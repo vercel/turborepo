@@ -1,17 +1,15 @@
 services:
   db:
-    platform: linux/amd64
-    image: postgres:15 # Use a specific version of Postgres
+    image: postgres:18.6
     restart: always
     environment:
-      - POSTGRES_USER=sebi
-      - POSTGRES_PASSWORD=sebi_test_4444
-      - POSTGRES_DB=turborepo
+      POSTGRES_USER: sebi
+      POSTGRES_PASSWORD: sebi_test_4444
+      POSTGRES_DB: turborepo
     ports:
-      - '5432:5432' # Expose the Postgres port to your local machine
+      - "5432:5432"
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - database:/var/lib/postgresql/data
 
 volumes:
   database:
-    driver: local

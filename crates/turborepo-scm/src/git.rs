@@ -26,7 +26,7 @@ impl SCM {
     pub fn get_current_sha(&self, path: &AbsoluteSystemPath) -> Result<String, Error> {
         match self {
             Self::Git(git) => git.get_current_sha(),
-            Self::Manual => Err(Error::GitRequired(path.to_owned())),
+            Self::Manual(_) => Err(Error::GitRequired(path.to_owned())),
         }
     }
 
@@ -39,7 +39,7 @@ impl SCM {
                 // Preserve partial results for unusual states such as an unborn branch.
                 (git.get_current_branch().ok(), git.get_current_sha().ok())
             }),
-            Self::Manual => (None, None),
+            Self::Manual(_) => (None, None),
         }
     }
 
@@ -50,7 +50,7 @@ impl SCM {
     pub fn get_dirty_hash(&self) -> Option<String> {
         match self {
             Self::Git(git) => git.get_dirty_hash(),
-            Self::Manual => None,
+            Self::Manual(_) => None,
         }
     }
 
@@ -61,8 +61,34 @@ impl SCM {
     pub fn get_dirty_hash_from_repo_index(&self, repo_index: &RepoGitIndex) -> Option<String> {
         match self {
             Self::Git(git) => git.get_dirty_hash_from_repo_index(repo_index),
-            Self::Manual => None,
+            Self::Manual(_) => None,
         }
+    }
+
+    /// Select changed paths tracked in the index or HEAD, including staged
+    /// deletions. Committed deletions require provenance from the compared
+    /// diff.
+    pub fn tracked_changed_files(
+        &self,
+        turbo_root: &AbsoluteSystemPath,
+        changed_files: &HashSet<AnchoredSystemPathBuf>,
+    ) -> Result<HashSet<AnchoredSystemPathBuf>, Error> {
+        let Self::Git(git) = self else {
+            return Ok(HashSet::new());
+        };
+        let pathspec = git.root.anchor(turbo_root)?;
+        let pathspec = if pathspec.as_str().is_empty() {
+            String::new()
+        } else {
+            format!(":(literal){}", pathspec.to_unix())
+        };
+        let output = git.execute_git_command(
+            &["ls-files", "--cached", "--with-tree=HEAD", "-z"],
+            &pathspec,
+        )?;
+        let mut tracked = HashSet::new();
+        git.add_files_from_stdout(&mut tracked, turbo_root, output)?;
+        Ok(changed_files.intersection(&tracked).cloned().collect())
     }
 
     /// get the actual changed files between two git refs
@@ -127,7 +153,7 @@ impl SCM {
                     Err(e) => Err(e),
                 }
             }
-            Self::Manual => Err(Error::GitRequired(turbo_root.to_owned())),
+            Self::Manual(_) => Err(Error::GitRequired(turbo_root.to_owned())),
         }
     }
 
@@ -150,7 +176,7 @@ impl SCM {
                 )?;
                 Ok(!output.is_empty())
             }
-            Self::Manual => Ok(false),
+            Self::Manual(_) => Ok(false),
         }
     }
 
@@ -164,7 +190,7 @@ impl SCM {
                 .change_prefetch
                 .take_previous_content(from_commit, file_path)
                 .unwrap_or_else(|| git.previous_content(from_commit, file_path)),
-            Self::Manual => Err(Error::GitRequired(file_path.to_owned())),
+            Self::Manual(_) => Err(Error::GitRequired(file_path.to_owned())),
         }
     }
 
@@ -853,7 +879,11 @@ impl GitRepo {
             });
             // Include any files that have been staged, but not committed
             let staged = scope.spawn(|| {
-                self.execute_git_command(&["diff", "--name-only", "--cached", "-z"], pathspec)
+                // Both sides of a rename can affect different packages.
+                self.execute_git_command(
+                    &["diff", "--name-only", "--cached", "--no-renames", "-z"],
+                    pathspec,
+                )
             });
             let join = |handle: std::thread::ScopedJoinHandle<'_, Result<Vec<u8>, Error>>| {
                 handle
@@ -987,7 +1017,7 @@ mod tests {
 
     use tempfile::{NamedTempFile, TempDir};
     use test_case::test_case;
-    use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, PathError};
+    use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPathBuf, PathError};
     use which::which;
 
     use super::{CIEnv, InvalidRange, default_base_ref, previous_content};
@@ -1032,6 +1062,60 @@ mod tests {
 
         let path = repo_root.path().to_path_buf();
         Ok((repo_root, path))
+    }
+
+    #[test]
+    fn tracked_changed_files_exclude_generated_outputs_and_keep_deletions() -> Result<(), Error> {
+        for nested in [false, true] {
+            let (_repo, path) = setup_repository(Some("main"))?;
+            let dir = if nested {
+                path.join("nested[repo]")
+            } else {
+                path.clone()
+            };
+            fs::create_dir_all(&dir)?;
+            fs::write(dir.join(".gitignore"), "ignored.txt\n")?;
+            for file in ["tracked.txt", "removed.txt", "deleted.txt"] {
+                fs::write(dir.join(file), "original")?;
+            }
+            run_git(&path, &["add", "."]);
+            run_git(&path, &["commit", "-m", "Initial"]);
+            fs::write(dir.join("generated.txt"), "generated")?;
+            fs::write(dir.join("ignored.txt"), "generated")?;
+            fs::write(dir.join("staged.txt"), "staged")?;
+            run_git(&dir, &["add", "staged.txt"]);
+            run_git(&dir, &["rm", "--cached", "removed.txt"]);
+            fs::remove_file(dir.join("deleted.txt"))?;
+            let root = AbsoluteSystemPath::from_std_path(&dir)?;
+            let scm = SCM::new(root);
+            let changed: HashSet<_> = [
+                "tracked.txt",
+                "removed.txt",
+                "deleted.txt",
+                "staged.txt",
+                "generated.txt",
+                "ignored.txt",
+            ]
+            .into_iter()
+            .map(|file| AnchoredSystemPathBuf::from_raw(file).unwrap())
+            .collect();
+            let expected: HashSet<_> = ["tracked.txt", "removed.txt", "deleted.txt", "staged.txt"]
+                .into_iter()
+                .map(|file| AnchoredSystemPathBuf::from_raw(file).unwrap())
+                .collect();
+            assert_eq!(scm.tracked_changed_files(root, &changed)?, expected);
+            assert!(
+                SCM::Manual(crate::FileHashMode::ContentOnly)
+                    .tracked_changed_files(root, &changed)?
+                    .is_empty()
+            );
+            run_git(&dir, &["add", "-u"]);
+            run_git(&path, &["commit", "-m", "Remove tracked files"]);
+            let selected = scm.tracked_changed_files(root, &changed)?;
+            assert!(!selected.contains(&AnchoredSystemPathBuf::from_raw("deleted.txt")?));
+            assert!(!selected.contains(&AnchoredSystemPathBuf::from_raw("removed.txt")?));
+        }
+        Ok(())
     }
 
     #[test]
@@ -1091,7 +1175,11 @@ mod tests {
             &["-c", "commit.gpgsign=false", "commit", "-m", "Lock"],
         );
         assert!(scm.is_path_committed(&lock).unwrap());
-        assert!(!SCM::Manual.is_path_committed(&lock).unwrap());
+        assert!(
+            !SCM::Manual(crate::FileHashMode::ContentOnly)
+                .is_path_committed(&lock)
+                .unwrap()
+        );
 
         let blob = run_git(&repo, &["rev-parse", "HEAD:nested[repo]/turbo.lock"]);
         fs::remove_file(&lock).unwrap();
@@ -1296,6 +1384,60 @@ mod tests {
         );
         Ok(())
     }
+    #[test_case("", "index.js", "moved.js"; "repository_root")]
+    #[test_case("nested repo", "file with spaces.txt", "renamed file.txt"; "nested_root_with_spaces")]
+    fn test_staged_rename_includes_both_paths(
+        prefix: &str,
+        source_name: &str,
+        destination_name: &str,
+    ) -> Result<(), Error> {
+        let (_repo, repo_path) = setup_repository(None)?;
+        let turbo_root = repo_path.join(prefix);
+        fs::create_dir_all(turbo_root.join("packages/util"))?;
+        fs::create_dir_all(turbo_root.join("packages/another"))?;
+        let source = Path::new(prefix).join("packages/util").join(source_name);
+        let destination = Path::new(prefix)
+            .join("packages/another")
+            .join(destination_name);
+        fs::write(repo_path.join(&source), "module.exports = 42;\n")?;
+        commit_file(&repo_path, &source, None);
+        run_git(&repo_path, &["config", "diff.renames", "true"]);
+        run_git(
+            &repo_path,
+            &[
+                "mv",
+                &source.to_string_lossy(),
+                &destination.to_string_lossy(),
+            ],
+        );
+        assert!(run_git(&repo_path, &["diff", "--cached", "--name-status"]).starts_with("R100"));
+
+        let files = changed_files(
+            repo_path.clone(),
+            turbo_root.clone(),
+            Some("HEAD"),
+            None,
+            true,
+        )?;
+        assert_eq!(
+            files,
+            HashSet::from([
+                Path::new("packages")
+                    .join("util")
+                    .join(source_name)
+                    .to_string_lossy()
+                    .into_owned(),
+                Path::new("packages")
+                    .join("another")
+                    .join(destination_name)
+                    .to_string_lossy()
+                    .into_owned(),
+            ])
+        );
+        assert!(changed_files(repo_path, turbo_root, Some("HEAD"), None, false)?.is_empty());
+        Ok(())
+    }
+
     #[test]
     fn test_merge_base() -> Result<(), Error> {
         let (repo_root, repo_path) = setup_repository(None)?;
@@ -2397,7 +2539,10 @@ mod tests {
 
     #[test]
     fn test_dirty_hash_manual_scm_returns_none() {
-        assert_eq!(SCM::Manual.get_dirty_hash(), None);
+        assert_eq!(
+            SCM::Manual(crate::FileHashMode::ContentOnly).get_dirty_hash(),
+            None
+        );
     }
 
     /// Differential matrix: the repo-index dirty hash must agree with the
@@ -2955,6 +3100,7 @@ mod tests {
             bin,
             attrs: std::sync::OnceLock::new(),
             github_actions_remote_base_ref_fallback: false,
+            file_hash_mode: crate::FileHashMode::ContentOnly,
             slowest_files: None,
             change_prefetch: Default::default(),
         }

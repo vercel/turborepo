@@ -1,33 +1,12 @@
-use std::{borrow::Cow, collections::HashSet, io::ErrorKind};
+use std::{collections::HashSet, io::ErrorKind};
 
-use globwalk::{PackageInput, fix_glob_pattern, is_glob_pattern};
+use globwalk::{PackageInput, fix_glob_pattern};
 use ignore::WalkBuilder;
 use tracing::info;
-use turbopath::{
-    AbsoluteSystemPath, AnchoredSystemPath, AnchoredSystemPathBuf, IntoUnix, RelativeUnixPath,
-};
+use turbopath::{AbsoluteSystemPath, AnchoredSystemPath, AnchoredSystemPathBuf, IntoUnix};
 use wax::{Glob, Program, any};
 
 use crate::{Error, GitHashes, OidHash, package_deps::InputSelection};
-
-fn expand_dir_pattern<'a>(base: &AbsoluteSystemPath, pattern: &'a str) -> Cow<'a, str> {
-    if is_glob_pattern(pattern) {
-        return Cow::Borrowed(pattern);
-    }
-    let Ok(rel) = RelativeUnixPath::new(pattern) else {
-        return Cow::Borrowed(pattern);
-    };
-    let resolved = base.join_unix_path(rel);
-    if resolved.symlink_metadata().is_ok_and(|m| m.is_dir()) {
-        if pattern.ends_with('/') {
-            Cow::Owned(format!("{pattern}**"))
-        } else {
-            Cow::Owned(format!("{pattern}/**"))
-        }
-    } else {
-        Cow::Borrowed(pattern)
-    }
-}
 
 fn to_glob(input: &str) -> Result<Glob<'static>, Error> {
     let glob = fix_glob_pattern(input).into_unix();
@@ -99,6 +78,7 @@ fn hash_file_with_attrs(
 }
 
 fn hash_discovered_file(
+    root: &AbsoluteSystemPath,
     path: &AbsoluteSystemPath,
     attr_path: &str,
     attrs: Option<&crate::crlf::GitAttrs>,
@@ -106,7 +86,7 @@ fn hash_discovered_file(
     let text_attr = attrs
         .map(|attrs| attrs.resolve_text_attr(attr_path))
         .unwrap_or(crate::crlf::TextAttr::Unspecified);
-    match crate::crlf::hash_file_as_git_blob(path, text_attr) {
+    match crate::crlf::hash_file_as_git_blob(root, path, text_attr) {
         Ok(Some(hash)) => Ok(Some(hash)),
         Ok(None) => {
             info!(%path, "skipping non-regular hash candidate");
@@ -134,7 +114,7 @@ pub(crate) fn hash_discovered_files(
         let anchored = file.as_ref();
         let path = root_path.resolve(anchored);
         let attr_path = effective_attrs_root.anchor(&path)?.to_unix();
-        if let Some(hash) = hash_discovered_file(&path, attr_path.as_str(), attrs)? {
+        if let Some(hash) = hash_discovered_file(root_path, &path, attr_path.as_str(), attrs)? {
             hashes.insert(anchored.to_unix(), hash);
         }
     }
@@ -193,11 +173,6 @@ pub(crate) fn get_input_file_hashes_without_git<S: AsRef<str>>(
     let mut default_file_hashes = GitHashes::new();
     let mut excluded_file_paths = HashSet::new();
 
-    // Inputs that resolve outside the package directory can't be found by the
-    // WalkBuilder since it only walks within the package directory. Handle
-    // these separately using globwalk rooted at turbo_root, matching the git
-    // path's behavior. Inputs inside the package are matched against walked
-    // paths using their normalized package-relative form.
     let mut local_inclusions: Vec<String> = Vec::new();
     let mut local_exclusions: Vec<String> = Vec::new();
     let mut external_inclusions = Vec::new();
@@ -214,12 +189,31 @@ pub(crate) fn get_input_file_hashes_without_git<S: AsRef<str>>(
     let has_local_inputs = !local_inclusions.is_empty() || !local_exclusions.is_empty();
     let has_local_inclusions = !local_inclusions.is_empty();
 
-    if !external_inclusions.is_empty() {
-        let files = globwalk::globwalk(
+    for inclusion in &local_inclusions {
+        external_inclusions
+            .push(PackageInput::resolve(package_unix_path.as_str(), inclusion)?.into_glob());
+    }
+    for exclusion in &local_exclusions {
+        external_exclusions.push(
+            PackageInput::resolve(package_unix_path.as_str(), &format!("!{exclusion}"))?
+                .into_glob(),
+        );
+    }
+    let has_inclusions = !external_inclusions.is_empty();
+    if has_inclusions {
+        for name in globwalk::PACKAGE_CONFIG_INPUTS
+            .iter()
+            .filter(|_| include_configs)
+        {
+            external_inclusions
+                .push(PackageInput::resolve(package_unix_path.as_str(), name)?.into_glob());
+        }
+        let files = globwalk::globwalk_with_settings(
             turbo_root,
             &external_inclusions,
             &external_exclusions,
             globwalk::WalkType::Files,
+            globwalk::Settings::default().follow_links(),
         )?;
         for file_path in &files {
             if !exact_exclusions.is_empty() {
@@ -239,7 +233,9 @@ pub(crate) fn get_input_file_hashes_without_git<S: AsRef<str>>(
             let attr_path =
                 AnchoredSystemPathBuf::relative_path_between(effective_attrs_root, file_path)
                     .to_unix();
-            if let Some(hash) = hash_discovered_file(file_path, attr_path.as_str(), attrs)? {
+            if let Some(hash) =
+                hash_discovered_file(turbo_root, file_path, attr_path.as_str(), attrs)?
+            {
                 hashes.insert(relative_path, hash);
             }
         }
@@ -250,40 +246,13 @@ pub(crate) fn get_input_file_hashes_without_git<S: AsRef<str>>(
     }
 
     let mut walker_builder = WalkBuilder::new(&full_package_path);
-    let mut includes = Vec::new();
     let mut excludes = Vec::new();
     for exclusion in &local_exclusions {
-        excludes.push(to_glob(exclusion)?);
+        for pattern in globwalk::walk_exclusion_patterns(exclusion) {
+            excludes.push(to_glob(&pattern)?);
+        }
     }
-    for inclusion in &local_inclusions {
-        // If the pattern has no glob metacharacters and resolves to a
-        // directory, treat it as "dir/**" to match all files inside.
-        // This mirrors what globwalk::add_doublestar_to_dir does in the
-        // git code path.
-        let effective_pattern = expand_dir_pattern(&full_package_path, inclusion);
-        includes.push(to_glob(effective_pattern.as_ref())?);
-    }
-    let include_pattern =
-        if include_configs && includes.is_empty() && external_inclusions.is_empty() {
-            None
-        } else {
-            // Add in package.json and turbo.json to input patterns. Both file paths are
-            // relative to pkgPath
-            //
-            // - package.json is an input because if the `scripts` in the package.json
-            //   change (i.e. the tasks that turbo executes), we want a cache miss, since
-            //   any existing cache could be invalid.
-            // - turbo.json because it's the definition of the tasks themselves. The root
-            //   turbo.json is similarly included in the global hash. This file may not
-            //   exist in the workspace, but that is ok, because it will get ignored
-            //   downstream.
-            if include_configs {
-                includes.push(to_glob("package.json")?);
-                includes.push(to_glob("turbo.json")?);
-            }
 
-            Some(any(includes)?)
-        };
     let exclude_pattern = if excludes.is_empty() {
         None
     } else {
@@ -295,16 +264,18 @@ pub(crate) fn get_input_file_hashes_without_git<S: AsRef<str>>(
         walker_builder.filter_entry(move |entry| entry.path() != git_metadata_path.as_std_path());
     }
 
-    let walker = walker_builder
-        .follow_links(false)
-        // if inputs have been provided manually, we shouldn't skip ignored files to mimic the
-        // regular behavior
-        .git_ignore(!has_local_inputs && external_inclusions.is_empty())
-        .require_git(false)
-        .hidden(false) // this results in yielding hidden files (e.g. .gitignore)
-        .build();
+    let walker = (!has_inclusions).then(|| {
+        walker_builder
+            .follow_links(true)
+            // if inputs have been provided manually, we shouldn't skip ignored files to mimic the
+            // regular behavior
+            .git_ignore(!has_local_inputs && external_inclusions.is_empty())
+            .require_git(false)
+            .hidden(false) // this results in yielding hidden files (e.g. .gitignore)
+            .build()
+    });
 
-    for dirent in walker {
+    for dirent in walker.into_iter().flatten() {
         let dirent = dirent?;
         let metadata = match dirent.metadata() {
             Ok(metadata) => metadata,
@@ -339,13 +310,6 @@ pub(crate) fn get_input_file_hashes_without_git<S: AsRef<str>>(
         let relative_path = full_package_path.anchor(path)?;
         let relative_path = relative_path.to_unix();
 
-        // if we have includes, and this path doesn't match any of them, skip it
-        if let Some(include_pattern) = include_pattern.as_ref()
-            && !include_pattern.is_match(relative_path.as_str())
-        {
-            continue;
-        }
-
         // if we have excludes, and this path matches one of them, skip it
         if let Some(exclude_pattern) = exclude_pattern.as_ref()
             && exclude_pattern.is_match(relative_path.as_str())
@@ -354,7 +318,7 @@ pub(crate) fn get_input_file_hashes_without_git<S: AsRef<str>>(
         }
 
         let attr_path = effective_attrs_root.anchor(path)?.to_unix();
-        if let Some(hash) = hash_discovered_file(path, attr_path.as_str(), attrs)? {
+        if let Some(hash) = hash_discovered_file(turbo_root, path, attr_path.as_str(), attrs)? {
             hashes.insert(relative_path, hash);
         }
     }
@@ -364,7 +328,7 @@ pub(crate) fn get_input_file_hashes_without_git<S: AsRef<str>>(
     if include_default_files {
         walker_builder.filter_entry(move |entry| entry.path() != git_metadata_path.as_std_path());
         let walker = walker_builder
-            .follow_links(false)
+            .follow_links(true)
             .git_ignore(true)
             .require_git(false)
             .hidden(false) // this results in yielding hidden files (e.g. .gitignore)
@@ -410,7 +374,7 @@ pub(crate) fn get_input_file_hashes_without_git<S: AsRef<str>>(
             }
 
             let attr_path = effective_attrs_root.anchor(path)?.to_unix();
-            if let Some(hash) = hash_discovered_file(path, attr_path.as_str(), attrs)? {
+            if let Some(hash) = hash_discovered_file(turbo_root, path, attr_path.as_str(), attrs)? {
                 default_file_hashes.insert(relative_path, hash);
             }
         }

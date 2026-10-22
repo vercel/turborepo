@@ -9,8 +9,7 @@ use std::{
 use chrono::Local;
 use tracing::Instrument;
 use turbopath::{
-    AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPath, AnchoredSystemPathBuf,
-    RelativeUnixPathBuf,
+    AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPath, RelativeUnixPathBuf,
 };
 use turborepo_analytics::{AnalyticsHandle, start_analytics};
 use turborepo_api_client::{APIAuth, APIClient, CacheClient, SharedHttpClient};
@@ -43,7 +42,7 @@ use turborepo_telemetry::events::{
     repo::{RepoEventBuilder, RepoType},
 };
 use turborepo_types::{
-    FilterMode, SecretString, TaskDefinition, TaskDefinitionHashInfo, TaskInputs, UIMode,
+    Credential, FilterMode, TaskDefinition, TaskDefinitionHashInfo, TaskInputs, UIMode,
 };
 use turborepo_ui::ColorConfig;
 use turborepo_vercel_api::CachingStatusResponse;
@@ -193,16 +192,16 @@ pub(crate) fn changed_files_for_affected_range<D: ChangedFilesDetector>(
     from_ref: Option<&str>,
     to_ref: Option<&str>,
 ) -> Result<
-    Result<HashSet<AnchoredSystemPathBuf>, turborepo_scm::git::InvalidRange>,
+    Result<turborepo_types::TaskInputChanges, turborepo_scm::git::InvalidRange>,
     turborepo_scm::Error,
 > {
-    detector.changed_files(repo_root, from_ref, to_ref, true, true, true)
+    detector.task_input_changes(repo_root, from_ref, to_ref, true, true, true)
 }
 
 trait CacheStatusProbe: Send + Sync + 'static {
     fn check_caching_status(
         &self,
-        token: &SecretString,
+        token: &Credential,
         team_id: Option<&str>,
         team_slug: Option<&str>,
     ) -> impl Future<Output = turborepo_api_client::Result<CachingStatusResponse>> + Send;
@@ -211,7 +210,7 @@ trait CacheStatusProbe: Send + Sync + 'static {
 impl CacheStatusProbe for APIClient {
     fn check_caching_status(
         &self,
-        token: &SecretString,
+        token: &Credential,
         team_id: Option<&str>,
         team_slug: Option<&str>,
     ) -> impl Future<Output = turborepo_api_client::Result<CachingStatusResponse>> + Send {
@@ -223,7 +222,7 @@ impl CacheStatusProbe for APIClient {
 /// can happen after the run has started; dropping it signals nothing.
 fn start_remote_cache_preflight(
     client: impl CacheStatusProbe,
-    token: SecretString,
+    token: Credential,
     team_id: Option<String>,
     team_slug: Option<String>,
     read_only_tx: tokio::sync::oneshot::Sender<()>,
@@ -299,6 +298,11 @@ fn apply_configured_read_only(status: RemoteCacheStatus, remote_write: bool) -> 
 
 fn map_api_error_to_status(err: turborepo_api_client::Error) -> RemoteCacheStatus {
     match &err {
+        turborepo_api_client::Error::SavedVercelCredentialDestination => {
+            RemoteCacheStatus::Unavailable(
+                RemoteCacheUnavailableReason::SavedVercelCredentialDestination,
+            )
+        }
         turborepo_api_client::Error::ReqwestError(e) if e.is_connect() || e.is_timeout() => {
             RemoteCacheStatus::Unavailable(RemoteCacheUnavailableReason::CouldNotConnect)
         }
@@ -567,7 +571,7 @@ impl RunBuilder {
             || (self.opts.cache_opts.cache.remote.should_use() && self.api_auth.is_some())
     }
 
-    fn api_client_from_http(&self, http_client: reqwest::Client) -> APIClient {
+    fn api_client_from_http(&self, http_client: turborepo_api_client::HttpClient) -> APIClient {
         let timeout = self.opts.api_client_opts.timeout;
         let upload_timeout = self.opts.api_client_opts.upload_timeout;
 
@@ -1011,6 +1015,11 @@ impl RunBuilder {
                 .opts
                 .future_flags
                 .github_actions_remote_base_ref_fallback;
+            let file_hash_mode = if self.opts.future_flags.hash_file_permissions {
+                turborepo_scm::FileHashMode::ExecutableBit
+            } else {
+                turborepo_scm::FileHashMode::ContentOnly
+            };
             let skip_repo_index = self.skip_repo_index_and_scm_state;
             let prefetch_summary_scm_state = self.opts.run_opts.dry_run.is_some();
             tokio::task::spawn_blocking(move || {
@@ -1018,6 +1027,7 @@ impl RunBuilder {
                     Some(root) => SCM::new_with_git_root(&repo_root, root),
                     None => SCM::new(&repo_root),
                 }
+                .with_file_hash_mode(file_hash_mode)
                 .with_github_actions_remote_base_ref_fallback(
                     github_actions_remote_base_ref_fallback,
                 );
@@ -1227,7 +1237,16 @@ impl RunBuilder {
                     // panicked; that panic surfaces when the repo-index task
                     // is joined below. Detect inline so the run reaches that
                     // point.
-                    (SCM::new(&self.repo_root), None)
+                    (
+                        SCM::new(&self.repo_root).with_file_hash_mode(
+                            if self.opts.future_flags.hash_file_permissions {
+                                turborepo_scm::FileHashMode::ExecutableBit
+                            } else {
+                                turborepo_scm::FileHashMode::ContentOnly
+                            },
+                        ),
+                        None,
+                    )
                 }
             }
         };
@@ -2202,7 +2221,18 @@ impl RunBuilder {
                         );
                         return None;
                     }
-                    self.api_auth.as_ref().map(|auth| auth.token.expose())
+                    let credential = &self.api_auth.as_ref()?.token;
+                    if let Ok(url) = url::Url::parse(endpoint) {
+                        if let Err(error) =
+                            turborepo_api_client::validate_credential_destination(credential, &url)
+                        {
+                            tracing::warn!("Skipping OTEL cache token injection: {error}");
+                            return None;
+                        }
+                    } else {
+                        return None;
+                    }
+                    Some(credential)
                 });
                 observability::Handle::try_init(opts, token)
             });
@@ -2485,7 +2515,7 @@ impl RunBuilder {
                 tracing::info!(
                     total_tasks,
                     affected_tasks = affected_tasks.len(),
-                    changed_files = changed_files.len(),
+                    changed_files = changed_files.files.len(),
                     "task-level affected detection complete"
                 );
                 // Scope affected entrypoints before retaining their execution
@@ -3246,7 +3276,7 @@ mod origins_match_tests {
             repo_root: repo_root.to_owned(),
             color_config: ColorConfig::new(true),
             version: "test",
-            scm: SCM::Manual,
+            scm: SCM::Manual(turborepo_scm::FileHashMode::ContentOnly),
             pkg_dep_graph,
             turbo_json_loader: UnifiedTurboJsonLoader::noop(HashMap::from([(
                 PackageName::Root,
@@ -3618,6 +3648,29 @@ mod origins_match_tests {
             ));
             Ok(Ok(self.files.clone()))
         }
+
+        fn task_input_changes(
+            &self,
+            root: &AbsoluteSystemPath,
+            from: Option<&str>,
+            to: Option<&str>,
+            include_uncommitted: bool,
+            allow_unknown_objects: bool,
+            merge_base: bool,
+        ) -> Result<
+            Result<turborepo_types::TaskInputChanges, turborepo_scm::git::InvalidRange>,
+            turborepo_scm::Error,
+        > {
+            self.changed_files(
+                root,
+                from,
+                to,
+                include_uncommitted,
+                allow_unknown_objects,
+                merge_base,
+            )
+            .map(|files| files.map(turborepo_types::TaskInputChanges::from_tracked))
+        }
     }
 
     #[test]
@@ -3639,7 +3692,10 @@ mod origins_match_tests {
         .unwrap()
         .unwrap();
 
-        assert_eq!(detected, files);
+        assert_eq!(
+            detected,
+            turborepo_types::TaskInputChanges::from_tracked(files)
+        );
         assert_eq!(
             *calls.lock().unwrap(),
             [(
@@ -4038,7 +4094,7 @@ mod remote_cache_status_tests {
     use std::{future::Future, sync::Mutex};
 
     use turborepo_run_opts::RemoteCacheDisabledReason;
-    use turborepo_types::SecretString;
+    use turborepo_types::Credential;
     use turborepo_vercel_api::{CachingStatus, CachingStatusResponse};
 
     use super::{
@@ -4051,7 +4107,7 @@ mod remote_cache_status_tests {
     impl CacheStatusProbe for StubCacheStatusProbe {
         fn check_caching_status(
             &self,
-            _token: &SecretString,
+            _token: &Credential,
             _team_id: Option<&str>,
             _team_slug: Option<&str>,
         ) -> impl Future<Output = turborepo_api_client::Result<CachingStatusResponse>> + Send
@@ -4068,7 +4124,7 @@ mod remote_cache_status_tests {
         let (read_only_tx, _read_only_rx) = tokio::sync::oneshot::channel();
         let handle = start_remote_cache_preflight(
             probe,
-            SecretString::new("test-token".to_string()),
+            Credential::from("test-token".to_string()),
             None,
             None,
             read_only_tx,
@@ -4084,7 +4140,7 @@ mod remote_cache_status_tests {
         let (read_only_tx, read_only_rx) = tokio::sync::oneshot::channel();
         let handle = start_remote_cache_preflight(
             probe,
-            SecretString::new("test-token".to_string()),
+            Credential::from("test-token".to_string()),
             None,
             None,
             read_only_tx,
@@ -4110,7 +4166,7 @@ mod remote_cache_status_tests {
         impl CacheStatusProbe for DeferredProbe {
             fn check_caching_status(
                 &self,
-                _token: &SecretString,
+                _token: &Credential,
                 _team_id: Option<&str>,
                 _team_slug: Option<&str>,
             ) -> impl Future<Output = turborepo_api_client::Result<CachingStatusResponse>> + Send
@@ -4130,7 +4186,7 @@ mod remote_cache_status_tests {
         let (read_only_tx, mut read_only_rx) = tokio::sync::oneshot::channel();
         let handle = start_remote_cache_preflight(
             DeferredProbe(Mutex::new(Some(wait))),
-            SecretString::new("test-token".into()),
+            Credential::from("test-token"),
             None,
             None,
             read_only_tx,

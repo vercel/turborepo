@@ -26,6 +26,15 @@ serde = { workspace = true }
 thiserror = { workspace = true }
 wax = { workspace = true }
 
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.59", features = [
+  "Win32_Foundation",
+  "Win32_Storage_FileSystem",
+] }
+
 [dev-dependencies]
 anyhow = { workspace = true }
 serde_json = { workspace = true }

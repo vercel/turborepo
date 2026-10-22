@@ -84,6 +84,7 @@ pub fn should_print_version() -> bool {
 /// that runs concurrently with graph building.
 #[derive(Debug, Clone, Copy)]
 pub(crate) enum RemoteCacheUnavailableReason {
+    SavedVercelCredentialDestination,
     CouldNotConnect,
     UsageLimitExceeded,
     SpendingPaused,
@@ -226,6 +227,9 @@ fn remote_cache_status_message(status: RemoteCacheStatus, api_url: &str) -> (Str
         }
         RemoteCacheStatus::Unavailable(reason) => {
             let msg = match reason {
+                RemoteCacheUnavailableReason::SavedVercelCredentialDestination => {
+                    turborepo_api_client::Error::SavedVercelCredentialDestination.to_string()
+                }
                 RemoteCacheUnavailableReason::CouldNotConnect => {
                     format!("Remote caching unavailable (Could not connect to \"{api_url}\")")
                 }
@@ -1780,10 +1784,7 @@ impl turborepo_query_api::QueryRun for Run {
         &self,
         base: Option<&str>,
         head: Option<&str>,
-    ) -> Result<
-        std::collections::HashSet<turbopath::AnchoredSystemPathBuf>,
-        turborepo_query_api::AffectedPackagesError,
-    > {
+    ) -> Result<turborepo_types::TaskInputChanges, turborepo_query_api::AffectedPackagesError> {
         match builder::changed_files_for_affected_range(self.scm(), self.repo_root(), base, head)
             .map_err(|e| turborepo_query_api::AffectedPackagesError::Other(Box::new(e)))?
         {
@@ -1791,14 +1792,14 @@ impl turborepo_query_api::QueryRun for Run {
             Err(_invalid_range) => {
                 // If git range is invalid, return empty set — the affected packages
                 // computation will handle reporting all-packages-changed separately.
-                Ok(std::collections::HashSet::new())
+                Ok(turborepo_types::TaskInputChanges::default())
             }
         }
     }
 
     fn match_tasks_against_changed_files(
         &self,
-        changed_files: &std::collections::HashSet<turbopath::AnchoredSystemPathBuf>,
+        changed_files: &turborepo_types::TaskInputChanges,
     ) -> Result<
         std::collections::HashMap<turborepo_query_api::QueryTaskId, String>,
         turborepo_query_api::AffectedPackagesError,

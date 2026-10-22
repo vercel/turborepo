@@ -103,7 +103,19 @@ pub fn affected_task_ids(
     changed_files: &HashSet<AnchoredSystemPathBuf>,
     global_deps: &[String],
 ) -> HashSet<TaskId<'static>> {
-    affected_task_ids_with_managed_setup(engine, pkg_dep_graph, changed_files, global_deps, false)
+    let root = pkg_dep_graph.repo_root();
+    let tracked = match turborepo_scm::SCM::new(root).tracked_changed_files(root, changed_files) {
+        Ok(tracked) => tracked,
+        Err(error) => {
+            tracing::warn!(%error, "unable to classify task input changes; selecting all tasks");
+            return engine.task_ids().cloned().collect();
+        }
+    };
+    let changes = turborepo_types::TaskInputChanges {
+        files: changed_files.clone(),
+        tracked,
+    };
+    affected_task_ids_with_managed_setup(engine, pkg_dep_graph, &changes, global_deps, false)
 }
 
 /// Like `affected_task_ids`, with committed managed toolchain resolution
@@ -112,11 +124,16 @@ pub fn affected_task_ids(
 pub fn affected_task_ids_with_managed_setup(
     engine: &Engine,
     pkg_dep_graph: &PackageGraph,
-    changed_files: &HashSet<AnchoredSystemPathBuf>,
+    changed_files: &turborepo_types::TaskInputChanges,
     global_deps: &[String],
     managed_setup: bool,
 ) -> HashSet<TaskId<'static>> {
-    if is_global_change(changed_files, global_deps, pkg_dep_graph, managed_setup) {
+    if is_global_change(
+        &changed_files.files,
+        global_deps,
+        pkg_dep_graph,
+        managed_setup,
+    ) {
         return engine.task_ids().cloned().collect();
     }
 
@@ -311,7 +328,7 @@ mod tests {
             let affected = affected_task_ids_with_managed_setup(
                 &engine,
                 &graph,
-                &changed(&["turbo.lock"]),
+                &turborepo_types::TaskInputChanges::from_tracked(changed(&["turbo.lock"])),
                 &global_deps,
                 managed_setup,
             );
@@ -320,7 +337,9 @@ mod tests {
                 affected_task_ids_with_managed_setup(
                     &engine,
                     &graph,
-                    &changed(&["packages/a/turbo.lock"]),
+                    &turborepo_types::TaskInputChanges::from_tracked(changed(&[
+                        "packages/a/turbo.lock"
+                    ])),
                     &global_deps,
                     managed_setup,
                 )

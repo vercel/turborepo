@@ -72,6 +72,7 @@ fn preprocess_paths_and_globs<S: AsRef<str>>(
     base_path: &AbsoluteSystemPath,
     include: &[S],
     exclude: &[S],
+    follow_links: bool,
 ) -> Result<(PathBuf, Vec<String>, Vec<String>), WalkError> {
     let raw_slash = base_path
         .as_std_path()
@@ -86,7 +87,7 @@ fn preprocess_paths_and_globs<S: AsRef<str>>(
             let mut fixed = fix_glob_pattern(s.as_ref()).into_owned();
             // We need to check inclusion globs before the join
             // as to_slash doesn't preserve Windows drive names.
-            add_doublestar_to_dir(base_path, &mut fixed);
+            add_doublestar_to_dir(base_path, &mut fixed, follow_links);
             let joined = join_unix_like_paths(&base_path_slash, &fixed);
             if let Some((collapsed, segment)) = collapse_path(&joined) {
                 lowest = std::cmp::min(lowest, segment);
@@ -295,7 +296,7 @@ pub fn exact_input_tree(glob: &str) -> Option<String> {
     })
 }
 
-fn add_doublestar_to_dir(base: &AbsoluteSystemPath, glob: &mut String) {
+fn add_doublestar_to_dir(base: &AbsoluteSystemPath, glob: &mut String, follow_links: bool) {
     let Some(tree) = directory_inclusion_tree(glob) else {
         return;
     };
@@ -309,7 +310,12 @@ fn add_doublestar_to_dir(base: &AbsoluteSystemPath, glob: &mut String) {
 
     let path = base.join_unix_path(glob_path);
 
-    let Ok(metadata) = path.symlink_metadata() else {
+    let metadata = if follow_links {
+        std::fs::metadata(&path)
+    } else {
+        std::fs::symlink_metadata(&path)
+    };
+    let Ok(metadata) = metadata else {
         debug!("'{path}' doesn't have metadata");
         return;
     };
@@ -1091,7 +1097,7 @@ fn compile_globs<S: AsRef<str>>(
     settings: Settings,
 ) -> Result<CompiledGlobs, WalkError> {
     let (base_path_new, include_paths, exclude_paths) =
-        preprocess_paths_and_globs(base_path, include, exclude)?;
+        preprocess_paths_and_globs(base_path, include, exclude, settings.follow_links)?;
 
     // Plain-segment exclusions always compile and are matched exactly by
     // path comparison (see `PlainExclusion::matches`), so skip wax for them.
@@ -2060,7 +2066,7 @@ mod test {
         let exclude = exclude.iter().map(|s| s.to_string()).collect_vec();
 
         let (result_path, include, exclude) =
-            super::preprocess_paths_and_globs(&base_path, &include, &exclude).unwrap();
+            super::preprocess_paths_and_globs(&base_path, &include, &exclude, false).unwrap();
 
         let expected = format!(
             "{}{}",
@@ -3296,7 +3302,7 @@ mod test {
 
         let mut glob = glob.to_owned();
 
-        add_doublestar_to_dir(base, &mut glob);
+        add_doublestar_to_dir(base, &mut glob, false);
 
         assert_eq!(glob, expected);
     }
@@ -4053,7 +4059,7 @@ mod plain_exclusion_test {
                 let mut compiled =
                     compile_globs(&root, &include, &exclude, Settings::default()).unwrap();
                 let (_, _, exclude_paths) =
-                    preprocess_paths_and_globs(&root, &include, &exclude).unwrap();
+                    preprocess_paths_and_globs(&root, &include, &exclude, false).unwrap();
                 compiled.plain_exclusions.clear();
                 compiled.ex_patterns = exclude_paths
                     .into_iter()
@@ -4284,7 +4290,7 @@ mod segment_exclusion_test {
                             "{exclusions:?} should produce segment exclusions"
                         );
                         let (_, _, exclude_paths) =
-                            preprocess_paths_and_globs(&root, &include, &exclude).unwrap();
+                            preprocess_paths_and_globs(&root, &include, &exclude, false).unwrap();
                         compiled.plain_exclusions.clear();
                         compiled.ex_patterns = exclude_paths
                             .into_iter()
@@ -4358,7 +4364,8 @@ mod tree_walk_test {
         walk_type: WalkType,
     ) -> HashSet<AbsoluteSystemPathBuf> {
         let (base, includes, excludes) =
-            preprocess_paths_and_globs(root, &validated(include), &validated(exclude)).unwrap();
+            preprocess_paths_and_globs(root, &validated(include), &validated(exclude), false)
+                .unwrap();
         let ex_patterns: Vec<Glob<'static>> = excludes
             .into_iter()
             .map(glob_with_contextual_error)
