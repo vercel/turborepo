@@ -102,10 +102,6 @@ pub async fn run(
 
     let color_config = base.color_config;
 
-    // Git-aware filters use lockfile changes while resolving package scope.
-    // Plain listings and package details only query workspace relationships.
-    let needs_external_dependencies = base.opts.scope_opts.affected_range.is_some()
-        || !base.opts.scope_opts.filter_patterns.is_empty();
     let run_builder =
         RunBuilder::new(base.discovery_builder_input()?, None)?.skip_repo_index_and_scm_state();
     // Package details and task-based scope selection need the complete graph.
@@ -116,7 +112,7 @@ pub async fn run(
     } else {
         run_builder
     };
-    let run_builder = if needs_external_dependencies {
+    let run_builder = if run_builder.needs_external_dependencies_for_scope() {
         run_builder
     } else {
         run_builder.skip_external_dependencies()

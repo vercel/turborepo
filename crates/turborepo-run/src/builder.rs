@@ -545,6 +545,20 @@ impl RunBuilder {
         self
     }
 
+    /// Whether scope selection needs lockfile-aware change detection.
+    /// Static selectors only need workspace relationships, even when expanding
+    /// dependencies or selecting task tags. Keep malformed selectors on the
+    /// complete path so scope resolution can report the original error.
+    pub fn needs_external_dependencies_for_scope(&self) -> bool {
+        let scope = &self.opts.scope_opts;
+        scope.affected_range.is_some()
+            || Self::parse_filter_selectors(&scope.filter_patterns).is_none_or(|selectors| {
+                selectors
+                    .iter()
+                    .any(|selector| selector.git_range.is_some())
+            })
+    }
+
     /// Whether scope selection needs tasks rather than only package inventory.
     /// Inventory commands must populate the graph even without requested tasks.
     pub fn needs_task_graph_for_scope(&self) -> bool {

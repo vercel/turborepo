@@ -345,15 +345,62 @@ fn test_ls_does_not_read_lockfile() {
 }
 
 #[test]
-fn test_filtered_ls_still_reads_lockfile() {
+fn test_static_filtered_ls_does_not_read_lockfile() {
     let tempdir = tempfile::tempdir().unwrap();
     setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", false).unwrap();
     fs::write(tempdir.path().join("package-lock.json"), "not valid json").unwrap();
 
-    let output = run_turbo(tempdir.path(), &["ls", "--filter", "my-app"]);
-    assert!(output.status.success());
-    let stderr = String::from_utf8_lossy(&output.stderr);
-    assert!(stderr.contains("attempting to parse"));
+    for command in [vec!["ls"], vec!["query", "ls"]] {
+        for (filters, expected) in [
+            (vec!["my-app"], vec!["my-app"]),
+            (vec!["my-*"], vec!["my-app"]),
+            (vec!["{./apps/*}"], vec!["my-app"]),
+            (vec!["my-app..."], vec!["my-app", "util"]),
+            (vec!["...util"], vec!["my-app", "util"]),
+            (vec!["!my-app"], vec!["another", "util"]),
+            (vec!["my-app...", "!util"], vec!["my-app"]),
+            (vec![r#"tag:"not[git]""#], vec![]),
+        ] {
+            let mut args = command.clone();
+            args.push("--output=json");
+            for filter in filters {
+                args.extend(["--filter", filter]);
+            }
+            let output = run_turbo(tempdir.path(), &args);
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            assert!(output.status.success(), "{args:?}: {stderr}");
+            assert!(
+                !stderr.contains("attempting to parse"),
+                "{args:?}: {stderr}"
+            );
+            let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+            let names = json["packages"]["items"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|item| item["name"].as_str().unwrap())
+                .collect::<Vec<_>>();
+            assert_eq!(names, expected, "{args:?}");
+        }
+    }
+}
+
+#[test]
+fn test_git_filtered_ls_still_reads_lockfile() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", false).unwrap();
+    fs::write(tempdir.path().join("package-lock.json"), "not valid json").unwrap();
+
+    for command in [vec!["ls"], vec!["query", "ls"]] {
+        for selection in [vec!["--filter=my-app[HEAD]"], vec!["--affected"]] {
+            let mut args = command.clone();
+            args.extend(selection);
+            let output = run_turbo_with_env(tempdir.path(), &args, &[("TURBO_SCM_BASE", "HEAD")]);
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            assert!(output.status.success(), "{args:?}: {stderr}");
+            assert!(stderr.contains("attempting to parse"), "{args:?}: {stderr}");
+        }
+    }
 }
 
 #[test]
