@@ -11,7 +11,7 @@ use turbopath::AbsoluteSystemPath;
 #[cfg(test)]
 use turbopath::AbsoluteSystemPathBuf;
 use turborepo_api_client::{Client, TokenClient};
-use turborepo_types::{ConfigurationSource, SecretString};
+use turborepo_types::{ConfigurationSource, Credential};
 use turborepo_ui::ColorConfig;
 use url::Url;
 
@@ -93,9 +93,7 @@ fn is_localhost(host: &str) -> bool {
 pub(crate) fn should_attempt_vercel_token_refresh(source: ExistingTokenSource) -> bool {
     matches!(
         source,
-        ExistingTokenSource::TurboAuth
-            | ExistingTokenSource::TurboConfig
-            | ExistingTokenSource::LegacyAuth
+        ExistingTokenSource::TurboAuth | ExistingTokenSource::LegacyAuth
     )
 }
 
@@ -156,7 +154,7 @@ pub struct LoginOptions<'a, T: Client + TokenClient> {
     pub api_client: &'a T,
 
     pub sso_team: Option<&'a str>,
-    pub existing_token: Option<&'a str>,
+    pub existing_token: Option<&'a Credential>,
     pub force: bool,
     pub sso_login_callback_port: Option<u16>,
     /// The team currently linked in configuration, if any. When set, reusing
@@ -211,6 +209,9 @@ fn load_auth_tokens(
         return Ok(turbo_auth_tokens);
     }
 
+    if !turbo_token.is_saved_vercel() {
+        return Ok(turbo_auth_tokens);
+    }
     let vercel_auth_tokens = load_legacy_auth_tokens(Some(turbo_token))?;
     if vercel_auth_tokens.token.is_none() {
         return Ok(turbo_auth_tokens);
@@ -262,7 +263,12 @@ fn load_turbo_auth_tokens_from_paths(
         return Ok(tokens);
     }
 
-    Ok(load_tokens_from_path(turbo_config_path, "Turbo config file")?.unwrap_or_default())
+    let mut tokens =
+        load_tokens_from_path(turbo_config_path, "Turbo config file")?.unwrap_or_default();
+    tokens.token = tokens
+        .token
+        .map(|token| Credential::generic(token.expose().into()));
+    Ok(tokens)
 }
 
 pub(crate) fn classify_existing_vercel_token(token: &str) -> Result<ExistingTokenSource, Error> {
@@ -295,7 +301,7 @@ pub(crate) fn classify_existing_vercel_token(token: &str) -> Result<ExistingToke
 }
 
 fn load_legacy_auth_tokens(
-    expected_token: Option<&SecretString>,
+    expected_token: Option<&Credential>,
 ) -> Result<crate::AuthTokens, Error> {
     use crate::Token;
 
@@ -328,15 +334,13 @@ fn load_legacy_auth_tokens(
 
 async fn exchange_legacy_auth_token(
     turbo_auth_path: &AbsoluteSystemPath,
-    turbo_config_path: &AbsoluteSystemPath,
-    expected_token: Option<&SecretString>,
+    expected_token: Option<&Credential>,
     allow_legacy_token_fallback: bool,
-) -> Result<Option<SecretString>, Error> {
+) -> Result<Option<Credential>, Error> {
     let legacy_auth_tokens = load_legacy_auth_tokens(expected_token)?;
     exchange_auth_tokens(
         &legacy_auth_tokens,
         turbo_auth_path,
-        turbo_config_path,
         allow_legacy_token_fallback,
         "legacy Vercel auth token",
     )
@@ -350,35 +354,12 @@ fn can_refresh_token(auth_tokens: &crate::AuthTokens) -> bool {
     auth_tokens.refresh_token.is_some()
 }
 
-fn should_exchange_turbo_config_token(
-    auth_tokens: &crate::AuthTokens,
-    turbo_auth_path: &AbsoluteSystemPath,
-) -> Result<bool, Error> {
-    let Some(token) = auth_tokens.token.as_ref() else {
-        return Ok(false);
-    };
-
-    if token.expose().starts_with("vca_")
-        || auth_tokens.refresh_token.is_some()
-        || auth_tokens.expires_at.is_some()
-    {
-        return Ok(false);
-    }
-
-    Ok(!path_contains_token(
-        turbo_auth_path,
-        "Turbo auth file",
-        token.expose(),
-    )?)
-}
-
 async fn exchange_auth_tokens(
     auth_tokens: &crate::AuthTokens,
     turbo_auth_path: &AbsoluteSystemPath,
-    turbo_config_path: &AbsoluteSystemPath,
     allow_token_fallback: bool,
     source_label: &str,
-) -> Result<Option<SecretString>, Error> {
+) -> Result<Option<Credential>, Error> {
     let Some(stored_token) = auth_tokens.token.clone() else {
         return Ok(None);
     };
@@ -401,13 +382,8 @@ async fn exchange_auth_tokens(
 
     match exchange_source.exchange_legacy_token().await {
         Ok(exchanged_tokens) => {
-            if let Err(e) =
-                persist_turbo_oauth_tokens(&exchanged_tokens, turbo_auth_path, turbo_config_path)
-            {
-                warn!(
-                    "Failed to write exchanged tokens to {turbo_auth_path} and clear \
-                     {turbo_config_path}: {e}"
-                );
+            if let Err(e) = exchanged_tokens.write_to_config_file(turbo_auth_path) {
+                warn!("Failed to write exchanged tokens to {turbo_auth_path}: {e}");
             }
             Ok(exchanged_tokens.token)
         }
@@ -448,21 +424,15 @@ async fn exchange_auth_tokens(
 async fn refresh_and_persist_turbo_token(
     auth_tokens: &crate::AuthTokens,
     turbo_auth_path: &AbsoluteSystemPath,
-    turbo_config_path: &AbsoluteSystemPath,
-) -> Option<SecretString> {
+) -> Option<Credential> {
     if !can_refresh_token(auth_tokens) {
         return None;
     }
 
     match auth_tokens.refresh_token().await {
         Ok(new_tokens) => {
-            if let Err(e) =
-                persist_turbo_oauth_tokens(&new_tokens, turbo_auth_path, turbo_config_path)
-            {
-                warn!(
-                    "Failed to write refreshed tokens to {turbo_auth_path} and clear \
-                     {turbo_config_path}: {e}"
-                );
+            if let Err(e) = new_tokens.write_to_config_file(turbo_auth_path) {
+                warn!("Failed to write refreshed tokens to {turbo_auth_path}: {e}");
             }
             new_tokens.token
         }
@@ -473,20 +443,10 @@ async fn refresh_and_persist_turbo_token(
     }
 }
 
-fn persist_turbo_oauth_tokens(
-    auth_tokens: &crate::AuthTokens,
-    turbo_auth_path: &AbsoluteSystemPath,
-    turbo_config_path: &AbsoluteSystemPath,
-) -> Result<(), Error> {
-    auth_tokens.write_to_config_file(turbo_auth_path)?;
-    crate::AuthTokens::clear_from_config_file(turbo_config_path)?;
-    Ok(())
-}
-
 async fn get_token_with_refresh_inner(
     allow_legacy_token_fallback: bool,
     allow_turbo_config_token_fallback: bool,
-) -> Result<Option<SecretString>, Error> {
+) -> Result<Option<Credential>, Error> {
     use crate::{TURBO_AUTH_FILE, TURBO_TOKEN_DIR, TURBO_TOKEN_FILE};
 
     let turbo_config_dir = match turborepo_dirs::config_dir()? {
@@ -499,65 +459,44 @@ async fn get_token_with_refresh_inner(
     let auth_tokens = load_auth_tokens(&turbo_auth_path, &turbo_config_path)?;
 
     if let Some(token) = &auth_tokens.token {
+        if !token.is_saved_vercel() {
+            return Ok(allow_turbo_config_token_fallback.then(|| token.clone()));
+        }
         if classify_existing_vercel_token(token.expose())? == ExistingTokenSource::LegacyAuth {
             return exchange_legacy_auth_token(
                 &turbo_auth_path,
-                &turbo_config_path,
                 Some(token),
                 allow_legacy_token_fallback,
-            )
-            .await;
-        }
-
-        if should_exchange_turbo_config_token(&auth_tokens, &turbo_auth_path)? {
-            return exchange_auth_tokens(
-                &auth_tokens,
-                &turbo_auth_path,
-                &turbo_config_path,
-                allow_turbo_config_token_fallback,
-                "Turbo config token",
             )
             .await;
         }
 
         if auth_tokens.is_expired() {
             if let Some(refreshed_token) =
-                refresh_and_persist_turbo_token(&auth_tokens, &turbo_auth_path, &turbo_config_path)
-                    .await
+                refresh_and_persist_turbo_token(&auth_tokens, &turbo_auth_path).await
             {
                 return Ok(Some(refreshed_token));
             }
 
-            exchange_legacy_auth_token(
-                &turbo_auth_path,
-                &turbo_config_path,
-                Some(token),
-                allow_legacy_token_fallback,
-            )
-            .await
+            exchange_legacy_auth_token(&turbo_auth_path, Some(token), allow_legacy_token_fallback)
+                .await
         } else {
             Ok(Some(token.clone()))
         }
     } else {
-        exchange_legacy_auth_token(
-            &turbo_auth_path,
-            &turbo_config_path,
-            None,
-            allow_legacy_token_fallback,
-        )
-        .await
+        exchange_legacy_auth_token(&turbo_auth_path, None, allow_legacy_token_fallback).await
     }
 }
 
 /// Attempts to get a valid token with automatic refresh if expired.
-pub async fn get_token_with_refresh() -> Result<Option<SecretString>, Error> {
+pub async fn get_token_with_refresh() -> Result<Option<Credential>, Error> {
     get_token_with_refresh_inner(true, true).await
 }
 
-/// Login prefers upgrading legacy/config tokens into Turbo OAuth sessions. If
-/// that upgrade fails, callers should fall through to a fresh login instead of
-/// silently reusing the old token.
-pub async fn get_token_with_refresh_for_login() -> Result<Option<SecretString>, Error> {
+/// Login prefers upgrading legacy Vercel auth tokens into dedicated OAuth
+/// sessions. If that upgrade fails, callers should fall through to a fresh
+/// login instead of silently reusing the old token.
+pub async fn get_token_with_refresh_for_login() -> Result<Option<Credential>, Error> {
     get_token_with_refresh_inner(false, false).await
 }
 
@@ -565,8 +504,11 @@ pub async fn get_token_with_refresh_for_login() -> Result<Option<SecretString>, 
 /// by the server. Unlike `get_token_with_refresh`, this never falls back to the
 /// same stored token.
 pub async fn recover_token_after_forbidden(
-    current_token: &SecretString,
-) -> Result<Option<SecretString>, Error> {
+    current_token: &Credential,
+) -> Result<Option<Credential>, Error> {
+    if !current_token.is_saved_vercel() {
+        return Ok(None);
+    }
     use crate::{TURBO_AUTH_FILE, TURBO_TOKEN_DIR, TURBO_TOKEN_FILE};
 
     let turbo_config_dir = match turborepo_dirs::config_dir()? {
@@ -579,48 +521,22 @@ pub async fn recover_token_after_forbidden(
 
     match classify_existing_vercel_token(current_token.expose())? {
         ExistingTokenSource::LegacyAuth => {
-            exchange_legacy_auth_token(
-                &turbo_auth_path,
-                &turbo_config_path,
-                Some(current_token),
-                false,
-            )
-            .await
+            exchange_legacy_auth_token(&turbo_auth_path, Some(current_token), false).await
         }
         ExistingTokenSource::TurboAuth | ExistingTokenSource::TurboConfig => {
             let auth_tokens = load_auth_tokens(&turbo_auth_path, &turbo_config_path)?;
-            if auth_tokens.token.as_ref().map(|token| token.expose())
-                != Some(current_token.expose())
-            {
+            if auth_tokens.token.as_ref() != Some(current_token) {
                 return Ok(None);
             }
 
-            if should_exchange_turbo_config_token(&auth_tokens, &turbo_auth_path)? {
-                return exchange_auth_tokens(
-                    &auth_tokens,
-                    &turbo_auth_path,
-                    &turbo_config_path,
-                    false,
-                    "Turbo config token",
-                )
-                .await;
-            }
-
             if let Some(refreshed_token) =
-                refresh_and_persist_turbo_token(&auth_tokens, &turbo_auth_path, &turbo_config_path)
-                    .await
+                refresh_and_persist_turbo_token(&auth_tokens, &turbo_auth_path).await
                 && refreshed_token.expose() != current_token.expose()
             {
                 return Ok(Some(refreshed_token));
             }
 
-            exchange_legacy_auth_token(
-                &turbo_auth_path,
-                &turbo_config_path,
-                Some(current_token),
-                false,
-            )
-            .await
+            exchange_legacy_auth_token(&turbo_auth_path, Some(current_token), false).await
         }
         ExistingTokenSource::Other => Ok(None),
     }
@@ -633,12 +549,12 @@ mod tests {
     use tempfile::tempdir;
     use tokio::sync::Mutex;
     use turbopath::AbsoluteSystemPathBuf;
-    use turborepo_types::SecretString;
+    use turborepo_types::{Credential, SecretString};
 
     use super::{
         ExistingTokenSource, can_refresh_token, classify_existing_vercel_token,
         get_token_with_refresh, is_vercel, load_auth_tokens, recover_token_after_forbidden,
-        should_exchange_turbo_config_token, should_skip_existing_token_for_login,
+        should_skip_existing_token_for_login,
     };
     use crate::{
         AuthTokens, TURBO_AUTH_FILE, TURBO_TOKEN_DIR, TURBO_TOKEN_FILE, Token,
@@ -831,7 +747,7 @@ mod tests {
     }
 
     #[test]
-    fn test_should_exchange_turbo_config_legacy_token() {
+    fn test_generic_config_legacy_token_stays_generic() {
         let _lock = ENV_LOCK.blocking_lock();
         let turbo_config_dir = create_mock_turbo_config_dir();
         let vercel_config_dir = create_mock_vercel_config_dir();
@@ -848,7 +764,7 @@ mod tests {
             turbo_config_dir.join_components(&[TURBO_TOKEN_DIR, TURBO_TOKEN_FILE]);
         let auth_tokens = load_auth_tokens(&turbo_auth_path, &turbo_config_path).unwrap();
 
-        assert!(should_exchange_turbo_config_token(&auth_tokens, &turbo_auth_path).unwrap());
+        assert!(!auth_tokens.token.as_ref().unwrap().is_saved_vercel());
 
         unsafe {
             env::remove_var("TURBO_CONFIG_DIR_PATH");
@@ -857,7 +773,7 @@ mod tests {
     }
 
     #[test]
-    fn test_should_not_exchange_turbo_auth_oauth_token() {
+    fn test_dedicated_auth_token_stays_protected() {
         let _lock = ENV_LOCK.blocking_lock();
         let turbo_config_dir = create_mock_turbo_config_dir();
         let vercel_config_dir = create_mock_vercel_config_dir();
@@ -879,7 +795,7 @@ mod tests {
             turbo_config_dir.join_components(&[TURBO_TOKEN_DIR, TURBO_TOKEN_FILE]);
         let auth_tokens = load_auth_tokens(&turbo_auth_path, &turbo_config_path).unwrap();
 
-        assert!(!should_exchange_turbo_config_token(&auth_tokens, &turbo_auth_path).unwrap());
+        assert!(auth_tokens.token.as_ref().unwrap().is_saved_vercel());
 
         unsafe {
             env::remove_var("TURBO_CONFIG_DIR_PATH");
@@ -916,6 +832,7 @@ mod tests {
         let token = get_token_with_refresh().await.unwrap().unwrap();
 
         assert_eq!(token.expose(), "vca_turbo_auth_token");
+        assert!(token.is_saved_vercel());
 
         unsafe {
             env::remove_var("TURBO_CONFIG_DIR_PATH");
@@ -939,6 +856,7 @@ mod tests {
         let token = get_token_with_refresh().await.unwrap().unwrap();
 
         assert_eq!(token.expose(), "legacy_config_token");
+        assert!(!token.is_saved_vercel());
 
         unsafe {
             env::remove_var("TURBO_CONFIG_DIR_PATH");
@@ -1047,8 +965,15 @@ mod tests {
             env::set_var("VERCEL_CONFIG_DIR_PATH", vercel_config_dir.as_path());
         }
 
+        let generic = Credential::generic("stored-token".into());
+        assert!(
+            recover_token_after_forbidden(&generic)
+                .await
+                .unwrap()
+                .is_none()
+        );
         let recovered =
-            recover_token_after_forbidden(&SecretString::new("other-token".to_string()))
+            recover_token_after_forbidden(&Credential::saved_vercel("other-token".into()))
                 .await
                 .unwrap();
 
@@ -1227,7 +1152,7 @@ mod tests {
     async fn test_refreshability_depends_on_refresh_token_not_access_token_prefix() {
         for token in ["vca_token", "legacy_token", "corrupted!!!", ""] {
             let auth_tokens = AuthTokens {
-                token: Some(SecretString::new(token.to_string())),
+                token: Some(Credential::from(token.to_string())),
                 refresh_token: Some(SecretString::new("refresh_token".to_string())),
                 expires_at: Some(current_unix_time_secs() - 3600),
             };
@@ -1239,7 +1164,7 @@ mod tests {
         }
 
         let auth_tokens = AuthTokens {
-            token: Some(SecretString::new("vca_token".to_string())),
+            token: Some(Credential::from("vca_token".to_string())),
             refresh_token: None,
             expires_at: Some(current_unix_time_secs() - 3600),
         };

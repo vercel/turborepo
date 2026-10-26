@@ -790,6 +790,15 @@ fn generate_root_schema_interface() -> String {
 
 export interface FutureFlags {
   /**
+   * Include file executable permissions in task hashes. Disabled by default.
+   * Enabling this flag changes all task hashes. On Unix, any executable bit
+   * marks a regular file as executable. On Windows, files are non-executable.
+   * Symlink permissions and other permission bits do not affect hashes.
+   *
+   * @defaultValue `false`
+   */
+  hashFilePermissions?: boolean;
+  /**
    * When using `outputLogs: "errors-only"`, show task hashes when tasks
    * complete successfully. This provides visibility into which tasks are
    * running without showing full output logs.
@@ -1089,7 +1098,6 @@ fn generate_setup_policy_interfaces() -> String {
    * How `turbo setup` prepares tools for every toolchain.
    *
    * - `"managed"`: Provision the locked version for this repository.
-   * - `"verify-system"`: Use an installed tool after verifying that it matches the locked version.
    * - `"skip"`: Neither provision nor verify the tool, which also skips the toolchain's dependencies.
    *
    * Without `setup`, `turbo setup` infers what to prepare from native
@@ -1306,15 +1314,27 @@ mod cli_tests {
     }
 
     #[test]
+    fn hash_file_permissions_is_an_optional_boolean_future_flag() {
+        let schema = serde_json::to_value(super::generate_schema()).unwrap();
+        let flags = &schema["definitions"]["FutureFlags"];
+        let permissions = &flags["properties"]["hashFilePermissions"];
+        assert_eq!(permissions["type"], "boolean");
+        assert_eq!(permissions["default"], false);
+        assert!(
+            flags["required"]
+                .as_array()
+                .is_none_or(|fields| !fields.contains(&serde_json::json!("hashFilePermissions")))
+        );
+        assert!(super::generate_typescript().contains("hashFilePermissions?: boolean;"));
+    }
+
+    #[test]
     fn setup_policy_is_an_optional_root_object() {
         let schema = serde_json::to_value(super::generate_schema()).unwrap();
         let setup = &schema["properties"]["setup"]["anyOf"][0]["$ref"];
         assert_eq!(setup, "#/definitions/SetupPolicy");
         let tools = &schema["definitions"]["ToolPolicy"]["enum"];
-        assert_eq!(
-            tools,
-            &serde_json::json!(["managed", "verify-system", "skip"])
-        );
+        assert_eq!(tools, &serde_json::json!(["managed", "skip"]));
         assert!(super::generate_typescript().contains("export interface ToolchainSetupPolicy {"));
         let tool = &schema["definitions"]["AdditionalTool"];
         assert_eq!(

@@ -7,14 +7,13 @@
 //! considered (e.g. tasks with `$TURBO_ROOT$` inputs in non-affected
 //! packages).
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 
-use turbopath::AnchoredSystemPathBuf;
 use turborepo_repository::package_graph::{PackageGraph, PackageName};
 use turborepo_task_id::TaskId;
 use turborepo_types::{
-    TaskDefinition, TaskInputs,
-    task_input_matching::{compile_globs, file_matches_compiled_inputs},
+    EffectiveTaskInputs, TaskDefinition, TaskInputChanges, TaskInputs, TaskOutputs,
+    task_input_matching::CompiledEffectiveInputs,
 };
 
 use crate::{Built, Engine};
@@ -44,7 +43,12 @@ static DEFAULT_TASK_INPUTS: TaskInputs = TaskInputs {
     eager: true,
 };
 
-/// Returns the set of tasks whose input globs match at least one changed file.
+static DEFAULT_TASK_OUTPUTS: TaskOutputs = TaskOutputs {
+    inclusions: Vec::new(),
+    exclusions: Vec::new(),
+};
+
+/// Returns the set of tasks whose effective inputs match a changed file.
 ///
 /// Iterates every task in the engine regardless of which packages are
 /// "affected" at the package level. This is critical for correctness:
@@ -65,19 +69,17 @@ static DEFAULT_TASK_INPUTS: TaskInputs = TaskInputs {
 pub fn match_tasks_against_changed_files(
     engine: &Engine<Built, TaskDefinition>,
     pkg_dep_graph: &PackageGraph,
-    changed_files: &HashSet<AnchoredSystemPathBuf>,
+    changed_files: &TaskInputChanges,
 ) -> Result<HashMap<TaskId<'static>, String>, AffectednessError> {
     let mut matched = HashMap::new();
 
-    // Pre-convert all file paths to Unix strings once, avoiding repeated
-    // allocation in the O(tasks × files) inner loop.
-    let changed_unix: Vec<String> = changed_files
+    let changed_unix: Vec<_> = changed_files
+        .files
         .iter()
-        .map(|f| f.to_unix().to_string())
+        .map(|f| (f.to_unix().to_string(), changed_files.tracked.contains(f)))
         .collect();
 
-    // Compile globs once per unique (package_path, inputs) pair.
-    let mut compiled_cache: HashMap<(String, TaskInputs), _> = HashMap::new();
+    let mut compiled_cache: HashMap<(String, EffectiveTaskInputs<'_>), _> = HashMap::new();
 
     for task_id in engine.task_ids() {
         let pkg_name = PackageName::from(task_id.package());
@@ -89,12 +91,18 @@ pub fn match_tasks_against_changed_files(
 
         let inputs = engine
             .task_definition(task_id)
-            .map(|def| &def.inputs)
-            .unwrap_or(&DEFAULT_TASK_INPUTS);
+            .map(|def| EffectiveTaskInputs {
+                declared: &def.inputs,
+                tracked_outputs: &def.outputs,
+            })
+            .unwrap_or(EffectiveTaskInputs {
+                declared: &DEFAULT_TASK_INPUTS,
+                tracked_outputs: &DEFAULT_TASK_OUTPUTS,
+            });
 
-        let cache_key = (pkg_str.clone(), inputs.clone());
+        let cache_key = (pkg_str.clone(), inputs);
         if !compiled_cache.contains_key(&cache_key) {
-            let compiled = compile_globs(inputs, &pkg_str).map_err(|error| {
+            let compiled = CompiledEffectiveInputs::compile(inputs, &pkg_str).map_err(|error| {
                 AffectednessError::InvalidGlob {
                     task: task_id.clone(),
                     glob: error.glob,
@@ -111,8 +119,8 @@ pub fn match_tasks_against_changed_files(
             format!("{pkg_str}/")
         };
 
-        for file_unix in &changed_unix {
-            if file_matches_compiled_inputs(file_unix, &pkg_str, &pkg_prefix_slash, compiled) {
+        for (file_unix, tracked_change) in &changed_unix {
+            if compiled.matches(file_unix, &pkg_str, &pkg_prefix_slash, *tracked_change) {
                 matched.insert(task_id.clone(), file_unix.clone());
                 break;
             }
@@ -124,7 +132,7 @@ pub fn match_tasks_against_changed_files(
 
 #[cfg(test)]
 mod tests {
-    use std::collections::{HashMap, HashSet};
+    use std::collections::HashMap;
 
     use turbopath::{AbsoluteSystemPath, AnchoredSystemPathBuf};
     use turborepo_errors::Spanned;
@@ -188,11 +196,13 @@ mod tests {
         engine.seal()
     }
 
-    fn changed(files: &[&str]) -> HashSet<AnchoredSystemPathBuf> {
-        files
-            .iter()
-            .map(|f| AnchoredSystemPathBuf::from_raw(f).unwrap())
-            .collect()
+    fn changed(files: &[&str]) -> TaskInputChanges {
+        TaskInputChanges::from_tracked(
+            files
+                .iter()
+                .map(|f| AnchoredSystemPathBuf::from_raw(f).unwrap())
+                .collect(),
+        )
     }
 
     fn def_with_inputs(globs: &[&str], default: bool) -> TaskDefinition {

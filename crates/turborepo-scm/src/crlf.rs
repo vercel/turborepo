@@ -551,6 +551,7 @@ fn hash_file_for_cache(
 /// itself. Outputs are bit-identical to git for all non-colliding inputs,
 /// enforced by differential tests against `git hash-object` below.
 pub(crate) fn hash_file_as_git_blob(
+    root: &AbsoluteSystemPath,
     path: &AbsoluteSystemPath,
     attr: TextAttr,
 ) -> Result<Option<OidHash>, std::io::Error> {
@@ -560,10 +561,44 @@ pub(crate) fn hash_file_as_git_blob(
         return Ok(None);
     }
 
+    let target = path.to_realpath().map_err(|error| match error {
+        turbopath::PathError::IO(error) => error,
+        error => std::io::Error::other(error),
+    })?;
+    let real_root = root.to_realpath().map_err(std::io::Error::other)?;
+    let authored = real_root
+        .resolve(&turbopath::AnchoredSystemPathBuf::relative_path_between(
+            root, path,
+        ))
+        .clean()
+        .map_err(std::io::Error::other)?;
+    if target != authored {
+        let relative = real_root.anchor(&target).map_err(|_| {
+            std::io::Error::new(
+                std::io::ErrorKind::PermissionDenied,
+                "input symlink leaves repository",
+            )
+        })?;
+        if relative
+            .components()
+            .any(|part| turbopath::is_git_metadata_component(part.as_str()))
+        {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::PermissionDenied,
+                "input symlink enters Git metadata",
+            ));
+        }
+    }
     let mut file = std::fs::File::open(path)?;
     let metadata = file.metadata()?;
     if !metadata.is_file() {
         return Ok(None);
+    }
+    if turbopath::file_realpath(&file)? != target.as_std_path() {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::PermissionDenied,
+            "input changed while opening",
+        ));
     }
     Ok(Some(hash_file_for_cache(
         path,
@@ -601,6 +636,13 @@ mod tests {
     use turbopath::AbsoluteSystemPathBuf;
 
     use super::*;
+
+    fn hash_file_as_git_blob(
+        path: &AbsoluteSystemPath,
+        attr: TextAttr,
+    ) -> Result<Option<OidHash>, std::io::Error> {
+        super::hash_file_as_git_blob(path.parent().unwrap(), path, attr)
+    }
 
     fn tmp_dir() -> (tempfile::TempDir, AbsoluteSystemPathBuf) {
         let tmp = tempfile::tempdir().unwrap();

@@ -199,7 +199,7 @@ mod tests {
         sync::{mpsc, mpsc::UnboundedReceiver},
     };
     use turborepo_api_client::{APIAuth, analytics::AnalyticsClient};
-    use turborepo_types::SecretString;
+    use turborepo_types::Credential;
     use turborepo_vercel_api::{AnalyticsEvent, CacheEvent, CacheSource};
     use uuid::Uuid;
 
@@ -255,7 +255,7 @@ mod tests {
 
         let (analytics_sender, analytics_handle) = start_analytics(
             APIAuth {
-                token: SecretString::new("foo".to_string()),
+                token: Credential::from("foo".to_string()),
                 team_id: Some("bar".to_string()),
                 team_slug: None,
             },
@@ -301,7 +301,7 @@ mod tests {
 
         let (analytics_sender, analytics_handle) = start_analytics(
             APIAuth {
-                token: SecretString::new("foo".to_string()),
+                token: Credential::from("foo".to_string()),
                 team_id: Some("bar".to_string()),
                 team_slug: None,
             },
@@ -357,7 +357,7 @@ mod tests {
     async fn test_close_does_not_block_on_slow_client() {
         let (analytics_sender, analytics_handle) = start_analytics(
             APIAuth {
-                token: SecretString::new("foo".to_string()),
+                token: Credential::from("foo".to_string()),
                 team_id: Some("bar".to_string()),
                 team_slug: None,
             },
@@ -408,7 +408,7 @@ mod tests {
         let (tx, mut rx) = mpsc::unbounded_channel();
         let (analytics_sender, analytics_handle) = start_analytics(
             APIAuth {
-                token: SecretString::new("foo".to_string()),
+                token: Credential::from("foo".to_string()),
                 team_id: Some("bar".to_string()),
                 team_slug: None,
             },
@@ -441,7 +441,7 @@ mod tests {
 
         let (analytics_sender, analytics_handle) = start_analytics(
             APIAuth {
-                token: SecretString::new("foo".to_string()),
+                token: Credential::from("foo".to_string()),
                 team_id: Some("bar".to_string()),
                 team_slug: None,
             },
@@ -483,7 +483,7 @@ mod tests {
         };
         let (analytics_sender, analytics_handle) = start_analytics(
             APIAuth {
-                token: SecretString::new("foo".to_string()),
+                token: Credential::from("foo".to_string()),
                 team_id: Some("bar".to_string()),
                 team_slug: None,
             },
@@ -534,7 +534,7 @@ mod tests {
 
         let (analytics_sender, analytics_handle) = start_analytics(
             APIAuth {
-                token: SecretString::new("foo".to_string()),
+                token: Credential::from("foo".to_string()),
                 team_id: Some("bar".to_string()),
                 team_slug: None,
             },

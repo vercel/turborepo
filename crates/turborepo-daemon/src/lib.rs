@@ -87,6 +87,9 @@ pub trait PackageChangesWatcher: Send + Sync {
 pub struct PackageChangesWatcherArgs {
     pub repo_root: AbsoluteSystemPathBuf,
     pub file_events: turborepo_filewatch::WatchSource,
+    pub package_discovery: tokio::sync::watch::Receiver<
+        Option<Result<turborepo_repository::discovery::DiscoveryResponse, String>>,
+    >,
     pub hash_watcher: std::sync::Arc<turborepo_filewatch::hash_watcher::HashWatcher>,
     pub custom_turbo_json_path: Option<AbsoluteSystemPathBuf>,
     pub allow_no_package_manager: bool,

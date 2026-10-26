@@ -92,7 +92,9 @@ process.on('SIGINT', () => {
   }, 50);
 });
 setTimeout(() => { child.kill(); process.exit(99); }, 60000);
-fs.writeFileSync('pids.json', JSON.stringify([process.pid, child.pid]));
+// Publish readiness only after the complete PID payload has been written.
+fs.writeFileSync('pids.tmp', JSON.stringify([process.pid, child.pid]));
+fs.renameSync('pids.tmp', 'pids.json');
 setInterval(() => {}, 1000);
 "#;
 

@@ -365,16 +365,14 @@ mod tests {
             &self,
             _base: Option<&str>,
             _head: Option<&str>,
-        ) -> Result<
-            std::collections::HashSet<turbopath::AnchoredSystemPathBuf>,
-            turborepo_query_api::AffectedPackagesError,
-        > {
+        ) -> Result<turborepo_types::TaskInputChanges, turborepo_query_api::AffectedPackagesError>
+        {
             Ok(Default::default())
         }
 
         fn match_tasks_against_changed_files(
             &self,
-            _files: &std::collections::HashSet<turbopath::AnchoredSystemPathBuf>,
+            _files: &turborepo_types::TaskInputChanges,
         ) -> Result<
             std::collections::HashMap<turborepo_query_api::QueryTaskId, String>,
             turborepo_query_api::AffectedPackagesError,

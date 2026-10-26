@@ -53,7 +53,7 @@ pub(super) struct Run {
 }
 
 /// A committed Node/pnpm repository plus an isolated home and temp dir, with
-/// PATH limited to Git's directory (setup checks `.turbo/` ignore coverage).
+/// PATH limited to Git's directory (setup asks Git for the worktree root).
 pub(super) struct Repo {
     _temp: tempfile::TempDir,
     pub(super) root: PathBuf,

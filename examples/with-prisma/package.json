@@ -3,6 +3,7 @@
   "private": true,
   "scripts": {
     "build": "turbo run build",
+    "check-types": "turbo run check-types",
     "db:migrate:deploy": "turbo run db:migrate:deploy",
     "db:migrate:dev": "turbo run db:migrate:dev",
     "db:push": "turbo run db:push",
@@ -13,14 +14,14 @@
     "lint": "turbo run lint"
   },
   "devDependencies": {
-    "pnpm": "12.4.2",
-    "prettier": "3.9.8",
-    "prisma": "8.0.0-rc.15",
-    "tsx": "4.23.13",
-    "turbo": "2.10.13"
+    "pnpm": "12.14.0",
+    "prettier": "3.9.10",
+    "prisma": "8.0.0-rc.24",
+    "tsx": "4.23.15",
+    "turbo": "2.11.10"
   },
   "engines": {
-    "node": ">=24.21.0"
+    "node": ">=26.12.1"
   },
-  "packageManager": "pnpm@12.4.2"
+  "packageManager": "pnpm@12.14.0"
 }

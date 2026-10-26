@@ -65,7 +65,7 @@ fn yarn_classic_and_modern_lock_launch_the_managed_node_and_repeat_without_traff
         );
 
         let plan = f.plan();
-        let bin = plan.path_prepend().unwrap().to_path_buf();
+        let bin = plan.path_prepend().to_path_buf();
         let mut names: Vec<_> = fs::read_dir(&bin)
             .unwrap()
             .map(|e| e.unwrap().file_name().into_string().unwrap())
@@ -147,7 +147,7 @@ fn modern_yarn_bundle_pins_verify_and_a_committed_yarn_path_is_left_to_yarn() {
     assert_eq!(yarn.version, version);
     // Yarn's bundle re-runs a committed yarnPath with its own process.execPath,
     // which the launcher makes the managed node.exe.
-    let bin = plan.path_prepend().unwrap().to_path_buf();
+    let bin = plan.path_prepend().to_path_buf();
     let launcher = bin.join("../tools/yarn").join(&yarn.executables["yarn"]);
     let launcher = fs::read_to_string(launcher).unwrap();
     assert!(launcher.starts_with("@\"%~dp0..\\..\\node\\node.exe\" "));

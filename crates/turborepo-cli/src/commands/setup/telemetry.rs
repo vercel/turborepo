@@ -110,7 +110,6 @@ pub(super) fn failure(error: &Error) -> SetupFailure {
         }
         Error::LockDiagnostics(super::lock_diagnostics::Error::Drift(_)) => SetupFailure::LockStale,
         Error::Offline(_) => SetupFailure::Readiness,
-        Error::SystemTool(_) => SetupFailure::Readiness,
         Error::OfflineMissing(_) => SetupFailure::Download,
         Error::Unsupported(message) => match *message {
             "managed promotion requires macOS or GNU Linux"
@@ -128,10 +127,7 @@ pub(super) fn failure(error: &Error) -> SetupFailure {
             "a native Node declaration is required"
             | "setup discovery changed during check; retry turbo setup"
             | "setup discovery changed during provisioning" => SetupFailure::Discovery,
-            "unsafe .turbo storage path"
-            | "storage must be untracked and Git-ignored; add /.turbo/ to .gitignore" => {
-                SetupFailure::Install
-            }
+            "unsafe .turbo storage path" => SetupFailure::Install,
             _ => SetupFailure::Unsupported,
         },
         Error::SourcePolicy(_) => SetupFailure::SourcePolicy,

@@ -31,6 +31,10 @@ fn specs_preserve_raw_version_grammar_for_each_consumer() {
     for family in Family::ALL {
         for version in [
             "1.2.3",
+            "12.0.0",
+            "12.0.0-alpha.1",
+            "^12.0.0",
+            "12.0.0+sha512.abc",
             "^1 || 2",
             " = v1.2.3 ",
             "1.2.3+sha512.abc",
@@ -61,7 +65,7 @@ fn entries_preserve_absence_constraints_and_raw_failure_policy() {
         assert_eq!(entry.version, None);
         assert_eq!(entry.version().unwrap(), None);
         assert_eq!(entry.on_fail, Some(&value["onFail"]));
-        for version in ["", "*", " ^1 || 2 ", "1.2.3+build"] {
+        for version in ["", "*", " ^1 || 2 ", "1.2.3+build", "12.0.0", "^12.0.0"] {
             let value = json!({"name": family.name(), "version": version, "onFail": 42});
             let entry = parse_entry(&value).unwrap();
             assert_eq!(entry.version, Some(&value["version"]));

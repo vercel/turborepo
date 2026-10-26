@@ -42,4 +42,5 @@ turborepo-ui = { workspace = true, features = ["tui"] }
 [dev-dependencies]
 serde_json = { workspace = true }
 tempfile = { workspace = true }
+tokio = { workspace = true, features = ["test-util"] }
 turborepo-types = { workspace = true }
