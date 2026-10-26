@@ -1,0 +1,14 @@
+{
+  "$schema": "https://turborepo.dev/schema.json",
+  "agentGuidance": false,
+  "tasks": {
+    "build": {
+      "dependsOn": ["^build"],
+      "outputs": ["dist/**"],
+      "env": ["DOCS_PREVIEW_TOKEN"]
+    },
+    "test": {
+      "dependsOn": ["build"]
+    }
+  }
+}

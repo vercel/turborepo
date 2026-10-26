@@ -1,8 +1,8 @@
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 
-/** Latest attempts without a grader are not model failures, even if the eval
- * framework has cached their fingerprint (e.g. an AI Gateway 402 response). */
+/** Invalid attempts and failures without a grader are not model failures, even
+ * if the framework has cached their fingerprint (e.g. an AI Gateway 402). */
 export function ungradedAttempts(resultsRoot, variants, fixtures) {
   const ungraded = [];
   for (const variant of variants) {
@@ -26,7 +26,10 @@ export function ungradedAttempts(resultsRoot, variants, fixtures) {
           const path = join(fixtureRoot, attempt, "result.json");
           if (!existsSync(path)) return false;
           const result = JSON.parse(readFileSync(path, "utf8"));
-          return result.status === "failed" && !result.outputPaths?.eval;
+          return (
+            typeof result.metadata?.invalidAttempt === "string" ||
+            (result.status === "failed" && !result.outputPaths?.eval)
+          );
         })
       ) {
         ungraded.push(`${variant}/${fixture}`);

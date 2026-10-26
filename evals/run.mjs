@@ -129,10 +129,10 @@ function main() {
     );
     if (ungraded.length) {
       console.error(
-        `Ungraded attempts (no eval output): ${ungraded.join(", ")}`
+        `Ungraded or isolation-invalid attempts: ${ungraded.join(", ")}`
       );
       console.error(
-        "These are not model failures. Fix the infrastructure error and rerun."
+        "These are not model failures. Fix the infrastructure or guidance isolation problem and rerun."
       );
       process.exitCode = 1;
       return;

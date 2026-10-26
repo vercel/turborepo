@@ -12,6 +12,26 @@ function record(root, timestamp, variant, fixture, result) {
   writeFileSync(join(path, "run-1/result.json"), JSON.stringify(result));
 }
 
+test("invalid attempts are flagged even with grader output or a passed status", (t) => {
+  const root = mkdtempSync(join(tmpdir(), "turbo-eval-results-"));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  for (const status of ["failed", "passed"]) {
+    record(root, "2026-09-25T01:00:00Z", status, "env-cache", {
+      status,
+      metadata: { invalidAttempt: "turbo.json dropped agentGuidance: false" },
+      outputPaths: { eval: "./outputs/eval.txt" }
+    });
+    assert.deepEqual(ungradedAttempts(root, [status], ["env-cache"]), [
+      `${status}/env-cache`
+    ]);
+    record(root, "2026-09-25T02:00:00Z", status, "env-cache", {
+      status: "passed",
+      outputPaths: { eval: "./outputs/eval.txt" }
+    });
+    assert.deepEqual(ungradedAttempts(root, [status], ["env-cache"]), []);
+  }
+});
+
 test("ungraded failures are flagged, but a newer graded result supersedes them", (t) => {
   const root = mkdtempSync(join(tmpdir(), "turbo-eval-results-"));
   t.after(() => rmSync(root, { recursive: true, force: true }));

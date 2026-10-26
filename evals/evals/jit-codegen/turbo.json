@@ -1,0 +1,14 @@
+{
+  "$schema": "https://turborepo.dev/schema.json",
+  "agentGuidance": false,
+  "tasks": {
+    "codegen": {
+      "cache": false,
+      "passThroughEnv": ["CATALOG_SCHEMA_URL"]
+    },
+    "build": {
+      "dependsOn": ["codegen"],
+      "outputs": ["dist/**"]
+    }
+  }
+}
