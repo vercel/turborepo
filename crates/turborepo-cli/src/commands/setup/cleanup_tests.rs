@@ -31,6 +31,26 @@ fn selected(f: &Fixture) -> String {
 }
 
 #[test]
+fn selected_tools_and_shared_downloads_do_not_report_disk_use() {
+    let cache = tempfile::tempdir().unwrap();
+    let f = Fixture::new();
+    let u = Upstream::new(&f, false, None);
+    assert_eq!(
+        f.run_with(u.origin(), Some(cache.path()), FROZEN).unwrap(),
+        0
+    );
+    let lock = turborepo_setup::lock::Lock::parse(f.lock.to_string().as_bytes()).unwrap();
+    let host = provision::platform().unwrap();
+    let shared = turborepo_setup::artifact_cache::ArtifactCache::new(cache.path());
+    let mut store = Store::open(f.owned.root()).unwrap();
+    let lines = cleanup::after_provisioning(&mut store, shared.as_ref(), &lock, host);
+    assert!(lines.is_empty(), "{lines:?}");
+    let report = cleanup::inspect(f.owned.root());
+    assert!(report.is_empty(), "{report:?}");
+    f.no_execution();
+}
+
+#[test]
 fn replaced_tools_outlive_check_and_their_grace_then_frozen_setup_removes_them() {
     let mut f = Fixture::new();
     let first = Upstream::new(&f, false, None);
@@ -50,7 +70,7 @@ fn replaced_tools_outlive_check_and_their_grace_then_frozen_setup_removes_them()
     age(&tools.join(&old), 8 * DAY);
     let report = cleanup::inspect(f.owned.root());
     assert!(
-        report[1].starts_with("turbo setup will remove "),
+        report[0].starts_with("turbo setup will remove "),
         "{report:?}"
     );
     let before = publication_guards::state(f.owned.root());
@@ -132,9 +152,11 @@ fn cleanup_failures_are_warnings_that_never_fail_setup() {
     let shared = turborepo_setup::artifact_cache::ArtifactCache::new(cache.path());
     let mut store = Store::open(f.owned.root()).unwrap();
     let lines = cleanup::after_provisioning(&mut store, shared.as_ref(), &lock, host);
-    assert!(lines[0].starts_with("Managed tools use "), "{lines:?}");
     let warning = "Warning: could not clean up the shared download cache";
-    assert!(lines[1].starts_with(warning), "{lines:?}");
+    assert!(
+        lines.len() == 1 && lines[0].starts_with(warning),
+        "{lines:?}"
+    );
     // Store cleanup that fails closed is also only a warning.
     let manifest = f.owned.root().join(".turbo/tools/manifest.json");
     fs::write(manifest, br#"{"schema":1}"#).unwrap();

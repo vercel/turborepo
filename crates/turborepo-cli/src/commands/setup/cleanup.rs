@@ -1,5 +1,5 @@
-//! Automatic cleanup of managed storage that turbo.lock no longer selects,
-//! and disk-use reporting. Best effort: nothing here can fail setup.
+//! Automatic cleanup of managed storage that turbo.lock no longer selects.
+//! Best effort: nothing here can fail setup.
 use std::{path::Path, time::Duration};
 
 use turborepo_setup::{
@@ -34,12 +34,8 @@ pub(super) fn after_provisioning(
     for (platform, sha256) in referenced(lock, host) {
         cache.mark_used(platform, sha256);
     }
-    match cache
-        .prune_unused(DAY * UNUSED_DAYS)
-        .and_then(|removed| Ok((removed, cache.disk_use()?)))
-    {
-        Ok((removed, usage)) => {
-            lines.push(format!("Shared download cache: {}.", size(usage.bytes)));
+    match cache.prune_unused(DAY * UNUSED_DAYS) {
+        Ok(removed) => {
             if removed.entries > 0 {
                 lines.push(format!(
                     "Removed {} of shared downloads no setup used in {UNUSED_DAYS} days.",
@@ -64,10 +60,7 @@ pub(super) fn inspect(root: &Path) -> Vec<String> {
 }
 
 fn report(usage: &StorageUse, removal: &str) -> Vec<String> {
-    let mut lines = vec![format!(
-        "Managed tools use {} in this clone's .turbo/tools.",
-        size(usage.selected.bytes)
-    )];
+    let mut lines = Vec::new();
     if usage.removable.entries > 0 {
         lines.push(format!(
             "{removal} {} of managed tools turbo.lock no longer selects.",
