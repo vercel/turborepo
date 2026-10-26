@@ -119,7 +119,7 @@ fn authorization_success_is_readonly_and_rechecks_at_every_use_without_locks() {
                 let entries: Vec<_> = std::env::split_paths(&path).collect();
                 assert_eq!(
                     entries,
-                    vec![plan.path_prepend().unwrap().to_owned(), "/host/bin".into()]
+                    vec![plan.path_prepend().to_owned(), "/host/bin".into()]
                 );
             })
             .unwrap();

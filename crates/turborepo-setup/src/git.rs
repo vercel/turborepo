@@ -22,13 +22,9 @@ impl Reply {
 pub trait Git: Send + Sync {
     /// `git rev-parse --show-toplevel`, run in `dir`.
     fn toplevel(&self, dir: &Path) -> io::Result<Reply>;
-    /// `git check-ignore -- <paths>`, run in `root`.
-    fn check_ignore(&self, root: &Path, paths: &[&str]) -> io::Result<Reply>;
-    /// `git ls-files -- <paths>`, run in `root`.
-    fn ls_files(&self, root: &Path, paths: &[&str]) -> io::Result<Reply>;
 }
 
-/// Setup shells out to Git for ignore and worktree checks. Explain a missing
+/// Setup shells out to Git to find the worktree root. Explain a missing
 /// executable instead of surfacing a bare "No such file or directory".
 pub fn git_spawn_error(error: io::Error) -> io::Error {
     if error.kind() != io::ErrorKind::NotFound {
@@ -36,8 +32,8 @@ pub fn git_spawn_error(error: io::Error) -> io::Error {
     }
     io::Error::new(
         io::ErrorKind::NotFound,
-        "could not run `git`: it was not found on PATH. turbo setup uses Git to confirm that \
-         .turbo/ is ignored; install Git or add it to PATH, then retry",
+        "could not run `git`: it was not found on PATH. turbo setup uses Git to find the \
+         repository root; install Git or add it to PATH, then retry",
     )
 }
 
@@ -47,14 +43,13 @@ pub fn git_spawn_error(error: io::Error) -> io::Error {
 pub struct GitCli;
 
 impl GitCli {
-    fn run(dir: &Path, arguments: &[&str], paths: &[&str]) -> io::Result<Reply> {
+    fn run(dir: &Path, arguments: &[&str]) -> io::Result<Reply> {
         let output = Command::new("git")
             .current_dir(dir)
             .env_remove("GIT_DIR")
             .env_remove("GIT_WORK_TREE")
             .env_remove("GIT_INDEX_FILE")
             .args(arguments)
-            .args(paths)
             .output()
             .map_err(git_spawn_error)?;
         Ok(Reply {
@@ -67,15 +62,7 @@ impl GitCli {
 
 impl Git for GitCli {
     fn toplevel(&self, dir: &Path) -> io::Result<Reply> {
-        Self::run(dir, &["rev-parse", "--show-toplevel"], &[])
-    }
-
-    fn check_ignore(&self, root: &Path, paths: &[&str]) -> io::Result<Reply> {
-        Self::run(root, &["check-ignore", "--"], paths)
-    }
-
-    fn ls_files(&self, root: &Path, paths: &[&str]) -> io::Result<Reply> {
-        Self::run(root, &["ls-files", "--"], paths)
+        Self::run(dir, &["rev-parse", "--show-toplevel"])
     }
 }
 

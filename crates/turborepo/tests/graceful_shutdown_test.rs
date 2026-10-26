@@ -1305,6 +1305,7 @@ done
             /// SIGTERM to the entrypoint PID only, as a process manager sends
             /// it.
             Term,
+            Hangup,
         }
 
         enum Run {
@@ -1405,6 +1406,7 @@ done
             fn stop(&mut self, stop: Stop) {
                 match (stop, self) {
                     (Stop::Term, run) => send_signal(run.pid(), Signal::SIGTERM),
+                    (Stop::Hangup, run) => send_signal(run.pid(), Signal::SIGHUP),
                     (Stop::CtrlC, Self::Pty { child, .. }) => child.send_ctrl_c(),
                     (Stop::CtrlC, run) => send_signal_to_process_group(run.pid(), Signal::SIGINT),
                 }
@@ -1607,7 +1609,7 @@ process.exit(Number(process.env.PARITY_EXIT));
         fn first_stop_request_waits_for_one_graceful_cleanup() {
             let launcher = ProcessLauncher::new();
             for terminal in [Terminal::Pipes, Terminal::Pty] {
-                for stop in [Stop::CtrlC, Stop::Term] {
+                for stop in [Stop::CtrlC, Stop::Term, Stop::Hangup] {
                     for entry in ENTRIES {
                         eprintln!("case: {entry:?} {terminal:?} {stop:?}");
                         let (_tempdir, root, mut run, tree) =
@@ -1724,6 +1726,43 @@ process.exit(Number(process.env.PARITY_EXIT));
                     "{context}"
                 );
                 tree.assert_gone(entrypoint);
+            }
+        }
+
+        #[test]
+        fn npm_wrapper_does_not_escalate_repeated_hangup_or_mixed_term_requests() {
+            let launcher = ProcessLauncher::new();
+            for terminal in [Terminal::Pipes, Terminal::Pty] {
+                for (first, second) in [
+                    (Stop::Hangup, Stop::Hangup),
+                    (Stop::Hangup, Stop::Term),
+                    (Stop::Term, Stop::Hangup),
+                ] {
+                    eprintln!("case: {terminal:?} {first:?}+{second:?}");
+                    let (_tempdir, root, mut run, tree) =
+                        start_blocked(&launcher, Entrypoint::NpmWrapper, terminal);
+                    let app = root.join("apps/app-a");
+                    let release = ReleaseGuard::new(&root);
+                    let entrypoint = run.pid();
+                    run.stop(first);
+                    run.wait_for(&app.join("cleanup.started"));
+                    run.assert_running("before the second request");
+                    run.stop(second);
+                    thread::sleep(Duration::from_millis(500));
+                    run.assert_running("after the second request");
+                    assert!(!app.join("descendant.release").exists());
+                    drop(release);
+                    let outcome = run.finish(EXIT_TIMEOUT);
+                    let output = &outcome.output;
+                    let context = format!("{terminal:?} {first:?}+{second:?}\n{output}");
+                    assert_eq!(outcome.code, 0, "{context}");
+                    assert!(app.join("descendant.release").exists(), "{context}");
+                    assert!(
+                        !output.contains("Force killed") && !output.contains("timed out"),
+                        "{context}"
+                    );
+                    tree.assert_gone(entrypoint);
+                }
             }
         }
 

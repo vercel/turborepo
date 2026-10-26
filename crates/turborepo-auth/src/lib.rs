@@ -18,7 +18,7 @@ use serde::Deserialize;
 use turbopath::AbsoluteSystemPath;
 use turborepo_api_client::{CacheClient, Client, TokenClient};
 use turborepo_json_rewrite::{set_path, unset_path};
-use turborepo_types::SecretString;
+use turborepo_types::{Credential, SecretString};
 use turborepo_vercel_api::{User, token::ResponseTokenMetadata};
 
 pub struct TeamInfo<'a> {
@@ -42,7 +42,7 @@ const AUTH_REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
 
 #[derive(Debug, Clone, Default)]
 pub struct AuthTokens {
-    pub token: Option<SecretString>,
+    pub token: Option<Credential>,
     pub refresh_token: Option<SecretString>,
     pub expires_at: Option<u64>,
 }
@@ -59,7 +59,7 @@ fn auth_tokens_from_oauth_response(
     fallback_refresh_token: Option<SecretString>,
 ) -> AuthTokens {
     AuthTokens {
-        token: Some(oauth_response.access_token),
+        token: Some(Credential::saved_vercel(oauth_response.access_token)),
         refresh_token: oauth_response.refresh_token.or(fallback_refresh_token),
         expires_at: Some(
             current_unix_time_secs()
@@ -79,9 +79,19 @@ fn build_auth_http_client_with_timeout(
     request_timeout: Duration,
 ) -> Result<reqwest::Client, Error> {
     Ok(reqwest::Client::builder()
+        .redirect(reqwest::redirect::Policy::none())
         .connect_timeout(connect_timeout)
         .timeout(request_timeout)
         .build()?)
+}
+
+fn credential_request_url(credential: &Credential, endpoint: &str) -> Result<url::Url, Error> {
+    let url = url::Url::parse(endpoint).map_err(|err| turborepo_api_client::Error::InvalidUrl {
+        url: endpoint.to_owned(),
+        err,
+    })?;
+    turborepo_api_client::validate_credential_destination(credential, &url)?;
+    Ok(url)
 }
 
 /// Token.
@@ -93,19 +103,19 @@ fn build_auth_http_client_with_timeout(
 #[derive(Debug, Clone, PartialEq)]
 pub enum Token {
     /// An existing token on the filesystem
-    Existing(SecretString),
+    Existing(Credential),
     /// A token that was just created, but not yet written to the filesystem
-    New(SecretString),
+    New(Credential),
 }
 
 impl Token {
     pub fn new(token: String) -> Self {
-        Self::New(SecretString::new(token))
+        Self::New(Credential::from(token))
     }
     pub fn existing(token: String) -> Self {
-        Self::Existing(SecretString::new(token))
+        Self::Existing(Credential::from(token))
     }
-    pub fn existing_secret(token: SecretString) -> Self {
+    pub fn existing_secret(token: Credential) -> Self {
         Self::Existing(token)
     }
     /// Reads a non-empty token from a JSON file.
@@ -130,7 +140,7 @@ impl Token {
                     }
                 })?;
                 if let Some(token) = wrapper.token.filter(|token| !token.is_empty()) {
-                    Ok(Self::Existing(SecretString::new(token)))
+                    Ok(Self::Existing(Credential::from(token)))
                 } else {
                     Err(Error::TokenNotFound)
                 }
@@ -158,7 +168,10 @@ impl Token {
                     }
                 })?;
                 Ok(AuthTokens {
-                    token: wrapper.token.map(SecretString::new),
+                    token: wrapper
+                        .token
+                        .filter(|token| !token.is_empty())
+                        .map(|token| Credential::saved_vercel(token.into())),
                     refresh_token: wrapper.refresh_token.map(SecretString::new),
                     expires_at: wrapper.expires_at,
                 })
@@ -359,7 +372,7 @@ impl Token {
         Ok(())
     }
     /// Returns the underlying token.
-    pub fn into_inner(&self) -> &SecretString {
+    pub fn into_inner(&self) -> &Credential {
         match self {
             Self::Existing(token) | Self::New(token) => token,
         }
@@ -471,7 +484,8 @@ impl AuthTokens {
         let client = build_auth_http_client()?;
 
         // Introspect the refresh token to discover its client_id
-        let client_id = Self::introspect_client_id(&client, refresh_token).await?;
+        let credential = Credential::saved_vercel(refresh_token.clone());
+        let client_id = Self::introspect_client_id(&client, &credential).await?;
 
         let params = [
             ("refresh_token", refresh_token.expose()),
@@ -479,7 +493,8 @@ impl AuthTokens {
             ("client_id", client_id.as_str()),
         ];
 
-        let mut request = client.post(VERCEL_OAUTH_TOKEN_URL).form(&params);
+        let url = credential_request_url(&credential, VERCEL_OAUTH_TOKEN_URL)?;
+        let mut request = client.post(url).form(&params);
         if let Some(agent) = turborepo_ai_agents::get_agent() {
             request = request.header("x-ai-agent", agent);
         }
@@ -509,6 +524,7 @@ impl AuthTokens {
 
     async fn exchange_token_with_url(&self, token_url: &str) -> Result<AuthTokens, Error> {
         let subject_token = self.token.as_ref().ok_or(Error::TokenNotFound)?;
+        let url = credential_request_url(subject_token, token_url)?;
         let client = build_auth_http_client()?;
         let params = [
             ("grant_type", TOKEN_EXCHANGE_GRANT_TYPE),
@@ -517,7 +533,7 @@ impl AuthTokens {
             ("subject_token_type", ACCESS_TOKEN_SUBJECT_TYPE),
         ];
 
-        let mut request = client.post(token_url).form(&params);
+        let mut request = client.post(url).form(&params);
         if let Some(agent) = turborepo_ai_agents::get_agent() {
             request = request.header("x-ai-agent", agent);
         }
@@ -540,7 +556,7 @@ impl AuthTokens {
     /// Introspects a token to discover its client_id.
     async fn introspect_client_id(
         client: &reqwest::Client,
-        token: &SecretString,
+        token: &Credential,
     ) -> Result<String, Error> {
         #[derive(Deserialize)]
         struct IntrospectionResponse {
@@ -548,8 +564,9 @@ impl AuthTokens {
             client_id: Option<String>,
         }
 
+        let url = credential_request_url(token, VERCEL_OAUTH_INTROSPECT_URL)?;
         let response = client
-            .post(VERCEL_OAUTH_INTROSPECT_URL)
+            .post(url)
             .form(&[("token", token.expose())])
             .send()
             .await?;
@@ -603,6 +620,68 @@ mod tests {
     use super::*;
 
     #[tokio::test]
+    async fn auth_exchange_preserves_protection_and_never_redirects_forms() {
+        let server = MockServer::start_async().await;
+        let redirected = server
+            .mock_async(|when, then| {
+                when.path("/redirected");
+                then.status(200).body(r#"{"access_token":"unexpected"}"#);
+            })
+            .await;
+        let exchange = server
+            .mock_async(|when, then| {
+                when.path("/exchange");
+                then.status(307)
+                    .header("location", server.url("/redirected"));
+            })
+            .await;
+        let protected = AuthTokens {
+            token: Some(Credential::saved_vercel(
+                "synthetic-protected-sentinel".into(),
+            )),
+            ..Default::default()
+        };
+        assert!(matches!(
+            protected
+                .exchange_token_with_url(&server.url("/exchange"))
+                .await,
+            Err(Error::APIError(
+                turborepo_api_client::Error::SavedVercelCredentialDestination
+            ))
+        ));
+        exchange.assert_calls_async(0).await;
+        let generic = AuthTokens {
+            token: Some(Credential::generic("synthetic-generic-sentinel".into())),
+            ..Default::default()
+        };
+        assert!(
+            generic
+                .exchange_token_with_url(&server.url("/exchange"))
+                .await
+                .is_err()
+        );
+        exchange.assert_calls_async(1).await;
+        redirected.assert_calls_async(0).await;
+    }
+
+    #[test]
+    fn refreshed_oauth_access_token_is_protected_without_relying_on_prefix() {
+        let tokens = auth_tokens_from_oauth_response(
+            OAuthTokenResponse {
+                access_token: "synthetic-refreshed-sentinel".into(),
+                refresh_token: None,
+                expires_in: Some(3600),
+            },
+            Some("synthetic-refresh-sentinel".into()),
+        );
+        assert!(tokens.token.as_ref().unwrap().is_saved_vercel());
+        assert_eq!(
+            tokens.refresh_token.as_ref().unwrap().expose(),
+            "synthetic-refresh-sentinel"
+        );
+    }
+
+    #[tokio::test]
     async fn test_auth_http_client_times_out_stalled_response() {
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
         let addr = listener.local_addr().unwrap();
@@ -637,10 +716,7 @@ mod tests {
     }
 
     impl Client for MockUserClient {
-        async fn get_user(
-            &self,
-            token: &SecretString,
-        ) -> turborepo_api_client::Result<UserResponse> {
+        async fn get_user(&self, token: &Credential) -> turborepo_api_client::Result<UserResponse> {
             if !self.should_succeed {
                 return Err(turborepo_api_client::Error::UnknownStatus {
                     code: "unauthorized".to_string(),
@@ -669,13 +745,13 @@ mod tests {
 
         async fn get_teams(
             &self,
-            _token: &SecretString,
+            _token: &Credential,
         ) -> turborepo_api_client::Result<TeamsResponse> {
             unimplemented!("get_teams")
         }
         async fn get_team(
             &self,
-            _token: &SecretString,
+            _token: &Credential,
             _team_id: &str,
         ) -> turborepo_api_client::Result<Option<Team>> {
             unimplemented!("get_team")
@@ -685,11 +761,11 @@ mod tests {
         }
         async fn verify_sso_token(
             &self,
-            token: &SecretString,
+            token: &Credential,
             _: &str,
         ) -> turborepo_api_client::Result<VerifiedSsoUser> {
             Ok(VerifiedSsoUser {
-                token: token.clone(),
+                token: token.expose().into(),
                 team_id: None,
             })
         }
@@ -809,7 +885,7 @@ mod tests {
 
         // Test with no expiry (should not be expired)
         let tokens_no_expiry = AuthTokens {
-            token: Some(SecretString::new("test_token".to_string())),
+            token: Some(Credential::from("test_token".to_string())),
             refresh_token: Some(SecretString::new("refresh_token".to_string())),
             expires_at: None,
         };
@@ -817,7 +893,7 @@ mod tests {
 
         // Test with future expiry (should not be expired)
         let tokens_future_expiry = AuthTokens {
-            token: Some(SecretString::new("test_token".to_string())),
+            token: Some(Credential::from("test_token".to_string())),
             refresh_token: Some(SecretString::new("refresh_token".to_string())),
             expires_at: Some(current_time + 3600), // 1 hour in the future
         };
@@ -825,7 +901,7 @@ mod tests {
 
         // Test with past expiry (should be expired)
         let tokens_past_expiry = AuthTokens {
-            token: Some(SecretString::new("test_token".to_string())),
+            token: Some(Credential::from("test_token".to_string())),
             refresh_token: Some(SecretString::new("refresh_token".to_string())),
             expires_at: Some(current_time - 3600), // 1 hour in the past
         };
@@ -833,7 +909,7 @@ mod tests {
 
         // Test edge case: exactly at expiry time (should be expired)
         let tokens_exact_expiry = AuthTokens {
-            token: Some(SecretString::new("test_token".to_string())),
+            token: Some(Credential::from("test_token".to_string())),
             refresh_token: Some(SecretString::new("refresh_token".to_string())),
             expires_at: Some(current_time),
         };
@@ -910,7 +986,7 @@ mod tests {
             .expect("Failed to create AbsoluteSystemPathBuf");
 
         let tokens = AuthTokens {
-            token: Some(SecretString::new("vca_test_token".to_string())),
+            token: Some(Credential::from("vca_test_token".to_string())),
             refresh_token: Some(SecretString::new("test_refresh_token".to_string())),
             expires_at: Some(1234567890),
         };
@@ -947,7 +1023,7 @@ mod tests {
             .expect("Failed to create AbsoluteSystemPathBuf");
 
         let tokens = AuthTokens {
-            token: Some(SecretString::new("vca_test_token".to_string())),
+            token: Some(Credential::from("vca_test_token".to_string())),
             refresh_token: Some(SecretString::new("test_refresh_token".to_string())),
             expires_at: Some(1234567890),
         };
@@ -967,7 +1043,7 @@ mod tests {
     #[tokio::test]
     async fn test_refresh_token_missing_refresh_token() {
         let tokens = AuthTokens {
-            token: Some(SecretString::new("vca_test_token".to_string())),
+            token: Some(Credential::from("vca_test_token".to_string())),
             refresh_token: None, // No refresh token
             expires_at: Some(current_unix_time_secs() - 3600),
         };
@@ -995,7 +1071,7 @@ mod tests {
             .await;
 
         let exchanged = AuthTokens {
-            token: Some(SecretString::new("legacy-token".to_string())),
+            token: Some(Credential::from("legacy-token".to_string())),
             refresh_token: None,
             expires_at: None,
         }
@@ -1027,7 +1103,7 @@ mod tests {
             .await;
 
         let exchanged = AuthTokens {
-            token: Some(SecretString::new("legacy-token".to_string())),
+            token: Some(Credential::from("legacy-token".to_string())),
             refresh_token: Some(SecretString::new("legacy-refresh-token".to_string())),
             expires_at: None,
         }
@@ -1051,7 +1127,7 @@ mod tests {
             .expect("Failed to create AbsoluteSystemPathBuf");
 
         let original_tokens = AuthTokens {
-            token: Some(SecretString::new("vca_roundtrip_token".to_string())),
+            token: Some(Credential::from("vca_roundtrip_token".to_string())),
             refresh_token: Some(SecretString::new("roundtrip_refresh_token".to_string())),
             expires_at: Some(1234567890),
         };
@@ -1087,7 +1163,7 @@ mod tests {
             .expect("Failed to write config file");
 
         let auth_tokens = AuthTokens {
-            token: Some(SecretString::new("token-123".to_string())),
+            token: Some(Credential::from("token-123".to_string())),
             refresh_token: Some(SecretString::new("refresh-456".to_string())),
             expires_at: Some(12345),
         };
@@ -1119,7 +1195,7 @@ mod tests {
             .expect("Failed to write config file");
 
         let auth_tokens = AuthTokens {
-            token: Some(SecretString::new("new-token".to_string())),
+            token: Some(Credential::from("new-token".to_string())),
             refresh_token: None,
             expires_at: None,
         };
@@ -1177,7 +1253,7 @@ mod tests {
         async fn get_artifact(
             &self,
             _hash: &str,
-            _token: &SecretString,
+            _token: &Credential,
             _team_id: Option<&str>,
             _team_slug: Option<&str>,
             _method: Method,
@@ -1188,7 +1264,7 @@ mod tests {
         async fn fetch_artifact(
             &self,
             _hash: &str,
-            _token: &SecretString,
+            _token: &Credential,
             _team_id: Option<&str>,
             _team_slug: Option<&str>,
         ) -> Result<Option<Response>, turborepo_api_client::Error> {
@@ -1206,7 +1282,7 @@ mod tests {
             _body_len: usize,
             _duration: u64,
             _tag: Option<&str>,
-            _token: &SecretString,
+            _token: &Credential,
             _team_id: Option<&str>,
             _team_slug: Option<&str>,
             _sha: Option<&str>,
@@ -1218,7 +1294,7 @@ mod tests {
         async fn artifact_exists(
             &self,
             _hash: &str,
-            _token: &SecretString,
+            _token: &Credential,
             _team_id: Option<&str>,
             _team_slug: Option<&str>,
         ) -> Result<Option<Response>, turborepo_api_client::Error> {
@@ -1227,7 +1303,7 @@ mod tests {
 
         async fn get_caching_status(
             &self,
-            _token: &SecretString,
+            _token: &Credential,
             _team_id: Option<&str>,
             _team_slug: Option<&str>,
         ) -> Result<CachingStatusResponse, turborepo_api_client::Error> {
@@ -1240,6 +1316,7 @@ mod tests {
                     };
                     Ok(CachingStatusResponse {
                         status: caching_status,
+                        read_only: false,
                     })
                 }
                 MockCachingResponse::Error(MockErrorType::Error) => {
@@ -1325,7 +1402,7 @@ mod tests {
     impl TokenClient for MockTokenClient {
         async fn get_metadata(
             &self,
-            _token: &SecretString,
+            _token: &Credential,
         ) -> turborepo_api_client::Result<ResponseTokenMetadata> {
             if self.should_fail {
                 return Err(turborepo_api_client::Error::UnknownStatus {
@@ -1346,7 +1423,7 @@ mod tests {
             }
         }
 
-        async fn delete_token(&self, _token: &SecretString) -> turborepo_api_client::Result<()> {
+        async fn delete_token(&self, _token: &Credential) -> turborepo_api_client::Result<()> {
             if self.should_fail {
                 return Err(turborepo_api_client::Error::UnknownStatus {
                     code: "error".to_string(),
@@ -1445,7 +1522,7 @@ mod tests {
     impl TokenClient for MockSSOTokenClient {
         async fn get_metadata(
             &self,
-            _token: &SecretString,
+            _token: &Credential,
         ) -> turborepo_api_client::Result<ResponseTokenMetadata> {
             if let Some(metadata) = &self.metadata_response {
                 Ok(metadata.clone())
@@ -1458,7 +1535,7 @@ mod tests {
             }
         }
 
-        async fn delete_token(&self, _token: &SecretString) -> turborepo_api_client::Result<()> {
+        async fn delete_token(&self, _token: &Credential) -> turborepo_api_client::Result<()> {
             Ok(())
         }
     }
@@ -1570,7 +1647,7 @@ mod tests {
     #[test]
     fn auth_tokens_debug_redacts_secrets() {
         let tokens = AuthTokens {
-            token: Some(SecretString::new("access-token-123".to_string())),
+            token: Some(Credential::from("access-token-123".to_string())),
             refresh_token: Some(SecretString::new("refresh-456".to_string())),
             expires_at: Some(12345),
         };

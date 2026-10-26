@@ -444,6 +444,11 @@
           "default": false,
           "type": "boolean"
         },
+        "hashFilePermissions": {
+          "description": "Include file executable permissions in task hashes. Disabled by default. Enabling this flag changes all task hashes. On Unix, any executable bit marks a regular file as executable. On Windows, files are non-executable. Symlink permissions and other permission bits do not affect hashes.",
+          "default": false,
+          "type": "boolean"
+        },
         "longerSignatureKey": {
           "description": "Enforce a minimum length of 32 bytes for `TURBO_REMOTE_CACHE_SIGNATURE_KEY` when `remoteCache.signature` is enabled. Short keys weaken the HMAC-SHA256 signature, making brute-force tag collision feasible.",
           "default": false,
@@ -1155,9 +1160,9 @@
       ]
     },
     "ToolPolicy": {
-      "description": "How `turbo setup` prepares a toolchain's tools. `managed` provisions the locked version for this repository. `verify-system` uses an installed tool after verifying that it matches the locked version. `skip` neither provisions nor verifies the tool, which also skips the toolchain's dependencies.",
+      "description": "How `turbo setup` prepares a toolchain's tools. `managed` provisions the locked version for this repository. `skip` neither provisions nor verifies the tool, which also skips the toolchain's dependencies.",
       "type": "string",
-      "enum": ["managed", "verify-system", "skip"]
+      "enum": ["managed", "skip"]
     },
     "ToolchainSetupPolicy": {
       "description": "Setup policy for one toolchain. Omitted values use the root `setup` values, then the inferred default.",

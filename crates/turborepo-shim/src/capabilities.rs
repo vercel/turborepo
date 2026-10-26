@@ -15,8 +15,8 @@ const MAX_FEATURES: usize = 64;
 
 /// The prelaunch `turbo.lock` schema this build activates.
 pub const EXPERIMENTAL_LOCK_SCHEMA: u32 = 0;
-/// What this build activates for that schema: each lock adapter ID, locked
-/// `verify-system` tools checked on PATH, and `clone-local` selections that
+/// What this build activates for that schema: each lock adapter ID and
+/// `clone-local` selections that
 /// `turbo setup --no-lock` records without a turbo.lock. Sorted. A name's
 /// meaning is frozen once a build advertises it: a lock or activation change
 /// that an older peer would misread needs a new name, so that peer is refused
@@ -33,7 +33,6 @@ pub const FEATURES: &[&str] = &[
     "rust",
     "rustup",
     "uv",
-    "verify-system",
     "yarn",
 ];
 
@@ -120,11 +119,6 @@ impl fmt::Display for Requirement {
     }
 }
 
-/// Builds whose host the managed-run context accepts. Linux builds cover glibc
-/// and musl hosts alike: both peers classify the host's C library at runtime,
-/// and activation admits only verify-system tools on musl. Released Linux
-/// binaries are static musl builds, so this never depends on the build's own
-/// C library. Windows arm64 is unqualified.
 fn target() -> Option<&'static str> {
     use Architecture::{Arm64, X64};
     use OperatingSystem::{Linux, Macos, Windows};
@@ -265,6 +259,15 @@ impl Capabilities {
         }
         Ok(())
     }
+}
+
+#[cfg(test)]
+#[test]
+fn removed_feature_is_an_unknown_peer_requirement() {
+    let requirement = Requirement::new(EXPERIMENTAL_LOCK_SCHEMA, ["verify-system"]);
+    let current = Capabilities::current("test");
+    assert!(current.shortfall(&requirement).is_some());
+    assert!(!FEATURES.contains(&"verify-system"));
 }
 
 #[cfg(test)]

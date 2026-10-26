@@ -139,6 +139,7 @@ pub async fn start_test_server(
             get(|| async {
                 Json(CachingStatusResponse {
                     status: CachingStatus::Enabled,
+                    read_only: false,
                 })
             }),
         )

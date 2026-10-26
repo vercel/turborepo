@@ -487,6 +487,120 @@ fn watch_task_inputs_reruns_on_turbo_root_input_without_root_tasks() {
 }
 
 #[test]
+fn watch_new_package_builds_and_rebuilds_on_source_and_dependency_changes() {
+    let (_tempdir, test_dir) = setup_watch_test();
+    let config = r#"{
+  "$schema": "https://turborepo.dev/schema.json",
+  "tasks": {
+    "build": {
+      "dependsOn": ["^build"],
+      "inputs": ["src/**"],
+      "outputs": []
+    }
+  }
+}
+"#;
+    fs::write(test_dir.join("turbo.json"), config).unwrap();
+    for pkg in ["a", "b"] {
+        let package_dir = test_dir.join("packages").join(pkg);
+        fs::create_dir(package_dir.join("src")).unwrap();
+        fs::rename(package_dir.join("src.js"), package_dir.join("src/src.js")).unwrap();
+    }
+    common::git(&test_dir, &["add", "."]);
+    common::git(
+        &test_dir,
+        &["commit", "-m", "configure source inputs", "--quiet"],
+    );
+
+    let guard = WatchGuard::new(spawn_turbo_watch(&test_dir));
+    for pkg in ["a", "b"] {
+        assert!(
+            wait_for_markers(&test_dir, pkg, 1, Duration::from_secs(30)) >= 1,
+            "package {pkg} should build before adding package c"
+        );
+    }
+
+    let package_dir = test_dir.join("packages/c");
+    fs::create_dir_all(package_dir.join("src")).unwrap();
+    let build_script = fs::read_to_string(test_dir.join("packages/a/build.js")).unwrap();
+    fs::write(
+        package_dir.join("build.js"),
+        build_script.replace("pkg-a", "pkg-c"),
+    )
+    .unwrap();
+    fs::copy(
+        test_dir.join("packages/a/src/src.js"),
+        package_dir.join("src/src.js"),
+    )
+    .unwrap();
+    fs::write(
+        package_dir.join("package.json"),
+        r#"{
+  "name": "pkg-c",
+  "scripts": {
+    "build": "node build.js"
+  },
+  "dependencies": {
+    "pkg-a": "*"
+  }
+}
+"#,
+    )
+    .unwrap();
+    common::git(&test_dir, &["add", "."]);
+    common::git(&test_dir, &["commit", "-m", "add package c", "--quiet"]);
+
+    let c_initial = wait_for_markers(&test_dir, "c", 1, Duration::from_secs(30));
+    assert!(
+        c_initial >= 1,
+        "new package c should build without editing root configuration (#14842)"
+    );
+
+    fs::write(
+        package_dir.join("src/src.js"),
+        "module.exports = { c: 2 };\n",
+    )
+    .unwrap();
+    common::git(&test_dir, &["add", "."]);
+    common::git(
+        &test_dir,
+        &["commit", "-m", "change package c source", "--quiet"],
+    );
+    let c_after_source = wait_for_markers(&test_dir, "c", c_initial + 1, Duration::from_secs(30));
+    assert!(
+        c_after_source > c_initial,
+        "new package c should rebuild after its source changes"
+    );
+
+    let a_before = marker_count(&test_dir, "a");
+    fs::write(
+        test_dir.join("packages/a/src/src.js"),
+        "module.exports = { a: 2 };\n",
+    )
+    .unwrap();
+    common::git(&test_dir, &["add", "."]);
+    common::git(
+        &test_dir,
+        &["commit", "-m", "change package a source", "--quiet"],
+    );
+    assert!(
+        wait_for_markers(&test_dir, "a", a_before + 1, Duration::from_secs(30)) > a_before,
+        "dependency package a should rebuild after its source changes"
+    );
+    assert!(
+        wait_for_markers(&test_dir, "c", c_after_source + 1, Duration::from_secs(30))
+            > c_after_source,
+        "new package c should rebuild after dependency package a changes"
+    );
+    assert_eq!(
+        fs::read_to_string(test_dir.join("turbo.json")).unwrap(),
+        config
+    );
+
+    drop(guard);
+}
+
+#[test]
 fn watch_file_change_reruns_affected_package() {
     let (_tempdir, test_dir) = setup_watch_test();
     let guard = WatchGuard::new(spawn_turbo_watch(&test_dir));
@@ -941,25 +1055,60 @@ fn watch_edit_during_build_triggers_rebuild() {
     );
 }
 
-/// Rapid successive edits to the same file should be coalesced by the
-/// debouncer, producing fewer rebuilds than edits.
 #[test]
 fn watch_rapid_edits_produce_single_rebuild() {
-    let (_tempdir, test_dir) = setup_watch_test();
-    let guard = WatchGuard::new(spawn_turbo_watch(&test_dir));
+    let (_tempdir, test_dir) = setup_slow_build_test();
+    let build_file = test_dir.join("packages/a/build.js");
+    let build_script = fs::read_to_string(&build_file).unwrap();
+    fs::write(
+        &build_file,
+        format!(
+            "const source = require('fs').readFileSync(require('path').join(__dirname, 'src.js'), \
+             'utf8');\n{build_script}\nfs.writeFileSync(path.join(markerDir, 'complete'), \
+             source);\n"
+        ),
+    )
+    .unwrap();
+    common::git(&test_dir, &["add", "."]);
+    common::git(
+        &test_dir,
+        &["commit", "-m", "add build completion markers", "--quiet"],
+    );
 
-    // Wait for initial build and settle
-    wait_for_markers(&test_dir, "a", 1, Duration::from_secs(30));
-    wait_for_markers(&test_dir, "b", 1, Duration::from_secs(30));
-    std::thread::sleep(Duration::from_secs(3));
-
-    let a_before = marker_count(&test_dir, "a");
-
-    // Fire 10 rapid edits without staging or committing each one. The watcher
-    // only needs file-system events here, and per-edit git commits can take
-    // longer than the debounce window under parallel CI load.
-    let num_edits = 10;
+    let output = tempfile::NamedTempFile::new().unwrap();
+    let completed_file = test_dir.join("packages/a/.markers/complete");
+    let wait_for_source = |source: &str| {
+        let started = Instant::now();
+        while fs::read_to_string(&completed_file).ok().as_deref() != Some(source) {
+            assert!(
+                started.elapsed() < Duration::from_secs(30),
+                "a build must complete having consumed {source:?}. CLI output:\n{}",
+                fs::read_to_string(output.path()).unwrap_or_default()
+            );
+            std::thread::sleep(Duration::from_millis(200));
+        }
+    };
     let src_file = test_dir.join("packages/a/src.js");
+    let initial_source = fs::read_to_string(&src_file).unwrap();
+    let guard = WatchGuard::new(spawn_turbo_watch_with_tasks_and_stdio(
+        &test_dir,
+        &["build"],
+        output.as_file().try_clone().unwrap().into(),
+        output.as_file().try_clone().unwrap().into(),
+    ));
+    wait_for_source(&initial_source);
+    assert_eq!(
+        wait_for_markers(&test_dir, "b", 1, Duration::from_secs(30)),
+        1,
+        "package b's initial build must start"
+    );
+
+    let a_before = prefixed_marker_count(&test_dir, "a", "run-");
+
+    // Wall-clock write spacing does not bound package-event spacing after
+    // filesystem delivery and async hashing. The paused-time
+    // pending_changes_coalesce_five_edits_until_quiet test covers 100ms events.
+    let num_edits = 5;
     for i in 0..num_edits {
         fs::write(
             &src_file,
@@ -968,18 +1117,20 @@ fn watch_rapid_edits_produce_single_rebuild() {
         .unwrap();
     }
 
-    // Wait for at least one rebuild, then let the system fully settle.
-    wait_for_markers(&test_dir, "a", a_before + 1, Duration::from_secs(30));
+    wait_for_source(&format!(
+        "module.exports = {{ a: 'rapid-{}' }};\n",
+        num_edits - 1
+    ));
     std::thread::sleep(Duration::from_secs(5));
 
-    let a_after = marker_count(&test_dir, "a");
+    let a_after = prefixed_marker_count(&test_dir, "a", "run-");
 
     drop(guard);
 
     let rebuilds = a_after - a_before;
-    assert!(
-        rebuilds < num_edits,
-        "debouncer should coalesce {num_edits} rapid edits into fewer rebuilds, but got {rebuilds}"
+    assert_eq!(
+        rebuilds, 1,
+        "{num_edits} rapid edits should produce exactly one rebuild, but got {rebuilds}"
     );
 }
 

@@ -152,9 +152,6 @@ importers:
       '@shikijs/transformers':
         specifier: ^3.22.0
         version: 3.22.0
-      '@upstash/redis':
-        specifier: 1.35.7
-        version: 1.35.7
       '@vercel/agent-readability':
         specifier: ^0.5.1
         version: 0.5.1(@vercel/functions@3.9.5(@aws-sdk/credential-provider-web-identity@3.972.49)(ws@8.21.3))(next@16.3.8(@babel/core@7.29.7(supports-color@8.1.1))(@opentelemetry/api@1.9.0)(@types/node@24.10.11)(react-dom@19.2.4(react@19.2.4))(react@19.2.4))
@@ -162,8 +159,8 @@ importers:
         specifier: ^1.6.1
         version: 1.6.1(next@16.3.8(@babel/core@7.29.7(supports-color@8.1.1))(@opentelemetry/api@1.9.0)(@types/node@24.10.11)(react-dom@19.2.4(react@19.2.4))(react@19.2.4))(react@19.2.4)
       '@vercel/geistdocs':
-        specifier: 2.11.0
-        version: 2.11.0(@svta/cml-cta@1.0.1(@svta/cml-structured-field-values@1.0.1(@svta/cml-utils@1.0.1))(@svta/cml-utils@1.0.1))(@svta/cml-structured-field-values@1.0.1(@svta/cml-utils@1.0.1))(@svta/cml-utils@1.0.1)(@types/mdast@4.0.4)(@types/react-dom@19.2.3(@types/react@19.2.13))(@vercel/functions@3.9.5(@aws-sdk/credential-provider-web-identity@3.972.49)(ws@8.21.3))(lucide-react@0.555.0(react@19.2.4))(micromark-util-types@2.0.2)(micromark@4.0.2(supports-color@8.1.1))(next@16.3.8(@babel/core@7.29.7(supports-color@8.1.1))(@opentelemetry/api@1.9.0)(@types/node@24.10.11)(react-dom@19.2.4(react@19.2.4))(react@19.2.4))(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(supports-color@8.1.1)(tailwindcss@4.1.18)
+        specifier: 2.13.2
+        version: 2.13.2(@svta/cml-cta@1.0.1(@svta/cml-structured-field-values@1.0.1(@svta/cml-utils@1.0.1))(@svta/cml-utils@1.0.1))(@svta/cml-structured-field-values@1.0.1(@svta/cml-utils@1.0.1))(@svta/cml-utils@1.0.1)(@types/mdast@4.0.4)(@types/react-dom@19.2.3(@types/react@19.2.13))(@vercel/functions@3.9.5(@aws-sdk/credential-provider-web-identity@3.972.49)(ws@8.21.3))(lucide-react@0.555.0(react@19.2.4))(micromark-util-types@2.0.2)(micromark@4.0.2(supports-color@8.1.1))(next@16.3.8(@babel/core@7.29.7(supports-color@8.1.1))(@opentelemetry/api@1.9.0)(@types/node@24.10.11)(react-dom@19.2.4(react@19.2.4))(react@19.2.4))(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(supports-color@8.1.1)(tailwindcss@4.1.18)
       '@vercel/speed-insights':
         specifier: ^1.3.1
         version: 1.3.1(next@16.3.8(@babel/core@7.29.7(supports-color@8.1.1))(@opentelemetry/api@1.9.0)(@types/node@24.10.11)(react-dom@19.2.4(react@19.2.4))(react@19.2.4))(react@19.2.4)
@@ -191,9 +188,6 @@ importers:
       geist:
         specifier: ^1.7.2
         version: 1.7.2(next@16.3.8(@babel/core@7.29.7(supports-color@8.1.1))(@opentelemetry/api@1.9.0)(@types/node@24.10.11)(react-dom@19.2.4(react@19.2.4))(react@19.2.4))
-      linkedom:
-        specifier: 0.18.12
-        version: 0.18.12
       lucide-react:
         specifier: ^0.555.0
         version: 0.555.0(react@19.2.4)
@@ -6421,9 +6415,6 @@ packages:
   '@upsetjs/venn.js@2.0.0':
     resolution: {integrity: sha512-WbBhLrooyePuQ1VZxrJjtLvTc4NVfpOyKx0sKqioq9bX1C1m7Jgykkn8gLrtwumBioXIqam8DLxp88Adbue6Hw==}
 
-  '@upstash/redis@1.35.7':
-    resolution: {integrity: sha512-bdCdKhke+kYUjcLLuGWSeQw7OLuWIx3eyKksyToLBAlGIMX9qiII0ptp8E0y7VFE1yuBxBd/3kSzJ8774Q4g+A==}
-
   '@vercel/agent-readability@0.5.1':
     resolution: {integrity: sha512-iQih444RJMoAREej/ccTmAUc+PiSogRffqQZMvGdcfF/5GN/4VilXrMHYQWRIq75c70D2AIOxX5sh9EG23ZT3w==}
     engines: {node: '>=20.0.0'}
@@ -6541,8 +6532,8 @@ packages:
       ws:
         optional: true
 
-  '@vercel/geistdocs@2.11.0':
-    resolution: {integrity: sha512-8adwIy++2Re0zNhBqsQj/OkVGqhzDxLEHfJZbTyahAZypwmh94sdBzwdbfftp8SUeaLrcfnMNHL9rzqe3kvUCw==}
+  '@vercel/geistdocs@2.13.2':
+    resolution: {integrity: sha512-nfvki0ZBxMQUvs+7UJ2g+yBuz5Jv9ErD1tsmmUiW+L2i3SGplEYHpGaGEzmO074d3RFf76imcTgl1CSqALS++Q==}
     hasBin: true
     peerDependencies:
       next: ^16.3.3
@@ -7317,9 +7308,6 @@ packages:
     resolution: {integrity: sha512-/Tb/JcjK111nNScGob5MNtsntNM1aCNUDipB/TkwZFhyDrrE47SOx/18wF2bbjgc3ZzCSKW1T5nt5EbFoAz/Vg==}
     engines: {node: '>=4'}
     hasBin: true
-
-  cssom@0.5.0:
-    resolution: {integrity: sha512-iKuQcq+NdHqlAcwUY0o/HL69XQrUaQdMjmStJ8JFmUaiiQErlhrmuigkg/CU4E2J0IyUKUrMAgl36TvN67MqTw==}
 
   csstype@3.2.3:
     resolution: {integrity: sha512-z1HGKcYy2xA8AGQfwrn0PAy+PB7X/GSj3UVJW9qKyn43xWa+gl5nXmU4qqLMRzWVLFC8KusUX8T/0kCiOYpAIQ==}
@@ -8453,9 +8441,6 @@ packages:
   html-escaper@2.0.2:
     resolution: {integrity: sha512-H2iMtd0I4Mt5eYiapRdIDjp+XzelXQ0tFE4JS7YFwFevXXMmOp9myNrUvCg0D6ws8iqkRPBfKHgbwig1SmlLfg==}
 
-  html-escaper@3.0.3:
-    resolution: {integrity: sha512-RuMffC89BOWQoY0WKGpIhn5gX3iI54O6nRA0yC124NYVtzjmFWBIiFd8M0x+ZdX0P9R4lADg1mgP8C7PxGOWuQ==}
-
   html-url-attributes@3.0.1:
     resolution: {integrity: sha512-ol6UPyBWqsrO6EJySPz2O7ZSr856WDrEzM5zMqp+FJJLGMW35cLYmmZnl0vztAZxRUoNZJFTCohfjuIJ8I4QBQ==}
 
@@ -9076,15 +9061,6 @@ packages:
 
   lines-and-columns@1.2.4:
     resolution: {integrity: sha512-7ylylesZQ/PV29jhEDl3Ufjo6ZX7gCqJr5F7PKrqc93v7fzSymt1BpwEU8nAUXs8qzzvqhbjhK5QZg6Mt/HkBg==}
-
-  linkedom@0.18.12:
-    resolution: {integrity: sha512-jalJsOwIKuQJSeTvsgzPe9iJzyfVaEJiEXl+25EkKevsULHvMJzpNqwvj1jOESWdmgKDiXObyjOYwlUqG7wo1Q==}
-    engines: {node: '>=16'}
-    peerDependencies:
-      canvas: '>= 2'
-    peerDependenciesMeta:
-      canvas:
-        optional: true
 
   linkify-it@5.0.0:
     resolution: {integrity: sha512-5aHCbzQRADcdP+ATqnDuhhJ/MRIqDkZX5pyjFHRRysS8vZ5AbqGEoFIb6pYHPZ+L/OC2Lc+xT8uHVVR5CAK/wQ==}
@@ -10686,11 +10662,15 @@ packages:
     resolution: {integrity: sha512-HLpt+uLy/pxB+bum/9DzAgiKS8CX1EvbWxI4zlmgGCExImLdiad2iCwXT5Z4c9c3Eq8rP2318mPW2c+QbtjK8A==}
     engines: {node: '>= 10.0.0', npm: '>= 3.0.0'}
 
-  sonner@2.0.7:
-    resolution: {integrity: sha512-W6ZN4p58k8aDKA4XPcx2hpIQXBRAgyiWVkYhT7CvK6D3iAu7xjvVyhQHg2/iaKJZ1XVJ4r7XuwGL+WGEK37i9w==}
+  sonner@2.0.8:
+    resolution: {integrity: sha512-UM/ByIoFra8yzV75n1o0Puu0bw5U/9UNnDacrJNspekBewIfsQ3D6ez1nvlWpt7aTsO6rujQtifBpycwIivqlg==}
     peerDependencies:
+      '@types/react': ^18.0.0 || ^19.0.0
       react: ^18.0.0 || ^19.0.0 || ^19.0.0-rc
       react-dom: ^18.0.0 || ^19.0.0 || ^19.0.0-rc
+    peerDependenciesMeta:
+      '@types/react':
+        optional: true
 
   source-map-js@1.2.1:
     resolution: {integrity: sha512-UXWMKhLOwVKb728IUtQPXxfYU+usdybtUrK/8uGE8CQMvrhOpwvzDBwj0QhSL7MQc7vIsISBG8VQ8+IDQxpfQA==}
@@ -11171,9 +11151,6 @@ packages:
     engines: {node: '>=0.8.0'}
     hasBin: true
 
-  uhyphen@0.2.0:
-    resolution: {integrity: sha512-qz3o9CHXmJJPGBdqzab7qAYuW8kQGKNEuoHFYrBwV6hWIMcpAmxDLXojcHfFr9US1Pe6zUswEIJIbLI610fuqA==}
-
   ultracite@7.4.3:
     resolution: {integrity: sha512-HMnd21OpSSwi/YtNqXUP/798dlTQ2GlXh0wR+8rIVY9uCTTQiOiRthdLlRaAo6IqUT0l29hiRl+ShsO0r81LtQ==}
     hasBin: true
@@ -11188,9 +11165,6 @@ packages:
 
   unconfig@7.5.0:
     resolution: {integrity: sha512-oi8Qy2JV4D3UQ0PsopR28CzdQ3S/5A1zwsUwp/rosSbfhJ5z7b90bIyTwi/F7hCLD4SGcZVjDzd4XoUQcEanvA==}
-
-  uncrypto@0.1.3:
-    resolution: {integrity: sha512-Ql87qFHB3s/De2ClA9e0gsnS6zXG27SkTiSJwjCc9MebbfapQfuPzumMIUMi38ezPZVNFcHI9sUIepeQfw8J8Q==}
 
   underscore@1.13.8:
     resolution: {integrity: sha512-DXtD3ZtEQzc7M8m4cXotyHR+FAS18C64asBYY5vqZexfYryNNnDc02W4hKg3rdQuqOYas1jkseX0+nZXjTXnvQ==}
@@ -16951,10 +16925,6 @@ snapshots:
       d3-selection: 3.0.0
       d3-transition: 3.0.1(d3-selection@3.0.0)
 
-  '@upstash/redis@1.35.7':
-    dependencies:
-      uncrypto: 0.1.3
-
   '@vercel/agent-readability@0.5.1(@vercel/functions@3.9.5(@aws-sdk/credential-provider-web-identity@3.972.49)(ws@8.21.3))(next@16.3.8(@babel/core@7.29.7(supports-color@8.1.1))(@opentelemetry/api@1.9.0)(@types/node@24.10.11)(react-dom@19.2.4(react@19.2.4))(react@19.2.4))':
     optionalDependencies:
       '@vercel/functions': 3.9.5(@aws-sdk/credential-provider-web-identity@3.972.49)(ws@8.21.3)
@@ -17014,7 +16984,7 @@ snapshots:
       ws: 8.21.3
     optional: true
 
-  '@vercel/geistdocs@2.11.0(@svta/cml-cta@1.0.1(@svta/cml-structured-field-values@1.0.1(@svta/cml-utils@1.0.1))(@svta/cml-utils@1.0.1))(@svta/cml-structured-field-values@1.0.1(@svta/cml-utils@1.0.1))(@svta/cml-utils@1.0.1)(@types/mdast@4.0.4)(@types/react-dom@19.2.3(@types/react@19.2.13))(@vercel/functions@3.9.5(@aws-sdk/credential-provider-web-identity@3.972.49)(ws@8.21.3))(lucide-react@0.555.0(react@19.2.4))(micromark-util-types@2.0.2)(micromark@4.0.2(supports-color@8.1.1))(next@16.3.8(@babel/core@7.29.7(supports-color@8.1.1))(@opentelemetry/api@1.9.0)(@types/node@24.10.11)(react-dom@19.2.4(react@19.2.4))(react@19.2.4))(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(supports-color@8.1.1)(tailwindcss@4.1.18)':
+  '@vercel/geistdocs@2.13.2(@svta/cml-cta@1.0.1(@svta/cml-structured-field-values@1.0.1(@svta/cml-utils@1.0.1))(@svta/cml-utils@1.0.1))(@svta/cml-structured-field-values@1.0.1(@svta/cml-utils@1.0.1))(@svta/cml-utils@1.0.1)(@types/mdast@4.0.4)(@types/react-dom@19.2.3(@types/react@19.2.13))(@vercel/functions@3.9.5(@aws-sdk/credential-provider-web-identity@3.972.49)(ws@8.21.3))(lucide-react@0.555.0(react@19.2.4))(micromark-util-types@2.0.2)(micromark@4.0.2(supports-color@8.1.1))(next@16.3.8(@babel/core@7.29.7(supports-color@8.1.1))(@opentelemetry/api@1.9.0)(@types/node@24.10.11)(react-dom@19.2.4(react@19.2.4))(react@19.2.4))(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(supports-color@8.1.1)(tailwindcss@4.1.18)':
     dependencies:
       '@ai-sdk/react': 3.0.221(react@19.2.4)(zod@4.6.7)
       '@clack/prompts': 0.11.0
@@ -17052,7 +17022,7 @@ snapshots:
       remark-mdx: 3.1.1(supports-color@8.1.1)
       remark-parse: 11.0.0(supports-color@8.1.1)
       remark-stringify: 11.0.0
-      sonner: 2.0.7(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
+      sonner: 2.0.8(@types/react@19.2.13)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
       streamdown: 2.5.0(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(supports-color@8.1.1)
       tailwind-merge: 3.5.0
       tailwindcss: 4.1.18
@@ -17915,8 +17885,6 @@ snapshots:
   css-what@6.2.2: {}
 
   cssesc@3.0.0: {}
-
-  cssom@0.5.0: {}
 
   csstype@3.2.3: {}
 
@@ -19297,8 +19265,6 @@ snapshots:
 
   html-escaper@2.0.2: {}
 
-  html-escaper@3.0.3: {}
-
   html-url-attributes@3.0.1: {}
 
   html-void-elements@3.0.0: {}
@@ -20128,14 +20094,6 @@ snapshots:
       lightningcss-win32-x64-msvc: 1.30.2
 
   lines-and-columns@1.2.4: {}
-
-  linkedom@0.18.12:
-    dependencies:
-      css-select: 5.2.2
-      cssom: 0.5.0
-      html-escaper: 3.0.3
-      htmlparser2: 10.1.0
-      uhyphen: 0.2.0
 
   linkify-it@5.0.0:
     dependencies:
@@ -22401,10 +22359,12 @@ snapshots:
       ip-address: 10.1.0
       smart-buffer: 4.2.0
 
-  sonner@2.0.7(react-dom@19.2.4(react@19.2.4))(react@19.2.4):
+  sonner@2.0.8(@types/react@19.2.13)(react-dom@19.2.4(react@19.2.4))(react@19.2.4):
     dependencies:
       react: 19.2.4
       react-dom: 19.2.4(react@19.2.4)
+    optionalDependencies:
+      '@types/react': 19.2.13
 
   source-map-js@1.2.1: {}
 
@@ -22906,8 +22866,6 @@ snapshots:
   uglify-js@3.19.3:
     optional: true
 
-  uhyphen@0.2.0: {}
-
   ultracite@7.4.3(oxlint@1.78.0):
     dependencies:
       '@clack/prompts': 1.2.0
@@ -22932,8 +22890,6 @@ snapshots:
       jiti: 2.6.1
       quansync: 1.0.0
       unconfig-core: 7.5.0
-
-  uncrypto@0.1.3: {}
 
   underscore@1.13.8: {}
 

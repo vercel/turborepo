@@ -6,7 +6,7 @@ export type OutputLogs =
   | "errors-only";
 export type EnvMode = "loose" | "strict";
 export type UI = "tui" | "stream" | "stream-with-experimental-timestamps";
-export type ToolPolicy = "managed" | "verify-system" | "skip";
+export type ToolPolicy = "managed" | "skip";
 export type DependencyPolicy = "locked" | "skip";
 export type ArtifactPlatform =
   | "macos-x64"
@@ -262,6 +262,15 @@ export interface RootSchema extends BaseSchema {
 }
 
 export interface FutureFlags {
+  /**
+   * Include file executable permissions in task hashes. Disabled by default.
+   * Enabling this flag changes all task hashes. On Unix, any executable bit
+   * marks a regular file as executable. On Windows, files are non-executable.
+   * Symlink permissions and other permission bits do not affect hashes.
+   *
+   * @defaultValue `false`
+   */
+  hashFilePermissions?: boolean;
   /**
    * When using `outputLogs: "errors-only"`, show task hashes when tasks
    * complete successfully. This provides visibility into which tasks are
@@ -550,7 +559,6 @@ export interface SetupPolicy {
    * How `turbo setup` prepares tools for every toolchain.
    *
    * - `"managed"`: Provision the locked version for this repository.
-   * - `"verify-system"`: Use an installed tool after verifying that it matches the locked version.
    * - `"skip"`: Neither provision nor verify the tool, which also skips the toolchain's dependencies.
    *
    * Without `setup`, `turbo setup` infers what to prepare from native

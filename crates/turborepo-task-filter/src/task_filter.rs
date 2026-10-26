@@ -17,7 +17,7 @@
 
 use std::collections::{HashMap, HashSet};
 
-use turbopath::{AbsoluteSystemPath, AnchoredSystemPathBuf};
+use turbopath::AbsoluteSystemPath;
 use turborepo_repository::package_graph::{PackageGraph, PackageName};
 use turborepo_scope::{ChangedFilesDetector, TargetSelector, target_selector::GitRange};
 use turborepo_task_id::TaskId;
@@ -502,9 +502,9 @@ fn get_changed_files(
     scm: &impl ChangedFilesDetector,
     repo_root: &AbsoluteSystemPath,
     git_range: &GitRange,
-) -> Result<Result<HashSet<AnchoredSystemPathBuf>, turborepo_scm::git::InvalidRange>, crate::Error>
+) -> Result<Result<turborepo_types::TaskInputChanges, turborepo_scm::git::InvalidRange>, crate::Error>
 {
-    let result = scm.changed_files(
+    let result = scm.task_input_changes(
         repo_root,
         git_range.from_ref.as_deref(),
         git_range.to_ref.as_deref(),
@@ -817,6 +817,29 @@ mod tests {
                 merge_base,
             ));
             Ok(Ok(self.files.clone()))
+        }
+
+        fn task_input_changes(
+            &self,
+            root: &AbsoluteSystemPath,
+            from: Option<&str>,
+            to: Option<&str>,
+            include_uncommitted: bool,
+            allow_unknown_objects: bool,
+            merge_base: bool,
+        ) -> Result<
+            Result<turborepo_types::TaskInputChanges, turborepo_scm::git::InvalidRange>,
+            turborepo_scm::Error,
+        > {
+            self.changed_files(
+                root,
+                from,
+                to,
+                include_uncommitted,
+                allow_unknown_objects,
+                merge_base,
+            )
+            .map(|files| files.map(turborepo_types::TaskInputChanges::from_tracked))
         }
     }
 
@@ -1364,9 +1387,12 @@ mod tests {
             .map(|f| AnchoredSystemPathBuf::from_raw(f).unwrap())
             .collect();
 
-        let affected =
-            turborepo_engine::match_tasks_against_changed_files(&engine, &pkg_graph, &changed)
-                .unwrap();
+        let affected = turborepo_engine::match_tasks_against_changed_files(
+            &engine,
+            &pkg_graph,
+            &turborepo_types::TaskInputChanges::from_tracked(changed),
+        )
+        .unwrap();
         assert!(
             affected.contains_key(&a_build),
             "task with $TURBO_ROOT$ input should match root file change"

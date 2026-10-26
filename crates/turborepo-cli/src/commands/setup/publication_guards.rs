@@ -35,7 +35,7 @@ fn check(f: &Fixture, d: &root::Discovery) -> std::io::Result<()> {
     f.owned
         .policy_at(&f.owned.root().join("apps/web/src"))
         .map_err(std::io::Error::other)?;
-    provision::storage(f.owned.root(), &*f.git).map_err(std::io::Error::other)?;
+    provision::storage(f.owned.root()).map_err(std::io::Error::other)?;
     if !d.revalidate().map_err(std::io::Error::other)? {
         return Err(std::io::Error::other("original discovery drift"));
     }
@@ -72,8 +72,7 @@ fn unsupported_unchanged_plans_fail_before_any_writes_in_both_consumers() {
             0 => {
                 fs::write(f.owned.root().join("package.json"), "{}").unwrap();
                 f.lock["tools"].as_object_mut().unwrap().remove("pnpm");
-                f.lock["tools"]["node"]["installation"] =
-                    json!({"kind":"verify-system","executables":["node"]});
+                f.lock["tools"]["node"]["installation"] = json!({"kind":"managed","artifacts":{"any":{"distribution":{"url":"https://example.test/node.tgz","sha256":"a".repeat(64),"format":"tar-gz","executables":{"node":"bin/node"}}}}});
             }
             1 => {
                 f.lock["tools"]["node"]["options"] = json!({"unsupported":["true"]});
@@ -302,7 +301,7 @@ fn effective_git_targets_and_indirection_bytes_are_immutable_after_lock_staging(
                     fs::remove_file(&worktree).unwrap();
                     std::os::unix::fs::symlink(root.parent().unwrap(), &worktree).unwrap();
                     assert_eq!(fs::read(root.join("common/config")).unwrap(), config_before);
-                    assert!(provision::storage(root, &*f.git).is_ok());
+                    assert!(provision::storage(root).is_ok());
                 }
                 _ => {
                     fs::rename(root.join("common/config"), root.join("common/old-config")).unwrap();

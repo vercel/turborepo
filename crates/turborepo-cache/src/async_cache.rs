@@ -195,6 +195,11 @@ impl AsyncCache {
         }
     }
 
+    /// See [`CacheMultiplexer::disable_remote_writes`].
+    pub fn disable_remote_writes(&self) {
+        self.real_cache.disable_remote_writes();
+    }
+
     #[tracing::instrument(skip_all)]
     pub async fn exists(&self, key: &str) -> Result<Option<CacheHitMetadata>, CacheError> {
         self.real_cache.exists(key).await
@@ -285,7 +290,7 @@ mod tests {
     use tempfile::tempdir;
     use turbopath::AbsoluteSystemPathBuf;
     use turborepo_api_client::{APIAuth, APIClient};
-    use turborepo_types::SecretString;
+    use turborepo_types::Credential;
     use turborepo_vercel_api_mock::start_test_server;
 
     use crate::{
@@ -336,7 +341,7 @@ mod tests {
             Some(APIAuth {
                 team_id: None,
                 team_slug: None,
-                token: SecretString::new("test-token".into()),
+                token: Credential::from("test-token"),
             }),
             None,
             LazyScmState::resolved(None),
@@ -405,7 +410,7 @@ mod tests {
             Some(APIAuth {
                 team_id: None,
                 team_slug: None,
-                token: SecretString::new("test-token".into()),
+                token: Credential::from("test-token"),
             }),
             None,
             LazyScmState::resolved(None),
@@ -460,7 +465,7 @@ mod tests {
             "2.0.0",
             false,
         )?;
-        let token = SecretString::new("test-token".into());
+        let token = Credential::from("test-token");
         client
             .put_artifact(
                 "hit",
@@ -562,7 +567,7 @@ mod tests {
         )?;
         let api_auth = Some(APIAuth {
             team_id: Some("my-team-id".to_string()),
-            token: SecretString::new("my-token".to_string()),
+            token: Credential::from("my-token".to_string()),
             team_slug: None,
         });
         let async_cache = AsyncCache::new(
@@ -656,7 +661,7 @@ mod tests {
 
         let api_auth = Some(APIAuth {
             team_id: Some("my-team-id".to_string()),
-            token: SecretString::new("my-token".to_string()),
+            token: Credential::from("my-token".to_string()),
             team_slug: None,
         });
         let async_cache = AsyncCache::new(
@@ -759,7 +764,7 @@ mod tests {
 
         let api_auth = Some(APIAuth {
             team_id: Some("my-team-id".to_string()),
-            token: SecretString::new("my-token".to_string()),
+            token: Credential::from("my-token".to_string()),
             team_slug: None,
         });
         let async_cache = AsyncCache::new(
@@ -841,7 +846,7 @@ mod tests {
         )?;
         let api_auth = Some(APIAuth {
             team_id: Some("my-team-id".to_string()),
-            token: SecretString::new("my-token".to_string()),
+            token: Credential::from("my-token".to_string()),
             team_slug: None,
         });
         let async_cache = AsyncCache::new(

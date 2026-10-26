@@ -46,14 +46,11 @@ const WINDOWS_LAUNCHER: &str = "@\"%~dp0..\\@KEY@\\@ENTRYPOINT@\" %*\r\n";
 pub enum Error {
     #[error("invalid locked Python artifact or mappings; regenerate turbo.lock")]
     InvalidLock,
-    #[error(
-        "no locked Python build for this target; update turbo.lock on a supported target or \
-         configure verify-system"
-    )]
+    #[error("no locked Python build for this target; update turbo.lock on a supported target")]
     MissingTarget,
     #[error(
         "managed Python promotion is not qualified for Windows arm64 or musl; use macOS, GNU \
-         Linux or Windows x64, or configure verify-system"
+         Linux or Windows x64"
     )]
     UnsupportedTarget,
     #[error("the complete desired inventory must include this Python plan unchanged")]

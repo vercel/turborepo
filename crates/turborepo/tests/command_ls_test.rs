@@ -428,3 +428,59 @@ fn test_ls_pretty_reports_missing_first_package() {
     assert!(output.stdout.is_empty());
     assert!(String::from_utf8_lossy(&output.stderr).contains("Package `missing` not found"));
 }
+
+/// Run turbo with stdout connected to a pipe whose reader has already gone
+/// away, like `turbo ls | true`. Returns the exit status and stderr.
+#[cfg(unix)]
+fn run_turbo_with_closed_stdout(
+    dir: &std::path::Path,
+    args: &[&str],
+) -> (std::process::ExitStatus, String) {
+    use std::{io::Read, process::Stdio};
+
+    let config_dir = tempfile::tempdir().unwrap();
+    let mut cmd = std::process::Command::new(assert_cmd::cargo::cargo_bin("turbo"));
+    cmd.args(args)
+        .current_dir(dir)
+        .env("TURBO_CONFIG_DIR_PATH", config_dir.path())
+        .env("TURBO_TELEMETRY_DISABLED", "1")
+        .env("TURBO_TELEMETRY_MESSAGE_DISABLED", "1")
+        .env("TURBO_GLOBAL_WARNING_DISABLED", "1")
+        .env("TURBO_PRINT_VERSION_DISABLED", "1")
+        .env("DO_NOT_TRACK", "1")
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+    let mut child = cmd.spawn().unwrap();
+    // Drop the read end before turbo has produced any output.
+    drop(child.stdout.take());
+    let mut stderr = String::new();
+    child
+        .stderr
+        .take()
+        .unwrap()
+        .read_to_string(&mut stderr)
+        .unwrap();
+    (child.wait().unwrap(), stderr)
+}
+
+#[cfg(unix)]
+#[test]
+fn test_ls_closed_stdout_does_not_panic() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", false).unwrap();
+
+    for args in [
+        &["ls"][..],
+        &["ls", "--output=json"],
+        &["ls", "my-app"],
+        &["ls", "my-app", "--output=json"],
+        &["query", "ls"],
+    ] {
+        let (status, stderr) = run_turbo_with_closed_stdout(tempdir.path(), args);
+        assert!(
+            !stderr.contains("Turbo has crashed") && !stderr.contains("Broken pipe"),
+            "turbo {args:?} reported a broken pipe: {stderr}"
+        );
+        assert_eq!(status.code(), Some(0), "turbo {args:?}: {stderr}");
+    }
+}

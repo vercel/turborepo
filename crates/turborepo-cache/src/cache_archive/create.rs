@@ -8,9 +8,11 @@ use std::{
 };
 
 use tar::{EntryType, Header};
-use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPath, IntoUnix};
+use turbopath::{
+    AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPath, AnchoredSystemPathBuf, IntoUnix,
+};
 
-use super::zstd_sink::ZstdSink;
+use super::{RestoreManifest, zstd_sink::ZstdSink};
 use crate::CacheError;
 
 /// Most worker threads zstd uses to compress one cache archive.
@@ -89,12 +91,12 @@ struct OpenDir {
     path: AbsoluteSystemPathBuf,
 }
 
-/// What [`CacheWriter::add_file`] archived, so callers recording a restore
-/// manifest don't need to stat the output again.
-pub(crate) enum ArchivedEntry {
+enum ArchivedEntry {
     /// A regular file, with the metadata of the opened file that was archived.
     File(fs::Metadata),
     Directory,
+    /// A symlink, with the target it was archived with, in Unix form.
+    Symlink(camino::Utf8PathBuf),
     Other,
 }
 
@@ -402,8 +404,33 @@ impl<'a> CacheWriter<'a> {
         }
     }
 
+    pub(crate) fn add_files(
+        &mut self,
+        anchor: &AbsoluteSystemPath,
+        files: &[AnchoredSystemPathBuf],
+    ) -> Result<RestoreManifest, CacheError> {
+        let mut manifest = RestoreManifest::new();
+        for file in files {
+            let entry = self.add_file(anchor, file)?;
+            let unix_path = file.to_unix();
+            match entry {
+                ArchivedEntry::File(metadata) => {
+                    let _ = manifest.record_file_metadata(unix_path.as_str().to_owned(), &metadata);
+                }
+                ArchivedEntry::Directory => {
+                    manifest.record_dir(unix_path.as_str().to_owned());
+                }
+                ArchivedEntry::Symlink(target) => {
+                    manifest.record_symlink(unix_path.as_str().to_owned(), target.as_str());
+                }
+                ArchivedEntry::Other => {}
+            }
+        }
+        Ok(manifest)
+    }
+
     // Adds a user-cached item to the tar
-    pub(crate) fn add_file(
+    fn add_file(
         &mut self,
         anchor: &AbsoluteSystemPath,
         file_path: &AnchoredSystemPath,
@@ -438,7 +465,7 @@ impl<'a> CacheWriter<'a> {
                 // Unix-style. This will get restored to a system path.
                 let target = target.into_unix();
                 self.append_link(&mut header, file_path.as_str(), &target)?;
-                Ok(ArchivedEntry::Other)
+                Ok(ArchivedEntry::Symlink(target))
             }
             ArchiveSource::Other { mut header } => {
                 let is_dir = matches!(header.entry_type(), EntryType::Directory);
@@ -663,7 +690,7 @@ fn open_dir_at_allowing_internal_symlink(
                 return Err(CacheError::CreateUnsupportedFileType(Backtrace::capture()));
             }
 
-            let real_target = file_realpath(&file, &target_path)?;
+            let real_target = file_realpath(&file)?;
             if !real_target.starts_with(real_anchor) {
                 return Err(CacheError::LinkOutsideOfDirectory(
                     link_target.to_string(),
@@ -678,20 +705,10 @@ fn open_dir_at_allowing_internal_symlink(
 }
 
 #[cfg(unix)]
-fn file_realpath(
-    file: &fs::File,
-    fallback_path: &AbsoluteSystemPath,
-) -> Result<AbsoluteSystemPathBuf, CacheError> {
-    use std::os::unix::io::AsRawFd;
-
-    for fd_dir in ["/proc/self/fd", "/dev/fd"] {
-        let fd_path = std::path::PathBuf::from(format!("{}/{}", fd_dir, file.as_raw_fd()));
-        if let Ok(realpath) = std::fs::read_link(fd_path) {
-            return Ok(AbsoluteSystemPathBuf::try_from(realpath.as_path())?);
-        }
-    }
-
-    fallback_path.to_realpath().map_err(Into::into)
+fn file_realpath(file: &fs::File) -> Result<AbsoluteSystemPathBuf, CacheError> {
+    Ok(AbsoluteSystemPathBuf::try_from(turbopath::file_realpath(
+        file,
+    )?)?)
 }
 
 #[cfg(unix)]
@@ -914,41 +931,7 @@ fn ensure_windows_path_is_under_anchor(
 
 #[cfg(windows)]
 fn windows_final_path(file: &fs::File) -> Result<std::path::PathBuf, CacheError> {
-    use std::os::windows::io::AsRawHandle;
-
-    use windows_sys::Win32::Storage::FileSystem::{
-        FILE_NAME_NORMALIZED, GetFinalPathNameByHandleW, VOLUME_NAME_DOS,
-    };
-
-    let mut buffer = vec![0u16; 260];
-    loop {
-        let len = unsafe {
-            GetFinalPathNameByHandleW(
-                file.as_raw_handle(),
-                buffer.as_mut_ptr(),
-                buffer.len() as u32,
-                FILE_NAME_NORMALIZED | VOLUME_NAME_DOS,
-            )
-        };
-        if len == 0 {
-            return Err(std::io::Error::last_os_error().into());
-        }
-
-        let len = len as usize;
-        if len < buffer.len() {
-            let path = String::from_utf16(&buffer[..len]).map_err(|e| {
-                std::io::Error::new(
-                    std::io::ErrorKind::InvalidData,
-                    format!("Windows returned invalid UTF-16 path: {e}"),
-                )
-            })?;
-            return Ok(std::path::PathBuf::from(strip_windows_verbatim_prefix(
-                &path,
-            )));
-        }
-
-        buffer.resize(len + 1, 0);
-    }
+    Ok(turbopath::file_realpath(file)?)
 }
 
 #[cfg(windows)]

@@ -30,6 +30,13 @@ use ts_rs::TS;
 #[schemars(rename_all = "camelCase")]
 #[deserializable()]
 pub struct FutureFlags {
+    /// Include file executable permissions in task hashes. Disabled by default.
+    /// Enabling this flag changes all task hashes. On Unix, any executable bit
+    /// marks a regular file as executable. On Windows, files are
+    /// non-executable. Symlink permissions and other permission bits do not
+    /// affect hashes.
+    #[serde(default)]
+    pub hash_file_permissions: bool,
     /// When using `outputLogs: "errors-only"`, show task hashes when tasks
     /// complete successfully. This provides visibility into which tasks are
     /// running without showing full output logs.
@@ -174,7 +181,7 @@ impl TS for FutureFlags {
          boolean, strictTaskEntrypointSelection?: boolean, globalConfiguration?: boolean, \
          experimentalCargoWorkspaces?: boolean, experimentalPythonWorkspaces?: boolean, \
          experimentalGoWorkspaces?: boolean, experimentalTaskCommand?: boolean, \
-         experimentalSetup?: boolean }"
+         experimentalSetup?: boolean, hashFilePermissions?: boolean }"
             .to_string()
     }
 
@@ -185,7 +192,7 @@ impl TS for FutureFlags {
          boolean, strictTaskEntrypointSelection?: boolean, globalConfiguration?: boolean, \
          experimentalCargoWorkspaces?: boolean, experimentalPythonWorkspaces?: boolean, \
          experimentalGoWorkspaces?: boolean, experimentalTaskCommand?: boolean, \
-         experimentalSetup?: boolean }"
+         experimentalSetup?: boolean, hashFilePermissions?: boolean }"
             .to_string()
     }
 
@@ -196,7 +203,8 @@ impl TS for FutureFlags {
          boolean, filterUsingTasks?: boolean, strictTaskEntrypointSelection?: boolean, \
          globalConfiguration?: boolean, experimentalCargoWorkspaces?: boolean, \
          experimentalPythonWorkspaces?: boolean, experimentalGoWorkspaces?: boolean, \
-         experimentalTaskCommand?: boolean, experimentalSetup?: boolean };"
+         experimentalTaskCommand?: boolean, experimentalSetup?: boolean, hashFilePermissions?: \
+         boolean };"
             .to_string()
     }
 
@@ -207,7 +215,8 @@ impl TS for FutureFlags {
          boolean, filterUsingTasks?: boolean, strictTaskEntrypointSelection?: boolean, \
          globalConfiguration?: boolean, experimentalCargoWorkspaces?: boolean, \
          experimentalPythonWorkspaces?: boolean, experimentalGoWorkspaces?: boolean, \
-         experimentalTaskCommand?: boolean, experimentalSetup?: boolean };"
+         experimentalTaskCommand?: boolean, experimentalSetup?: boolean, hashFilePermissions?: \
+         boolean };"
             .to_string()
     }
 
@@ -223,7 +232,30 @@ mod tests {
     use super::*;
 
     #[test]
-    fn experimental_setup_is_optional_in_all_typescript_forms() {
+    fn hash_file_permissions_defaults_to_false_and_parses() {
+        assert!(!FutureFlags::default().hash_file_permissions);
+        for (json, expected) in [
+            (r#"{}"#, false),
+            (r#"{"futureFlags":{}}"#, false),
+            (r#"{"futureFlags":{"hashFilePermissions":false}}"#, false),
+            (r#"{"futureFlags":{"hashFilePermissions":true}}"#, true),
+        ] {
+            let raw = crate::RawRootTurboJson::parse(json, "turbo.json").unwrap();
+            assert_eq!(
+                raw.future_flags
+                    .as_ref()
+                    .map(|flags| flags.as_inner().hash_file_permissions)
+                    .unwrap_or_default(),
+                expected
+            );
+            let raw: crate::RawTurboJson = raw.try_into().unwrap();
+            let config = crate::TurboJson::try_from(raw).unwrap();
+            assert_eq!(config.future_flags.hash_file_permissions, expected);
+        }
+    }
+
+    #[test]
+    fn future_flags_are_optional_in_all_typescript_forms() {
         for typescript in [
             FutureFlags::inline(),
             FutureFlags::inline_flattened(),
@@ -231,6 +263,7 @@ mod tests {
             FutureFlags::decl_concrete(),
         ] {
             assert!(typescript.contains("experimentalSetup?: boolean"));
+            assert!(typescript.contains("hashFilePermissions?: boolean"));
         }
     }
 }

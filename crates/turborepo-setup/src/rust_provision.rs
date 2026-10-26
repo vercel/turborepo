@@ -39,14 +39,11 @@ const MAX_PROXY_BYTES: u64 = 64 * 1024 * 1024;
 pub enum Error {
     #[error("invalid locked Rust toolchain; regenerate turbo.lock")]
     InvalidLock,
-    #[error(
-        "no locked Rust toolchain for this target; update turbo.lock on a supported target or \
-         configure verify-system"
-    )]
+    #[error("no locked Rust toolchain for this target; update turbo.lock on a supported target")]
     MissingTarget,
     #[error(
         "managed Rust promotion is not qualified for this host, Windows arm64 or musl; use a \
-         supported macOS, GNU Linux or Windows x64 target or configure verify-system"
+         supported macOS, GNU Linux or Windows x64 target"
     )]
     UnsupportedTarget,
     #[error("the complete desired inventory must include this Rust plan unchanged")]

@@ -222,6 +222,82 @@ fn test_excluded_inputs() {
 }
 
 #[test]
+fn test_tracked_outputs_invalidate_cache_and_preserve_committed_edits() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", true).unwrap();
+    let app = tempdir.path().join("apps/my-app");
+    fs::create_dir_all(app.join("src")).unwrap();
+    fs::create_dir_all(app.join("dist")).unwrap();
+    fs::write(app.join("src/input.txt"), "source\n").unwrap();
+    fs::write(app.join("dist/LICENSE"), "license v1\n").unwrap();
+    fs::write(
+        app.join("package.json"),
+        serde_json::to_vec(&serde_json::json!({
+            "name": "my-app",
+            "scripts": {
+                "build": "node -e \"const fs = require('fs'); fs.mkdirSync('dist', { recursive: true }); fs.copyFileSync('src/input.txt', 'dist/out.txt')\""
+            }
+        })).unwrap(),
+    ).unwrap();
+    fs::write(
+        tempdir.path().join("turbo.json"),
+        r#"{"tasks":{"build":{"inputs":["src/**"],"outputs":["dist/**"]}}}"#,
+    )
+    .unwrap();
+    git(tempdir.path(), &["add", "."]);
+    git(tempdir.path(), &["commit", "-qm", "add tracked output"]);
+
+    let args = ["run", "build", "--filter=my-app", "--output-logs=hash-only"];
+    let first = run_turbo(tempdir.path(), &args);
+    assert!(
+        first.status.success(),
+        "{}",
+        String::from_utf8_lossy(&first.stderr)
+    );
+    let first_stdout = String::from_utf8_lossy(&first.stdout);
+    let first_hash = extract_hash(&first_stdout, "cache miss, executing ");
+
+    fs::write(app.join("dist/LICENSE"), "license v2\n").unwrap();
+    git(tempdir.path(), &["add", "apps/my-app/dist/LICENSE"]);
+    git(tempdir.path(), &["commit", "-qm", "update license"]);
+    let second = run_turbo(tempdir.path(), &args);
+    assert!(
+        second.status.success(),
+        "{}",
+        String::from_utf8_lossy(&second.stderr)
+    );
+    let second_stdout = String::from_utf8_lossy(&second.stdout);
+    let second_hash = extract_hash(&second_stdout, "cache miss, executing ");
+    assert_ne!(first_hash, second_hash);
+    assert_eq!(
+        fs::read_to_string(app.join("dist/LICENSE")).unwrap(),
+        "license v2\n"
+    );
+
+    fs::remove_file(app.join("dist/out.txt")).unwrap();
+    let third = run_turbo(tempdir.path(), &args);
+    assert!(
+        third.status.success(),
+        "{}",
+        String::from_utf8_lossy(&third.stderr)
+    );
+    let third_stdout = String::from_utf8_lossy(&third.stdout);
+    assert!(
+        third_stdout.contains(&format!("cache hit, suppressing logs {second_hash}")),
+        "{third_stdout}"
+    );
+    assert_eq!(
+        fs::read_to_string(app.join("dist/out.txt")).unwrap(),
+        "source\n"
+    );
+    assert_eq!(
+        fs::read_to_string(app.join("dist/LICENSE")).unwrap(),
+        "license v2\n"
+    );
+    git(tempdir.path(), &["diff", "--exit-code"]);
+}
+
+#[test]
 fn test_dependency_outputs_hashes_materialized_dependency_outputs() {
     let tempdir = tempfile::tempdir().unwrap();
     setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", true).unwrap();

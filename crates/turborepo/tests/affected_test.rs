@@ -1020,6 +1020,90 @@ fn test_task_level_affected_iff_task_hash_changes() {
 }
 
 #[test]
+fn test_task_level_affected_tracked_outputs_match_hashes() {
+    #[derive(Clone, Copy, Debug)]
+    enum Change {
+        Committed,
+        Untracked,
+        RemovedFromIndex,
+        Deleted,
+    }
+    use Change::*;
+
+    for (file, change, inputs, expected) in [
+        ("dist/LICENSE", Committed, r#"["src/**"]"#, true),
+        ("dist/excluded.txt", Committed, r#"["src/**"]"#, false),
+        ("dist/generated.txt", Untracked, r#"["src/**"]"#, false),
+        ("src/index.ts", Committed, r#"["src/**"]"#, true),
+        (
+            "dist/excluded.txt",
+            Committed,
+            r#"["$TURBO_DEFAULT$"]"#,
+            true,
+        ),
+        ("dist/LICENSE", Committed, r#"["src/**", "!dist/**"]"#, true),
+        ("dist/LICENSE", RemovedFromIndex, r#"["src/**"]"#, true),
+        ("dist/LICENSE", Deleted, r#"["src/**"]"#, true),
+    ] {
+        let tempdir = tempfile::tempdir().unwrap();
+        let dir = tempdir.path();
+        setup::setup_integration_test(dir, "affected_tasks_inputs", "npm@10.5.0", false).unwrap();
+        fs::write(
+            dir.join("turbo.json"),
+            format!(
+                r#"{{"futureFlags": {{"affectedUsingTaskInputs": true}},
+                  "tasks": {{"typecheck": {{"inputs": {inputs},
+                  "outputs": ["dist/**", "!dist/excluded.txt"]}}}}}}"#
+            ),
+        )
+        .unwrap();
+        fs::create_dir_all(dir.join("packages/lib-a/src")).unwrap();
+        fs::create_dir_all(dir.join("packages/lib-a/dist")).unwrap();
+        fs::write(dir.join("packages/lib-a/src/index.ts"), "original").unwrap();
+        fs::write(dir.join("packages/lib-a/dist/LICENSE"), "original").unwrap();
+        fs::write(dir.join("packages/lib-a/dist/excluded.txt"), "original").unwrap();
+        git(dir, &["add", "."]);
+        git(
+            dir,
+            &[
+                "add",
+                "-f",
+                "packages/lib-a/dist/LICENSE",
+                "packages/lib-a/dist/excluded.txt",
+            ],
+        );
+        git(dir, &["commit", "-m", "tracked output inputs", "--quiet"]);
+        git(dir, &["checkout", "-b", "my-branch"]);
+
+        let before = typecheck_hash(dir).unwrap();
+        let path = format!("packages/lib-a/{file}");
+        match change {
+            Deleted => fs::remove_file(dir.join(&path)).unwrap(),
+            _ => fs::write(dir.join(&path), "changed").unwrap(),
+        }
+        match change {
+            Committed | Deleted => git(dir, &["add", "-A", "--", &path]),
+            RemovedFromIndex => git(dir, &["rm", "--cached", "--", &path]),
+            Untracked => {}
+        }
+        if !matches!(change, Untracked) {
+            git(dir, &["commit", "-m", "change selected file", "--quiet"]);
+        }
+        let after = typecheck_hash(dir).unwrap();
+        assert_eq!(
+            before != after,
+            expected,
+            "hash change for {file}, inputs={inputs}"
+        );
+        assert_eq!(
+            typecheck_affected(dir),
+            (expected, expected),
+            "(run, query) affectedness for {file}, change={change:?}, inputs={inputs}"
+        );
+    }
+}
+
+#[test]
 fn test_task_level_affected_root_package_json_not_global() {
     let tempdir = tempfile::tempdir().unwrap();
     setup_task_level_affected(tempdir.path());

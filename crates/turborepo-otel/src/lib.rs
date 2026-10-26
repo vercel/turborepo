@@ -89,6 +89,8 @@
 //! **Gated by `task_attributes`** (unbounded, opt-in):
 //! - `turbo.task.id`, `turbo.task.hash`, `turbo.task.external_inputs_hash`
 
+mod auth_http;
+
 use std::{
     collections::{BTreeMap, HashMap},
     sync::Arc,
@@ -286,6 +288,13 @@ pub enum Error {
     Exporter(opentelemetry_otlp::ExporterBuildError),
     #[error("invalid OTLP header `{0}`")]
     InvalidHeader(String),
+    #[error(
+        "Saved Vercel cache credentials cannot be injected into the gRPC OTEL exporter. Use \
+         HTTP/protobuf for guarded credential injection."
+    )]
+    ProtectedGrpcCredential,
+    #[error(transparent)]
+    HttpClient(#[from] turborepo_api_client::Error),
 }
 
 struct Instruments {
@@ -317,9 +326,35 @@ impl std::fmt::Debug for Handle {
 
 impl Handle {
     pub fn try_new(config: Config) -> Result<Self, Error> {
+        Self::try_new_with_credential(config, None)
+    }
+
+    pub fn try_new_with_credential(
+        mut config: Config,
+        credential: Option<turborepo_types::Credential>,
+    ) -> Result<Self, Error> {
+        if config.protocol == Protocol::Grpc
+            && credential
+                .as_ref()
+                .is_some_and(|credential| credential.is_saved_vercel())
+        {
+            return Err(Error::ProtectedGrpcCredential);
+        }
+        if config.protocol == Protocol::Grpc
+            && !config
+                .headers
+                .keys()
+                .any(|key| key.eq_ignore_ascii_case("authorization"))
+            && let Some(credential) = &credential
+        {
+            config.headers.insert(
+                "Authorization".to_owned(),
+                format!("Bearer {}", credential.expose()),
+            );
+        }
         validate_endpoint(&config.endpoint)?;
 
-        let provider = build_provider(&config)?;
+        let provider = build_provider(&config, credential)?;
         let meter = provider.meter("turborepo");
         let instruments = Arc::new(create_instruments(&meter));
 
@@ -470,7 +505,10 @@ fn validate_endpoint(endpoint: &str) -> Result<(), Error> {
     Err(Error::UnsupportedTransport(scheme.to_string()))
 }
 
-fn build_provider(config: &Config) -> Result<SdkMeterProvider, Error> {
+fn build_provider(
+    config: &Config,
+    credential: Option<turborepo_types::Credential>,
+) -> Result<SdkMeterProvider, Error> {
     let resource = build_resource(config);
 
     let temporality = default_temporality();
@@ -498,6 +536,10 @@ fn build_provider(config: &Config) -> Result<SdkMeterProvider, Error> {
             };
             let mut builder = opentelemetry_otlp::MetricExporter::builder()
                 .with_http()
+                .with_http_client(auth_http::CredentialHttpClient::new(
+                    credential,
+                    config.timeout,
+                )?)
                 .with_temporality(temporality)
                 .with_export_config(export_config);
             if !config.headers.is_empty() {

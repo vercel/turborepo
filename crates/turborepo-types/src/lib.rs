@@ -14,6 +14,8 @@
 //! - [`HashTrackerInfo`]: Provides access to task hash information
 //! - [`GlobalHashInputs`]: Provides access to global hash inputs
 
+mod credential;
+pub use credential::Credential;
 pub mod secret;
 pub mod task_input_matching;
 use std::{collections::HashMap, fmt, str::FromStr, sync::Arc};
@@ -363,10 +365,10 @@ pub struct APIClientOpts {
     /// Upload-specific timeout in seconds
     pub upload_timeout: u64,
     /// Authentication token (if authenticated).
-    /// Wrapped in `SecretString` to prevent accidental exposure in logs.
+    /// Keeps the secret and its runtime destination restriction together.
     /// Skipped during serialization.
     #[serde(skip)]
-    pub token: Option<SecretString>,
+    pub token: Option<Credential>,
     /// Team ID for the remote cache
     pub team_id: Option<String>,
     /// Team slug for the remote cache
@@ -511,10 +513,35 @@ impl<'a> TaskArgs<'a> {
 
 /// TaskOutputs represents the patterns for including and excluding files from
 /// outputs.
-#[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub struct TaskOutputs {
     pub inclusions: Vec<String>,
     pub exclusions: Vec<String>,
+}
+
+/// File selections that feed a task hash. Output exclusions apply only to
+/// tracked outputs, independently of authored and derived input selections.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct EffectiveTaskInputs<'a> {
+    pub declared: &'a TaskInputs,
+    pub tracked_outputs: &'a TaskOutputs,
+}
+
+/// Changed paths and the subset originating from tracked files. Keeping the
+/// provenance separate prevents generated outputs from becoming task inputs.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct TaskInputChanges {
+    pub files: std::collections::HashSet<AnchoredSystemPathBuf>,
+    pub tracked: std::collections::HashSet<AnchoredSystemPathBuf>,
+}
+
+impl TaskInputChanges {
+    pub fn from_tracked(files: std::collections::HashSet<AnchoredSystemPathBuf>) -> Self {
+        Self {
+            tracked: files.clone(),
+            files,
+        }
+    }
 }
 
 /// TaskInputs represents the input file patterns for a task.
