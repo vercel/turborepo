@@ -662,12 +662,22 @@ fn create_new_windows_file(path: &AbsoluteSystemPath) -> io::Result<File> {
             .create_new(true)
             .share_mode(FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE)
             .custom_flags(FILE_FLAG_OPEN_REPARSE_POINT);
-        match path.open_with_options(options) {
+        let error = match path.open_with_options(options) {
             Ok(file) => return Ok(file),
-            Err(error) if error.kind() == io::ErrorKind::AlreadyExists => {
+            Err(error) => error,
+        };
+        // CreateFile reports ACCESS_DENIED instead of FILE_EXISTS when a
+        // directory or a directory symlink holds the name. Only a real
+        // directory is kept.
+        match path.symlink_metadata() {
+            Ok(metadata) if metadata.is_dir() => return Err(error),
+            Ok(_) if error.kind() == io::ErrorKind::PermissionDenied => {
                 remove_existing_windows_entry(path)?;
             }
-            Err(error) => return Err(error),
+            _ if error.kind() == io::ErrorKind::AlreadyExists => {
+                remove_existing_windows_entry(path)?;
+            }
+            _ => return Err(error),
         }
     }
 
