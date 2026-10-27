@@ -12,7 +12,6 @@ use std::{collections::HashSet, ffi::OsString};
 use std::{
     collections::{HashMap, VecDeque},
     fs::File,
-    sync::atomic::{AtomicU64, Ordering},
 };
 #[cfg(windows)]
 use std::{
@@ -551,27 +550,18 @@ impl RestoreDestination {
         reader: &mut impl io::Read,
         mode: u32,
     ) -> Result<Option<std::fs::Metadata>, CacheError> {
-        // Write a new inode and atomically replace the destination. Opening an
-        // existing leaf directly could still modify an out-of-tree hardlink.
-        let (mut file, temporary_name) = create_temporary_file(self.directory.as_raw_fd(), mode)?;
+        // Always write a new inode. Opening an existing leaf directly could
+        // modify an out-of-tree hardlink or follow a symlink. Staging under a
+        // temporary name is avoided because a killed restore would leave that
+        // name behind for the next cache save to archive.
+        let mut file = create_new_file_at(self.directory.as_raw_fd(), &self.file_name, mode)?;
         if let Err(error) = io::copy(reader, &mut file) {
-            unlink_at(self.directory.as_raw_fd(), &temporary_name, 0).ok();
-            return Err(error.into());
-        }
-        let metadata = file.metadata().ok();
-        drop(file);
-
-        if let Err(error) = rename_at(
-            self.directory.as_raw_fd(),
-            &temporary_name,
-            self.directory.as_raw_fd(),
-            &self.file_name,
-        ) {
-            unlink_at(self.directory.as_raw_fd(), &temporary_name, 0).ok();
+            drop(file);
+            unlink_at(self.directory.as_raw_fd(), &self.file_name, 0).ok();
             return Err(error.into());
         }
 
-        Ok(metadata)
+        Ok(file.metadata().ok())
     }
 
     pub fn write_symlink(&self, target: &str, _target_is_dir: bool) -> Result<(), CacheError> {
@@ -581,44 +571,26 @@ impl RestoreDestination {
                 "symlink target contains NUL byte",
             )
         })?;
-        let temporary_name = create_temporary_symlink(self.directory.as_raw_fd(), &target)?;
-
-        let rename_result = rename_at(
-            self.directory.as_raw_fd(),
-            &temporary_name,
-            self.directory.as_raw_fd(),
-            &self.file_name,
-        );
-        let rename_result = match rename_result {
-            Err(error)
-                if matches!(
-                    error.raw_os_error(),
-                    Some(libc::EISDIR) | Some(libc::ENOTDIR)
-                ) =>
-            {
-                match unlink_at(
-                    self.directory.as_raw_fd(),
-                    &self.file_name,
-                    libc::AT_REMOVEDIR,
-                ) {
-                    Ok(()) => rename_at(
-                        self.directory.as_raw_fd(),
-                        &temporary_name,
-                        self.directory.as_raw_fd(),
-                        &self.file_name,
-                    ),
-                    Err(error) => Err(error),
-                }
+        let parent_fd = self.directory.as_raw_fd();
+        for _ in 0..16 {
+            let result =
+                unsafe { libc::symlinkat(target.as_ptr(), parent_fd, self.file_name.as_ptr()) };
+            if result == 0 {
+                return Ok(());
             }
-            result => result,
-        };
-
-        if let Err(error) = rename_result {
-            unlink_at(self.directory.as_raw_fd(), &temporary_name, 0).ok();
-            return Err(error.into());
+            let error = io::Error::last_os_error();
+            if error.kind() != io::ErrorKind::AlreadyExists {
+                return Err(error.into());
+            }
+            // An empty directory may be replaced by a symlink, as before.
+            remove_entry_at(parent_fd, &self.file_name, true)?;
         }
 
-        Ok(())
+        Err(io::Error::other(format!(
+            "cache restore destination changed repeatedly: {:?}",
+            self.file_name
+        ))
+        .into())
     }
 }
 
@@ -639,17 +611,11 @@ impl RestoreDestination {
         reader: &mut impl io::Read,
         _mode: u32,
     ) -> Result<Option<std::fs::Metadata>, CacheError> {
-        let (mut file, temporary_path) = create_windows_temporary_file(&self.parent_path)?;
+        let destination = self.parent_path.join_component(&self.file_name);
+        let mut file = create_new_windows_file(&destination)?;
         if let Err(error) = io::copy(reader, &mut file) {
             drop(file);
-            remove_windows_entry(&temporary_path).ok();
-            return Err(error.into());
-        }
-        drop(file);
-
-        let destination = self.parent_path.join_component(&self.file_name);
-        if let Err(error) = replace_windows_entry(&temporary_path, &destination) {
-            remove_windows_entry(&temporary_path).ok();
+            remove_windows_entry(&destination).ok();
             return Err(error.into());
         }
 
@@ -657,28 +623,39 @@ impl RestoreDestination {
     }
 
     pub fn write_symlink(&self, target: &str, target_is_dir: bool) -> Result<(), CacheError> {
-        let temporary_path =
-            create_windows_temporary_symlink(&self.parent_path, target, target_is_dir)?;
         let destination = self.parent_path.join_component(&self.file_name);
-        if let Err(error) = replace_windows_entry(&temporary_path, &destination) {
-            remove_windows_entry(&temporary_path).ok();
-            return Err(error.into());
+        for _ in 0..16 {
+            let result = if target_is_dir {
+                destination.symlink_to_dir(target)
+            } else {
+                destination.symlink_to_file(target)
+            };
+            match result {
+                Ok(()) => return Ok(()),
+                Err(error) if error.is_io_error(io::ErrorKind::AlreadyExists) => {
+                    remove_existing_windows_entry(&destination)?;
+                }
+                Err(error) => return Err(io::Error::other(error).into()),
+            }
         }
 
-        Ok(())
+        Err(io::Error::other(format!(
+            "cache restore destination changed repeatedly: {destination}"
+        ))
+        .into())
     }
 }
 
+/// Creates `path` as a new file, removing any existing entry first. Creating
+/// with `CREATE_NEW` guarantees the handle refers to a file this call created,
+/// so restored bytes can never reach an existing hardlink or reparse point.
 #[cfg(windows)]
-fn create_windows_temporary_file(
-    parent: &AbsoluteSystemPath,
-) -> io::Result<(File, AbsoluteSystemPathBuf)> {
+fn create_new_windows_file(path: &AbsoluteSystemPath) -> io::Result<File> {
     use windows_sys::Win32::Storage::FileSystem::{
         FILE_FLAG_OPEN_REPARSE_POINT, FILE_SHARE_DELETE, FILE_SHARE_READ, FILE_SHARE_WRITE,
     };
 
-    for _ in 0..128 {
-        let path = parent.join_component(&temporary_basename());
+    for _ in 0..16 {
         let mut options = OpenOptions::new();
         options
             .write(true)
@@ -686,103 +663,27 @@ fn create_windows_temporary_file(
             .share_mode(FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE)
             .custom_flags(FILE_FLAG_OPEN_REPARSE_POINT);
         match path.open_with_options(options) {
-            Ok(file) => return Ok((file, path)),
-            Err(error) if error.kind() == io::ErrorKind::AlreadyExists => continue,
+            Ok(file) => return Ok(file),
+            Err(error) if error.kind() == io::ErrorKind::AlreadyExists => {
+                remove_existing_windows_entry(path)?;
+            }
             Err(error) => return Err(error),
         }
     }
 
-    Err(io::Error::new(
-        io::ErrorKind::AlreadyExists,
-        "could not allocate a temporary cache restore file",
-    ))
+    Err(io::Error::other(format!(
+        "cache restore destination changed repeatedly: {path}"
+    )))
 }
 
+/// Removes an entry without following it. An entry that is already gone
+/// counts as removed.
 #[cfg(windows)]
-fn create_windows_temporary_symlink(
-    parent: &AbsoluteSystemPath,
-    target: &str,
-    target_is_dir: bool,
-) -> io::Result<AbsoluteSystemPathBuf> {
-    for _ in 0..128 {
-        let path = parent.join_component(&temporary_basename());
-        let result = if target_is_dir {
-            path.symlink_to_dir(target)
-        } else {
-            path.symlink_to_file(target)
-        };
-        match result {
-            Ok(()) => return Ok(path),
-            Err(error) if error.is_io_error(io::ErrorKind::AlreadyExists) => continue,
-            Err(error) => return Err(io::Error::other(error)),
-        }
+fn remove_existing_windows_entry(path: &AbsoluteSystemPath) -> io::Result<()> {
+    match remove_windows_entry(path) {
+        Err(error) if path.symlink_metadata().is_ok() => Err(error),
+        _ => Ok(()),
     }
-
-    Err(io::Error::new(
-        io::ErrorKind::AlreadyExists,
-        "could not allocate a temporary cache restore symlink",
-    ))
-}
-
-#[cfg(windows)]
-fn replace_windows_entry(
-    source: &AbsoluteSystemPath,
-    destination: &AbsoluteSystemPath,
-) -> io::Result<()> {
-    match move_windows_entry(source, destination) {
-        Ok(()) => Ok(()),
-        Err(first_error) => {
-            let metadata = match destination.symlink_metadata() {
-                Ok(metadata) => metadata,
-                Err(_) => return Err(first_error),
-            };
-            if metadata.file_attributes()
-                & windows_sys::Win32::Storage::FileSystem::FILE_ATTRIBUTE_REPARSE_POINT
-                == 0
-                && !metadata.is_dir()
-            {
-                return Err(first_error);
-            }
-
-            remove_windows_entry(destination)?;
-            move_windows_entry(source, destination)
-        }
-    }
-}
-
-#[cfg(windows)]
-fn move_windows_entry(
-    source: &AbsoluteSystemPath,
-    destination: &AbsoluteSystemPath,
-) -> io::Result<()> {
-    use windows_sys::Win32::Storage::FileSystem::{MOVEFILE_REPLACE_EXISTING, MoveFileExW};
-
-    let source = windows_verbatim_path(source);
-    let destination = windows_verbatim_path(destination);
-    let result = unsafe {
-        MoveFileExW(
-            source.as_ptr(),
-            destination.as_ptr(),
-            MOVEFILE_REPLACE_EXISTING,
-        )
-    };
-    if result == 0 {
-        return Err(io::Error::last_os_error());
-    }
-    Ok(())
-}
-
-#[cfg(windows)]
-fn windows_verbatim_path(path: &AbsoluteSystemPath) -> Vec<u16> {
-    let path = path.as_str().replace('/', r"\");
-    let verbatim = if path.starts_with(r"\\?\") {
-        path
-    } else if let Some(unc) = path.strip_prefix(r"\\") {
-        format!(r"\\?\UNC\{unc}")
-    } else {
-        format!(r"\\?\{path}")
-    };
-    verbatim.encode_utf16().chain(std::iter::once(0)).collect()
 }
 
 #[cfg(unix)]
@@ -869,95 +770,57 @@ fn unlink_at(parent_fd: i32, component: &CString, flags: i32) -> io::Result<()> 
     Ok(())
 }
 
+/// Creates `name` as a new regular file beneath `parent_fd`, removing any
+/// existing non-directory entry first. `O_EXCL` guarantees the returned
+/// descriptor refers to an inode this call created, so restored bytes can
+/// never reach an existing hardlink or follow a symlink, even if the entry is
+/// swapped between the removal and the create.
 #[cfg(unix)]
-fn rename_at(
-    old_parent_fd: i32,
-    old_name: &CString,
-    new_parent_fd: i32,
-    new_name: &CString,
-) -> io::Result<()> {
-    let result = unsafe {
-        libc::renameat(
-            old_parent_fd,
-            old_name.as_ptr(),
-            new_parent_fd,
-            new_name.as_ptr(),
-        )
-    };
-    if result == -1 {
-        return Err(io::Error::last_os_error());
-    }
-    Ok(())
-}
-
-#[cfg(unix)]
-fn create_temporary_file(parent_fd: i32, mode: u32) -> io::Result<(File, CString)> {
-    for _ in 0..128 {
-        let temporary_name = temporary_name()?;
-        let flags =
-            libc::O_WRONLY | libc::O_CREAT | libc::O_EXCL | libc::O_NOFOLLOW | libc::O_CLOEXEC;
-        let fd = unsafe {
-            libc::openat(
-                parent_fd,
-                temporary_name.as_ptr(),
-                flags,
-                mode as libc::c_uint,
-            )
-        };
+fn create_new_file_at(parent_fd: i32, name: &CString, mode: u32) -> io::Result<File> {
+    let flags = libc::O_WRONLY | libc::O_CREAT | libc::O_EXCL | libc::O_NOFOLLOW | libc::O_CLOEXEC;
+    for _ in 0..16 {
+        let fd = unsafe { libc::openat(parent_fd, name.as_ptr(), flags, mode as libc::c_uint) };
         if fd != -1 {
             // SAFETY: openat returned a new owned file descriptor.
-            return Ok((unsafe { File::from_raw_fd(fd) }, temporary_name));
+            return Ok(unsafe { File::from_raw_fd(fd) });
         }
 
         let error = io::Error::last_os_error();
         if error.kind() != io::ErrorKind::AlreadyExists {
             return Err(error);
         }
+        remove_entry_at(parent_fd, name, false)?;
     }
 
-    Err(io::Error::new(
-        io::ErrorKind::AlreadyExists,
-        "could not allocate a temporary cache restore file",
-    ))
+    Err(io::Error::other(format!(
+        "cache restore destination changed repeatedly: {name:?}"
+    )))
 }
 
+/// Removes the entry `name` beneath `parent_fd` without following it. A
+/// directory is removed only when `allow_empty_directory` is set and it is
+/// empty. An entry that is already gone counts as removed.
 #[cfg(unix)]
-fn create_temporary_symlink(parent_fd: i32, target: &CString) -> io::Result<CString> {
-    for _ in 0..128 {
-        let temporary_name = temporary_name()?;
-        let result =
-            unsafe { libc::symlinkat(target.as_ptr(), parent_fd, temporary_name.as_ptr()) };
-        if result == 0 {
-            return Ok(temporary_name);
-        }
+fn remove_entry_at(parent_fd: i32, name: &CString, allow_empty_directory: bool) -> io::Result<()> {
+    let error = match unlink_at(parent_fd, name, 0) {
+        Ok(()) => return Ok(()),
+        Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(()),
+        Err(error) => error,
+    };
 
-        let error = io::Error::last_os_error();
-        if error.kind() != io::ErrorKind::AlreadyExists {
-            return Err(error);
-        }
+    // Unlinking a directory fails with EISDIR on Linux and EPERM on macOS.
+    let is_directory = fstat_at_no_follow(parent_fd, name)
+        .is_ok_and(|stat| stat.st_mode & libc::S_IFMT == libc::S_IFDIR);
+    if !is_directory {
+        return Err(error);
     }
-
-    Err(io::Error::new(
-        io::ErrorKind::AlreadyExists,
-        "could not allocate a temporary cache restore symlink",
-    ))
-}
-
-#[cfg(any(unix, windows))]
-fn temporary_basename() -> String {
-    static NEXT_TEMPORARY: AtomicU64 = AtomicU64::new(0);
-
-    format!(
-        ".turbo-restore-{}-{}",
-        std::process::id(),
-        NEXT_TEMPORARY.fetch_add(1, Ordering::Relaxed)
-    )
-}
-
-#[cfg(unix)]
-fn temporary_name() -> io::Result<CString> {
-    CString::new(temporary_basename())
-        .map_err(|_| io::Error::new(io::ErrorKind::InvalidInput, "invalid temporary file name"))
+    if !allow_empty_directory {
+        return Err(io::Error::from_raw_os_error(libc::EISDIR));
+    }
+    match unlink_at(parent_fd, name, libc::AT_REMOVEDIR) {
+        Err(error) if error.kind() != io::ErrorKind::NotFound => Err(error),
+        _ => Ok(()),
+    }
 }
 
 #[cfg(unix)]

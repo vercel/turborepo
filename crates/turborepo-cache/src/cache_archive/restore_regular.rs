@@ -189,6 +189,105 @@ mod tests {
     }
 
     #[test]
+    fn restore_destination_does_not_write_through_hardlink() -> Result<()> {
+        let outside_dir = tempdir()?;
+        let outside_target = outside_dir.path().join("target.js");
+        std::fs::write(&outside_target, b"do not overwrite")?;
+
+        let output_dir = tempdir()?;
+        let anchor = AbsoluteSystemPathBuf::try_from(output_dir.path())?;
+        std::fs::hard_link(&outside_target, anchor.join_component("index.js").as_path())?;
+        let path = AnchoredSystemPathBuf::from_raw("index.js")?;
+        let dir_cache = CachedDirTree::new(anchor.clone())?;
+
+        dir_cache
+            .destination(&path)?
+            .write_regular(&mut &b"restored"[..], 0o644)?;
+
+        assert_eq!(std::fs::read(&outside_target)?, b"do not overwrite");
+        assert_eq!(
+            std::fs::read(anchor.join_component("index.js").as_path())?,
+            b"restored"
+        );
+
+        Ok(())
+    }
+
+    // Any entry besides the destination would be archived as an output by the
+    // next cache save if a restore were killed before removing it.
+    #[test]
+    fn restore_destination_creates_no_other_entries() -> Result<()> {
+        let output_dir = tempdir()?;
+        let anchor = AbsoluteSystemPathBuf::try_from(output_dir.path())?;
+        std::fs::write(anchor.join_component("index.js").as_path(), b"stale")?;
+        let path = AnchoredSystemPathBuf::from_raw("index.js")?;
+        let dir_cache = CachedDirTree::new(anchor.clone())?;
+
+        dir_cache
+            .destination(&path)?
+            .write_regular(&mut &b"restored"[..], 0o644)?;
+
+        let entries: Vec<_> = std::fs::read_dir(output_dir.path())?
+            .map(|entry| entry.map(|entry| entry.file_name()))
+            .collect::<Result<_, _>>()?;
+        assert_eq!(entries, ["index.js"]);
+        assert_eq!(
+            std::fs::read(anchor.join_component("index.js").as_path())?,
+            b"restored"
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn restore_destination_refuses_to_replace_non_empty_directory() -> Result<()> {
+        let output_dir = tempdir()?;
+        let anchor = AbsoluteSystemPathBuf::try_from(output_dir.path())?;
+        let directory = anchor.join_component("folder");
+        directory.create_dir_all()?;
+        std::fs::write(directory.join_component("child").as_path(), b"keep")?;
+        let path = AnchoredSystemPathBuf::from_raw("folder")?;
+        let dir_cache = CachedDirTree::new(anchor.clone())?;
+
+        let error = dir_cache
+            .destination(&path)?
+            .write_regular(&mut &b"restored"[..], 0o644)
+            .expect_err("a directory is not replaced by a file");
+        assert_eq!(error.to_string(), "IO error: Is a directory (os error 21)");
+        assert_eq!(
+            std::fs::read(directory.join_component("child").as_path())?,
+            b"keep"
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn restore_destination_removes_partial_file_on_read_error() -> Result<()> {
+        struct FailingReader;
+        impl std::io::Read for FailingReader {
+            fn read(&mut self, _: &mut [u8]) -> std::io::Result<usize> {
+                Err(std::io::Error::other("truncated archive"))
+            }
+        }
+
+        let output_dir = tempdir()?;
+        let anchor = AbsoluteSystemPathBuf::try_from(output_dir.path())?;
+        let path = AnchoredSystemPathBuf::from_raw("index.js")?;
+        let dir_cache = CachedDirTree::new(anchor.clone())?;
+
+        assert!(
+            dir_cache
+                .destination(&path)?
+                .write_regular(&mut FailingReader, 0o644)
+                .is_err()
+        );
+        assert_eq!(std::fs::read_dir(output_dir.path())?.count(), 0);
+
+        Ok(())
+    }
+
+    #[test]
     fn restore_destination_writes_contents_and_reports_metadata() -> Result<()> {
         let output_dir = tempdir()?;
         let anchor = AbsoluteSystemPathBuf::try_from(output_dir.path())?;
@@ -290,6 +389,30 @@ mod windows_tests {
         assert_eq!(
             std::fs::read(anchor.join_component("index.js").as_path())?,
             b"restored"
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn restore_destination_refuses_to_replace_non_empty_directory() -> Result<()> {
+        let output_dir = tempdir()?;
+        let anchor = AbsoluteSystemPathBuf::try_from(output_dir.path())?;
+        let directory = anchor.join_component("folder");
+        directory.create_dir_all()?;
+        std::fs::write(directory.join_component("child").as_path(), b"keep")?;
+        let path = AnchoredSystemPathBuf::from_raw("folder")?;
+        let dir_cache = CachedDirTree::new(anchor.clone())?;
+
+        assert!(
+            dir_cache
+                .destination(&path)?
+                .write_regular(&mut &b"restored"[..], 0)
+                .is_err()
+        );
+        assert_eq!(
+            std::fs::read(directory.join_component("child").as_path())?,
+            b"keep"
         );
 
         Ok(())
