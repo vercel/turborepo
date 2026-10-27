@@ -395,6 +395,31 @@ mod windows_tests {
     }
 
     #[test]
+    fn restore_destination_replaces_final_directory_symlink() -> Result<()> {
+        let outside_dir = tempdir()?;
+        std::fs::write(outside_dir.path().join("child"), b"keep")?;
+
+        let output_dir = tempdir()?;
+        let anchor = AbsoluteSystemPathBuf::try_from(output_dir.path())?;
+        let path = AnchoredSystemPathBuf::from_raw("index.js")?;
+        let dir_cache = CachedDirTree::new(anchor.clone())?;
+        let destination = dir_cache.destination(&path)?;
+        anchor
+            .join_component("index.js")
+            .symlink_to_dir(outside_dir.path().to_string_lossy())?;
+
+        destination.write_regular(&mut &b"restored"[..], 0)?;
+
+        assert_eq!(std::fs::read(outside_dir.path().join("child"))?, b"keep");
+        assert_eq!(
+            std::fs::read(anchor.join_component("index.js").as_path())?,
+            b"restored"
+        );
+
+        Ok(())
+    }
+
+    #[test]
     fn restore_destination_refuses_to_replace_non_empty_directory() -> Result<()> {
         let output_dir = tempdir()?;
         let anchor = AbsoluteSystemPathBuf::try_from(output_dir.path())?;
