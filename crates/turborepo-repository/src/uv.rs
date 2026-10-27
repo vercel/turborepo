@@ -87,6 +87,12 @@ pub enum Error {
     ManifestEdit(#[from] Box<toml_edit::TomlError>),
     #[error(transparent)]
     WorkspaceGlob(#[from] crate::workspaces::Error),
+    #[error("invalid [tool.uv.workspace] exclude pattern {pattern:?}: {source}")]
+    InvalidExclude {
+        pattern: String,
+        #[source]
+        source: glob::PatternError,
+    },
     #[error("uv workspace member at {0} has no [project].name")]
     MissingMemberName(String),
     #[error("root pyproject.toml has no [tool.uv.workspace] table")]
@@ -819,6 +825,43 @@ pub struct DiscoveredWorkspace {
     pytest: Option<ToolExecution>,
 }
 
+/// `[tool.uv.workspace] exclude`, matched the way uv matches it. Each entry is
+/// normalized like a path and tested by the `glob` crate against one member's
+/// repository-relative directory. `*` crosses `/`, and an excluded directory
+/// does not hide members nested below it.
+struct UvExclusions(Vec<glob::Pattern>);
+
+impl UvExclusions {
+    fn new(patterns: &[String]) -> Result<Self, Error> {
+        patterns
+            .iter()
+            .map(|pattern| {
+                let mut components = Vec::new();
+                for component in std::path::Path::new(pattern).components() {
+                    match component {
+                        std::path::Component::Normal(part) => {
+                            components.push(part.to_string_lossy())
+                        }
+                        std::path::Component::ParentDir => {
+                            components.pop();
+                        }
+                        _ => {}
+                    }
+                }
+                glob::Pattern::new(&components.join("/")).map_err(|source| Error::InvalidExclude {
+                    pattern: pattern.clone(),
+                    source,
+                })
+            })
+            .collect::<Result<_, _>>()
+            .map(Self)
+    }
+
+    fn excludes(&self, member_dir: &str) -> bool {
+        self.0.iter().any(|pattern| pattern.matches(member_dir))
+    }
+}
+
 /// Discover package membership and internal relationships without consulting
 /// uv.lock. Exact metadata remains authoritative when available, but this
 /// snapshot keeps graph construction usable when lockfile resolution fails.
@@ -841,13 +884,18 @@ fn discover_workspace_from_manifests(
     let Some(workspace) = root_manifest.workspace() else {
         return Ok(empty_workspace(name));
     };
-    let globs = crate::workspaces::WorkspaceGlobs::new(
-        workspace.members.clone(),
-        workspace.exclude.clone(),
-    )?;
+    let globs = crate::workspaces::WorkspaceGlobs::new(workspace.members.clone(), Vec::new())?;
+    let exclusions = UvExclusions::new(&workspace.exclude)?;
     let mut parsed = Vec::new();
     let mut seen = HashMap::<String, String>::new();
     for manifest_path in globs.get_manifests(repo_root, PYPROJECT_TOML)? {
+        let member_dir = manifest_path
+            .parent()
+            .ok_or_else(|| Error::InvalidMemberManifestPath(manifest_path.to_string()))?;
+        let member_dir = repo_root.anchor(member_dir)?.to_unix();
+        if exclusions.excludes(member_dir.as_str()) {
+            continue;
+        }
         let Some(manifest) = PyProjectManifest::load(&manifest_path)? else {
             continue;
         };
@@ -4495,9 +4543,6 @@ version = "0.1.0"
         );
     }
 
-    // Expected members were observed from `uv workspace metadata` (uv 0.12.19)
-    // on the same layout. uv matches each exclusion against a member's own
-    // path, and its `*` crosses directory separators.
     #[test_case::test_case("services/group", &["api", "web"] ; "excluded parent keeps children")]
     #[test_case::test_case("./services/group", &["api", "web"] ; "dot slash prefix")]
     #[test_case::test_case("services/group/", &["api", "web"] ; "trailing slash")]
