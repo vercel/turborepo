@@ -4495,6 +4495,47 @@ version = "0.1.0"
         );
     }
 
+    // Expected members were observed from `uv workspace metadata` (uv 0.12.19)
+    // on the same layout. uv matches each exclusion against a member's own
+    // path, and its `*` crosses directory separators.
+    #[test_case::test_case("services/group", &["api", "web"] ; "excluded parent keeps children")]
+    #[test_case::test_case("./services/group", &["api", "web"] ; "dot slash prefix")]
+    #[test_case::test_case("services/group/", &["api", "web"] ; "trailing slash")]
+    #[test_case::test_case("services/g*", &["web"] ; "star matches nested member")]
+    #[test_case::test_case("services/*", &[] ; "star crosses separators")]
+    fn test_manifest_discovery_matches_uv_exclusions(exclude: &str, expected: &[&str]) {
+        let tempdir = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(tempdir.path()).unwrap();
+        root.join_component(PYPROJECT_TOML)
+            .create_with_contents(format!(
+                "[tool.turbo]\nname = \"acme\"\n\n[tool.uv.workspace]\nmembers = [\"services/*\", \
+                 \"services/group/*\"]\nexclude = [\"{exclude}\"]\n"
+            ))
+            .unwrap();
+        for (dir, name) in [
+            (&["services", "web"][..], "web"),
+            (&["services", "group", "api"], "api"),
+        ] {
+            let package_dir = root.join_components(dir);
+            package_dir.create_dir_all().unwrap();
+            package_dir
+                .join_component(PYPROJECT_TOML)
+                .create_with_contents(format!(
+                    "[project]\nname = \"{name}\"\nversion = \"0.1.0\"\n"
+                ))
+                .unwrap();
+        }
+        let workspace = discover_workspace_from_manifests(&root, false).unwrap();
+        assert_eq!(
+            workspace
+                .packages
+                .iter()
+                .map(|package| package.name.as_str())
+                .collect::<Vec<_>>(),
+            expected
+        );
+    }
+
     /// Writes a two-member workspace (`core`, `util`) with no uv.lock, where
     /// `core` depends on `helper` through the given member and root
     /// `[tool.uv.sources]` tables.
