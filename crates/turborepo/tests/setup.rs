@@ -1468,8 +1468,8 @@ fn standalone_check_and_locked_plan_report_only_node_pnpm_and_reject_damage() {
             text.contains("node 24.0.0: ready") && text.contains("pnpm 10.0.0: ready"),
             "{text}"
         );
-        // Disk use is reported without any write (checked by `invoke`).
-        assert!(text.contains("in this clone's .turbo/tools."), "{text}");
+        // Check no longer reports managed-tool disk use.
+        assert!(!text.contains(".turbo/tools"), "{text}");
         assert!(
             text.contains("Dependencies skipped")
                 && text.contains("dependency readiness was not checked"),
