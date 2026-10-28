@@ -1109,6 +1109,8 @@ A Package Configuration can add additional outputs while keeping the root output
 
 Without `$TURBO_EXTENDS$`, the `outputs` array would be completely replaced with `[".next/**", "!.next/cache/**", "!.next/dev/**"]`, dropping the `"dist/**"` from the root configuration.
 
+For `inputs`, the inherited value is the task's effective inputs. When the inherited task omits `inputs` or sets `"inputs": []`, it hashes every file in the package checked into source control, so `["$TURBO_EXTENDS$", "../shared/**"]` keeps those files and adds `../shared/**`.
+
 ### `outputLogs`
 
 Default: `full`
