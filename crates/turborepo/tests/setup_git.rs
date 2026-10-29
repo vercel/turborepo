@@ -242,7 +242,7 @@ fn pruned_docker_output_without_git_provisions_and_checks() {
     let (code, text) = turbo_with_home(&root, &frozen, Path::new(""), home.path());
     assert_eq!(code, 0, "{text}");
     assert!(
-        text.contains("node24.0.0:reused") && text.contains("pnpm10.0.0:reused"),
+        text.contains("node24.0.0reused") && text.contains("pnpm10.0.0reused"),
         "{text}"
     );
     let (code, text) = turbo_with_home(
@@ -278,7 +278,7 @@ fn pruned_docker_output_without_git_provisions_and_checks() {
     let (code, text) = turbo_with_home(&root, &frozen, bin.path(), home.path());
     assert_eq!(code, 0, "{text}");
     assert!(
-        text.contains("node24.0.0:reused") && text.contains("pnpm10.0.0:reused"),
+        text.contains("node24.0.0reused") && text.contains("pnpm10.0.0reused"),
         "{text}"
     );
 }

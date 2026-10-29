@@ -29,7 +29,10 @@ use turborepo_setup::{
 use turborepo_tool_install::Store;
 use turborepo_turbo_json::SetupMirrors;
 
-use super::Error;
+use super::{
+    Error,
+    output::{Note, ToolOutcome, ToolReport, ToolRow},
+};
 
 pub(super) struct Transports {
     pub node: NodeTransport,
@@ -433,16 +436,61 @@ pub(super) fn plans(
     })
 }
 
-/// Aggregate results for the caller's report; no paths or versions.
-/// `downloaded_bytes` covers every verified artifact setup transferred itself,
-/// across all ecosystems; rustup's own toolchain downloads are not visible.
-#[derive(Debug, Default)]
-pub(super) struct Provisioned {
-    pub downloaded_bytes: u64,
-    pub installed: usize,
-    pub reused: usize,
+/// One difference between the previous and the published `turbo.lock`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) enum LockChange {
+    Locked {
+        id: String,
+        version: String,
+    },
+    Changed {
+        id: String,
+        from: String,
+        to: String,
+    },
+    Reselected {
+        id: String,
+        version: String,
+    },
+    Removed {
+        id: String,
+        version: String,
+    },
 }
 
+pub(super) fn lock_changes(
+    previous: Option<&turborepo_setup::lock::Lock>,
+    current: &turborepo_setup::lock::Lock,
+) -> Vec<LockChange> {
+    let mut changes = Vec::new();
+    for (id, tool) in current.tools() {
+        let old = previous.and_then(|lock| lock.tools().get(id));
+        if old == Some(tool) {
+            continue;
+        }
+        let (id, version) = (id.clone(), tool.version.clone());
+        changes.push(match old {
+            Some(old) if old.version != tool.version => LockChange::Changed {
+                id,
+                from: old.version.clone(),
+                to: version,
+            },
+            Some(_) => LockChange::Reselected { id, version },
+            None => LockChange::Locked { id, version },
+        });
+    }
+    for (id, tool) in previous.into_iter().flat_map(|lock| lock.tools()) {
+        if !current.tools().contains_key(id) {
+            changes.push(LockChange::Removed {
+                id: id.clone(),
+                version: tool.version.clone(),
+            });
+        }
+    }
+    changes
+}
+
+/// The lock diff as `--plan` and refresh report it.
 pub(super) fn lock_report(
     previous: Option<&turborepo_setup::lock::Lock>,
     current: &turborepo_setup::lock::Lock,
@@ -455,24 +503,20 @@ pub(super) fn lock_report(
             "created"
         }
     )];
-    for (id, tool) in current.tools() {
-        let old = previous.and_then(|lock| lock.tools().get(id));
-        if old == Some(tool) {
-            continue;
-        }
-        lines.push(match old {
-            Some(old) if old.version != tool.version => {
-                format!("{id}: {} -> {}", old.version, tool.version)
-            }
-            Some(_) => format!("{id}: {} (selection changed)", tool.version),
-            None => format!("{id}: locked {}", tool.version),
-        });
-    }
-    for (id, tool) in previous.into_iter().flat_map(|lock| lock.tools()) {
-        if !current.tools().contains_key(id) {
-            lines.push(format!("{id}: {} -> removed from lock", tool.version));
-        }
-    }
+    lines.extend(
+        lock_changes(previous, current)
+            .into_iter()
+            .map(|change| match change {
+                LockChange::Changed { id, from, to } => format!("{id}: {from} -> {to}"),
+                LockChange::Reselected { id, version } => {
+                    format!("{id}: {version} (selection changed)")
+                }
+                LockChange::Locked { id, version } => format!("{id}: locked {version}"),
+                LockChange::Removed { id, version } => {
+                    format!("{id}: {version} -> removed from lock")
+                }
+            }),
+    );
     lines.join("\n")
 }
 
@@ -536,8 +580,9 @@ pub(super) fn run(
     request: &super::SetupRequest,
     transports: Option<Transports>,
     preflight: impl Fn() -> Result<ToolDownloadPolicy, Error>,
-) -> Result<Provisioned, Error> {
+) -> Result<ToolReport, Error> {
     let (force, offline) = (request.force, request.offline);
+    let mut notes = Vec::new();
     let resolution_mode = if request.update_lock {
         turborepo_setup::lock::reconcile::Mode::Refresh
     } else {
@@ -654,7 +699,10 @@ pub(super) fn run(
         check()?;
         let published = snapshot.after_publication(&outcome.lock)?;
         if outcome.publication == Some(WriteOutcome::Written) {
-            println!("{}", lock_report(snapshot.previous_lock(), &outcome.lock));
+            notes.push(Note::Lock {
+                created: snapshot.previous_lock().is_none(),
+                changes: lock_changes(snapshot.previous_lock(), &outcome.lock),
+            });
         }
         transports = Some(sources);
         published
@@ -1082,7 +1130,7 @@ pub(super) fn run(
     trust.publish(&store)?;
     // Every adapter that transfers verified bytes itself. A Rust toolchain is
     // fetched by the private rustup, so only its installer is counted.
-    let mut provisioned = Provisioned {
+    let mut report = ToolReport {
         downloaded_bytes: [
             prepared_node.as_ref().map(|p| p.downloaded_bytes()),
             prepared_pnpm.as_ref().map(|p| p.downloaded_bytes()),
@@ -1103,11 +1151,11 @@ pub(super) fn run(
                 .map(|p| p.downloaded_bytes()),
         )
         .sum(),
-        ..Provisioned::default()
+        ..ToolReport::default()
     };
     for tool in &desired {
         let (reused, source) = match additional(tool) {
-            Some((plan, prepared)) => (prepared.is_none(), format!(" ({})", plan.source())),
+            Some((plan, prepared)) => (prepared.is_none(), Some(plan.source().to_string())),
             None => (
                 (tool.id == "node" && prepared_node.is_none())
                     || (tool.id == "pnpm" && prepared_pnpm.is_none())
@@ -1119,14 +1167,9 @@ pub(super) fn run(
                     || (tool.id == "yarn" && prepared_yarn.is_none())
                     || (tool.id == "bun" && prepared_bun.is_none())
                     || (tool.id == "go" && prepared_go.is_none()),
-                String::new(),
+                None,
             ),
         };
-        if reused {
-            provisioned.reused += 1;
-        } else {
-            provisioned.installed += 1;
-        }
         let from_cache = match tool.id.as_str() {
             _ if additional(tool).is_some() => additional(tool)
                 .and_then(|(_, prepared)| prepared)
@@ -1136,16 +1179,18 @@ pub(super) fn run(
             "npm" => prepared_npm.as_ref().is_some_and(|npm| npm.from_cache()),
             _ => false,
         };
-        let status = if reused && force {
-            "reinstalled from the verified installation"
-        } else if reused {
-            "reused"
-        } else if from_cache {
-            "installed from the shared download cache"
-        } else {
-            "installed"
+        let outcome = match (reused, force, from_cache) {
+            (true, true, _) => ToolOutcome::Reinstalled,
+            (true, false, _) => ToolOutcome::Reused,
+            (false, _, true) => ToolOutcome::InstalledFromCache,
+            (false, _, false) => ToolOutcome::Installed,
         };
-        println!("{} {}: {status}{source}", tool.id, tool.version);
+        report.rows.push(ToolRow {
+            id: tool.id.clone(),
+            version: tool.version.clone(),
+            outcome,
+            source,
+        });
     }
     if let Some(npm) = lock.tools().get("npm")
         && matches!(
@@ -1153,16 +1198,23 @@ pub(super) fn run(
             turborepo_setup::lock::Installation::Bundled { .. }
         )
     {
-        println!("npm {}: provided by managed Node (bundled)", npm.version);
+        report.rows.push(ToolRow {
+            id: "npm".into(),
+            version: npm.version.clone(),
+            outcome: ToolOutcome::BundledWithNode,
+            source: None,
+        });
     }
     if offline {
-        println!("Offline: used only installed tools and verified cached artifacts.");
+        notes.push(Note::Offline);
     }
     // Cleanup follows both generation and external trust publication, while
     // the writer and Store guards are still held. It never fails setup.
-    for line in super::cleanup::after_provisioning(&mut store, transports.node.cache(), lock, host)
-    {
-        println!("{line}");
-    }
-    Ok(provisioned)
+    notes.extend(
+        super::cleanup::after_provisioning(&mut store, transports.node.cache(), lock, host)
+            .into_iter()
+            .map(Note::Cleanup),
+    );
+    report.notes = notes;
+    Ok(report)
 }

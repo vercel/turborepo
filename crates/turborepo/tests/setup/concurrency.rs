@@ -19,7 +19,7 @@ use super::{
     recovery::{CHECK, OFFLINE, Repo, text},
 };
 
-const INSTALLED: &str = "node 24.0.0: installed from the shared download cache";
+const INSTALLED: &str = "node 24.0.0 installed (cached)";
 
 fn spawn(repo: &Repo, count: usize, monitor: &TcpListener) -> Vec<Child> {
     (0..count)
@@ -110,7 +110,7 @@ fn concurrent_writers_in_one_repository_publish_one_generation_or_nothing() {
     repo.assert_committed();
     // Writers serialize on the repository lock: one installs, the rest reuse.
     repo.seed();
-    assert_eq!(finish(spawn(&repo, 4, &monitor), 0, "pnpm 10.0.0:"), 1);
+    assert_eq!(finish(spawn(&repo, 4, &monitor), 0, "pnpm 10.0.0"), 1);
     assert_eq!(generations(&repo), 1);
     assert_ready(&repo);
     assert_idle(&monitor);
@@ -126,7 +126,7 @@ fn cancelled_writer_releases_waiters_while_another_repository_shares_the_cache()
     let monitor = monitor();
     let mut waiting = spawn(&first, 3, &monitor);
     // The other repository is not blocked and installs from the same entries.
-    assert_eq!(finish(spawn(&second, 2, &monitor), 0, "pnpm 10.0.0:"), 1);
+    assert_eq!(finish(spawn(&second, 2, &monitor), 0, "pnpm 10.0.0"), 1);
     assert!(
         waiting
             .iter_mut()
@@ -139,7 +139,7 @@ fn cancelled_writer_releases_waiters_while_another_repository_shares_the_cache()
         Some(Signal::SIGKILL as i32)
     );
     drop(held);
-    assert_eq!(finish(waiting, 0, "pnpm 10.0.0:"), 1);
+    assert_eq!(finish(waiting, 0, "pnpm 10.0.0"), 1);
     for repo in [&first, &second] {
         assert_eq!(generations(repo), 1);
         assert_ready(repo);

@@ -7,7 +7,14 @@ use turborepo_setup::{
     source_policy::ToolDownloadPolicy,
 };
 
-use super::{Error as SetupError, authorization::Authorization, check, provision, root::Discovery};
+use super::{
+    Error as SetupError,
+    authorization::Authorization,
+    check,
+    output::{Note, ToolOutcome, ToolReport, ToolRow},
+    provision,
+    root::Discovery,
+};
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
@@ -37,7 +44,7 @@ fn inspect(
     transports: Option<&provision::Transports>,
     preflight: impl Fn() -> Result<ToolDownloadPolicy, SetupError>,
     force: bool,
-) -> Result<Vec<String>, SetupError> {
+) -> Result<Vec<ToolRow>, SetupError> {
     let context = check::context()?;
     let platform = context.artifact_platform();
     let root = discovery.snapshot_root()?.as_std_path();
@@ -109,34 +116,35 @@ fn inspect(
     // final fresh external-evidence check, not after it or inside its callback.
     inputs()?;
     storage()?;
-    let lines = authorization
+    let rows = authorization
         .with_current(|plan| {
             plan.tools()
                 .iter()
-                .map(|tool| {
+                .map(|tool| ToolRow {
+                    id: tool.id.clone(),
+                    version: tool.version.clone(),
                     // Offline, the verified installed bytes are the only
                     // reinstall source, and they were just fully re-verified.
-                    let outcome = if force {
-                        "re-verified (trusted installed bytes; offline --force)"
+                    outcome: if force {
+                        ToolOutcome::Reverified
                     } else {
-                        "reused (trusted installed bytes; offline)"
-                    };
-                    format!("{} {}: {outcome}", tool.id, tool.version)
+                        ToolOutcome::ReusedTrusted
+                    },
+                    source: None,
                 })
                 .collect::<Vec<_>>()
         })
         .map_err(|error| unavailable(error, &artifacts))?;
-    Ok(lines)
+    Ok(rows)
 }
 
 /// Trusted reuse touches no tools; the caller reports dependencies, which
 /// may still install offline from the native caches.
-fn report(lines: Vec<String>) -> provision::Provisioned {
-    println!("{}", lines.join("\n"));
-    println!("Tools: no resolution, downloads, writes, or probes.");
-    provision::Provisioned {
-        reused: lines.len(),
-        ..Default::default()
+fn report(rows: Vec<ToolRow>) -> ToolReport {
+    ToolReport {
+        rows,
+        notes: vec![Note::TrustedRepeat],
+        downloaded_bytes: 0,
     }
 }
 
@@ -146,7 +154,7 @@ pub(super) fn run(
     request: &super::SetupRequest,
     transports: Option<provision::Transports>,
     preflight: impl Fn() -> Result<ToolDownloadPolicy, SetupError>,
-) -> Result<provision::Provisioned, SetupError> {
+) -> Result<ToolReport, SetupError> {
     let checked = inspect(
         discovery,
         &sources,
