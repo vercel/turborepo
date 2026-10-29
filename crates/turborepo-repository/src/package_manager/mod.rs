@@ -375,6 +375,25 @@ impl PackageManager {
         ignores.iter().map(|s| s.to_string())
     }
 
+    fn get_package_json_workspace_globs(
+        &self,
+        package_json_path: &AbsoluteSystemPath,
+    ) -> Result<Vec<String>, Error> {
+        let package_json_text = fs::read_to_string(package_json_path)?;
+        // Package managers accept a leading UTF-8 BOM, so tolerate it here too.
+        let package_json_text = package_json_text
+            .strip_prefix('\u{feff}')
+            .unwrap_or(&package_json_text);
+        let package_json: PackageJsonWorkspaces = serde_json::from_str(package_json_text)
+            .map_err(|_| Error::Workspace(MissingWorkspaceError::from(self.clone())))?;
+
+        if package_json.workspaces.as_ref().is_empty() {
+            Err(MissingWorkspaceError::from(self.clone()).into())
+        } else {
+            Ok(package_json.workspaces.into())
+        }
+    }
+
     fn get_configured_workspace_globs(
         &self,
         root_path: &AbsoluteSystemPath,
@@ -390,15 +409,7 @@ impl PackageManager {
             | PackageManager::Npm
             | PackageManager::Yarn
             | PackageManager::Bun => {
-                let package_json_text = fs::read_to_string(self.workspace_glob_source(root_path))?;
-                let package_json: PackageJsonWorkspaces = serde_json::from_str(&package_json_text)
-                    .map_err(|_| Error::Workspace(MissingWorkspaceError::from(self.clone())))?;
-
-                if package_json.workspaces.as_ref().is_empty() {
-                    return Err(MissingWorkspaceError::from(self.clone()).into());
-                } else {
-                    package_json.workspaces.into()
-                }
+                self.get_package_json_workspace_globs(&self.workspace_glob_source(root_path))?
             }
             PackageManager::Nub { lockfile } => {
                 if lockfile.is_pnpm_family()
@@ -410,18 +421,9 @@ impl PackageManager {
                         Error::Workspace(MissingWorkspaceError::from(self.clone()))
                     })?
                 } else {
-                    let package_json_text =
-                        fs::read_to_string(root_path.join_component("package.json"))?;
-                    let package_json: PackageJsonWorkspaces =
-                        serde_json::from_str(&package_json_text).map_err(|_| {
-                            Error::Workspace(MissingWorkspaceError::from(self.clone()))
-                        })?;
-
-                    if package_json.workspaces.as_ref().is_empty() {
-                        return Err(MissingWorkspaceError::from(self.clone()).into());
-                    } else {
-                        package_json.workspaces.into()
-                    }
+                    self.get_package_json_workspace_globs(
+                        &root_path.join_component("package.json"),
+                    )?
                 }
             }
             PackageManager::Aube { lockfile } => {
@@ -443,18 +445,9 @@ impl PackageManager {
                         Error::Workspace(MissingWorkspaceError::from(self.clone()))
                     })?
                 } else {
-                    let package_json_text =
-                        fs::read_to_string(root_path.join_component("package.json"))?;
-                    let package_json: PackageJsonWorkspaces =
-                        serde_json::from_str(&package_json_text).map_err(|_| {
-                            Error::Workspace(MissingWorkspaceError::from(self.clone()))
-                        })?;
-
-                    if package_json.workspaces.as_ref().is_empty() {
-                        return Err(MissingWorkspaceError::from(self.clone()).into());
-                    } else {
-                        package_json.workspaces.into()
-                    }
+                    self.get_package_json_workspace_globs(
+                        &root_path.join_component("package.json"),
+                    )?
                 }
             }
         };
@@ -2728,6 +2721,20 @@ mod tests {
         let nested: PackageJsonWorkspaces =
             serde_json::from_str("{ \"workspaces\": {\"packages\": [\"packages/**\"]}}")?;
         assert_eq!(nested.workspaces.as_ref(), vec!["packages/**"]);
+        Ok(())
+    }
+
+    #[test]
+    fn test_workspace_globs_package_json_with_bom() -> Result<(), Error> {
+        let tmpdir = tempfile::tempdir().unwrap();
+        let repo_root = AbsoluteSystemPath::from_std_path(tmpdir.path()).unwrap();
+        std::fs::write(
+            repo_root.join_component("package.json").as_std_path(),
+            concat!("\u{feff}", r#"{"workspaces": ["packages/*"]}"#),
+        )?;
+
+        let globs = PackageManager::Npm.get_workspace_globs(repo_root)?;
+        assert_eq!(globs.raw_inclusions, vec!["packages/*"]);
         Ok(())
     }
 
