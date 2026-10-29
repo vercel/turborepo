@@ -1712,8 +1712,8 @@ fn plain_setup_provisions_tools_and_reports_dependencies_skipped() {
     let policy = r#"{"futureFlags":{"experimentalSetup":true},"setup":{"javascript":{"dependencies":"skip"}}}"#;
     write(root, "turbo.json", policy);
     for (mode, outcome, skipped) in [
-        ("--frozen", "reused", "turbo.json setup policy"),
-        ("--check", "ready", "turbo.json setup policy"),
+        ("--frozen", " reused", "turbo.json setup policy"),
+        ("--check", ": ready", "turbo.json setup policy"),
     ] {
         let output = Command::new(env!("CARGO_BIN_EXE_turbo"))
             .env_clear()
@@ -1741,8 +1741,8 @@ fn plain_setup_provisions_tools_and_reports_dependencies_skipped() {
         let code = output.status.code().unwrap();
         assert_eq!(code, 0, "{text}");
         assert!(
-            text.contains(&format!("node 24.0.0: {outcome}"))
-                && text.contains(&format!("pnpm 10.0.0: {outcome}")),
+            text.contains(&format!("node 24.0.0{outcome}"))
+                && text.contains(&format!("pnpm 10.0.0{outcome}")),
             "{text}"
         );
         assert!(

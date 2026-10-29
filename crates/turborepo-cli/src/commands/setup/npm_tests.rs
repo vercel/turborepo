@@ -32,8 +32,10 @@ fn npm_telemetry_counts_managed_owners_and_artifact_bytes() {
                     Some(transports),
                     f.git.clone(),
                     &mut report,
+                    &output::Console::capture(output::Mode::Plain).0,
                     || Ok(f.owned.policy_at(&f.owned.root().join("apps/web/src"))?),
                 )
+                .map(|completed| completed.exit_code())
             })
             .unwrap();
             assert_eq!(result.unwrap(), 0);

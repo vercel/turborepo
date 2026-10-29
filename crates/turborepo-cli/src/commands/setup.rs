@@ -31,6 +31,7 @@ mod lock_diagnostics;
 mod msvc;
 mod no_lock;
 mod offline;
+mod output;
 mod plan;
 mod provision;
 mod root;
@@ -235,8 +236,13 @@ pub fn run_with_telemetry(
     color_config: ColorConfig,
 ) -> Result<i32, Error> {
     let started = Instant::now();
+    let console = output::Console::new(output::Style {
+        mode: output::Mode::current(turborepo_ci::is_ci()),
+        color: color_config,
+    });
     let mut report = telemetry::Report::default();
-    let result = run_observed(args, setup_args, Arc::new(GitCli), &mut report);
+    let result = run_observed(args, setup_args, Arc::new(GitCli), &mut report, &console)
+        .and_then(|completed| Ok(console.final_line(&completed, started.elapsed())?));
     telemetry::record(&report, &result, started.elapsed(), color_config);
     result
 }
@@ -244,7 +250,15 @@ pub fn run_with_telemetry(
 /// Production setup without telemetry, so tests never initialize it.
 #[cfg(test)]
 pub fn run(args: &Args, setup_args: &SetupArgs, git: Arc<dyn Git>) -> Result<i32, Error> {
-    run_observed(args, setup_args, git, &mut telemetry::Report::default())
+    let (console, _) = output::Console::capture(output::Mode::Plain);
+    run_observed(
+        args,
+        setup_args,
+        git,
+        &mut telemetry::Report::default(),
+        &console,
+    )
+    .map(|completed| completed.exit_code())
 }
 
 fn run_observed(
@@ -252,14 +266,15 @@ fn run_observed(
     setup_args: &SetupArgs,
     git: Arc<dyn Git>,
     report: &mut telemetry::Report,
-) -> Result<i32, Error> {
+    console: &output::Console,
+) -> Result<output::Completed, Error> {
     #[cfg(windows)]
     exit_on_relayed_ctrl_c()?;
     let invocation = match args.cwd.as_deref() {
         Some(cwd) => turbopath::AbsoluteSystemPathBuf::from_cwd(cwd)?,
         None => turbopath::AbsoluteSystemPathBuf::cwd()?,
     };
-    run_reporting(args, setup_args, None, git, report, || {
+    run_reporting(args, setup_args, None, git, report, console, || {
         Ok(ToolDownloadPolicy::inspect(invocation.as_std_path())?)
     })
 }
@@ -300,14 +315,17 @@ fn run_with_policy(
     git: Arc<dyn Git>,
     preflight: impl Fn() -> Result<ToolDownloadPolicy, Error>,
 ) -> Result<i32, Error> {
+    let (console, _) = output::Console::capture(output::Mode::Plain);
     run_reporting(
         args,
         setup_args,
         transports,
         git,
         &mut telemetry::Report::default(),
+        &console,
         preflight,
     )
+    .map(|completed| completed.exit_code())
 }
 
 fn run_reporting(
@@ -316,8 +334,9 @@ fn run_reporting(
     transports: Option<provision::Transports>,
     git: Arc<dyn Git>,
     report: &mut telemetry::Report,
+    console: &output::Console,
     preflight: impl Fn() -> Result<ToolDownloadPolicy, Error>,
-) -> Result<i32, Error> {
+) -> Result<output::Completed, Error> {
     // Discovery reads files/Git metadata: no language-tool probes, environment
     // config pipeline, graph, package manager detection, or local CLI handoff.
     let discovery = root::Discovery::capture(args, git)?;
@@ -408,7 +427,7 @@ fn run_reporting(
                 ));
             }
             println!("Nothing to prepare: every toolchain is skipped.");
-            return Ok(0);
+            return Ok(output::Completed::Reported(0));
         }
         if snapshot
             .declarations()
@@ -435,7 +454,8 @@ fn run_reporting(
         .map(provision::Transports::trust_base)
         .transpose()?;
     if request.mode == Mode::Check {
-        return check::run(&discovery, snapshot, &dependencies, preflight);
+        return check::run(&discovery, snapshot, &dependencies, preflight)
+            .map(output::Completed::Reported);
     }
     if request.mode == Mode::Plan {
         println!(
@@ -449,24 +469,35 @@ fn run_reporting(
                 preflight
             )?
         );
-        return Ok(0);
+        return Ok(output::Completed::Reported(0));
     }
     // Offline setup reuses the trusted installation or verified cached bytes;
     // enabled dependencies then install offline from the native caches.
     // Clone-local --no-lock runs only when every dependency is skipped
     // (`validate`).
-    let provisioned = if request.offline {
+    let declared = snapshot.declarations();
+    // `rustup toolchain install` still writes to the terminal, which a spinner
+    // would draw over.
+    let preparing = (!declared.contains_key("rust")).then(|| {
+        let ids: Vec<_> = declared.keys().map(String::as_str).collect();
+        console.spinner(&format!("Preparing {}", ids.join(", ")))
+    });
+    let tools = if request.offline {
         offline::run(&discovery, snapshot, &request, transports, preflight)
     } else if request.lock == LockMode::NoLock {
         no_lock::run(&discovery, snapshot, transports, preflight)
     } else {
         provision::run(&discovery, snapshot, &request, transports, preflight)
     }?;
-    report.downloaded_bytes = provisioned.downloaded_bytes;
-    report.tools_installed = provisioned.installed;
-    report.tools_reused = provisioned.reused;
+    drop(preparing);
+    report.downloaded_bytes = tools.downloaded_bytes;
+    report.tools_installed = tools.installed();
+    report.tools_reused = tools.reused();
+    console.tools(&tools)?;
     let root = discovery.snapshot_root()?.as_std_path();
-    Ok(dependencies.install(root, ecosystems, trust_base)?)
+    let deps = dependencies.install(root, ecosystems, trust_base, console)?;
+    console.skips(&deps)?;
+    Ok(output::Completed::Provisioned(deps))
 }
 
 /// Whether setup provisions for this host. On Windows only a confirmed x64
@@ -558,14 +589,20 @@ pub fn setup_for_tests(
             .map_err(|e| e.to_string())?,
     };
     // Like run_with_policy, never telemetry. Binary tests run real Git.
+    let console = output::Console::new(output::Style {
+        mode: output::Mode::current(turborepo_ci::is_ci()),
+        color: ColorConfig::new(true),
+    });
     run_reporting(
         &args,
         setup_args,
         Some(transports),
         Arc::new(GitCli),
         &mut telemetry::Report::default(),
+        &console,
         || Ok(policy()?),
     )
+    .map(|completed| completed.exit_code())
     .map_err(|e| e.to_string())
 }
 

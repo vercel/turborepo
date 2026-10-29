@@ -539,7 +539,11 @@ fn global_setup_then_plain_run_repeat_repair_and_drift() {
     // First setup from a subdirectory creates the lock and asks for a commit.
     let first = j.turbo(&j.web, TOOLS_ONLY, &[]);
     first.succeeds();
-    assert!(contains(&first.text, "Commit turbo.lock"), "{}", first.text);
+    assert!(
+        contains(&first.text, "turbo.lock created, commit it"),
+        "{}",
+        first.text
+    );
     assert!(!first.connects.is_empty() && !first.text.contains("fixture-"));
     let lock = j.read("turbo.lock");
     for cwd in [&j.root, &j.web] {
@@ -584,7 +588,7 @@ fn global_setup_then_plain_run_repeat_repair_and_drift() {
     let update = j.turbo(&j.root, TOOLS_ONLY, &[]);
     update.succeeds();
     assert!(
-        contains(&update.text, "node: 24.0.0 -> 24.1.0"),
+        contains(&update.text, "node 24.0.0 → 24.1.0"),
         "{}",
         update.text
     );

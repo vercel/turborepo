@@ -64,11 +64,6 @@ pub enum Error {
 
 pub fn start_spinner(message: &str) -> ProgressBar {
     let pb = ProgressBar::new_spinner();
-    if env::var("CI").is_ok() {
-        pb.enable_steady_tick(Duration::from_secs(30));
-    } else {
-        pb.enable_steady_tick(Duration::from_millis(125));
-    }
     pb.set_style(
         ProgressStyle::default_spinner()
             // For more spinners check out the cli-spinners project:
@@ -82,6 +77,13 @@ pub fn start_spinner(message: &str) -> ProgressBar {
             ]),
     );
     pb.set_message(message.to_string());
+    // Ticking draws immediately, so it starts only once style and message are
+    // set; otherwise the first frame is indicatif's unstyled default.
+    if env::var("CI").is_ok() {
+        pb.enable_steady_tick(Duration::from_secs(30));
+    } else {
+        pb.enable_steady_tick(Duration::from_millis(125));
+    }
 
     pb
 }

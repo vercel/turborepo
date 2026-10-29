@@ -189,9 +189,10 @@ fn telemetry_counts_downloaded_uv_bytes() {
                 go: turborepo_setup::go_resolution::GoTransport::loopback_http_for_tests(origin)
                     .unwrap(),
             };
-            run_reporting(args, setup_args, Some(transports), turborepo_setup::git::FakeGit::shared(), &mut report, || {
+            run_reporting(args, setup_args, Some(transports), turborepo_setup::git::FakeGit::shared(), &mut report, &output::Console::capture(output::Mode::Plain).0, || {
                 Ok(owned.policy_at(&cwd)?)
             })
+            .map(|completed| completed.exit_code())
         })
         .unwrap()
         .unwrap();

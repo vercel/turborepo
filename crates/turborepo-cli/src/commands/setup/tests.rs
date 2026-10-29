@@ -745,8 +745,10 @@ fn telemetry_report_counts_artifact_bytes_and_reuse() {
                 Some(transports),
                 f.git.clone(),
                 &mut report,
+                &output::Console::capture(output::Mode::Plain).0,
                 || Ok(f.owned.policy_at(&f.owned.root().join("apps/web/src"))?),
             )
+            .map(|completed| completed.exit_code())
         })
         .unwrap();
         (result.map_err(|error| telemetry::failure(&error)), report)

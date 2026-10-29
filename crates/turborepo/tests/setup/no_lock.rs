@@ -122,7 +122,8 @@ fn production_no_lock_ci_healthy_repeat_has_positive_pins_record_and_no_traffic(
                 "production positive required, not a policy bypass: {text}"
             );
             assert!(
-                text.contains("node 24.0.0: reused") && text.contains("pnpm 10.0.0: reused"),
+                super::diagnostic_contains(&text, "node 24.0.0 reused")
+                    && super::diagnostic_contains(&text, "pnpm 10.0.0 reused"),
                 "{text}"
             );
             assert!(

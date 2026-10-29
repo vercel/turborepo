@@ -428,18 +428,18 @@ fn killed_unpack_corrupt_cache_and_repeats_never_publish_partial_tools() {
     );
     assert_eq!(repo.inventory(), None);
     repo.seed();
-    let installed = "installed from the shared download cache";
+    let installed = "installed (cached)";
     repo.expect(
         OFFLINE,
         0,
         &[
-            &format!("node 24.0.0: {installed}"),
-            &format!("pnpm 10.0.0: {installed}"),
+            &format!("node 24.0.0 {installed}"),
+            &format!("pnpm 10.0.0 {installed}"),
             "Offline: used only installed tools and verified cached artifacts.",
         ],
     );
     let first = repo.inventory().unwrap();
-    repo.expect(OFFLINE, 0, &["node 24.0.0: reused", "pnpm 10.0.0: reused"]);
+    repo.expect(OFFLINE, 0, &["node 24.0.0 reused", "pnpm 10.0.0 reused"]);
     assert_eq!(repo.inventory().unwrap(), first);
     repo.expect(CHECK, 0, &["node 24.0.0: ready", "pnpm 10.0.0: ready"]);
     repo.assert_committed();
@@ -454,7 +454,7 @@ fn killed_unpack_corrupt_cache_and_repeats_never_publish_partial_tools() {
         1,
         &["managed installation does not match turbo.lock; run turbo setup"],
     );
-    repo.expect(OFFLINE, 0, &[&format!("node 24.0.0: {installed}")]);
+    repo.expect(OFFLINE, 0, &[&format!("node 24.0.0 {installed}")]);
     assert_ne!(repo.inventory().unwrap(), first);
     repo.expect(CHECK, 0, &["node 24.0.0: ready", "pnpm 10.0.0: ready"]);
     repo.assert_committed();
@@ -521,13 +521,13 @@ fn killed_additional_tool_download_publishes_nothing_and_recovers_from_the_cache
     );
     // Verified bytes another clone cached complete the cohort without traffic.
     fs::write(&entry, &tool).unwrap();
-    let installed = "installed from the shared download cache";
+    let installed = "installed (cached)";
     repo.expect(
         OFFLINE_FORCE,
         0,
         &[
-            &format!("fixture 1.2.3: {installed}"),
-            &format!("node 24.0.0: {installed}"),
+            &format!("fixture 1.2.3 {installed}"),
+            &format!("node 24.0.0 {installed}"),
         ],
     );
     repo.expect(CHECK, 0, &["fixture 1.2.3: ready", "node 24.0.0: ready"]);

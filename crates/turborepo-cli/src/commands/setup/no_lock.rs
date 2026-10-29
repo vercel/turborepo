@@ -10,14 +10,19 @@ use turborepo_setup::{
 };
 use turborepo_tool_install::Store;
 
-use super::{Error, provision, root, trust::TrustStore};
+use super::{
+    Error,
+    output::{Note, ToolOutcome, ToolReport, ToolRow},
+    provision, root,
+    trust::TrustStore,
+};
 
 pub(super) fn run(
     discovery: &root::Discovery,
     snapshot: Snapshot,
     transports: Option<provision::Transports>,
     preflight: impl Fn() -> Result<ToolDownloadPolicy, Error>,
-) -> Result<provision::Provisioned, Error> {
+) -> Result<ToolReport, Error> {
     let platform = provision::platform()?;
     // Name what is missing or unsupported instead of the record's generic
     // rejection; both fail before transports, writers, or Store.
@@ -182,7 +187,7 @@ pub(super) fn run(
     // turbo.lock or, without one, by its sealed clone-local selection.
     checked()?;
     trust.publish(&store)?;
-    let mut provisioned = provision::Provisioned {
+    let mut report = ToolReport {
         downloaded_bytes: prepared_node
             .as_ref()
             .map_or(0, |node| node.downloaded_bytes())
@@ -194,25 +199,25 @@ pub(super) fn run(
     for tool in &desired {
         let reused = (tool.id == "node" && prepared_node.is_none())
             || (tool.id != "node" && prepared_manager.is_none());
-        if reused {
-            provisioned.reused += 1;
-        } else {
-            provisioned.installed += 1;
-        }
-        println!(
-            "{} {}: {}",
-            tool.id,
-            tool.version,
-            if reused { "reused" } else { "installed" }
-        );
+        report.rows.push(ToolRow {
+            id: tool.id.clone(),
+            version: tool.version.clone(),
+            outcome: if reused {
+                ToolOutcome::Reused
+            } else {
+                ToolOutcome::Installed
+            },
+            source: None,
+        });
     }
     if let Some(npm) = bundled_npm {
-        println!("npm {npm}: provided by managed Node (bundled)");
+        report.rows.push(ToolRow {
+            id: "npm".into(),
+            version: npm,
+            outcome: ToolOutcome::BundledWithNode,
+            source: None,
+        });
     }
-    println!(
-        "No turbo.lock written (--no-lock). Clone-local selections do not establish cross-machine \
-         reproducibility or frozen readiness."
-    );
-    println!("turbo run uses these tools in this clone only.");
-    Ok(provisioned)
+    report.notes.push(Note::NoLock);
+    Ok(report)
 }
