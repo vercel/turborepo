@@ -1252,7 +1252,12 @@ mod tests {
                 #[cfg(unix)]
                 expected_output: Err("IO error: Is a directory (os error 21)".to_string()),
                 #[cfg(windows)]
-                expected_output: Err("IO error: failed to remove directory `".to_string()),
+                expected_output: Err(format!(
+                    "IO error: {}",
+                    std::io::Error::from_raw_os_error(
+                        windows_sys::Win32::Foundation::ERROR_ACCESS_DENIED as i32
+                    )
+                )),
             },
             TestCase {
                 name: "symlink cycle",
@@ -1447,16 +1452,6 @@ mod tests {
                     }
                     (Err(err), Err(expected_error)) => {
                         let actual_error = err.to_string();
-                        #[cfg(windows)]
-                        if test.name == "place file at dir location" {
-                            assert!(
-                                actual_error.starts_with(expected_error),
-                                "test {:?}: expected error starting with {expected_error:?}, \
-                                 received {actual_error:?}",
-                                test.name
-                            );
-                            continue;
-                        }
                         assert_eq!(&actual_error, expected_error, "test: {:?}", test.name);
                         continue;
                     }
