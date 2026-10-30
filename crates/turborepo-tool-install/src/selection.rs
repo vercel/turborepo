@@ -128,7 +128,8 @@ pub enum VarValue {
     /// so it never uses the user's uv-managed interpreters.
     Tree(TreeRef),
     Word(String),
-    /// The repository's private Cargo home, `.turbo/cargo-home`.
+    /// The repository's private Cargo home in the user's tool store, which the
+    /// Store records when it publishes the generation.
     RepoCargoHome,
 }
 
@@ -230,7 +231,11 @@ fn script_word(word: &str) -> Result<(), Error> {
 /// directory from its own path, so tree paths stay relative and the launcher
 /// works when run directly, without any inherited environment.
 #[cfg(not(windows))]
-pub(crate) fn unix_launcher(tool: &Tool, launch: &Launch) -> Vec<u8> {
+pub(crate) fn unix_launcher(
+    tool: &Tool,
+    launch: &Launch,
+    cargo_home: Option<&std::path::Path>,
+) -> Result<Vec<u8>, Error> {
     fn tree(tree: &TreeRef) -> String {
         match tree.path.as_str() {
             "" => format!("\"$generation\"'/tools/{}'", tree.tool),
@@ -245,8 +250,11 @@ pub(crate) fn unix_launcher(tool: &Tool, launch: &Launch) -> Vec<u8> {
         let value = match value {
             VarValue::Tree(path) => tree(path),
             VarValue::Word(word) => format!("'{word}'"),
-            // The Store root is `.turbo/tools`, beside setup's Cargo home.
-            VarValue::RepoCargoHome => "\"$generation\"'/../../cargo-home'".to_owned(),
+            VarValue::RepoCargoHome => {
+                let home = cargo_home.ok_or(Error::InvalidInventory)?;
+                let home = home.to_str().ok_or(Error::UnsafePath)?;
+                format!("'{}'", home.replace('\'', "'\\''"))
+            }
         };
         let _ = writeln!(script, "{}={value}", var.name());
     }
@@ -266,7 +274,7 @@ pub(crate) fn unix_launcher(tool: &Tool, launch: &Launch) -> Vec<u8> {
         }
     }
     script.push_str(" \"$@\"\n");
-    script.into_bytes()
+    Ok(script.into_bytes())
 }
 
 /// Transfers control to `program`, preserving `%*` and its exit status.

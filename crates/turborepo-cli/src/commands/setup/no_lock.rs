@@ -49,12 +49,10 @@ pub(super) fn run(
     let root = discovery.snapshot_root()?.as_std_path();
     // User state is checked after the read-only diagnostics above, before any
     // writer or traffic.
-    let base = match &transports {
-        Some(transports) => transports.trust_base()?,
-        None => dirs_next::data_local_dir()
-            .ok_or_else(|| io::Error::other("cannot locate setup user state directory"))?,
-    };
-    let trust = TrustStore::new(&base, root)?;
+    let fixture = transports
+        .as_ref()
+        .and_then(provision::Transports::tool_store);
+    let trust = TrustStore::new(&provision::user_store(fixture.as_deref(), root)?, root)?;
     let check = || {
         trust.preflight()?;
         preflight()?;
@@ -75,7 +73,7 @@ pub(super) fn run(
     let guard = snapshot.guard()?;
     check()?;
     snapshot.check_guard(&guard)?;
-    let mut store = Store::open(root)?;
+    let mut store = Store::open(root)?.with_user_store(trust.store())?;
     let checked = || {
         check().map_err(io::Error::other)?;
         snapshot.check_guard(&guard).map_err(io::Error::other)

@@ -416,14 +416,19 @@ fn no_lock_waits_revalidate_before_traffic_after_writer_and_store_acquisition() 
     }
 }
 fn trusted(f: &Fixture) -> (PathBuf, Value) {
-    let path = fs::read_dir(f.owned.home().join("turborepo/setup-roots"))
+    let path = fs::read_dir(f.owned.home().join("repos"))
         .unwrap()
         .next()
         .unwrap()
         .unwrap()
-        .path();
+        .path()
+        .join("record.json");
     let value = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
     (path, value)
+}
+fn trust_store(f: &Fixture) -> crate::commands::setup::trust::TrustStore {
+    let store = turborepo_tool_install::UserStore::at(f.owned.home(), f.owned.root()).unwrap();
+    crate::commands::setup::trust::TrustStore::new(&store, f.owned.root()).unwrap()
 }
 fn digest(bytes: &[u8]) -> String {
     format!("{:x}", Sha256::digest(bytes))
@@ -456,8 +461,7 @@ fn no_lock_records_clone_local_trust_that_a_committed_lock_never_inherits() {
         digest(&f.manifest().unwrap())
     );
     assert_eq!(installation["bin"], installed.bin.to_str().unwrap());
-    let trust =
-        crate::commands::setup::trust::TrustStore::new(f.owned.home(), f.owned.root()).unwrap();
+    let trust = trust_store(&f);
     let recorded = trust.recorded().unwrap().unwrap();
     assert_eq!(recorded.bin, installed.bin);
     assert!(!recorded.stale);
@@ -491,8 +495,7 @@ fn no_lock_freshly_verifies_untrusted_inventory_before_recording_it() {
     // A healthy inventory without user-state evidence, as if copied or
     // committed, proves nothing about where its bytes came from.
     fs::remove_file(trusted(&f).0).unwrap();
-    let trust =
-        crate::commands::setup::trust::TrustStore::new(f.owned.home(), f.owned.root()).unwrap();
+    let trust = trust_store(&f);
     assert!(trust.recorded().unwrap().is_none());
     let paths = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
     let log = paths.clone();
