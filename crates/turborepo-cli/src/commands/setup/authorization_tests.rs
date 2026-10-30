@@ -234,8 +234,8 @@ fn lock_declaration_and_captured_source_drift_fail_closed() {
 }
 
 #[test]
-fn every_export_resource_and_generation_is_freshly_checked_before_use() {
-    for case in 0..7 {
+fn every_export_and_generation_is_freshly_checked_before_use() {
+    for case in 0..5 {
         let (f, u) = installed();
         let selected = inspect(&f).unwrap();
         let current = Store::inspect(f.owned.root()).unwrap().unwrap();
@@ -243,9 +243,7 @@ fn every_export_resource_and_generation_is_freshly_checked_before_use() {
             0 => fs::remove_file(current.bin.join("node")).unwrap(),
             1 => fs::remove_file(current.bin.join("pnpm")).unwrap(),
             2 => fs::remove_file(current.bin.join("pnpx")).unwrap(),
-            3 => fs::write(current.bin.join("../tools/node/resource"), "damaged").unwrap(),
-            4 => fs::remove_file(current.bin.join("../tools/pnpm/dist/resource")).unwrap(),
-            5 => symlink("../tools/node/bin/node", current.bin.join("git")).unwrap(),
+            3 => symlink("../tools/node/bin/node", current.bin.join("git")).unwrap(),
             _ => fs::remove_file(f.owned.root().join(".turbo/tools/manifest.json")).unwrap(),
         }
         rejects_without_effects(&f, &u, &selected);
@@ -253,26 +251,71 @@ fn every_export_resource_and_generation_is_freshly_checked_before_use() {
 }
 
 #[test]
-fn successful_first_use_does_not_authorize_mutated_executable_bytes_on_second_use() {
+fn damaged_contents_are_left_to_setup_verification() {
+    for case in 0..3 {
+        let (f, u) = installed();
+        let selected = inspect(&f).unwrap();
+        selected.with_current(|_| ()).unwrap();
+        let manifest = f.manifest().unwrap();
+        let evidence = fs::read(record(&f)).unwrap();
+        let tools = Store::inspect(f.owned.root())
+            .unwrap()
+            .unwrap()
+            .bin
+            .join("../tools");
+        match case {
+            0 => turborepo_setup::test_support::damage(&tools.join("node/resource"), "damaged"),
+            1 => fs::remove_file(tools.join("pnpm/dist/resource")).unwrap(),
+            _ => turborepo_setup::test_support::damage(
+                &tools.join("node/bin/node"),
+                "#!/bin/sh\nexit 0\n",
+            ),
+        }
+        let before = snapshot(f.owned.root().parent().unwrap());
+        selected.with_current(|_| ()).unwrap();
+        inspect(&f).unwrap().with_current(|_| ()).unwrap();
+        assert_eq!(snapshot(f.owned.root().parent().unwrap()), before);
+        assert_eq!(f.manifest().unwrap(), manifest);
+        assert_eq!(fs::read(record(&f)).unwrap(), evidence);
+
+        let error = f.check(super::checks::CHECK).unwrap_err().to_string();
+        assert!(error.contains("turbo setup"), "case {case}: {error}");
+        assert!(
+            matches!(
+                Store::inspect_with(f.owned.root(), turborepo_tool_install::Verification::Full),
+                Err(turborepo_tool_install::Error::DamagedContents)
+            ),
+            "case {case}: a full check sees the damage"
+        );
+        assert_eq!(u.hits(), 3);
+        f.no_execution();
+    }
+}
+
+#[test]
+fn a_manifest_that_no_longer_matches_the_setup_record_is_untrusted() {
     let (f, u) = installed();
     let selected = inspect(&f).unwrap();
-    let used = Cell::new(0);
-    selected.with_current(|_| used.set(used.get() + 1)).unwrap();
-    let manifest = f.manifest().unwrap();
-    let record_path = record(&f);
-    let evidence = fs::read(&record_path).unwrap();
-    let current = Store::inspect(f.owned.root()).unwrap().unwrap();
-    fs::write(
-        current.bin.join("../tools/node/bin/node"),
-        "#!/bin/sh\nexit 0\n",
-    )
-    .unwrap();
-    let before = snapshot(f.owned.root().parent().unwrap());
-    assert!(selected.with_current(|_| used.set(used.get() + 1)).is_err());
-    assert_eq!(used.get(), 1);
-    assert_eq!(f.manifest().unwrap(), manifest);
-    assert_eq!(fs::read(record_path).unwrap(), evidence);
-    assert_eq!(snapshot(f.owned.root().parent().unwrap()), before);
+    let path = f.owned.root().join(".turbo/tools/manifest.json");
+    let mut manifest: Value = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+    manifest["tools"][0]["tree_sha256"] = json!("0".repeat(64));
+    fs::write(&path, manifest.to_string()).unwrap();
+    assert!(
+        turborepo_tool_install::Store::inspect_with(
+            f.owned.root(),
+            turborepo_tool_install::Verification::Shallow
+        )
+        .unwrap()
+        .is_some()
+    );
+
+    let called = Cell::new(false);
+    assert!(matches!(
+        selected.with_current(|_| called.set(true)),
+        Err(AuthorizationError::Untrusted)
+    ));
+    assert!(!called.get());
+    assert!(matches!(inspect(&f), Err(AuthorizationError::Untrusted)));
     assert_eq!(u.hits(), 3);
     f.no_execution();
 }
@@ -334,7 +377,14 @@ fn healthy_repository_forgery_is_readiness_not_authority() {
         )
         .unwrap();
     // A self-consistent manifest and valid trees cannot mint external evidence.
-    assert!(ActivationPlan::inspect(f.owned.root(), context()).is_ok());
+    assert!(
+        ActivationPlan::captured(
+            &turborepo_setup::lock::Snapshot::capture(f.owned.root()).unwrap(),
+            context(),
+            turborepo_tool_install::Verification::Shallow,
+        )
+        .is_ok()
+    );
     rejects_without_effects(&f, &u, &selected);
     fs::remove_file(record(&f)).unwrap();
     rejects_without_effects(&f, &u, &selected);
@@ -378,7 +428,14 @@ fn moved_and_same_path_recloned_roots_require_new_setup() {
         } else {
             moved.as_path()
         };
-        assert!(ActivationPlan::inspect(root, context()).is_ok());
+        assert!(
+            ActivationPlan::captured(
+                &turborepo_setup::lock::Snapshot::capture(root).unwrap(),
+                context(),
+                turborepo_tool_install::Verification::Shallow,
+            )
+            .is_ok()
+        );
         assert!(
             Authorization::inspect(root, f.owned.home(), context(), Default::default()).is_err()
         );

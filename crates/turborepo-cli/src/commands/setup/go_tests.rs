@@ -304,7 +304,10 @@ fn check_reports_go_readiness_and_fails_closed_without_the_flag_or_on_damage() {
         Err(Error::Activation(Activation::DeclarationDrift))
     ));
     fs::write(root.join("turbo.json"), GO).unwrap();
-    fs::write(current(&f).bin.join("../tools/go/src/go.mod"), "damage").unwrap();
+    turborepo_setup::test_support::damage(
+        &current(&f).bin.join("../tools/go/src/go.mod"),
+        "damage",
+    );
     let result = f.check(CHECK);
     assert!(matches!(
         result,

@@ -129,11 +129,7 @@ fn coherent_repo_forgery_and_removed_or_corrupt_user_record_require_fresh_verifi
             2 => fs::write(&path, b"not a trust record").unwrap(),
             _ => {
                 let current = Store::inspect(f.owned.root()).unwrap().unwrap();
-                fs::write(
-                    current.bin.join("../tools/node/resource"),
-                    b"tampered resource",
-                )
-                .unwrap();
+                fs::remove_file(current.bin.join("node")).unwrap();
             }
         }
         assert!(
@@ -199,7 +195,7 @@ fn shell_hook_view_keeps_recorded_tools_on_lock_drift_but_never_repo_inventory()
         match case {
             0 => fs::write(f.owned.root().join("turbo.lock"), format!("{}\n", f.lock)).unwrap(),
             1 => seed(&f, false),
-            2 => fs::write(bin.join("../tools/node/resource"), b"tampered").unwrap(),
+            2 => fs::remove_file(bin.join("node")).unwrap(),
             3 => fs::remove_dir_all(f.owned.root().join(".turbo/tools")).unwrap(),
             _ => fs::remove_file(record(&f).0).unwrap(),
         }

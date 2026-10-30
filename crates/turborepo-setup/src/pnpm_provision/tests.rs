@@ -257,7 +257,7 @@ async fn full_tree_bound_shims_repeat_reuse_and_stale_replacement() {
         "adjacent runtime resource"
     );
     let resource_mode = fs::metadata(root.join("dist/templates/config.json")).unwrap();
-    assert_eq!(resource_mode.permissions().mode() & 0o777, 0o640);
+    assert_eq!(resource_mode.permissions().mode() & 0o777, 0o440);
     let cli_mode = fs::metadata(root.join("bin/pnpm.cjs")).unwrap();
     assert_eq!(cli_mode.permissions().mode() & 0o100, 0);
     let bait = tempfile::tempdir().unwrap();
@@ -430,11 +430,7 @@ async fn desired_node_binding_and_damaged_generation_repair() {
     let snapshot = manifest(repo.path());
     registry.requests.lock().unwrap().clear();
     let old = store.current().unwrap().unwrap().bin;
-    fs::write(
-        old.parent().unwrap().join("tools/node/bin/node"),
-        "corrupted",
-    )
-    .unwrap();
+    fs::remove_file(old.join("node")).unwrap();
     let desired = [node.inventory_tool().clone(), pnpm.inventory_tool().clone()];
     assert!(
         pnpm.prepare_if_needed(&store, &desired, &registry.transport)
