@@ -114,7 +114,7 @@ fn node_only_plan_ignores_disabled_ecosystems_without_probing_or_creating_storag
 }
 
 #[test]
-fn damaged_plans_never_report_reuse_or_change_any_owned_bytes() {
+fn damaged_plans_never_change_any_owned_bytes() {
     for case in 0..5 {
         let mut f = Fixture::new();
         let u = Upstream::new(&f, false, None);
@@ -123,11 +123,17 @@ fn damaged_plans_never_report_reuse_or_change_any_owned_bytes() {
             .unwrap()
             .unwrap();
         match case {
-            0 => fs::write(current.bin.join("../tools/node/resource"), "damage").unwrap(),
+            0 => turborepo_setup::test_support::damage(
+                &current.bin.join("../tools/node/resource"),
+                "damage",
+            ),
             1 => fs::remove_file(current.bin.join("../tools/pnpm/dist/resource")).unwrap(),
             2 => fs::write(f.owned.root().join(".turbo/tools/manifest.json"), "invalid").unwrap(),
             3 => {
-                fs::write(current.bin.join("../tools/node/resource"), "damage").unwrap();
+                turborepo_setup::test_support::damage(
+                    &current.bin.join("../tools/node/resource"),
+                    "damage",
+                );
                 fs::remove_file(current.bin.join("node")).unwrap();
                 std::os::unix::fs::symlink("../tools/pnpm/bin/pnpm.cjs", current.bin.join("node"))
                     .unwrap();
@@ -155,10 +161,10 @@ fn damaged_plans_never_report_reuse_or_change_any_owned_bytes() {
                 } else if case == 4 {
                     "repair (installation does not match turbo.lock)"
                 } else {
-                    "repair (damaged installation)"
+                    "reuse (healthy installation)"
                 };
                 let report = f.plan_report(force).unwrap();
-                assert!(report.contains(action) && !report.contains("reuse"));
+                assert!(report.contains(action));
                 if case != 4 {
                     assert_eq!(report, f.expected_plan(action));
                 }

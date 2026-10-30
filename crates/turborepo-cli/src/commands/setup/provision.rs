@@ -812,7 +812,9 @@ pub(super) fn run(
     // record forces the entire cohort through verified artifact preparation.
     let recorded = trust.allows_reuse(&store)?;
     let replace = force || !recorded;
-    let preparation = if replace {
+    // Locked setup publishes no record, so it republishes a --no-lock
+    // generation by copying every tree, and must restage a damaged one.
+    let preparation = if replace || store.republishes_damage(&desired, None)? {
         turborepo_setup::Preparation::Fresh
     } else {
         turborepo_setup::Preparation::IfNeeded

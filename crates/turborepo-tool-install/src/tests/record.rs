@@ -195,7 +195,7 @@ fn recorded_failures_never_select_partial_tools_or_metadata() {
 }
 
 #[test]
-fn readonly_records_are_bounded_hash_checked_and_not_health_stamps() {
+fn readonly_records_are_bounded_and_hash_checked() {
     assert!(Record::new(Vec::new()).is_err());
     assert!(Record::new(vec![0; RECORD_LIMIT as usize + 1]).is_err());
     let maximum = Record::new(vec![0; RECORD_LIMIT as usize]).unwrap();
@@ -234,7 +234,7 @@ fn readonly_records_are_bounded_hash_checked_and_not_health_stamps() {
                 .unwrap(),
             4 => wire.record_sha256 = Some("invalid".into()),
             5 => wire.record_sha256 = None,
-            6 => fs::write(current.bin.join("pnpm"), b"damaged sibling").unwrap(),
+            6 => fs::remove_file(current.bin.join("pnpm")).unwrap(),
             7 => fs::hard_link(&path, path.with_extension("alias")).unwrap(),
             8 => fs::set_permissions(&path, fs::Permissions::from_mode(0o666)).unwrap(),
             9 => {
@@ -335,10 +335,11 @@ fn tokens_bind_guard_root_exact_manifest_and_full_resources_after_waits() {
     assert!(store.current().is_ok()); // Same parsed manifest, different actual bytes.
     assert!(store.check_generation(&expected).is_err());
     fs::write(store.root.join("manifest.json"), &before).unwrap();
-    let tree = expected.current().unwrap().tool_tree(&desired[0]).unwrap();
-    fs::write(tree.join("resource"), b"resource drift during wait").unwrap();
+    let shim = expected.current().unwrap().bin.join(&desired[0].id);
+    let target = fs::read_link(&shim).unwrap();
+    fs::remove_file(&shim).unwrap();
     assert!(store.check_generation(&expected).is_err());
-    fs::write(tree.join("resource"), b"adjacent resource").unwrap();
+    symlink(target, &shim).unwrap();
     select(&mut store, &desired, &data, true);
     assert!(store.check_generation(&expected).is_err());
     let reopened = store.generation().unwrap();
@@ -384,10 +385,7 @@ fn final_pointer_record_resource_and_root_races_reject_noop_and_changed_paths() 
                                 )?,
                                 1 => fs::write(old_generation.join("record.json"), b"corrupt")?,
                                 2 => fs::remove_file(root.join("manifest.json"))?,
-                                3 => fs::write(
-                                    old_generation.join("tools/node/resource"),
-                                    b"corrupt resource",
-                                )?,
+                                3 => fs::remove_file(old_generation.join("bin/node"))?,
                                 4 => fs::remove_dir_all(&old_generation)?,
                                 5 => {
                                     fs::rename(&root, root.with_extension("held"))?;

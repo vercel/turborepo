@@ -46,8 +46,13 @@ fn declared_executables_share_the_managed_bin_and_removal_is_drift() {
     let value = locked(repo.path());
     let bin = seed(repo.path(), &with_artifacts(&value));
     for plan in [
-        ActivationPlan::inspect(repo.path(), context()).unwrap(),
-        ActivationPlan::verify_with(repo.path(), context(), Ecosystems::default()).unwrap(),
+        inspect(repo.path(), context()).unwrap(),
+        ActivationPlan::captured(
+            &Snapshot::capture(repo.path()).unwrap(),
+            context(),
+            Verification::Full,
+        )
+        .unwrap(),
     ] {
         assert_eq!(plan.tools(), with_artifacts(&value));
         assert_eq!(plan.path_prepend(), bin.as_path());
@@ -62,7 +67,7 @@ fn declared_executables_share_the_managed_bin_and_removal_is_drift() {
     // An installation without the tool never activates the rest.
     seed(repo.path(), &desired(&value, None));
     assert!(matches!(
-        ActivationPlan::inspect(repo.path(), context()),
+        inspect(repo.path(), context()),
         Err(Error::StaleInventory)
     ));
     seed(repo.path(), &with_artifacts(&value));
@@ -73,7 +78,7 @@ fn declared_executables_share_the_managed_bin_and_removal_is_drift() {
     ] {
         declare(repo.path(), tools);
         assert!(matches!(
-            ActivationPlan::inspect(repo.path(), context()),
+            inspect(repo.path(), context()),
             Err(Error::DeclarationDrift)
         ));
     }
@@ -88,9 +93,7 @@ fn a_tool_without_an_artifact_for_this_platform_never_activates() {
     );
     let value = locked(repo.path());
     seed(repo.path(), &desired(&value, None));
-    let error = ActivationPlan::inspect(repo.path(), context())
-        .err()
-        .unwrap();
+    let error = inspect(repo.path(), context()).err().unwrap();
     assert!(
         matches!(&error, Error::AdditionalTool(artifact_provision::Error::MissingTarget {
             tool, platform

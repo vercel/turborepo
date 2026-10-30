@@ -12,7 +12,7 @@ use tokio::{
     net::TcpListener,
 };
 #[cfg(unix)]
-use turborepo_tool_install::Outcome;
+use turborepo_tool_install::{Outcome, Verification};
 
 use super::*;
 
@@ -288,13 +288,34 @@ async fn locked_unix_matrix_full_resources_shims_repair_and_network_free_repeat(
         assert_eq!(fs::read(&manifest).unwrap(), old);
         recovery::assert_scoped_resource(&store);
         assert_eq!(upstream.requests.load(Ordering::SeqCst), 1);
-        fs::write(root.join("bin/node"), "damaged").unwrap();
-        assert!(!store.is_current(&[plan.inventory_tool().clone()]).unwrap());
+        crate::source_policy::test_support::damage(&root.join("bin/node"), "damaged");
         assert_eq!(
             install(&mut store, &plan, &transport).await.unwrap(),
+            Outcome::Unchanged
+        );
+        assert_eq!(upstream.requests.load(Ordering::SeqCst), 1);
+        assert!(Store::inspect_with(repo.path(), Verification::Full).is_err());
+        let desired = [plan.inventory_tool().clone()];
+        let prepared = plan
+            .prepare(&store, &desired, &transport, crate::Preparation::Fresh)
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            store
+                .force_reconcile_checked(
+                    &desired,
+                    |tool, path| prepared.stage(tool, path),
+                    || { Ok(()) }
+                )
+                .unwrap(),
             Outcome::Replaced
         );
-        assert!(store.current().unwrap().is_some());
+        assert!(
+            Store::inspect_with(repo.path(), Verification::Full)
+                .unwrap()
+                .is_some()
+        );
         recovery::assert_scoped_resource(&store);
         assert_eq!(upstream.requests.load(Ordering::SeqCst), 2);
         assert_eq!(serde_json::to_vec(&value).unwrap(), before);

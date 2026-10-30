@@ -199,11 +199,15 @@ fn missing_and_damaged_generations_repair_exact_record_not_refresh_floating_requ
         match damage {
             0 => fs::remove_dir_all(current.bin.parent().unwrap()).unwrap(),
             1 => fs::remove_dir_all(&tree).unwrap(),
-            2 => fs::write(tree.join("resource"), b"damaged").unwrap(),
+            2 => {
+                fs::remove_file(current.bin.join("node")).unwrap();
+                std::os::unix::fs::symlink("../tools/node/resource", current.bin.join("node"))
+                    .unwrap();
+            }
             3 => fs::remove_file(current.bin.join("node")).unwrap(),
             5 => {
                 fs::remove_file(recovery(p, &lock)).unwrap();
-                fs::remove_file(tree.join("resource")).unwrap();
+                fs::remove_dir_all(&tree).unwrap();
             }
             _ => fs::remove_file(current.bin.parent().unwrap().join("record.json")).unwrap(),
         }
@@ -246,7 +250,6 @@ fn final_noop_and_changed_publication_recheck_sources_lock_generation_and_root()
             let selection = staged(&snapshot, &store, &World::new(vec![], |_| {})).unwrap();
             let before = manifest(p);
             let current = store.current().unwrap().unwrap();
-            let tree = current.tool_tree(&current.tools[0]).unwrap();
             let mut calls = 0;
             let result = selection.publish(&snapshot, &mut store, force, populate, || {
                 calls += 1;
@@ -256,7 +259,7 @@ fn final_noop_and_changed_publication_recheck_sources_lock_generation_and_root()
                         1 => fs::write(p.join("turbo.lock"), lock.canonical_bytes().unwrap())
                             .unwrap(),
                         2 => fs::write(p.join("turbo.json"), b"{}").unwrap(),
-                        3 => fs::write(tree.join("resource"), b"wait drift").unwrap(),
+                        3 => fs::remove_file(current.bin.join("node")).unwrap(),
                         6 => fs::write(recovery(p, &lock), b"corrupt").unwrap(),
                         5 => {
                             fs::rename(p.join(".turbo/tools"), p.join(".turbo/old-tools")).unwrap();

@@ -375,7 +375,7 @@ fn selected_payload_inventory_and_corruption_cannot_be_replaced_by_caller_data()
             let generation = current.bin.parent().unwrap();
             match case {
                 5 => fs::write(generation.join("record.json"), b"corrupt").unwrap(),
-                6 => fs::write(current.bin.join("node"), b"corrupt").unwrap(),
+                6 => fs::remove_file(current.bin.join("node")).unwrap(),
                 _ => fs::remove_dir_all(generation).unwrap(),
             }
             assert!(baseline.check(&snapshot, &store).is_err());

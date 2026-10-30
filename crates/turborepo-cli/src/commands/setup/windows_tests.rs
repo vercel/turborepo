@@ -256,7 +256,12 @@ impl Fixture {
             ["unprobed".into()].into(),
         )
         .unwrap();
-        turborepo_setup::activation::ActivationPlan::inspect(self.owned.root(), context).unwrap()
+        turborepo_setup::activation::ActivationPlan::captured(
+            &turborepo_setup::lock::Snapshot::capture(self.owned.root()).unwrap(),
+            context,
+            turborepo_tool_install::Verification::Shallow,
+        )
+        .unwrap()
     }
     fn no_execution(&self) {
         for path in ["node_modules", "hook-ran", "apps/web/src/hook-ran"] {
