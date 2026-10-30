@@ -365,7 +365,7 @@ fn healthy_repository_forgery_is_readiness_not_authority() {
         .force_reconcile_checked(
             &tools,
             |tool, root| {
-                for path in tool.executables.values() {
+                for path in tool.tree_files() {
                     let path = root.join(path);
                     fs::create_dir_all(path.parent().unwrap())?;
                     fs::write(&path, "#!/bin/sh\ntouch probe-ran\nexit 91\n")?;

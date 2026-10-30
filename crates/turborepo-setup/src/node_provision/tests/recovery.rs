@@ -41,6 +41,7 @@ fn sibling(node: &Tool) -> Tool {
         platform: node.platform.clone(),
         artifact_sha256: "b".repeat(64),
         executables: BTreeMap::from([("fixture".into(), "bin/fixture".into())]),
+        vars: Default::default(),
     }
 }
 fn stage_sibling(tool: &Tool, root: &Path) -> Result<(), turborepo_tool_install::Error> {

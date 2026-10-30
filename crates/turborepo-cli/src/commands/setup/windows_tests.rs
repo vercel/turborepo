@@ -319,11 +319,9 @@ fn frozen_setup_installs_pathext_exports_that_activate_and_repeat_reuses() {
         fs::read(tools.join("pnpm/dist/resource")).unwrap(),
         b"pnpm resource"
     );
-    let launcher = &plan.tools()[1].executables["pnpm"];
-    assert!(launcher.starts_with("managed-node-") && launcher.ends_with("/pnpm.cmd"));
     assert_eq!(
-        fs::read_to_string(tools.join("pnpm").join(launcher)).unwrap(),
-        "@\"%~dp0..\\..\\node\\node.exe\" \"%~dp0..\\bin\\pnpm.cjs\" %*\r\n"
+        fs::read_to_string(bin.join("pnpm.cmd")).unwrap(),
+        "@\"%~dp0..\\tools\\node\\node.exe\" \"%~dp0..\\tools\\pnpm\\bin\\pnpm.cjs\" %*\r\n"
     );
 
     // Activation prepends the ordinary (non-verbatim) bin spelling, and

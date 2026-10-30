@@ -73,7 +73,7 @@ fn artifacts<'a>(wire: &'a mut Document, id: &str) -> &'a mut Artifacts {
     }
 }
 fn populate(tool: &InstalledTool, tree: &Path) -> Result<(), InstallError> {
-    for path in tool.executables.values() {
+    for path in tool.tree_files() {
         let path = tree.join(path);
         fs::create_dir_all(path.parent().unwrap())?;
         fs::write(&path, b"fixture; never executed")?;
@@ -347,11 +347,11 @@ fn selected_payload_inventory_and_corruption_cannot_be_replaced_by_caller_data()
             2 => {
                 tools.pop();
             }
-            3 => tools[1]
-                .executables
-                .get_mut("pnpm")
-                .unwrap()
-                .push_str("-forged"),
+            3 => {
+                tools[1]
+                    .executables
+                    .insert("pnpm".into(), "pnpm-forged".into());
+            }
             _ => {}
         }
         publish_with(

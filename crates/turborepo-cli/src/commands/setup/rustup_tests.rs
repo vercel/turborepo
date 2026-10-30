@@ -224,13 +224,11 @@ fn locked_rust_setup_is_private_atomic_repeatable_and_reinstallable() {
         .collect();
     shims.sort();
     assert_eq!(shims, ["cargo", "rustc", "rustdoc", "rustup"]);
-    assert_eq!(
-        fs::read_link(current.bin.join("cargo")).unwrap(),
-        std::path::Path::new(&format!(
-            "../tools/rust/toolchains/1.99.0-{}/bin/cargo",
-            triple()
-        ))
-    );
+    let cargo = fs::read_to_string(current.bin.join("cargo")).unwrap();
+    assert!(cargo.contains(&format!(
+        "exec \"$generation\"'/tools/rust/toolchains/1.99.0-{}/bin/cargo'",
+        triple()
+    )));
     // Never execute the installer or create a toolchain in the caller's home.
     // Only the producer's private, external setup receipt may be written.
     assert!(!repo.owned.root().join("installer-ran").exists());

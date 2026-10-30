@@ -32,6 +32,7 @@ fn tool(id: &str) -> Tool {
         platform: "linux-x86_64-gnu".into(),
         artifact_sha256: "a".repeat(64),
         executables: BTreeMap::from([(id.into(), "bin/tool".into())]),
+        vars: Default::default(),
     }
 }
 
@@ -357,4 +358,87 @@ fn crash_child() {
             std::process::exit(79);
         })
         .unwrap();
+}
+
+#[test]
+fn launchers_run_other_trees_and_a_variable_change_republishes_without_restaging() {
+    let repo = tempfile::tempdir().unwrap();
+    let mut store = Store::open(repo.path()).unwrap();
+    let mut runner = tool("runner");
+    runner.executables = BTreeMap::from([(
+        "run".into(),
+        Export::Launch(Launch {
+            program: TreeRef::new("node", "bin/tool"),
+            args: vec![
+                LaunchArg::Tree(TreeRef::new("runner", "resource")),
+                LaunchArg::Word("--flag".into()),
+            ],
+        }),
+    )]);
+    runner.vars = BTreeMap::from([(ManagedVar::Gotoolchain, VarValue::Word("local".into()))]);
+    let mut node = tool("node");
+    let stage = |tool: &Tool, root: &Path| -> Result<(), Error> {
+        fs::create_dir(root.join("bin"))?;
+        let script = "#!/bin/sh\necho \"$GOTOOLCHAIN|$*\"\n";
+        fs::write(root.join("bin/tool"), script)?;
+        fs::set_permissions(root.join("bin/tool"), fs::Permissions::from_mode(0o755))?;
+        Ok(fs::write(root.join("resource"), &tool.id)?)
+    };
+    // A launcher may only name selected trees.
+    assert!(matches!(
+        store.reconcile(std::slice::from_ref(&runner), stage),
+        Err(Error::InvalidInventory)
+    ));
+    let desired = [node.clone(), runner.clone()];
+    store.reconcile(&desired, stage).unwrap();
+    let current = store.current().unwrap().unwrap();
+    let tools = fs::canonicalize(current.bin.join("../tools")).unwrap();
+    let output = Command::new(current.bin.join("run"))
+        .arg("x y")
+        .env_clear()
+        .output()
+        .unwrap();
+    assert_eq!(
+        String::from_utf8(output.stdout).unwrap(),
+        format!(
+            "local|{} --flag x y\n",
+            tools.join("runner/resource").display()
+        )
+    );
+    // Exports without variables stay links into their own tree.
+    assert!(current.bin.join("node").is_symlink());
+
+    // New variables republish `bin` and copy, never restage, the trees.
+    runner.vars = BTreeMap::from([(ManagedVar::Gotoolchain, VarValue::Word("auto".into()))]);
+    node.vars = BTreeMap::from([(ManagedVar::Goroot, VarValue::Tree(TreeRef::new("node", "")))]);
+    let desired = [node, runner];
+    assert!(!store.is_current(&desired).unwrap());
+    for tool in &desired {
+        assert!(store.can_reuse(tool).unwrap());
+    }
+    let outcome = store
+        .reconcile(&desired, |_, _| Err(Error::InvalidInventory))
+        .unwrap();
+    assert_eq!(outcome, Outcome::Replaced);
+    let current = store.current().unwrap().unwrap();
+    let output = Command::new(current.bin.join("run"))
+        .env_clear()
+        .output()
+        .unwrap();
+    assert!(
+        String::from_utf8(output.stdout)
+            .unwrap()
+            .starts_with("auto|")
+    );
+}
+
+#[test]
+fn managed_variable_names_are_their_serialized_names() {
+    for var in ManagedVar::ALL {
+        assert_eq!(serde_json::to_value(var).unwrap(), var.name());
+        assert_eq!(ManagedVar::from_name(var.name()), Some(var));
+    }
+    let names: Vec<_> = ManagedVar::ALL.iter().map(|var| var.name()).collect();
+    assert!(names.windows(2).all(|pair| pair[0] < pair[1]));
+    assert_eq!(ManagedVar::from_name("PATH"), None);
 }

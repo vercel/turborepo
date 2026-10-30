@@ -19,7 +19,7 @@ use std::{
 };
 
 use sha2::{Digest, Sha256};
-use turborepo_tool_install::{Store, Tool};
+use turborepo_tool_install::{Export, Launch, ManagedVar, Store, Tool, TreeRef, VarValue};
 
 use crate::{
     lock::{self, AlternateFormat, Artifact, Format, Installation, Lock, Platform},
@@ -186,25 +186,42 @@ impl RustPlan {
         } else {
             None
         };
-        let proxied = proxy_sha256.is_some();
-        let export = |path: &str| {
-            if proxied {
-                PROXY.to_owned()
-            } else {
-                format!("{toolchain}/{path}")
-            }
+        // Proxies select the toolchain from these and must never auto-install
+        // into the tree. Unix launchers set them for every invocation; Windows
+        // proxies rely on activation.
+        let mut vars = BTreeMap::from([
+            (
+                ManagedVar::RustupHome,
+                VarValue::Tree(TreeRef::new("rust", "")),
+            ),
+            (
+                ManagedVar::RustupToolchain,
+                VarValue::Word(format!("{}-{host}", rust.version)),
+            ),
+            (ManagedVar::CargoHome, VarValue::RepoCargoHome),
+        ]);
+        let export = |path: &str| match &proxy_sha256 {
+            Some(_) => Export::File(PROXY.to_owned()),
+            None => Export::Launch(Launch {
+                program: TreeRef::new("rust", format!("{toolchain}/{path}")),
+                args: Vec::new(),
+            }),
         };
+        let executables = (parts.values())
+            .flat_map(|artifact| &artifact.executables)
+            .map(|(name, path)| (name.clone(), export(path)))
+            .collect();
+        if proxy_sha256.is_some() {
+            vars.insert(ManagedVar::RustupAutoInstall, VarValue::Word("0".into()));
+        }
         Ok(Self {
             tool: Tool {
                 id: "rust".into(),
                 version: rust.version.clone(),
                 platform: spelling.into(),
                 artifact_sha256: hex::encode(Sha256::digest(digest)),
-                executables: parts
-                    .values()
-                    .flat_map(|artifact| &artifact.executables)
-                    .map(|(name, path)| (name.clone(), export(path)))
-                    .collect(),
+                executables,
+                vars,
             },
             host,
             profile,

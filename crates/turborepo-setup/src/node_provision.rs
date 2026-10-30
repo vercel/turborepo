@@ -8,7 +8,7 @@ use semver::Version;
 use turborepo_archive::{ExtractedArtifact, Layout};
 use turborepo_download::{ApprovedOrigin, DownloadClient, ExpectedSha256};
 use turborepo_platform::OperatingSystem::Windows;
-use turborepo_tool_install::{Store, Tool};
+use turborepo_tool_install::{Export, Store, Tool};
 
 use crate::{
     NodeArtifact,
@@ -224,7 +224,8 @@ impl NodePlan {
                 version: node.version.clone(),
                 platform: spelling.into(),
                 artifact_sha256: artifact.sha256.clone(),
-                executables: artifact.executables.clone(),
+                executables: Export::files(&artifact.executables),
+                vars: Default::default(),
             },
             platform,
             artifact,
@@ -328,10 +329,10 @@ impl NodePlan {
                 bytes
             }
         };
-        let mut required = vec![self.tool.executables["node"].clone()];
+        let mut required = vec![self.artifact.executables["node"].clone()];
         let base = if self.windows { "" } else { "lib/" };
         for name in ["npm", "npx"] {
-            if let Some(path) = self.tool.executables.get(name) {
+            if let Some(path) = self.artifact.executables.get(name) {
                 if self.windows {
                     required.push(path.clone());
                 }
@@ -359,7 +360,7 @@ impl NodePlan {
         )?;
         if !self.windows {
             for (name, cli) in [("npm", "npm-cli.js"), ("npx", "npx-cli.js")] {
-                if self.tool.executables.contains_key(name)
+                if self.artifact.executables.contains_key(name)
                     && fs::read_link(tree.root_path().join("bin").join(name))?
                         != Path::new(&format!("../lib/node_modules/npm/bin/{cli}"))
                 {

@@ -267,11 +267,7 @@ async fn full_tree_bound_shims_repeat_reuse_and_stale_replacement() {
     )
     .unwrap();
     fs::set_permissions(bait.path().join("node"), fs::Permissions::from_mode(0o755)).unwrap();
-    for path in [
-        current.bin.join("pnpm"),
-        root.join(&pnpm.inventory_tool().executables["pnpm"]),
-        current.bin.join("pnpx"),
-    ] {
+    for path in [current.bin.join("pnpm"), current.bin.join("pnpx")] {
         let output = Command::new(path)
             .args(["space argument", "literal'quote", "--version"])
             .env("PATH", bait.path())
@@ -298,6 +294,7 @@ async fn full_tree_bound_shims_repeat_reuse_and_stale_replacement() {
         platform: "any".into(),
         artifact_sha256: "ab".repeat(32),
         executables: BTreeMap::from([("extra".into(), "bin/node".into())]),
+        vars: Default::default(),
     };
     let expanded = [
         node.inventory_tool().clone(),
@@ -317,9 +314,12 @@ async fn full_tree_bound_shims_repeat_reuse_and_stale_replacement() {
     std::os::unix::fs::symlink("../tools/pnpm/bin/pnpm.cjs", bin.join("pnpm")).unwrap();
     install(&mut store, &node, &pnpm, &registry).await.unwrap();
     let bin = store.current().unwrap().unwrap().bin;
-    assert_eq!(
-        fs::read_link(bin.join("pnpm")).unwrap(),
-        Path::new("../tools/pnpm").join(&pnpm.inventory_tool().executables["pnpm"])
+    let output = Command::new(bin.join("pnpm")).output().unwrap();
+    assert_eq!(output.status.code(), Some(19));
+    assert!(
+        String::from_utf8(output.stdout)
+            .unwrap()
+            .starts_with("managed-node\n<")
     );
     assert!(!bin.join("extra").exists());
 }
@@ -447,7 +447,8 @@ async fn desired_node_binding_and_damaged_generation_repair() {
     changed["tools"]["node"]["installation"]["artifacts"]["macos-arm64"]["distribution"]
         ["sha256"] = json!("22".repeat(32));
     let (_, new_pnpm) = plans(&changed);
-    assert_ne!(pnpm.inventory_tool(), new_pnpm.inventory_tool());
+    // pnpm's tree and identity never depend on Node; only the plan binds it.
+    assert_eq!(pnpm.inventory_tool(), new_pnpm.inventory_tool());
     let desired = [
         node.inventory_tool().clone(),
         new_pnpm.inventory_tool().clone(),
@@ -462,6 +463,42 @@ async fn desired_node_binding_and_damaged_generation_repair() {
     let result = PnpmPlan::from_lock(&lock, TARGET, &node, None);
     assert!(matches!(result, Err(Error::NodeBinding)));
     assert!(registry.requests.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn pnpm_tree_hash_is_the_same_beside_any_node() {
+    let bytes = archive(&package().to_string(), "bin/pnpm.cjs");
+    let registry = serve(metadata(&bytes), bytes.clone()).await;
+    let mut other = fixture(&bytes);
+    let node = &mut other["tools"]["node"];
+    node["version"] = json!("22.0.0");
+    node["declarations"][0]["request"] = json!("22.0.0");
+    let distribution = &mut node["installation"]["artifacts"]["macos-arm64"]["distribution"];
+    distribution["url"] = json!("https://nodejs.org/dist/v22.0.0/node-v22.0.0-darwin-arm64.tar.gz");
+    distribution["sha256"] = json!("22".repeat(32));
+    distribution["rootPrefix"] = json!("node-v22.0.0-darwin-arm64");
+    let mut hashes = Vec::new();
+    for value in [fixture(&bytes), other] {
+        let (node, pnpm) = plans(&value);
+        let repo = tempfile::tempdir().unwrap();
+        let mut store = Store::open(repo.path()).unwrap();
+        install(&mut store, &node, &pnpm, &registry).await.unwrap();
+        let manifest: Value = serde_json::from_slice(&manifest(repo.path())).unwrap();
+        let tools = manifest["tools"].as_array().unwrap();
+        let installed = |id: &str| {
+            tools
+                .iter()
+                .find(|t| t["tool"]["id"] == id)
+                .unwrap()
+                .clone()
+        };
+        hashes.push((
+            installed("node")["tool"].clone(),
+            installed("pnpm")["tree_sha256"].clone(),
+        ));
+    }
+    assert_ne!(hashes[0].0, hashes[1].0, "the two Node selections differ");
+    assert_eq!(hashes[0].1, hashes[1].1);
 }
 
 #[test]

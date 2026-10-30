@@ -13,7 +13,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use turborepo_tool_install::{Record, Store, Tool, Verification};
+use turborepo_tool_install::{Record, Store, Tool, VarValue, Verification};
 
 use crate::{
     artifact_provision::{self, ArtifactPlan},
@@ -383,102 +383,58 @@ impl ActivationPlan {
     }
 }
 
-/// Every variable [`runtime_env`] may set, sorted. The shell hook restores only
-/// these from its saved state, so a tampered state cannot unset or overwrite
-/// any other variable.
-pub const HOOK_ENV: [&str; 10] = [
-    "CARGO_HOME",
-    "GOROOT",
-    "GOTOOLCHAIN",
-    "RUSTUP_AUTO_INSTALL",
-    "RUSTUP_HOME",
-    "RUSTUP_TOOLCHAIN",
-    "UV_PYTHON",
-    "UV_PYTHON_DOWNLOADS",
-    "UV_PYTHON_INSTALL_DIR",
-    "UV_PYTHON_PREFERENCE",
-];
-
-/// The variables an installed generation's tools need beside PATH, from its
-/// `bin` and inventory tools alone. Managed run and exec set exactly these,
-/// and the shell hook derives them from its trusted record without reading the
-/// Store, so the prompt and tasks always agree. Never inherited or
-/// host-dependent settings:
-///
-/// - Rust: the generation's private `RUSTUP_HOME`, the exact `RUSTUP_TOOLCHAIN`
-///   and the clone's `CARGO_HOME`, never the user's homes or overrides. Windows
-///   exports are rustup proxies, which must never auto-install into the
-///   generation.
-/// - Go: `GOTOOLCHAIN=local` stops toolchain switches and downloads, and
-///   `GOROOT` pins this verified tree, so the locked `go` never builds with
-///   another release's standard library and tools. Windows `go.exe` is a hard
-///   link that finds its tree only through `GOROOT`.
-/// - uv/Python: the uv launchers' settings, for uv processes that do not start
-///   through them (every Windows uv), plus the locked interpreter as uv's
-///   request. That is uv's download key rather than a path: a path request
-///   makes `uv pip` install into the managed interpreter itself instead of the
-///   project's virtual environment.
-///
-/// Node and Bun are self-contained, and pnpm/Yarn shims launch the selected
-/// managed Node by path, so they need none.
+/// The variables an installed generation's tools need beside PATH: each
+/// tool's `vars`, resolved against the generation's `bin` and the repository
+/// root alone. Managed run and exec set exactly these, Unix launchers set the
+/// same values for their own tool, and the shell hook derives them from its
+/// trusted record without reading the Store, so the prompt and tasks always
+/// agree. Never inherited or host-dependent settings.
 pub fn runtime_env(
     root: &Path,
     bin: &Path,
     tools: &[Tool],
 ) -> Result<BTreeMap<String, OsString>, Error> {
     let mut env = BTreeMap::new();
-    let tool = |id: &str| tools.iter().find(|tool| tool.id == id);
-    let (rust, go, uv, python) = (tool("rust"), tool("go"), tool("uv"), tool("python"));
-    if rust.is_none() && go.is_none() && uv.is_none() && python.is_none() {
-        return Ok(env);
-    }
-    let generation = bin.parent().ok_or(Error::StaleInventory)?;
-    // Like `bin`, the ordinary spelling tools print and compare, never a
-    // verbatim `\\?\` path.
-    let plain = |path: PathBuf| {
-        #[cfg(windows)]
-        let path = dunce::simplified(&path).to_path_buf();
-        path.into_os_string()
-    };
-    let tree = |id: &str| plain(generation.join("tools").join(id));
-    if let Some(rust) = rust {
-        let host = crate::rustup::host(&rust.platform).ok_or(Error::InvalidLock)?;
-        let cargo_home = crate::cargo_prefetch::cargo_home_path(root);
-        // Cargo creates a missing home on first use; never create it here.
-        match std::fs::symlink_metadata(&cargo_home) {
-            Ok(m) if !m.is_dir() || m.file_type().is_symlink() => {
-                return Err(Error::UnsafeCargoHome(cargo_home));
+    for tool in tools {
+        for (var, value) in &tool.vars {
+            let value = match value {
+                VarValue::Tree(tree) => {
+                    let generation = bin.parent().ok_or(Error::StaleInventory)?;
+                    let path = (tree.path.split('/').filter(|part| !part.is_empty()))
+                        .fold(generation.join("tools").join(&tree.tool), |p, c| p.join(c));
+                    plain(path)
+                }
+                VarValue::Word(word) => OsString::from(word),
+                VarValue::RepoCargoHome => {
+                    let cargo_home = crate::cargo_prefetch::cargo_home_path(root);
+                    // Cargo creates a missing home on first use; never create it here.
+                    match std::fs::symlink_metadata(&cargo_home) {
+                        Ok(m) if !m.is_dir() || m.file_type().is_symlink() => {
+                            return Err(Error::UnsafeCargoHome(cargo_home));
+                        }
+                        Err(e) if e.kind() != io::ErrorKind::NotFound => {
+                            return Err(StorageError::from(e).into());
+                        }
+                        _ => {}
+                    }
+                    plain(cargo_home)
+                }
+            };
+            // Two tools that set one variable must agree on its value.
+            if (env.insert(var.name().to_owned(), value.clone())).is_some_and(|old| old != value) {
+                return Err(Error::InvalidLock);
             }
-            Err(e) if e.kind() != io::ErrorKind::NotFound => {
-                return Err(StorageError::from(e).into());
-            }
-            _ => {}
         }
-        if cfg!(windows) {
-            env.insert("RUSTUP_AUTO_INSTALL".into(), "0".into());
-        }
-        env.insert("RUSTUP_HOME".into(), tree("rust"));
-        let toolchain = format!("{}-{host}", rust.version);
-        env.insert("RUSTUP_TOOLCHAIN".into(), toolchain.into());
-        env.insert("CARGO_HOME".into(), plain(cargo_home));
-    }
-    if go.is_some() {
-        for (key, value) in crate::go_provision::RUNTIME_ENV {
-            env.insert(key.to_owned(), OsString::from(value));
-        }
-        env.insert("GOROOT".into(), tree("go"));
-    }
-    if uv.is_some() || python.is_some() {
-        env.insert("UV_PYTHON_DOWNLOADS".into(), "never".into());
-        env.insert("UV_PYTHON_INSTALL_DIR".into(), tree("python"));
-    }
-    if let Some(python) = python {
-        let key = crate::python_resolution::installed_key(&python.version, &python.platform)
-            .ok_or(Error::InvalidLock)?;
-        env.insert("UV_PYTHON_PREFERENCE".into(), "only-managed".into());
-        env.insert("UV_PYTHON".into(), key.into());
     }
     Ok(env)
+}
+
+/// Like `bin`, the ordinary spelling tools print and compare, never a
+/// verbatim `\\?\` path.
+fn plain(path: PathBuf) -> OsString {
+    #[cfg(windows)]
+    let path = dunce::simplified(&path).to_path_buf();
+    path.into_os_string()
 }
 
 /// The installed identity setup provisions for the declared manager. Each plan

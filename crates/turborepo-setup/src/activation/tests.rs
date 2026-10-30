@@ -202,10 +202,22 @@ fn manager_sources(repo: &Path, value: &Value, package_manager: &str) {
     .unwrap();
 }
 
+/// A bin export launches the staged tree program: the trap `stage` writes.
+fn assert_runs_tree_trap(export: &Path) {
+    let cwd = tempfile::tempdir().unwrap();
+    let status = std::process::Command::new(export)
+        .current_dir(cwd.path())
+        .env_clear()
+        .status()
+        .unwrap();
+    assert_eq!(status.code(), Some(99));
+    assert!(cwd.path().join("activation-was-probed").exists());
+}
+
 // Readiness fixtures only, not executable authorization or vendor verification.
 // Every export is a trap: any probe would fail and leave an observable marker.
 fn stage(tool: &Tool, root: &Path) -> Result<(), turborepo_tool_install::Error> {
-    for path in tool.executables.values() {
+    for path in tool.tree_files() {
         let path = root.join(path);
         fs::create_dir_all(path.parent().unwrap())?;
         fs::write(&path, "#!/bin/sh\ntouch activation-was-probed\nexit 99\n")?;
@@ -403,6 +415,7 @@ fn stale_or_unrelated_inventory_never_supplies_extra_exports() {
                 platform: "any".into(),
                 artifact_sha256: "44".repeat(32),
                 executables: BTreeMap::from([("foreign".into(), "bin/tool".into())]),
+                vars: Default::default(),
             }),
         }
         seed(repo.path(), &tools);
@@ -1007,10 +1020,7 @@ fn rust_selection_adds_toolchain_exports_and_private_runtime_env() {
         ])
     );
     for name in ["cargo", "rustc", "rustdoc"] {
-        assert_eq!(
-            fs::canonicalize(plan.path_prepend().join(name)).unwrap(),
-            home.join(format!("toolchains/{toolchain}/bin/{name}"))
-        );
+        assert_runs_tree_trap(&plan.path_prepend().join(name));
     }
     // Cargo creates its home on first use; planning never does.
     assert_eq!(state(repo.path()), before);
@@ -1246,8 +1256,7 @@ fn go_selection_contributes_its_bin_and_locked_runtime_env() {
             ])
         );
         for name in ["go", "gofmt"] {
-            let export = fs::canonicalize(plan.path_prepend().join(name)).unwrap();
-            assert_eq!(export, goroot.join("bin").join(name));
+            assert_runs_tree_trap(&plan.path_prepend().join(name));
         }
         assert_eq!(state(repo.path()), before);
     }

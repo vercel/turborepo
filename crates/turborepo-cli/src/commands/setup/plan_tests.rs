@@ -424,10 +424,11 @@ fn proposed_creation_drift_and_refresh_match_what_setup_then_writes() {
     let mut write = SETUP.to_vec();
     write.push("--update-lock");
     assert_eq!(f.run(&newer, &write).unwrap(), 0);
-    // pnpm's managed launcher is bound to Node, so setup re-stages it too.
-    let tools = f
-        .locked_tools()
-        .replace("reuse (healthy installation)", stale);
+    // Only Node is installed; pnpm's tree is reused beside any Node.
+    let tools = f.locked_tools().replace(
+        "node 24.1.0: reuse (healthy installation)",
+        &format!("node 24.1.0: {stale}"),
+    );
     assert_eq!(
         refreshed,
         format!(

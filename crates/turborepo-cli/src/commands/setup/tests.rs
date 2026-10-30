@@ -683,6 +683,22 @@ fn late_failures_preserve_previous_inventory_and_never_publish_partial_node() {
             .unwrap();
         artifacts.values_mut().next().unwrap()["distribution"]["sha256"] =
             json!(format!("{:x}", Sha256::digest(&f.node)));
+        // pnpm's tree does not depend on Node, so change it too: the late
+        // failures below happen while its new artifact downloads.
+        f.pnpm = archive(
+            "package",
+            &[
+                (
+                    "package.json",
+                    r#"{"name":"pnpm","version":"10.0.0","bin":{"pnpm":"bin/pnpm.cjs","pnpx":"bin/pnpx.cjs"}}"#,
+                ),
+                ("bin/pnpm.cjs", "throw new Error('must not run');"),
+                ("bin/pnpx.cjs", "throw new Error('must not run');"),
+                ("dist/resource", "new pnpm resource"),
+            ],
+        );
+        f.lock["tools"]["pnpm"]["installation"]["artifacts"]["any"]["package"]["sha256"] =
+            json!(format!("{:x}", Sha256::digest(&f.pnpm)));
         f.save();
         let drift = match case {
             1 => Some((f.owned.root().join(".nvmrc"), "26.0.0".into())),
