@@ -30,6 +30,9 @@ function Invoke-WebRequest {
   if ($Uri -like '*/repos/vercel/turborepo/releases/latest') {
     return [pscustomobject]@{ Content = '{"tag_name":"v2.11.5"}' }
   }
+  if ($Uri -like '*/repos/vercel/turborepo/releases`?per_page=30') {
+    return [pscustomobject]@{ Content = '[{"tag_name":"v2.11.7"},{"tag_name":"v2.11.7-canary.3"},{"tag_name":"v2.11.7-canary.2"},{"tag_name":"v2.11.5"}]' }
+  }
   if ($Uri -like '*/SHA256SUMS' -and $OutFile) {
     Copy-Item -LiteralPath $script:ChecksumFixture -Destination $OutFile
     return
@@ -146,6 +149,20 @@ try {
   Assert-True ([IO.File]::ReadAllLines($githubPathFixture) -contains $expectedInstallDirectory) 'Installer did not add its directory to GITHUB_PATH.'
   Assert-True (($env:Path -split ';') -contains $expectedInstallDirectory) 'Installer did not add its directory to the current PATH.'
   Assert-True (-not (Test-Path -LiteralPath $InstallDirectory)) 'Piped execution used an ambient install-directory variable.'
+  $env:Path = $systemPath
+
+  # The archive only contains turbo.exe, so the same bytes can be served under the canary name.
+  $stableArchiveName = $script:ArchiveName
+  $script:ArchiveName = 'turbo-2.11.7-canary.3-x86_64-pc-windows-msvc.tar.gz'
+  [IO.File]::WriteAllText($script:ChecksumFixture, "$digest  $script:ArchiveName`n")
+  $canaryInstallDirectory = Join-Path $testRoot 'canary-install'
+  $requestCountBeforeCanary = $script:RequestCount
+  $canaryOutput = . $installerPath -Version 'canary' -InstallDirectory $canaryInstallDirectory -NoModifyPath 6>&1
+  Assert-True (($canaryOutput | Out-String) -match 'Installed turbo 2\.11\.7-canary\.3 at') 'Installer did not resolve canary to the newest canary release.'
+  Assert-True (Test-Path -LiteralPath (Join-Path $canaryInstallDirectory 'turbo.exe') -PathType Leaf) 'Installer did not install the canary turbo.exe.'
+  Assert-True ($script:RequestCount -eq ($requestCountBeforeCanary + 3)) 'Expected release-list, checksum, and archive requests for canary.'
+  $script:ArchiveName = $stableArchiveName
+  [IO.File]::WriteAllText($script:ChecksumFixture, "$digest  $script:ArchiveName`n")
   $env:Path = $systemPath
 
   $badInstallDirectory = Join-Path $testRoot 'bad-digest-install'
