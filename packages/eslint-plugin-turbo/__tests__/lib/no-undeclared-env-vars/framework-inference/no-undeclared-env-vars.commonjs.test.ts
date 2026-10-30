@@ -64,6 +64,27 @@ ruleTester.run(RULES.noUndeclaredEnvVars, rule, {
       ]
     },
     {
+      code: `const { INVITE_CODE } = process.env;`,
+      ...options(),
+      filename: viteFilename,
+      errors: [
+        {
+          message: "INVITE_CODE is not listed as a dependency in turbo.json"
+        }
+      ]
+    },
+    {
+      code: `const { MY_NEXT_PUBLIC_KEY } = process.env;`,
+      ...options(),
+      filename: nextJsFilename,
+      errors: [
+        {
+          message:
+            "MY_NEXT_PUBLIC_KEY is not listed as a dependency in turbo.json"
+        }
+      ]
+    },
+    {
       code: `const { VITE_THINGS } = process.env;`,
       ...options(),
       filename: kitchenSinkFilename,
