@@ -127,6 +127,47 @@ async fn verified_archive_installs_go_and_gofmt_then_reuses_healthy_trees() {
     assert!(matches!(partial.await, Err(Error::InventoryMismatch)));
 }
 
+#[tokio::test]
+async fn unix_go_launchers_pin_the_toolchain_without_any_parent_environment() {
+    let mut builder = tar::Builder::new(Vec::new());
+    let script = b"#!/bin/sh\necho \"$GOTOOLCHAIN|$GOROOT|$*\"\n";
+    add(&mut builder, "go/bin/go", 0o755, script);
+    add(&mut builder, "go/bin/gofmt", 0o755, script);
+    let mut encoder = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::fast());
+    encoder.write_all(&builder.into_inner().unwrap()).unwrap();
+    let bytes = encoder.finish().unwrap();
+    let platform = Platform::LinuxX64Gnu;
+    let plan = plan(document(platform, &bytes), platform).unwrap();
+    let server = LoopbackServer::new([(ROUTE.to_owned(), bytes)], |_| {}).unwrap();
+    let transport = GoTransport::loopback_http_for_tests(server.origin()).unwrap();
+    let repo = tempfile::tempdir().unwrap();
+    let mut store = Store::open(repo.path()).unwrap();
+    let desired = [plan.inventory_tool().clone()];
+    let prepared = plan
+        .prepare(&store, &desired, &transport, Preparation::IfNeeded)
+        .await
+        .unwrap()
+        .unwrap();
+    store
+        .reconcile(&desired, |tool, path| prepared.stage(tool, path))
+        .unwrap();
+    let current = Store::inspect(repo.path()).unwrap().unwrap();
+    let goroot = fs::canonicalize(current.tool_tree(plan.inventory_tool()).unwrap()).unwrap();
+    for name in ["go", "gofmt"] {
+        let output = std::process::Command::new(current.bin.join(name))
+            .args(["env", "GOTOOLCHAIN"])
+            .env_clear()
+            .output()
+            .unwrap();
+        assert!(output.status.success(), "{name}");
+        assert_eq!(
+            String::from_utf8(output.stdout).unwrap(),
+            format!("local|{}|env GOTOOLCHAIN\n", goroot.display()),
+            "{name}"
+        );
+    }
+}
+
 /// One mirror base serves both official paths: go.dev's index and
 /// dl.google.com's archives. The lock keeps the official URLs.
 #[tokio::test]

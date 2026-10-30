@@ -32,6 +32,7 @@ fn seed(f: &Fixture, git: bool) {
             platform: "any".into(),
             artifact_sha256: "a".repeat(64),
             executables: [("git".into(), "bin/git".into())].into(),
+            vars: Default::default(),
         });
     }
     Store::open(f.owned.root())
@@ -39,7 +40,7 @@ fn seed(f: &Fixture, git: bool) {
         .force_reconcile_checked(
             &tools,
             |tool, root| {
-                for path in tool.executables.values() {
+                for path in tool.tree_files() {
                     let file = root.join(path);
                     fs::create_dir_all(file.parent().unwrap())?;
                     fs::write(&file, "#!/bin/sh\ntouch probe-ran\nexit 91\n")?;

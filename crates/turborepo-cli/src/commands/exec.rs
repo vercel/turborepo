@@ -426,8 +426,8 @@ fs.writeFileSync('pids.json', JSON.stringify([process.pid, child.pid]));
     }
 
     /// A generation laid out like Windows managed setup's: `bin\node.exe`, a
-    /// single-binary `bin\uv.exe`, and a `bin\pnpm.cmd` launcher chain that
-    /// runs `pnpm.cjs` with the generation's own Node. Host tools of the same
+    /// single-binary `bin\uv.exe`, and a `bin\pnpm.cmd` launcher that runs
+    /// `pnpm.cjs` with the generation's own Node. Host tools of the same
     /// names come later on PATH and must never run.
     struct Fixture {
         temp: tempfile::TempDir,
@@ -438,9 +438,8 @@ fs.writeFileSync('pids.json', JSON.stringify([process.pid, child.pid]));
         fn new() -> Self {
             let temp = tempfile::tempdir().unwrap();
             let generation = temp.path().join("generation");
-            let launcher = generation.join(r"tools\pnpm\managed-node-fixture");
             let host = temp.path().join("host");
-            for dir in [&launcher, &generation.join("bin"), &host] {
+            for dir in [&generation.join("bin"), &host] {
                 fs::create_dir_all(dir).unwrap();
             }
             fs::create_dir_all(generation.join(r"tools\node")).unwrap();
@@ -455,12 +454,8 @@ fs.writeFileSync('pids.json', JSON.stringify([process.pid, child.pid]));
             }
             fs::write(
                 generation.join(r"bin\pnpm.cmd"),
-                "@\"%~dp0..\\tools\\pnpm\\managed-node-fixture\\pnpm.cmd\" %*\r\n",
-            )
-            .unwrap();
-            fs::write(
-                launcher.join("pnpm.cmd"),
-                "@\"%~dp0..\\..\\node\\node.exe\" \"%~dp0..\\bin\\pnpm.cjs\" %*\r\n",
+                "@\"%~dp0..\\tools\\node\\node.exe\" \"%~dp0..\\tools\\pnpm\\bin\\pnpm.cjs\" \
+                 %*\r\n",
             )
             .unwrap();
             fs::write(generation.join(r"tools\pnpm\bin\pnpm.cjs"), PNPM).unwrap();

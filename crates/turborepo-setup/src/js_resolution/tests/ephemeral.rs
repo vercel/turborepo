@@ -35,7 +35,7 @@ fn executable(path: &Path) {
     fs::set_permissions(path, fs::Permissions::from_mode(0o755)).unwrap();
 }
 fn populate(tool: &InstalledTool, tree: &Path) -> Result<(), turborepo_tool_install::Error> {
-    for path in tool.executables.values() {
+    for path in tool.tree_files() {
         if tool.id != "node" || !path.ends_with("npm") && !path.ends_with("npx") {
             executable(&tree.join(path));
         }
@@ -74,7 +74,7 @@ fn assert_installed(root: &Path, lock: &Lock) -> turborepo_tool_install::Current
             b"adjacent resource"
         );
         for name in tool.executables.keys() {
-            assert!(current.bin.join(name).is_symlink());
+            assert!(current.bin.join(name).is_file());
         }
     }
     assert!(!root.join("turbo.lock").exists());

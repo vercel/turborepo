@@ -227,13 +227,8 @@ async fn fresh_cohort_resources_bound_launchers_reuse_and_repair() {
     fs::write(bait.path().join("node"), "#!/bin/sh\nexit 99\n").unwrap();
     fs::set_permissions(bait.path().join("node"), fs::Permissions::from_mode(0o755)).unwrap();
     for name in ["npm", "npx"] {
-        let launcher = root.join(&npm.inventory_tool().executables[name]);
-        assert_ne!(
-            fs::metadata(&launcher).unwrap().permissions().mode() & 0o100,
-            0
-        );
-        for path in [current.bin.join(name), launcher] {
-            let output = Command::new(path)
+        {
+            let output = Command::new(current.bin.join(name))
                 .args(["space arg", "literal'quote"])
                 .env("PATH", bait.path())
                 .current_dir(bait.path())
@@ -260,6 +255,7 @@ async fn fresh_cohort_resources_bound_launchers_reuse_and_repair() {
         platform: "any".into(),
         artifact_sha256: "ab".repeat(32),
         executables: std::collections::BTreeMap::from([("extra".into(), "bin/node".into())]),
+        vars: Default::default(),
     };
     let expanded = [desired.to_vec(), vec![extra]].concat();
     assert!(
@@ -410,7 +406,8 @@ async fn authored_constraints_and_node_identity_prevent_unverified_reuse() {
     changed["tools"]["node"]["installation"]["artifacts"]["macos-arm64"]["distribution"]
         ["sha256"] = json!("22".repeat(32));
     let (_, new_npm) = plans(&changed, None);
-    assert_ne!(npm.inventory_tool(), new_npm.inventory_tool());
+    // npm's tree and identity never depend on Node; only the plan binds it.
+    assert_eq!(npm.inventory_tool(), new_npm.inventory_tool());
     assert!(matches!(
         NpmPlan::from_lock(&lock(&changed), TARGET, &node, None),
         Err(Error::NodeBinding)
