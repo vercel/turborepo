@@ -596,6 +596,61 @@ fn global_setup_then_plain_run_repeat_repair_and_drift() {
     j.build(&j.web, "loose", "24.1.0", &[]);
 }
 
+/// Setup records the repository in the user's tool store, never in the
+/// repository, and `TURBO_TOOL_STORE` relocates that store.
+#[test]
+fn setup_records_the_repository_in_the_user_tool_store() {
+    let j = Journey::new();
+    j.turbo(&j.root, TOOLS_ONLY, &[]).succeeds();
+    let root = j.root.canonicalize().unwrap();
+    let name = format!("{:x}", Sha256::digest(root.as_os_str().as_encoded_bytes()));
+    let data = if cfg!(target_os = "macos") {
+        j.home.join("Library/Application Support")
+    } else {
+        j.home.join(".local/share")
+    };
+    let record = |store: &Path| store.join("repos").join(&name).join("record.json");
+    let default = data.join("turborepo/tools");
+    let value: serde_json::Value =
+        serde_json::from_slice(&fs::read(record(&default)).unwrap()).unwrap();
+    assert_eq!(value["installation"]["root"], json!(root));
+    assert!(!data.join("turborepo/setup-roots").exists());
+    assert!(!j.root.join(".turbo/cargo-home").exists());
+    j.build(&j.root, "strict", "24.0.0", &[]);
+
+    // A relocated store has no record until setup writes one there.
+    let store = j.temp.path().join("tool-store");
+    let env = [("TURBO_TOOL_STORE", store.to_str().unwrap())];
+    let build = ["run", "build"];
+    j.turbo(&j.root, &build, &env)
+        .fails("run turbo setup")
+        .offline();
+    j.turbo(&j.root, TOOLS_ONLY, &env).succeeds();
+    assert!(record(&store).is_file());
+    let run = j.turbo(&j.root, &build, &env);
+    run.succeeds().offline();
+    assert!(run.text.contains("fixture-node 24.0.0"), "{}", run.text);
+
+    // A relative store or one inside the repository is refused before any
+    // traffic, and nothing is created there.
+    for (path, created) in [
+        ("relative-store", j.root.join("relative-store")),
+        (".turbo/store", j.root.join(".turbo/store")),
+    ] {
+        let path = if path.starts_with('.') {
+            j.root.join(path).to_str().unwrap().to_owned()
+        } else {
+            path.to_owned()
+        };
+        for args in [TOOLS_ONLY, &build[..]] {
+            j.turbo(&j.root, args, &[("TURBO_TOOL_STORE", &path)])
+                .fails("TURBO_TOOL_STORE must name an absolute directory")
+                .offline();
+        }
+        assert!(!created.exists(), "{}", created.display());
+    }
+}
+
 /// Tool acquisition ignores npm's ambient configuration: first setup still
 /// uses verified official fixture downloads, and installed repeats stay
 /// offline. All environment overrides belong to child commands, never the test

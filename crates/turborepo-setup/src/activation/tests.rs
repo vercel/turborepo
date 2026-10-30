@@ -253,6 +253,18 @@ fn seed(repo: &Path, tools: &[Tool]) -> PathBuf {
     store.current().unwrap().unwrap().bin
 }
 
+/// Seeds `tools` with `repo`'s Cargo home in a fixture tool store, which the
+/// caller keeps alive, and returns that Cargo home.
+fn seed_with_cargo_home(repo: &Path, tools: &[Tool], store: &Path) -> PathBuf {
+    let user_store = turborepo_tool_install::UserStore::at(store, repo).unwrap();
+    let mut store = Store::open(repo)
+        .unwrap()
+        .with_user_store(&user_store)
+        .unwrap();
+    store.reconcile(tools, stage).unwrap();
+    user_store.cargo_home(&repo.canonicalize().unwrap())
+}
+
 fn installed() -> tempfile::TempDir {
     let repo = tempfile::tempdir().unwrap();
     write_sources(repo.path(), &fixture());
@@ -931,7 +943,8 @@ fn rust_and_python_cohort_preserves_both_private_runtime_environments() {
             .clone(),
     );
     tools.sort_by(|a, b| a.id.cmp(&b.id));
-    seed(repo.path(), &tools);
+    let store = tempfile::tempdir().unwrap();
+    let cargo_home = seed_with_cargo_home(repo.path(), &tools, store.path());
     let before = state(repo.path());
     let plan = inspect_with(
         repo.path(),
@@ -971,11 +984,7 @@ fn rust_and_python_cohort_preserves_both_private_runtime_environments() {
     );
     assert_eq!(
         plan.runtime_env()["CARGO_HOME"],
-        repo.path()
-            .canonicalize()
-            .unwrap()
-            .join(".turbo/cargo-home")
-            .into_os_string()
+        cargo_home.into_os_string()
     );
     assert_eq!(
         plan.runtime_env()["RUSTUP_HOME"],
@@ -987,6 +996,7 @@ fn rust_and_python_cohort_preserves_both_private_runtime_environments() {
     );
     assert_eq!(state(repo.path()), before);
     assert!(!repo.path().join(".turbo/cargo-home").exists());
+    assert!(!store.path().join("repos").exists());
 }
 
 #[test]
@@ -994,7 +1004,8 @@ fn rust_selection_adds_toolchain_exports_and_private_runtime_env() {
     let repo = tempfile::tempdir().unwrap();
     write_sources(repo.path(), &fixture());
     let value = with_rust(repo.path(), fixture());
-    seed(repo.path(), &desired(&value, None));
+    let store = tempfile::tempdir().unwrap();
+    let cargo_home = seed_with_cargo_home(repo.path(), &desired(&value, None), store.path());
     let before = state(repo.path());
     // Without the Cargo flag the Rust selections are drift, never ignored.
     assert!(matches!(
@@ -1011,10 +1022,7 @@ fn rust_selection_adds_toolchain_exports_and_private_runtime_env() {
     assert_eq!(
         plan.runtime_env(),
         &BTreeMap::from([
-            (
-                "CARGO_HOME".into(),
-                root.join(".turbo/cargo-home").into_os_string()
-            ),
+            ("CARGO_HOME".into(), cargo_home.clone().into_os_string()),
             ("RUSTUP_HOME".into(), home.clone().into_os_string()),
             ("RUSTUP_TOOLCHAIN".into(), toolchain.into()),
         ])
@@ -1025,20 +1033,21 @@ fn rust_selection_adds_toolchain_exports_and_private_runtime_env() {
     // Cargo creates its home on first use; planning never does.
     assert_eq!(state(repo.path()), before);
     assert!(!root.join(".turbo/cargo-home").exists());
+    assert!(!cargo_home.exists());
 }
 
 #[test]
 fn rust_only_plans_bind_the_toolchain_file_tree_and_cargo_home() {
     let repo = tempfile::tempdir().unwrap();
     let value = with_rust(repo.path(), json!({"schemaVersion":0,"tools":{}}));
-    seed(repo.path(), &desired(&value, None));
+    let store = tempfile::tempdir().unwrap();
+    let home = seed_with_cargo_home(repo.path(), &desired(&value, None), store.path());
     let plan = inspect_with(repo.path(), context(), RUST).unwrap();
     let ids: Vec<_> = plan.tools().iter().map(|tool| tool.id.as_str()).collect();
     assert_eq!(ids, ["rust", "rustup"]);
 
     // An existing private home is used; a redirected or non-directory one is not.
-    let home = repo.path().join(".turbo/cargo-home");
-    fs::create_dir(&home).unwrap();
+    fs::create_dir_all(&home).unwrap();
     assert!(inspect_with(repo.path(), context(), RUST).is_ok());
     fs::remove_dir(&home).unwrap();
     let outside = tempfile::tempdir().unwrap();

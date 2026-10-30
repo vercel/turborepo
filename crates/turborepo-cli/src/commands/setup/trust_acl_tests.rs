@@ -30,13 +30,13 @@ fn acl_access_with_unchanged_unix_metadata_fails_before_traffic() {
         let f = Fixture::new();
         let first = Upstream::new(&f, false, None);
         f.run(&first, FROZEN).unwrap();
-        let directory = f.owned.home().join("turborepo/setup-roots");
-        let record = fs::read_dir(&directory)
+        let directory = fs::read_dir(f.owned.home().join("repos"))
             .unwrap()
             .next()
             .unwrap()
             .unwrap()
             .path();
+        let record = directory.join("record.json");
         let path = match target {
             "record" => record.clone(),
             "directory" => directory,
@@ -75,9 +75,9 @@ fn inherited_acl_on_new_state_component_fails_before_trust_publication() {
     let upstream = Upstream::new(&f, false, None);
     assert!(f.run(&upstream, FROZEN).is_err());
     assert_eq!(upstream.hits(), 3);
-    let private = f.owned.home().join("turborepo");
+    let private = f.owned.home().join("repos");
     assert_eq!(fs::metadata(&private).unwrap().mode() & 0o777, 0o700);
-    assert!(!private.join("setup-roots").exists());
+    assert_eq!(fs::read_dir(&private).unwrap().count(), 0);
     assert!(f.manifest().is_some()); // Published installation is still untrusted.
     f.no_execution();
 }

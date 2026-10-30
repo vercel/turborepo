@@ -105,7 +105,7 @@ impl Repo {
         };
         let code = turborepo_cli::test_support::frozen_tools_for_tests(
             &invocation,
-            &user_base,
+            &user_base.join("turborepo/tools"),
             upstream.origin(),
             || owned.policy_at(&invocation),
         )

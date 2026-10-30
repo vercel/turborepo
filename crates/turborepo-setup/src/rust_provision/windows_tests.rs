@@ -120,7 +120,12 @@ fn windows_toolchains_install_privately_and_export_rustup_proxies() {
     );
     assert_eq!(plan.toolchain(), format!("1.99.0-{HOST}"));
     let desired = vec![tool.clone()];
-    let mut store = Store::open(repo.path()).unwrap();
+    let user_store =
+        turborepo_tool_install::UserStore::at(&fixtures.path().join("store"), repo.path()).unwrap();
+    let mut store = Store::open(repo.path())
+        .unwrap()
+        .with_user_store(&user_store)
+        .unwrap();
     let transport = official();
     let prepared = plan
         .prepare(&store, &desired, &binary, &transport, IfNeeded)

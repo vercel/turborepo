@@ -449,10 +449,9 @@ fn run_reporting(
     // Decided before any download, so a missing ecosystem lockfile fails first.
     let dependencies = dependencies::Dependencies::select(&discovery, &plan, &snapshot, &request)?;
     let ecosystems = snapshot.ecosystems();
-    let trust_base = transports
+    let tool_store = transports
         .as_ref()
-        .map(provision::Transports::trust_base)
-        .transpose()?;
+        .and_then(provision::Transports::tool_store);
     if request.mode == Mode::Check {
         return check::run(&discovery, snapshot, &dependencies, preflight)
             .map(output::Completed::Reported);
@@ -495,7 +494,7 @@ fn run_reporting(
     report.tools_reused = tools.reused();
     console.tools(&tools)?;
     let root = discovery.snapshot_root()?.as_std_path();
-    let deps = dependencies.install(root, ecosystems, trust_base, console)?;
+    let deps = dependencies.install(root, ecosystems, tool_store, console)?;
     console.skips(&deps)?;
     Ok(output::Completed::Provisioned(deps))
 }
@@ -507,37 +506,34 @@ pub(crate) fn platform_supported() -> bool {
     provision::platform().is_ok()
 }
 
-/// Records `root`'s current installation as trusted under `user_base`, or the
-/// real user state directory, exactly as setup publishes it, so binary tests
+/// Records `root`'s current installation as trusted in `tool_store`, or the
+/// user's located tool store, exactly as setup publishes it, so binary tests
 /// can drive the shell hook. Returns the record's path. Fixture injection only.
 #[cfg(feature = "test-support")]
 pub fn record_trust_for_tests(
     root: &std::path::Path,
-    user_base: Option<&std::path::Path>,
+    tool_store: Option<&std::path::Path>,
 ) -> Result<std::path::PathBuf, String> {
-    let base = match user_base {
-        Some(base) => base.to_owned(),
-        None => dirs_next::data_local_dir().ok_or("cannot locate the user state directory")?,
-    };
+    let user_store = provision::user_store(tool_store, root).map_err(|e| e.to_string())?;
     let store = turborepo_tool_install::Store::open(root).map_err(|e| e.to_string())?;
-    let trust = trust::TrustStore::new(&base, root).map_err(|e| e.to_string())?;
+    let trust = trust::TrustStore::new(&user_store, root).map_err(|e| e.to_string())?;
     trust.record(&store).map_err(|e| e.to_string())?;
     Ok(trust.path())
 }
 
 /// `turbo setup --frozen --tools-only` against loopback fixture artifacts,
-/// publishing trust evidence under `user_base`, so binary tests can exercise
+/// publishing trust evidence in `tool_store`, so binary tests can exercise
 /// real managed activation. Fixture injection only, like `run_with_policy`.
 #[cfg(feature = "test-support")]
 pub fn frozen_tools_for_tests(
     invocation: &std::path::Path,
-    user_base: &std::path::Path,
+    tool_store: &std::path::Path,
     origin: &str,
     policy: impl Fn() -> Result<ToolDownloadPolicy, turborepo_setup::source_policy::Error>,
 ) -> Result<i32, String> {
     setup_for_tests(
         invocation,
-        user_base,
+        tool_store,
         origin,
         &["--frozen", "--tools-only"],
         policy,
@@ -549,7 +545,7 @@ pub fn frozen_tools_for_tests(
 #[cfg(feature = "test-support")]
 pub fn setup_for_tests(
     invocation: &std::path::Path,
-    user_base: &std::path::Path,
+    tool_store: &std::path::Path,
     origin: &str,
     flags: &[&str],
     policy: impl Fn() -> Result<ToolDownloadPolicy, turborepo_setup::source_policy::Error>,
@@ -570,7 +566,7 @@ pub fn setup_for_tests(
         unreachable!("the words select setup");
     };
     let transports = provision::Transports {
-        trust_base: Some(user_base.to_owned()),
+        tool_store: Some(tool_store.to_owned()),
         registry: RegistryTransport::loopback_http_for_tests(origin).map_err(|e| e.to_string())?,
         node: NodeTransport::loopback_http_for_tests(origin).map_err(|e| e.to_string())?,
         pnpm: PnpmTransport::loopback_http_for_tests(origin).map_err(|e| e.to_string())?,

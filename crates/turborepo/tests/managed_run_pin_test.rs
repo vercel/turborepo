@@ -123,9 +123,11 @@ impl Repo {
         } else {
             home.join("data")
         };
-        let trust =
-            turborepo_cli::test_support::record_trust_for_tests(&root, Some(user_base.as_path()))
-                .unwrap();
+        let trust = turborepo_cli::test_support::record_trust_for_tests(
+            &root,
+            Some(&user_base.join("turborepo/tools")),
+        )
+        .unwrap();
         Self {
             _temp: temp,
             root,

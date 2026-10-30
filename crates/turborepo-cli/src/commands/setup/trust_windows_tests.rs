@@ -4,7 +4,7 @@
 #![allow(clippy::unwrap_used)]
 
 use tempfile::TempDir;
-use turborepo_tool_install::Current;
+use turborepo_tool_install::{Current, UserStore};
 
 use super::*;
 use crate::commands::setup::dacl::{
@@ -30,11 +30,13 @@ impl Fixture {
     }
 
     fn trust(&self) -> TrustStore {
-        TrustStore::new(self.home.path(), self.repo.path()).unwrap()
+        let store = UserStore::at(self.home.path(), self.repo.path()).unwrap();
+        TrustStore::new(&store, self.repo.path()).unwrap()
     }
 
+    /// This repository's directory in the store, which holds its record.
     fn records(&self) -> PathBuf {
-        self.home.path().join("turborepo").join("setup-roots")
+        self.trust().path().parent().unwrap().to_owned()
     }
 
     /// Stands in for Store::current, which supplies the canonical bin path.
@@ -53,11 +55,13 @@ impl Fixture {
             tools,
             bin,
             record: None,
+            cargo_home: None,
         };
         trust
             .inspect_installation(|| Ok(Some(current)))
             .unwrap()
             .unwrap()
+            .0
     }
 
     fn publish(&self) -> TrustStore {
@@ -97,7 +101,7 @@ fn records_are_owner_only_and_round_trip_with_the_path_spelling() {
     dacl::check(&dacl::open(&f.records(), true).unwrap()).unwrap();
     dacl::check(&dacl::open(&trust.path(), false).unwrap()).unwrap();
     // The records directory is protected, so parent grants never reach it.
-    let shared = f.home.path().join("turborepo");
+    let shared = f.home.path().join("repos");
     assert!(icacls(&shared, &["/grant", "*S-1-1-0:(OI)(CI)(M)"]));
     assert!(trust.load().unwrap().is_some());
     let bytes = fs::read(trust.path()).unwrap();
@@ -118,10 +122,11 @@ fn lock_changes_moved_roots_and_same_path_reclones_do_not_match() {
         Some(hash(&lock))
     );
 
-    let moved = f.home.path().join("moved");
+    let moved = f.repo.path().with_extension("moved");
     fs::rename(f.repo.path(), &moved).unwrap();
+    let store = UserStore::at(f.home.path(), &moved).unwrap();
     assert!(
-        TrustStore::new(f.home.path(), &moved)
+        TrustStore::new(&store, &moved)
             .unwrap()
             .load()
             .unwrap()
@@ -133,6 +138,7 @@ fn lock_changes_moved_roots_and_same_path_reclones_do_not_match() {
     let reclone = f.trust();
     assert_eq!(reclone.path(), trust.path());
     assert!(reclone.load().unwrap().unwrap().installation != f.installation(&reclone));
+    fs::remove_dir_all(&moved).unwrap();
 }
 
 #[test]

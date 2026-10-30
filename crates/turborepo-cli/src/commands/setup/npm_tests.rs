@@ -184,7 +184,7 @@ impl NpmFixture {
             let discovery = root::Discovery::capture(args, self.f.git.clone())?;
             let sources = self.f.sources()?;
             let transports = provision::Transports {
-                trust_base: Some(self.f.owned.home().to_owned()),
+                tool_store: Some(self.f.owned.home().to_owned()),
                 node: turborepo_setup::node_provision::NodeTransport::loopback_http_for_tests(
                     upstream.origin(),
                 )
@@ -995,7 +995,7 @@ fn npm_no_lock_provisions_bundled_or_registry_npm_that_turbo_run_activates() {
             root,
             &root.join("turbo.json"),
             true,
-            f.owned.home(),
+            Some(f.owned.home()),
             crate::commands::managed::context,
         )
         .unwrap()
