@@ -34,13 +34,28 @@ try {
 function Get-TurboVersion {
   param([string]$RequestedVersion)
 
-  if ([string]::IsNullOrWhiteSpace($RequestedVersion) -or $RequestedVersion -eq 'latest') {
+  function Invoke-TurboGitHubApi {
+    param([string]$Path)
     $response = Invoke-WebRequest `
-      -Uri 'https://api.github.com/repos/vercel/turborepo/releases/latest' `
+      -Uri "https://api.github.com/repos/vercel/turborepo/$Path" `
       -Headers @{ Accept = 'application/vnd.github+json'; 'X-GitHub-Api-Version' = '2022-11-28' } `
       -UseBasicParsing `
       -ErrorAction Stop
-    $release = $response.Content | ConvertFrom-Json -ErrorAction Stop
+    return $response.Content | ConvertFrom-Json -ErrorAction Stop
+  }
+
+  if ([string]::IsNullOrWhiteSpace($RequestedVersion) -or $RequestedVersion -eq 'latest') {
+    $release = Invoke-TurboGitHubApi -Path 'releases/latest'
+    $RequestedVersion = [string]$release.tag_name
+  } elseif ($RequestedVersion -eq 'canary') {
+    # Releases are listed newest first.
+    $releases = Invoke-TurboGitHubApi -Path 'releases?per_page=30'
+    $release = @($releases) |
+      Where-Object { [string]$_.tag_name -cmatch '^v?[0-9]+\.[0-9]+\.[0-9]+-canary\.[0-9]+$' } |
+      Select-Object -First 1
+    if ($null -eq $release) {
+      throw 'Could not find a canary release on GitHub.'
+    }
     $RequestedVersion = [string]$release.tag_name
   }
 
