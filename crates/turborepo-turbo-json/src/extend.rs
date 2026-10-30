@@ -76,11 +76,22 @@ impl Extendable for ProcessedWith {
     }
 }
 
+impl ProcessedInputs {
+    /// Whether these inputs hash every git-tracked file in the package at
+    /// startup: either via `$TURBO_DEFAULT$`, or because no startup or JIT
+    /// globs narrow the default (`inputs` omitted or `[]`).
+    fn includes_default_files(&self) -> bool {
+        self.default || (self.globs.is_empty() && self.jit_globs.is_empty() && !self.jit_default)
+    }
+}
+
 impl Extendable for ProcessedInputs {
     fn extend(&mut self, other: Self) {
         if other.extends {
+            // Appended globs would otherwise narrow an implicit "all files"
+            // parent down to just the child's globs.
+            self.default = self.includes_default_files() || other.default;
             self.globs.extend(other.globs);
-            self.default = self.default || other.default;
             self.jit_globs.extend(other.jit_globs);
             self.jit_default = self.jit_default || other.jit_default;
             if other.dependency_outputs.is_some() {
@@ -148,7 +159,13 @@ impl ProcessedTaskDefinition {
         // Array fields that support extends behavior
         merge_field!(self, other, outputs);
         merge_field!(self, other, depends_on);
-        merge_field!(self, other, inputs);
+        // Unlike other array fields, omitted `inputs` is not empty: it means
+        // every package file, which `$TURBO_EXTENDS$` must append to.
+        if let Some(other_inputs) = other.inputs {
+            self.inputs
+                .get_or_insert_with(ProcessedInputs::default)
+                .extend(other_inputs);
+        }
         merge_field!(self, other, env);
         merge_field!(self, other, pass_through_env);
         merge_field!(self, other, with);
@@ -187,7 +204,7 @@ mod test {
     use super::*;
     use crate::{
         future_flags::FutureFlags,
-        processed::{ProcessedEnv, ProcessedInputs, ProcessedOutputs},
+        processed::{ProcessedEnv, ProcessedGlob, ProcessedInputs, ProcessedOutputs},
     };
 
     // Shared test fixtures
@@ -671,6 +688,64 @@ mod test {
         );
         assert_eq!(base.depends_on.as_ref().unwrap().deps.len(), 2);
         assert_eq!(base.with.as_ref().unwrap().tasks.len(), 2);
+    }
+
+    fn inputs_extending_with_glob() -> ProcessedInputs {
+        ProcessedInputs {
+            globs: vec![
+                ProcessedGlob::from_spanned_input(Spanned::new(UnescapedString::from("lib/**")))
+                    .unwrap(),
+            ],
+            legacy_startup: true,
+            extends: true,
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn test_extending_omitted_inputs_keeps_default_files() {
+        let mut base = ProcessedTaskDefinition::default();
+        base.merge(ProcessedTaskDefinition {
+            inputs: Some(inputs_extending_with_glob()),
+            ..Default::default()
+        });
+
+        let inputs = base.inputs.unwrap();
+        assert!(inputs.default);
+        assert_eq!(inputs.globs.len(), 1);
+    }
+
+    #[test]
+    fn test_extending_empty_inputs_keeps_default_files() {
+        let mut inputs = inputs_base();
+        inputs.extend(inputs_extending_with_glob());
+        assert!(inputs.default);
+    }
+
+    #[test]
+    fn test_extending_explicit_globs_does_not_add_default_files() {
+        let mut inputs = ProcessedInputs::new_legacy(
+            vec![Spanned::new(UnescapedString::from("src/**"))],
+            &FutureFlags::default(),
+        )
+        .unwrap();
+        inputs.extend(inputs_extending_with_glob());
+        assert!(!inputs.default);
+        assert_eq!(inputs.globs.len(), 2);
+    }
+
+    #[test]
+    fn test_extending_jit_only_inputs_does_not_add_default_files() {
+        let mut inputs = ProcessedInputs {
+            jit_globs: vec![
+                ProcessedGlob::from_spanned_input(Spanned::new(UnescapedString::from("gen/**")))
+                    .unwrap(),
+            ],
+            structured_jit: true,
+            ..Default::default()
+        };
+        inputs.extend(inputs_extending_with_glob());
+        assert!(!inputs.default);
     }
 
     #[test]
