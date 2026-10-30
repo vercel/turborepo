@@ -22,8 +22,14 @@ fn run_overrides(
 ) -> Result<(turborepo_run::EnvironmentVariableMap, PathBuf), String> {
     use crate::commands::managed::{ManagedTools, context};
     let root = owned.root();
-    let tools = ManagedTools::inspect(root, &root.join("turbo.json"), true, owned.home(), context)?
-        .ok_or("unmanaged")?;
+    let tools = ManagedTools::inspect(
+        root,
+        &root.join("turbo.json"),
+        true,
+        Some(owned.home()),
+        context,
+    )?
+    .ok_or("unmanaged")?;
     let env = tools.revalidate()?;
     let bin = std::env::split_paths(&env["PATH"]).next().unwrap();
     Ok((env, bin))
@@ -144,7 +150,7 @@ impl Fixture {
         cache: Option<turborepo_setup::artifact_cache::ArtifactCache>,
     ) -> provision::Transports {
         provision::Transports {
-            trust_base: Some(self.owned.home().to_owned()),
+            tool_store: Some(self.owned.home().to_owned()),
             registry:
                 turborepo_setup::registry_resolution::RegistryTransport::loopback_http_for_tests(
                     origin,

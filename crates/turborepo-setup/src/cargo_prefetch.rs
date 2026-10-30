@@ -41,17 +41,10 @@ pub enum Error {
     Io(#[from] io::Error),
 }
 
-/// Where the clone's private Cargo home lives, without creating or checking
-/// it. Activation exposes this same directory to tasks as `CARGO_HOME`.
-pub fn cargo_home_path(root: &Path) -> PathBuf {
-    // Split components: `/` is not a separator under a `\\?\` root.
-    root.join(".turbo").join("cargo-home")
-}
-
-/// The repository's private Cargo home, beside managed tools rather than in
-/// the user's `~/.cargo`, created if missing.
-pub fn cargo_home(root: &Path) -> Result<PathBuf, Error> {
-    let home = cargo_home_path(root);
+/// Creates the repository's private Cargo home if missing: the one
+/// activation exposes to tasks as `CARGO_HOME`, never the user's `~/.cargo`.
+pub fn cargo_home(home: &Path) -> Result<PathBuf, Error> {
+    let home = home.to_owned();
     let mut builder = fs::DirBuilder::new();
     builder.recursive(false);
     #[cfg(unix)]

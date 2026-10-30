@@ -100,7 +100,7 @@ impl Repo {
                     node: turborepo_setup::node_provision::NodeTransport::loopback_http_for_tests(origin).unwrap(),
                     pnpm: turborepo_setup::pnpm_provision::PnpmTransport::loopback_http_for_tests(origin).unwrap(),
                     registry: turborepo_setup::registry_resolution::RegistryTransport::loopback_http_for_tests(origin).unwrap(),
-                    trust_base: Some(self.owned.home().to_owned()),
+                    tool_store: Some(self.owned.home().to_owned()),
                     rustup: turborepo_setup::rustup_provision::RustupTransport::loopback_http_for_tests(origin).unwrap(),
                     uv: turborepo_setup::uv_resolution::UvTransport::loopback_http_for_tests(origin).unwrap(),
                     python: turborepo_setup::python_resolution::PythonTransport::loopback_http_for_tests(origin).unwrap(),
@@ -119,7 +119,7 @@ impl Repo {
         use crate::commands::managed::{ManagedTools, context};
         let root = self.owned.root();
         let config = root.join("turbo.json");
-        let tools = ManagedTools::inspect(root, &config, true, self.owned.home(), context)
+        let tools = ManagedTools::inspect(root, &config, true, Some(self.owned.home()), context)
             .unwrap()
             .unwrap();
         let env = tools.revalidate().unwrap();

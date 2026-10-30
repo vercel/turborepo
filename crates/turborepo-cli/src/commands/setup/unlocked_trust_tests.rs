@@ -9,19 +9,21 @@ fn missing_lock_publication_succeeds_and_revokes_previous_locked_authority() {
     let upstream = Upstream::new(&f, false, None);
     f.run(&upstream, FROZEN).unwrap();
     let lock = fs::read(f.owned.root().join("turbo.lock")).unwrap();
-    let record = fs::read_dir(f.owned.home().join("turborepo/setup-roots"))
+    let record = fs::read_dir(f.owned.home().join("repos"))
         .unwrap()
         .next()
         .unwrap()
         .unwrap()
-        .path();
+        .path()
+        .join("record.json");
     let manifest = f.manifest().unwrap();
     fs::remove_file(f.owned.root().join("turbo.lock")).unwrap();
     let sources = f.sources().unwrap();
     let writer = sources.guard().unwrap();
     let store = turborepo_tool_install::Store::open(f.owned.root()).unwrap();
     sources.check_guard(&writer).unwrap();
-    let trust = super::trust::TrustStore::new(f.owned.home(), f.owned.root()).unwrap();
+    let user_store = turborepo_tool_install::UserStore::at(f.owned.home(), f.owned.root()).unwrap();
+    let trust = super::trust::TrustStore::new(&user_store, f.owned.root()).unwrap();
     trust.publish(&store).unwrap();
     trust.publish(&store).unwrap(); // Repeat does not create a fake record/lock.
     assert!(!record.exists());
@@ -32,7 +34,7 @@ fn missing_lock_publication_succeeds_and_revokes_previous_locked_authority() {
             f.owned.root(),
             &f.owned.root().join("turbo.json"),
             true,
-            f.owned.home(),
+            Some(f.owned.home()),
             || panic!("missing-lock repo must not probe the host")
         )
         .unwrap()
@@ -46,7 +48,7 @@ fn missing_lock_publication_succeeds_and_revokes_previous_locked_authority() {
             f.owned.root(),
             &f.owned.root().join("turbo.json"),
             true,
-            f.owned.home(),
+            Some(f.owned.home()),
             managed::context
         )
         .is_err()

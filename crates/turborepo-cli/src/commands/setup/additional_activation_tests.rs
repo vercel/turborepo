@@ -116,7 +116,8 @@ fn exec_check_and_hook_expose_the_tool_and_stale_states_never_fall_back() {
     // `--check` accepts the locked tool without writing anything.
     assert_eq!(f.check(super::super::checks::CHECK).unwrap(), 0);
     // The hook activates the bin directory setup recorded for this root.
-    let trust = TrustStore::new(f.owned.home(), &root.canonicalize().unwrap()).unwrap();
+    let store = turborepo_tool_install::UserStore::at(f.owned.home(), root).unwrap();
+    let trust = TrustStore::new(&store, &root.canonicalize().unwrap()).unwrap();
     let recorded = trust.recorded().unwrap().unwrap();
     assert!(!recorded.stale && recorded.bin.join("fixture").is_file());
 

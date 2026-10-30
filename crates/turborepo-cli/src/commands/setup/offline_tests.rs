@@ -15,12 +15,13 @@ fn installed() -> Fixture {
     f
 }
 fn record(f: &Fixture) -> PathBuf {
-    fs::read_dir(f.owned.home().join("turborepo/setup-roots"))
+    fs::read_dir(f.owned.home().join("repos"))
         .unwrap()
         .next()
         .unwrap()
         .unwrap()
         .path()
+        .join("record.json")
 }
 fn attempt(f: &Fixture, u: &LoopbackServer, flags: &[&str]) -> Result<i32, Error> {
     let before = snapshot(f.owned.root().parent().unwrap());
@@ -130,7 +131,7 @@ fn offline_force_reinstalls_trusted_cohorts_and_preserves_sources_dependencies_a
             assert_ne!(f.manifest().unwrap(), before);
             let authorization = super::super::authorization::Authorization::inspect(
                 f.owned.root(),
-                f.owned.home(),
+                Some(f.owned.home()),
                 check::context().unwrap(),
                 Default::default(),
             )
@@ -204,7 +205,7 @@ fn missing_and_damaged_installations_report_the_complete_unverified_artifact_set
     let fresh = Fixture::new();
     unavailable(&fresh, &empty);
     assert!(!fresh.owned.root().join(".turbo").exists());
-    assert!(!fresh.owned.home().join("turborepo").exists());
+    assert!(!fresh.owned.home().join("repos").exists());
     for case in 0..5 {
         let f = installed();
         let current = Store::inspect(f.owned.root()).unwrap().unwrap();
@@ -346,7 +347,7 @@ fn offline_repeat_rechecks_original_sources_discovery_and_trust_before_success()
             run_with_policy(args, setup_args, Some(provision::Transports {
                 bun: turborepo_setup::bun_provision::BunTransport::loopback_http_for_tests("http://127.0.0.1:1").unwrap(),
                 artifact: None,
-                trust_base: Some(f.owned.home().to_owned()),
+                tool_store: Some(f.owned.home().to_owned()),
                 node: turborepo_setup::node_provision::NodeTransport::loopback_http_for_tests("http://127.0.0.1:1").unwrap(),
                 pnpm: turborepo_setup::pnpm_provision::PnpmTransport::loopback_http_for_tests("http://127.0.0.1:1").unwrap(),
                 registry: turborepo_setup::registry_resolution::RegistryTransport::loopback_http_for_tests("http://127.0.0.1:1").unwrap(),

@@ -43,6 +43,7 @@ impl Store {
                 tools: inventory.tools.into_iter().map(|t| t.tool).collect(),
                 bin: generation.join("bin"),
                 record: Some(record),
+                cargo_home: inventory.cargo_home,
             }),
             repair: Some((path.clone(), None)),
         };

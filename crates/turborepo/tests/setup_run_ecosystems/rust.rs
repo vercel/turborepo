@@ -16,7 +16,7 @@ root=$(pwd -P)
 id="path+file://$root/crates/app#0.1.0"
 case "$1" in
 metadata) printf '{"packages":[{"id":"%s","name":"app","source":null,"manifest_path":"%s/crates/app/Cargo.toml","dependencies":[],"targets":[{"name":"app","kind":["lib"]}]}],"workspace_members":["%s"],"target_directory":"%s/target","metadata":{"name":"demo"}}\n' "$id" "$root" "$id" "$root" ;;
-build) echo "managed-cargo $* toolchain=$RUSTUP_TOOLCHAIN cargo_home=${CARGO_HOME##*/.turbo/} secret=${JOURNEY_SECRET:-filtered}" ;;
+build) echo "managed-cargo $* toolchain=$RUSTUP_TOOLCHAIN cargo_home=${CARGO_HOME##*/repos/*/} secret=${JOURNEY_SECRET:-filtered}" ;;
 *) exit 1 ;;
 esac
 "#;

@@ -86,6 +86,14 @@ struct Repo {
     installer: String,
 }
 impl Repo {
+    /// The repository's Cargo home in the fixture's tool store.
+    fn cargo_home(&self) -> PathBuf {
+        let root = self.owned.root().canonicalize().unwrap();
+        turborepo_tool_install::UserStore::at(self.owned.home(), &root)
+            .unwrap()
+            .cargo_home(&root)
+    }
+
     fn new(flags: &str) -> Self {
         let owned = OwnedSetupFixture::new().unwrap();
         let root = owned.root();
@@ -177,7 +185,7 @@ cp "OUTSIDE/manifest-$3.toml" "$tc/lib/rustlib/multirust-channel-manifest.toml"
                 setup_args,
                 Some(provision::Transports {
                     artifact: None,
-                    trust_base: Some(self.owned.home().to_owned()),
+                    tool_store: Some(self.owned.home().to_owned()),
                     node: turborepo_setup::node_provision::NodeTransport::loopback_http_for_tests(origin).unwrap(),
                     pnpm: turborepo_setup::pnpm_provision::PnpmTransport::loopback_http_for_tests(origin).unwrap(),
                     registry: turborepo_setup::registry_resolution::RegistryTransport::loopback_http_for_tests(origin).unwrap(),
@@ -238,18 +246,18 @@ fn locked_rust_setup_is_private_atomic_repeatable_and_reinstallable() {
         .unwrap()
         .map(|entry| entry.unwrap().file_name())
         .collect();
-    assert_eq!(home_entries, ["turborepo"]);
-    let state = repo.owned.home().join("turborepo");
-    let state_entries: Vec<_> = fs::read_dir(&state)
-        .unwrap()
-        .map(|entry| entry.unwrap().file_name())
-        .collect();
-    assert_eq!(state_entries, ["setup-roots"]);
-    let records: Vec<_> = fs::read_dir(state.join("setup-roots"))
+    assert_eq!(home_entries, ["repos"]);
+    let repos: Vec<_> = fs::read_dir(repo.owned.home().join("repos"))
         .unwrap()
         .map(|entry| entry.unwrap().path())
         .collect();
-    assert_eq!(records.len(), 1);
+    assert_eq!(repos.len(), 1);
+    let state_entries: Vec<_> = fs::read_dir(&repos[0])
+        .unwrap()
+        .map(|entry| entry.unwrap().file_name())
+        .collect();
+    assert_eq!(state_entries, ["record.json"]);
+    let records = [repos[0].join("record.json")];
     assert!(!records[0].starts_with(repo.owned.root()));
     let receipt: Value = serde_json::from_slice(&fs::read(&records[0]).unwrap()).unwrap();
     assert_eq!(receipt["schema"], 1);
@@ -296,7 +304,7 @@ fn managed_run_activates_locked_rust_in_cargo_repositories_by_policy() {
     assert_eq!(env["RUSTUP_TOOLCHAIN"], format!("1.99.0-{}", triple()));
     let home = std::path::Path::new(&env["RUSTUP_HOME"]);
     assert!(home.join("toolchains").is_dir(), "{env:?}");
-    let cargo_home = repo.owned.root().join(".turbo/cargo-home");
+    let cargo_home = repo.cargo_home();
     assert_eq!(std::path::Path::new(&env["CARGO_HOME"]), cargo_home);
     // Like setup, a Rust skip policy ignores rust-toolchain.toml, so the locked
     // selection is drift rather than an activation.
@@ -378,7 +386,7 @@ fn rust_readiness_checks_are_read_only_and_detect_damage() {
     // No download, rustup run, Cargo home or inventory change.
     assert_eq!((upstream.hits(), repo.calls().len()), (1, 1));
     assert_eq!(repo.manifest(), manifest);
-    assert!(!repo.owned.root().join(".turbo/cargo-home").exists());
+    assert!(!repo.cargo_home().exists());
 
     // A damaged toolchain file is reported, never repaired.
     let current = turborepo_tool_install::Store::inspect(repo.owned.root())
@@ -459,7 +467,8 @@ fn locked_cargo_dependencies_prefetch_with_the_managed_toolchain_and_home() {
     let args = fs::read_to_string(root.join("cargo-args")).unwrap();
     let fetch = "fetch --locked toolchain cargo-home";
     assert_eq!(args.lines().collect::<Vec<_>>(), [fetch; 3]);
-    assert!(root.join(".turbo/cargo-home").is_dir());
+    assert!(repo.cargo_home().is_dir());
+    assert!(!root.join(".turbo/cargo-home").exists());
     assert_eq!(fs::read(root.join("Cargo.lock")).unwrap(), b"version = 4\n");
 
     fs::remove_file(root.join("Cargo.lock")).unwrap();

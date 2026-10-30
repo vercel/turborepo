@@ -144,12 +144,13 @@ fn production_no_lock_ci_healthy_repeat_has_positive_pins_record_and_no_traffic(
             // Without turbo.lock the record names the clone-local selection.
             let record: serde_json::Value = serde_json::from_slice(
                 &fs::read(
-                    fs::read_dir(data.join("turborepo/setup-roots"))
+                    fs::read_dir(data.join("turborepo/tools/repos"))
                         .unwrap()
                         .next()
                         .unwrap()
                         .unwrap()
-                        .path(),
+                        .path()
+                        .join("record.json"),
                 )
                 .unwrap(),
             )
@@ -255,12 +256,13 @@ fn trust(root: &Path, data: &Path, current: &turborepo_tool_install::Current) {
         "manifest_sha256": sha(&manifest), "bin": current.bin, "tools": current.tools,
         "selection_sha256": sha(current.record.as_ref().unwrap().bytes()),
     }});
-    let records = data.join("turborepo/setup-roots");
+    let store = data.join("turborepo/tools");
+    let records = store.join("repos").join(sha(root.as_os_str().as_bytes()));
     fs::create_dir_all(&records).unwrap();
-    for dir in [data.to_owned(), data.join("turborepo"), records.clone()] {
+    for dir in records.ancestors().take_while(|dir| dir.starts_with(data)) {
         fs::set_permissions(dir, fs::Permissions::from_mode(0o700)).unwrap();
     }
-    let path = records.join(format!("{}.json", sha(root.as_os_str().as_bytes())));
+    let path = records.join("record.json");
     fs::write(&path, record.to_string()).unwrap();
     fs::set_permissions(&path, fs::Permissions::from_mode(0o600)).unwrap();
 }
