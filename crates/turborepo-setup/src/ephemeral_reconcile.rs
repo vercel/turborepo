@@ -156,6 +156,9 @@ impl Staged {
     pub fn selection(&self) -> &Lock {
         self.native.selection()
     }
+    pub fn record(&self) -> &turborepo_tool_install::Record {
+        self.native.record()
+    }
     pub fn desired(&self) -> &[Tool] {
         &self.desired
     }

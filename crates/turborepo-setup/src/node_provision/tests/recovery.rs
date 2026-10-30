@@ -256,13 +256,12 @@ async fn damaged_sibling_or_shim_requires_node_preparation_before_reconcile() {
         let current = ready.store.current().unwrap().unwrap();
         let node_bytes = fs::read(current.bin.join("node")).unwrap();
         if damage == "tree" {
-            fs::write(
+            fs::remove_file(
                 current
                     .bin
                     .parent()
                     .unwrap()
                     .join("tools/fixture/bin/fixture"),
-                "damaged",
             )
             .unwrap();
         } else {

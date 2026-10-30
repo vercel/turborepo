@@ -12,6 +12,7 @@ use turborepo_setup::{
     execution_identity::ExecutionContext,
     lock::{Ecosystems, Snapshot},
 };
+use turborepo_tool_install::Verification;
 
 use super::trust::TrustStore;
 
@@ -153,7 +154,32 @@ impl Authorization {
         context: ExecutionContext,
         ecosystems: Ecosystems,
     ) -> Result<Self, Error> {
-        Self::authorize(root, user_state_base, context, ecosystems, false)
+        Self::authorize(
+            root,
+            user_state_base,
+            context,
+            ecosystems,
+            Verification::Shallow,
+            false,
+        )
+    }
+
+    /// `inspect` that first re-hashes every installed byte, for setup's
+    /// offline repeat, which reports the installation as re-verified.
+    pub(crate) fn verify(
+        root: &Path,
+        user_state_base: &Path,
+        context: ExecutionContext,
+        ecosystems: Ecosystems,
+    ) -> Result<Self, Error> {
+        Self::authorize(
+            root,
+            user_state_base,
+            context,
+            ecosystems,
+            Verification::Full,
+            false,
+        )
     }
 
     /// `inspect` for a `turbo setup --no-lock` clone: the sealed clone-local
@@ -165,7 +191,14 @@ impl Authorization {
         user_state_base: &Path,
         context: ExecutionContext,
     ) -> Result<Self, Error> {
-        Self::authorize(root, user_state_base, context, Ecosystems::default(), true)
+        Self::authorize(
+            root,
+            user_state_base,
+            context,
+            Ecosystems::default(),
+            Verification::Shallow,
+            true,
+        )
     }
 
     fn authorize(
@@ -173,6 +206,7 @@ impl Authorization {
         user_state_base: &Path,
         context: ExecutionContext,
         ecosystems: Ecosystems,
+        verification: Verification,
         clone_local: bool,
     ) -> Result<Self, Error> {
         let root = root.canonicalize()?;
@@ -182,12 +216,7 @@ impl Authorization {
         }
         let trust = TrustStore::new(user_state_base, &root)?;
         trust.preflight()?;
-        // Initial authorization never trusts repo-writable publication stamps.
-        let plan = if clone_local {
-            ActivationPlan::verify_clone_local_captured(&sources, context.clone())?
-        } else {
-            ActivationPlan::verify_captured(&sources, context.clone())?
-        };
+        let plan = Self::plan(&sources, context.clone(), verification, clone_local)?;
         if !trust.authorizes(&plan)? {
             return Err(Error::Untrusted);
         }
@@ -204,20 +233,20 @@ impl Authorization {
     }
 
     fn plan(
-        root: &Path,
+        sources: &Snapshot,
         context: ExecutionContext,
-        ecosystems: Ecosystems,
+        verification: Verification,
         clone_local: bool,
     ) -> Result<ActivationPlan, Error> {
         Ok(if clone_local {
-            ActivationPlan::inspect_clone_local(root, context)?
+            ActivationPlan::clone_local(sources, context, verification)?
         } else {
-            ActivationPlan::inspect_with(root, context, ecosystems)?
+            ActivationPlan::captured(sources, context, verification)?
         })
     }
 
     /// Invoke only at the actual use boundary, not to cache PATH for later use.
-    /// Revalidate original root/source bytes, complete installation trees and
+    /// Revalidate original root/source bytes, installation layout and
     /// exports, exact generation, and external evidence before invoking the
     /// callback. No resolution, network, writes, locks, probes or task
     /// execution.
@@ -226,10 +255,11 @@ impl Authorization {
         use_plan: impl FnOnce(&ActivationPlan) -> T,
     ) -> Result<T, Error> {
         self.sources.ensure_current()?;
+        let sources = Snapshot::capture_with(&self.root, self.ecosystems)?;
         let current = Self::plan(
-            &self.root,
+            &sources,
             self.context.clone(),
-            self.ecosystems,
+            Verification::Shallow,
             self.clone_local,
         )?;
         if current.path_prepend() != self.plan.path_prepend()

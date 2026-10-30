@@ -386,7 +386,7 @@ fn rust_readiness_checks_are_read_only_and_detect_damage() {
     let current = turborepo_tool_install::Store::inspect(repo.owned.root())
         .unwrap()
         .unwrap();
-    fs::write(current.bin.join("rustdoc"), "exit 1\n").unwrap();
+    turborepo_setup::test_support::damage(&current.bin.join("rustdoc"), "exit 1\n");
     assert!(matches!(
         repo.run(&upstream, CHECK),
         Err(Error::Activation(ActivationError::DamagedInventory(_)))

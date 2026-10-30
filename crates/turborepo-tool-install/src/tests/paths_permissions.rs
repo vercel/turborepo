@@ -352,6 +352,8 @@ fn umask_0002_clone_gets_a_private_store_and_unsafe_directories_fail_closed() {
         (generation.clone(), 0o700),
         (generation.join("bin"), 0o700),
         (generation.join("tools/node"), 0o700),
+        (generation.join("tools/node/bin/tool"), 0o555),
+        (generation.join("tools/node/resource"), 0o444),
         (turbo.join("tools/transaction.lock"), 0o600),
         (turbo.join("tools/manifest.json"), 0o600),
     ] {

@@ -539,7 +539,11 @@ impl Environment {
     /// the trusted setup record that provisioning just published.
     fn recorded(root: &Path, sources: &Snapshot, trust_base: &Path) -> Result<Self, Error> {
         let context = crate::commands::managed::context().map_err(Error::Host)?;
-        let plan = ActivationPlan::inspect_captured(sources, context)?;
+        let plan = ActivationPlan::captured(
+            sources,
+            context,
+            turborepo_tool_install::Verification::Shallow,
+        )?;
         let trust = super::trust::TrustStore::new(trust_base, root)?;
         if !trust.authorizes(&plan)? {
             return Err(Error::Untrusted);

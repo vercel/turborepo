@@ -5,6 +5,7 @@ use turborepo_setup::{
     lock::{Platform, Snapshot},
     source_policy::ToolDownloadPolicy,
 };
+use turborepo_tool_install::Verification;
 
 use super::{Error, root::Discovery};
 
@@ -35,7 +36,7 @@ pub(super) fn run(
     let context = context()?;
     preflight()?;
     // Keep the original captured sources and their workspace-flag gating.
-    let plan = ActivationPlan::verify_captured(&sources, context)?;
+    let plan = ActivationPlan::captured(&sources, context, Verification::Full)?;
     // Recheck policy as well as original invocation/root and source bytes. Do
     // not recapture discovery after drift, acquire locks, or initialize Store.
     preflight()?;

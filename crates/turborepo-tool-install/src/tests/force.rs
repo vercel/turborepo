@@ -99,8 +99,7 @@ fn forced_replacement_copies_only_tools_without_fresh_bytes() {
     assert_eq!(staged, ["pnpm"]);
     let current = store.current().unwrap().unwrap();
     assert!(current.bin != old && current.tools == desired);
-    // Reuse needs a healthy selection; otherwise the caller must stage.
-    fs::write(current.bin.join("../tools/pnpm/resource"), b"damaged").unwrap();
+    damage(&current.bin.join("../tools/pnpm/resource"));
     let before = manifest(&store);
     let fail = |_: &Tool, _: &Path| Err(Error::InvalidInventory);
     assert!(
@@ -109,4 +108,50 @@ fn forced_replacement_copies_only_tools_without_fresh_bytes() {
             .is_err()
     );
     assert_eq!(manifest(&store), before);
+}
+
+#[test]
+fn publication_restages_a_copy_with_a_dangling_resource_link() {
+    let node = tool("node");
+    let record = Record::new(b"changed selection".to_vec()).unwrap();
+    for publication in ["cohort", "record", "reused"] {
+        let repo = tempfile::tempdir().unwrap();
+        let mut store = Store::open(repo.path()).unwrap();
+        store
+            .reconcile(std::slice::from_ref(&node), populate)
+            .unwrap();
+        let tree = store.current().unwrap().unwrap().bin.join("../tools/node");
+        symlink("missing", tree.join("dangling")).unwrap();
+
+        let mut staged = Vec::new();
+        let stage = |tool: &Tool, root: &Path| {
+            staged.push(tool.id.clone());
+            populate(tool, root)
+        };
+        let outcome = match publication {
+            "cohort" => store.reconcile(&[node.clone(), tool("pnpm")], stage),
+            "record" => {
+                let expected = store.generation().unwrap();
+                store.reconcile_recorded_checked(
+                    std::slice::from_ref(&node),
+                    &record,
+                    &expected,
+                    false,
+                    stage,
+                    || Ok(()),
+                )
+            }
+            _ => store.force_reconcile_reusing_checked(
+                std::slice::from_ref(&node),
+                std::slice::from_ref(&node),
+                stage,
+                || Ok(()),
+            ),
+        };
+        assert_eq!(outcome.unwrap(), Outcome::Replaced, "{publication}");
+        assert_eq!(staged[0], "node", "{publication}");
+        Store::inspect_with(repo.path(), Verification::Full)
+            .unwrap()
+            .unwrap();
+    }
 }

@@ -188,7 +188,7 @@ async fn verified_bootstrap_publishes_one_shim_and_failures_keep_the_prior_gener
         .unwrap()
         .permissions()
         .mode();
-    assert_eq!(mode & 0o777, 0o755);
+    assert_eq!(mode & 0o777, 0o555);
     // Only the binary: no homes, proxies or toolchains.
     assert_eq!(fs::read_dir(&tree).unwrap().count(), 1);
     assert_eq!(fs::read_dir(tree.join("bin")).unwrap().count(), 1);

@@ -196,7 +196,6 @@ impl ManagedTools {
             ci,
             clone_local,
         });
-        tools.revalidate()?;
         Ok(Some(Arc::new(ManagedRun::new(snapshot, tools)?)))
     }
 }

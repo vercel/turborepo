@@ -4,7 +4,7 @@ use std::{collections::BTreeMap, io::Write, process::Command};
 
 use semver::Version;
 use sha2::{Digest, Sha256};
-use turborepo_tool_install::Outcome;
+use turborepo_tool_install::{Outcome, Verification};
 
 use super::*;
 use crate::{
@@ -142,12 +142,8 @@ async fn verified_build_is_staged_at_the_uv_key_with_python_shims() {
     );
     assert_eq!(upstream.hits(), 1);
     // Bytecode is hashed like every other managed byte.
-    fs::write(tree.join(PYC), b"stale").unwrap();
-    assert_eq!(
-        install(&mut store, &plan, &transport).await.unwrap(),
-        Outcome::Replaced
-    );
-    assert_eq!(upstream.hits(), 2);
+    crate::source_policy::test_support::damage(&tree.join(PYC), b"stale");
+    assert!(Store::inspect_with(repo.path(), Verification::Full).is_err());
 }
 
 #[tokio::test(flavor = "current_thread")]

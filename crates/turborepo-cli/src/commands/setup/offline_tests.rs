@@ -212,7 +212,10 @@ fn missing_and_damaged_installations_report_the_complete_unverified_artifact_set
             0 => fs::remove_file(f.owned.root().join(".turbo/tools/manifest.json")).unwrap(),
             1 => fs::remove_file(current.bin.join("../tools/node/bin/node")).unwrap(),
             2 => fs::remove_file(current.bin.join("../tools/pnpm/dist/resource")).unwrap(),
-            3 => fs::write(current.bin.join("../tools/node/resource"), "damaged").unwrap(),
+            3 => turborepo_setup::test_support::damage(
+                &current.bin.join("../tools/node/resource"),
+                "damaged",
+            ),
             _ => fs::remove_file(current.bin.join("pnpx")).unwrap(),
         }
         unavailable(&f, &empty);
@@ -243,7 +246,14 @@ fn missing_corrupt_unsafe_and_stale_external_evidence_never_becomes_offline_auth
             }
         }
         // Readiness still succeeds: the rejection must be external provenance.
-        assert!(ActivationPlan::inspect(f.owned.root(), check::context().unwrap()).is_ok());
+        assert!(
+            ActivationPlan::captured(
+                &turborepo_setup::lock::Snapshot::capture(f.owned.root()).unwrap(),
+                check::context().unwrap(),
+                turborepo_tool_install::Verification::Shallow,
+            )
+            .is_ok()
+        );
         unavailable(&f, &empty);
     }
 }
@@ -268,7 +278,14 @@ fn coherent_repository_only_forgery_is_healthy_but_never_authorized_offline() {
             || Ok(()),
         )
         .unwrap();
-    assert!(ActivationPlan::inspect(f.owned.root(), check::context().unwrap()).is_ok());
+    assert!(
+        ActivationPlan::captured(
+            &turborepo_setup::lock::Snapshot::capture(f.owned.root()).unwrap(),
+            check::context().unwrap(),
+            turborepo_tool_install::Verification::Shallow,
+        )
+        .is_ok()
+    );
     let empty = LoopbackServer::new([], |_| {}).unwrap();
     unavailable(&f, &empty);
 }

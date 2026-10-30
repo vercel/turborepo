@@ -7,7 +7,7 @@ use turborepo_setup::{
     lock::{Installation, Platform, Snapshot, Tool, reconcile},
     source_policy::ToolDownloadPolicy,
 };
-use turborepo_tool_install::Store;
+use turborepo_tool_install::{Store, Verification};
 
 use super::{
     Error, LockMode, SetupRequest, check, dependencies::Dependencies, provision, root::Discovery,
@@ -80,13 +80,10 @@ fn inspect_with(
     // Share frozen provisioning's native request, artifact and integrity gates.
     provision::plans(&sources, lock)?;
     provision::storage(discovery.snapshot_root()?.as_std_path())?;
-    let action = match ActivationPlan::inspect_captured(&sources, context) {
+    let action = match ActivationPlan::captured(&sources, context, Verification::Shallow) {
         Ok(_) => "reuse (healthy installation)",
         Err(ReadinessError::MissingInventory) => "install (missing installation)",
         Err(ReadinessError::StaleInventory) => "repair (installation does not match turbo.lock)",
-        Err(ReadinessError::DamagedInventory(turborepo_tool_install::Error::DamagedContents)) => {
-            "repair (damaged installation)"
-        }
         Err(error) => return Err(error.into()),
     };
     let action = if force { "reinstall (--force)" } else { action };
@@ -180,11 +177,9 @@ fn propose(
     desired.extend(yarn.as_ref().map(|plan| plan.inventory_tool().clone()));
     desired.extend(bun.as_ref().map(|plan| plan.inventory_tool().clone()));
     // Same per-tool reuse as setup's preparation; inspection never writes.
-    let (installed, damaged) = match Store::inspect(root) {
-        Ok(current) => (current.map(|c| c.tools).unwrap_or_default(), false),
-        Err(turborepo_tool_install::Error::DamagedContents) => (vec![], true),
-        Err(error) => return Err(error.into()),
-    };
+    let installed = Store::inspect(root)?
+        .map(|current| current.tools)
+        .unwrap_or_default();
     let previous = sources.previous_lock();
     let change = match previous {
         None => Some("created"),
@@ -205,9 +200,7 @@ fn propose(
             .iter()
             .find(|inventory| &inventory.id == inventory_id);
         // A tool bound to a changed Node is re-staged even if its bytes exist.
-        let action = if damaged {
-            "repair (damaged installation)"
-        } else if inventory.is_some_and(|inventory| installed.contains(inventory)) {
+        let action = if inventory.is_some_and(|inventory| installed.contains(inventory)) {
             "reuse (healthy installation)"
         } else if installed.is_empty() {
             "install (missing installation)"

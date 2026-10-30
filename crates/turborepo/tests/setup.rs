@@ -1223,7 +1223,10 @@ fn pruned_outputs_pass_real_setup_check_against_their_own_lock() {
                     proven += 1;
                 }
             }
-            fs::write(current.bin.join("../tools/pnpm/resource"), "damage").unwrap();
+            turborepo_setup::test_support::damage(
+                &current.bin.join("../tools/pnpm/resource"),
+                "damage",
+            );
             check_failure(
                 &pruned,
                 &["setup", "--check", "--tools-only", "--offline"],
@@ -1288,6 +1291,7 @@ fn standalone_check_and_locked_plan_report_only_node_pnpm_and_reject_damage() {
         pnpm_provision::PnpmPlan,
         test_support::OwnedSetupFixture,
     };
+    use turborepo_tool_install::Verification;
     if common::windows_arm64_host() {
         eprintln!("Skipped: managed setup refuses Windows arm64 hosts, even for x64 turbo.");
         return;
@@ -1520,7 +1524,9 @@ fn standalone_check_and_locked_plan_report_only_node_pnpm_and_reject_damage() {
                 let before = snapshot(pruned.root().parent().unwrap());
                 let sources = Snapshot::capture(&output_root).unwrap();
                 pruned.policy_at(&output_root).unwrap();
-                let plan = ActivationPlan::inspect(&output_root, context.clone()).unwrap();
+                let plan =
+                    ActivationPlan::captured(&sources, context.clone(), Verification::Shallow)
+                        .unwrap();
                 assert_eq!(plan.tools(), tools);
                 pruned.policy_at(&output_root).unwrap();
                 sources.ensure_current().unwrap();
@@ -1529,10 +1535,13 @@ fn standalone_check_and_locked_plan_report_only_node_pnpm_and_reject_damage() {
                     "Real prune output {}: owned typed Node/pnpm readiness passed",
                     output_root.display()
                 );
-                fs::write(plan.path_prepend().join("../tools/pnpm/resource"), "damage").unwrap();
+                turborepo_setup::test_support::damage(
+                    &plan.path_prepend().join("../tools/pnpm/resource"),
+                    "damage",
+                );
                 let damaged = snapshot(pruned.root().parent().unwrap());
                 assert!(matches!(
-                    ActivationPlan::inspect(&output_root, context.clone()),
+                    ActivationPlan::captured(&sources, context.clone(), Verification::Full),
                     Err(turborepo_setup::activation::Error::DamagedInventory(_))
                 ));
                 assert_eq!(snapshot(pruned.root().parent().unwrap()), damaged);
@@ -1540,7 +1549,7 @@ fn standalone_check_and_locked_plan_report_only_node_pnpm_and_reject_damage() {
         }
         assert!(matches!(monitor.accept(), Err(e) if e.kind() == io::ErrorKind::WouldBlock));
     }
-    fs::write(current.bin.join("../tools/pnpm/resource"), "damage").unwrap();
+    turborepo_setup::test_support::damage(&current.bin.join("../tools/pnpm/resource"), "damage");
     check_failure(
         root,
         &["setup", "--check", "--tools-only"],
@@ -1570,7 +1579,7 @@ fn standalone_check_and_locked_plan_report_only_node_pnpm_and_reject_damage() {
                 assert!(stdout.contains(if force {
                     "reinstall (--force)"
                 } else {
-                    "repair (damaged installation)"
+                    "reuse (healthy installation)"
                 }));
             }
         }
