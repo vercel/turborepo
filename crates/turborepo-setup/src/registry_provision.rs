@@ -14,7 +14,7 @@ use turborepo_archive::{ExtractedArtifact, Layout};
 use turborepo_download::{
     ApprovedOrigin, DownloadClient, ExpectedSha256, ExpectedSha512, Limits, VerifiedArtifact,
 };
-use turborepo_tool_install::{Store, Tool};
+use turborepo_tool_install::{Export, Launch, LaunchArg, Store, Tool, TreeRef};
 
 use crate::{
     artifact_cache::ArtifactCache,
@@ -532,7 +532,6 @@ pub(crate) struct RegistryPlan {
     /// Native pnpm's platform package name, binary path and locked artifact.
     native: Option<(&'static str, lock::Artifact)>,
     authored: Option<CorepackIntegrity>,
-    launch_directory: String,
     manager: Manager,
     /// Authored pins cover modern Yarn's `bin/yarn.js`, not the archive.
     bundled: bool,
@@ -570,7 +569,6 @@ impl RegistryPlan {
         manager: Manager,
     ) -> Result<Self, Error> {
         let id = package_name(manager)?;
-        let windows = platform == Platform::WindowsX64;
         let qualified = match platform {
             Platform::MacosX64
             | Platform::MacosArm64
@@ -602,28 +600,41 @@ impl RegistryPlan {
         let (artifact, native) = (artifact.clone(), native.cloned());
         ExpectedSha256::from_hex(&artifact.sha256)?;
         let node = node.inventory_tool().clone();
-        // A changed authored constraint must re-verify, even when archive SHA-256
-        // is unchanged. Hash framed identity into a bounded portable component.
-        let binding =
-            serde_json::to_vec(&(&node, authored.map(|pin| (pin.algorithm, &pin.digest))))
-                .map_err(|_| Error::InvalidLock)?;
-        let launch_directory = format!("managed-node-{:x}", Sha256::digest(binding));
-        // Windows launchers are batch files so PATHEXT resolves `pnpm`.
-        let extension = if windows { ".cmd" } else { "" };
-        let executables = native
-            .as_ref()
-            .unwrap_or(&artifact)
-            .executables
-            .keys()
-            .map(|name| {
-                (
-                    name.clone(),
-                    format!("{launch_directory}/{name}{extension}"),
-                )
-            })
-            .collect();
-        // Reuse identity binds every verified part.
-        let artifact_sha256 = match &native {
+        let Some(Export::File(node_binary)) = node.executables.get("node") else {
+            return Err(Error::NodeBinding);
+        };
+        // JavaScript entry points run on the selected Node by path. Native pnpm
+        // runs from its own tree, never a bin link, so it still finds `dist/`
+        // beside its image (`pnpx`/`pnx` as `pnpm dlx`, like pnpm's own Unix
+        // alias scripts).
+        let executables = match &native {
+            None => artifact
+                .executables
+                .iter()
+                .map(|(name, entry)| {
+                    let launch = Launch {
+                        program: TreeRef::new("node", node_binary.clone()),
+                        args: vec![LaunchArg::Tree(TreeRef::new(id, entry.clone()))],
+                    };
+                    (name.clone(), Export::Launch(launch))
+                })
+                .collect(),
+            Some(native) => native
+                .executables
+                .keys()
+                .map(|name| {
+                    let args = match name.as_str() {
+                        "pnpx" | "pnx" => vec![LaunchArg::Word("dlx".into())],
+                        _ => Vec::new(),
+                    };
+                    let program = TreeRef::new(id, NATIVE_BINARY);
+                    (name.clone(), Export::Launch(Launch { program, args }))
+                })
+                .collect(),
+        };
+        // Reuse identity binds every verified part, and a changed authored
+        // constraint must re-verify even when archive SHA-256 is unchanged.
+        let mut artifact_sha256 = match &native {
             None => artifact.sha256.clone(),
             Some(native) => {
                 ExpectedSha256::from_hex(&native.sha256)?;
@@ -631,6 +642,11 @@ impl RegistryPlan {
                 format!("{:x}", Sha256::digest(parts))
             }
         };
+        if let Some(pin) = authored {
+            let pin = serde_json::to_vec(&(&artifact_sha256, pin.algorithm, &pin.digest))
+                .map_err(|_| Error::InvalidLock)?;
+            artifact_sha256 = format!("{:x}", Sha256::digest(pin));
+        }
         let native = native
             .map(|native| native_package(platform).map(|(name, _)| (name, native)))
             .map(|native| native.ok_or(Error::UnsupportedTarget))
@@ -642,13 +658,13 @@ impl RegistryPlan {
                 platform: node.platform.clone(),
                 artifact_sha256,
                 executables,
+                vars: BTreeMap::new(),
             },
             node,
             platform: artifact_platform,
             artifact,
             native,
             authored: authored.cloned(),
-            launch_directory,
             manager,
             bundled: registry_metadata::is_modern_yarn(manager, &version),
         })
@@ -766,16 +782,11 @@ impl RegistryPlan {
             let (sha256, sha512) = bundle_digests(&tree)?;
             crate::registry_resolution::check_pin(pin, None, &sha256, &sha512)?;
         }
-        if tree.root_path().join(&self.launch_directory).try_exists()? {
-            return Err(Error::InvalidPackage);
-        }
         Ok(Some(PreparedRegistry {
             tree,
             native,
             downloaded_bytes,
             tool: self.tool.clone(),
-            launch_directory: self.launch_directory.clone(),
-            entrypoints: self.artifact.executables.clone(),
             from_cache,
         }))
     }
@@ -787,8 +798,6 @@ pub struct PreparedRegistry {
     native: Option<(ExtractedArtifact, String)>,
     downloaded_bytes: u64,
     tool: Tool,
-    launch_directory: String,
-    entrypoints: std::collections::BTreeMap<String, String>,
     from_cache: bool,
 }
 impl PreparedRegistry {
@@ -803,9 +812,8 @@ impl PreparedRegistry {
         self.downloaded_bytes
     }
 
-    /// Copy verified resources; launch this generation's managed Node, or the
-    /// native pnpm binary directly (`pnpx`/`pnx` as `pnpm dlx`, like pnpm's
-    /// own Unix alias scripts).
+    /// Copy the verified package, and the native pnpm binary beside it. The
+    /// Store generates the launchers into `bin`.
     pub fn stage(
         &self,
         tool: &Tool,
@@ -825,48 +833,6 @@ impl PreparedRegistry {
             let target = destination.join(NATIVE_BINARY);
             fs::copy(native.root_path().join(binary), &target)?;
             executable(&target)?;
-        }
-        // Owner-only like every other store directory, whatever the umask.
-        #[cfg_attr(not(unix), allow(unused_mut))]
-        let mut launch = fs::DirBuilder::new();
-        #[cfg(unix)]
-        std::os::unix::fs::DirBuilderExt::mode(&mut launch, 0o700);
-        launch.create(destination.join(&self.launch_directory))?;
-        for (name, path) in &self.tool.executables {
-            // The bin forwarder calls this file directly, so %~dp0 is always
-            // the launch directory. Entry points are fixed validated mappings.
-            // Native pnpm runs from the tool directory, never a bin hard link,
-            // so it still finds `dist/` beside its own image.
-            let script = if cfg!(windows) {
-                let command = match (&self.native, name.as_str()) {
-                    (None, _) => format!(
-                        "\"%~dp0..\\..\\node\\node.exe\" \"%~dp0..\\{}\"",
-                        self.entrypoints[name].replace('/', "\\")
-                    ),
-                    (Some(_), "pnpx" | "pnx") => format!("\"%~dp0..\\{NATIVE_BINARY}\" dlx"),
-                    (Some(_), _) => format!("\"%~dp0..\\{NATIVE_BINARY}\""),
-                };
-                format!("@{command} %*\r\n")
-            } else {
-                let id = &self.tool.id;
-                let command = match (&self.native, name.as_str()) {
-                    (None, _) => format!(
-                        "\"$tools/node/bin/node\" \"$tools/{id}/{}\"",
-                        self.entrypoints[name]
-                    ),
-                    (Some(_), "pnpx" | "pnx") => format!("\"$tools/{id}/{NATIVE_BINARY}\" dlx"),
-                    (Some(_), _) => format!("\"$tools/{id}/{NATIVE_BINARY}\""),
-                };
-                format!(
-                    "#!/bin/sh\ncase \"$0\" in */*) ;; *) exit 126;; esac\nhere=${{0%/*}}\ncase \
-                     \"${{here##*/}}\" in {}) tools=\"$here/../..\";; *) \
-                     tools=\"$here/../tools\";; esac\ntools=$(CDPATH= cd -- \"$tools\" && pwd -P) \
-                     || exit 126\nexec {command} \"$@\"\n",
-                    self.launch_directory
-                )
-            };
-            fs::write(destination.join(path), script)?;
-            executable(&destination.join(path))?;
         }
         Ok(())
     }

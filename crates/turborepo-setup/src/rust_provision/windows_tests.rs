@@ -113,7 +113,11 @@ fn windows_toolchains_install_privately_and_export_rustup_proxies() {
     let lock = lock(&fs::read(&binary).unwrap(), &manifest, true);
     let plan = RustPlan::from_lock(&lock, Platform::WindowsX64).unwrap();
     let tool = plan.inventory_tool();
-    assert!(tool.executables.values().all(|path| path == PROXY));
+    assert!(
+        tool.executables
+            .values()
+            .all(|export| export.as_file() == Some(PROXY))
+    );
     assert_eq!(plan.toolchain(), format!("1.99.0-{HOST}"));
     let desired = vec![tool.clone()];
     let mut store = Store::open(repo.path()).unwrap();

@@ -19,7 +19,9 @@ use std::{
 };
 
 mod repair;
+mod selection;
 
+pub use selection::{Export, Launch, LaunchArg, ManagedVar, TreeRef, VarValue};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
@@ -46,7 +48,8 @@ pub enum Error {
 }
 
 /// Exact identity independent of turbo.lock; artifact/platform identify bytes,
-/// not mirrors. Executables map portable names to paths within the full tree.
+/// not mirrors. Executables map portable names to what `bin` exports for
+/// them; `vars` are the variables those programs need.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Tool {
@@ -54,7 +57,37 @@ pub struct Tool {
     pub version: String,
     pub platform: String,
     pub artifact_sha256: String,
-    pub executables: BTreeMap<String, String>,
+    pub executables: BTreeMap<String, Export>,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub vars: BTreeMap<ManagedVar, VarValue>,
+}
+
+impl Tool {
+    /// Whether `other` stages the same tree bytes. Variables are rendered
+    /// only into `bin`, so a tree whose variables changed is still reusable.
+    fn same_tree(&self, other: &Tool) -> bool {
+        (&self.id, &self.version, &self.platform) == (&other.id, &other.version, &other.platform)
+            && self.artifact_sha256 == other.artifact_sha256
+            && self.executables == other.executables
+    }
+
+    /// The paths in this tool's own tree that its exports run or pass.
+    pub fn tree_files(&self) -> Vec<&str> {
+        (self.executables.values())
+            .flat_map(|export| export.tree_files(&self.id))
+            .filter(|(id, ..)| *id == self.id)
+            .map(|(_, path, _)| path)
+            .collect()
+    }
+
+    /// The file names this tool's exports take in `bin`. On Windows the
+    /// extension is the export's PATHEXT type.
+    pub fn bin_entries(&self) -> Result<Vec<String>, Error> {
+        self.executables
+            .iter()
+            .map(|(name, export)| shim_name(name, export))
+            .collect()
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -115,8 +148,11 @@ impl Record {
 }
 
 impl Inventory {
+    /// Holds a tree `tool` can reuse.
     fn contains(&self, tool: &Tool) -> bool {
-        self.tools.iter().any(|installed| &installed.tool == tool)
+        self.tools
+            .iter()
+            .any(|installed| installed.tool.same_tree(tool))
     }
 }
 
@@ -477,8 +513,7 @@ impl Store {
     /// false so provisioning can repair it atomically.
     pub fn is_current(&self, desired: &[Tool]) -> Result<bool, Error> {
         validate_tools(desired)?;
-        let mut desired = desired.to_vec();
-        desired.sort_by(|a, b| a.id.cmp(&b.id));
+        let desired = sorted(desired);
         Ok(self
             .healthy_inventory()?
             .is_some_and(|old| old.tools.iter().map(|t| &t.tool).eq(desired.iter())))
@@ -488,7 +523,7 @@ impl Store {
     /// A broken sibling layout or shim invalidates reuse of the entire
     /// generation. Trees are not read; see `reusable_tree`.
     pub fn can_reuse(&self, tool: &Tool) -> Result<bool, Error> {
-        validate_tools(std::slice::from_ref(tool))?;
+        validate_tool(tool)?;
         Ok(self
             .healthy_inventory()?
             .is_some_and(|old| old.contains(tool)))
@@ -507,12 +542,11 @@ impl Store {
         let Some(old) = self.healthy_inventory()? else {
             return Ok(None);
         };
-        let Some(entry) = old.tools.iter().find(|entry| &entry.tool == tool) else {
+        let Some(entry) = old.tools.iter().find(|entry| entry.tool.same_tree(tool)) else {
             return Ok(None);
         };
         let tree = self.root.join(&old.generation).join("tools").join(&tool.id);
-        let unchanged =
-            old.tools.len() == desired.len() && desired.iter().all(|tool| old.contains(tool));
+        let unchanged = old.tools.iter().map(|t| &t.tool).eq(sorted(desired).iter());
         if !unchanged {
             match tree_hash(&tree) {
                 Ok(hash) if hash == entry.tree_sha256 => {}
@@ -592,10 +626,10 @@ impl Store {
             if verification == Verification::Full && tree_hash(&tree)? != installed.tree_sha256 {
                 damaged = true;
             }
-            check_executables(&tree, &installed.tool)?;
-            for (name, executable) in &installed.tool.executables {
-                let shim = shim_name(name, executable)?;
-                check_shim(&bin.join(&shim), &tree, &installed.tool.id, executable)?;
+            check_executables(&tools, &installed.tool)?;
+            for (name, export) in &installed.tool.executables {
+                let shim = shim_name(name, export)?;
+                check_shim(&bin.join(&shim), &tools, &installed.tool, export)?;
                 names.insert(shim);
             }
         }
@@ -716,8 +750,7 @@ impl Store {
         let record_sha256 = recorded.map(|(record, _)| record.hash());
         let old = self.healthy_inventory()?;
         let valid_old = old.as_ref().filter(|_| force.is_none());
-        let mut desired = desired.to_vec();
-        desired.sort_by(|a, b| a.id.cmp(&b.id));
+        let desired = sorted(desired);
         if valid_old.is_some_and(|old| {
             old.tools.iter().map(|t| &t.tool).eq(desired.iter())
                 && old.record_sha256 == record_sha256
@@ -751,7 +784,7 @@ impl Store {
                 None => valid_old,
             };
             let reused = reuse.and_then(|old| {
-                let entry = old.tools.iter().find(|entry| entry.tool == tool)?;
+                let entry = old.tools.iter().find(|entry| entry.tool.same_tree(&tool))?;
                 Some((&old.generation, &entry.tree_sha256))
             });
             let copied = match reused {
@@ -778,8 +811,11 @@ impl Store {
                 Some(hash) if !modes_changed => hash,
                 _ => tree_hash(&tree)?,
             };
-            export(&tree, &bin, &tool)?;
             installed.push(Installed { tool, tree_sha256 });
+        }
+        // Launchers may name other trees, so export once every tree is staged.
+        for installed in &installed {
+            export(&tools, &bin, &installed.tool)?;
         }
         if let Some((record, _)) = recorded {
             write_private(&stage.path().join("record.json"), record.bytes())?;
@@ -1014,23 +1050,45 @@ fn is_sha256(value: &str) -> bool {
             .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
 }
 
+fn sorted(tools: &[Tool]) -> Vec<Tool> {
+    let mut tools = tools.to_vec();
+    tools.sort_by(|a, b| a.id.cmp(&b.id));
+    tools
+}
+
+fn validate_tool(tool: &Tool) -> Result<(), Error> {
+    component(&tool.id)?;
+    if tool.version.is_empty()
+        || tool.platform.is_empty()
+        || !is_sha256(&tool.artifact_sha256)
+        || tool.executables.is_empty()
+    {
+        return Err(Error::InvalidInventory);
+    }
+    for name in tool.executables.keys() {
+        component(name)?;
+    }
+    selection::validate(tool)
+}
+
+/// A complete selection: every tool valid, ids and export names unique, and
+/// every launcher naming only selected trees.
 fn validate_tools(tools: &[Tool]) -> Result<(), Error> {
     let mut ids = BTreeSet::new();
     let mut names = BTreeSet::new();
     for tool in tools {
-        component(&tool.id)?;
-        if !ids.insert(&tool.id)
-            || tool.version.is_empty()
-            || tool.platform.is_empty()
-            || !is_sha256(&tool.artifact_sha256)
-            || tool.executables.is_empty()
-        {
+        validate_tool(tool)?;
+        if !ids.insert(tool.id.as_str()) || !tool.executables.keys().all(|n| names.insert(n)) {
             return Err(Error::InvalidInventory);
         }
-        for (name, path) in &tool.executables {
-            component(name)?;
-            relative(path)?;
-            if !names.insert(name) {
+    }
+    for tool in tools {
+        for export in tool.executables.values() {
+            if !export
+                .tree_files(&tool.id)
+                .iter()
+                .all(|(id, ..)| ids.contains(id))
+            {
                 return Err(Error::InvalidInventory);
             }
         }
@@ -1153,74 +1211,113 @@ fn windows_kind(path: &str) -> Result<&'static str, Error> {
 
 /// The PATH entry for a portable export name. Windows keeps the target's
 /// PATHEXT extension so `name` resolves to `name.exe` or `name.cmd`.
-fn shim_name(name: &str, path: &str) -> Result<String, Error> {
+fn shim_name(name: &str, export: &Export) -> Result<String, Error> {
     #[cfg(windows)]
-    return Ok(format!("{name}.{}", windows_kind(path)?));
+    return Ok(match export {
+        Export::File(path) => format!("{name}.{}", windows_kind(path)?),
+        Export::Launch(_) => format!("{name}.cmd"),
+    });
     #[cfg(not(windows))]
     {
-        let _ = path;
+        let _ = export;
         Ok(name.to_owned())
     }
 }
 
-/// Transfers control to the tool's own batch launcher, preserving `%*` and
-/// its exit status. `%~dp0` is this bin directory.
-#[cfg(windows)]
-fn forwarder(id: &str, path: &str) -> Vec<u8> {
-    format!(
-        "@\"%~dp0..\\tools\\{id}\\{}\" %*\r\n",
-        path.replace('/', "\\")
-    )
-    .into_bytes()
+/// Exactly what a bin entry must be.
+enum Shim {
+    /// A relative symlink with this target.
+    #[cfg(not(windows))]
+    Link(PathBuf),
+    /// A hard link to this tree file. The image path becomes `bin\name.exe`,
+    /// so `.exe` exports must not load adjacent resources.
+    #[cfg(windows)]
+    HardLink(PathBuf),
+    /// A generated script with these bytes.
+    Script(Vec<u8>),
 }
 
-fn make_shim(tree: &Path, bin: &Path, id: &str, name: &str, path: &str) -> Result<(), Error> {
-    let shim = bin.join(shim_name(name, path)?);
+fn shim(tools: &Path, tool: &Tool, export: &Export) -> Result<Shim, Error> {
     #[cfg(windows)]
     {
-        // Hard links need no symlink privilege. The image path becomes
-        // bin\name.exe, so exe exports must not load adjacent resources.
-        if windows_kind(path)? == "exe" {
-            fs::hard_link(tree.join(relative_path(path)), shim)?;
-        } else {
-            OpenOptions::new()
-                .write(true)
-                .create_new(true)
-                .open(shim)?
-                .write_all(&forwarder(id, path))?;
-        }
-        Ok(())
+        Ok(match export {
+            Export::File(path) if windows_kind(path)? == "exe" => {
+                Shim::HardLink(tools.join(&tool.id).join(relative_path(path)))
+            }
+            Export::File(path) => Shim::Script(selection::windows_forwarder(&Launch {
+                program: TreeRef::new(tool.id.clone(), path.clone()),
+                args: Vec::new(),
+            })),
+            Export::Launch(launch) => Shim::Script(selection::windows_forwarder(launch)),
+        })
     }
     #[cfg(not(windows))]
     {
-        let _ = tree;
-        make_link(&shim_target(id, path), &shim)
+        let _ = tools;
+        Ok(match export {
+            Export::File(path) => Shim::Link(PathBuf::from("../tools").join(&tool.id).join(path)),
+            Export::Launch(launch) => Shim::Script(selection::unix_launcher(tool, launch)),
+        })
     }
 }
 
-/// Check a staged tree's executables, then export them into `bin`.
-fn export(tree: &Path, bin: &Path, tool: &Tool) -> Result<(), Error> {
-    check_executables(tree, tool)?;
-    for (name, path) in &tool.executables {
-        make_shim(tree, bin, &tool.id, name, path)?;
+fn make_shim(path: &Path, shim: Shim) -> Result<(), Error> {
+    match shim {
+        #[cfg(not(windows))]
+        Shim::Link(target) => make_link(&target, path),
+        #[cfg(windows)]
+        Shim::HardLink(target) => Ok(fs::hard_link(target, path)?),
+        Shim::Script(bytes) => {
+            OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .open(path)?
+                .write_all(&bytes)?;
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::PermissionsExt;
+                fs::set_permissions(path, fs::Permissions::from_mode(0o555))?;
+            }
+            Ok(())
+        }
+    }
+}
+
+/// Check a staged generation's exports of `tool`, then export them into `bin`.
+fn export(tools: &Path, bin: &Path, tool: &Tool) -> Result<(), Error> {
+    check_executables(tools, tool)?;
+    for (name, export) in &tool.executables {
+        make_shim(
+            &bin.join(shim_name(name, export)?),
+            shim(tools, tool, export)?,
+        )?;
     }
     Ok(())
 }
 
-fn check_shim(shim: &Path, tree: &Path, id: &str, path: &str) -> Result<(), Error> {
-    let metadata = fs::symlink_metadata(shim)?;
+fn check_shim(path: &Path, tools: &Path, tool: &Tool, export: &Export) -> Result<(), Error> {
+    let metadata = fs::symlink_metadata(path)?;
     #[cfg(windows)]
-    let valid = metadata.is_file()
-        && std::os::windows::fs::MetadataExt::file_attributes(&metadata) & 0x400 == 0
-        && if windows_kind(path)? == "exe" {
-            same_file::is_same_file(shim, tree.join(relative_path(path)))?
-        } else {
-            metadata.len() <= RECORD_LIMIT && fs::read(shim)? == forwarder(id, path)
-        };
+    let regular = metadata.is_file()
+        && std::os::windows::fs::MetadataExt::file_attributes(&metadata) & 0x400 == 0;
     #[cfg(not(windows))]
-    let valid = {
-        let _ = tree;
-        metadata.file_type().is_symlink() && fs::read_link(shim)? == shim_target(id, path)
+    let regular = metadata.is_file();
+    let valid = match shim(tools, tool, export)? {
+        #[cfg(not(windows))]
+        Shim::Link(target) => metadata.file_type().is_symlink() && fs::read_link(path)? == target,
+        #[cfg(windows)]
+        Shim::HardLink(target) => regular && same_file::is_same_file(path, target)?,
+        Shim::Script(bytes) => {
+            regular && metadata.len() <= RECORD_LIMIT && fs::read(path)? == bytes && {
+                #[cfg(unix)]
+                {
+                    use std::os::unix::fs::PermissionsExt;
+                    metadata.permissions().mode() & 0o100 != 0
+                }
+                #[cfg(not(unix))]
+                true
+            }
+        }
     };
     if !valid {
         return Err(Error::UnsafePath);
@@ -1254,11 +1351,6 @@ fn create_directory(path: &Path, existing: DirectoryCheck) -> Result<(), Error> 
     }
 }
 
-#[cfg(not(windows))]
-fn shim_target(id: &str, path: &str) -> PathBuf {
-    PathBuf::from("../tools").join(id).join(path)
-}
-
 fn make_link(target: &Path, path: &Path) -> Result<(), Error> {
     #[cfg(unix)]
     {
@@ -1272,20 +1364,27 @@ fn make_link(target: &Path, path: &Path) -> Result<(), Error> {
     }
 }
 
-fn check_executables(root: &Path, tool: &Tool) -> Result<(), Error> {
-    for path in tool.executables.values() {
-        let resolved = fs::canonicalize(root.join(relative_path(path)))?;
-        if !resolved.starts_with(root) || !resolved.is_file() {
-            return Err(Error::UnsafePath);
-        }
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            // Installer-owned files need owner execute; group/other execute
-            // alone does not make the exported binary runnable by its owner.
-            if fs::metadata(resolved)?.permissions().mode() & 0o100 == 0 {
-                return Err(Error::InvalidInventory);
+/// Every tree file an export runs or passes exists inside its own tree, and
+/// every file it runs is executable.
+fn check_executables(tools: &Path, tool: &Tool) -> Result<(), Error> {
+    for export in tool.executables.values() {
+        for (id, path, executed) in export.tree_files(&tool.id) {
+            let root = tools.join(id);
+            let resolved = fs::canonicalize(root.join(relative_path(path)))?;
+            if !resolved.starts_with(&root) || !resolved.is_file() {
+                return Err(Error::UnsafePath);
             }
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::PermissionsExt;
+                // Installer-owned files need owner execute; group/other execute
+                // alone does not make the exported binary runnable by its owner.
+                if executed && fs::metadata(resolved)?.permissions().mode() & 0o100 == 0 {
+                    return Err(Error::InvalidInventory);
+                }
+            }
+            #[cfg(not(unix))]
+            let _ = executed;
         }
     }
     Ok(())

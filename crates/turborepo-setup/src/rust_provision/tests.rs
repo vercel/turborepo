@@ -124,10 +124,13 @@ fn locked_toolchains_install_through_private_rustup_and_publish_toolchain_shims(
         shims,
         ["cargo", "cargo-clippy", "clippy-driver", "rustc", "rustdoc"]
     );
-    assert_eq!(
-        fs::read_link(current.bin.join("cargo")).unwrap(),
-        Path::new("../tools/rust/toolchains/1.99.0-x86_64-unknown-linux-gnu/bin/cargo")
-    );
+    // The bin launcher runs the toolchain's own binary, with no inherited
+    // environment.
+    let cargo = std::process::Command::new(current.bin.join("cargo"))
+        .env_clear()
+        .output()
+        .unwrap();
+    assert_eq!(String::from_utf8(cargo.stdout).unwrap(), "cargo\n");
     let tree = current.tool_tree(plan.inventory_tool()).unwrap();
     assert!(tree.join("settings.toml").is_file());
     // Scratch homes are gone once the prepared toolchain is dropped.
@@ -289,8 +292,15 @@ fn locked_selections_must_satisfy_declarations_and_official_shapes() {
         Err(Error::MissingTarget)
     ));
     let plan = RustPlan::from_lock(&lock(tool), Platform::MacosArm64).unwrap();
+    let rustc = turborepo_tool_install::TreeRef::new(
+        "rust",
+        "toolchains/1.99.0-aarch64-apple-darwin/bin/rustc",
+    );
     assert_eq!(
         plan.inventory_tool().executables["rustc"],
-        "toolchains/1.99.0-aarch64-apple-darwin/bin/rustc"
+        turborepo_tool_install::Export::Launch(turborepo_tool_install::Launch {
+            program: rustc,
+            args: Vec::new(),
+        })
     );
 }

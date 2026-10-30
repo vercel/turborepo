@@ -62,6 +62,7 @@ fn repo(dir: &Path, flagged: bool, records: Option<&mut Records>) -> Option<Stri
             ("npm".into(), "npm.cmd".into()),
         ]
         .into(),
+        vars: Default::default(),
     };
     let system32 = PathBuf::from(std::env::var_os("SystemRoot").unwrap()).join("System32");
     Store::open(&root)

@@ -9,7 +9,7 @@ use std::{collections::BTreeSet, fs, io, path::Path, time::Duration};
 
 use turborepo_archive::{ExtractedArtifact, Layout};
 use turborepo_download::{ApprovedOrigin, DownloadClient, ExpectedSha256, VerifiedArtifact};
-use turborepo_tool_install::{Store, Tool};
+use turborepo_tool_install::{Export, Store, Tool};
 use url::Url;
 
 use crate::{
@@ -212,7 +212,8 @@ impl ArtifactPlan {
                 version: tool.version.clone(),
                 platform: spelling,
                 artifact_sha256: artifact.sha256.clone(),
-                executables: artifact.executables.clone(),
+                executables: Export::files(&artifact.executables),
+                vars: Default::default(),
             },
             platform,
             artifact: artifact.clone(),
@@ -316,7 +317,12 @@ impl ArtifactPlan {
             tool: self.tool.id.clone(),
             source,
         };
-        let required: Vec<_> = self.tool.executables.values().map(String::as_str).collect();
+        let required: Vec<_> = self
+            .artifact
+            .executables
+            .values()
+            .map(String::as_str)
+            .collect();
         // Without a `rootPrefix`, entries sit at the archive's top level.
         let root = self.artifact.root_prefix.as_deref().unwrap_or_default();
         let limits = turborepo_archive::Limits::new(MAX_EXTRACTED_BYTES, 100_000, 4096, 64)
@@ -428,10 +434,8 @@ impl PreparedArtifact {
         match &self.payload {
             Payload::Archive(tree) => copy_tree(&tree.root_path(), destination)?,
             Payload::Binary(bytes) => {
-                let relative = tool
-                    .executables
-                    .values()
-                    .next()
+                let relative = (tool.executables.values().next())
+                    .and_then(Export::as_file)
                     .ok_or(turborepo_tool_install::Error::InvalidInventory)?;
                 // Lock paths use `/`; never join them unsplit onto a Windows
                 // verbatim destination.

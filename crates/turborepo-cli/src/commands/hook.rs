@@ -14,7 +14,7 @@ use std::{
 
 use sha2::{Digest, Sha256};
 use turbopath::AbsoluteSystemPath;
-use turborepo_setup::activation::HOOK_ENV;
+use turborepo_tool_install::ManagedVar;
 use turborepo_turbo_json::RawTurboJson;
 
 use crate::{cli::HookShell, commands::setup::trust::TrustStore};
@@ -96,9 +96,7 @@ struct Saved {
 }
 
 /// `<root id>;<stamp>;<status>;<saved>;<bin>`. The bin is last because it
-/// may contain `;`. States written by an earlier turbo (see [`legacy`]) are
-/// still read, so a shell activated before an upgrade still removes the bin it
-/// added when it leaves.
+/// may contain `;`.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 struct State {
     root: String,
@@ -112,10 +110,6 @@ struct State {
 
 impl State {
     fn parse(value: &str) -> Option<Self> {
-        // A root id is a 16-digit hex digest, never `1` or `2`.
-        if let Some(state) = legacy(value) {
-            return Some(state);
-        }
         let mut fields = value.splitn(5, ';');
         let root = fields.next()?.to_owned();
         let stamp = fields.next()?.to_owned();
@@ -129,7 +123,10 @@ impl State {
             .map(str::to_owned);
         // Only variables the hook can set are restored, so a tampered state
         // cannot unset or overwrite any other variable.
-        if !saved.keys().all(|name| HOOK_ENV.contains(&name.as_str())) {
+        if !saved
+            .keys()
+            .all(|name| ManagedVar::from_name(name).is_some())
+        {
             return None;
         }
         Some(Self {
@@ -167,68 +164,6 @@ fn status(value: &str) -> Option<Status> {
         "missing" => Status::Missing,
         "unsupported" => Status::Unsupported,
         _ => return None,
-    })
-}
-
-/// The states earlier turbo releases wrote: `1;<root>;<stamp>;<status>;<bin>`,
-/// or `2;<root>;<stamp>;<status>;<saved>;<bin>` where `<saved>` lists only
-/// what each variable replaced (`NAME` when unset, else `NAME=<hex>`). Those
-/// hooks set only Windows Go's GOROOT, at the Store's `tools/go` beside `bin`,
-/// and GOTOOLCHAIN=local, so the set values follow from the bin. Read so that
-/// leaving after an upgrade still removes the bin and restores the variables.
-/// Any change to the current format must keep reading the one before it.
-fn legacy(value: &str) -> Option<State> {
-    let (version, rest) = value.split_once(';')?;
-    let fields = match version {
-        "1" => 4,
-        "2" => 5,
-        _ => return None,
-    };
-    let mut fields = rest.splitn(fields, ';');
-    let root = fields.next()?.to_owned();
-    let stamp = fields.next()?.to_owned();
-    let status = status(fields.next()?)?;
-    let saved = (version == "2").then(|| fields.next()).flatten();
-    if version == "2" && saved.is_none() {
-        return None;
-    }
-    let bin = Some(fields.next()?)
-        .filter(|bin| !bin.is_empty())
-        .map(str::to_owned);
-    let goroot = bin
-        .as_deref()
-        .and_then(|bin| Path::new(bin).parent())
-        .and_then(|generation| {
-            generation
-                .join("tools")
-                .join("go")
-                .to_str()
-                .map(str::to_owned)
-        });
-    let saved = match saved {
-        None => BTreeMap::new(),
-        Some(saved) => saved
-            .split(',')
-            .map(|entry| {
-                let (name, previous) = match entry.split_once('=') {
-                    Some((name, hex)) => (name, Some(unhex(hex)?)),
-                    None => (entry, None),
-                };
-                let set = match name {
-                    "GOROOT" => goroot.clone(),
-                    "GOTOOLCHAIN" => Some("local".to_owned()),
-                    _ => return None,
-                };
-                Some((name.to_owned(), Saved { set, previous }))
-            })
-            .collect::<Option<_>>()?,
-    };
-    Some(State {
-        root,
-        stamp,
-        status,
-        saved,
-        bin,
     })
 }
 
@@ -1155,6 +1090,7 @@ mod tests {
             platform: "test".into(),
             artifact_sha256: "a".repeat(64),
             executables: [("node".into(), "bin/node".into())].into(),
+            vars: Default::default(),
         };
         let selection = br#"{"schemaVersion":0,"tools":{}}"#.to_vec();
         let mut store = Store::open(&root).unwrap();
@@ -1337,74 +1273,6 @@ mod tests {
     }
 
     #[test]
-    fn leaving_after_an_upgrade_still_removes_what_an_earlier_hook_added() {
-        let temp = tempfile::tempdir().unwrap();
-        let outside = Some(temp.path());
-        let id = digest(b"/repo");
-        // An earlier turbo's state without runtime variables. Repository-chosen
-        // exports must never keep PATH precedence outside the repository.
-        let v1 = State::parse(&format!("1;{id};s;active;/repo/gen/bin")).unwrap();
-        assert_eq!(v1.root, id);
-        assert_eq!(v1.bin.as_deref(), Some("/repo/gen/bin"));
-        let left = changes(
-            Some(v1),
-            &p("/repo/gen/bin:/usr/bin"),
-            outside,
-            None,
-            || false,
-        );
-        assert_eq!(left.path, Some(p("/usr/bin")));
-        assert_eq!(left.state, Some(None));
-
-        // With Windows Go variables: what each replaced, set or unset.
-        let goroot = Path::new("/repo/gen").join("tools").join("go");
-        let goroot = goroot.to_str().unwrap();
-        let v2 = format!(
-            "2;{id};s;active;GOROOT={},GOTOOLCHAIN;/repo/gen/bin",
-            hex("/mine")
-        );
-        let v2 = State::parse(&v2).unwrap();
-        let host = Host {
-            qualified: true,
-            pathext: None,
-        };
-        let shell = |name: &str| match name {
-            "GOROOT" => Some(goroot.to_owned()),
-            "GOTOOLCHAIN" => Some("local".to_owned()),
-            _ => None,
-        };
-        let left = super::changes(
-            Some(v2),
-            &p("/repo/gen/bin:/usr/bin"),
-            outside,
-            None,
-            &host,
-            || false,
-            shell,
-        );
-        assert_eq!(left.path, Some(p("/usr/bin")));
-        assert_eq!(
-            left.env,
-            [
-                ("GOROOT".to_owned(), Some("/mine".to_owned())),
-                ("GOTOOLCHAIN".to_owned(), None),
-            ]
-        );
-        assert_eq!(left.state, Some(None));
-
-        // Earlier states stay as strict as the current one.
-        for state in [
-            format!("2;{id};s;active;PATH;/bin"),
-            format!("2;{id};s;active;GOROOT=ff;/bin"),
-            format!("2;{id};s;active;/bin"),
-            format!("1;{id};s;bogus;/bin"),
-            format!("3;{id};s;active;;/bin"),
-        ] {
-            assert_eq!(State::parse(&state), None, "{state}");
-        }
-    }
-
-    #[test]
     fn variables_are_set_then_restored_exactly_and_user_edits_win() {
         use std::{cell::RefCell, collections::HashMap};
         let vars = |pairs: &[(&str, &str)]| -> BTreeMap<String, String> {
@@ -1478,18 +1346,14 @@ mod tests {
     }
 
     #[test]
-    fn runtime_variables_cover_rust_go_and_uv_on_every_platform() {
+    fn runtime_variables_resolve_tree_paths_words_and_the_cargo_home() {
         use turborepo_setup::activation::runtime_env;
-        let windows = cfg!(windows);
-        let platform = if windows {
-            "windows-x64"
-        } else {
-            "linux-x64-gnu"
-        };
-        let tool = |id: &str, version: &str| turborepo_tool_install::Tool {
+        use turborepo_tool_install::{ManagedVar, TreeRef, VarValue};
+        let tool = |id: &str, vars: &[(ManagedVar, VarValue)]| turborepo_tool_install::Tool {
+            vars: vars.iter().cloned().collect(),
             id: id.into(),
-            version: version.into(),
-            platform: platform.into(),
+            version: "1.0.0".into(),
+            platform: "linux-x64-gnu".into(),
             artifact_sha256: "a".repeat(64),
             executables: BTreeMap::new(),
         };
@@ -1497,45 +1361,44 @@ mod tests {
         let root = temp.path();
         let generation = root.join(".turbo").join("tools").join("generation-a");
         let bin = generation.join("bin");
+        let installdir = (
+            ManagedVar::UvPythonInstallDir,
+            VarValue::Tree(TreeRef::new("python", "")),
+        );
         let tools = [
-            tool("go", "1.23.0"),
-            tool("node", "24.0.0"),
-            tool("python", "3.12.12"),
-            tool("rust", "1.90.0"),
-            tool("uv", "0.9.0"),
+            tool("node", &[]),
+            tool(
+                "go",
+                &[
+                    (ManagedVar::Goroot, VarValue::Tree(TreeRef::new("go", ""))),
+                    (ManagedVar::Gotoolchain, VarValue::Word("local".into())),
+                ],
+            ),
+            tool("rust", &[(ManagedVar::CargoHome, VarValue::RepoCargoHome)]),
+            tool("uv", std::slice::from_ref(&installdir)),
+            tool("python", std::slice::from_ref(&installdir)),
         ];
-        assert!(runtime_env(root, &bin, &tools[1..2]).unwrap().is_empty());
+        assert!(runtime_env(root, &bin, &tools[..1]).unwrap().is_empty());
         let env = runtime_env(root, &bin, &tools).unwrap();
-        let names: Vec<_> = env.keys().map(String::as_str).collect();
-        let expected: Vec<_> = (HOOK_ENV.into_iter())
-            .filter(|name| windows || *name != "RUSTUP_AUTO_INSTALL")
-            .collect();
-        assert_eq!(names, expected);
         let tree = |id: &str| generation.join("tools").join(id).into_os_string();
-        let (host, key) = if windows {
-            (
-                "x86_64-pc-windows-msvc",
-                "cpython-3.12.12-windows-x86_64-none",
-            )
-        } else {
-            (
-                "x86_64-unknown-linux-gnu",
-                "cpython-3.12.12-linux-x86_64-gnu",
-            )
-        };
         let cargo_home = root.join(".turbo").join("cargo-home");
-        assert_eq!(env["CARGO_HOME"], cargo_home.clone().into_os_string());
-        assert_eq!(env["GOROOT"], tree("go"));
-        assert_eq!(env["GOTOOLCHAIN"], "local");
-        assert_eq!(env["RUSTUP_HOME"], tree("rust"));
-        assert_eq!(env["RUSTUP_TOOLCHAIN"], format!("1.90.0-{host}").as_str());
-        assert_eq!(env["UV_PYTHON"], key);
-        assert_eq!(env["UV_PYTHON_DOWNLOADS"], "never");
-        assert_eq!(env["UV_PYTHON_INSTALL_DIR"], tree("python"));
-        assert_eq!(env["UV_PYTHON_PREFERENCE"], "only-managed");
-        // uv without Python requests no interpreter.
-        let uv = runtime_env(root, &bin, &tools[4..]).unwrap();
-        assert!(uv.contains_key("UV_PYTHON_INSTALL_DIR") && !uv.contains_key("UV_PYTHON"));
+        let expected = BTreeMap::from([
+            ("CARGO_HOME".to_owned(), cargo_home.clone().into_os_string()),
+            ("GOROOT".to_owned(), tree("go")),
+            ("GOTOOLCHAIN".to_owned(), "local".into()),
+            ("UV_PYTHON_INSTALL_DIR".to_owned(), tree("python")),
+        ]);
+        assert_eq!(env, expected);
+        // Every name the hook may restore is one activation can set.
+        assert!(
+            (env.keys()).all(|name| ManagedVar::from_name(name).is_some_and(|v| v.name() == name))
+        );
+        // Two tools that disagree on one variable are an invalid selection.
+        let conflict = tool(
+            "uv",
+            &[(ManagedVar::Gotoolchain, VarValue::Word("auto".into()))],
+        );
+        assert!(runtime_env(root, &bin, &[tools[1].clone(), conflict]).is_err());
         // Like managed run, never a Cargo home that is not a plain directory.
         fs::create_dir_all(root.join(".turbo")).unwrap();
         fs::write(&cargo_home, "").unwrap();

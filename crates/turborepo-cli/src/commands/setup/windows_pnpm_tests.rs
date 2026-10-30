@@ -55,13 +55,9 @@ fn provision(f: &Fixture, routes: Vec<(String, Vec<u8>)>) -> (ActivationPlan, Ve
     (plan, names)
 }
 
+/// The generated bin forwarder; pnpm's own tree holds no launchers.
 fn launcher(plan: &ActivationPlan, name: &str) -> String {
-    let pnpm = plan.tools().iter().find(|tool| tool.id == "pnpm").unwrap();
-    let path = &pnpm.executables[name];
-    assert!(path.starts_with("managed-node-"), "{path}");
-    assert!(path.ends_with(&format!("/{name}.cmd")), "{path}");
-    let tools = plan.path_prepend().join("../tools/pnpm");
-    fs::read_to_string(tools.join(path)).unwrap()
+    fs::read_to_string(plan.path_prepend().join(format!("{name}.cmd"))).unwrap()
 }
 
 /// Node and its bundled npm, then the four pnpm names.
@@ -96,7 +92,10 @@ fn pnpm_11_runs_its_module_entry_points_on_the_managed_node() {
     ] {
         assert_eq!(
             launcher(&plan, name),
-            format!("@\"%~dp0..\\..\\node\\node.exe\" \"%~dp0..\\bin\\{entry}.mjs\" %*\r\n")
+            format!(
+                "@\"%~dp0..\\tools\\node\\node.exe\" \"%~dp0..\\tools\\pnpm\\bin\\{entry}.mjs\" \
+                 %*\r\n"
+            )
         );
     }
     let path = plan.path(Some(system32().as_os_str())).unwrap();
@@ -186,7 +185,7 @@ fn pnpm_12_locks_every_platform_and_runs_the_windows_binary_beside_its_wrapper()
         };
         assert_eq!(
             launcher(&plan, name),
-            format!("@\"%~dp0..\\pnpm-native.exe\"{dlx} %*\r\n")
+            format!("@\"%~dp0..\\tools\\pnpm\\pnpm-native.exe\"{dlx} %*\r\n")
         );
     }
     let path = plan.path(Some(system32().as_os_str())).unwrap();
