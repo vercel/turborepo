@@ -15,7 +15,6 @@ use url::Url;
 
 use crate::{
     Preparation,
-    artifact_cache::ArtifactCache,
     lock::{
         self, Format, Installation, Lock, Platform,
         additional::{ADAPTER, PART},
@@ -69,8 +68,6 @@ pub enum Error {
     },
     #[error("cannot prepare additional tool downloads: {0}")]
     Transport(#[source] turborepo_download::Error),
-    #[error("offline setup has no verified cached artifact and never contacts upstream")]
-    Offline,
     #[error(transparent)]
     Install(#[from] turborepo_tool_install::Error),
 }
@@ -81,8 +78,6 @@ pub struct ArtifactTransport {
     loopback: Option<String>,
     /// Serves `<base>/<host>/<path>` for each locked URL.
     mirror: Option<String>,
-    cache: Option<ArtifactCache>,
-    offline: bool,
 }
 
 impl ArtifactTransport {
@@ -127,22 +122,7 @@ impl ArtifactTransport {
             client: client.with_https_redirects(),
             loopback,
             mirror,
-            cache: None,
-            offline: false,
         }
-    }
-
-    /// Reuse verified artifact bytes from a caller-selected user cache. Hits
-    /// are re-verified against the locked digest; downloads are stored.
-    pub fn with_cache(mut self, cache: Option<ArtifactCache>) -> Self {
-        self.cache = cache;
-        self
-    }
-
-    /// Serve only verified cache hits; a miss fails before any request.
-    pub fn offline(mut self) -> Self {
-        self.offline = true;
-        self
     }
 
     /// Explicit fixture-only HTTP opt-in; literal loopback IPs only.
@@ -315,43 +295,14 @@ impl ArtifactPlan {
         self.download(transport).await.map(Some)
     }
 
-    /// Whether the shared cache holds verified bytes for this artifact.
-    pub fn cache_available(&self, cache: Option<&ArtifactCache>) -> bool {
-        cache
-            .and_then(|cache| cache.get(self.platform, &self.artifact.sha256, MAX_DOWNLOAD_BYTES))
-            .is_some()
-    }
-
-    /// Download (or read from the shared cache), verify, and unpack into
-    /// private staging. Declared executables must be regular files inside the
-    /// archive root.
+    /// Download, verify, and unpack into private staging. Declared executables
+    /// must be regular files inside the archive root.
     pub async fn download(&self, transport: &ArtifactTransport) -> Result<PreparedArtifact, Error> {
-        let cached = transport
-            .cache
-            .as_ref()
-            .and_then(|cache| cache.get(self.platform, &self.artifact.sha256, MAX_DOWNLOAD_BYTES));
-        let from_cache = cached.is_some();
-        let bytes = match cached {
-            Some(bytes) => bytes,
-            None if transport.offline => return Err(Error::Offline),
-            None => {
-                let bytes = self.fetch(transport).await?;
-                // Best effort: a cache write failure never fails verified setup.
-                if let Some(cache) = &transport.cache {
-                    let _ = cache.put(self.platform, &bytes);
-                }
-                bytes
-            }
-        };
-        let downloaded_bytes = if from_cache {
-            0
-        } else {
-            bytes.as_bytes().len() as u64
-        };
+        let bytes = self.fetch(transport).await?;
+        let downloaded_bytes = bytes.as_bytes().len() as u64;
         let prepared = |payload| PreparedArtifact {
             payload,
             tool: self.tool.clone(),
-            from_cache,
             downloaded_bytes,
         };
         let (format, root) = match &self.staged {
@@ -459,17 +410,11 @@ enum Payload {
 pub struct PreparedArtifact {
     payload: Payload,
     tool: Tool,
-    from_cache: bool,
     downloaded_bytes: u64,
 }
 
 impl PreparedArtifact {
-    /// Whether verified bytes came from the shared download cache.
-    pub fn from_cache(&self) -> bool {
-        self.from_cache
-    }
-
-    /// Bytes fetched over the network; zero for a cache hit.
+    /// Bytes fetched over the network.
     pub fn downloaded_bytes(&self) -> u64 {
         self.downloaded_bytes
     }
