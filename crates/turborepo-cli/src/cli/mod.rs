@@ -39,7 +39,7 @@ pub use args::{
     AffectedArgs, Args, BoundariesIgnore, Command, ContinueModeArg, DaemonCommand, DryRunModeArg,
     EnvModeArg, ExecutionArgs, GenerateCommand, GenerateWorkspaceArgs, GeneratorCustomArgs,
     GraphOutput, HookShell, LogOrderArg, LogPrefixArg, LsArgs, NonEmptyPath, OutputFormat,
-    OutputLogsModeArg, QuerySubcommand, RunArgs, SetupArgs, TelemetryCommand, Verbosity,
+    OutputLogsModeArg, PrintEnv, QuerySubcommand, RunArgs, SetupArgs, TelemetryCommand, Verbosity,
 };
 pub(crate) use configuration::resolve_configuration_from_args;
 
@@ -417,8 +417,11 @@ pub fn run(
 
     // Exec leaves stdout, stderr, and the repository to the program: no
     // version banner, telemetry, agent guidance, or worker runtimes.
-    if let Some(Command::Exec { command }) = &cli_args.command {
+    if let Some(Command::Exec { print_env, command }) = &cli_args.command {
         let repo_root = repo_root(repo_state.as_ref(), &cli_args)?;
+        if let Some(format) = print_env {
+            return exec::print_env(&repo_root, &cli_args, *format, color_config);
+        }
         return exec::run(&repo_root, &cli_args, command, color_config);
     }
 

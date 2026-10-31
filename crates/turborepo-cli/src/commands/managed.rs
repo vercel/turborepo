@@ -3,7 +3,12 @@
 //! inventory search. Only [`activate_probes`] changes the process
 //! environment, after selection.
 
-use std::{collections::BTreeSet, ffi::OsString, path::Path, sync::Arc};
+use std::{
+    collections::BTreeSet,
+    ffi::OsString,
+    path::{Path, PathBuf},
+    sync::Arc,
+};
 
 use turborepo_run::{EnvironmentVariableMap, ManagedEnvironment, ManagedRun};
 use turborepo_setup::{
@@ -82,6 +87,16 @@ pub(crate) fn activate_for_discovery(
 pub(crate) fn select(
     base: &crate::commands::CommandBase,
 ) -> Result<Option<Arc<ManagedRun>>, turborepo_run::Error> {
+    select_tools(base)?
+        .map(ManagedTools::into_run)
+        .transpose()
+        .map_err(turborepo_run::Error::ManagedTools)
+}
+
+/// [`select`], keeping the authorized tools for `turbo exec --print-env`.
+pub(crate) fn select_tools(
+    base: &crate::commands::CommandBase,
+) -> Result<Option<Arc<ManagedTools>>, turborepo_run::Error> {
     if !base.opts.future_flags.experimental_setup {
         return Ok(None);
     }
@@ -107,7 +122,7 @@ pub(crate) fn select(
             ));
         }
     }
-    ManagedTools::inspect(
+    ManagedTools::inspect_tools(
         base.repo_root.as_std_path(),
         base.opts.repo_opts.root_turbo_json_path.as_std_path(),
         true,
@@ -119,17 +134,15 @@ pub(crate) fn select(
 
 pub(crate) struct ManagedTools {
     authorization: Authorization,
+    snapshot: ExecutionSnapshot,
     inherited_path: Option<OsString>,
-    identity: String,
     ci: bool,
     clone_local: bool,
 }
 
 impl ManagedTools {
-    /// A root turbo.lock, or without one this clone's `turbo setup --no-lock`
-    /// record, selects managed mode. Either way
-    /// activation is equally strict and never downloads. `store` names a
-    /// fixture's tool store; otherwise authorization locates the user's.
+    /// [`ManagedTools::inspect_tools`], as a run.
+    #[cfg(test)]
     pub(crate) fn inspect(
         root: &Path,
         config: &Path,
@@ -137,6 +150,22 @@ impl ManagedTools {
         store: Option<&Path>,
         context: impl FnOnce() -> Result<ExecutionContext, String>,
     ) -> Result<Option<Arc<ManagedRun>>, String> {
+        Self::inspect_tools(root, config, enabled, store, context)?
+            .map(Self::into_run)
+            .transpose()
+    }
+
+    /// A root turbo.lock, or without one this clone's `turbo setup --no-lock`
+    /// record, selects managed mode. Either way
+    /// activation is equally strict and never downloads. `store` names a
+    /// fixture's tool store; otherwise authorization locates the user's.
+    pub(crate) fn inspect_tools(
+        root: &Path,
+        config: &Path,
+        enabled: bool,
+        store: Option<&Path>,
+        context: impl FnOnce() -> Result<ExecutionContext, String>,
+    ) -> Result<Option<Arc<Self>>, String> {
         // A lock alone must never change unconfigured-repository behavior.
         if !enabled {
             return Ok(None);
@@ -184,16 +213,56 @@ impl ManagedTools {
         let snapshot = authorization
             .with_current(|plan, _| plan.snapshot().clone())
             .map_err(explain)?;
-        let identity = snapshot.fingerprint().to_owned();
-        let inherited_path = std::env::var_os("PATH");
-        let tools = Arc::new(Self {
+        Ok(Some(Arc::new(Self {
             authorization,
-            inherited_path,
-            identity,
+            snapshot,
+            inherited_path: std::env::var_os("PATH"),
             ci,
             clone_local,
-        });
-        Ok(Some(Arc::new(ManagedRun::new(snapshot, tools)?)))
+        })))
+    }
+
+    fn into_run(self: Arc<Self>) -> Result<Arc<ManagedRun>, String> {
+        Ok(Arc::new(ManagedRun::new(self.snapshot.clone(), self)?))
+    }
+
+    /// What `turbo exec` gives a program, from one fresh authorization: the
+    /// variables it overrides and the repository's stable bin link.
+    pub(crate) fn activation(&self) -> Result<(EnvironmentVariableMap, PathBuf), String> {
+        self.authorization
+            .with_current(|_, activation| {
+                Ok((
+                    self.overrides(activation)?,
+                    activation.stable_bin().to_owned(),
+                ))
+            })
+            .map_err(|e| guidance(&e, self.ci, self.clone_local))?
+    }
+
+    fn overrides(
+        &self,
+        activation: &turborepo_tool_install::Activation,
+    ) -> Result<EnvironmentVariableMap, String> {
+        let mut overrides = EnvironmentVariableMap::default();
+        let path = activation
+            .path(self.inherited_path.as_deref())
+            .map_err(|e| e.to_string())?;
+        overrides.insert(
+            "PATH".into(),
+            path.into_string().map_err(|_| {
+                "managed PATH is not UTF-8; run from a UTF-8 repository path".to_owned()
+            })?,
+        );
+        for (key, value) in activation.vars() {
+            overrides.insert(
+                key.clone(),
+                value
+                    .clone()
+                    .into_string()
+                    .map_err(|_| "managed runtime variable is not UTF-8".to_owned())?,
+            );
+        }
+        Ok(overrides)
     }
 }
 
@@ -243,34 +312,11 @@ pub(crate) fn activate_probes(tools: &ManagedRun) -> Result<(), turborepo_run::E
 
 impl ManagedEnvironment for ManagedTools {
     fn revalidate(&self) -> Result<EnvironmentVariableMap, String> {
-        self.authorization
-            .with_current(|_, activation| {
-                let mut overrides = EnvironmentVariableMap::default();
-                let path = activation
-                    .path(self.inherited_path.as_deref())
-                    .map_err(|e| e.to_string())?;
-                overrides.insert(
-                    "PATH".into(),
-                    path.into_string().map_err(|_| {
-                        "managed PATH is not UTF-8; run from a UTF-8 repository path".to_owned()
-                    })?,
-                );
-                for (key, value) in activation.vars() {
-                    overrides.insert(
-                        key.clone(),
-                        value
-                            .clone()
-                            .into_string()
-                            .map_err(|_| "managed runtime variable is not UTF-8".to_owned())?,
-                    );
-                }
-                Ok(overrides)
-            })
-            .map_err(|e| guidance(&e, self.ci, self.clone_local))?
+        Ok(self.activation()?.0)
     }
 
     fn cache_identity(&self) -> &str {
-        &self.identity
+        self.snapshot.fingerprint()
     }
 }
 

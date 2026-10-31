@@ -883,7 +883,10 @@ impl Args {
                 }
             }
         }
-        if let Some(Command::Exec { command }) = &args.command
+        if let Some(Command::Exec {
+            print_env: None,
+            command,
+        }) = &args.command
             && command.first().is_none_or(|program| program.is_empty())
         {
             return Err(
@@ -1367,8 +1370,16 @@ pub enum Command {
     /// '--'; turbo does not interpret its arguments. Never installs tools,
     /// updates turbo.lock, or runs tasks.
     Exec {
+        /// Print the managed environment instead of running a command
+        #[usage(long, value_enum, require_equals = true, value_name = "FORMAT")]
+        print_env: Option<PrintEnv>,
         /// The program to run and its arguments
-        #[usage(value_name = "COMMAND", double_dash = "required", required = true)]
+        #[usage(
+            value_name = "COMMAND",
+            double_dash = "required",
+            required_unless("print_env"),
+            conflicts("print_env")
+        )]
         command: Vec<OsString>,
     },
 
@@ -1410,6 +1421,21 @@ pub enum Command {
     /// Unlink the current directory from your Vercel organization and disable
     /// Remote Caching
     Unlink,
+}
+
+/// How `turbo exec --print-env` prints the managed environment.
+#[derive(Copy, Clone, Debug, ValueEnum, Serialize, Eq, PartialEq)]
+pub enum PrintEnv {
+    /// The repository's stable bin directory
+    Bin,
+    /// POSIX shell `export` statements
+    Sh,
+    /// fish `set -gx` statements
+    Fish,
+    /// PowerShell `$env:` assignments
+    Pwsh,
+    /// A JSON object of the variables `turbo exec` sets
+    Json,
 }
 
 #[derive(Copy, Clone, Debug, Default, ValueEnum, Serialize, Eq, PartialEq)]
