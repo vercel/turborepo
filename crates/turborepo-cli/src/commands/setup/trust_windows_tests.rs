@@ -1,10 +1,9 @@
-//! Windows user-state checks with fixture installations. Real Windows tool
-//! generations and provisioning arrive separately; these tests exercise the
+//! Windows user-state checks with fixture records. These tests exercise the
 //! record, descriptor and identity checks that setup, run and the hook share.
 #![allow(clippy::unwrap_used)]
 
 use tempfile::TempDir;
-use turborepo_tool_install::{Current, UserStore};
+use turborepo_tool_install::{EnvKey, UserStore};
 
 use super::*;
 use crate::commands::setup::dacl::{
@@ -23,9 +22,6 @@ impl Fixture {
     fn new() -> Self {
         let (home, repo) = (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
         fs::write(repo.path().join("turbo.lock"), "{}").unwrap();
-        let tools = repo.path().join(".turbo").join("tools");
-        fs::create_dir_all(tools.join("generation-a").join("bin")).unwrap();
-        fs::write(tools.join("manifest.json"), "fixture inventory").unwrap();
         Self { home, repo }
     }
 
@@ -39,37 +35,17 @@ impl Fixture {
         self.trust().path().parent().unwrap().to_owned()
     }
 
-    /// Stands in for Store::current, which supplies the canonical bin path.
-    fn installation(&self, trust: &TrustStore) -> Installation {
-        let bin = trust.root.join(".turbo").join("tools").join("generation-a");
-        let bin = bin.join("bin");
-        let tools = vec![Tool {
-            id: "node".into(),
-            version: "24.0.0".into(),
-            platform: "windows-x64".into(),
-            artifact_sha256: "a".repeat(64),
-            executables: [("node".into(), "node.exe".into())].into(),
-            vars: Default::default(),
-        }];
-        let current = Current {
-            tools,
-            bin,
-            record: None,
-            cargo_home: None,
-        };
-        trust
-            .inspect_installation(|| Ok(Some(current)))
-            .unwrap()
-            .unwrap()
-            .0
-    }
-
     fn publish(&self) -> TrustStore {
         let trust = self.trust();
         trust.preflight().unwrap();
-        trust.write_record(self.installation(&trust)).unwrap();
+        trust.write_record(&env(), None).unwrap();
         trust
     }
+}
+
+/// The environment fixture records bind; nothing here installs it.
+fn env() -> EnvKey {
+    EnvKey::try_from("a".repeat(64)).unwrap()
 }
 
 #[test]
@@ -77,8 +53,9 @@ fn records_are_owner_only_and_round_trip_with_the_path_spelling() {
     let f = Fixture::new();
     let trust = f.publish();
     let record = trust.load().unwrap().unwrap();
-    assert!(record.installation == f.installation(&trust));
+    assert_eq!(record.env, env());
     assert_eq!(record.lock_sha256, Some(hash(b"{}")));
+    // The record keeps the canonical verbatim root it was loaded against.
     assert!(
         trust
             .root
@@ -86,13 +63,8 @@ fn records_are_owner_only_and_round_trip_with_the_path_spelling() {
             .to_string_lossy()
             .starts_with(r"\\?\")
     );
-    assert!(
-        !record
-            .installation
-            .bin
-            .to_string_lossy()
-            .starts_with(r"\\?\")
-    );
+    assert_eq!(record.root, trust.root);
+    assert!(trust.same_directory(&record).unwrap());
     assert_eq!(
         trust.path().parent(),
         Some(&*f.records().canonicalize().unwrap())
@@ -105,7 +77,7 @@ fn records_are_owner_only_and_round_trip_with_the_path_spelling() {
     assert!(icacls(&shared, &["/grant", "*S-1-1-0:(OI)(CI)(M)"]));
     assert!(trust.load().unwrap().is_some());
     let bytes = fs::read(trust.path()).unwrap();
-    trust.write_record(f.installation(&trust)).unwrap();
+    trust.write_record(&env(), None).unwrap();
     assert_eq!(fs::read(trust.path()).unwrap(), bytes);
 }
 
@@ -134,10 +106,10 @@ fn lock_changes_moved_roots_and_same_path_reclones_do_not_match() {
     );
     // A new directory at the old path has a new NTFS file ID.
     fs::create_dir(f.repo.path()).unwrap();
-    fs::rename(moved.join(".turbo"), f.repo.path().join(".turbo")).unwrap();
     let reclone = f.trust();
     assert_eq!(reclone.path(), trust.path());
-    assert!(reclone.load().unwrap().unwrap().installation != f.installation(&reclone));
+    let record = reclone.load().unwrap().unwrap();
+    assert!(!reclone.same_directory(&record).unwrap());
     fs::remove_dir_all(&moved).unwrap();
 }
 
@@ -165,8 +137,7 @@ fn unsafe_windows_user_state_fails_closed_without_following_links() {
                 junction(&f.records(), &elsewhere);
             }
             _ => {
-                let installation = f.installation(&trust);
-                assert!(trust.write_record(installation).is_err());
+                assert!(trust.write_record(&env(), None).is_err());
                 assert_eq!(fs::read_dir(f.records()).unwrap().count(), 0);
             }
         }

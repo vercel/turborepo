@@ -467,6 +467,7 @@ impl Captured {
         String::from_utf8_lossy(&self.out.lock().unwrap()).into_owned()
     }
 
+    #[cfg(unix)]
     pub fn err(&self) -> String {
         String::from_utf8_lossy(&self.err.lock().unwrap()).into_owned()
     }

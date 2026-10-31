@@ -269,7 +269,7 @@ impl RegistryTransport {
     }
 
     /// Loopback fixtures only; canonical provenance, no env override.
-    #[cfg(any(all(test, unix), feature = "test-support"))]
+    #[cfg(any(test, feature = "test-support"))]
     pub fn loopback_http_for_tests(origin: &str) -> Result<Self, Error> {
         Ok(Self {
             client: DownloadClient::loopback_http_for_tests(origin)?,
