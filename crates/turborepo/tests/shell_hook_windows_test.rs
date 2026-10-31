@@ -51,6 +51,7 @@ fn repo(dir: &Path, flagged: bool, store: Option<&Path>) -> Option<PathBuf> {
         ]
         .into(),
         vars: Default::default(),
+        staging: turborepo_tool_install::Staging::new("fixture", 1, &()).unwrap(),
     };
     let system32 = PathBuf::from(std::env::var_os("SystemRoot").unwrap()).join("System32");
     let installed = common::setup::install_tools(&root, store, vec![node], None, |_, tree| {

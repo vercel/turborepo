@@ -444,6 +444,7 @@ fn any_other_tool_set_names_another_environment() {
                 artifact_sha256: "44".repeat(32),
                 executables: BTreeMap::from([("foreign".into(), "bin/tool".into())]),
                 vars: Default::default(),
+                staging: turborepo_tool_install::Staging::new("fixture", 1, &()).unwrap(),
             }),
         }
         let other = turborepo_tool_install::Selection::new(tools).unwrap();

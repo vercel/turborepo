@@ -9,7 +9,7 @@ use std::{collections::BTreeMap, io, path::Path, time::Duration};
 use semver::Version;
 use turborepo_archive::{ExtractedArtifact, Layout};
 use turborepo_download::{ApprovedOrigin, DownloadClient, ExpectedSha256, Limits};
-use turborepo_tool_install::{Export, SetupSession, Tool};
+use turborepo_tool_install::{Export, SetupSession, Staging, Tool};
 
 use crate::{
     lock::{Artifact, Format, Installation, Lock, Platform},
@@ -19,6 +19,8 @@ use crate::{
 };
 
 const RELEASES: &str = "https://github.com";
+/// Bump when this adapter stages different bytes for the same staging inputs.
+const STAGING_REVISION: u32 = 1;
 // GitHub answers release downloads with a redirect to its asset CDN.
 const ASSETS: [&str; 2] = [
     "https://release-assets.githubusercontent.com",
@@ -264,6 +266,14 @@ impl BunPlan {
                 artifact_sha256: artifact.sha256.clone(),
                 executables: Export::files(&artifact.executables),
                 vars: Default::default(),
+                staging: Staging::new(
+                    "bun",
+                    STAGING_REVISION,
+                    &crate::staging::Archive {
+                        format: expected.format,
+                        root: expected.root_prefix.as_deref().ok_or(Error::InvalidLock)?,
+                    },
+                )?,
             },
             artifact: expected,
         })

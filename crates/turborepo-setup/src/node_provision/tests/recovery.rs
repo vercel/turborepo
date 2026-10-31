@@ -43,6 +43,7 @@ fn sibling(node: &Tool) -> Tool {
         artifact_sha256: "b".repeat(64),
         executables: BTreeMap::from([("fixture".into(), "bin/fixture".into())]),
         vars: Default::default(),
+        staging: turborepo_tool_install::Staging::new("fixture", 1, &()).unwrap(),
     }
 }
 fn stage_sibling(tool: &Tool, root: &Path) -> Result<(), turborepo_tool_install::Error> {

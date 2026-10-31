@@ -99,6 +99,7 @@ fn exports_that_would_shadow_another_tool_are_rejected() {
             .map(|name| (name.to_string(), format!("bin/{name}").into()))
             .collect(),
         vars: Default::default(),
+        staging: turborepo_tool_install::Staging::new("fixture", 1, &()).unwrap(),
     };
     let node = tool("node", "macos-arm64", &["node", "npm", "npx"]);
     let check = |additional: &[Tool]| artifact_provision::check_exports([&node], additional);

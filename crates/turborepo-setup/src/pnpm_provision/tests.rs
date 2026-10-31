@@ -291,6 +291,7 @@ async fn full_tree_bound_shims_repeat_reuse_and_stale_replacement() {
         artifact_sha256: "ab".repeat(32),
         executables: BTreeMap::from([("extra".into(), "bin/node".into())]),
         vars: Default::default(),
+        staging: turborepo_tool_install::Staging::new("fixture", 1, &()).unwrap(),
     };
     let expanded = [
         node.inventory_tool().clone(),

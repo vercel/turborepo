@@ -1091,6 +1091,7 @@ mod tests {
             artifact_sha256: "a".repeat(64),
             executables: [("node".into(), "bin/node".into())].into(),
             vars: Default::default(),
+            staging: turborepo_tool_install::Staging::new("fixture", 1, &()).unwrap(),
         };
         let selection = Selection::new(vec![tool]).unwrap();
         let store = UserStore::at(&home, &root).unwrap();
