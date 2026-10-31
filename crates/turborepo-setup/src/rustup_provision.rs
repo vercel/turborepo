@@ -12,7 +12,7 @@ use std::{
 };
 
 use turborepo_download::{ApprovedOrigin, DownloadClient, ExpectedSha256, Limits};
-use turborepo_tool_install::{Store, Tool};
+use turborepo_tool_install::{Export, Store, Tool};
 
 use crate::{
     lock::{self, Artifact, Declaration, Format, Installation, Lock, Platform},
@@ -205,7 +205,8 @@ impl RustupPlan {
                 version: version.to_string(),
                 platform: spelling.into(),
                 artifact_sha256: artifact.sha256.clone(),
-                executables,
+                executables: Export::files(&executables),
+                vars: BTreeMap::new(),
             },
             artifact: artifact.clone(),
         })
@@ -276,7 +277,7 @@ impl RustupPlan {
         };
         // Split components: Windows images must not carry a lock path's `/`
         // (a `cmd.exe` image there cannot even run its own commands).
-        let path = self.tool.executables["rustup"].split('/');
+        let path = self.artifact.executables["rustup"].split('/');
         Ok(path.fold(tree, |tree, part| tree.join(part)))
     }
 }
@@ -307,7 +308,11 @@ impl PreparedRustup {
         {
             return Err(invalid);
         }
-        let path = destination.join(self.tool.executables.get("rustup").ok_or(invalid)?);
+        let path = destination.join(
+            (self.tool.executables.get("rustup"))
+                .and_then(Export::as_file)
+                .ok_or(invalid)?,
+        );
         fs::create_dir(
             path.parent()
                 .ok_or(turborepo_tool_install::Error::UnsafePath)?,

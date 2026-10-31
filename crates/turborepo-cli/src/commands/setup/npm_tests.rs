@@ -461,8 +461,8 @@ fn npm_local_first_lock_repeat_frozen_force_and_check_use_complete_host_cohort()
             assert!(current.bin.join(name).exists());
             if !bundled {
                 let shim = fs::read_to_string(current.bin.join(name)).unwrap();
-                assert!(shim.contains("exec \"$tools/node/bin/node\""));
-                assert!(shim.contains(&format!("$tools/npm/bin/{name}-cli.js")));
+                assert!(shim.contains("exec \"$generation\"'/tools/node/bin/node'"));
+                assert!(shim.contains(&format!("/tools/npm/bin/{name}-cli.js'")));
             }
         }
         assert_eq!(
@@ -1041,7 +1041,7 @@ fn npm_no_lock_pin_change_reconciles_owners_without_a_lock() {
     assert_eq!(current.tools.len(), 2);
     for name in ["npm", "npx"] {
         let shim = fs::read_to_string(current.bin.join(name)).unwrap();
-        assert!(shim.contains(&format!("$tools/npm/bin/{name}-cli.js")));
+        assert!(shim.contains(&format!("/tools/npm/bin/{name}-cli.js'")));
     }
     n.untouched();
 }

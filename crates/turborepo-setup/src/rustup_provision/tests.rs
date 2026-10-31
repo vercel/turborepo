@@ -110,7 +110,10 @@ async fn locked_plans_accept_only_the_official_binary_shape() {
     let (_, _, lock) = resolved().await;
     let plan = RustupPlan::from_lock(&lock, TARGET).unwrap();
     assert_eq!(plan.inventory_tool().platform, "linux-x64-gnu");
-    assert_eq!(plan.inventory_tool().executables["rustup"], "bin/rustup");
+    assert_eq!(
+        plan.inventory_tool().executables["rustup"],
+        "bin/rustup".into()
+    );
     assert!(matches!(
         RustupPlan::from_lock(&lock, Platform::Any),
         Err(Error::UnsupportedTarget)

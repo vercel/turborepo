@@ -123,14 +123,14 @@ impl PythonPlan {
             let executables = artifact
                 .executables
                 .keys()
-                .map(|name| (name.clone(), format!("{launch}/{name}.cmd")))
+                .map(|name| (name.clone(), format!("{launch}/{name}.cmd").into()))
                 .collect();
             (executables, "python.exe".into(), "Lib".into(), Some(launch))
         } else {
             let executables = artifact
                 .executables
                 .iter()
-                .map(|(name, path)| (name.clone(), format!("{key}/{path}")))
+                .map(|(name, path)| (name.clone(), format!("{key}/{path}").into()))
                 .collect();
             let (interpreter, stdlib) =
                 (format!("bin/python{minor}"), format!("lib/python{minor}"));
@@ -143,6 +143,8 @@ impl PythonPlan {
                 platform: spelling,
                 artifact_sha256: artifact.sha256.clone(),
                 executables,
+                // Activation only: Python's own exports need none of them.
+                vars: crate::uv_provision::interpreter_vars(Some(key.clone())),
             },
             artifact,
             key,

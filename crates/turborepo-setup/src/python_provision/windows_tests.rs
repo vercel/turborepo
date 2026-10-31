@@ -115,7 +115,8 @@ async fn verified_build_runs_in_place_through_the_batch_launcher() {
     assert_eq!(names(&current.bin), ["python.cmd"]);
     // uv's install-directory scan skips the dot directory, so the key
     // directory stays its only installation.
-    let launch = plan.inventory_tool().executables["python"]
+    let launch = (plan.inventory_tool().executables["python"].as_file())
+        .unwrap()
         .split('/')
         .next()
         .unwrap()

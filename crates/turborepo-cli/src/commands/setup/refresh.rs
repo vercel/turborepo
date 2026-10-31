@@ -63,7 +63,8 @@ fn ordinary_float_preserves_but_refresh_selects_newer_and_repeat_is_noop() {
     .unwrap();
     // Explicitly select non-frozen refresh so the local fixture also runs in CI.
     assert_eq!(f.run(&u, REFRESH).unwrap(), 0);
-    assert_eq!(u.hits(), 7);
+    // pnpm's tree is reused beside the new Node.
+    assert_eq!(u.hits(), 5);
     let new = selected(&f);
     assert_eq!(new.tools()["node"].version, "24.1.0");
     assert_eq!(new.tools()["pnpm"], old.tools()["pnpm"]);
@@ -86,7 +87,7 @@ fn ordinary_float_preserves_but_refresh_selects_newer_and_repeat_is_noop() {
     let modified = fs::metadata(&lock_path).unwrap().modified().unwrap();
     let before = publication_guards::state(f.owned.root());
     assert_eq!(f.run(&u, REFRESH).unwrap(), 0);
-    assert_eq!(u.hits(), 11); // Metadata + exact pnpm bytes, no provisioning downloads.
+    assert_eq!(u.hits(), 9); // Metadata + exact pnpm bytes, no provisioning downloads.
     assert_eq!(same_file::Handle::from_path(&lock_path).unwrap(), inode);
     assert_eq!(
         fs::metadata(&lock_path).unwrap().modified().unwrap(),

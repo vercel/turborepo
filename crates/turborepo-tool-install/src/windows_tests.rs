@@ -16,6 +16,7 @@ fn node() -> Tool {
             ("node".into(), "node.exe".into()),
             ("npm".into(), "npm.cmd".into()),
         ]),
+        vars: Default::default(),
     }
 }
 
@@ -26,6 +27,7 @@ fn pnpm() -> Tool {
         platform: "windows-x64".into(),
         artifact_sha256: "b".repeat(64),
         executables: BTreeMap::from([("pnpm".into(), "launch/pnpm.cmd".into())]),
+        vars: Default::default(),
     }
 }
 

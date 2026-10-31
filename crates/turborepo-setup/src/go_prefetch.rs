@@ -110,9 +110,8 @@ impl Prefetch<'_> {
             .args(args)
             .envs(self.env)
             .stdin(Stdio::null());
-        for (key, value) in crate::go_provision::RUNTIME_ENV {
-            process.env(key, value);
-        }
+        // Setup's own go never switches toolchains, whatever `env` holds.
+        process.env("GOTOOLCHAIN", "local");
         if self.offline {
             process.envs(OFFLINE_ENV.iter().copied());
         }

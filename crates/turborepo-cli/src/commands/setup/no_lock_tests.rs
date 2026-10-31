@@ -95,18 +95,15 @@ fn no_lock_targeted_drift_retains_unaffected_pins_and_removes_manager() {
     })
     .unwrap();
     f.run(&node, NO_LOCK).unwrap();
-    // Node binding changes pnpm's launcher identity: exact locked verification
-    // is required, not a new package-manager resolution or selection.
-    assert_eq!(node.hits(), 5);
-    assert_eq!(
-        paths
+    // pnpm's tree is reused beside any Node: no new package-manager
+    // resolution, selection or download.
+    assert_eq!(node.hits(), 3);
+    assert!(
+        !paths
             .lock()
             .unwrap()
             .iter()
-            .filter(|p| p.starts_with("/pnpm/"))
-            .cloned()
-            .collect::<Vec<_>>(),
-        ["/pnpm/10.1.0", "/pnpm/-/pnpm-10.1.0.tgz"]
+            .any(|p| p.starts_with("/pnpm/"))
     );
     assert_eq!(selection(&f).tools()["pnpm"], pnpm);
     let prior = selection(&f).tools()["node"].clone();

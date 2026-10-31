@@ -1107,7 +1107,7 @@ fn seed_generation(
 ) -> turborepo_tool_install::Current {
     use std::os::unix::fs::PermissionsExt;
     let stage = |tool: &turborepo_tool_install::Tool, destination: &Path| {
-        for relative in tool.executables.values() {
+        for relative in tool.tree_files() {
             let file = destination.join(relative);
             fs::create_dir_all(file.parent().expect("executable parent"))?;
             fs::write(&file, "#!/bin/sh\ntouch probe-ran\nexit 99\n")?;
@@ -1357,7 +1357,7 @@ fn standalone_check_and_locked_plan_report_only_node_pnpm_and_reject_damage() {
     // Production has no loopback override. Seed through the real Store/adapter
     // contract; the CLI library fixtures separately exercise actual downloads.
     let stage = |tool: &turborepo_tool_install::Tool, destination: &Path| {
-        for relative in tool.executables.values() {
+        for relative in tool.tree_files() {
             let file = destination.join(relative);
             fs::create_dir_all(file.parent().unwrap())?;
             fs::write(&file, "#!/bin/sh\ntouch probe-ran\nexit 99\n")?;
@@ -1639,7 +1639,7 @@ fn plain_setup_provisions_tools_and_reports_dependencies_skipped() {
         .reconcile(
             &[node.inventory_tool().clone(), pnpm.inventory_tool().clone()],
             |tool, destination| {
-                for relative in tool.executables.values() {
+                for relative in tool.tree_files() {
                     let file = destination.join(relative);
                     fs::create_dir_all(file.parent().unwrap())?;
                     fs::write(&file, "#!/bin/sh\ntouch probe-ran\nexit 99\n")?;
