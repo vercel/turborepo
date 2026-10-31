@@ -1,4 +1,4 @@
-use std::{ffi::OsString, path::Path};
+use std::{collections::BTreeMap, ffi::OsString, path::Path};
 
 use turbopath::AbsoluteSystemPathBuf;
 
@@ -79,9 +79,9 @@ fn exec_runs_authorized_managed_tools_and_never_runs_stale_ones() {
     assert_eq!(u.hits(), 3);
 }
 
-fn installed_tools(f: &Fixture) -> std::sync::Arc<turborepo_run::ManagedRun> {
+fn installed_tools(f: &Fixture) -> std::sync::Arc<ManagedTools> {
     let root = f.owned.root();
-    ManagedTools::inspect(
+    ManagedTools::inspect_tools(
         root,
         &root.join("turbo.json"),
         true,
@@ -90,6 +90,83 @@ fn installed_tools(f: &Fixture) -> std::sync::Arc<turborepo_run::ManagedRun> {
     )
     .unwrap()
     .unwrap()
+}
+
+/// The environment a program `turbo exec` ran actually saw.
+fn child_env(tools: &ManagedTools, program: &[&str], cwd: &Path) -> BTreeMap<String, String> {
+    let output = cwd.join("child-env");
+    let command: Vec<_> = program.iter().map(OsString::from).collect();
+    let cwd = AbsoluteSystemPathBuf::try_from(cwd).unwrap();
+    let status = exec::spawn(tools, &command, &cwd, |mut command| {
+        command.stdout(fs::File::create(&output)?);
+        command.status()
+    })
+    .unwrap();
+    assert_eq!(status, 0);
+    fs::read_to_string(&output)
+        .unwrap()
+        .lines()
+        .filter_map(|line| line.split_once('='))
+        .map(|(key, value)| (key.to_owned(), value.to_owned()))
+        .collect()
+}
+
+#[test]
+fn print_env_is_the_environment_exec_gives_the_program() {
+    use crate::cli::PrintEnv;
+    let f = Fixture::new();
+    f.run(&Upstream::new(&f, false, None), FROZEN).unwrap();
+    let tools = installed_tools(&f);
+    let (overrides, bin) = tools.activation().unwrap();
+    let json = exec::render(PrintEnv::Json, &overrides, &bin).unwrap();
+    let printed: BTreeMap<String, String> = serde_json::from_str(&json).unwrap();
+    assert!(printed.contains_key("PATH"));
+    let cwd = f.owned.root().join("apps/web");
+    let seen = child_env(&tools, &["env"], &cwd);
+    for (key, value) in &printed {
+        assert_eq!(seen.get(key), Some(value), "{key}");
+    }
+    // A shell that evaluates `sh` output gets the same values.
+    let script = exec::render(PrintEnv::Sh, &overrides, &bin).unwrap();
+    fs::write(cwd.join("activate.sh"), &script).unwrap();
+    let evaluated = child_env(&tools, &["sh", "-c", ". ./activate.sh && env"], &cwd);
+    for (key, value) in &printed {
+        assert_eq!(evaluated.get(key), Some(value), "{key}");
+    }
+    // `bin` is the repository's stable link to the same environment.
+    let bin = exec::render(PrintEnv::Bin, &overrides, &bin).unwrap();
+    let bin = Path::new(bin.trim_end());
+    assert!(bin.starts_with(f.owned.home()) && bin.ends_with("bin"));
+    let first = std::env::split_paths(&printed["PATH"]).next().unwrap();
+    assert_eq!(bin.canonicalize().unwrap(), first.canonicalize().unwrap());
+    f.no_execution();
+}
+
+#[test]
+fn print_env_bin_without_the_stable_link_is_the_environments_bin() {
+    use crate::cli::PrintEnv;
+    let f = Fixture::new();
+    f.run(&Upstream::new(&f, false, None), FROZEN).unwrap();
+    let tools = installed_tools(&f);
+    let (overrides, stable) = tools.activation().unwrap();
+    let env_bin = std::env::split_paths(&overrides["PATH"]).next().unwrap();
+    assert_ne!(
+        stable, env_bin,
+        "the stable link is printed while it exists"
+    );
+    assert_eq!(
+        stable.canonicalize().unwrap(),
+        env_bin.canonicalize().unwrap()
+    );
+    // Windows setup skips the link when the user cannot create symlinks.
+    fs::remove_file(&stable).unwrap();
+
+    let (overrides, bin) = tools.activation().unwrap();
+    let printed = exec::render(PrintEnv::Bin, &overrides, &bin).unwrap();
+    let printed = Path::new(printed.trim_end());
+    assert!(printed.join("node").is_file(), "{printed:?}");
+    assert_eq!(printed, env_bin);
+    f.no_execution();
 }
 
 #[test]
@@ -119,7 +196,7 @@ fn exec_after_lock_drift_fails_with_setup_guidance_and_runs_nothing() {
             "case {case}: {error}"
         );
         let root = f.owned.root();
-        let fresh = ManagedTools::inspect(
+        let fresh = ManagedTools::inspect_tools(
             root,
             &root.join("turbo.json"),
             true,

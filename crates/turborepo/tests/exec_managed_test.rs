@@ -175,6 +175,45 @@ fn in_store(repo: &Repo, path: &str) -> bool {
 }
 
 #[test]
+fn print_env_json_is_the_environment_exec_gives_the_program() {
+    let repo = Repo::provisioned();
+    let host = repo.owned.home().join("host-bin");
+    symlink(which::which("env").unwrap(), host.join("env")).unwrap();
+    let (before, hits) = (repo.state(), repo.upstream.hits());
+    let (output, _) = repo.exec("apps/web", &["exec", "--print-env=json"]);
+    assert_eq!(output.status.code(), Some(0), "{}", stderr(&output));
+    let printed: std::collections::BTreeMap<String, String> =
+        serde_json::from_slice(&output.stdout).unwrap();
+    assert!(printed.contains_key("PATH"), "{printed:?}");
+    let (output, _) = repo.exec("apps/web", &["exec", "--", "env"]);
+    assert_eq!(output.status.code(), Some(0), "{}", stderr(&output));
+    let seen: std::collections::BTreeMap<_, _> = String::from_utf8(output.stdout)
+        .unwrap()
+        .lines()
+        .filter_map(|line| line.split_once('='))
+        .map(|(key, value)| (key.to_owned(), value.to_owned()))
+        .collect();
+    for (key, value) in &printed {
+        assert_eq!(seen.get(key), Some(value), "{key}");
+    }
+    // `bin` is the repository's stable link to the same environment.
+    let (output, _) = repo.exec("", &["exec", "--print-env=bin"]);
+    assert_eq!(output.status.code(), Some(0), "{}", stderr(&output));
+    let bin = String::from_utf8(output.stdout).unwrap();
+    let installed = common::setup::installed(repo.owned.root(), &repo.store()).unwrap();
+    assert_eq!(Path::new(bin.trim_end()), installed.stable_bin);
+    let first = std::env::split_paths(&printed["PATH"]).next().unwrap();
+    assert_eq!(
+        Path::new(bin.trim_end()).canonicalize().unwrap(),
+        first.canonicalize().unwrap()
+    );
+    // Printing never installs, downloads or runs a managed tool.
+    assert_eq!(repo.state(), before);
+    assert_eq!(repo.upstream.hits(), hits);
+    assert!(!repo.owned.home().join("host-ran").exists());
+}
+
+#[test]
 fn exec_runs_managed_tools_from_root_nested_and_cwd_without_installing() {
     let repo = Repo::provisioned();
     let root = repo.owned.root().to_owned();
