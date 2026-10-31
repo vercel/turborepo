@@ -9,6 +9,7 @@ use std::{
 use super::*;
 
 mod gc;
+mod publish;
 mod user_store;
 
 fn tool(id: &str) -> Tool {
@@ -285,10 +286,19 @@ fn setups_racing_on_the_same_missing_tree_both_succeed_and_leave_one_tree() {
     });
     let keys: Vec<_> = results.into_iter().map(|r| r.unwrap().env).collect();
     assert_eq!(keys[0], keys[1]);
-    let trees = fs::read_dir(f.store.root().join("trees")).unwrap().count();
-    assert_eq!(trees, 1);
-    assert_eq!(fs::read_dir(f.store.root().join("tmp")).unwrap().count(), 0);
+    for (kind, expected) in [("trees", 1), ("envs", 1), ("tmp", 0)] {
+        let found = fs::read_dir(f.store.root().join(kind)).unwrap().count();
+        assert_eq!(found, expected, "{kind}");
+    }
     f.store.check(&Selection::new(tools).unwrap()).unwrap();
+    for repo in &repos {
+        let root = fs::canonicalize(repo.path()).unwrap();
+        let activation = f.store.activate(&root, &keys[0]).unwrap();
+        let output = Command::new(activation.stable_bin().join("node"))
+            .output()
+            .unwrap();
+        assert!(output.status.success());
+    }
 }
 
 #[test]
