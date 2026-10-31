@@ -73,7 +73,7 @@ Before each prompt, and after each directory change in zsh and fish, the hook ru
 
 Node.js, npm, pnpm, Yarn, and Bun need no variables, so in a JavaScript-only repository the hook only changes `PATH`.
 
-Commands at your prompt then behave like tasks. `rustup` and `cargo` use the managed toolchain, and `cargo install` installs into the clone's `.turbo/cargo-home` instead of `~/.cargo`. The hook doesn't add `.turbo/cargo-home/bin` to `PATH`. `go` never switches to another toolchain, and uv uses the managed Python.
+Commands at your prompt then behave like tasks. `rustup` and `cargo` use the managed toolchain, and `cargo install` installs into the repository's private Cargo home in the [tool store](/docs/core-concepts/managed-toolchains#where-tools-are-stored) instead of `~/.cargo`. The hook doesn't add that home's `bin` directory to `PATH`. `go` never switches to another toolchain, and uv uses the managed Python.
 
 ### Leaving and switching repositories
 
@@ -89,7 +89,7 @@ The hook never downloads or installs tools, never writes `turbo.lock`, and never
 
 ### Trust
 
-The hook activates only binaries that `turbo setup` installed and recorded for your user. `turbo setup` records each clone it sets up in `turbo`'s user state directory, outside the repository. A `.turbo/tools` directory alone, such as one checked into a repository you just cloned, is never activated. The installation must match the record for that exact clone, so moving, copying, or recloning a repository requires `turbo setup` again.
+The hook activates only tools that `turbo setup` installed and recorded for your user. `turbo setup` records each clone it sets up in your [tool store](/docs/core-concepts/managed-toolchains#where-tools-are-stored), outside the repository. The hook never reads files in the repository to find tools, including `.turbo/bin`. The record names that exact clone, so moving, copying, or recloning a repository requires `turbo setup` again.
 
 ### Out-of-date and missing tools
 
@@ -145,7 +145,7 @@ Use `turbo exec` for:
 
 - **Scripts and CI steps.** Non-interactive shells don't draw prompts, so the hook never runs.
 - **`cmd.exe` and Git Bash on Windows.** They have no supported hook.
-- **GUI-launched processes.** Editors and other applications that start tools directly don't load your shell's startup files.
+- **GUI-launched processes.** Editors and other applications that start tools directly don't load your shell's startup files. You can also point them at `.turbo/bin`, or at the output of [`turbo exec --print-env`](/docs/reference/exec#--print-env).
 - **Machines without the hook.** For example, when you installed `turbo` with `--no-shell-hook`.
 
 `turbo exec` uses the same tools as `turbo run`, and it fails instead of running out-of-date tools.

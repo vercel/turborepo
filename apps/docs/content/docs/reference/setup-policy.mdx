@@ -55,7 +55,7 @@ Set these keys at the top of `setup` to apply them to every toolchain, or inside
 
 How `turbo setup` prepares a toolchain's tools:
 
-- `managed`: Download, verify, and install the version recorded in `turbo.lock` into `.turbo/tools`. This is the default.
+- `managed`: Download, verify, and install the version recorded in `turbo.lock` into your [tool store](/docs/core-concepts/managed-toolchains#where-tools-are-stored). This is the default.
 - `verify-system`: Use a tool that's already installed after verifying that it matches `turbo.lock`. See [`verify-system`](#verify-system).
 - `skip`: Neither install nor verify the toolchain. Tasks use whatever is on `PATH`. A skipped toolchain also skips its dependencies.
 
@@ -172,8 +172,6 @@ Set `"dependencies": "skip"` to make tools-only setup the repository default, fo
 javascript: tools managed (inferred); dependencies skipped (turbo.json setup policy)
 node 24.21.0: reused
 pnpm 10.18.0: reused
-Managed tools use 218.9 MB in this clone's .turbo/tools.
-Shared download cache: 67.5 MB.
 Dependencies skipped (turbo.json setup policy). No tasks run.
 ```
 
@@ -209,7 +207,7 @@ For each tool, `turbo setup` uses the first `node` or `pnpm` on `PATH` outside o
 | Frozen or CI, `--check`, and `--force` | Verifies without writing: `turbo.lock` matches your declarations, and each tool on `PATH` is exactly the locked version.                                          |
 | `--update-lock`                        | Records the installed versions in `turbo.lock`, even for unchanged declarations.                                                                                  |
 
-`--force` has nothing to reinstall, so it only verifies. Local mode still requires `/.turbo/` in your `.gitignore`, because `turbo setup` takes a lock under `.turbo/` while it writes `turbo.lock`.
+`--force` has nothing to reinstall, so it only verifies. In local mode, `turbo setup` still takes a lock under `.turbo/` while it writes `turbo.lock`.
 
 ```txt title="Terminal"
 javascript: tools verify-system (turbo.json setup policy); dependencies locked (inferred); turbo setup verifies the installed tools against turbo.lock but does not install them, so consistency depends on each machine

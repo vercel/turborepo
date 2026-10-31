@@ -30,7 +30,7 @@ You can run `turbo setup` from any directory in your repository. It walks up to 
 
 - A root `turbo.json` or `turbo.jsonc`.
 - A [supported platform](/docs/reference/managed-toolchain-platforms).
-- In a Git repository, `.turbo/` must be ignored and untracked. Add `/.turbo/` to your `.gitignore`. Outside a Git repository, such as in [pruned output](/docs/core-concepts/managed-toolchains#pruning), `turbo setup` skips this check.
+- A [tool store](/docs/core-concepts/managed-toolchains#where-tools-are-stored) that only your user can write, outside the repository. By default, it's `turborepo/tools` in your local data directory. Set `TURBO_TOOL_STORE` to an absolute path to use another directory.
 - At least one [supported declaration](#supported-declarations) at the repository root. npm, pnpm, and Yarn also need a Node.js declaration.
 - To install JavaScript dependencies, which `turbo setup` does by default, a package manager declared with `packageManager` or `devEngines.packageManager` and its committed lockfile. See [Dependencies](#dependencies).
 - No npm configuration that could redirect downloads. Configure [mirrors](/docs/reference/setup-policy#mirrors) instead. See [npm configuration is rejected](#npm-configuration-is-rejected).
@@ -77,7 +77,7 @@ Requires [`futureFlags.experimentalCargoWorkspaces`](/docs/guides/tools/rust#ena
 | -------------------------------------------- | ------------------------------------------ |
 | `rust-toolchain.toml` or `rust-toolchain`    | `channel = "1.90.0"` or `channel = "stable"` |
 
-`turbo setup` installs rustup and the selected toolchain with the components and targets the file lists. Its rustup and Cargo homes are private to the clone: Cargo uses `.turbo/cargo-home` instead of `~/.cargo`, so it doesn't share your credentials or registry cache, and `cargo install` installs there too. `turbo run`, `turbo exec`, and the [shell hook](/docs/reference/hook) set `RUSTUP_HOME`, `RUSTUP_TOOLCHAIN`, and `CARGO_HOME`, so `rustup` and `cargo` act on the managed toolchain. `turbo.lock` records each component's `.tar.gz` and `.tar.xz` downloads.
+`turbo setup` installs rustup and the selected toolchain with the components and targets the file lists. Its rustup home is the installed toolchain in the [tool store](/docs/core-concepts/managed-toolchains#where-tools-are-stored), which repositories that lock the same toolchain share. Cargo uses a home that's private to the repository, in the repository's directory in the tool store, instead of `~/.cargo`. It doesn't share your credentials or registry cache, and `cargo install` installs there too. `turbo run`, `turbo exec`, and the [shell hook](/docs/reference/hook) set `RUSTUP_HOME`, `RUSTUP_TOOLCHAIN`, and `CARGO_HOME`, so `rustup` and `cargo` act on the managed toolchain. `turbo.lock` records each component's `.tar.gz` and `.tar.xz` downloads.
 
 ### Python
 
@@ -166,7 +166,7 @@ Dependencies: javascript installed. No Turborepo tasks run.
 - **Lifecycle scripts follow your package manager.** Before each install, `turbo setup` prints the effective [lifecycle-script policy](/docs/reference/setup-policy#lifecyclescripts), including allowlists your repository commits. Pass [`--ignore-scripts`](#--ignore-scripts) to skip them for one run.
 - **Failures keep their exit code.** If the install fails, `turbo setup` exits with the package manager's exit code.
 - **Every run repeats the install.** An unchanged lockfile doesn't prove that installed dependencies are complete, so `turbo setup` never skips the install. Package managers make the repeat fast.
-- **Rust.** `cargo fetch` only downloads crates, into the clone's `.turbo/cargo-home`, and runs no build scripts.
+- **Rust.** `cargo fetch` only downloads crates, into the repository's private Cargo home, and runs no build scripts.
 - **Python.** Skipping lifecycle scripts passes `--no-build` to uv, so packages without a compatible wheel fail to install.
 - **Go.** `turbo setup` restores `go.work`, `go.work.sum`, `go.mod`, and `go.sum` and fails if `go` changes them, which usually means missing checksums.
 - **`verify-system` tools.** [`verify-system`](/docs/reference/setup-policy#verify-system) setup never installs dependencies. Install them with the verified package manager, such as `pnpm install --frozen-lockfile`.
@@ -190,13 +190,12 @@ pnpm 10.18.0: lifecycle scripts skipped (--ignore-scripts); passing --ignore-scr
 
 Check the installed toolchains against `turbo.lock` and verify their files, without resolving, downloading, or writing anything.
 
-`--check` re-reads every byte of every installed file. The checks in `turbo run`, `turbo exec`, and the shell hook are faster because they trust the [stamps](/docs/core-concepts/managed-toolchains#how-turbo-run-uses-managed-tools) that `turbo setup` recorded at install time while the files' metadata is unchanged. Use `--check` to catch changes that metadata can't show.
+`--check` re-hashes every installed file of every tool that `turbo.lock` selects, and compares each tool's `bin` entries with what `turbo setup` creates. `turbo run`, `turbo exec`, and the shell hook [never read installed files](/docs/core-concepts/managed-toolchains#how-turbo-run-uses-managed-tools). They trust that `turbo setup` verified each tool when it installed it. Use `--check` to find a tool that changed after installation, such as in a tool store that CI restored from a cache. To replace a changed tool, run `turbo setup --force`.
 
 ```txt title="Terminal"
 javascript: tools managed (inferred); dependencies locked (inferred)
 node 24.21.0: ready
 pnpm 10.18.0: ready
-Managed tools use 218.9 MB in this clone's .turbo/tools.
 javascript dependencies: not checked; turbo setup reruns pnpm install --frozen-lockfile from pnpm-lock.yaml, because dependency readiness is not tracked
   pnpm 10.18.0: native pnpm policy; project scripts run; dependency scripts run only for allowed packages
   Permitted lifecycle scripts run package code that can start other commands. turbo setup runs no Turborepo tasks.
@@ -237,9 +236,7 @@ To resolve those versions, it reads release metadata and downloads the archives 
 
 ### `--force`
 
-Reinstall the versions in `turbo.lock` into a new installation. `turbo setup` reuses verified bytes from the [shared download cache](/docs/core-concepts/managed-toolchains#disk-use-and-cleanup) and downloads anything that isn't cached. `--force` never re-resolves versions or writes `turbo.lock`, and it requires an existing `turbo.lock` that matches your declarations. Use [`--update-lock`](#--update-lock) to change versions.
-
-On Windows, installations from earlier versions of `turbo` have no stamps, so every check re-reads all of their files until `turbo setup` replaces them. `--force` reinstalls them with stamps right away.
+Re-hash every installed tool that `turbo.lock` selects, and reinstall each one whose files changed. A reinstall downloads the tool again. `--force` never re-resolves versions or writes `turbo.lock`, and it requires an existing `turbo.lock` that matches your declarations. Use [`--update-lock`](#--update-lock) to change versions.
 
 ### `--frozen`
 
@@ -268,9 +265,9 @@ Dependencies skipped (--tools-only). No tasks run. turbo run uses these tools in
 
 ### `--offline`
 
-Never contact the network. Use it after an online `turbo setup` on the same machine has warmed the caches.
+Never contact the network. Use it after an online `turbo setup` has put the tools in your [tool store](/docs/core-concepts/managed-toolchains#where-tools-are-stored), on this machine or in a store that CI restored from a cache.
 
-- **Tools.** Plain `--offline` reuses installations that an earlier `turbo setup` installed and recorded for this clone. If there aren't any, it installs from the shared download cache. `--offline --force` reinstalls from the shared download cache. If anything isn't cached, `turbo setup` lists every missing artifact with its URL and digest, and installs nothing.
+- **Tools.** `--offline` uses only tools already in the tool store. When this clone's recorded installation is current, it reuses that installation. Otherwise, it sets up the clone from the tools in the store. `--offline --force` re-hashes them first. If a tool is missing or changed, `turbo setup` lists each one with its URL and digest, and installs nothing.
 - **Dependencies.** Each package manager runs in its own offline mode and fails on anything missing from its cache instead of downloading it.
 - **Resolution.** `--offline` can't resolve versions, so it requires an existing `turbo.lock` and can't be combined with `--update-lock`.
 
@@ -328,12 +325,11 @@ These combinations aren't supported yet. They exit with an error without changin
 `turbo setup` first prints the effective [setup policy](/docs/reference/setup-policy#output) for each toolchain. Then it reports changes to `turbo.lock` and one line per tool:
 
 - `installed`: The tool was downloaded, verified, and installed.
-- `installed from the shared download cache`: The tool was installed from verified bytes that an earlier setup on this machine downloaded.
-- `reused`: The existing installation already matched `turbo.lock`.
+- `reused`: The tool was already in your [tool store](/docs/core-concepts/managed-toolchains#where-tools-are-stored), installed for this repository or another one.
 - `ready`: With `--check`, the installation matches `turbo.lock`.
 - `verified at <path> (verify-system)`: With [`verify-system`](/docs/reference/setup-policy#verify-system), the tool on `PATH` matches `turbo.lock`.
 
-[Additional tools](/docs/reference/additional-tools) also print the URL they came from. Next, `turbo setup` reports [disk use](/docs/core-concepts/managed-toolchains#disk-use-and-cleanup): this clone's `.turbo/tools`, replaced installations it keeps for 7 days, and the shared download cache. Last, it installs and reports each toolchain's dependencies, and confirms that no tasks ran.
+[Additional tools](/docs/reference/additional-tools) also print the URL they came from. Next, `turbo setup` reports the unused tools that [cleanup](/docs/core-concepts/managed-toolchains#cleanup) removed from the tool store, and the replaced tools it keeps for 7 days. Last, it installs and reports each toolchain's dependencies, and confirms that no tasks ran.
 
 ## Network
 
@@ -363,14 +359,6 @@ These combinations aren't supported yet. They exit with an error without changin
 ```
 
 Remove `experimentalSetup` from `futureFlags` in your root `turbo.json`. See [Upgrading from the experimental release](/docs/core-concepts/managed-toolchains#upgrading-from-the-experimental-release).
-
-### `.turbo` isn't ignored
-
-```txt title="Terminal"
-storage must be untracked and Git-ignored; add /.turbo/ to .gitignore
-```
-
-Add `/.turbo/` to your root `.gitignore`. If files under `.turbo/` are tracked, remove them from Git with `git rm -r --cached .turbo`. Outside a Git repository, `turbo setup` skips this check and prints `No Git repository found; skipped checking that .turbo/ is Git-ignored.`
 
 ### A dependency lockfile is missing
 
@@ -444,18 +432,19 @@ Pass `--no-frozen --update-lock` for an intentional update in CI.
 ### The managed installation is missing, damaged, or out of date
 
 ```txt title="Terminal"
-managed setup validation failed: managed tools are not installed; run turbo setup to repair the installation (turbo.lock is unchanged)
+managed setup validation failed: managed tools have no matching trusted setup record; run turbo setup to repair the installation (turbo.lock is unchanged)
 ```
 
-`turbo run` and `turbo exec` report this, or a similar message, when `.turbo/tools` is missing, doesn't match `turbo.lock`, has changed files, or wasn't installed by `turbo setup` for your user in this clone. Moving or copying a clone, or restoring `.turbo` from a cache, also requires `turbo setup` again. Run `turbo setup`; it reinstalls from the shared download cache when it can.
+`turbo run` and `turbo exec` report this, or a similar message, when `turbo setup` hasn't recorded an installation for this clone and its current `turbo.lock`, or when the recorded tools aren't in your [tool store](/docs/core-concepts/managed-toolchains#where-tools-are-stored). Moving or recloning a repository also requires `turbo setup` again. Run `turbo setup`. It reuses the tools that are already in the tool store.
 
-| Message                                                     | Cause                                                                   |
-| ----------------------------------------------------------- | ----------------------------------------------------------------------- |
-| `managed tools are not installed`                           | `turbo setup` hasn't installed tools in this clone.                     |
-| `managed tools do not match turbo.lock`                     | `turbo.lock` changed since `turbo setup`, for example after `git pull`. |
-| `managed tools are damaged or unsafe`                       | A file in `.turbo/tools` changed after installation.                    |
-| `managed tools have no matching trusted setup record`       | The clone moved, or `.turbo/tools` came from somewhere else.            |
-| `tool declarations no longer match turbo.lock`              | A declaration changed. See [Declarations changed](#declarations-changed). |
+| Message                                                                                | Cause                                                                                                                           |
+| -------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| `managed tools have no matching trusted setup record`                                  | `turbo setup` hasn't run in this clone, the clone moved, or `turbo.lock` changed since `turbo setup`, such as after `git pull`. |
+| `managed tools are not ready (managed ... is not installed in the tool store ...)`     | The tool store doesn't have the recorded tools, for example because it was deleted.                                             |
+| `managed tools are not ready (managed ... changed since turbo setup installed it ...)` | A `bin` entry in the tool store changed after installation. Run `turbo setup --force`.                                          |
+| `managed tools are not ready (unsafe tool store ...)`                                  | `TURBO_TOOL_STORE` isn't an absolute path outside the repository, to a directory that only your user can write.                 |
+| `managed tools changed after this run selected them`                                   | `turbo setup` changed the tools while the command ran.                                                                          |
+| `tool declarations no longer match turbo.lock`                                         | A declaration changed. See [Declarations changed](#declarations-changed).                                                       |
 
 ### Unsupported declarations
 

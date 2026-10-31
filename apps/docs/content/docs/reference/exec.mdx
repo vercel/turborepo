@@ -16,6 +16,7 @@ Run one command with the repository's [managed toolchains](/docs/core-concepts/m
 
 ```bash title="Terminal"
 turbo exec [flags] -- <command> [args...]
+turbo exec [flags] --print-env=<format>
 ```
 
 ```bash title="Terminal"
@@ -29,15 +30,38 @@ turbo exec -- pnpm install --frozen-lockfile
 
 Everything after `--` is the command and its arguments, passed through unchanged. The `--` is required, so nothing after it is read as a `turbo` flag.
 
-Before `--`, `turbo exec` accepts global flags such as `--cwd` and `--root-turbo-json`. It has no setup, lock, or task flags.
+Before `--`, `turbo exec` accepts global flags such as `--cwd` and `--root-turbo-json`, and [`--print-env`](#--print-env). It has no setup, lock, or task flags.
 
 To run a task named `exec`, use `turbo run exec`.
+
+## `--print-env`
+
+Print the managed environment instead of running a command. Editors, direnv, and scripts can use it to find the managed tools without the [shell hook](/docs/reference/hook). `--print-env` can't be combined with a command. It checks the installation like `turbo exec` does, fails in the same cases, and never installs anything.
+
+| Format | Output                                                                |
+| ------ | --------------------------------------------------------------------- |
+| `bin`  | The path of the repository's stable `bin` directory in the tool store |
+| `sh`   | POSIX shell `export NAME='value'` statements                          |
+| `fish` | fish `set -gx NAME 'value'` statements, with `PATH` as a list         |
+| `pwsh` | PowerShell `$env:NAME = 'value'` assignments                          |
+| `json` | A JSON object of the variables that `turbo exec` sets                 |
+
+The `sh`, `fish`, `pwsh`, and `json` formats print `PATH` and every variable that `turbo exec` sets. `PATH` starts with the `bin` directory of the repository's current tools, followed by your `PATH`. That directory changes when `turbo setup` changes the tools, so evaluate the output again after `turbo setup`:
+
+```bash title="./.envrc"
+eval "$(turbo exec --print-env=sh)"
+```
+
+The `bin` format prints a path that stays the same when `turbo setup` changes the tools. [`.turbo/bin`](/docs/core-concepts/managed-toolchains#where-tools-are-stored) in the repository is a link to the same directory, so an editor setting can name a path inside the repository, such as `.turbo/bin/node`.
+
+On macOS and Linux, the programs in that directory set the variables they need, such as `GOROOT` or `UV_PYTHON`, so they work without the rest of the managed environment. The exception is `CARGO_HOME`, which only `turbo run`, `turbo exec`, and the shell hook set. On Windows, the programs in that directory set no variables. Use the `pwsh` or `json` format to get them.
 
 ## Behavior
 
 - **Working directory.** The command runs in your current directory, which can be anywhere inside the repository. With `--cwd`, it runs in that directory instead.
 - **Never installs.** `turbo exec` never installs or downloads tools and never changes `turbo.lock`. If the repository has no `turbo.lock`, or its managed tools are missing or out of date, it fails before running anything and tells you to run `turbo setup`. It never falls back to tools on your `PATH`.
 - **Clone-local tools.** After [`turbo setup --no-lock`](/docs/reference/setup#--no-lock), `turbo exec` uses the tools it installed for this clone.
+- **No lock, no tool files.** `turbo exec` reads only the records and `bin` entries that `turbo setup` wrote in the [tool store](/docs/core-concepts/managed-toolchains#where-tools-are-stored). It never reads the installed tools' files and never waits for a running `turbo setup`.
 - **[`verify-system`](/docs/reference/setup-policy#verify-system) tools.** `turbo exec` checks them on `PATH` against `turbo.lock` and runs the command with your `PATH` unchanged.
 
 ```txt title="Terminal"

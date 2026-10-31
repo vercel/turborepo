@@ -11,7 +11,7 @@ related:
   - /docs/reference/hook
 ---
 
-`setup.additionalTools` in the root `turbo.json` declares command-line tools that `turbo setup` has no built-in support for, such as `protoc` or an internal company CLI. For each tool, you pin an exact version and, for each platform, the URL and SHA-256 digest of a downloadable binary or archive. `turbo setup` records the declaration in `turbo.lock`, downloads and verifies the artifact, and installs it into `.turbo/tools` next to the other [managed toolchains](/docs/core-concepts/managed-toolchains). `turbo run`, `turbo exec`, and the shell hook then put its executables on `PATH`. `turbo setup` never runs scripts from the tool or the repository.
+`setup.additionalTools` in the root `turbo.json` declares command-line tools that `turbo setup` has no built-in support for, such as `protoc` or an internal company CLI. For each tool, you pin an exact version and, for each platform, the URL and SHA-256 digest of a downloadable binary or archive. `turbo setup` records the declaration in `turbo.lock`, downloads and verifies the artifact, and installs it into your [tool store](/docs/core-concepts/managed-toolchains#where-tools-are-stored) next to the other managed toolchains. `turbo run`, `turbo exec`, and the shell hook then put its executables on `PATH`. `turbo setup` never runs scripts from the tool or the repository.
 
 ## Declaring a tool
 
@@ -89,8 +89,6 @@ pnpm: locked 10.18.0
 node 24.21.0: installed
 pnpm 10.18.0: installed
 acme 1.4.2: installed (https://downloads.example.com/acme/1.4.2/acme-1.4.2-linux-x64.tar.gz)
-Managed tools use 231.2 MB in this clone's .turbo/tools.
-Shared download cache: 74.6 MB.
 ...
 ```
 
@@ -216,16 +214,16 @@ A declaration is already exact, so `turbo setup` copies it into `turbo.lock` wit
 
 Any edit to a declaration, including a new digest, URL, layout, or platform under the same version, counts as a changed declaration.
 
-| Situation                 | Local `turbo setup`                                                              | Frozen or CI `turbo setup` |
-| ------------------------- | -------------------------------------------------------------------------------- | -------------------------- |
-| No `turbo.lock`           | Creates it                                                                       | Fails                      |
-| Nothing changed           | Reuses the installation without downloading                                      | Same                       |
-| A declaration changed     | Rewrites only that tool's entry, prints the change, installs                     | Fails and names the tool   |
-| A declaration was removed | Removes the entry and the installed tool                                         | Fails and names the tool   |
-| `--update-lock`           | Leaves additional tools unchanged                                                | Requires `--no-frozen`     |
-| `--force`                 | Downloads, verifies, and reinstalls the locked artifacts                         | Same                       |
-| `--check`                 | Re-hashes every installed file, including resources, and changes nothing         | Same                       |
-| `--plan`                  | Reports each tool's declaration, source, digest, and action, and changes nothing | Same                       |
+| Situation                 | Local `turbo setup`                                                                                                                   | Frozen or CI `turbo setup` |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- | -------------------------- |
+| No `turbo.lock`           | Creates it                                                                                                                            | Fails                      |
+| Nothing changed           | Reuses the installation without downloading                                                                                           | Same                       |
+| A declaration changed     | Rewrites only that tool's entry, prints the change, installs                                                                          | Fails and names the tool   |
+| A declaration was removed | Removes the entry. [Cleanup](/docs/core-concepts/managed-toolchains#cleanup) later deletes the tool if no other repository selects it | Fails and names the tool   |
+| `--update-lock`           | Leaves additional tools unchanged                                                                                                     | Requires `--no-frozen`     |
+| `--force`                 | Re-hashes the installed artifacts and reinstalls any that changed                                                                     | Same                       |
+| `--check`                 | Re-hashes every installed file, including resources, and changes nothing                                                              | Same                       |
+| `--plan`                  | Reports each tool's declaration, source, digest, and action, and changes nothing                                                      | Same                       |
 
 ```txt title="Terminal"
 turbo.lock updated. Commit turbo.lock to share the exact managed tool selections.
@@ -238,16 +236,16 @@ acme: 1.4.2 (selection changed)
 - **Verified first.** The download must match `sha256` before anything is unpacked or installed.
 - **Bounded.** Each artifact is limited to 256 MiB downloaded, 512 MiB extracted, and five minutes.
 - **Safe extraction.** Archive entries must stay inside `rootPrefix`, or inside the archive when there's no `rootPrefix`. Entries spelled with `./`, absolute paths, or `..` are rejected. Each executable must be a regular file inside `rootPrefix` with its executable permission set in the archive. Zip archives created on Windows don't record permissions, so they can't provide executables for macOS or Linux.
-- **Atomic.** Tools install into a new generation in `.turbo/tools`. If anything fails, the previous installation stays in place.
+- **Atomic.** Each tool unpacks into a private staging directory and appears in the [tool store](/docs/core-concepts/managed-toolchains#where-tools-are-stored) only when it's complete. If anything fails, the repository keeps its previous tools.
 - **Proxies and certificates.** Downloads honor `HTTPS_PROXY`, `HTTP_PROXY`, `NO_PROXY`, `SSL_CERT_FILE`, and `SSL_CERT_DIR`.
 
-In local mode, `turbo setup` updates `turbo.lock` before it downloads. If the new artifact then fails to download or verify, fix the declaration and run `turbo setup` again. An interrupted `turbo setup` publishes nothing and leaves no partial download in the shared cache; run it again.
+In local mode, `turbo setup` updates `turbo.lock` before it downloads. If the new artifact then fails to download or verify, fix the declaration and run `turbo setup` again. An interrupted `turbo setup` publishes nothing. Run it again.
 
 ### Mirrors and offline setup
 
-Verified artifacts are kept in the same shared download cache as the built-in tools, keyed by platform and SHA-256, so another clone installs them without downloading.
+Installed artifacts are kept in the [tool store](/docs/core-concepts/managed-toolchains#where-tools-are-stored) with the built-in tools, keyed by name, version, platform, and SHA-256, so another repository that locks the same artifact reuses it without downloading.
 
-- **Offline.** `turbo setup --offline` reuses a healthy installation without network access. `turbo setup --offline --force` installs from the shared cache, or reinstalls from the verified installation. If any artifact is missing, it lists every one with its URL and digest and installs nothing.
+- **Offline.** `turbo setup --offline` uses only artifacts already in the tool store, without network access. `turbo setup --offline --force` re-hashes them first. If any artifact is missing or changed, it lists every one with its URL and digest and installs nothing.
 - **Mirror.** Set `TURBO_SETUP_ARTIFACT_MIRROR` to an HTTPS URL, and `turbo setup` downloads each locked URL from `<mirror>/<host>/<path>` instead, the layout `wget -x` writes. For example, with `TURBO_SETUP_ARTIFACT_MIRROR=https://mirror.example.com/tools`, the URL above is fetched from `https://mirror.example.com/tools/downloads.example.com/acme/1.4.2/acme-1.4.2-linux-x64.tar.gz`. The mirror can't contain credentials, a query, or a fragment, and `turbo.lock` keeps the declared URLs.
 
 ## Using the tool

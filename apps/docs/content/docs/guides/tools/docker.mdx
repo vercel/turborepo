@@ -292,16 +292,16 @@ Build it from the root of your repository, and pass the `turbo` version to insta
 docker build -f apps/web/Dockerfile --build-arg TURBO_VERSION=<version> .
 ```
 
-Add `.turbo` to your `.dockerignore`, so the tools that `turbo setup` installed on your machine stay out of the build context.
+Add `.turbo` to your `.dockerignore`. On your machine, `.turbo/bin` links to your own [tool store](/docs/core-concepts/managed-toolchains#where-tools-are-stored), which doesn't exist in the image.
 
 ### How the Dockerfile works
 
 - **Standalone `turbo`**: The `base` stage downloads `turbo` and verifies its checksum, without Node.js or a package manager. Linux releases are statically linked against musl, and they detect the image's C library when they run. On a glibc image like `debian:trixie-slim`, they install and run the glibc build of Node.js.
 - **Pruned setup files**: `turbo prune --docker` copies `turbo.lock`, the declarations it records, and the root `turbo.json` into `json/`. The `builder` stage installs tools and dependencies before it copies your source code, so Docker reuses that step until a file in `json/` changes.
-- **No Git repository**: The pruned output has no `.git` directory. Outside a Git repository, `turbo setup` skips checking that `.turbo/` is ignored.
+- **Tool store**: `turbo setup` installs the tools into the tool store in the build user's home directory, `/root/.local/share/turborepo/tools` for `root`, not into `/app`. Only the `builder` stage uses them. The `runner` image doesn't contain them.
 - **Frozen mode**: [`--frozen`](/docs/reference/setup#--frozen) installs exactly what `turbo.lock` records and fails, without changing it, if `turbo.lock` is missing or no longer matches your declarations. `turbo setup` uses frozen mode by default in CI, but Docker doesn't pass your CI provider's environment variables into the build, so pass `--frozen` yourself.
 - **Dependencies**: After installing the tools, `turbo setup` runs `pnpm install --frozen-lockfile` with the managed pnpm. Allowed [lifecycle scripts](/docs/reference/setup-policy#lifecyclescripts) run during this step.
-- **One `turbo setup` per `RUN` instruction**: `turbo setup` records each installation for the directory that it installed into, and Docker gives every `RUN` instruction a new copy of that directory. Without a new `turbo setup`, `turbo run` fails with `managed tools have no matching trusted setup record`. Run `turbo setup` again in each `RUN` instruction that uses the managed tools. Later runs reinstall from the shared download cache instead of downloading again. `--tools-only` skips dependencies, which the previous step installed.
+- **One `turbo setup` per `RUN` instruction**: `turbo setup` records each installation for the directory that it installed into, and Docker gives every `RUN` instruction a new copy of that directory. Without a new `turbo setup`, `turbo run` fails with `managed tools have no matching trusted setup record`. Run `turbo setup` again in each `RUN` instruction that uses the managed tools. Later runs reuse the tools already in the tool store instead of downloading them again. `--tools-only` skips dependencies, which the previous step installed.
 - **Runner**: The final image runs your app with Node.js from a `node` image. Use the version that `turbo.lock` selects.
 
 The `builder` stage prints:
@@ -310,17 +310,14 @@ The `builder` stage prints:
 javascript: tools managed (inferred); dependencies locked (inferred)
 node 24.21.0: installed
 pnpm 10.18.0: installed
-Managed tools use 218.9 MB in this clone's .turbo/tools.
-Shared download cache: 62.3 MB.
-No Git repository found; skipped checking that .turbo/ is Git-ignored.
 Installing javascript dependencies from pnpm-lock.yaml with managed pnpm 10.18.0: pnpm install --frozen-lockfile (dependency installation, not a Turborepo task)
 ...
 javascript dependencies: installed; pnpm-lock.yaml unchanged
 Dependencies: javascript installed. No Turborepo tasks run.
 ...
 javascript: tools managed (inferred); dependencies skipped (--tools-only)
-node 24.21.0: installed from the shared download cache
-pnpm 10.18.0: installed from the shared download cache
+node 24.21.0: reused
+pnpm 10.18.0: reused
 ...
 ```
 

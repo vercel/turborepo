@@ -219,6 +219,25 @@ steps:
 
 In CI, `turbo setup` installs exactly what `turbo.lock` records, and fails if `turbo.lock` doesn't match your declarations. See [Using `turbo setup` in CI](/docs/core-concepts/managed-toolchains#using-turbo-setup-in-ci).
 
+#### Cache the tool store
+
+`turbo setup` installs tools into a [tool store](/docs/core-concepts/managed-toolchains#where-tools-are-stored) outside the repository. To skip downloading them in every job, point `TURBO_TOOL_STORE` at a directory outside the checkout and cache it, keyed on `turbo.lock`:
+
+```yaml title=".github/workflows/ci.yml"
+steps:
+  - uses: actions/checkout@v4
+  - run: curl -fsSL https://turborepo.dev/install | sh
+  - run: echo "TURBO_TOOL_STORE=$RUNNER_TEMP/turbo-tools" >> "$GITHUB_ENV"
+  - uses: actions/cache@v4
+    with:
+      path: ${{ runner.temp }}/turbo-tools
+      key: turbo-tools-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('turbo.lock') }}
+  - run: turbo setup
+  - run: turbo run build test
+```
+
+`TURBO_TOOL_STORE` must be an absolute path outside the repository. With a restored store, `turbo setup` reuses the tools in it and downloads nothing, but it still runs, because each checkout needs its own setup record. `turbo setup` trusts the tools in a restored store without re-hashing them. To re-hash them, run [`turbo setup --check`](/docs/reference/setup#--check) after `turbo setup`.
+
 ### Use `turbo run` in CI
 
 `turbo run` is the most common command you will use when working in your Turborepo so it is aliased to `turbo` for convenience. While this is great for working locally, there are other subcommands for `turbo` like [`turbo prune`](/docs/reference/prune) and [`turbo generate`](/docs/reference/generate).

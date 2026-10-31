@@ -38,7 +38,7 @@ turbo setup
 
 `turbo setup` reads the versions your repository already declares, in the files you already use: `.nvmrc` or `.node-version`, `engines` and `devEngines` in `package.json`, and `packageManager`. Rust, Python, and Go repositories can use `rust-toolchain.toml`, `.python-version`, `pyproject.toml`, and `go.mod`. There's no new version file to keep in sync.
 
-It downloads those versions into the repository's `.turbo/tools` directory, verifies them, and then installs your dependencies with the package manager it just installed:
+It downloads those versions into a tool store in your user data directory, verifies them, and then installs your dependencies with the package manager it just installed. Every repository on your machine that selects the same versions shares one copy:
 
 ```txt title="Terminal"
 javascript: tools managed (inferred); dependencies locked (inferred)
@@ -47,8 +47,6 @@ node: locked 24.21.0
 pnpm: locked 10.18.0
 node 24.21.0: installed
 pnpm 10.18.0: installed
-Managed tools use 218.9 MB in this clone's .turbo/tools.
-Shared download cache: 125.5 MB.
 Installing javascript dependencies from pnpm-lock.yaml with managed pnpm 10.18.0: pnpm install --frozen-lockfile (dependency installation, not a Turborepo task)
 pnpm 10.18.0: native pnpm policy; project scripts run; dependency scripts run only for allowed packages
 ...
@@ -78,7 +76,7 @@ For everything else, there are two more ways to use the same tools:
 
 ## Ready for CI, Docker, and dependency bots
 
-In CI, `turbo setup` uses frozen mode: it installs exactly what `turbo.lock` records, and fails without writing anything if your declarations changed without a lock update. After the first run, `turbo setup --offline` repeats a setup from the shared download cache without network access.
+In CI, `turbo setup` uses frozen mode: it installs exactly what `turbo.lock` records, and fails without writing anything if your declarations changed without a lock update. Cache the tool store between jobs, and `turbo setup` downloads nothing. `turbo setup --offline` uses only the tools already in the store, without network access.
 
 - **Docker**: `turbo prune --docker` includes `turbo.lock` and its declarations, so your build image only needs the standalone `turbo` binary. See the [Docker guide](/docs/guides/tools/docker#managed-toolchains).
 - **Renovate and Dependabot**: When Renovate updates your Node.js or package manager version, it can run `turbo setup` to update `turbo.lock` in the same pull request. For Dependabot, update `turbo.lock` on its branch with one command. See [Updating `turbo.lock` with dependency bots](/docs/guides/updating-turbo-lock).

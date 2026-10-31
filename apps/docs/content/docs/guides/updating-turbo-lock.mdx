@@ -128,7 +128,7 @@ This configuration relies on these settings:
 
 - **`--no-frozen`**: Renovate sets `CI=true` for every command it runs, so `turbo setup` would otherwise use frozen mode and fail on the changed declaration. `--no-frozen` uses local mode, which updates `turbo.lock`.
 - **`--tools-only`**: Updating `turbo.lock` doesn't need your dependencies, so Renovate's run skips installing them.
-- **`fileFilters`**: Limits the files that Renovate commits to `turbo.lock`. The installed tools in `.turbo/tools` are Git-ignored, so they're never committed.
+- **`fileFilters`**: Limits the files that Renovate commits to `turbo.lock`, so it never commits `.turbo/bin`, the link that `turbo setup` writes. The installed tools live in your [tool store](/docs/core-concepts/managed-toolchains#where-tools-are-stored), outside the repository.
 - **`matchManagers`, `matchDepNames`, and `matchDepTypes`**: Limit the task to toolchain updates. Other updates don't change `turbo.lock`, so running `turbo setup` for them only adds time.
 
 ## Dependabot and other tools

@@ -16,7 +16,7 @@ related:
   - /docs/guides/updating-turbo-lock
 ---
 
-Tasks need more than source code. They also need the right Node.js, package manager, and language toolchain versions, plus your dependencies. With managed toolchains, your repository declares those versions in the files it already uses, [`turbo setup`](/docs/reference/setup) installs exactly those versions inside the repository, and [`turbo run`](/docs/reference/run) uses them for every task.
+Tasks need more than source code. They also need the right Node.js, package manager, and language toolchain versions, plus your dependencies. With managed toolchains, your repository declares those versions in the files it already uses, [`turbo setup`](/docs/reference/setup) installs exactly those versions, and [`turbo run`](/docs/reference/run) uses them for every task.
 
 A new contributor or CI job only needs the [standalone `turbo` binary](/docs/getting-started/installation#global-installation). It doesn't need Node.js, a package manager, rustup, uv, or Go installed first.
 
@@ -28,7 +28,7 @@ turbo run build
 ## How it works
 
 1. Your repository declares versions in native files, such as `.nvmrc` and the `packageManager` field of `package.json`.
-2. `turbo setup` resolves each declaration to an exact release, records it in `turbo.lock`, downloads and verifies that release, and installs it into `.turbo/tools`.
+2. `turbo setup` resolves each declaration to an exact release, records it in `turbo.lock`, downloads and verifies that release, and installs it into your [tool store](#where-tools-are-stored).
 3. `turbo setup` installs your dependencies with each package manager's frozen install, such as `pnpm install --frozen-lockfile`, from your committed lockfiles.
 4. You commit `turbo.lock`. Every contributor and CI job then gets the same versions.
 5. `turbo run` puts the installed tools first on `PATH` for every task. [`turbo exec`](/docs/reference/exec) and the [shell hook](/docs/reference/hook) do the same for commands outside of tasks.
@@ -59,7 +59,7 @@ Install the standalone `turbo` binary. It doesn't need Node.js or a package mana
 <Step>
 ### Ignore `.turbo/` in Git
 
-Installed tools live in `.turbo/tools`, which must be ignored and untracked. `turbo setup` refuses to install tools otherwise. Outside a Git repository, such as in [pruned output](#pruning), it skips this check.
+`turbo setup` writes `.turbo/bin`, a link to this repository's tools in your [tool store](#where-tools-are-stored). The link only works on your machine, so keep `.turbo/` out of Git.
 
 ```txt title="./.gitignore"
 /.turbo/
@@ -100,8 +100,6 @@ node: locked 24.21.0
 pnpm: locked 10.18.0
 node 24.21.0: installed
 pnpm 10.18.0: installed
-Managed tools use 218.9 MB in this clone's .turbo/tools.
-Shared download cache: 62.3 MB.
 Installing javascript dependencies from pnpm-lock.yaml with managed pnpm 10.18.0: pnpm install --frozen-lockfile (dependency installation, not a Turborepo task)
 pnpm 10.18.0: native pnpm policy; project scripts run; dependency scripts run only for allowed packages
 Permitted lifecycle scripts run package code that can start other commands. turbo setup runs no Turborepo tasks.
@@ -110,7 +108,7 @@ javascript dependencies: installed; pnpm-lock.yaml unchanged
 Dependencies: javascript installed. No Turborepo tasks run.
 ```
 
-The first line is the effective [setup policy](/docs/reference/setup-policy#output) for each toolchain. Verified downloads also go into a [shared download cache](#disk-use-and-cleanup) in your user cache directory, so other clones reuse them without downloading again.
+The first line is the effective [setup policy](/docs/reference/setup-policy#output) for each toolchain. The tools go into your [tool store](#where-tools-are-stored), outside the repository, so another repository that selects the same versions reuses them without downloading.
 
 </Step>
 <Step>
@@ -190,7 +188,7 @@ Don't edit `turbo.lock` by hand. Change your declarations and run `turbo setup` 
 
 ### Portability
 
-`turbo.lock` records downloads for every platform its tools publish, so a lock created on macOS works unchanged on Linux and Windows. [Frozen](/docs/reference/setup#frozen-mode) setup never adds a platform to it. The installed tools in `.turbo/tools` belong to one clone and are never committed.
+`turbo.lock` records downloads for every platform its tools publish, so a lock created on macOS works unchanged on Linux and Windows. [Frozen](/docs/reference/setup#frozen-mode) setup never adds a platform to it. Installed tools live in your [tool store](#where-tools-are-stored), outside the repository, and are never committed.
 
 ### When `turbo.lock` changes
 
@@ -202,7 +200,7 @@ Don't edit `turbo.lock` by hand. Change your declarations and run `turbo setup` 
 | A declaration changed or was removed                    | Re-resolves only that tool, updates the lock, prints diff  | Fails and names it         |
 | A newer release matches an unchanged request, like `24` | Keeps the locked version                                   | Keeps the locked version   |
 | [`--update-lock`](/docs/reference/setup#--update-lock)  | Re-resolves every request to the newest match              | Requires `--no-frozen`     |
-| [`--force`](/docs/reference/setup#--force)              | Reinstalls the locked versions and never changes the lock  | Same                       |
+| [`--force`](/docs/reference/setup#--force)              | Re-hashes the locked tools and reinstalls any that changed | Same                       |
 
 When `turbo setup` updates the lock, it prints each change:
 
@@ -227,13 +225,13 @@ A repository is managed when its root contains `turbo.lock`, or when [`turbo set
 
 In a managed repository, every `turbo run`:
 
-1. **Validates setup first.** Before it builds the graph, `turbo run` checks that the tools in `.turbo/tools` match `turbo.lock` and your declarations, are intact, and were installed by `turbo setup` for your user in this clone. If anything is wrong, it fails and tells you to run `turbo setup`. It never downloads tools, and it never falls back to tools on your `PATH`.
+1. **Validates setup first.** Before it builds the graph, `turbo run` checks that `turbo.lock` matches your declarations, that `turbo setup` recorded an installation for your user in this clone and for this exact `turbo.lock`, and that the recorded tools are in your tool store. If anything is wrong, it fails and tells you to run `turbo setup`. It never downloads tools, and it never falls back to tools on your `PATH`.
 2. **Activates the tools.** The managed tools come first on `PATH`, together with the variables they need, such as `CARGO_HOME` for Rust or `GOROOT` for Go. `turbo`'s own probes, such as `cargo metadata` and Go workspace discovery, use them too. For tasks, this applies after [environment mode](/docs/crafting-your-repository/using-environment-variables#environment-modes) filtering, in both strict and loose mode.
 3. **Hashes the toolchain.** Task hashes include the selected toolchain. See [Caching](#caching).
 
 `turbo run` checks the installation again before each task starts. If the tools changed during the run, the task fails instead of starting.
 
-These checks don't re-read every installed file. When `turbo setup` installs tools, it records a stamp of each installed tree: a digest of its file metadata, bound to the digest of its contents. While the metadata matches the stamp, `turbo run`, `turbo exec`, and the shell hook trust the recorded contents digest. [`turbo setup --check`](/docs/reference/setup#--check) always re-reads every byte. On Windows, `turbo setup` records stamps only on NTFS and ReFS volumes, including Dev Drives. On other file systems, every check re-reads every file.
+These checks never read the installed files, and they take no lock. `turbo setup` verifies each tool against `turbo.lock` once, when it installs the tool, and on macOS and Linux it makes the installed files read-only. After that, `turbo run`, `turbo exec`, and the shell hook read only the records and `bin` entries that `turbo setup` wrote. To re-hash every installed file, run [`turbo setup --check`](/docs/reference/setup#--check).
 
 ### Other commands
 
@@ -276,6 +274,7 @@ A repository-local `turbo` that you start directly, such as with `pnpm turbo` or
 
 - **The [shell hook](/docs/reference/hook)** puts the managed tools first on `PATH`, and sets the same variables that `turbo run` gives tasks, while your bash, zsh, fish, or PowerShell session is inside the repository. It restores your own values when you leave. The standalone installers add it by default.
 - **[`turbo exec -- <command>`](/docs/reference/exec)** runs one command with the managed tools. Use it in scripts, CI steps, `cmd.exe`, and processes started by other applications. See [when to use `turbo exec`](/docs/reference/hook#when-to-use-turbo-exec).
+- **`.turbo/bin` and [`turbo exec --print-env`](/docs/reference/exec#--print-env)** give editors, direnv, and scripts the managed tools without a shell hook. `.turbo/bin` is a link to this repository's `bin` directory in the tool store, and its path stays the same when `turbo setup` changes the tools. `turbo` never reads it.
 
 When `turbo.lock` changes after `turbo setup`, for example after `git pull`, the shell hook keeps the previously installed tools active and asks you to run `turbo setup`. `turbo run` and `turbo exec` fail until you do.
 
@@ -299,32 +298,42 @@ When `turbo` detects CI, `turbo setup` uses [frozen mode](/docs/reference/setup#
         turbo.lock, then retry CI.
 ```
 
-To check an existing installation without changing anything, use [`turbo setup --check`](/docs/reference/setup#--check). To speed up repeated jobs, cache the [shared download cache](#disk-use-and-cleanup) and your package manager's store between runs.
+To check an existing installation without changing anything, use [`turbo setup --check`](/docs/reference/setup#--check). To skip tool downloads in repeated jobs, cache the [tool store](#where-tools-are-stored) and your package manager's store between runs. See [Cache the tool store](/docs/crafting-your-repository/constructing-ci#cache-the-tool-store).
 
-## Disk use and cleanup
+## Where tools are stored
 
-Each clone and worktree has its own `.turbo/tools`. Verified downloads are also kept in a shared download cache that every clone on the machine reuses, so a second clone installs without downloading. The shared cache is in `turborepo/setup-artifacts` inside your user cache directory:
+`turbo setup` installs tools once per user, into a tool store outside your repositories. The store is in `turborepo/tools` inside your local data directory:
 
-| Platform | Shared download cache                                |
-| -------- | ---------------------------------------------------- |
-| macOS    | `~/Library/Caches/turborepo/setup-artifacts`         |
-| Linux    | `$XDG_CACHE_HOME/turborepo/setup-artifacts`, or `~/.cache/turborepo/setup-artifacts` |
-| Windows  | `%LOCALAPPDATA%\turborepo\setup-artifacts`           |
+| Platform | Tool store                                                            |
+| -------- | --------------------------------------------------------------------- |
+| macOS    | `~/Library/Application Support/turborepo/tools`                       |
+| Linux    | `$XDG_DATA_HOME/turborepo/tools`, or `~/.local/share/turborepo/tools` |
+| Windows  | `%LOCALAPPDATA%\turborepo\tools`                                      |
 
-Nothing in the shared cache is ever put on `PATH`. Tools are always installed into a clone's `.turbo/tools` first, and verified again on the way.
+To use another directory, such as one that CI caches, set `TURBO_TOOL_STORE` to its path. It must be an absolute path outside the repository, to a directory that only your user can write. `turbo setup` creates missing directories, readable only by you.
 
-`turbo setup` cleans up automatically and reports disk use at the end of each run:
+The store has three parts:
+
+- **`trees/`** holds one copy of each tool release that any repository selects, verified against `turbo.lock` when `turbo setup` installs it. On macOS and Linux, its files are read-only.
+- **`envs/`** holds a `bin` directory for each combination of tools that a `turbo.lock` selects. Repositories with the same selection share one.
+- **`repos/`** holds one directory for each repository: the record that `turbo run`, `turbo exec`, and the shell hook check, a stable `bin` link to the repository's current environment, and the repository's private `CARGO_HOME`.
+
+A second clone, worktree, or repository that selects tools already in the store downloads nothing. `turbo setup` reports each tool as `reused` and writes only the repository's record and links. The record names the repository's directory and its `turbo.lock`. Moving or recloning a repository needs `turbo setup` again, which reuses the tools in the store.
+
+In the repository, `turbo setup` writes `.turbo/bin`, a link to the stable `bin` link in `repos/`, for [editors and scripts](#using-managed-tools-outside-of-tasks). On Windows, `turbo setup` skips these links when your user can't create symbolic links.
+
+### Cleanup
+
+At the end of each run, `turbo setup` deletes tools that no repository using the store has selected for 7 days. Tools of a repository that was deleted, moved, or recloned count as unselected. `turbo setup` reports what it removed and what it keeps:
 
 ```txt title="Terminal"
-Managed tools use 218.9 MB in this clone's .turbo/tools.
+Removed 182.4 MB of managed tools no repository selects.
 Keeping 218.9 MB of replaced managed tools for 7 days after replacement in case a running task still uses them.
-Shared download cache: 129.6 MB.
 ```
 
-- **Replaced installations** that `turbo.lock` no longer selects are kept for 7 days after they're replaced, in case a running task still uses them, then removed by the next `turbo setup`.
-- **Shared downloads** that no `turbo setup` on the machine used for 90 days are removed.
+The 7 days protect processes that started before a repository switched to new tools. A process that keeps running for longer than that can lose its tools. While another `turbo setup` is using the store, cleanup skips that run.
 
-To remove everything yourself, delete `.turbo/tools` in each clone and the shared download cache directory.
+To remove everything yourself, delete the tool store directory. Every repository then needs `turbo setup` again.
 
 ## Upgrading from the experimental release
 

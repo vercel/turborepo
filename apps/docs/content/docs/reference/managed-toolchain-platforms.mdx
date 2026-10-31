@@ -14,7 +14,7 @@ related:
 
 [Managed toolchains](/docs/core-concepts/managed-toolchains) work in three steps:
 
-1. **[`turbo setup`](/docs/reference/setup)** installs the tools that `turbo.lock` records into `.turbo/tools`, then installs dependencies.
+1. **[`turbo setup`](/docs/reference/setup)** installs the tools that `turbo.lock` records into your [tool store](/docs/core-concepts/managed-toolchains#where-tools-are-stored), then installs dependencies.
 2. **Managed `turbo run` and [`turbo exec`](/docs/reference/exec)** run tasks and commands with those tools.
 3. **The [shell hook](/docs/reference/hook)** puts those tools first on `PATH` at your prompt.
 
@@ -77,7 +77,8 @@ What's different on Windows:
 - **Shell hook.** The hook supports Windows PowerShell 5.1 and PowerShell 7, and needs `.CMD` in `PATHEXT`. It doesn't support `cmd.exe` or Git Bash; use `turbo exec` there. See [Windows](/docs/reference/hook#windows) in the hook reference.
 - **Rust builds** need the MSVC linker. If it's missing, `turbo setup` still succeeds and recommends installing Visual Studio Build Tools with the "Desktop development with C++" workload.
 - **Python.** The first `turbo setup` precompiles the standard library, so it takes longer than later runs.
-- **Repository paths can't contain `%`.** `cmd.exe` would expand it in a managed tool's path, so `turbo setup` stops and asks you to move the repository to a path without `%`.
+- **Tool store paths can't contain `%`, `!`, or `"`.** `cmd.exe` would expand them in a managed tool's path, so `turbo setup` can't create `.cmd` programs in such a [tool store](/docs/core-concepts/managed-toolchains#where-tools-are-stored). Set `TURBO_TOOL_STORE` to a path without them.
+- **Links need permission to create symbolic links.** Without it, `turbo setup` skips `.turbo/bin` and the stable `bin` link in the tool store, and `turbo exec --print-env=bin` prints a path that doesn't exist. `turbo run`, `turbo exec`, the hook, and the other [`--print-env`](/docs/reference/exec#--print-env) formats work without the links.
 
 ### Windows arm64
 
