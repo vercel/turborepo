@@ -6,9 +6,12 @@
 
 use std::{collections::BTreeMap, fs, time::Duration};
 
+use serde::Serialize;
 use turborepo_archive::{ExtractedArtifact, Layout};
 use turborepo_download::ExpectedSha256;
-use turborepo_tool_install::{Export, Launch, ManagedVar, SetupSession, Tool, TreeRef, VarValue};
+use turborepo_tool_install::{
+    Export, Launch, ManagedVar, SetupSession, Staging, Tool, TreeRef, VarValue,
+};
 
 use crate::{
     go_discovery::GoVersion,
@@ -16,10 +19,22 @@ use crate::{
     lock::{self, Installation, Lock, Platform},
 };
 
+/// The official archives keep the toolchain under `go/`.
+const ROOT: &str = "go";
 // Exactly `go/test`, Go's own compiler regression suite: unused by the go
 // command, and it contains PAX-named non-ASCII fixtures. A Go-only constant;
 // no lock, index, or repository input can change it.
 const EXCLUDED: &[&str] = &["test"];
+/// Bump when this adapter stages different bytes for the same staging inputs.
+const STAGING_REVISION: u32 = 1;
+
+/// The official archive's `go/` entries in `format`, without [`EXCLUDED`].
+#[derive(Serialize)]
+struct Staged {
+    #[serde(flatten)]
+    archive: crate::staging::Archive<'static>,
+    excluded: &'static [&'static str],
+}
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
@@ -71,7 +86,7 @@ impl GoPlan {
         };
         if artifact.url != format!("{ARTIFACT_ORIGIN}/go/{name}")
             || artifact.format != format
-            || artifact.root_prefix.as_deref() != Some("go")
+            || artifact.root_prefix.as_deref() != Some(ROOT)
             || artifact.destination.is_some()
             || artifact.executables != go_resolution::executables(format)
         {
@@ -111,6 +126,17 @@ impl GoPlan {
                 artifact_sha256: artifact.sha256.clone(),
                 executables,
                 vars,
+                staging: Staging::new(
+                    "go",
+                    STAGING_REVISION,
+                    &Staged {
+                        archive: crate::staging::Archive {
+                            format: artifact.format,
+                            root: ROOT,
+                        },
+                        excluded: EXCLUDED,
+                    },
+                )?,
             },
             artifact,
         })
@@ -180,7 +206,7 @@ impl GoPlan {
             format,
             turborepo_archive::Limits::new(1024 * 1024 * 1024, 65_536, 4096, 64)?,
             Layout {
-                root: "go",
+                root: ROOT,
                 required_files: &required,
             },
             EXCLUDED,

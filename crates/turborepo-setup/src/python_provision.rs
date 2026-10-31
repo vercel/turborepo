@@ -18,10 +18,11 @@ use std::{
     time::Duration,
 };
 
+use serde::Serialize;
 use sha2::{Digest, Sha256};
 use turborepo_archive::{Allowances, ExtractedArtifact, Layout};
 use turborepo_download::ExpectedSha256;
-use turborepo_tool_install::{SetupSession, Tool};
+use turborepo_tool_install::{SetupSession, Staging, Tool};
 
 use crate::{
     lock::{self, Installation, Lock, Platform},
@@ -41,6 +42,21 @@ const OFFICIAL_ARCHIVE: Allowances = Allowances {
 /// Windows launcher beside uv's key directory: `%~dp0` is its own directory,
 /// and the interpreter keeps its image path inside the build.
 const WINDOWS_LAUNCHER: &str = "@\"%~dp0..\\@KEY@\\@ENTRYPOINT@\" %*\r\n";
+/// Bump when this adapter stages different bytes for the same staging inputs.
+const STAGING_REVISION: u32 = 1;
+
+/// The official archive's `python/` entries copied into uv's `key`
+/// directory, its standard library compiled with `interpreter`, and on
+/// Windows one launcher per entry point in `launch_directory`.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct Staged<'a> {
+    key: &'a str,
+    interpreter: &'a str,
+    stdlib: &'a str,
+    launch_directory: Option<&'a str>,
+    entrypoints: &'a BTreeMap<String, String>,
+}
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
@@ -136,6 +152,14 @@ impl PythonPlan {
                 (format!("bin/python{minor}"), format!("lib/python{minor}"));
             (executables, interpreter, stdlib, None)
         };
+        let staging = Staged {
+            key: &key,
+            interpreter: &interpreter,
+            stdlib: &stdlib,
+            launch_directory: launch_directory.as_deref(),
+            entrypoints: &artifact.executables,
+        };
+        let staging = Staging::new("python", STAGING_REVISION, &staging)?;
         Ok(Self {
             tool: Tool {
                 id: "python".into(),
@@ -145,6 +169,7 @@ impl PythonPlan {
                 executables,
                 // Activation only: Python's own exports need none of them.
                 vars: crate::uv_provision::interpreter_vars(Some(key.clone())),
+                staging,
             },
             artifact,
             key,

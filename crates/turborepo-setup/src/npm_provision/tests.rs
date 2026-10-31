@@ -253,6 +253,7 @@ async fn fresh_cohort_resources_bound_launchers_reuse_and_repair() {
         artifact_sha256: "ab".repeat(32),
         executables: std::collections::BTreeMap::from([("extra".into(), "bin/node".into())]),
         vars: Default::default(),
+        staging: turborepo_tool_install::Staging::new("fixture", 1, &()).unwrap(),
     };
     let expanded = [desired.to_vec(), vec![extra]].concat();
     assert!(

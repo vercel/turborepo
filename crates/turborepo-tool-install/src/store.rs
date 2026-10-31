@@ -25,14 +25,15 @@ use std::{
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    Error, Export, Tool, TreeRef, UserStore, VarValue, create_directory, directory, is_sha256,
-    make_read_only, read_bounded, real_directory, relative_path, selection, sha256_hex,
+    Error, Export, Staging, Tool, TreeRef, UserStore, VarValue, create_directory, directory,
+    is_sha256, make_read_only, read_bounded, real_directory, relative_path, selection, sha256_hex,
     shared_directory, shim_name, sync_directory, sync_tree, tree_hash, validate_tools,
     write_private,
 };
 
-/// Bump when setup stages different bytes for the same artifact.
-const TREE_REVISION: u32 = 1;
+/// Bump when the store's tree layout or seal changes. A change in how one
+/// adapter stages bumps that adapter's own [`Staging`] revision instead.
+const TREE_REVISION: u32 = 2;
 /// Bump when environment rendering changes, so no turbo trusts shims another
 /// rendered differently.
 const ENV_REVISION: u32 = 1;
@@ -77,10 +78,14 @@ impl fmt::Display for EnvKey {
 
 /// A complete, validated tool set for one host, sorted by id. Its key names
 /// the environment every repository selecting exactly these tools shares.
+/// The key hashes every field of every tool, so it changes whenever any
+/// tree key its shims name changes.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Selection {
     tools: Vec<Tool>,
     key: EnvKey,
+    /// Each tool's tree key, by id.
+    trees: BTreeMap<String, String>,
 }
 
 impl Selection {
@@ -90,7 +95,15 @@ impl Selection {
         let mut bytes = format!("turbo-env\0{ENV_REVISION}\0").into_bytes();
         bytes.extend(serde_json::to_vec(&tools)?);
         let key = EnvKey(sha256_hex(&bytes));
-        Ok(Self { tools, key })
+        let trees = (tools.iter())
+            .map(|tool| Ok((tool.id.clone(), TreeId::of(tool)?.key)))
+            .collect::<Result<_, Error>>()?;
+        Ok(Self { tools, key, trees })
+    }
+
+    /// The key of the selected tool `id`'s tree.
+    fn tree_key(&self, id: &str) -> Option<&str> {
+        self.trees.get(id).map(String::as_str)
     }
 
     pub fn tools(&self) -> &[Tool] {
@@ -100,14 +113,12 @@ impl Selection {
     pub fn key(&self) -> &EnvKey {
         &self.key
     }
-
-    fn tool(&self, id: &str) -> Option<&Tool> {
-        self.tools.iter().find(|tool| tool.id == id)
-    }
 }
 
-/// What makes a tree's bytes, never its exports or the other tools it serves,
-/// so selections that stage the same artifact share one tree.
+/// Everything that makes a tree's bytes: the verified artifact and how its
+/// adapter stages it. Never its exports or the other tools it serves, so
+/// selections that stage the same artifact the same way share one tree. The
+/// seal stores it, and reuse requires the sealed spec to equal the request.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct TreeSpec {
@@ -115,35 +126,32 @@ struct TreeSpec {
     version: String,
     platform: String,
     artifact_sha256: String,
+    staging: Staging,
 }
 
-impl TreeSpec {
-    fn of(tool: &Tool) -> Self {
-        Self {
+/// A tool's tree spec and the key that names its directory: the hash of the
+/// spec's canonical serialization.
+struct TreeId {
+    spec: TreeSpec,
+    key: String,
+}
+
+impl TreeId {
+    fn of(tool: &Tool) -> Result<Self, Error> {
+        let spec = TreeSpec {
             id: tool.id.clone(),
             version: tool.version.clone(),
             platform: tool.platform.clone(),
             artifact_sha256: tool.artifact_sha256.clone(),
-        }
+            staging: tool.staging.clone(),
+        };
+        let mut bytes = format!("turbo-tree\0{TREE_REVISION}\0").into_bytes();
+        bytes.extend(serde_json::to_vec(&spec)?);
+        Ok(Self {
+            spec,
+            key: sha256_hex(&bytes),
+        })
     }
-
-    fn key(&self) -> String {
-        let mut bytes = format!("turbo-tree\0{TREE_REVISION}").into_bytes();
-        for field in [
-            &self.id,
-            &self.version,
-            &self.platform,
-            &self.artifact_sha256,
-        ] {
-            bytes.extend((field.len() as u64).to_le_bytes());
-            bytes.extend(field.as_bytes());
-        }
-        sha256_hex(&bytes)
-    }
-}
-
-fn tree_key(tool: &Tool) -> String {
-    TreeSpec::of(tool).key()
 }
 
 #[derive(Serialize, Deserialize)]
@@ -274,8 +282,8 @@ impl UserStore {
         self.root.join("trees").join(key)
     }
 
-    fn tree_root(&self, tool: &Tool) -> PathBuf {
-        self.tree_dir(&tree_key(tool)).join("root")
+    fn tree_root(&self, key: &str) -> PathBuf {
+        self.tree_dir(key).join("root")
     }
 
     fn env_dir(&self, key: &EnvKey) -> PathBuf {
@@ -315,7 +323,7 @@ impl UserStore {
             return Err(Error::Damaged(format!("environment {env}")));
         }
         for tool in selection.tools() {
-            if self.tree_seal(tool)?.is_none() {
+            if self.tree_seal(&TreeId::of(tool)?)?.is_none() {
                 return Err(Error::NotInstalled(format!("{} {}", tool.id, tool.version)));
             }
         }
@@ -363,7 +371,8 @@ impl UserStore {
     /// The root of the sealed tree setup would reuse for `tool`, from its
     /// seal alone, for reports that never install.
     pub fn sealed_tree(&self, tool: &Tool) -> Result<Option<PathBuf>, Error> {
-        Ok(self.tree_seal(tool)?.map(|_| self.tree_root(tool)))
+        let id = TreeId::of(tool)?;
+        Ok(self.tree_seal(&id)?.map(|_| self.tree_root(&id.key)))
     }
 
     /// `turbo setup --check`: re-hash every tree `selection` uses against
@@ -372,10 +381,11 @@ impl UserStore {
     pub fn check(&self, selection: &Selection) -> Result<(), Error> {
         for tool in selection.tools() {
             let label = || format!("{} {}", tool.id, tool.version);
+            let id = TreeId::of(tool)?;
             let seal = self
-                .tree_seal(tool)?
+                .tree_seal(&id)?
                 .ok_or_else(|| Error::NotInstalled(label()))?;
-            if tree_hash(&self.tree_root(tool))? != seal.tree_sha256 {
+            if tree_hash(&self.tree_root(&id.key))? != seal.tree_sha256 {
                 return Err(Error::Damaged(label()));
             }
         }
@@ -393,8 +403,8 @@ impl UserStore {
     /// selection lacks (uv without a managed Python): it resolves to a path
     /// in the environment that never exists, never to anything the user owns.
     fn tree_path(&self, selection: &Selection, env: &Path, reference: &TreeRef) -> OsString {
-        let root = match selection.tool(&reference.tool) {
-            Some(tool) => self.tree_root(tool),
+        let root = match selection.tree_key(&reference.tool) {
+            Some(key) => self.tree_root(key),
             None => env.join("unselected").join(&reference.tool),
         };
         match reference.path.as_str() {
@@ -404,10 +414,10 @@ impl UserStore {
         .into_os_string()
     }
 
-    /// The tree's seal when `trees/<key>` is a complete installed tree for
-    /// exactly `tool`'s bytes. Reads no tree contents.
-    fn tree_seal(&self, tool: &Tool) -> Result<Option<TreeSeal>, Error> {
-        let dir = self.tree_dir(&tree_key(tool));
+    /// The tree's seal when `trees/<key>` is a complete installed tree whose
+    /// sealed spec is exactly `id`'s. Reads no tree contents.
+    fn tree_seal(&self, id: &TreeId) -> Result<Option<TreeSeal>, Error> {
+        let dir = self.tree_dir(&id.key);
         let bytes = match read_bounded(&dir.join("seal.json")) {
             Ok(bytes) => bytes,
             Err(Error::Io(e)) if e.kind() == io::ErrorKind::NotFound => return Ok(None),
@@ -417,7 +427,7 @@ impl UserStore {
         let Ok(seal) = serde_json::from_slice::<TreeSeal>(&bytes) else {
             return Ok(None);
         };
-        if seal.schema != SEAL_SCHEMA || seal.spec != TreeSpec::of(tool) {
+        if seal.schema != SEAL_SCHEMA || seal.spec != id.spec {
             return Ok(None);
         }
         match real_directory(&dir.join("root")) {
@@ -480,14 +490,17 @@ impl UserStore {
         #[cfg(windows)]
         {
             let tree = |id: &str| {
-                let root = self.tree_root(selection.tool(id)?);
+                let root = self.tree_root(selection.tree_key(id)?);
                 let root = root.to_str()?;
                 // Forwarders interpolate the root into a batch line.
                 (!root.contains(['%', '!', '"'])).then(|| root.to_owned())
             };
             Ok(match export {
                 Export::File(path) if crate::windows_kind(path)? == "exe" => {
-                    Shim::HardLink(self.tree_root(tool).join(relative_path(path)))
+                    let key = selection
+                        .tree_key(&tool.id)
+                        .ok_or(Error::InvalidInventory)?;
+                    Shim::HardLink(self.tree_root(key).join(relative_path(path)))
                 }
                 Export::File(path) => Shim::Script(selection::windows_forwarder(
                     &crate::Launch {
@@ -503,8 +516,8 @@ impl UserStore {
         {
             // Relative to the store, so a store restored at another path
             // keeps working.
-            let tree = |id: &str| match selection.tool(id) {
-                Some(tool) => format!("trees/{}/root", tree_key(tool)),
+            let tree = |id: &str| match selection.tree_key(id) {
+                Some(key) => format!("trees/{key}/root"),
                 None => format!("envs/{}/unselected/{id}", selection.key()),
             };
             Ok(match export {
@@ -529,12 +542,13 @@ impl SetupSession<'_> {
     /// The installed tree setup reuses for `tool`, for adapters that read
     /// installed resources. `None` means setup must stage it.
     pub fn tree(&self, tool: &Tool) -> Result<Option<PathBuf>, Error> {
-        let Some(seal) = self.store.tree_seal(tool)? else {
+        let id = TreeId::of(tool)?;
+        let Some(seal) = self.store.tree_seal(&id)? else {
             return Ok(None);
         };
-        let root = self.store.tree_root(tool);
+        let root = self.store.tree_root(&id.key);
         if self.reuse == Reuse::Verified {
-            let key = tree_key(tool);
+            let key = id.key;
             let healthy = match self.verified.borrow().get(&key) {
                 Some(healthy) => *healthy,
                 None => match tree_hash(&root) {
@@ -616,7 +630,8 @@ impl SetupSession<'_> {
         tool: &Tool,
         stage: &mut impl FnMut(&Tool, &Path) -> Result<(), Error>,
     ) -> Result<(), Error> {
-        let target = self.store.tree_dir(&tree_key(tool));
+        let id = TreeId::of(tool)?;
+        let target = self.store.tree_dir(&id.key);
         // Setup stages only what it found unusable.
         let replace = fs::symlink_metadata(&target).is_ok();
         let staged = staging(&self.store.tmp(), "tree-")?;
@@ -626,7 +641,7 @@ impl SetupSession<'_> {
         make_read_only(&root)?;
         let seal = TreeSeal {
             schema: SEAL_SCHEMA,
-            spec: TreeSpec::of(tool),
+            spec: id.spec.clone(),
             tree_sha256: tree_hash(&root)?,
         };
         write_private(
@@ -639,9 +654,9 @@ impl SetupSession<'_> {
             &target,
             &self.store.tmp(),
             replace,
-            || Ok(self.store.tree_seal(tool)?.is_some()),
+            || Ok(self.store.tree_seal(&id)?.is_some()),
         )?;
-        self.verified.borrow_mut().insert(tree_key(tool), true);
+        self.verified.borrow_mut().insert(id.key, true);
         Ok(())
     }
 
@@ -652,7 +667,7 @@ impl SetupSession<'_> {
         directory(&bin)?;
         for tool in selection.tools() {
             crate::check_executables(tool, |id| {
-                selection.tool(id).map(|tool| self.store.tree_root(tool))
+                selection.tree_key(id).map(|key| self.store.tree_root(key))
             })?;
             for (name, export) in &tool.executables {
                 make_shim(

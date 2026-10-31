@@ -64,6 +64,33 @@ pub struct Tool {
     pub executables: BTreeMap<String, Export>,
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub vars: BTreeMap<ManagedVar, VarValue>,
+    pub staging: Staging,
+}
+
+/// Everything beyond the verified artifact that decides the bytes setup
+/// stages into a tool's tree: the adapter whose staging code runs, that
+/// code's revision, and every input it reads. Trees are keyed by it, so two
+/// tools that stage the same artifact differently never share a tree.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Staging {
+    adapter: String,
+    revision: u32,
+    inputs: serde_json::Value,
+}
+
+impl Staging {
+    /// `inputs` is one typed value holding every input the adapter's staging
+    /// reads. Bump `revision` whenever that staging code would write
+    /// different bytes for the same inputs.
+    pub fn new(adapter: &str, revision: u32, inputs: &impl Serialize) -> Result<Self, Error> {
+        component(adapter)?;
+        Ok(Self {
+            adapter: adapter.to_owned(),
+            revision,
+            inputs: serde_json::to_value(inputs)?,
+        })
+    }
 }
 
 impl Tool {
@@ -171,6 +198,7 @@ fn sha256_hex(bytes: &[u8]) -> String {
 
 fn validate_tool(tool: &Tool) -> Result<(), Error> {
     component(&tool.id)?;
+    component(&tool.staging.adapter)?;
     if tool.version.is_empty()
         || tool.platform.is_empty()
         || !is_sha256(&tool.artifact_sha256)

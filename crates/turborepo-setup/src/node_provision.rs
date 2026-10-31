@@ -8,7 +8,7 @@ use semver::Version;
 use turborepo_archive::{ExtractedArtifact, Layout};
 use turborepo_download::{ApprovedOrigin, DownloadClient, ExpectedSha256};
 use turborepo_platform::OperatingSystem::Windows;
-use turborepo_tool_install::{Export, SetupSession, Tool};
+use turborepo_tool_install::{Export, SetupSession, Staging, Tool};
 
 use crate::{
     NodeArtifact,
@@ -47,6 +47,8 @@ pub enum Error {
 }
 
 const ARCHIVE_LIMIT: usize = 128 * 1024 * 1024;
+/// Bump when this adapter stages different bytes for the same staging inputs.
+const STAGING_REVISION: u32 = 1;
 
 pub struct NodeTransport {
     client: DownloadClient,
@@ -226,6 +228,14 @@ impl NodePlan {
                 artifact_sha256: artifact.sha256.clone(),
                 executables: Export::files(&artifact.executables),
                 vars: Default::default(),
+                staging: Staging::new(
+                    "node",
+                    STAGING_REVISION,
+                    &crate::staging::Archive {
+                        format: artifact.format,
+                        root,
+                    },
+                )?,
             },
             platform,
             artifact,
