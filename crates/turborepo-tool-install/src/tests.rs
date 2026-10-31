@@ -8,6 +8,7 @@ use std::{
 
 use super::*;
 
+mod gc;
 mod user_store;
 
 fn tool(id: &str) -> Tool {
