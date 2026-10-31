@@ -337,7 +337,7 @@ impl ActivationPlan {
                 .map_err(|_| Error::StaleInventory)?;
         }
         // The shell hook derives the same values from its trusted record.
-        let runtime_env = runtime_env(repo, &current.bin, &tools)?;
+        let runtime_env = runtime_env(&current.bin, current.cargo_home.as_deref(), &tools)?;
         sources.ensure_current()?;
         Ok(Self {
             snapshot,
@@ -384,14 +384,14 @@ impl ActivationPlan {
 }
 
 /// The variables an installed generation's tools need beside PATH: each
-/// tool's `vars`, resolved against the generation's `bin` and the repository
-/// root alone. Managed run and exec set exactly these, Unix launchers set the
-/// same values for their own tool, and the shell hook derives them from its
-/// trusted record without reading the Store, so the prompt and tasks always
-/// agree. Never inherited or host-dependent settings.
+/// tool's `vars`, resolved against the generation's `bin` and the
+/// `CARGO_HOME` it was published with. Managed run and exec set exactly
+/// these, Unix launchers set the same values for their own tool, and the
+/// shell hook derives them from its trusted installation, so the prompt and
+/// tasks always agree. Never inherited or host-dependent settings.
 pub fn runtime_env(
-    root: &Path,
     bin: &Path,
+    cargo_home: Option<&Path>,
     tools: &[Tool],
 ) -> Result<BTreeMap<String, OsString>, Error> {
     let mut env = BTreeMap::new();
@@ -406,7 +406,7 @@ pub fn runtime_env(
                 }
                 VarValue::Word(word) => OsString::from(word),
                 VarValue::RepoCargoHome => {
-                    let cargo_home = crate::cargo_prefetch::cargo_home_path(root);
+                    let cargo_home = cargo_home.ok_or(Error::StaleInventory)?.to_owned();
                     // Cargo creates a missing home on first use; never create it here.
                     match std::fs::symlink_metadata(&cargo_home) {
                         Ok(m) if !m.is_dir() || m.file_type().is_symlink() => {

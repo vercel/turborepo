@@ -70,7 +70,7 @@ fn run(owned: &OwnedSetupFixture, upstream: &LoopbackServer, flags: &[&str]) -> 
             args,
             setup_args,
             Some(provision::Transports {
-                trust_base: Some(owned.home().to_owned()),
+                tool_store: Some(owned.home().to_owned()),
                 node: turborepo_setup::node_provision::NodeTransport::loopback_http_for_tests(origin)
                     .unwrap(),
                 pnpm: turborepo_setup::pnpm_provision::PnpmTransport::loopback_http_for_tests(origin)
@@ -162,7 +162,7 @@ fn telemetry_counts_downloaded_uv_bytes() {
         let mut report = telemetry::Report::default();
         let code = crate::cli::dispatch_setup(&args, |args, setup_args| {
             let transports = provision::Transports {
-                trust_base: Some(owned.home().to_owned()),
+                tool_store: Some(owned.home().to_owned()),
                 node: turborepo_setup::node_provision::NodeTransport::loopback_http_for_tests(origin)
                     .unwrap(),
                 pnpm: turborepo_setup::pnpm_provision::PnpmTransport::loopback_http_for_tests(origin)

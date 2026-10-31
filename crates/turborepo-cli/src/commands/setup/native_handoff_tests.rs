@@ -182,7 +182,7 @@ fn current_native_self_local_and_copied_local_startup_preserve_root_config() {
         Some(provision::Transports {
                 bun: turborepo_setup::bun_provision::BunTransport::loopback_http_for_tests(upstream.origin()).unwrap(),
             artifact: None,
-            trust_base:Some(user_base.clone()),
+            tool_store:Some(user_base.join("turborepo/tools")),
             registry:turborepo_setup::registry_resolution::RegistryTransport::loopback_http_for_tests(upstream.origin()).unwrap(),
             node:turborepo_setup::node_provision::NodeTransport::loopback_http_for_tests(upstream.origin()).unwrap(),
             pnpm:turborepo_setup::pnpm_provision::PnpmTransport::loopback_http_for_tests(upstream.origin()).unwrap(),

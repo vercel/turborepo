@@ -1,20 +1,22 @@
 use std::os::unix::fs::{MetadataExt, PermissionsExt, symlink};
 
-use turborepo_tool_install::{Store, Tool};
+use turborepo_tool_install::{Store, Tool, UserStore};
 
 use super::*;
 use crate::commands::setup::trust::TrustStore;
 
 fn trust(f: &Fixture) -> TrustStore {
-    TrustStore::new(f.owned.home(), f.owned.root()).unwrap()
+    let store = UserStore::at(f.owned.home(), f.owned.root()).unwrap();
+    TrustStore::new(&store, f.owned.root()).unwrap()
 }
 fn record(f: &Fixture) -> (PathBuf, Value) {
-    let path = fs::read_dir(f.owned.home().join("turborepo/setup-roots"))
+    let path = fs::read_dir(f.owned.home().join("repos"))
         .unwrap()
         .next()
         .unwrap()
         .unwrap()
-        .path();
+        .path()
+        .join("record.json");
     let value = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
     (path, value)
 }
@@ -217,7 +219,7 @@ fn moved_and_same_path_recloned_roots_cannot_reuse_records() {
         let f = Fixture::new();
         let u = Upstream::new(&f, false, None);
         f.run(&u, FROZEN).unwrap();
-        let moved = f.owned.home().join("moved-repo");
+        let moved = f.owned.root().with_file_name("moved-repo");
         fs::rename(f.owned.root(), &moved).unwrap();
         let root = if same_path {
             // Keep the old inode alive, and recreate a clone at its former path.
@@ -228,7 +230,7 @@ fn moved_and_same_path_recloned_roots_cannot_reuse_records() {
         } else {
             moved.as_path()
         };
-        let state = TrustStore::new(f.owned.home(), root).unwrap();
+        let state = TrustStore::new(&UserStore::at(f.owned.home(), root).unwrap(), root).unwrap();
         assert!(!state.allows_reuse(&Store::open(root).unwrap()).unwrap());
     }
 }
@@ -239,8 +241,8 @@ fn unsafe_external_state_fails_before_traffic_without_following_links() {
         let f = Fixture::new();
         let u = Upstream::new(&f, false, None);
         if case == 0 {
-            assert!(TrustStore::new(f.owned.root(), f.owned.root()).is_err());
-            symlink(f.owned.root(), f.owned.home().join("turborepo")).unwrap();
+            assert!(UserStore::at(f.owned.root(), f.owned.root()).is_err());
+            symlink(f.owned.root(), f.owned.home().join("repos")).unwrap();
         } else {
             f.run(&u, FROZEN).unwrap();
             let (path, _) = record(&f);
@@ -273,16 +275,12 @@ fn unsafe_external_state_fails_before_traffic_without_following_links() {
 }
 
 #[test]
-fn existing_user_state_ancestors_only_need_to_be_unwritable_by_everyone() {
-    // macOS places turbo's config files in the same directory, and Ubuntu's
-    // 0002 umask leaves an existing `~/.local/share` 0775.
+fn existing_store_ancestors_only_need_to_be_unwritable_by_everyone() {
+    // Ubuntu's 0002 umask leaves an existing `~/.local/share` 0775.
     let f = Fixture::new();
-    let shared = f.owned.home().join("turborepo");
-    fs::create_dir(&shared).unwrap();
-    fs::write(shared.join("telemetry.json"), "{}").unwrap();
-    for path in [f.owned.home(), shared.as_path()] {
-        fs::set_permissions(path, fs::Permissions::from_mode(0o775)).unwrap();
-    }
+    let store = f.owned.home();
+    let ancestor = store.parent().unwrap();
+    fs::set_permissions(ancestor, fs::Permissions::from_mode(0o775)).unwrap();
     let u = Upstream::new(&f, false, None);
     f.run(&u, FROZEN).unwrap();
     let (path, _) = record(&f);
@@ -290,12 +288,13 @@ fn existing_user_state_ancestors_only_need_to_be_unwritable_by_everyone() {
     assert_eq!(fs::metadata(records).unwrap().mode() & 0o777, 0o700);
     let empty = LoopbackServer::new([], |_| {}).unwrap();
     f.run(&empty, FROZEN).unwrap();
-    // The record directory setup creates stays private, and a world-writable
-    // ancestor fails closed before traffic.
+    // The record directory stays private, nobody else may write the store,
+    // and a world-writable ancestor fails closed before traffic.
+    let store_mode = fs::metadata(store).unwrap().mode() & 0o777;
     for (path, mode, restore) in [
         (records, 0o750, 0o700),
-        (shared.as_path(), 0o777, 0o775),
-        (f.owned.home(), 0o777, 0o775),
+        (store, 0o775, store_mode),
+        (ancestor, 0o777, 0o775),
     ] {
         fs::set_permissions(path, fs::Permissions::from_mode(mode)).unwrap();
         assert!(f.run(&empty, FROZEN).is_err(), "{path:?} {mode:o}");
@@ -308,18 +307,24 @@ fn existing_user_state_ancestors_only_need_to_be_unwritable_by_everyone() {
 
 #[test]
 fn setup_prunes_only_records_whose_root_is_gone_or_replaced() {
-    use std::os::unix::fs::OpenOptionsExt;
+    use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt};
     let f = Fixture::new();
     let u = Upstream::new(&f, false, None);
     f.run(&u, FROZEN).unwrap();
     let (own, value) = record(&f);
-    let directory = own.parent().unwrap().to_owned();
+    let repos = f.owned.home().join("repos");
     let write = |name: String, root: &std::path::Path, identity: (u64, u64)| {
         let mut other = value.clone();
         other["installation"]["root"] = json!(root);
         other["installation"]["device"] = json!(identity.0);
         other["installation"]["inode"] = json!(identity.1);
-        let path = directory.join(format!("{name}.json"));
+        let directory = repos.join(name);
+        fs::DirBuilder::new()
+            .mode(0o700)
+            .create(&directory)
+            .unwrap();
+        fs::create_dir(directory.join("cargo-home")).unwrap();
+        let path = directory.join("record.json");
         fs::OpenOptions::new()
             .write(true)
             .create_new(true)
@@ -358,7 +363,9 @@ fn setup_prunes_only_records_whose_root_is_gone_or_replaced() {
     f.run(&empty, FROZEN).unwrap();
     assert_eq!(empty.hits(), 0);
     assert!(own.exists() && kept.exists() && misfiled.exists());
-    assert!(!replaced.exists() && !gone.exists());
+    // A pruned repository's whole directory goes, its Cargo home included.
+    assert!(!replaced.parent().unwrap().exists() && !gone.parent().unwrap().exists());
+    assert!(kept.parent().unwrap().join("cargo-home").is_dir());
     assert!(
         trust(&f)
             .allows_reuse(&Store::open(f.owned.root()).unwrap())

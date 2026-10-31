@@ -33,7 +33,7 @@ fn context() -> ExecutionContext {
 fn inspect(f: &Fixture) -> Result<Authorization, AuthorizationError> {
     Authorization::inspect(
         f.owned.root(),
-        f.owned.home(),
+        Some(f.owned.home()),
         context(),
         Default::default(),
     )
@@ -47,12 +47,13 @@ fn installed() -> (Fixture, Upstream) {
 }
 
 fn record(f: &Fixture) -> PathBuf {
-    fs::read_dir(f.owned.home().join("turborepo/setup-roots"))
+    fs::read_dir(f.owned.home().join("repos"))
         .unwrap()
         .next()
         .unwrap()
         .unwrap()
         .path()
+        .join("record.json")
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -393,13 +394,15 @@ fn healthy_repository_forgery_is_readiness_not_authority() {
 #[test]
 fn missing_user_state_is_not_created_or_replaced_by_ancestor_evidence() {
     let (f, u) = installed();
-    let home = f.owned.home().join("never-created");
+    let outside = tempfile::tempdir().unwrap();
+    let home = outside.path().join("never-created");
     let before = snapshot(f.owned.root().parent().unwrap());
     assert!(matches!(
-        Authorization::inspect(f.owned.root(), &home, context(), Default::default()),
+        Authorization::inspect(f.owned.root(), Some(&home), context(), Default::default()),
         Err(AuthorizationError::Untrusted)
     ));
-    assert!(!home.exists());
+    // Locating the store creates only its empty root.
+    assert_eq!(fs::read_dir(&home).unwrap().count(), 0);
     assert_eq!(snapshot(f.owned.root().parent().unwrap()), before);
     assert_eq!(u.hits(), 3);
     f.no_execution();
@@ -410,7 +413,7 @@ fn moved_and_same_path_recloned_roots_require_new_setup() {
     for reclone in [false, true] {
         let (f, u) = installed();
         let selected = inspect(&f).unwrap();
-        let moved = f.owned.home().join("moved-repo");
+        let moved = f.owned.root().with_file_name("moved-repo");
         fs::rename(f.owned.root(), &moved).unwrap();
         if reclone {
             fs::create_dir(f.owned.root()).unwrap();
@@ -437,7 +440,8 @@ fn moved_and_same_path_recloned_roots_require_new_setup() {
             .is_ok()
         );
         assert!(
-            Authorization::inspect(root, f.owned.home(), context(), Default::default()).is_err()
+            Authorization::inspect(root, Some(f.owned.home()), context(), Default::default())
+                .is_err()
         );
         assert_eq!(snapshot(f.owned.root().parent().unwrap()), before);
         assert_eq!(u.hits(), 3);

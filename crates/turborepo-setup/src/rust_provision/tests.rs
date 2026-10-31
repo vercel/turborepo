@@ -86,7 +86,12 @@ fn locked_toolchains_install_through_private_rustup_and_publish_toolchain_shims(
         &fixture("1.99.0", "2026-10-01"),
         0,
     );
-    let mut store = Store::open(repo.path()).unwrap();
+    let user_store =
+        turborepo_tool_install::UserStore::at(&fixtures.path().join("store"), repo.path()).unwrap();
+    let mut store = Store::open(repo.path())
+        .unwrap()
+        .with_user_store(&user_store)
+        .unwrap();
     let transport = official();
     let prepared = plan
         .prepare(&store, &desired, &binary, &transport, IfNeeded)

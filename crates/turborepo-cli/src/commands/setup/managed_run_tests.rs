@@ -15,7 +15,7 @@ fn select(f: &Fixture) -> Result<Option<Arc<ManagedRun>>, String> {
         f.owned.root(),
         &f.owned.root().join("turbo.json"),
         true,
-        f.owned.home(),
+        Some(f.owned.home()),
         managed::context,
     )
 }
@@ -243,9 +243,13 @@ fn flag_and_exact_lock_root_gate_selection_without_ancestor_fallback_or_host_qua
     let f = Fixture::new();
     let config = f.owned.root().join("turbo.json");
     assert!(
-        ManagedTools::inspect(f.owned.root(), &config, false, f.owned.home(), || panic!(
-            "disabled repo probed host"
-        ))
+        ManagedTools::inspect(
+            f.owned.root(),
+            &config,
+            false,
+            Some(f.owned.home()),
+            || panic!("disabled repo probed host")
+        )
         .unwrap()
         .is_none()
     );
@@ -255,14 +259,14 @@ fn flag_and_exact_lock_root_gate_selection_without_ancestor_fallback_or_host_qua
             &nested,
             &nested.join("turbo.json"),
             true,
-            f.owned.home(),
+            Some(f.owned.home()),
             || panic!("missing exact-root lock probed host")
         )
         .unwrap()
         .is_none()
     );
     assert!(select(&f).is_err()); // Lock exists, but setup never prepared evidence.
-    assert!(!f.owned.home().join("turborepo").exists());
+    assert!(!f.owned.home().join("repos").exists());
     assert!(!f.owned.root().join(".turbo").exists());
     // A managed lock on a musl host gets musl guidance, not `turbo setup`,
     // before any user state is read.
@@ -278,7 +282,7 @@ fn flag_and_exact_lock_root_gate_selection_without_ancestor_fallback_or_host_qua
         )
         .map_err(|e| e.to_string())
     };
-    let error = ManagedTools::inspect(f.owned.root(), &config, true, f.owned.home(), musl);
+    let error = ManagedTools::inspect(f.owned.root(), &config, true, Some(f.owned.home()), musl);
     let error = error.err().unwrap();
     assert!(error.contains("not supported on musl"), "{error}");
     assert!(!error.contains("run turbo setup"), "{error}");
@@ -486,8 +490,8 @@ fn no_lock_run_fails_closed_with_clone_local_guidance() {
             0 => fs::write(root.join(".nvmrc"), "24.1.0\n").unwrap(),
             1 => fs::remove_dir_all(current.bin.parent().unwrap()).unwrap(),
             2 => {
-                for entry in fs::read_dir(f.owned.home().join("turborepo/setup-roots")).unwrap() {
-                    fs::remove_file(entry.unwrap().path()).unwrap();
+                for entry in fs::read_dir(f.owned.home().join("repos")).unwrap() {
+                    fs::remove_file(entry.unwrap().path().join("record.json")).unwrap();
                 }
             }
             // Removing the clone-local inventory is the opt-out.

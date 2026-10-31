@@ -132,7 +132,7 @@ impl Journey {
         let invocation = self.root().join(dir);
         let code = turborepo_cli::test_support::setup_for_tests(
             &invocation,
-            &self.user_base(),
+            &self.user_base().join("turborepo/tools"),
             self.upstream.origin(),
             flags,
             || self.owned.policy_at(&invocation),

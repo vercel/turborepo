@@ -39,7 +39,7 @@ fn exec_runs_authorized_managed_tools_and_never_runs_stale_ones() {
         root,
         &root.join("turbo.json"),
         true,
-        f.owned.home(),
+        Some(f.owned.home()),
         managed::context,
     )
     .unwrap()

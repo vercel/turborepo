@@ -215,7 +215,7 @@ impl Adapter {
             Self::Cargo => {
                 let cargo = env.program("cargo")?;
                 // Activation exposes this same home to tasks as CARGO_HOME.
-                let home = cargo_prefetch::cargo_home(root)?;
+                let home = cargo_prefetch::cargo_home(&env.cargo_home)?;
                 match cargo_prefetch::prefetch(root, &cargo, &home, offline, vars) {
                     Ok(()) => Ok(None),
                     Err(cargo_prefetch::Error::Fetch(code)) => Ok(Some(code.parse().unwrap_or(1))),
@@ -403,12 +403,12 @@ impl Dependencies {
     /// managed environment that setup just recorded. Online, the first
     /// failing installer ends the run. Offline, every installer still runs
     /// from its cache, so the report lists each one that could not.
-    /// `trust_base` overrides the user state directory for fixtures.
+    /// `tool_store` names a fixture's tool store in place of the user's.
     pub fn install(
         &self,
         root: &Path,
         ecosystems: Ecosystems,
-        trust_base: Option<PathBuf>,
+        tool_store: Option<PathBuf>,
         console: &Console,
     ) -> Result<DependencyReport, Error> {
         let skipped = |id: &ToolchainId, reason: &str| StepOutcome {
@@ -432,9 +432,8 @@ impl Dependencies {
                 .collect();
             return Ok(report);
         }
-        let trust_base = trust_base
-            .or_else(dirs_next::data_local_dir)
-            .ok_or_else(|| std::io::Error::other("cannot locate setup user state directory"))?;
+        let store = super::provision::user_store(tool_store.as_deref(), root)
+            .map_err(std::io::Error::other)?;
         // The lock and installation that provisioning just published.
         let sources = Snapshot::capture_with(root, ecosystems)?;
         let lock = sources
@@ -454,7 +453,7 @@ impl Dependencies {
                 Step::Install(adapter) => adapter,
             };
             let run = adapter.run(root, lock, self.offline)?;
-            let env = Environment::recorded(root, &sources, &trust_base)?;
+            let env = Environment::recorded(root, &sources, &store)?;
             let mut step = console.step(id.clone(), run.command[0], run.display());
             let exit = adapter.execute(&run, root, &env, &mut step)?;
             report.steps.push(step.finish(exit)?);
@@ -532,27 +531,37 @@ fn go(snapshot: &Snapshot) -> Step {
 struct Environment {
     bin: PathBuf,
     vars: BTreeMap<String, OsString>,
+    cargo_home: PathBuf,
 }
 
 impl Environment {
     /// Authorized as strictly as `turbo run`: the activation plan must match
     /// the trusted setup record that provisioning just published.
-    fn recorded(root: &Path, sources: &Snapshot, trust_base: &Path) -> Result<Self, Error> {
+    fn recorded(
+        root: &Path,
+        sources: &Snapshot,
+        store: &turborepo_tool_install::UserStore,
+    ) -> Result<Self, Error> {
         let context = crate::commands::managed::context().map_err(Error::Host)?;
         let plan = ActivationPlan::captured(
             sources,
             context,
             turborepo_tool_install::Verification::Shallow,
         )?;
-        let trust = super::trust::TrustStore::new(trust_base, root)?;
+        let trust = super::trust::TrustStore::new(store, root)?;
         if !trust.authorizes(&plan)? {
             return Err(Error::Untrusted);
         }
+        let cargo_home = trust.cargo_home();
         let mut vars = plan.runtime_env().clone();
         let path = plan.path(std::env::var_os("PATH").as_deref())?;
         vars.insert("PATH".into(), path);
         let bin = plan.path_prepend().to_owned();
-        Ok(Self { bin, vars })
+        Ok(Self {
+            bin,
+            vars,
+            cargo_home,
+        })
     }
 
     /// The managed executable only, never a lookup on the caller's PATH.
