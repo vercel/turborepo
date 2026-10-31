@@ -4,13 +4,13 @@ use std::{collections::BTreeMap, io::Write, process::Command};
 
 use semver::Version;
 use sha2::{Digest, Sha256};
-use turborepo_tool_install::{Outcome, Verification};
 
 use super::*;
 use crate::{
     lock::{Declaration, Document},
     python_resolution::{RELEASES, official_artifact},
     source_policy::test_support::LoopbackServer,
+    test_store::{Outcome, TestStore},
 };
 
 const PATH: &str =
@@ -87,7 +87,7 @@ fn plan(document: Document, platform: Platform) -> Result<PythonPlan, Error> {
     PythonPlan::from_lock(&Lock::new(document).unwrap(), platform)
 }
 async fn install(
-    store: &mut Store,
+    store: &TestStore,
     plan: &PythonPlan,
     transport: &PythonTransport,
 ) -> Result<Outcome, Error> {
@@ -112,15 +112,15 @@ async fn verified_build_is_staged_at_the_uv_key_with_python_shims() {
     let transport = PythonTransport::loopback_http_for_tests(upstream.origin()).unwrap();
     let plan = plan(document(platform, &bytes), platform).unwrap();
     let repo = tempfile::tempdir().unwrap();
-    let mut store = Store::open(repo.path()).unwrap();
+    let store = TestStore::open(repo.path());
     assert_eq!(
-        install(&mut store, &plan, &transport).await.unwrap(),
+        install(&store, &plan, &transport).await.unwrap(),
         Outcome::Replaced
     );
     let current = store.current().unwrap().unwrap();
-    let tree = current
-        .bin
-        .join("../tools/python/cpython-3.12.12-linux-x86_64-gnu");
+    let tree = store
+        .tree_of(plan.inventory_tool())
+        .join("cpython-3.12.12-linux-x86_64-gnu");
     assert!(tree.join("lib/python3.12/os.py").is_file());
     assert_eq!(
         fs::read_to_string(tree.join(PYC)).unwrap(),
@@ -137,13 +137,13 @@ async fn verified_build_is_staged_at_the_uv_key_with_python_shims() {
         assert_eq!(String::from_utf8(output.stdout).unwrap(), expected);
     }
     assert_eq!(
-        install(&mut store, &plan, &transport).await.unwrap(),
+        install(&store, &plan, &transport).await.unwrap(),
         Outcome::Unchanged
     );
     assert_eq!(upstream.hits(), 1);
     // Bytecode is hashed like every other managed byte.
     crate::source_policy::test_support::damage(&tree.join(PYC), b"stale");
-    assert!(Store::inspect_with(repo.path(), Verification::Full).is_err());
+    assert!(store.check(&[plan.inventory_tool().clone()]).is_err());
 }
 
 #[tokio::test(flavor = "current_thread")]
@@ -155,9 +155,9 @@ async fn failed_bytecode_compilation_publishes_nothing() {
     let transport = PythonTransport::loopback_http_for_tests(upstream.origin()).unwrap();
     let plan = plan(document(platform, &bytes), platform).unwrap();
     let repo = tempfile::tempdir().unwrap();
-    let mut store = Store::open(repo.path()).unwrap();
+    let store = TestStore::open(repo.path());
     assert!(matches!(
-        install(&mut store, &plan, &transport).await,
+        install(&store, &plan, &transport).await,
         Err(Error::Install(turborepo_tool_install::Error::Io(_)))
     ));
     assert!(store.current().unwrap().is_none());
@@ -177,14 +177,11 @@ async fn linux_terminfo_case_siblings_install_as_distinct_terminals() {
     let transport = PythonTransport::loopback_http_for_tests(upstream.origin()).unwrap();
     let plan = plan(document(platform, &bytes), platform).unwrap();
     let repo = tempfile::tempdir().unwrap();
-    let mut store = Store::open(repo.path()).unwrap();
-    install(&mut store, &plan, &transport).await.unwrap();
+    let store = TestStore::open(repo.path());
+    install(&store, &plan, &transport).await.unwrap();
     let terminfo = store
-        .current()
-        .unwrap()
-        .unwrap()
-        .bin
-        .join("../tools/python/cpython-3.12.12-linux-x86_64-gnu/share/terminfo");
+        .tree_of(plan.inventory_tool())
+        .join("cpython-3.12.12-linux-x86_64-gnu/share/terminfo");
     for name in ["E/Eterm", "e/eterm"] {
         let body = fs::read_to_string(terminfo.join(name)).unwrap();
         assert_eq!(body, name[2..]);
@@ -199,9 +196,9 @@ async fn tampered_builds_never_publish() {
     let plan = plan(document(platform, &good()), platform).unwrap();
     let transport = PythonTransport::loopback_http_for_tests(upstream.origin()).unwrap();
     let repo = tempfile::tempdir().unwrap();
-    let mut store = Store::open(repo.path()).unwrap();
+    let store = TestStore::open(repo.path());
     assert!(matches!(
-        install(&mut store, &plan, &transport).await,
+        install(&store, &plan, &transport).await,
         Err(Error::Download(turborepo_download::Error::DigestMismatch))
     ));
     assert!(store.current().unwrap().is_none());
@@ -222,9 +219,9 @@ async fn windows_x64_plans_export_batch_launchers_and_install_only_on_windows() 
     let launcher = launcher.as_file().unwrap();
     assert!(launcher.starts_with(".launch-") && launcher.ends_with("/python.cmd"));
     let repo = tempfile::tempdir().unwrap();
-    let mut store = Store::open(repo.path()).unwrap();
+    let store = TestStore::open(repo.path());
     assert!(matches!(
-        install(&mut store, &plan, &transport).await,
+        install(&store, &plan, &transport).await,
         Err(Error::UnsupportedTarget)
     ));
     assert_eq!(upstream.hits(), 0);

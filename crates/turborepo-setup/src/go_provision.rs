@@ -8,7 +8,7 @@ use std::{collections::BTreeMap, fs, time::Duration};
 
 use turborepo_archive::{ExtractedArtifact, Layout};
 use turborepo_download::ExpectedSha256;
-use turborepo_tool_install::{Export, Launch, ManagedVar, Store, Tool, TreeRef, VarValue};
+use turborepo_tool_install::{Export, Launch, ManagedVar, SetupSession, Tool, TreeRef, VarValue};
 
 use crate::{
     go_discovery::GoVersion,
@@ -120,12 +120,12 @@ impl GoPlan {
         &self.tool
     }
 
-    /// The caller supplies ALL desired tools and reconciles that same set while
-    /// holding this Store lock. A healthy identical Go tree needs no download
+    /// The caller supplies ALL desired tools and ensures that same set in
+    /// the same setup session. A healthy identical Go tree needs no download
     /// unless preparation is fresh.
     pub async fn prepare(
         &self,
-        store: &Store,
+        store: &SetupSession<'_>,
         desired: &[Tool],
         transport: &GoTransport,
         preparation: crate::Preparation,
@@ -139,10 +139,8 @@ impl GoPlan {
             return Err(Error::InventoryMismatch);
         }
         // Fresh skips reuse, never validation of the complete desired cohort.
-        Store::validate_desired(desired)?;
-        if preparation == crate::Preparation::IfNeeded
-            && store.reusable_tree(&self.tool, desired)?.is_some()
-        {
+        let reusable = store.reusable_tree(&self.tool, desired)?.is_some();
+        if preparation == crate::Preparation::IfNeeded && reusable {
             return Ok(None);
         }
         self.download(transport).await.map(Some)

@@ -149,17 +149,29 @@ impl Repo {
         (output, text)
     }
 
+    fn store(&self) -> PathBuf {
+        let home = self.owned.home();
+        common::setup::user_tool_store(home, Some(&home.join("data")))
+    }
+
+    /// turbo.lock and the setup record.
     fn state(&self) -> (Vec<u8>, Vec<u8>) {
         let root = self.owned.root();
-        (
-            fs::read(root.join("turbo.lock")).unwrap(),
-            fs::read(root.join(".turbo/tools/manifest.json")).unwrap(),
-        )
+        let installed = common::setup::installed(root, &self.store()).unwrap();
+        (fs::read(root.join("turbo.lock")).unwrap(), installed.record)
     }
 }
 
 fn stderr(output: &Output) -> String {
     String::from_utf8_lossy(&output.stderr).into_owned()
+}
+
+/// Whether `path` names a file in the repository's tool store.
+fn in_store(repo: &Repo, path: &str) -> bool {
+    Path::new(path)
+        .canonicalize()
+        .unwrap()
+        .starts_with(repo.store().canonicalize().unwrap())
 }
 
 #[test]
@@ -184,14 +196,14 @@ fn exec_runs_managed_tools_from_root_nested_and_cwd_without_installing() {
         assert!(output.stdout.is_empty(), "exec must not print to stdout");
         let lines: Vec<_> = record.lines().collect();
         assert_eq!(PathBuf::from(lines[0]).canonicalize().unwrap(), cwd);
-        assert!(Path::new(lines[1]).starts_with(&root), "{}", lines[1]);
+        assert!(in_store(&repo, lines[1]), "{}", lines[1]);
         assert_eq!(&lines[2..], ["a b", "", "--", "--cwd", "*"]);
     }
     // Managed pnpm dispatches through the managed Node runtime.
     let (output, record) = repo.exec("apps/web", &["exec", "--", "pnpm", "--version"]);
     assert_eq!(output.status.code(), Some(7), "{}", stderr(&output));
     let lines: Vec<_> = record.lines().collect();
-    assert!(Path::new(lines[1]).starts_with(&root));
+    assert!(in_store(&repo, lines[1]), "{}", lines[1]);
     assert!(lines[2].ends_with("pnpm.cjs"), "{record}");
     assert_eq!(lines[3], "--version");
 
@@ -219,9 +231,7 @@ fn exec_fails_after_drift_or_damage_and_runs_nothing() {
     assert!(record.is_empty());
 
     fs::write(root.join(".nvmrc"), "24.0.0\n").unwrap();
-    let current = turborepo_tool_install::Store::inspect(&root)
-        .unwrap()
-        .unwrap();
+    let current = common::setup::installed(&root, &repo.store()).unwrap();
     fs::remove_file(current.bin.join("pnpm")).unwrap();
     let (output, record) = repo.exec("", &["exec", "--", "node"]);
     assert_eq!(output.status.code(), Some(1));

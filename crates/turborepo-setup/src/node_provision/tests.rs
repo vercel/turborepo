@@ -11,10 +11,10 @@ use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
     net::TcpListener,
 };
-#[cfg(unix)]
-use turborepo_tool_install::{Outcome, Verification};
 
 use super::*;
+#[cfg(unix)]
+use crate::test_store::{Outcome, TestStore};
 
 #[cfg(unix)]
 mod bundled;
@@ -221,7 +221,7 @@ fn zip_archive(arch: &str) -> Vec<u8> {
 
 #[cfg(unix)]
 async fn install(
-    store: &mut Store,
+    store: &TestStore,
     plan: &NodePlan,
     transport: &NodeTransport,
 ) -> Result<Outcome, Error> {
@@ -251,9 +251,9 @@ async fn locked_unix_matrix_full_resources_shims_repair_and_network_free_repeat(
         let before = serde_json::to_vec(&value).unwrap();
         let plan = plan(&value, platform).unwrap();
         let repo = tempfile::tempdir().unwrap();
-        let mut store = Store::open(repo.path()).unwrap();
+        let store = TestStore::open(repo.path());
         assert_eq!(
-            install(&mut store, &plan, &transport).await.unwrap(),
+            install(&store, &plan, &transport).await.unwrap(),
             Outcome::Replaced
         );
         let current = store.current().unwrap().unwrap();
@@ -272,30 +272,29 @@ async fn locked_unix_matrix_full_resources_shims_repair_and_network_free_repeat(
             assert!(output.status.success());
             assert_eq!(String::from_utf8(output.stdout).unwrap().trim(), expected);
         }
-        let root = current.bin.parent().unwrap().join("tools/node");
+        let root = store.tree_of(plan.inventory_tool());
         assert_eq!(
             fs::read_to_string(root.join("share/man/man1/node.1")).unwrap(),
             "fixture resource"
         );
         assert!(root.join("lib/node_modules/npm/package.json").is_file());
         recovery::assert_scoped_resource(&store);
-        let manifest = repo.path().join(".turbo/tools/manifest.json");
-        let old = fs::read(&manifest).unwrap();
         assert_eq!(
-            install(&mut store, &plan, &transport).await.unwrap(),
+            install(&store, &plan, &transport).await.unwrap(),
             Outcome::Unchanged
         );
-        assert_eq!(fs::read(&manifest).unwrap(), old);
+        assert_eq!(store.bin(), current.bin);
         recovery::assert_scoped_resource(&store);
         assert_eq!(upstream.requests.load(Ordering::SeqCst), 1);
+        // Setup trusts the seal it wrote; only --check and --force re-hash.
         crate::source_policy::test_support::damage(&root.join("bin/node"), "damaged");
         assert_eq!(
-            install(&mut store, &plan, &transport).await.unwrap(),
+            install(&store, &plan, &transport).await.unwrap(),
             Outcome::Unchanged
         );
         assert_eq!(upstream.requests.load(Ordering::SeqCst), 1);
-        assert!(Store::inspect_with(repo.path(), Verification::Full).is_err());
         let desired = [plan.inventory_tool().clone()];
+        assert!(store.check(&desired).is_err());
         let prepared = plan
             .prepare(&store, &desired, &transport, crate::Preparation::Fresh)
             .await
@@ -303,19 +302,11 @@ async fn locked_unix_matrix_full_resources_shims_repair_and_network_free_repeat(
             .unwrap();
         assert_eq!(
             store
-                .force_reconcile_checked(
-                    &desired,
-                    |tool, path| prepared.stage(tool, path),
-                    || { Ok(()) }
-                )
+                .force_reconcile(&desired, |tool, path| prepared.stage(tool, path))
                 .unwrap(),
             Outcome::Replaced
         );
-        assert!(
-            Store::inspect_with(repo.path(), Verification::Full)
-                .unwrap()
-                .is_some()
-        );
+        store.check(&desired).unwrap();
         recovery::assert_scoped_resource(&store);
         assert_eq!(upstream.requests.load(Ordering::SeqCst), 2);
         assert_eq!(serde_json::to_vec(&value).unwrap(), before);
@@ -328,13 +319,12 @@ async fn checksum_and_extraction_failures_never_publish_or_damage_prior_install(
     let platform = Platform::MacosArm64;
     let good = unix_archive("darwin", "arm64", false, false);
     let repo = tempfile::tempdir().unwrap();
-    let mut store = Store::open(repo.path()).unwrap();
+    let store = TestStore::open(repo.path());
     let good_plan = plan(&fixture(platform, &good), platform).unwrap();
     let upstream = serve(good.clone()).await;
     let transport = NodeTransport::loopback_http_for_tests(&upstream.origin).unwrap();
-    install(&mut store, &good_plan, &transport).await.unwrap();
-    let manifest = repo.path().join(".turbo/tools/manifest.json");
-    let old = fs::read(&manifest).unwrap();
+    install(&store, &good_plan, &transport).await.unwrap();
+    let old = store.published();
     for bytes in [
         b"corrupt bytes".to_vec(),
         unix_archive("darwin", "arm64", true, false),
@@ -348,34 +338,21 @@ async fn checksum_and_extraction_failures_never_publish_or_damage_prior_install(
                 ["sha256"] = json!("a".repeat(64));
         }
         let broken = plan(&value, platform).unwrap();
-        let error = install(&mut store, &broken, &transport).await.unwrap_err();
+        let error = install(&store, &broken, &transport).await.unwrap_err();
         assert!(matches!(
             error,
             Error::Download(turborepo_download::Error::DigestMismatch) | Error::Archive(_)
         ));
-        assert_eq!(fs::read(&manifest).unwrap(), old);
+        assert_eq!(store.published(), old);
         assert!(
             store
                 .is_current(&[good_plan.inventory_tool().clone()])
                 .unwrap()
         );
         let empty = tempfile::tempdir().unwrap();
-        let mut empty_store = Store::open(empty.path()).unwrap();
-        assert!(
-            install(&mut empty_store, &broken, &transport)
-                .await
-                .is_err()
-        );
-        assert!(!empty.path().join(".turbo/tools/manifest.json").exists());
-        assert!(
-            fs::read_dir(empty.path().join(".turbo/tools"))
-                .unwrap()
-                .all(|entry| !entry
-                    .unwrap()
-                    .file_name()
-                    .to_string_lossy()
-                    .starts_with("generation-"))
-        );
+        let empty_store = TestStore::open(empty.path());
+        assert!(install(&empty_store, &broken, &transport).await.is_err());
+        assert!(empty_store.published().is_empty());
     }
 }
 
@@ -421,7 +398,7 @@ async fn zip_matrix_prepares_full_windows_trees_and_promotes_only_native_x64() {
         );
         // Unqualified targets fail before any further download.
         let repo = tempfile::tempdir().unwrap();
-        let store = Store::open(repo.path()).unwrap();
+        let store = TestStore::open(repo.path());
         let prepared = plan
             .prepare_if_needed(&store, &[plan.inventory_tool().clone()], &transport)
             .await;
@@ -509,7 +486,7 @@ async fn selected_node_only_mapping_composes_with_separate_npm_inventory() {
     };
     let desired = [npm.clone(), plan.inventory_tool().clone()];
     let repo = tempfile::tempdir().unwrap();
-    let mut store = Store::open(repo.path()).unwrap();
+    let store = TestStore::open(repo.path());
     let upstream = serve(bytes).await;
     let transport = NodeTransport::loopback_http_for_tests(&upstream.origin).unwrap();
     assert!(matches!(

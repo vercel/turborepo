@@ -1,15 +1,16 @@
 //! Missing-real-lock library transaction. No CLI admission or execution
-//! authority.
+//! authority. The previous clone-local selection comes from the caller's
+//! user record; publication is the caller's store session.
 use std::{io, path::Path};
 
-use turborepo_tool_install::{GenerationExpectation, Store, Tool};
+use turborepo_tool_install::Tool;
 
 use crate::{
     lock::{
         Lock, Platform, Snapshot,
         reconcile::{self, Mode, Resolution},
     },
-    native_baseline::{Baseline, NativeRecord},
+    native_baseline::NativeRecord,
     node_provision::NodePlan,
     npm_provision::NpmPlan,
     package_manager::Manager,
@@ -27,8 +28,6 @@ pub enum Error {
     #[error(transparent)]
     Storage(#[from] crate::lock::StorageError),
     #[error(transparent)]
-    Install(#[from] turborepo_tool_install::Error),
-    #[error(transparent)]
     Node(#[from] crate::node_provision::Error),
     #[error(transparent)]
     Pnpm(#[from] crate::pnpm_provision::Error),
@@ -36,24 +35,8 @@ pub enum Error {
     Check(#[from] io::Error),
 }
 
-enum Generation {
-    Baseline(Box<Baseline>),
-    Empty(GenerationExpectation),
-}
-impl Generation {
-    fn expectation(&self) -> &GenerationExpectation {
-        match self {
-            Self::Baseline(baseline) => baseline.generation(),
-            Self::Empty(expected) => expected,
-        }
-    }
-}
-
-/// Private fields retain actual disk CAS and live Store evidence, not a fake
-/// lock.
 pub struct Staged {
     snapshot: Snapshot,
-    generation: Generation,
     native: NativeRecord,
     node: NodePlan,
     pnpm: Option<PnpmPlan>,
@@ -62,9 +45,11 @@ pub struct Staged {
     desired: Vec<Tool>,
 }
 
+/// `previous` is the clone-local selection the repository's user record
+/// holds, if any. An invalid one is never silently replaced.
 pub fn stage(
     snapshot: &Snapshot,
-    store: &Store,
+    previous: Option<&[u8]>,
     platform: Platform,
     offline: bool,
     resolve: impl FnOnce(Resolution<'_>) -> Result<Lock, reconcile::Error>,
@@ -74,7 +59,6 @@ pub fn stage(
     NativeRecord::preflight(snapshot)?;
     if snapshot.previous_lock().is_some()
         || !snapshot.declarations().contains_key("node")
-        || snapshot.repository_root() != store.repository_root()?
         || !matches!(
             platform,
             Platform::MacosX64
@@ -85,24 +69,10 @@ pub fn stage(
     {
         return Err(Error::Unsupported);
     }
-    let generation = match Baseline::capture(snapshot, store)? {
-        Some(baseline) => Generation::Baseline(Box::new(baseline)),
-        None => {
-            let expected = store.generation()?;
-            // A present generation requires sealed native provenance, even when healthy.
-            if expected.current().is_some() {
-                return Err(Error::Unsupported);
-            }
-            Generation::Empty(expected)
-        }
-    };
-    let previous = match &generation {
-        Generation::Baseline(baseline) => Some(baseline.native(snapshot, store)?),
-        Generation::Empty(_) => None,
-    };
+    let previous = previous.map(NativeRecord::decode).transpose()?;
     let candidate = reconcile::reconcile_previous(
         snapshot,
-        previous.map(NativeRecord::selection),
+        previous.as_ref().map(NativeRecord::selection),
         Mode::NoLock,
         offline,
         resolve,
@@ -113,10 +83,7 @@ pub fn stage(
         },
         || {
             check()?;
-            snapshot.ensure_current().map_err(io::Error::other)?;
-            store
-                .check_generation(generation.expectation())
-                .map_err(io::Error::other)
+            snapshot.ensure_current().map_err(io::Error::other)
         },
     )?;
     let native = NativeRecord::from_snapshot(snapshot, &candidate.lock)?;
@@ -141,20 +108,23 @@ pub fn stage(
     desired.extend(pnpm.iter().map(PnpmPlan::inventory_tool).cloned());
     let staged = Staged {
         snapshot: snapshot.clone(),
-        generation,
         native,
         node,
         pnpm,
         npm,
         desired,
     };
-    staged.check(snapshot, store)?;
+    staged.check(snapshot)?;
     Ok(staged)
 }
 
 impl Staged {
     pub fn selection(&self) -> &Lock {
         self.native.selection()
+    }
+    /// The canonical selection bytes the user record keeps.
+    pub fn selection_bytes(&self) -> &[u8] {
+        self.native.bytes()
     }
     pub fn desired(&self) -> &[Tool] {
         &self.desired
@@ -171,70 +141,23 @@ impl Staged {
 
     /// Recheck after caller-owned waits/preparation, never recapture source
     /// CAS.
-    pub fn check(&self, snapshot: &Snapshot, store: &Store) -> Result<(), Error> {
-        if self.snapshot.repository_root() != snapshot.repository_root()
-            || snapshot.repository_root() != store.repository_root()?
-        {
+    pub fn check(&self, snapshot: &Snapshot) -> Result<(), Error> {
+        if self.snapshot.repository_root() != snapshot.repository_root() {
             return Err(Error::Unsupported);
         }
         self.snapshot.ensure_current()?;
         snapshot.ensure_current()?;
-        store.check_generation(self.generation.expectation())?;
         Ok(())
     }
 
-    pub fn publish(
-        self,
-        snapshot: &Snapshot,
-        store: &mut Store,
-        force: bool,
-        stage_tool: impl FnMut(&Tool, &Path) -> Result<(), turborepo_tool_install::Error>,
-        mut check: impl FnMut() -> io::Result<()>,
-    ) -> Result<turborepo_tool_install::Outcome, Error> {
-        check()?;
-        self.check(snapshot, store)?;
-        let guard = self.snapshot.guard()?;
-        self.publish_guarded(snapshot, store, &guard, force, stage_tool, check)
-    }
-
-    /// Caller acquires WRITER before Store and retains both through
-    /// publication. Never reacquire the writer while a caller-held guard is
-    /// live.
-    pub fn publish_guarded(
-        self,
-        snapshot: &Snapshot,
-        store: &mut Store,
-        guard: &crate::writer_storage::WriterStorage,
-        force: bool,
-        mut stage_tool: impl FnMut(&Tool, &Path) -> Result<(), turborepo_tool_install::Error>,
-        mut check: impl FnMut() -> io::Result<()>,
-    ) -> Result<turborepo_tool_install::Outcome, Error> {
-        check()?;
-        self.snapshot.check_guard(guard)?;
-        self.check(snapshot, store)?;
-        Ok(store.reconcile_recorded_checked(
-            &self.desired,
-            self.native.record(),
-            self.generation.expectation(),
-            force,
-            |tool, tree| {
-                stage_tool(tool, tree)?;
-                if tool.id == "node" {
-                    self.node
-                        .verify_bundled_npm(tree)
-                        .map_err(io::Error::other)?;
-                } else {
-                    verify_manager(tree, tool)?;
-                }
-                Ok(())
-            },
-            || {
-                check()?;
-                self.snapshot.check_guard(guard).map_err(io::Error::other)?;
-                snapshot.ensure_current().map_err(io::Error::other)?;
-                Ok(())
-            },
-        )?)
+    /// Checks a freshly staged tree of this selection: the exact bundled npm
+    /// for Node, the exact manager package otherwise.
+    pub fn verify(&self, tool: &Tool, tree: &Path) -> io::Result<()> {
+        if tool.id == "node" {
+            self.node.verify_bundled_npm(tree).map_err(io::Error::other)
+        } else {
+            verify_manager(tree, tool)
+        }
     }
 }
 

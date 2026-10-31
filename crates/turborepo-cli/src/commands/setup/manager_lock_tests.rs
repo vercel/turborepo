@@ -154,7 +154,7 @@ fn bun_only_repositories_set_up_without_node() {
     assert_eq!(f.run(&u, LOCAL).unwrap(), 0);
     let created = selected(&f);
     assert_eq!(created.tools().keys().collect::<Vec<_>>(), ["bun"]);
-    let store = turborepo_tool_install::Store::open(f.owned.root()).unwrap();
+    let store = Installed::open(&f.owned);
     let current = store.current().unwrap().unwrap();
     assert_eq!(current.tools.len(), 1);
     assert!(current.bin.join("bunx").exists());

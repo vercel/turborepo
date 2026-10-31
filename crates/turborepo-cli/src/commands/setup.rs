@@ -453,8 +453,14 @@ fn run_reporting(
         .as_ref()
         .and_then(provision::Transports::tool_store);
     if request.mode == Mode::Check {
-        return check::run(&discovery, snapshot, &dependencies, preflight)
-            .map(output::Completed::Reported);
+        return check::run(
+            &discovery,
+            snapshot,
+            &dependencies,
+            tool_store.as_deref(),
+            preflight,
+        )
+        .map(output::Completed::Reported);
     }
     if request.mode == Mode::Plan {
         println!(
@@ -506,18 +512,92 @@ pub(crate) fn platform_supported() -> bool {
     provision::platform().is_ok()
 }
 
-/// Records `root`'s current installation as trusted in `tool_store`, or the
-/// user's located tool store, exactly as setup publishes it, so binary tests
-/// can drive the shell hook. Returns the record's path. Fixture injection only.
+/// The installation a repository's record names in a tool store, as fixtures
+/// inspect it.
+#[cfg(any(test, feature = "test-support"))]
+#[cfg_attr(not(feature = "test-support"), allow(dead_code))]
+pub struct RecordedInstallation {
+    /// The record's bytes.
+    pub record: Vec<u8>,
+    /// A `--no-lock` clone's recorded selection.
+    pub selection: Option<Vec<u8>>,
+    pub tools: Vec<turborepo_tool_install::Tool>,
+    /// The environment's `bin`.
+    pub bin: std::path::PathBuf,
+    /// `<store>/repos/<repo>/bin`, the link `.turbo/bin` names.
+    pub stable_bin: std::path::PathBuf,
+    /// Each sealed tree's root, by tool id.
+    pub trees: std::collections::BTreeMap<String, std::path::PathBuf>,
+}
+
+#[cfg(any(test, feature = "test-support"))]
+#[cfg_attr(not(feature = "test-support"), allow(dead_code))]
+impl RecordedInstallation {
+    pub fn tree(&self, id: &str) -> &std::path::Path {
+        &self.trees[id]
+    }
+}
+
+/// What `root`'s record in `tool_store` names, if it names a usable
+/// environment. Reads only; fixture inspection only.
+#[cfg(any(test, feature = "test-support"))]
+pub fn recorded_installation_for_tests(
+    root: &std::path::Path,
+    tool_store: &std::path::Path,
+) -> Result<Option<RecordedInstallation>, String> {
+    let error = |e: &dyn std::fmt::Display| e.to_string();
+    let root = root.canonicalize().map_err(|e| error(&e))?;
+    let store = trust::user_store(Some(tool_store), &root).map_err(|e| error(&e))?;
+    let trust = trust::TrustStore::new(&store, &root).map_err(|e| error(&e))?;
+    let Some(env) = trust.recorded_env().map_err(|e| error(&e))? else {
+        return Ok(None);
+    };
+    let activation = store.activate(&root, &env).map_err(|e| error(&e))?;
+    let seal =
+        std::fs::read(activation.bin().with_file_name("seal.json")).map_err(|e| error(&e))?;
+    let seal: serde_json::Value = serde_json::from_slice(&seal).map_err(|e| error(&e))?;
+    let tools: Vec<turborepo_tool_install::Tool> =
+        serde_json::from_value(seal["tools"].clone()).map_err(|e| error(&e))?;
+    let mut trees = std::collections::BTreeMap::new();
+    for tool in &tools {
+        if let Some(tree) = store.sealed_tree(tool).map_err(|e| error(&e))? {
+            trees.insert(tool.id.clone(), tree);
+        }
+    }
+    Ok(Some(RecordedInstallation {
+        record: std::fs::read(trust.path()).map_err(|e| error(&e))?,
+        selection: trust.clone_local_selection().map_err(|e| error(&e))?,
+        tools,
+        bin: activation.bin().to_owned(),
+        stable_bin: activation.stable_bin().to_owned(),
+        trees,
+    }))
+}
+
+/// Installs `tools` into `tool_store`, or the user's located tool store, and
+/// records them for `root` exactly as setup publishes them, so binary tests
+/// can drive managed activation without downloads. `selection` is what a
+/// `--no-lock` clone records without turbo.lock. `stage` writes one tool's
+/// tree. Returns the record's path. Fixture injection only.
 #[cfg(feature = "test-support")]
-pub fn record_trust_for_tests(
+pub fn install_tools_for_tests(
     root: &std::path::Path,
     tool_store: Option<&std::path::Path>,
+    tools: Vec<turborepo_tool_install::Tool>,
+    selection: Option<&[u8]>,
+    stage: impl FnMut(
+        &turborepo_tool_install::Tool,
+        &std::path::Path,
+    ) -> Result<(), turborepo_tool_install::Error>,
 ) -> Result<std::path::PathBuf, String> {
-    let user_store = provision::user_store(tool_store, root).map_err(|e| e.to_string())?;
-    let store = turborepo_tool_install::Store::open(root).map_err(|e| e.to_string())?;
-    let trust = trust::TrustStore::new(&user_store, root).map_err(|e| e.to_string())?;
-    trust.record(&store).map_err(|e| e.to_string())?;
+    let root = root.canonicalize().map_err(|e| e.to_string())?;
+    let user_store = trust::user_store(tool_store, &root).map_err(|e| e.to_string())?;
+    let trust = trust::TrustStore::new(&user_store, &root).map_err(|e| e.to_string())?;
+    let tools = turborepo_tool_install::Selection::new(tools).map_err(|e| e.to_string())?;
+    user_store
+        .begin_setup(&root, turborepo_tool_install::Reuse::Sealed)
+        .and_then(|session| session.ensure(&tools, stage, |env| Ok(trust.publish(env, selection)?)))
+        .map_err(|e| e.to_string())?;
     Ok(trust.path())
 }
 

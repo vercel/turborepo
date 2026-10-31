@@ -69,7 +69,7 @@ fn provisions_checks_repeats_and_rejects_drift(version: &str, package: &str, dri
     let lock = fs::read(f.owned.root().join("turbo.lock")).unwrap();
     assert_eq!(f.run(&u, FROZEN).unwrap(), 0);
     assert_eq!(u.hits(), 3);
-    let store = turborepo_tool_install::Store::open(f.owned.root()).unwrap();
+    let store = Installed::open(&f.owned);
     let current = store.current().unwrap().unwrap();
     let selected: Vec<_> = current
         .tools
@@ -160,9 +160,9 @@ fn yarn_check_failures_are_readonly_and_actionable() {
             let (f, u) = yarn(version, package);
             assert!(matches!(
                 f.check(super::checks::CHECK),
-                Err(Error::Activation(
-                    turborepo_setup::activation::Error::MissingInventory
-                ))
+                Err(Error::Install(turborepo_tool_install::Error::NotInstalled(
+                    _
+                )))
             ));
             (f, u)
         };

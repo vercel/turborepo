@@ -106,31 +106,37 @@ fn inspect(
     // repository-authored state path. Do NOT construct official transports.
     let fixture = transports.and_then(provision::Transports::tool_store);
     let authorization =
-        Authorization::verify(root, fixture.as_deref(), context, sources.ecosystems())
+        Authorization::inspect(root, fixture.as_deref(), context, sources.ecosystems())
             .map_err(|error| unavailable(error, &artifacts))?;
+    let store = super::trust::user_store(fixture.as_deref(), root)
+        .map_err(|error| unavailable(error, &artifacts))?;
     // Keep the original discovery/source/lock expectations even though the
     // authorization consumer captures its own snapshot. Recheck them BEFORE the
     // final fresh external-evidence check, not after it or inside its callback.
     inputs()?;
     storage()?;
     let rows = authorization
-        .with_current(|plan| {
-            plan.tools()
-                .iter()
-                .map(|tool| ToolRow {
-                    id: tool.id.clone(),
-                    version: tool.version.clone(),
-                    // Offline, the verified installed bytes are the only
-                    // reinstall source, and they were just fully re-verified.
-                    outcome: if force {
-                        ToolOutcome::Reverified
-                    } else {
-                        ToolOutcome::ReusedTrusted
-                    },
-                    source: None,
-                })
-                .collect::<Vec<_>>()
+        .with_current(|plan, _| {
+            // Offline, the installed trees are the only reinstall source, so
+            // every byte is re-verified against its seal.
+            store.check(plan.selection())?;
+            Ok::<_, turborepo_tool_install::Error>(
+                plan.tools()
+                    .iter()
+                    .map(|tool| ToolRow {
+                        id: tool.id.clone(),
+                        version: tool.version.clone(),
+                        outcome: if force {
+                            ToolOutcome::Reverified
+                        } else {
+                            ToolOutcome::ReusedTrusted
+                        },
+                        source: None,
+                    })
+                    .collect::<Vec<_>>(),
+            )
         })
+        .map_err(|error| unavailable(error, &artifacts))?
         .map_err(|error| unavailable(error, &artifacts))?;
     Ok(rows)
 }

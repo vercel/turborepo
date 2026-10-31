@@ -19,7 +19,7 @@ use std::{
 };
 
 use sha2::{Digest, Sha256};
-use turborepo_tool_install::{Export, Launch, ManagedVar, Store, Tool, TreeRef, VarValue};
+use turborepo_tool_install::{Export, Launch, ManagedVar, SetupSession, Tool, TreeRef, VarValue};
 
 use crate::{
     lock::{self, AlternateFormat, Artifact, Format, Installation, Lock, Platform},
@@ -247,7 +247,7 @@ impl RustPlan {
     /// Hold the Store guard through publication.
     pub fn prepare(
         &self,
-        store: &Store,
+        store: &SetupSession<'_>,
         desired: &[Tool],
         rustup: &Path,
         transport: &RustupTransport,
@@ -264,10 +264,9 @@ impl RustPlan {
         {
             return Ok(None);
         }
-        // Split components: `/` is not a separator under a `\\?\` root.
-        let scratch = tempfile::Builder::new()
-            .prefix(".rust-")
-            .tempdir_in(store.repository_root()?.join(".turbo").join("tools"))?;
+        // Staging renames the toolchain into place, so the homes live on the
+        // store's filesystem.
+        let scratch = store.scratch("rust-")?;
         let homes = PrivateHomes::create(scratch.path())?;
         let mut command = homes.command(rustup, transport);
         command
@@ -409,8 +408,8 @@ pub struct PreparedRust {
 }
 
 impl PreparedRust {
-    /// Callback for Store::reconcile: move the verified home into the empty
-    /// staged tree, which becomes this generation's RUSTUP_HOME.
+    /// Staging callback for `SetupSession::ensure`: move the verified home into
+    /// the empty staged tree, which becomes the toolchain's RUSTUP_HOME.
     pub fn stage(
         &self,
         tool: &Tool,

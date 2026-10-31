@@ -4,12 +4,12 @@ use std::{collections::BTreeMap, io::Write, process::Command};
 
 use semver::Version;
 use sha2::{Digest, Sha256};
-use turborepo_tool_install::Outcome;
 
 use super::*;
 use crate::{
     lock::{Declaration, Document},
     source_policy::test_support::LoopbackServer,
+    test_store::{Outcome, TestStore},
 };
 
 // Prints how it was reached; must never be a real uv.
@@ -84,7 +84,7 @@ fn serve(platform: Platform, bytes: Vec<u8>) -> (LoopbackServer, UvTransport) {
     (upstream, transport)
 }
 async fn install(
-    store: &mut Store,
+    store: &TestStore,
     plan: &UvPlan,
     transport: &UvTransport,
     preparation: crate::Preparation,
@@ -119,16 +119,21 @@ async fn locked_uv_installs_verified_tree_with_repo_scoped_launchers() {
         let (upstream, transport) = serve(platform, bytes.clone());
         let plan = plan(document(platform, &bytes), platform).unwrap();
         let repo = tempfile::tempdir().unwrap();
-        let mut store = Store::open(repo.path()).unwrap();
+        let store = TestStore::open(repo.path());
         let fresh = crate::Preparation::IfNeeded;
         assert_eq!(
-            install(&mut store, &plan, &transport, fresh).await.unwrap(),
+            install(&store, &plan, &transport, fresh).await.unwrap(),
             Outcome::Replaced
         );
         let current = store.current().unwrap().unwrap();
         assert_eq!(current.tools, [plan.inventory_tool().clone()]);
-        let tools = fs::canonicalize(current.bin.join("../tools")).unwrap();
-        // Through the generation's bin launchers, the caller's global
+        let uv = store.tree_of(plan.inventory_tool());
+        // A locked Python is not in this selection: uv's interpreter directory
+        // is a path in the environment that never exists.
+        let python = fs::canonicalize(current.bin.parent().unwrap())
+            .unwrap()
+            .join("unselected/python");
+        // Through the environment's bin launchers, the caller's global
         // interpreter settings are replaced by repo scope. The tree holds only
         // the verified archive.
         for binary in ["uv", "uvx"] {
@@ -136,20 +141,20 @@ async fn locked_uv_installs_verified_tree_with_repo_scoped_launchers() {
                 run(&current.bin.join(binary)),
                 format!(
                     "{}|{}|never|||sync --locked",
-                    tools.join("uv").join(binary).display(),
-                    tools.join("python").display()
+                    uv.join(binary).display(),
+                    python.display()
                 )
             );
         }
-        let tree: Vec<_> = fs::read_dir(tools.join("uv"))
+        let tree: Vec<_> = fs::read_dir(&uv)
             .unwrap()
             .map(|entry| entry.unwrap().file_name())
             .collect();
         assert_eq!(tree.len(), 2, "{tree:?}");
-        assert!(!tools.join("python").exists());
+        assert!(!python.exists());
         // Healthy repeat is network-free; fresh preparation re-verifies bytes.
         assert_eq!(
-            install(&mut store, &plan, &transport, fresh).await.unwrap(),
+            install(&store, &plan, &transport, fresh).await.unwrap(),
             Outcome::Unchanged
         );
         assert_eq!(upstream.hits(), 1);
@@ -198,24 +203,24 @@ async fn uv_launchers_request_the_locked_interpreter_without_any_parent_environm
     document.tools.insert("python".into(), python);
     let plan = UvPlan::from_lock(&Lock::new(document).unwrap(), platform).unwrap();
     let repo = tempfile::tempdir().unwrap();
-    let mut store = Store::open(repo.path()).unwrap();
-    install(&mut store, &plan, &transport, crate::Preparation::IfNeeded)
+    let store = TestStore::open(repo.path());
+    install(&store, &plan, &transport, crate::Preparation::IfNeeded)
         .await
         .unwrap();
-    let bin = store.current().unwrap().unwrap().bin;
+    let bin = store.bin();
     let output = Command::new(bin.join("uv"))
         .arg("sync")
         .env_clear()
         .output()
         .unwrap();
     assert!(output.status.success());
-    let tools = fs::canonicalize(bin.join("../tools")).unwrap();
+    let env = fs::canonicalize(bin.parent().unwrap()).unwrap();
     assert_eq!(
         String::from_utf8(output.stdout).unwrap().trim(),
         format!(
             "{}|{}|never|only-managed|cpython-3.12.12-macos-aarch64-none|sync",
-            tools.join("uv/uv").display(),
-            tools.join("python").display()
+            store.tree_of(plan.inventory_tool()).join("uv").display(),
+            env.join("unselected/python").display()
         )
     );
 }
@@ -232,8 +237,8 @@ async fn mirrors_serve_the_official_archive_path_beneath_their_base() {
     let transport = UvTransport::mirrored(&fixture.policy().unwrap(), &mirror).unwrap();
     let plan = plan(document(platform, &bytes), platform).unwrap();
     let repo = tempfile::tempdir().unwrap();
-    let mut store = Store::open(repo.path()).unwrap();
-    let outcome = install(&mut store, &plan, &transport, crate::Preparation::IfNeeded).await;
+    let store = TestStore::open(repo.path());
+    let outcome = install(&store, &plan, &transport, crate::Preparation::IfNeeded).await;
     assert_eq!(outcome.unwrap(), Outcome::Replaced);
     assert_eq!(upstream.requests(), [path]);
 }
@@ -254,8 +259,8 @@ async fn checksum_and_layout_failures_never_publish() {
         let (_upstream, transport) = serve(platform, served);
         let plan = plan(document(platform, &locked), platform).unwrap();
         let repo = tempfile::tempdir().unwrap();
-        let mut store = Store::open(repo.path()).unwrap();
-        let result = install(&mut store, &plan, &transport, crate::Preparation::IfNeeded).await;
+        let store = TestStore::open(repo.path());
+        let result = install(&store, &plan, &transport, crate::Preparation::IfNeeded).await;
         assert!(
             if layout {
                 matches!(result, Err(Error::Archive(_)))
@@ -345,9 +350,9 @@ async fn windows_x64_exports_the_flat_zip_binaries_and_installs_only_on_windows(
     assert_eq!(fs::read(prepared.binary()).unwrap(), b"uv");
     assert_eq!(upstream.hits(), 1);
     let repo = tempfile::tempdir().unwrap();
-    let mut store = Store::open(repo.path()).unwrap();
+    let store = TestStore::open(repo.path());
     assert!(matches!(
-        install(&mut store, &plan, &transport, crate::Preparation::Fresh).await,
+        install(&store, &plan, &transport, crate::Preparation::Fresh).await,
         Err(Error::UnsupportedTarget)
     ));
     assert_eq!(upstream.hits(), 1);
@@ -361,7 +366,7 @@ async fn preparation_requires_the_complete_desired_inventory() {
     let (upstream, transport) = serve(platform, bytes.clone());
     let plan = plan(document(platform, &bytes), platform).unwrap();
     let repo = tempfile::tempdir().unwrap();
-    let store = Store::open(repo.path()).unwrap();
+    let store = TestStore::open(repo.path());
     assert!(matches!(
         plan.prepare_if_needed(&store, &[], &transport).await,
         Err(Error::InventoryMismatch)

@@ -68,9 +68,7 @@ fn exec_runs_authorized_managed_tools_and_never_runs_stale_ones() {
 
     // A damaged cohort fails at the spawn boundary, never on host tools.
     fs::remove_file(&result).unwrap();
-    let current = turborepo_tool_install::Store::inspect(root)
-        .unwrap()
-        .unwrap();
+    let current = Installed::open(&f.owned).current().unwrap().unwrap();
     fs::remove_file(current.bin.join("pnpm")).unwrap();
     assert!(matches!(
         exec::spawn(tools.as_ref(), &command, &cwd, launch),
@@ -79,4 +77,56 @@ fn exec_runs_authorized_managed_tools_and_never_runs_stale_ones() {
     assert!(!result.exists());
     // Exec never downloads or repairs; only setup contacted the upstream.
     assert_eq!(u.hits(), 3);
+}
+
+fn installed_tools(f: &Fixture) -> std::sync::Arc<turborepo_run::ManagedRun> {
+    let root = f.owned.root();
+    ManagedTools::inspect(
+        root,
+        &root.join("turbo.json"),
+        true,
+        Some(f.owned.home()),
+        managed::context,
+    )
+    .unwrap()
+    .unwrap()
+}
+
+#[test]
+fn exec_after_lock_drift_fails_with_setup_guidance_and_runs_nothing() {
+    for case in 0..2 {
+        let mut f = Fixture::new();
+        f.run(&Upstream::new(&f, false, None), FROZEN).unwrap();
+        let tools = installed_tools(&f);
+        match case {
+            // Other bytes for the same tools: the record no longer matches.
+            0 => fs::write(f.owned.root().join("turbo.lock"), format!("{}\n", f.lock)).unwrap(),
+            // Another resolution than the declarations ask for.
+            _ => {
+                f.lock["tools"]["node"]["version"] = json!("24.0.1");
+                f.save();
+            }
+        }
+        let cwd = AbsoluteSystemPathBuf::try_from(f.owned.root().join("apps/web")).unwrap();
+        let command = ["node", "--version"].map(OsString::from);
+        let error = exec::spawn(tools.as_ref(), &command, &cwd, |_| {
+            panic!("a stale selection must never run")
+        })
+        .unwrap_err();
+        assert!(matches!(error, exec::Error::Stale(_)), "{error}");
+        assert!(
+            error.to_string().contains("turbo setup"),
+            "case {case}: {error}"
+        );
+        let root = f.owned.root();
+        let fresh = ManagedTools::inspect(
+            root,
+            &root.join("turbo.json"),
+            true,
+            Some(f.owned.home()),
+            managed::context,
+        );
+        assert!(fresh.err().unwrap().contains("turbo setup"), "case {case}");
+        f.no_execution();
+    }
 }

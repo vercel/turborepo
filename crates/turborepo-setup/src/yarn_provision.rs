@@ -2,7 +2,7 @@
 //! package, Yarn 2+ from the `@yarnpkg/cli-dist` bundle Corepack also uses.
 //! No Corepack, install hooks, `yarnPath` probes, or dependency installation.
 
-use turborepo_tool_install::{Store, Tool};
+use turborepo_tool_install::{SetupSession, Tool};
 
 pub use crate::registry_provision::{
     Error, PreparedRegistry as PreparedYarn, RegistryTransport as YarnTransport,
@@ -43,7 +43,7 @@ impl YarnPlan {
     /// Prepare only; reconcile the same complete desired inventory afterward.
     pub async fn prepare_if_needed(
         &self,
-        store: &Store,
+        store: &SetupSession<'_>,
         desired: &[Tool],
         transport: &YarnTransport,
     ) -> Result<Option<PreparedYarn>, Error> {
@@ -53,7 +53,7 @@ impl YarnPlan {
     /// Select fresh verification without changing the locked identity.
     pub async fn prepare(
         &self,
-        store: &Store,
+        store: &SetupSession<'_>,
         desired: &[Tool],
         transport: &YarnTransport,
         preparation: crate::Preparation,

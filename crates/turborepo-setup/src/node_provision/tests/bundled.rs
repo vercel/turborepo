@@ -6,6 +6,7 @@ use crate::{
     execution_identity::{ExecutionContext, ExecutionSnapshot, Libc, SelectedInstallation},
     lock::{Document, Ecosystems, Snapshot, WriteOutcome, reconcile},
     node_resolution::{ChecksumManifest, resolve},
+    test_store::{Outcome, TestStore},
 };
 
 const TARGET: Platform = Platform::LinuxX64Gnu;
@@ -163,9 +164,9 @@ async fn bundled_native_resolution_publication_execution_and_one_owner_generatio
         let plan = NodePlan::from_lock(&committed, TARGET).unwrap();
         let upstream = serve(bytes).await;
         let transport = NodeTransport::loopback_http_for_tests(&upstream.origin).unwrap();
-        let mut store = Store::open(repo.path()).unwrap();
+        let store = TestStore::open(repo.path());
         assert_eq!(
-            install(&mut store, &plan, &transport).await.unwrap(),
+            install(&store, &plan, &transport).await.unwrap(),
             Outcome::Replaced
         );
         assert_eq!(
@@ -174,7 +175,7 @@ async fn bundled_native_resolution_publication_execution_and_one_owner_generatio
         );
         recovery::assert_scoped_resource(&store);
         assert_eq!(
-            install(&mut store, &plan, &transport).await.unwrap(),
+            install(&store, &plan, &transport).await.unwrap(),
             Outcome::Unchanged
         );
         assert_eq!(upstream.requests.load(Ordering::SeqCst), 1);
@@ -302,10 +303,9 @@ async fn invalid_verified_packages_never_promote_and_legacy_inventory_cannot_ass
     let good_plan = NodePlan::from_lock(&good, TARGET).unwrap();
     let upstream = serve(good_bytes).await;
     let transport = NodeTransport::loopback_http_for_tests(&upstream.origin).unwrap();
-    let mut store = Store::open(repo.path()).unwrap();
-    install(&mut store, &good_plan, &transport).await.unwrap();
-    let manifest = repo.path().join(".turbo/tools/manifest.json");
-    let before = fs::read(&manifest).unwrap();
+    let store = TestStore::open(repo.path());
+    install(&store, &good_plan, &transport).await.unwrap();
+    let before = store.published();
     for package in [
         r#"{"name":"npm"}"#,
         r#"{"name":"npm","version":"11.6.2","bin":{"npm":"bin/npm-cli.js","npx":"bin/npx-cli.js"}}"#,
@@ -320,10 +320,10 @@ async fn invalid_verified_packages_never_promote_and_legacy_inventory_cannot_ass
         let upstream = serve(bytes).await;
         let transport = NodeTransport::loopback_http_for_tests(&upstream.origin).unwrap();
         assert!(matches!(
-            install(&mut store, &plan, &transport).await,
+            install(&store, &plan, &transport).await,
             Err(Error::InvalidBundledNpm)
         ));
-        assert_eq!(fs::read(&manifest).unwrap(), before);
+        assert_eq!(store.published(), before);
         // A legacy inventory can have this SAME Node artifact/mappings with no
         // semantic npm identity. Reuse must verify resources, not trust inventory.
         let mut legacy = lock.document().clone();
@@ -331,19 +331,14 @@ async fn invalid_verified_packages_never_promote_and_legacy_inventory_cannot_ass
         legacy.tools.get_mut("node").unwrap().options.clear();
         let legacy = NodePlan::from_lock(&Lock::new(legacy).unwrap(), TARGET).unwrap();
         let empty = tempfile::tempdir().unwrap();
-        let mut legacy_store = Store::open(empty.path()).unwrap();
-        install(&mut legacy_store, &legacy, &transport)
-            .await
-            .unwrap();
-        let installed = fs::read(empty.path().join(".turbo/tools/manifest.json")).unwrap();
+        let legacy_store = TestStore::open(empty.path());
+        install(&legacy_store, &legacy, &transport).await.unwrap();
+        let installed = legacy_store.published();
         assert!(matches!(
-            install(&mut legacy_store, &plan, &transport).await,
+            install(&legacy_store, &plan, &transport).await,
             Err(Error::InvalidBundledNpm)
         ));
-        assert_eq!(
-            fs::read(empty.path().join(".turbo/tools/manifest.json")).unwrap(),
-            installed
-        );
+        assert_eq!(legacy_store.published(), installed);
         assert_eq!(upstream.requests.load(Ordering::SeqCst), 2);
     }
     let mut collision = good_plan.inventory_tool().clone();
@@ -359,5 +354,5 @@ async fn invalid_verified_packages_never_promote_and_legacy_inventory_cannot_ass
             .is_err()
     );
     assert_eq!(upstream.requests.load(Ordering::SeqCst), 1);
-    assert_eq!(fs::read(manifest).unwrap(), before);
+    assert_eq!(store.published(), before);
 }

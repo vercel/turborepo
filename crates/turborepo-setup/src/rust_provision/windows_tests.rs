@@ -10,6 +10,7 @@ use crate::{
     Preparation::{Fresh, IfNeeded},
     rust_metadata::tests::fixture,
     rust_resolution,
+    test_store::TestStore,
 };
 
 const HOST: &str = "x86_64-pc-windows-msvc";
@@ -122,10 +123,7 @@ fn windows_toolchains_install_privately_and_export_rustup_proxies() {
     let desired = vec![tool.clone()];
     let user_store =
         turborepo_tool_install::UserStore::at(&fixtures.path().join("store"), repo.path()).unwrap();
-    let mut store = Store::open(repo.path())
-        .unwrap()
-        .with_user_store(&user_store)
-        .unwrap();
+    let store = TestStore::open(repo.path());
     let transport = official();
     let prepared = plan
         .prepare(&store, &desired, &binary, &transport, IfNeeded)
@@ -178,7 +176,7 @@ fn windows_toolchains_install_privately_and_export_rustup_proxies() {
         ]
     );
     // Every export is the verified proxy, never a toolchain binary.
-    let tree = current.tool_tree(tool).unwrap();
+    let tree = store.tree_of(tool);
     let proxy = tree.join("proxy").join("rustup.exe");
     assert_eq!(fs::read(&proxy).unwrap(), fs::read(&binary).unwrap());
     for shim in &shims {
@@ -213,7 +211,7 @@ fn windows_toolchains_install_privately_and_export_rustup_proxies() {
 #[test]
 fn failed_mismatched_or_unverified_installs_publish_nothing() {
     let repo = tempfile::tempdir().unwrap();
-    let store = Store::open(repo.path()).unwrap();
+    let store = TestStore::open(repo.path());
     let locked = manifest("1.99.0", HOST);
     let newer = manifest("1.99.1", HOST);
     let missing = "cargo cargo-clippy clippy-driver rustc";
@@ -264,7 +262,7 @@ fn windows_plans_bind_the_locked_rustup_and_never_install_arm64_or_unix() {
     let binary = rustup(fixtures.path(), BINARIES, &COMPONENTS, &x64, 0);
     let arm64 = manifest("1.99.0", "aarch64-pc-windows-msvc");
     let repo = tempfile::tempdir().unwrap();
-    let store = Store::open(repo.path()).unwrap();
+    let store = TestStore::open(repo.path());
     for (manifest, platform) in [
         (&arm64, Platform::WindowsArm64),
         (&x64, Platform::MacosArm64),

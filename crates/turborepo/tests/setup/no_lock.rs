@@ -1,6 +1,7 @@
 //! Production binary qualification: no loopback/policy override, no Node
 //! probes.
 #![allow(clippy::unwrap_used)] // Fixture failures fail the test.
+use turborepo_cli::test_support::RecordedInstallation;
 use turborepo_setup::{
     lock::{Lock, Platform, Snapshot},
     native_baseline::NativeRecord,
@@ -8,13 +9,17 @@ use turborepo_setup::{
     pnpm_provision::PnpmPlan,
     test_support::OwnedSetupFixture,
 };
-use turborepo_tool_install::Store;
 
 use super::*;
 
-/// A Node/pnpm generation sealed with its clone-local selection, as `turbo
-/// setup --no-lock` leaves it, whose executables run `script`.
-fn seeded(script: &str) -> (OwnedSetupFixture, Lock, turborepo_tool_install::Current) {
+/// The fixture's tool store, where `turbo` below locates it.
+fn store(f: &OwnedSetupFixture) -> PathBuf {
+    crate::common::setup::user_tool_store(f.home(), Some(&f.home().join("data")))
+}
+
+/// Node/pnpm installed and recorded with their clone-local selection, as
+/// `turbo setup --no-lock` leaves them, whose executables run `script`.
+fn seeded(script: &str) -> (OwnedSetupFixture, Lock, RecordedInstallation) {
     use std::os::unix::fs::PermissionsExt;
     let f = OwnedSetupFixture::new().unwrap();
     f.init_git().unwrap();
@@ -50,25 +55,29 @@ fn seeded(script: &str) -> (OwnedSetupFixture, Lock, turborepo_tool_install::Cur
     )
     .unwrap();
     let guard = sources.guard().unwrap();
-    let mut store = Store::open(root).unwrap();
-    let expected = store.generation().unwrap();
-    store.reconcile_recorded_checked(&[node.inventory_tool().clone(), pnpm.inventory_tool().clone()], native.record(), &expected, false, |tool, tree| {
-        for relative in tool.executables.values() {
-            let path = tree.join(relative);
-            fs::create_dir_all(path.parent().unwrap())?;
-            fs::write(&path, script)?;
-            fs::set_permissions(path, fs::Permissions::from_mode(0o755))?;
-        }
-        if tool.id == "pnpm" { fs::write(tree.join("package.json"), r#"{"name":"pnpm","version":"10.0.0","bin":{"pnpm":"bin/pnpm.cjs","pnpx":"bin/pnpx.cjs"}}"#)?; }
-        fs::write(tree.join("resource"), "complete fixture resource")?;
-        Ok(())
-    }, || { sources.check_guard(&guard).map_err(io::Error::other).map_err(Into::into) }).unwrap();
-    let before = store.current().unwrap().unwrap();
-    drop(store);
+    let before = crate::common::setup::install_tools(
+        root,
+        &store(&f),
+        vec![node.inventory_tool().clone(), pnpm.inventory_tool().clone()],
+        Some(native.bytes()),
+        |tool, tree| {
+            for relative in tool.tree_files() {
+                let path = tree.join(relative);
+                fs::create_dir_all(path.parent().unwrap())?;
+                fs::write(&path, script)?;
+                fs::set_permissions(path, fs::Permissions::from_mode(0o755))?;
+            }
+            if tool.id == "pnpm" {
+                fs::write(
+                    tree.join("package.json"),
+                    r#"{"name":"pnpm","version":"10.0.0","bin":{"pnpm":"bin/pnpm.cjs","pnpx":"bin/pnpx.cjs"}}"#,
+                )?;
+            }
+            fs::write(tree.join("resource"), "complete fixture resource")?;
+            Ok(())
+        },
+    );
     drop(guard);
-    // Seeded bytes are reusable only with the user-state record setup
-    // publishes for its own verified installs.
-    trust(root, &f.home().join("data"), &before);
     (f, lock, before)
 }
 
@@ -92,7 +101,6 @@ fn turbo(f: &OwnedSetupFixture, cwd: &str, words: &[&str]) -> Command {
 fn production_no_lock_ci_healthy_repeat_has_positive_pins_record_and_no_traffic() {
     let (f, lock, before) = seeded("#!/bin/sh\ntouch probe-ran\nexit 99\n");
     let root = f.root();
-    let data = f.home().join("data");
     let monitor = TcpListener::bind("127.0.0.1:0").unwrap();
     monitor.set_nonblocking(true).unwrap();
     let proxy = format!("http://{}", monitor.local_addr().unwrap());
@@ -133,30 +141,16 @@ fn production_no_lock_ci_healthy_repeat_has_positive_pins_record_and_no_traffic(
                     && !text.contains("No tasks run")
                     && text.contains("turbo run uses these tools in this clone only")
             );
-            let after = Store::inspect(root).unwrap().unwrap();
+            let after = crate::common::setup::installed(root, &store(&f)).unwrap();
             assert_eq!(after.bin, before.bin);
-            assert_eq!(
-                after.record.unwrap().bytes(),
-                before.record.as_ref().unwrap().bytes()
-            );
+            assert_eq!(after.selection, before.selection);
             assert_eq!(snapshot(root), original);
             assert_eq!(root.join("turbo.lock").exists(), existing);
-            // Without turbo.lock the record names the clone-local selection.
-            let record: serde_json::Value = serde_json::from_slice(
-                &fs::read(
-                    fs::read_dir(data.join("turborepo/tools/repos"))
-                        .unwrap()
-                        .next()
-                        .unwrap()
-                        .unwrap()
-                        .path()
-                        .join("record.json"),
-                )
-                .unwrap(),
-            )
-            .unwrap();
+            // Without turbo.lock the record holds the clone-local selection;
+            // with one, the lock's digest instead.
+            let record: serde_json::Value = serde_json::from_slice(&after.record).unwrap();
             assert_eq!(record.get("lock_sha256").is_some(), existing);
-            assert!(record["installation"]["selection_sha256"].is_string());
+            assert_eq!(record.get("selection").is_some(), !existing);
             assert!(!root.join("probe-ran").exists());
             assert!(matches!(monitor.accept(), Err(e) if e.kind() == io::ErrorKind::WouldBlock));
             positive += 1;
@@ -236,33 +230,4 @@ fn production_exec_uses_the_clone_local_selection_and_drift_runs_nothing() {
     assert!(stderr.contains("run turbo setup --no-lock"), "{stderr}");
     assert!(!stderr.contains("commit"), "{stderr}");
     assert!(output.stdout.is_empty());
-}
-
-/// The record `turbo setup --no-lock` publishes for `current` without
-/// turbo.lock, in the private user-state layout.
-fn trust(root: &Path, data: &Path, current: &turborepo_tool_install::Current) {
-    use std::os::unix::{
-        ffi::OsStrExt,
-        fs::{MetadataExt, PermissionsExt},
-    };
-
-    use sha2::Digest;
-    let sha = |bytes: &[u8]| format!("{:x}", sha2::Sha256::digest(bytes));
-    let root = root.canonicalize().unwrap();
-    let identity = fs::metadata(&root).unwrap();
-    let manifest = fs::read(root.join(".turbo/tools/manifest.json")).unwrap();
-    let record = serde_json::json!({"schema": 1, "installation": {
-        "root": root, "device": identity.dev(), "inode": identity.ino(),
-        "manifest_sha256": sha(&manifest), "bin": current.bin, "tools": current.tools,
-        "selection_sha256": sha(current.record.as_ref().unwrap().bytes()),
-    }});
-    let store = data.join("turborepo/tools");
-    let records = store.join("repos").join(sha(root.as_os_str().as_bytes()));
-    fs::create_dir_all(&records).unwrap();
-    for dir in records.ancestors().take_while(|dir| dir.starts_with(data)) {
-        fs::set_permissions(dir, fs::Permissions::from_mode(0o700)).unwrap();
-    }
-    let path = records.join("record.json");
-    fs::write(&path, record.to_string()).unwrap();
-    fs::set_permissions(&path, fs::Permissions::from_mode(0o600)).unwrap();
 }

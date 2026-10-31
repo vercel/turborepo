@@ -1,21 +1,14 @@
 //! Real parser/root/policy/HTTP acceptance; owned fixtures, no executed tools.
 use turborepo_setup::lock::Lock;
-use turborepo_tool_install::Store;
 
 use super::*;
 
 const NO_LOCK: &[&str] = &["--no-lock", "--tools-only"];
-fn current(f: &Fixture) -> turborepo_tool_install::Current {
-    Store::inspect(f.owned.root()).unwrap().unwrap()
+fn current(f: &Fixture) -> Current {
+    Installed::open(&f.owned).current().unwrap().unwrap()
 }
 fn selection(f: &Fixture) -> Lock {
     Lock::parse(current(f).record.as_ref().unwrap().bytes()).unwrap()
-}
-fn recovery(f: &Fixture, lock: &Lock) -> PathBuf {
-    let hash = format!("{:x}", Sha256::digest(lock.canonical_bytes().unwrap()));
-    f.owned
-        .root()
-        .join(format!(".turbo/tools/record-{hash}.json"))
 }
 fn tracked(f: &Fixture) -> Vec<(PathBuf, Vec<u8>)> {
     publication_guards::state(f.owned.root())
@@ -24,48 +17,34 @@ fn tracked(f: &Fixture) -> Vec<(PathBuf, Vec<u8>)> {
         .collect()
 }
 #[test]
-fn no_lock_ci_repeat_preserves_24_0_pin_generation_and_zero_advance_metadata() {
+fn no_lock_ci_repeat_preserves_24_0_pin_environment_and_zero_advance_metadata() {
     // Plain --no-lock cannot install locked dependencies (TURBO-6229).
-    for (legacy, flags) in [(false, NO_LOCK), (true, NO_LOCK)] {
-        let f = fresh();
-        fs::write(f.owned.root().join(".nvmrc"), "24.x").unwrap();
-        let before = tracked(&f);
-        let u = LoopbackServer::new(routes(&f, "24.0.0", "10.0.0"), |_| {}).unwrap();
-        assert_eq!(f.run(&u, flags).unwrap(), 0); // Also run with actual CI=1.
-        assert_eq!(u.hits(), 7);
-        let pinned = selection(&f);
-        let independent = recovery(&f, &pinned);
-        if legacy {
-            fs::remove_file(&independent).unwrap();
-        }
-        let generation = current(&f).bin;
-        let manifest = f.manifest();
-        let advanced = LoopbackServer::new(routes(&f, "24.1.0", "10.0.0"), |_| {}).unwrap();
-        assert_eq!(f.run(&advanced, flags).unwrap(), 0);
-        assert_eq!(advanced.hits(), 0);
-        assert_eq!(selection(&f), pinned);
-        assert_eq!(selection(&f).tools()["node"].version, "24.0.0");
-        assert_eq!(current(&f).bin, generation);
-        assert_eq!(f.manifest(), manifest);
-        assert_eq!(
-            fs::read(&independent).unwrap(),
-            pinned.canonical_bytes().unwrap()
-        );
-        assert_eq!(tracked(&f), before);
-        assert!(
-            current(&f)
-                .bin
-                .join("../tools/node/lib/node_modules/npm/package.json")
-                .is_file()
-        );
-        assert!(
-            current(&f)
-                .bin
-                .join("../tools/pnpm/dist/resource")
-                .is_file()
-        );
-        untouched(&f);
-    }
+    let f = fresh();
+    fs::write(f.owned.root().join(".nvmrc"), "24.x").unwrap();
+    let before = tracked(&f);
+    let u = LoopbackServer::new(routes(&f, "24.0.0", "10.0.0"), |_| {}).unwrap();
+    assert_eq!(f.run(&u, NO_LOCK).unwrap(), 0); // Also run with actual CI=1.
+    assert_eq!(u.hits(), 7);
+    let pinned = selection(&f);
+    let environment = current(&f).bin;
+    let manifest = f.manifest();
+    let advanced = LoopbackServer::new(routes(&f, "24.1.0", "10.0.0"), |_| {}).unwrap();
+    assert_eq!(f.run(&advanced, NO_LOCK).unwrap(), 0);
+    assert_eq!(advanced.hits(), 0);
+    assert_eq!(selection(&f), pinned);
+    assert_eq!(selection(&f).tools()["node"].version, "24.0.0");
+    assert_eq!(current(&f).bin, environment);
+    assert_eq!(f.manifest(), manifest);
+    assert_eq!(tracked(&f), before);
+    let current = current(&f);
+    assert!(
+        current
+            .tree("node")
+            .join("lib/node_modules/npm/package.json")
+            .is_file()
+    );
+    assert!(current.tree("pnpm").join("dist/resource").is_file());
+    untouched(&f);
 }
 #[test]
 fn no_lock_targeted_drift_retains_unaffected_pins_and_removes_manager() {
@@ -129,11 +108,13 @@ fn no_lock_existing_disk_lock_is_unchanged_and_stale_rejects_before_traffic_or_w
     let empty = LoopbackServer::new([], |_| {}).unwrap();
     f.run(&empty, NO_LOCK).unwrap();
     assert_eq!(empty.hits(), 0);
-    assert_eq!(selection(&f), pinned);
+    // The disk lock stays the resolution: no clone-local selection is kept.
+    assert_eq!(selected(&f), pinned);
+    assert!(current(&f).record.is_none());
     assert_eq!(tracked(&f), before);
-    let generation = current(&f).bin;
+    let environment = current(&f).bin;
     f.run(&empty, NO_LOCK).unwrap();
-    assert_eq!(current(&f).bin, generation);
+    assert_eq!(current(&f).bin, environment);
     fs::write(f.owned.root().join(".nvmrc"), "26.x").unwrap();
     let before = publication_guards::state(f.owned.root());
     assert!(f.run(&empty, NO_LOCK).is_err());
@@ -171,27 +152,29 @@ fn no_lock_recordless_inventory_without_disk_lock_rejects_without_refresh() {
     untouched(&f);
 }
 #[test]
-fn no_lock_repairs_missing_or_damaged_full_tree_without_refreshing_pins() {
-    for case in 0..5 {
+fn no_lock_repairs_missing_or_damaged_installation_without_refreshing_pins() {
+    for case in 0..4 {
         let f = fresh();
         fs::write(f.owned.root().join(".nvmrc"), "24.x").unwrap();
         let u = LoopbackServer::new(routes(&f, "24.0.0", "10.0.0"), |_| {}).unwrap();
         f.run(&u, NO_LOCK).unwrap();
         let pinned = selection(&f);
-        let tree = current(&f).bin.parent().unwrap().to_owned();
+        let installed = current(&f);
+        let env = installed.bin.parent().unwrap().to_owned();
         match case {
-            0 => fs::remove_dir_all(&tree).unwrap(),
-            1 => fs::remove_dir_all(tree.join("tools/node")).unwrap(),
+            // The whole Node tree, seal included: only Node is downloaded.
+            0 => fs::remove_dir_all(installed.tree("node").parent().unwrap()).unwrap(),
+            // Shims are rendered again from sealed trees, without traffic.
+            1 => fs::remove_dir_all(&env).unwrap(),
             2 => {
-                fs::remove_file(tree.join("bin/pnpm")).unwrap();
-                std::os::unix::fs::symlink("../tools/pnpm/dist/resource", tree.join("bin/pnpm"))
-                    .unwrap();
+                fs::remove_file(env.join("bin/pnpm")).unwrap();
+                std::os::unix::fs::symlink(
+                    installed.tree("pnpm").join("dist/resource"),
+                    env.join("bin/pnpm"),
+                )
+                .unwrap();
             }
-            3 => fs::remove_file(tree.join("bin/pnpm")).unwrap(),
-            _ => {
-                fs::remove_file(recovery(&f, &pinned)).unwrap();
-                fs::remove_file(tree.join("bin/pnpm")).unwrap();
-            }
+            _ => fs::remove_file(env.join("bin/pnpm")).unwrap(),
         }
         let mut repair_routes = routes(&f, "24.0.0", "10.0.0");
         repair_routes.retain(|(p, _)| p != "/dist/index.json");
@@ -206,47 +189,14 @@ fn no_lock_repairs_missing_or_damaged_full_tree_without_refreshing_pins() {
         .unwrap();
         f.run(&repair, NO_LOCK).unwrap();
         assert_eq!(selection(&f), pinned);
-        assert_eq!(repair.hits(), 3);
+        assert_eq!(repair.hits(), if case == 0 { 1 } else { 0 }, "case {case}");
         assert_eq!(
-            fs::read(current(&f).bin.join("../tools/pnpm/dist/resource")).unwrap(),
+            fs::read(current(&f).tree("pnpm").join("dist/resource")).unwrap(),
             b"complete pnpm resource"
         );
         assert!(current(&f).bin.join("pnpm").is_file());
         untouched(&f);
     }
-}
-#[test]
-fn no_lock_legacy_repair_keeps_original_record_cas_after_copy_creation() {
-    let f = fresh();
-    fs::write(f.owned.root().join(".nvmrc"), "24.x").unwrap();
-    let seed = LoopbackServer::new(routes(&f, "24.0.0", "10.0.0"), |_| {}).unwrap();
-    f.run(&seed, NO_LOCK).unwrap();
-    let pinned = selection(&f);
-    let independent = recovery(&f, &pinned);
-    let tree = current(&f).bin.parent().unwrap().to_owned();
-    fs::remove_file(&independent).unwrap();
-    fs::remove_file(tree.join("bin/pnpm")).unwrap();
-    let before = f.manifest();
-    let repair = LoopbackServer::new(routes(&f, "24.0.0", "10.0.0"), |_| {}).unwrap();
-    let fired = std::cell::Cell::new(false);
-    let result = dispatch(&f, &repair, NO_LOCK, || {
-        if independent.is_file() && !fired.replace(true) {
-            // The independent copy is valid; only the ORIGINAL captured path
-            // changes. Rebinding the token to the new copy would miss this.
-            fs::write(tree.join("record.json"), "foreign original record").unwrap();
-        }
-    });
-    assert!(fired.get());
-    assert!(result.is_err());
-    assert_eq!(repair.hits(), 3); // Exact preparation only; no pin resolution.
-    assert_eq!(f.manifest(), before);
-    assert_eq!(
-        fs::read(independent).unwrap(),
-        pinned.canonical_bytes().unwrap()
-    );
-    assert!(!f.owned.root().join("turbo.lock").exists());
-    assert!(Store::inspect(f.owned.root()).is_err()); // No false repair/readiness.
-    untouched(&f);
 }
 #[test]
 fn no_lock_unsupported_native_shape_fails_before_writer_or_nonlock_changes() {
@@ -304,7 +254,8 @@ fn no_lock_original_snapshot_rejects_lock_source_and_policy_races_during_downloa
                     selection(&f).canonical_bytes().unwrap(),
                 )
                 .unwrap();
-                fs::remove_dir_all(current(&f).bin.parent().unwrap()).unwrap();
+                // Only a missing tree makes setup download again.
+                fs::remove_dir_all(current(&f).tree("node").parent().unwrap()).unwrap();
             }
             let before = f.manifest();
             let root = f.owned.root().to_owned();
@@ -335,8 +286,8 @@ fn no_lock_original_snapshot_rejects_lock_source_and_policy_races_during_downloa
     }
 }
 #[test]
-fn no_lock_atomic_final_record_inventory_failures_preserve_previous_selection() {
-    for case in 0..5 {
+fn no_lock_sources_changed_before_recording_preserve_previous_selection() {
+    for case in 0..3 {
         let f = fresh();
         let seed = LoopbackServer::new(routes(&f, "24.0.0", "10.0.0"), |_| {}).unwrap();
         f.run(&seed, NO_LOCK).unwrap();
@@ -348,27 +299,16 @@ fn no_lock_atomic_final_record_inventory_failures_preserve_previous_selection() 
         )
         .unwrap();
         let u = LoopbackServer::new(routes(&f, "24.1.0", "10.1.0"), |_| {}).unwrap();
+        let envs = f.owned.home().join("envs");
         let fired = std::cell::Cell::new(false);
+        // Once the new environment is published, only the record remains.
         let result = dispatch(&f, &u, NO_LOCK, || {
-            let Some(staged) = fs::read_dir(f.owned.root().join(".turbo/tools"))
-                .ok()
-                .and_then(|entries| {
-                    entries
-                        .filter_map(Result::ok)
-                        .map(|e| e.path())
-                        .find(|p| p.join("record.json").is_file() && p.join("bin") != old.bin)
-                })
-            else {
-                return;
-            };
-            if fired.replace(true) {
+            if fs::read_dir(&envs).unwrap().count() < 2 || fired.replace(true) {
                 return;
             }
             match case {
-                0 => fs::write(staged.join("record.json"), "corrupt").unwrap(),
-                1 => fs::remove_file(staged.join("bin/pnpm")).unwrap(),
-                2 => fs::write(f.owned.root().join("turbo.lock"), "{}").unwrap(),
-                3 => fs::write(f.owned.root().join("turbo.json"), UNSUPPORTED_SETUP).unwrap(),
+                0 => fs::write(f.owned.root().join("turbo.lock"), "{}").unwrap(),
+                1 => fs::write(f.owned.root().join("turbo.json"), UNSUPPORTED_SETUP).unwrap(),
                 _ => fs::write(f.owned.root().join("pnpm-workspace.yaml"), "packages: []").unwrap(),
             }
         });
@@ -384,36 +324,31 @@ fn no_lock_atomic_final_record_inventory_failures_preserve_previous_selection() 
     }
 }
 #[test]
-fn no_lock_waits_revalidate_before_traffic_after_writer_and_store_acquisition() {
-    for writer in [true, false] {
-        let f = fresh();
-        let root = f.owned.root();
-        let snapshot = f.sources().unwrap();
-        let guard = writer.then(|| snapshot.guard().unwrap());
-        let store = (!writer).then(|| Store::open(root).unwrap());
-        let (tx, rx) = std::sync::mpsc::channel();
-        let empty = LoopbackServer::new([], |_| {}).unwrap();
-        std::thread::scope(|scope| {
-            let pending = scope.spawn(|| {
-                let calls = std::cell::Cell::new(0);
-                dispatch(&f, &empty, NO_LOCK, || {
-                    let n = calls.get() + 1;
-                    calls.set(n);
-                    if n == if writer { 1 } else { 3 } {
-                        tx.send(()).unwrap();
-                    }
-                })
-            });
-            rx.recv_timeout(std::time::Duration::from_secs(5)).unwrap();
-            fs::write(root.join("turbo.json"), UNSUPPORTED_SETUP).unwrap();
-            drop(guard);
-            drop(store);
-            assert!(pending.join().unwrap().is_err());
+fn no_lock_waits_revalidate_before_traffic_after_writer_acquisition() {
+    let f = fresh();
+    let root = f.owned.root();
+    let snapshot = f.sources().unwrap();
+    let guard = snapshot.guard().unwrap();
+    let (tx, rx) = std::sync::mpsc::channel();
+    let empty = LoopbackServer::new([], |_| {}).unwrap();
+    std::thread::scope(|scope| {
+        let pending = scope.spawn(|| {
+            let calls = std::cell::Cell::new(0);
+            dispatch(&f, &empty, NO_LOCK, || {
+                calls.set(calls.get() + 1);
+                if calls.get() == 1 {
+                    tx.send(()).unwrap();
+                }
+            })
         });
-        assert_eq!(empty.hits(), 0);
-        assert!(f.manifest().is_none());
-        untouched(&f);
-    }
+        rx.recv_timeout(std::time::Duration::from_secs(5)).unwrap();
+        fs::write(root.join("turbo.json"), UNSUPPORTED_SETUP).unwrap();
+        drop(guard);
+        assert!(pending.join().unwrap().is_err());
+    });
+    assert_eq!(empty.hits(), 0);
+    assert!(f.manifest().is_none());
+    untouched(&f);
 }
 fn trusted(f: &Fixture) -> (PathBuf, Value) {
     let path = fs::read_dir(f.owned.home().join("repos"))
@@ -438,7 +373,6 @@ fn locked_plan(f: &Fixture) -> turborepo_setup::activation::ActivationPlan {
     turborepo_setup::activation::ActivationPlan::captured(
         &turborepo_setup::lock::Snapshot::capture(f.owned.root()).unwrap(),
         context,
-        turborepo_tool_install::Verification::Shallow,
     )
     .unwrap()
 }
@@ -451,19 +385,15 @@ fn no_lock_records_clone_local_trust_that_a_committed_lock_never_inherits() {
     let (path, value) = trusted(&f);
     let installed = current(&f);
     assert!(value.get("lock_sha256").is_none());
-    let installation = &value["installation"];
     assert_eq!(
-        installation["selection_sha256"],
-        digest(installed.record.as_ref().unwrap().bytes())
+        value["selection"].as_str().unwrap().as_bytes(),
+        installed.record.as_ref().unwrap().bytes()
     );
-    assert_eq!(
-        installation["manifest_sha256"],
-        digest(&f.manifest().unwrap())
-    );
-    assert_eq!(installation["bin"], installed.bin.to_str().unwrap());
+    let env = installed.bin.parent().unwrap().file_name().unwrap();
+    assert_eq!(value["env"], env.to_str().unwrap());
     let trust = trust_store(&f);
     let recorded = trust.recorded().unwrap().unwrap();
-    assert_eq!(recorded.bin, installed.bin);
+    assert_eq!(recorded.activation.bin(), installed.bin);
     assert!(!recorded.stale);
     let modified = fs::metadata(&path).unwrap().modified().unwrap();
     let empty = LoopbackServer::new([], |_| {}).unwrap();
@@ -475,46 +405,47 @@ fn no_lock_records_clone_local_trust_that_a_committed_lock_never_inherits() {
     let lock = selection(&f).canonical_bytes().unwrap();
     fs::write(f.owned.root().join("turbo.lock"), &lock).unwrap();
     assert!(trust.recorded().unwrap().unwrap().stale);
-    assert!(!trust.authorizes(&locked_plan(&f)).unwrap());
-    // Setup from that lock records its digest instead, for the same generation.
+    assert!(trust.authorize(&locked_plan(&f)).unwrap().is_none());
+    // Setup from that lock records its digest instead, for the same environment.
     f.run(&empty, NO_LOCK).unwrap();
     assert_eq!(empty.hits(), 0);
     assert_eq!(current(&f).bin, installed.bin);
     assert_eq!(trusted(&f).1["lock_sha256"], digest(&lock));
-    assert!(trust.authorizes(&locked_plan(&f)).unwrap());
+    assert!(trust.authorize(&locked_plan(&f)).unwrap().is_some());
     untouched(&f);
 }
 #[test]
-fn no_lock_freshly_verifies_untrusted_inventory_before_recording_it() {
+fn no_lock_without_its_record_resolves_again_but_reuses_verified_trees() {
     let f = fresh();
     fs::write(f.owned.root().join(".nvmrc"), "24.x").unwrap();
     let u = LoopbackServer::new(routes(&f, "24.0.0", "10.0.0"), |_| {}).unwrap();
     f.run(&u, NO_LOCK).unwrap();
     let pinned = selection(&f);
     let old = current(&f).bin;
-    // A healthy inventory without user-state evidence, as if copied or
-    // committed, proves nothing about where its bytes came from.
+    // The record holds the clone-local pins; without it they are gone.
     fs::remove_file(trusted(&f).0).unwrap();
     let trust = trust_store(&f);
     assert!(trust.recorded().unwrap().is_none());
     let paths = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
     let log = paths.clone();
-    let verify = LoopbackServer::new(routes(&f, "24.0.0", "10.0.0"), move |p| {
+    let resolve = LoopbackServer::new(routes(&f, "24.0.0", "10.0.0"), move |p| {
         log.lock().unwrap().push(p.to_owned());
     })
     .unwrap();
-    f.run(&verify, NO_LOCK).unwrap();
-    // Exact verified preparation of the pinned cohort, never re-resolution.
-    assert_eq!(verify.hits(), 3);
+    f.run(&resolve, NO_LOCK).unwrap();
+    // Resolution only: Node metadata, and pnpm metadata plus the tarball it
+    // hashes for the selection. The Node archive is never fetched again.
+    assert_eq!(resolve.hits(), 4);
     assert!(
-        paths
-            .lock()
-            .unwrap()
-            .iter()
-            .all(|p| !p.ends_with("index.json") && !p.ends_with("SHASUMS256.txt"))
+        !paths.lock().unwrap().iter().any(|p| p.ends_with(".tar.gz")),
+        "{:?}",
+        paths.lock().unwrap()
     );
     assert_eq!(selection(&f), pinned);
-    assert_ne!(current(&f).bin, old);
-    assert_eq!(trust.recorded().unwrap().unwrap().bin, current(&f).bin);
+    assert_eq!(current(&f).bin, old);
+    assert_eq!(
+        trust.recorded().unwrap().unwrap().activation.bin(),
+        current(&f).bin
+    );
     untouched(&f);
 }

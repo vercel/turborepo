@@ -5,9 +5,9 @@ use crate::git::fake_repository;
 
 #[cfg(unix)]
 mod inherited_lock;
-// Shared, test-only owned child coordination; no production fork registration.
+// Test-only owned child coordination; no production fork registration.
 #[cfg(unix)]
-#[path = "../../../turborepo-tool-install/src/tests/inherited_child.rs"]
+#[path = "inherited_child.rs"]
 mod inherited_child;
 
 fn repository() -> tempfile::TempDir {

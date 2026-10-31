@@ -9,6 +9,7 @@ use super::*;
 use crate::{
     package_manager::discover_package_manager,
     source_policy::test_support::{LoopbackServer, stored_zip as zip},
+    test_store::TestStore,
 };
 
 const VERSION: &str = "1.2.23";
@@ -135,7 +136,7 @@ async fn locked_bun_and_bunx_shims_run_the_verified_release_binary() {
         let lock = lock(&installation, "bun@1.2.23");
         let bun = BunPlan::from_declaration(&lock, platform, &declaration("bun@1.2.23")).unwrap();
         let repo = tempfile::tempdir().unwrap();
-        let mut store = Store::open(repo.path()).unwrap();
+        let store = TestStore::open(repo.path());
         let desired = [bun.inventory_tool().clone()];
         let prepared = bun
             .prepare_if_needed(&store, &desired, &transport)
@@ -145,7 +146,7 @@ async fn locked_bun_and_bunx_shims_run_the_verified_release_binary() {
         store
             .reconcile(&desired, |tool, path| prepared.stage(tool, path))
             .unwrap();
-        let bin = store.current().unwrap().unwrap().bin;
+        let bin = store.bin();
         for (name, args, expected) in [
             (
                 "bun",
@@ -187,7 +188,7 @@ async fn mirrors_serve_official_release_paths_beneath_their_base() {
             .starts_with("https://github.com/oven-sh/bun/")
     );
     let repo = tempfile::tempdir().unwrap();
-    let store = Store::open(repo.path()).unwrap();
+    let store = TestStore::open(repo.path());
     let desired = [bun.inventory_tool().clone()];
     let prepared = bun.prepare_if_needed(&store, &desired, &transport).await;
     assert!(prepared.unwrap().is_some());
@@ -247,7 +248,7 @@ async fn tampered_locks_hosts_declarations_and_bytes_fail_before_publication() {
 
     // A wrong locked digest, then verified bytes with a different layout.
     let repo = tempfile::tempdir().unwrap();
-    let store = Store::open(repo.path()).unwrap();
+    let store = TestStore::open(repo.path());
     let relocated = zip("bun-linux-x64/bun", SCRIPT.as_bytes());
     let (_other, relocated_transport) = serve(&[("bun-darwin-aarch64.zip", relocated.clone())]);
     for (digest, transport, layout) in [

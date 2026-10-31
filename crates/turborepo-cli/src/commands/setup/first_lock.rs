@@ -330,12 +330,12 @@ fn local_create_repeat_targeted_update_removal_and_frozen_drift() {
     f.run(&empty, LOCAL).unwrap();
     assert_eq!(selected(&f).tools().len(), 1);
     assert_eq!(empty.hits(), 0);
-    let store = turborepo_tool_install::Store::open(f.owned.root()).unwrap();
+    let store = Installed::open(&f.owned);
     let current = store.current().unwrap().unwrap();
     assert_eq!(current.tools.len(), 1);
     assert!(!current.bin.join("pnpm").exists());
     assert_eq!(
-        fs::read(current.bin.join("../tools/node/resource")).unwrap(),
+        fs::read(current.tree("node").join("resource")).unwrap(),
         b"complete Node resource"
     );
     untouched(&f);
@@ -359,7 +359,7 @@ fn plain_setup_locks_and_provisions_exactly_like_tools_only() {
         }
         assert_eq!(empty.hits(), 0);
         assert_eq!(f.manifest().unwrap(), manifest);
-        let store = turborepo_tool_install::Store::open(f.owned.root()).unwrap();
+        let store = Installed::open(&f.owned);
         let tools = store.current().unwrap().unwrap().tools;
         outcomes.push((fs::read(f.owned.root().join("turbo.lock")).unwrap(), tools));
         untouched(&f);
@@ -594,7 +594,7 @@ fn published_lock_does_not_hide_late_source_or_foreign_candidate_and_tools_are_a
         .unwrap();
         assert!(f.run(&u, LOCAL).is_err());
         assert_eq!(f.manifest().unwrap(), manifest);
-        let store = turborepo_tool_install::Store::open(f.owned.root()).unwrap();
+        let store = Installed::open(&f.owned);
         assert_eq!(store.current().unwrap().unwrap().tools.len(), 2);
         untouched(&f);
     }

@@ -1,5 +1,6 @@
-//! Clone-local selection; never a committed lock. Like locked setup, the
-//! generation becomes trusted only through the external user-state record.
+//! Clone-local selection; never a committed lock. Like locked setup, tools
+//! install into the shared store and the repository's user record names the
+//! environment, holding the selection in place of turbo.lock.
 use std::{io, path::Path};
 
 use turborepo_setup::{
@@ -8,7 +9,7 @@ use turborepo_setup::{
     native_baseline::NativeRecord,
     source_policy::ToolDownloadPolicy,
 };
-use turborepo_tool_install::Store;
+use turborepo_tool_install::{Reuse, Selection};
 
 use super::{
     Error,
@@ -25,7 +26,7 @@ pub(super) fn run(
 ) -> Result<ToolReport, Error> {
     let platform = provision::platform()?;
     // Name what is missing or unsupported instead of the record's generic
-    // rejection; both fail before transports, writers, or Store.
+    // rejection; both fail before transports, writers, or the store.
     let declared = snapshot.declarations();
     if !declared.contains_key("node") {
         return Err(Error::NoLockNode);
@@ -38,7 +39,7 @@ pub(super) fn run(
     }
     NativeRecord::preflight(&snapshot)?;
     // An existing real lock is authoritative: reject drift/unsupported semantics
-    // before transports, WRITER, Store, or any ignored-state mutation.
+    // before transports, WRITER, the store, or any ignored-state mutation.
     let existing = snapshot
         .previous_lock()
         .map(|lock| {
@@ -52,7 +53,7 @@ pub(super) fn run(
     let fixture = transports
         .as_ref()
         .and_then(provision::Transports::tool_store);
-    let trust = TrustStore::new(&provision::user_store(fixture.as_deref(), root)?, root)?;
+    let trust = TrustStore::new(&super::trust::user_store(fixture.as_deref(), root)?, root)?;
     let check = || {
         trust.preflight()?;
         preflight()?;
@@ -73,24 +74,22 @@ pub(super) fn run(
     let guard = snapshot.guard()?;
     check()?;
     snapshot.check_guard(&guard)?;
-    let mut store = Store::open(root)?.with_user_store(trust.store())?;
+    let session = trust.store().begin_setup(root, Reuse::Sealed)?;
     let checked = || {
         check().map_err(io::Error::other)?;
         snapshot.check_guard(&guard).map_err(io::Error::other)
     };
     checked()?; // Both acquisitions may have waited; no traffic before this.
-    // Repo inventory proves health, never provenance. Without a matching user
-    // record the whole cohort is freshly verified before it can be recorded.
-    let recorded = trust.allows_reuse(&store)?;
-    let preparation = if recorded {
-        Preparation::IfNeeded
-    } else {
-        Preparation::Fresh
-    };
+    let previous = trust.clone_local_selection()?;
+    // An installation from a since-deleted turbo.lock has no clone-local
+    // pins to keep; re-resolving would silently move its tools.
+    if existing.is_none() && previous.is_none() && trust.recorded_env()?.is_some() {
+        return Err(ephemeral_reconcile::Error::Unsupported.into());
+    }
     let staged = if existing.is_none() {
         Some(ephemeral_reconcile::stage(
             &snapshot,
-            &store,
+            previous.as_deref(),
             platform,
             false,
             |request| {
@@ -128,23 +127,22 @@ pub(super) fn run(
     let mut desired = vec![node.inventory_tool().clone()];
     desired.extend(pnpm.as_ref().map(|plan| plan.inventory_tool().clone()));
     desired.extend(npm.as_ref().map(|plan| plan.inventory_tool().clone()));
-    let expected = store.generation().or_else(|_| store.repair_generation())?;
     let (prepared_node, prepared_manager) = runtime.block_on(async {
         let node = node
-            .prepare(&store, &desired, &sources.node, preparation)
+            .prepare(&session, &desired, &sources.node, Preparation::IfNeeded)
             .await?;
         checked()?;
         if let Some(staged) = &staged {
-            staged.check(&snapshot, &store)?;
+            staged.check(&snapshot)?;
         }
         // npm and pnpm share the exact, integrity-verified registry transport.
         let manager = match (&pnpm, &npm) {
             (Some(plan), _) => {
-                plan.prepare(&store, &desired, &sources.pnpm, preparation)
+                plan.prepare(&session, &desired, &sources.pnpm, Preparation::IfNeeded)
                     .await?
             }
             (_, Some(plan)) => {
-                plan.prepare(&store, &desired, &sources.pnpm, preparation)
+                plan.prepare(&session, &desired, &sources.pnpm, Preparation::IfNeeded)
                     .await?
             }
             _ => None,
@@ -153,38 +151,33 @@ pub(super) fn run(
     })?;
     checked()?;
     let stage_tool = |tool: &turborepo_tool_install::Tool, tree: &Path| {
-        if tool == node.inventory_tool() {
-            prepared_node
-                .as_ref()
-                .ok_or(turborepo_tool_install::Error::InvalidInventory)?
-                .stage(tool, tree)
+        let prepared = if tool == node.inventory_tool() {
+            prepared_node.as_ref().map(|node| node.stage(tool, tree))
         } else {
             prepared_manager
                 .as_ref()
-                .ok_or(turborepo_tool_install::Error::InvalidInventory)?
-                .stage(tool, tree)
+                .map(|manager| manager.stage(tool, tree))
+        };
+        prepared.ok_or(turborepo_tool_install::Error::InvalidInventory)??;
+        if let Some(staged) = &staged {
+            staged.verify(tool, tree)?;
         }
+        Ok(())
     };
-    if let Some(staged) = staged {
-        staged.check(&snapshot, &store)?;
-        staged.publish_guarded(
-            &snapshot, &mut store, &guard, !recorded, stage_tool, checked,
-        )?;
-    } else {
-        let native = existing.ok_or(Error::Unsupported("missing native record"))?;
-        store.reconcile_recorded_checked(
-            &desired,
-            native.record(),
-            &expected,
-            !recorded,
-            stage_tool,
-            || checked().map_err(Into::into),
-        )?;
+    let recorded = match (&staged, &existing) {
+        (Some(staged), _) => staged.selection_bytes(),
+        (_, Some(native)) => native.bytes(),
+        _ => return Err(Error::Unsupported("missing native record")),
+    };
+    if let Some(staged) = &staged {
+        staged.check(&snapshot)?;
     }
-    // Still under both guards: record the selected generation, identified by
-    // turbo.lock or, without one, by its sealed clone-local selection.
-    checked()?;
-    trust.publish(&store)?;
+    // Still under the writer guard: the record names the environment, and
+    // without turbo.lock, holds the clone-local selection.
+    let ensured = session.ensure(&Selection::new(desired.clone())?, stage_tool, |env| {
+        checked()?;
+        Ok(trust.publish(env, Some(recorded))?)
+    })?;
     let mut report = ToolReport {
         downloaded_bytes: prepared_node
             .as_ref()
@@ -195,8 +188,7 @@ pub(super) fn run(
         ..Default::default()
     };
     for tool in &desired {
-        let reused = (tool.id == "node" && prepared_node.is_none())
-            || (tool.id != "node" && prepared_manager.is_none());
+        let reused = !ensured.installed.contains(&tool.id);
         report.rows.push(ToolRow {
             id: tool.id.clone(),
             version: tool.version.clone(),
