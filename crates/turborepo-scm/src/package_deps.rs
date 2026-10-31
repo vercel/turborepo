@@ -395,11 +395,10 @@ impl GitRepo {
             (hashes, to_hash)
         };
 
+        let mut symlinks = crate::hash_object::SymlinkCache::new(turbo_root);
         let linked = hashes
             .keys()
-            .filter(|path| {
-                crate::hash_object::has_symlink(turbo_root, &full_pkg_path.join_unix_path(path))
-            })
+            .filter(|path| symlinks.has_symlink(&full_pkg_path.join_unix_path(path)))
             .cloned()
             .collect::<Vec<_>>();
         for path in linked {
