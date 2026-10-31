@@ -24,6 +24,18 @@ fn configuration_matches(path: &str, historical: Option<&[u8]>, local: Option<&[
             };
             matches!((parse(historical), parse(local)), (Ok(a), Ok(b)) if a == b)
         }
+        "pnpm-workspace.yaml" => match (historical, local) {
+            (Some(historical), Some(local)) => {
+                match (std::str::from_utf8(historical), std::str::from_utf8(local)) {
+                    // Git can check out CRLF while the historical blob contains LF.
+                    (Ok(historical), Ok(local)) => {
+                        historical.replace("\r\n", "\n") == local.replace("\r\n", "\n")
+                    }
+                    _ => historical == local,
+                }
+            }
+            _ => historical == local,
+        },
         _ => historical == local,
     }
 }
@@ -195,6 +207,54 @@ mod tests {
         ));
     }
 
+    #[test]
+    fn workspace_configuration_tolerates_checkout_line_endings() {
+        let lf = b"packages:\n  - packages/*\n".as_slice();
+        let crlf = b"packages:\r\n  - packages/*\r\n".as_slice();
+        for (historical, local, expected) in [
+            (lf, lf, true),
+            (lf, crlf, true),
+            (crlf, lf, true),
+            (lf, b"packages:\r\n  - packages/*\n", true),
+            (lf, b"packages:\r\n  - apps/*\r\n", false),
+            (
+                lf,
+                b"packages:\r\n  - packages/*\r\nlinkWorkspacePackages: true\r\n",
+                false,
+            ),
+            (
+                b"catalog:\n  foo: 1.0.0\n",
+                b"catalog:\r\n  foo: 2.0.0\r\n",
+                false,
+            ),
+            (b"value: a\rb\n", b"value: ab\n", false),
+            (b"\xff\n", b"\xfe\r\n", false),
+        ] {
+            assert_eq!(
+                configuration_matches("pnpm-workspace.yaml", Some(historical), Some(local)),
+                expected,
+                "historical={historical:?}, local={local:?}"
+            );
+        }
+        assert!(!configuration_matches(
+            "pnpm-workspace.yaml",
+            None,
+            Some(lf)
+        ));
+        assert!(!configuration_matches(
+            "pnpm-workspace.yaml",
+            Some(lf),
+            None
+        ));
+        assert!(!configuration_matches(
+            "pnpm-workspace.yaml",
+            None,
+            Some(b"")
+        ));
+        assert!(configuration_matches("pnpm-workspace.yaml", None, None));
+        assert!(!configuration_matches("other.yaml", Some(lf), Some(crlf)));
+    }
+
     fn lockfile(version: &str, later_dependency: bool) -> Vec<u8> {
         let (b, package, snapshot) = if later_dependency {
             (
@@ -221,11 +281,12 @@ mod tests {
         fs::create_dir_all(dir.path().join("packages/b")).unwrap();
         let root_json = br#"{"name":"root","private":true,"packageManager":"pnpm@11.22.0"}"#;
         let workspace = b"packages:\n  - packages/*\n";
+        let checkout_workspace = b"packages:\r\n  - packages/*\r\n";
         let a_head = br#"{"name":"a","dependencies":{"foo":"^1.0.0"}}"#;
         let b_head = br#"{"name":"b"}"#;
         for (path, bytes) in [
             ("package.json", root_json.as_slice()),
-            ("pnpm-workspace.yaml", workspace.as_slice()),
+            ("pnpm-workspace.yaml", checkout_workspace.as_slice()),
             (
                 "packages/a/package.json",
                 br#"{"name":"a","dependencies":{"foo":"^2.0.0"}}"#.as_slice(),
