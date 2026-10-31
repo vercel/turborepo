@@ -121,8 +121,6 @@ fn windows_toolchains_install_privately_and_export_rustup_proxies() {
     );
     assert_eq!(plan.toolchain(), format!("1.99.0-{HOST}"));
     let desired = vec![tool.clone()];
-    let user_store =
-        turborepo_tool_install::UserStore::at(&fixtures.path().join("store"), repo.path()).unwrap();
     let store = TestStore::open(repo.path());
     let transport = official();
     let prepared = plan
@@ -141,18 +139,11 @@ fn windows_toolchains_install_privately_and_export_rustup_proxies() {
         (dist, update),
         (rustup::ORIGIN, "https://static.rust-lang.org/rustup")
     );
-    // Both homes are fresh beside the Store, in their ordinary spelling.
-    let tools = repo
-        .path()
-        .canonicalize()
-        .unwrap()
-        .join(".turbo")
-        .join("tools");
+    // Both homes are fresh and private in the store's staging, in their
+    // ordinary spelling.
+    let staging = store.store().root().join("tmp");
     for home in [rustup_home, cargo_home] {
-        assert!(
-            Path::new(home).starts_with(dunce::simplified(&tools)),
-            "{home}"
-        );
+        assert!(Path::new(home).starts_with(&staging), "{home}");
         assert!(!home.starts_with(r"\\?\"), "{home}");
     }
     store
@@ -188,11 +179,8 @@ fn windows_toolchains_install_privately_and_export_rustup_proxies() {
         b"rustc\r\n"
     );
     assert!(tree.join("settings.toml").is_file());
-    let leftovers = fs::read_dir(&tools).unwrap().filter(|entry| {
-        let name = entry.as_ref().unwrap().file_name();
-        name.to_string_lossy().starts_with(".rust-")
-    });
-    assert_eq!(leftovers.count(), 0);
+    // Scratch homes are gone once the prepared toolchain is dropped.
+    assert_eq!(fs::read_dir(&staging).unwrap().count(), 0);
 
     assert!(
         plan.prepare(&store, &desired, &binary, &transport, IfNeeded)

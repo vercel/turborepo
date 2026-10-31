@@ -1,6 +1,8 @@
 //! A fixture tool store for adapter tests: a private store per test, and the
 //! setup session `turbo setup` would hold over it for one repository.
 #![allow(clippy::unwrap_used)]
+// Only Unix adapter tests exercise force, check and publication helpers.
+#![cfg_attr(windows, allow(dead_code))]
 
 use std::{
     cell::RefCell,

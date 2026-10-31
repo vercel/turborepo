@@ -81,13 +81,13 @@ async fn windows_x64_bootstrap_exports_one_hard_linked_rustup_exe() {
     // Only the binary: no homes, proxies or toolchains.
     assert_eq!(fs::read_dir(&tree).unwrap().count(), 1);
     // Toolchain installs run the selected binary by an all-backslash path.
-    let selected = plan.executable(&store, &desired, None, Path::new("unused"));
+    let selected = plan.executable(&store, None, Path::new("unused"));
     let selected = selected.unwrap();
     assert!(!selected.to_string_lossy().contains('/'), "{selected:?}");
     assert!(same_file::is_same_file(&selected, &binary).unwrap());
 
     // A healthy repeat downloads nothing; a corrupt fresh one keeps the
-    // published generation selected.
+    // published environment selected.
     let hits = server.hits();
     let reused = plan.prepare(&store, &desired, &transport, IfNeeded).await;
     assert!(reused.unwrap().is_none());

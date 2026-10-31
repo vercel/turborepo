@@ -14,7 +14,8 @@ use tokio::{
 
 use super::*;
 #[cfg(unix)]
-use crate::test_store::{Outcome, TestStore};
+use crate::test_store::Outcome;
+use crate::test_store::TestStore;
 
 #[cfg(unix)]
 mod bundled;

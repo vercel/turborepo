@@ -64,8 +64,8 @@ fn yarn_classic_and_modern_lock_launch_the_managed_node_and_repeat_without_traff
             json!({"yarn":"bin/yarn.js","yarnpkg":"bin/yarn.js"})
         );
 
-        let plan = f.plan();
-        let bin = plan.path_prepend().to_path_buf();
+        let activation = f.activation();
+        let bin = activation.bin().to_path_buf();
         let mut names: Vec<_> = fs::read_dir(&bin)
             .unwrap()
             .map(|e| e.unwrap().file_name().into_string().unwrap())
@@ -76,21 +76,26 @@ fn yarn_classic_and_modern_lock_launch_the_managed_node_and_repeat_without_traff
             names,
             ["node.exe", "npm.cmd", "npx.cmd", "yarn.cmd", "yarnpkg.cmd"]
         );
-        let tools = bin.join("../tools");
+        let installed = f.installed();
+        let (node, yarn) = (&installed.trees["node"], &installed.trees["yarn"]);
         assert_eq!(
-            fs::read(tools.join("yarn/lib/resource")).unwrap(),
+            fs::read(yarn.join("lib/resource")).unwrap(),
             b"yarn resource"
         );
         for name in ["yarn", "yarnpkg"] {
             assert_eq!(
                 fs::read_to_string(bin.join(format!("{name}.cmd"))).unwrap(),
-                "@\"%~dp0..\\tools\\node\\node.exe\" \"%~dp0..\\tools\\yarn\\bin\\yarn.js\" %*\r\n"
+                format!(
+                    "@\"{}\\node.exe\" \"{}\\bin\\yarn.js\" %*\r\n",
+                    node.display(),
+                    yarn.display()
+                )
             );
         }
         // No runtime variables such as YARN_IGNORE_PATH, so Yarn keeps its
         // own committed-release handling.
-        assert!(plan.runtime_env().is_empty());
-        let path = plan.path(Some(system32().as_os_str())).unwrap();
+        assert!(activation.vars().is_empty());
+        let path = activation.path(Some(system32().as_os_str())).unwrap();
         assert_eq!(exit_code(&path, "yarn /d /c exit 6"), Some(6));
         assert_eq!(exit_code(&path, "yarnpkg /d /c exit 7"), Some(7));
 
@@ -123,7 +128,7 @@ fn modern_yarn_bundle_pins_verify_and_a_committed_yarn_path_is_left_to_yarn() {
     let u = f.upstream_with(routes(version, package));
     assert!(f.run(&u, LOCAL).is_err());
     assert!(!f.owned.root().join("turbo.lock").exists());
-    assert!(!f.tools().join("manifest.json").exists());
+    assert!(!f.trust().path().exists());
 
     // A committed release is Yarn's own redirect: setup never reads or runs it.
     let root = f.owned.root();
@@ -138,20 +143,25 @@ fn modern_yarn_bundle_pins_verify_and_a_committed_yarn_path_is_left_to_yarn() {
     declare(&f, &format!("yarn@{version}+sha256.{bundle}"));
     assert_eq!(f.run(&u, LOCAL).unwrap(), 0);
     assert_eq!(f.run(&u, FROZEN).unwrap(), 0);
-    let plan = f.plan();
-    let yarn = plan.tools().iter().find(|tool| tool.id == "yarn").unwrap();
+    let installed = f.installed();
+    let yarn = installed
+        .tools
+        .iter()
+        .find(|tool| tool.id == "yarn")
+        .unwrap();
     assert_eq!(yarn.version, version);
     // Yarn's bundle re-runs a committed yarnPath with its own process.execPath,
     // which the launcher makes the managed node.exe.
-    let bin = plan.path_prepend().to_path_buf();
-    let launcher = fs::read_to_string(bin.join("yarn.cmd")).unwrap();
-    assert!(launcher.starts_with("@\"%~dp0..\\tools\\node\\node.exe\" "));
-    assert!(plan.runtime_env().is_empty());
+    let activation = f.activation();
+    let launcher = fs::read_to_string(activation.bin().join("yarn.cmd")).unwrap();
+    let node = installed.trees["node"].join("node.exe");
+    assert!(launcher.starts_with(&format!("@\"{}\" ", node.display())));
+    assert!(activation.vars().is_empty());
     assert_eq!(
         fs::read_to_string(&release).unwrap(),
         "throw new Error('committed release');"
     );
-    let path = plan.path(Some(system32().as_os_str())).unwrap();
+    let path = activation.path(Some(system32().as_os_str())).unwrap();
     assert_eq!(exit_code(&path, "yarn /d /c exit 5"), Some(5));
     f.no_execution();
 }

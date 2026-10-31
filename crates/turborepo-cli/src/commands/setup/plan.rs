@@ -62,7 +62,7 @@ fn kind(dependencies: &Dependencies) -> &'static str {
 }
 
 /// A tools-only locked plan, for direct tests.
-#[cfg(test)]
+#[cfg(all(test, unix))]
 pub(super) fn inspect(
     discovery: &Discovery,
     sources: Snapshot,

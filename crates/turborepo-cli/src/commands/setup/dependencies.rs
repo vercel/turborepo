@@ -330,7 +330,7 @@ impl Dependencies {
     }
 
     /// `--tools-only` for a JavaScript repository, for direct plan tests.
-    #[cfg(test)]
+    #[cfg(all(test, unix))]
     pub fn tools_only() -> Self {
         Self {
             steps: vec![(ToolchainId::JAVASCRIPT, Step::Skip("--tools-only".into()))],
