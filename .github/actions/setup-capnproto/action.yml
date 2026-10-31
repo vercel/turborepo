@@ -12,7 +12,7 @@ runs:
   steps:
     - name: "Cache capnproto (Linux)"
       if: runner.os == 'Linux' && inputs.use-cache == 'true' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
-      uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+      uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
       id: cache-capnp-linux
       with:
         path: |
@@ -48,7 +48,7 @@ runs:
 
     - name: "Cache capnproto (Windows)"
       if: runner.os == 'Windows' && inputs.use-cache == 'true' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
-      uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+      uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
       id: cache-capnp-windows
       with:
         path: .capnproto

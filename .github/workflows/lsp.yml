@@ -73,7 +73,7 @@ jobs:
     timeout-minutes: 30
     steps:
       - name: Checkout repo
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           ref: ${{ inputs.ref || github.ref }}
           persist-credentials: false
@@ -107,7 +107,7 @@ jobs:
         run: ${{ matrix.settings.rust-build-env }} cargo build --profile release-turborepo-lsp -p turborepo-lsp --target ${{ matrix.settings.target }}
 
       - name: Upload Artifacts
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: turborepo-lsp-${{ matrix.settings.target }}
           path: target/${{ matrix.settings.target }}/release-turborepo-lsp/turborepo-lsp*
@@ -122,7 +122,7 @@ jobs:
       pre_release: ${{ steps.version.outputs.pre_release }}
     steps:
       - name: Checkout repo
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           ref: ${{ inputs.ref || github.ref }}
           persist-credentials: false
@@ -143,37 +143,37 @@ jobs:
           extra-flags: "--frozen-lockfile"
 
       - name: Download darwin arm64 LSP
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: turborepo-lsp-aarch64-apple-darwin
           path: packages/turbo-vsc/out/artifacts/turborepo-lsp-aarch64-apple-darwin
 
       - name: Download darwin x64 LSP
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: turborepo-lsp-x86_64-apple-darwin
           path: packages/turbo-vsc/out/artifacts/turborepo-lsp-x86_64-apple-darwin
 
       - name: Download linux arm64 LSP
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: turborepo-lsp-aarch64-unknown-linux-musl
           path: packages/turbo-vsc/out/artifacts/turborepo-lsp-aarch64-unknown-linux-musl
 
       - name: Download linux x64 LSP
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: turborepo-lsp-x86_64-unknown-linux-musl
           path: packages/turbo-vsc/out/artifacts/turborepo-lsp-x86_64-unknown-linux-musl
 
       - name: Download win32 arm64 LSP
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: turborepo-lsp-aarch64-pc-windows-msvc
           path: packages/turbo-vsc/out/artifacts/turborepo-lsp-aarch64-pc-windows-msvc
 
       - name: Download win32 x64 LSP
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: turborepo-lsp-x86_64-pc-windows-msvc
           path: packages/turbo-vsc/out/artifacts/turborepo-lsp-x86_64-pc-windows-msvc
@@ -293,7 +293,7 @@ jobs:
             "${PRE_RELEASE_FLAG[@]}"
 
       - name: Upload VSIX
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: turbo-vsc-${{ steps.version.outputs.version }}
           path: packages/turbo-vsc/turbo-vsc-${{ steps.version.outputs.version }}.vsix
@@ -307,7 +307,7 @@ jobs:
     environment: vscode-marketplace
     steps:
       - name: Checkout repo
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           ref: ${{ inputs.ref || github.ref }}
           persist-credentials: false
@@ -318,7 +318,7 @@ jobs:
           extra-flags: "--frozen-lockfile"
 
       - name: Download VSIX
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: turbo-vsc-${{ needs.package-vscode.outputs.version }}
           path: packages/turbo-vsc
