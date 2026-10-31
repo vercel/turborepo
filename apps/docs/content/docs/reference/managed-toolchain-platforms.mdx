@@ -1,0 +1,110 @@
+---
+title: Managed toolchain platforms
+description: Which platforms `turbo setup`, managed `turbo run` and `turbo exec`, and the shell hook support, and which are still pending qualification.
+product: turborepo
+type: reference
+summary: Support status of managed toolchains for each operating system and architecture, how each platform is qualified, and the known gaps on the rest.
+prerequisites:
+  - /docs/core-concepts/managed-toolchains
+related:
+  - /docs/reference/setup
+  - /docs/reference/setup-policy
+  - /docs/support-policy
+---
+
+[Managed toolchains](/docs/core-concepts/managed-toolchains) work in three steps:
+
+1. **[`turbo setup`](/docs/reference/setup)** installs the tools that `turbo.lock` records into your [tool store](/docs/core-concepts/managed-toolchains#where-tools-are-stored), then installs dependencies.
+2. **Managed `turbo run` and [`turbo exec`](/docs/reference/exec)** run tasks and commands with those tools.
+3. **The [shell hook](/docs/reference/hook)** puts those tools first on `PATH` at your prompt.
+
+A platform is qualified when the complete journey passes there with a release build of `turbo`: standalone install, `turbo setup` with tools and dependencies, frozen setup in CI, `turbo run`, the shell hook, `turbo exec`, and an offline repeat.
+
+## Support by platform
+
+| Platform                     | Status                                         | `turbo setup`                       | `turbo run` and `turbo exec`        | Shell hook       |
+| ---------------------------- | ---------------------------------------------- | ----------------------------------- | ----------------------------------- | ---------------- |
+| macOS, Apple silicon (arm64) | Qualified                                      | Yes                                 | Yes                                 | bash, zsh, fish  |
+| Linux x64, glibc             | Qualified                                      | Yes                                 | Yes                                 | bash, zsh, fish  |
+| macOS, Intel (x64)           | [Pending](#pending-qualification)              | Yes                                 | Yes                                 | bash, zsh, fish  |
+| Linux arm64, glibc           | [Pending](#pending-qualification)              | Yes                                 | Yes                                 | bash, zsh, fish  |
+| Windows x64                  | [Partly qualified](#windows)                   | Yes                                 | Yes                                 | PowerShell       |
+| Linux with musl, like Alpine | [`verify-system` only](#musl-linux), pending   | `verify-system` only                | `verify-system` only                | Nothing to activate |
+| Windows arm64                | [Not supported](#windows-arm64)                | No                                  | No                                  | No               |
+
+Rust, Python, and Go follow the same table, and need their [workspace Future Flags](/docs/reference/setup#rust). [Additional tools](/docs/reference/additional-tools#platforms) install wherever the repository declares an artifact for the platform.
+
+### Standalone installation
+
+The [standalone installer](/docs/getting-started/installation#global-installation) installs `turbo` on macOS (x64 and arm64), Linux (x64 and arm64, with any C library), and Windows x64. On Windows arm64, it stops instead of installing the x64 build to run under emulation.
+
+## macOS
+
+On Apple silicon, the complete journey passes with a release build of `turbo`: Node.js and pnpm, Rust, uv and Python, Go, and an additional tool, with dependencies, offline repeats, and the bash and zsh hooks.
+
+Intel Macs use the same code, and `turbo.lock` records their `macos-x64` downloads. Their qualification is pending.
+
+## Linux with glibc
+
+The published `turbo` binaries for Linux are statically linked against musl, so one binary runs on every distribution. `turbo` detects the host's C library when it runs: on glibc hosts, `turbo setup` installs each tool's glibc download, such as `linux-x64-gnu`, and `turbo run` uses it.
+
+On Linux x64, the complete journey passes with a release build of `turbo`. Linux arm64 uses the same code, and `turbo.lock` records its `linux-arm64-gnu` downloads. Its qualification is pending.
+
+`turbo` must be able to classify the host's C library. If it can't, it fails with `cannot classify this Linux host's C library` instead of guessing.
+
+## musl Linux
+
+Official Node.js releases don't include musl builds, so managed tools aren't available on musl-based distributions such as Alpine Linux:
+
+```txt title="Terminal"
+managed tools are not supported on musl Linux hosts such as Alpine; install the repository's tools in the image and use verify-system for them
+```
+
+On these hosts, install Node.js and pnpm yourself, in containers from an exactly pinned image tag, and set the JavaScript toolchain to [`verify-system`](/docs/reference/setup-policy#verify-system). `turbo setup` then records and checks the installed Node.js and pnpm versions instead of downloading them, and `turbo run` and `turbo exec` use them from `PATH`. The shell hook has nothing to activate.
+
+Task hashes include the C library family and version, so caches are never shared between glibc and musl hosts, or between musl releases.
+
+`verify-system` on musl hosts is implemented. Its qualification is pending.
+
+## Windows
+
+On Windows x64, the Node.js and pnpm journey passes with a release build of `turbo`: standalone install, `turbo setup`, `turbo run`, `turbo exec`, and repair of a damaged installation. Dependency installs, Yarn, Bun, Rust, uv and Python, Go, additional tools, and the PowerShell hook are implemented for Windows x64. Their qualification on Windows is pending.
+
+What's different on Windows:
+
+- **Managed `bin`.** It contains `node.exe`, `npm.cmd`, `npx.cmd`, `pnpm.cmd` or `yarn.cmd`, `bun.exe` and `bunx.exe`, `uv.exe`, `uvx.exe`, `python.cmd`, `go.exe`, and `gofmt.exe`. There's no `python3`. Programs that start `python` without a shell don't find `python.cmd`; use `uv run python` instead.
+- **Use `turbo run`, `turbo exec`, or the hook.** Rust, Go, and Python need the variables they set, such as `CARGO_HOME`, `RUSTUP_HOME`, and `GOROOT`. Running `bin\cargo.exe` directly falls back to your own rustup installation.
+- **Shell hook.** The hook supports Windows PowerShell 5.1 and PowerShell 7, and needs `.CMD` in `PATHEXT`. It doesn't support `cmd.exe` or Git Bash; use `turbo exec` there. See [Windows](/docs/reference/hook#windows) in the hook reference.
+- **Rust builds** need the MSVC linker. If it's missing, `turbo setup` still succeeds and recommends installing Visual Studio Build Tools with the "Desktop development with C++" workload.
+- **Python.** The first `turbo setup` precompiles the standard library, so it takes longer than later runs.
+- **Tool store paths can't contain `%`, `!`, or `"`.** `cmd.exe` would expand them in a managed tool's path, so `turbo setup` can't create `.cmd` programs in such a [tool store](/docs/core-concepts/managed-toolchains#where-tools-are-stored). Set `TURBO_TOOL_STORE` to a path without them.
+- **Links need permission to create symbolic links.** Without it, `turbo setup` skips `.turbo/bin` and the stable `bin` link in the tool store, and `turbo exec --print-env=bin` prints a path that doesn't exist. `turbo run`, `turbo exec`, the hook, and the other [`--print-env`](/docs/reference/exec#--print-env) formats work without the links.
+
+### Windows arm64
+
+`turbo setup` refuses to install managed tools on Windows arm64, including when the x64 build of `turbo` runs under emulation:
+
+```txt title="Terminal"
+managed setup is not qualified for Windows arm64, including x64 turbo under emulation; use WSL or a Windows x64 machine
+```
+
+Use `turbo` in WSL instead.
+
+## Repository-local `turbo`
+
+In a managed repository, the global `turbo` hands off to a [repository-local `turbo`](/docs/core-concepts/managed-toolchains#repository-local-turbo) when that version supports the repository's `turbo.lock` schema and tools, and is built for the same platform. Handing off works on:
+
+- macOS, Apple silicon and Intel.
+- Linux x64 and arm64, with glibc. On musl hosts, such as Alpine, it works for repositories whose tools all use [`verify-system`](#musl-linux).
+- Windows x64.
+
+The check compares the lock schema, the platform, and the supported tools, never version numbers. If the local `turbo` was installed for another architecture, for example with x64 Node.js under emulation on Apple silicon, the command fails before running anything. Reinstall dependencies with a Node.js for the machine's native architecture. See [A repository-local `turbo` can't run managed tasks](/docs/reference/setup#a-repository-local-turbo-cant-run-managed-tasks).
+
+## Pending qualification
+
+These claims are pending. This page changes as each one passes the complete journey:
+
+- **macOS, Intel (x64).**
+- **Linux arm64, glibc.**
+- **Windows x64:** Dependency installs, Yarn, Bun, Rust, uv and Python, Go, additional tools, and the PowerShell hook.
+- **musl Linux:** `verify-system` with `turbo run` and `turbo exec`, in CI on a musl host.

@@ -7,6 +7,7 @@ summary: Use turbo prune to create optimized Docker images from your monorepo wi
 related:
   - /docs/guides/ci-vendors
   - /docs/guides/tools/typescript
+  - /docs/core-concepts/managed-toolchains
 ---
 
 import { CreateTurboCallout } from "./create-turbo-callout.tsx";
@@ -128,6 +129,8 @@ Splitting up **dependencies** and **source files** in this way lets us **only ru
   Without `--docker`, all pruned files are placed inside `./out`.
 </Callout>
 
+In a repository with [managed toolchains](/docs/core-concepts/managed-toolchains), both `./out/json` and `./out/full` also contain `turbo.lock`, the declaration files it records (such as `.nvmrc`), and the root `turbo.json`. See [Managed toolchains](#managed-toolchains).
+
 ### Example
 
 Our detailed [`with-docker` example](https://github.com/vercel/turborepo/tree/main/examples/with-docker) goes into depth on how to use `prune` to its full potential. Here's the Dockerfile, copied over for convenience.
@@ -147,7 +150,7 @@ docker build -f apps/web/Dockerfile .
 Standalone release archives start at 2.11.5. To use an older `turbo` version, install it with your package manager in the `prepare` stage instead of downloading an archive (for example, `RUN yarn global add turbo@2.11.4`).
 
 ```docker title="./apps/web/Dockerfile"
-FROM node:18-alpine AS base
+FROM node:24-alpine AS base
 RUN apk update
 RUN apk add --no-cache libc6-compat
 # Set working directory
@@ -215,6 +218,130 @@ COPY --from=builder --chown=nextjs:nodejs /app/apps/web/public ./apps/web/public
 CMD node apps/web/server.js
 ```
 
+## Managed toolchains
+
+In a repository with [managed toolchains](/docs/core-concepts/managed-toolchains), [`turbo setup`](/docs/reference/setup) installs the Node.js and pnpm versions that `turbo.lock` selects. Your build image doesn't need Node.js or a package manager, only the standalone `turbo` binary.
+
+<Callout type="info">
+  Managed tools require a glibc-based image, such as Debian or Ubuntu. On
+  Alpine and other musl-based images, see [Alpine and other musl-based
+  images](#alpine-and-other-musl-based-images).
+</Callout>
+
+This Dockerfile builds the same kind of Next.js app as the [example](#example), in a pnpm repository whose `turbo.lock` selects Node.js 24.21.0 and pnpm 10.18.0:
+
+```docker title="./apps/web/Dockerfile"
+FROM debian:trixie-slim AS base
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends ca-certificates curl \
+  && rm -rf /var/lib/apt/lists/*
+# Pin a release that supports managed toolchains.
+ARG TURBO_VERSION
+RUN set -eu; \
+    : "${TURBO_VERSION:?Pass --build-arg TURBO_VERSION=<version>}"; \
+    case "$(uname -m)" in \
+      x86_64) target=x86_64-unknown-linux-musl ;; \
+      aarch64) target=aarch64-unknown-linux-musl ;; \
+      *) echo 'Unsupported architecture' >&2; exit 1 ;; \
+    esac; \
+    archive="turbo-$TURBO_VERSION-$target.tar.gz"; \
+    release="https://github.com/vercel/turborepo/releases/download/v$TURBO_VERSION"; \
+    cd /tmp; \
+    curl -fsSL "$release/SHA256SUMS" -o SHA256SUMS; \
+    curl -fsSL "$release/$archive" -o "$archive"; \
+    awk -v name="$archive" '$2 == name && NF == 2 { print }' SHA256SUMS > turbo-checksum; \
+    [ "$(wc -l < turbo-checksum)" -eq 1 ]; \
+    sha256sum -c turbo-checksum; \
+    [ "$(tar -tzf "$archive")" = turbo ]; \
+    tar -xzf "$archive" -C /usr/local/bin turbo; \
+    chmod 755 /usr/local/bin/turbo; \
+    rm SHA256SUMS turbo-checksum "$archive"
+WORKDIR /app
+
+# ---
+FROM base AS prepare
+COPY . .
+RUN turbo prune web --docker
+
+# ---
+FROM base AS builder
+# json/ includes turbo.lock, the files it records, and turbo.json
+COPY --from=prepare /app/out/json/ .
+# Install the Node.js and pnpm versions that turbo.lock selects,
+# then install dependencies with the managed pnpm
+RUN turbo setup --frozen
+COPY --from=prepare /app/out/full/ .
+# Each RUN instruction needs its own turbo setup
+RUN turbo setup --frozen --tools-only \
+  && turbo run build
+
+# ---
+# Use the Node.js version that turbo.lock selects
+FROM node:24.21.0-trixie-slim AS runner
+WORKDIR /app
+USER node
+COPY --from=builder --chown=node:node /app/apps/web/.next/standalone ./
+COPY --from=builder --chown=node:node /app/apps/web/.next/static ./apps/web/.next/static
+COPY --from=builder --chown=node:node /app/apps/web/public ./apps/web/public
+CMD ["node", "apps/web/server.js"]
+```
+
+Build it from the root of your repository, and pass the `turbo` version to install:
+
+```bash title="Terminal"
+docker build -f apps/web/Dockerfile --build-arg TURBO_VERSION=<version> .
+```
+
+Add `.turbo` to your `.dockerignore`. On your machine, `.turbo/bin` links to your own [tool store](/docs/core-concepts/managed-toolchains#where-tools-are-stored), which doesn't exist in the image.
+
+### How the Dockerfile works
+
+- **Standalone `turbo`**: The `base` stage downloads `turbo` and verifies its checksum, without Node.js or a package manager. Linux releases are statically linked against musl, and they detect the image's C library when they run. On a glibc image like `debian:trixie-slim`, they install and run the glibc build of Node.js.
+- **Pruned setup files**: `turbo prune --docker` copies `turbo.lock`, the declarations it records, and the root `turbo.json` into `json/`. The `builder` stage installs tools and dependencies before it copies your source code, so Docker reuses that step until a file in `json/` changes.
+- **Tool store**: `turbo setup` installs the tools into the tool store in the build user's home directory, `/root/.local/share/turborepo/tools` for `root`, not into `/app`. Only the `builder` stage uses them. The `runner` image doesn't contain them.
+- **Frozen mode**: [`--frozen`](/docs/reference/setup#--frozen) installs exactly what `turbo.lock` records and fails, without changing it, if `turbo.lock` is missing or no longer matches your declarations. `turbo setup` uses frozen mode by default in CI, but Docker doesn't pass your CI provider's environment variables into the build, so pass `--frozen` yourself.
+- **Dependencies**: After installing the tools, `turbo setup` runs `pnpm install --frozen-lockfile` with the managed pnpm. Allowed [lifecycle scripts](/docs/reference/setup-policy#lifecyclescripts) run during this step.
+- **One `turbo setup` per `RUN` instruction**: `turbo setup` records each installation for the directory that it installed into, and Docker gives every `RUN` instruction a new copy of that directory. Without a new `turbo setup`, `turbo run` fails with `managed tools have no matching trusted setup record`. Run `turbo setup` again in each `RUN` instruction that uses the managed tools. Later runs reuse the tools already in the tool store instead of downloading them again. `--tools-only` skips dependencies, which the previous step installed.
+- **Runner**: The final image runs your app with Node.js from a `node` image. Use the version that `turbo.lock` selects.
+
+The `builder` stage prints:
+
+```txt title="Terminal"
+javascript: tools managed (inferred); dependencies locked (inferred)
+node 24.21.0: installed
+pnpm 10.18.0: installed
+Installing javascript dependencies from pnpm-lock.yaml with managed pnpm 10.18.0: pnpm install --frozen-lockfile (dependency installation, not a Turborepo task)
+...
+javascript dependencies: installed; pnpm-lock.yaml unchanged
+Dependencies: javascript installed. No Turborepo tasks run.
+...
+javascript: tools managed (inferred); dependencies skipped (--tools-only)
+node 24.21.0: reused
+pnpm 10.18.0: reused
+...
+```
+
+<Callout type="warn">
+  Run tasks with the global `turbo` instead of `pnpm turbo`. When `turbo` is
+  also installed in `node_modules`, the global `turbo` hands off to it only if
+  that version supports the repository's managed tools. Otherwise, it fails
+  before running anything and asks you to upgrade the repository's `turbo`
+  dependency. See [Repository-local
+  `turbo`](/docs/core-concepts/managed-toolchains#repository-local-turbo).
+</Callout>
+
+### Alpine and other musl-based images
+
+Official Node.js releases have no builds for musl, the C library that Alpine uses, so `turbo setup` can't install managed tools on Alpine:
+
+```txt title="Terminal"
+managed tools are not supported on musl Linux hosts such as Alpine; install the repository's tools in the image and use verify-system for them
+```
+
+On Alpine, use an image tag that pins the Node.js version exactly, such as `node:24.21.0-alpine3.23`, install your package manager in the image, and set the JavaScript toolchain to [`verify-system`](/docs/reference/setup-policy#verify-system). `turbo setup --frozen` then checks the installed Node.js and pnpm versions against `turbo.lock`, and `turbo run` uses them from `PATH`. With `verify-system`, `turbo setup` doesn't install dependencies, so run `pnpm install --frozen-lockfile` yourself.
+
+Support for `verify-system` on musl hosts is [pending qualification](/docs/reference/managed-toolchain-platforms#musl-linux). Repositories without managed toolchains can use the Alpine-based [example](#example).
+
 ## Remote Caching
 
 To take advantage of remote caches during Docker builds, you will need to make sure your build container has credentials to access your [Remote Cache](/docs/core-concepts/remote-caching).
@@ -238,3 +365,5 @@ RUN yarn turbo run build
 ```bash title="Terminal"
 docker build -f apps/web/Dockerfile . --build-arg TURBO_TEAM="your-team-name" --build-arg TURBO_TOKEN="your-token" --no-cache
 ```
+
+In a repository with [managed toolchains](#managed-toolchains), task hashes also include details of the machine that runs the task, such as its C library version, kernel release, and CPU features. A container uses its host's kernel and CPU, so Remote Cache hits require Docker hosts with matching details. See [Caching](/docs/core-concepts/managed-toolchains#caching).

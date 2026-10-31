@@ -1,0 +1,151 @@
+---
+title: hook
+description: API reference for the `turbo hook` shell hook
+product: turborepo
+type: reference
+summary: How the `turbo hook` command activates the toolchains `turbo setup` installed in your interactive shell, and when to use `turbo exec` instead.
+prerequisites:
+  - /docs/core-concepts/managed-toolchains
+related:
+  - /docs/reference/setup
+  - /docs/reference/exec
+---
+
+Print a shell hook that puts your repository's [managed toolchains](/docs/core-concepts/managed-toolchains) first on `PATH`, along with the variables they need, while your shell is inside the repository. Commands you type, such as `node`, `pnpm install`, or `cargo build`, then use the versions in `turbo.lock`.
+
+```bash title="Terminal"
+turbo hook <shell>
+```
+
+`<shell>` is `bash`, `zsh`, `fish`, or `powershell` (also accepted as `pwsh`). On native Windows, only `powershell` is supported. See [Windows](#windows).
+
+## Installing the hook
+
+The [standalone installers](/docs/getting-started/installation#global-installation) add the hook for you. To add it yourself, put the line for your shell at the end of its startup file:
+
+| Shell      | File                         | Line                                                        |
+| ---------- | ---------------------------- | ----------------------------------------------------------- |
+| zsh        | `~/.zshrc`                   | `eval "$(turbo hook zsh)"`                                  |
+| bash       | `~/.bashrc`                  | `eval "$(turbo hook bash)"`                                 |
+| fish       | `~/.config/fish/config.fish` | `turbo hook fish \| source`                                 |
+| PowerShell | `$PROFILE`                   | `Invoke-Expression (& turbo hook powershell \| Out-String)` |
+
+Open a new shell for the change to take effect. The hook records the path of the `turbo` binary that printed it, so later prompts don't depend on which `turbo` comes first on `PATH`.
+
+`cmd.exe` has no prompt hook. Use [`turbo exec`](#when-to-use-turbo-exec) instead.
+
+### The installer and opting out
+
+On macOS and Linux, `curl -fsSL https://turborepo.dev/install | sh` adds the hook to `~/.zshrc` for zsh, and to `~/.bashrc` (plus `~/.bash_profile` or `~/.bash_login`, if one exists) for bash. For fish, it prints the line to add yourself. It adds the hook only when the installed version of `turbo` supports it, and never in GitHub Actions.
+
+The installer marks its line with `# Turborepo standalone installer shell hook`. Running the installer again, or upgrading, updates that line instead of adding another. To skip the hook, use any of these:
+
+```bash title="Terminal"
+curl -fsSL https://turborepo.dev/install | sh -s -- --no-shell-hook
+curl -fsSL https://turborepo.dev/install | TURBO_NO_SHELL_HOOK=1 sh
+# Skips both PATH and the hook: the installer edits no shell profiles.
+curl -fsSL https://turborepo.dev/install | sh -s -- --no-modify-path
+curl -fsSL https://turborepo.dev/install | TURBO_NO_MODIFY_PATH=1 sh
+```
+
+On Windows, `irm https://turborepo.dev/install.ps1 | iex` adds the hook to your PowerShell profile (`$PROFILE.CurrentUserAllHosts`) with the same marker, when the installed version of `turbo` supports it. It skips the hook in GitHub Actions, and when the PowerShell execution policy is `Restricted` or `AllSigned`, because those policies don't run profile scripts. It tells you when it skips the hook. To skip it yourself, use any of these:
+
+```powershell title="PowerShell"
+& ([scriptblock]::Create((irm https://turborepo.dev/install.ps1))) -NoShellHook
+$env:TURBO_NO_SHELL_HOOK = '1'; irm https://turborepo.dev/install.ps1 | iex
+# Skips both PATH and the hook: the installer changes neither.
+& ([scriptblock]::Create((irm https://turborepo.dev/install.ps1))) -NoModifyPath
+```
+
+## What the hook changes
+
+Before each prompt, and after each directory change in zsh and fish, the hook runs `turbo` to check your current directory:
+
+1. It looks for the nearest `turbo.lock` in the current directory or its parents, stopping at the root of the Git repository. A repository nested inside another, such as a clone in a `vendor/` directory, never uses its parent's tools.
+2. If `turbo setup` installed tools for this clone, the hook puts their directory first on `PATH` and sets the same variables that `turbo run` and `turbo exec` set for those tools:
+
+| Toolchain | Variables                                                                                    |
+| --------- | -------------------------------------------------------------------------------------------- |
+| Rust      | `RUSTUP_HOME`, `RUSTUP_TOOLCHAIN`, and `CARGO_HOME`, plus `RUSTUP_AUTO_INSTALL=0` on Windows |
+| Go        | `GOROOT` and `GOTOOLCHAIN=local`                                                             |
+| uv        | `UV_PYTHON_DOWNLOADS=never` and `UV_PYTHON_INSTALL_DIR`                                      |
+| Python    | `UV_PYTHON_PREFERENCE=only-managed` and `UV_PYTHON`                                          |
+
+Node.js, npm, pnpm, Yarn, and Bun need no variables, so in a JavaScript-only repository the hook only changes `PATH`.
+
+Commands at your prompt then behave like tasks. `rustup` and `cargo` use the managed toolchain, and `cargo install` installs into the repository's private Cargo home in the [tool store](/docs/core-concepts/managed-toolchains#where-tools-are-stored) instead of `~/.cargo`. The hook doesn't add that home's `bin` directory to `PATH`. `go` never switches to another toolchain, and uv uses the managed Python.
+
+### Leaving and switching repositories
+
+When the hook enters a repository, it saves the value each of these variables had, including whether it was empty or unset:
+
+- **Leaving the repository** restores each variable that still holds the hook's value, and removes the one `PATH` entry the hook added. The rest of `PATH`, including changes you made in the meantime, stays exactly as it was.
+- **A variable you change inside the repository** is yours from then on. The hook doesn't set it again while you stay, and doesn't restore it when you leave.
+- **Switching directly to another managed repository** leaves the first repository, then enters the second.
+
+The hook keeps this state in two internal variables, `__TURBO_HOOK_STATE` and `__TURBO_HOOK_ENV`. Don't set or change them.
+
+The hook never downloads or installs tools, never writes `turbo.lock`, and never hands off to a [repository-local `turbo`](/docs/core-concepts/managed-toolchains#repository-local-turbo). In a repository whose tools all use [`verify-system`](/docs/reference/setup-policy#verify-system), it has nothing to activate and leaves `PATH` unchanged.
+
+### Trust
+
+The hook activates only tools that `turbo setup` installed and recorded for your user. `turbo setup` records each clone it sets up in your [tool store](/docs/core-concepts/managed-toolchains#where-tools-are-stored), outside the repository. The hook never reads files in the repository to find tools, including `.turbo/bin`. The record names that exact clone, so moving, copying, or recloning a repository requires `turbo setup` again.
+
+### Out-of-date and missing tools
+
+When `turbo.lock` changes after `turbo setup` ran, for example after `git pull`, the hook keeps the previously installed tools and their variables active and prints:
+
+```txt title="Terminal"
+turbo: turbo.lock changed since `turbo setup`; keeping the previously installed tools active. Run `turbo setup` to update them.
+```
+
+If the tools were never installed for this clone, the hook activates nothing and prints:
+
+```txt title="Terminal"
+turbo: this repository's managed tools are not installed. Run `turbo setup` to install them.
+```
+
+Notices appear when you enter a repository and when its state changes, not at every prompt.
+
+The hook is deliberately lenient so your shell keeps working. [`turbo run`](/docs/core-concepts/managed-toolchains#how-turbo-run-uses-managed-tools) and `turbo exec` stay strict: they fail until you run `turbo setup`.
+
+### Prompt latency
+
+The hook starts one `turbo` process per prompt. When nothing relevant changed since the last prompt, it only checks a few file timestamps, so the cost is about the same as `turbo --version`. Outside repositories with a `turbo.lock`, it only searches for one.
+
+If your global `turbo` comes from npm instead of the standalone binary, the npm wrapper starts Node.js each time a new shell prints the hook. Later prompts run the native binary directly.
+
+## Windows
+
+On Windows x64, the hook supports Windows PowerShell 5.1 and PowerShell 7. It doesn't support `cmd.exe` or Git Bash. `turbo hook bash`, `zsh`, and `fish` exit with an error on native Windows; use `turbo exec` in those shells.
+
+The Windows hook sets the same [variables](#what-the-hook-changes) as on macOS and Linux, plus `RUSTUP_AUTO_INSTALL=0`, which stops the managed rustup from installing other toolchains. It saves and restores them by the same [rules](#leaving-and-switching-repositories).
+
+Windows finds managed programs such as `pnpm.cmd` through `PATHEXT`. If your `PATHEXT` doesn't include the extensions the managed tools need, the hook activates nothing and prints:
+
+```txt title="Terminal"
+turbo: this repository's managed tools need .CMD in PATHEXT, so they are not active.
+```
+
+The hook doesn't activate tools on Windows arm64, where `turbo setup` doesn't install managed tools.
+
+## Removing the hook
+
+Delete the hook line from your shell's startup file. If the installer added it, it's the line that ends with `# Turborepo standalone installer shell hook`. [Uninstalling global `turbo`](/docs/getting-started/installation#uninstalling-global-turbo) with the installer also removes that line. Then open a new shell. Shells that are already open keep the hook until they exit.
+
+## When to use `turbo exec`
+
+The hook only affects interactive shells that load it. To run a single command with the managed tools anywhere else, use [`turbo exec`](/docs/reference/exec):
+
+```bash title="Terminal"
+turbo exec -- pnpm install
+```
+
+Use `turbo exec` for:
+
+- **Scripts and CI steps.** Non-interactive shells don't draw prompts, so the hook never runs.
+- **`cmd.exe` and Git Bash on Windows.** They have no supported hook.
+- **GUI-launched processes.** Editors and other applications that start tools directly don't load your shell's startup files. You can also point them at `.turbo/bin`, or at the output of [`turbo exec --print-env`](/docs/reference/exec#--print-env).
+- **Machines without the hook.** For example, when you installed `turbo` with `--no-shell-hook`.
+
+`turbo exec` uses the same tools as `turbo run`, and it fails instead of running out-of-date tools.

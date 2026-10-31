@@ -1,0 +1,325 @@
+---
+title: Additional tools
+description: Declare command-line tools that `turbo setup` downloads, verifies, and installs from artifacts your repository pins.
+product: turborepo
+type: reference
+summary: How the `setup.additionalTools` key declares a custom CLI with an exact version and verified per-platform artifacts, how `turbo setup` locks and installs it, how `turbo run`, `turbo exec`, and the shell hook use it, and what a pinned digest does and doesn't guarantee.
+related:
+  - /docs/reference/configuration
+  - /docs/reference/setup
+  - /docs/reference/exec
+  - /docs/reference/hook
+---
+
+`setup.additionalTools` in the root `turbo.json` declares command-line tools that `turbo setup` has no built-in support for, such as `protoc` or an internal company CLI. For each tool, you pin an exact version and, for each platform, the URL and SHA-256 digest of a downloadable binary or archive. `turbo setup` records the declaration in `turbo.lock`, downloads and verifies the artifact, and installs it into your [tool store](/docs/core-concepts/managed-toolchains#where-tools-are-stored) next to the other managed toolchains. `turbo run`, `turbo exec`, and the shell hook then put its executables on `PATH`. `turbo setup` never runs scripts from the tool or the repository.
+
+## Declaring a tool
+
+<Steps>
+<Step>
+### Collect the artifacts
+
+For each platform you support, find the release artifact and compute its SHA-256 digest from a copy you trust:
+
+```bash title="Terminal"
+shasum -a 256 acme-1.4.2-linux-x64.tar.gz
+```
+
+On Linux, `sha256sum` prints the same digest. Look inside each archive to find its layout. If every entry is under a single top-level directory, such as `acme-1.4.2/`, that directory is the `rootPrefix`. Archives whose entries sit at the top level, such as `protoc` release zips with `bin/` and `include/` at the root, omit `rootPrefix`.
+
+```txt title="acme-1.4.2-linux-x64.tar.gz"
+acme-1.4.2/
+├── bin/
+│   └── acme          # the executable
+└── share/
+    └── templates/    # resources the executable reads at runtime
+```
+
+</Step>
+<Step>
+### Declare the tool
+
+Add the tool under `setup.additionalTools` in the root `turbo.json`:
+
+```jsonc title="./turbo.json"
+{
+  "$schema": "https://turborepo.dev/schema.json",
+  "setup": {
+    "additionalTools": {
+      "acme": {
+        "version": "1.4.2",
+        "artifacts": {
+          "macos-arm64": {
+            "url": "https://downloads.example.com/acme/1.4.2/acme-1.4.2-macos-arm64.tar.gz",
+            "sha256": "4b5e2f0d9c8a7b6e5d4c3b2a1f0e9d8c7b6a5f4e3d2c1b0a9f8e7d6c5b4a3f2e",
+            "format": "tar-gz",
+            "rootPrefix": "acme-1.4.2",
+            "executables": { "acme": "bin/acme" },
+          },
+          "linux-x64-gnu": {
+            "url": "https://downloads.example.com/acme/1.4.2/acme-1.4.2-linux-x64.tar.gz",
+            "sha256": "9c1d0e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d",
+            "format": "tar-gz",
+            "rootPrefix": "acme-1.4.2",
+            "executables": { "acme": "bin/acme" },
+          },
+        },
+      },
+    },
+  },
+}
+```
+
+`turbo setup` keeps the whole tree under `rootPrefix`, so `bin/acme` can still find `share/templates` next to it. Without a `rootPrefix`, it keeps the whole archive, and executable paths are relative to its top level.
+
+</Step>
+<Step>
+### Run `turbo setup`
+
+```bash title="Terminal"
+turbo setup
+```
+
+```txt title="Terminal"
+javascript: tools managed (inferred); dependencies locked (inferred)
+turbo.lock created. Commit turbo.lock to share the exact managed tool selections.
+acme: locked 1.4.2
+node: locked 24.21.0
+pnpm: locked 10.18.0
+node 24.21.0: installed
+pnpm 10.18.0: installed
+acme 1.4.2: installed (https://downloads.example.com/acme/1.4.2/acme-1.4.2-linux-x64.tar.gz)
+...
+```
+
+Each additional tool's line names the URL it came from.
+
+</Step>
+<Step>
+### Commit `turbo.json` and `turbo.lock`
+
+Every contributor and CI job then installs the same bytes. Review later changes to `setup.additionalTools` like code changes. See [Trust boundary](#trust-boundary).
+
+</Step>
+<Step>
+### Use the tool
+
+Tasks find `acme` on `PATH` without any wrapper:
+
+```json title="./packages/api/package.json"
+{
+  "scripts": {
+    "generate": "acme generate --out src/generated"
+  }
+}
+```
+
+```bash title="Terminal"
+turbo run generate
+turbo exec -- acme --version
+```
+
+See [Using the tool](#using-the-tool) for how each command finds it.
+
+</Step>
+</Steps>
+
+A single executable file uses `"format": "binary"`, no `rootPrefix`, and exactly one executable, whose path is where `turbo setup` installs it:
+
+```jsonc title="./turbo.json"
+"linux-x64-gnu": {
+  "url": "https://downloads.example.com/acme/1.4.2/acme-linux-x64",
+  "sha256": "9c1d0e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d",
+  "format": "binary",
+  "executables": { "acme": "bin/acme" },
+}
+```
+
+## Fields
+
+| Field                     | Required | Description                                                                                                                                                                          |
+| ------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `additionalTools.<id>`    | Yes      | The tool ID. It starts with a lowercase letter and has at most 64 lowercase letters, digits, `-`, or `_`.                                                                            |
+| `version`                 | Yes      | An exact version, such as `1.4.2`. Ranges like `1.x` and channels like `latest`, `stable`, `lts`, `nightly`, or `current` are rejected.                                              |
+| `artifacts`               | Yes      | Artifacts keyed by [platform](#platforms). Declare at least one.                                                                                                                     |
+| `artifacts.*.url`         | Yes      | An HTTPS URL without credentials, a query, or a fragment.                                                                                                                            |
+| `artifacts.*.sha256`      | Yes      | The lowercase hex SHA-256 digest of the downloaded bytes.                                                                                                                            |
+| `artifacts.*.format`      | Yes      | `binary`, `tar`, `tar-gz`, or `zip`.                                                                                                                                                 |
+| `artifacts.*.rootPrefix`  | No       | The single top-level directory that contains every archive entry, as one directory name. Omit it when entries sit at the archive's top level. Not allowed for `binary`.              |
+| `artifacts.*.executables` | Yes      | Executable names mapped to paths relative to `rootPrefix` (or the archive's top level), or, for `binary`, to the install path. Up to 64 for an archive and exactly one for `binary`. |
+
+Paths are relative and portable: ASCII letters, digits, `.`, `_`, `-`, `+`, and `@`, separated by `/`, with no `..` segments or Windows device names such as `CON`. Unknown fields are errors, so there's nowhere to declare install scripts or commands.
+
+### Platforms
+
+| Platform           | Installs in this release |
+| ------------------ | ------------------------ |
+| `macos-x64`        | Yes                      |
+| `macos-arm64`      | Yes                      |
+| `linux-x64-gnu`    | Yes                      |
+| `linux-arm64-gnu`  | Yes                      |
+| `linux-x64-musl`   | No                       |
+| `linux-arm64-musl` | No                       |
+| `windows-x64`      | Yes                      |
+| `windows-arm64`    | No                       |
+
+`turbo.lock` records every platform you declare, so you can declare musl and Windows arm64 artifacts, but `turbo setup` doesn't install managed tools on those hosts. On a supported host without an artifact for its platform, `turbo setup` fails instead of substituting another platform's artifact. Frozen setup never adds the current platform to `turbo.lock`.
+
+### Windows executables
+
+On Windows, each executable must be an `.exe` file or a `.cmd` launcher, and its name omits the extension, such as `"acme": "bin/acme.exe"`. `turbo setup` exports an `.exe` as a hard link in the managed `bin` directory, so the program sees that directory as its own. If a tool loads DLLs or other files from its own directory, map a `.cmd` launcher that the archive ships instead: `turbo setup` exports it as a forwarder that runs the launcher from the installed tree, so `%~dp0` in the launcher is its real directory. `.cmd` paths can use only letters, digits, `-`, `_`, `.`, and `/`.
+
+## How `turbo setup` handles additional tools
+
+### `turbo.lock`
+
+A declaration is already exact, so `turbo setup` copies it into `turbo.lock` without resolving anything:
+
+```jsonc title="./turbo.lock"
+{
+  "schemaVersion": 0,
+  "tools": {
+    "acme": {
+      "adapter": "artifact",
+      "version": "1.4.2",
+      "declarations": [
+        {
+          "file": "turbo.json",
+          "field": "/setup/additionalTools/acme",
+          "request": "1.4.2",
+        },
+      ],
+      "installation": {
+        "kind": "managed",
+        "artifacts": {
+          "linux-x64-gnu": {
+            "artifact": {
+              "url": "https://downloads.example.com/acme/1.4.2/acme-1.4.2-linux-x64.tar.gz",
+              "sha256": "9c1d0e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d",
+              "format": "tar-gz",
+              "rootPrefix": "acme-1.4.2",
+              "executables": { "acme": "bin/acme" },
+            },
+          },
+          // ...macos-arm64
+        },
+      },
+    },
+    "node": {
+      // ...
+    },
+  },
+}
+```
+
+Any edit to a declaration, including a new digest, URL, layout, or platform under the same version, counts as a changed declaration.
+
+| Situation                 | Local `turbo setup`                                                                                                                   | Frozen or CI `turbo setup` |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- | -------------------------- |
+| No `turbo.lock`           | Creates it                                                                                                                            | Fails                      |
+| Nothing changed           | Reuses the installation without downloading                                                                                           | Same                       |
+| A declaration changed     | Rewrites only that tool's entry, prints the change, installs                                                                          | Fails and names the tool   |
+| A declaration was removed | Removes the entry. [Cleanup](/docs/core-concepts/managed-toolchains#cleanup) later deletes the tool if no other repository selects it | Fails and names the tool   |
+| `--update-lock`           | Leaves additional tools unchanged                                                                                                     | Requires `--no-frozen`     |
+| `--force`                 | Re-hashes the installed artifacts and reinstalls any that changed                                                                     | Same                       |
+| `--check`                 | Re-hashes every installed file, including resources, and changes nothing                                                              | Same                       |
+| `--plan`                  | Reports each tool's declaration, source, digest, and action, and changes nothing                                                      | Same                       |
+
+```txt title="Terminal"
+turbo.lock updated. Commit turbo.lock to share the exact managed tool selections.
+acme: 1.4.2 (selection changed)
+```
+
+### Downloads and installation
+
+- **Locked origins first.** `turbo setup` connects only to the origins of the locked URLs or your [mirror](#mirrors-and-offline-setup). Because the digest pins the bytes, a download may follow up to three redirects to other HTTPS origins, such as the CDN behind GitHub release downloads. A redirect never downgrades to HTTP, and each hop is a fresh request without credentials or cookies. `turbo.lock` records only the declared URL.
+- **Verified first.** The download must match `sha256` before anything is unpacked or installed.
+- **Bounded.** Each artifact is limited to 256 MiB downloaded, 512 MiB extracted, and five minutes.
+- **Safe extraction.** Archive entries must stay inside `rootPrefix`, or inside the archive when there's no `rootPrefix`. Entries spelled with `./`, absolute paths, or `..` are rejected. Each executable must be a regular file inside `rootPrefix` with its executable permission set in the archive. Zip archives created on Windows don't record permissions, so they can't provide executables for macOS or Linux.
+- **Atomic.** Each tool unpacks into a private staging directory and appears in the [tool store](/docs/core-concepts/managed-toolchains#where-tools-are-stored) only when it's complete. If anything fails, the repository keeps its previous tools.
+- **Proxies and certificates.** Downloads honor `HTTPS_PROXY`, `HTTP_PROXY`, `NO_PROXY`, `SSL_CERT_FILE`, and `SSL_CERT_DIR`.
+
+In local mode, `turbo setup` updates `turbo.lock` before it downloads. If the new artifact then fails to download or verify, fix the declaration and run `turbo setup` again. An interrupted `turbo setup` publishes nothing. Run it again.
+
+### Mirrors and offline setup
+
+Installed artifacts are kept in the [tool store](/docs/core-concepts/managed-toolchains#where-tools-are-stored) with the built-in tools, keyed by name, version, platform, and SHA-256, so another repository that locks the same artifact reuses it without downloading.
+
+- **Offline.** `turbo setup --offline` uses only artifacts already in the tool store, without network access. `turbo setup --offline --force` re-hashes them first. If any artifact is missing or changed, it lists every one with its URL and digest and installs nothing.
+- **Mirror.** Set `TURBO_SETUP_ARTIFACT_MIRROR` to an HTTPS URL, and `turbo setup` downloads each locked URL from `<mirror>/<host>/<path>` instead, the layout `wget -x` writes. For example, with `TURBO_SETUP_ARTIFACT_MIRROR=https://mirror.example.com/tools`, the URL above is fetched from `https://mirror.example.com/tools/downloads.example.com/acme/1.4.2/acme-1.4.2-linux-x64.tar.gz`. The mirror can't contain credentials, a query, or a fragment, and `turbo.lock` keeps the declared URLs.
+
+## Using the tool
+
+After `turbo setup`, every declared executable is in the same managed `bin` directory as Node.js and the other managed toolchains:
+
+- **`turbo run`** puts that directory first on `PATH` for every task, in both strict and loose [environment modes](/docs/crafting-your-repository/using-environment-variables#environment-modes).
+- **[`turbo exec`](/docs/reference/exec)** runs a command with the same `PATH`, for scripts and CI steps outside the task graph.
+- **[The shell hook](/docs/reference/hook)** adds it to your interactive shell.
+
+The exported executables point into the full installed tree, so a tool that finds resources relative to its own executable keeps working. Neither `turbo run` nor `turbo exec` downloads anything. If a tool is missing, damaged, or out of date with `turbo.lock`, they fail and tell you to run `turbo setup`, rather than using a tool with the same name from your `PATH`.
+
+### Task hashes
+
+A task's hash includes every locked additional tool's identity for the current platform: its digest, format, `rootPrefix`, and executable mapping. Changing the artifact changes the hash, even when `version` stays the same. The URL, mirror, and the clone's location aren't part of the hash, so moving the repository or switching mirrors keeps your cache hits.
+
+## Trust boundary
+
+A SHA-256 digest pins the exact bytes that `turbo setup` installs. It doesn't make the publisher trustworthy, and it doesn't check what the bytes do. When you declare a tool, your repository vouches for it:
+
+- Anyone who can change `setup.additionalTools` can make every contributor and CI job download and later run different bytes. Review those changes like code, for example with a `CODEOWNERS` entry for `turbo.json`.
+- Take the digest from a source you trust. A checksum file downloaded from the same server as the artifact only proves that the bytes match what that server published.
+- `version` is a label. `turbo setup` records it but doesn't check it against the tool.
+- `turbo setup` reports each tool's source URL so reviewers and CI logs show where the bytes came from.
+- Credentials never belong in `turbo.json` or `turbo.lock`. URLs with credentials, queries, or fragments are rejected, and authenticated downloads aren't supported yet. Keep proxy settings in your environment.
+
+### What `turbo setup` won't do
+
+Additional tools cover downloadable binaries and archives that run where they're unpacked. `turbo setup` doesn't:
+
+- Run install scripts or commands from the tool or the repository.
+- Install system libraries or system packages.
+- Run privileged installers, such as `.pkg` or `.msi` packages, or anything that needs `sudo`.
+- Start services or daemons.
+- Build tools from source.
+- Install tools through a package manager or load executable plugins. Package-manager-backed sources may be supported later.
+- Change your global `PATH` or run Turborepo tasks.
+
+If a tool is already a dependency of your repository, such as an npm package in `package.json`, keep declaring it there. Its native lockfile already pins it, and the package manager installs it.
+
+## Collisions
+
+`turbo setup` rejects declarations that would shadow a built-in tool or another additional tool:
+
+- **Built-in tools.** These IDs are reserved: `bun`, `go`, `javascript`, `node`, `npm`, `pnpm`, `python`, `rust`, `rustup`, `turbo`, `uv`, and `yarn`. Declare those tools in their native files instead.
+- **Built-in executables.** Executables that built-in tools provide are reserved, such as `node`, `npm`, `npx`, `pnpm`, `corepack`, `cargo`, `rustc`, `go`, `python`, `uv`, and `turbo`.
+- **Other additional tools.** Each executable name can belong to only one tool on each platform. Names are compared case-insensitively, and on Windows the `.exe`, `.cmd`, `.bat`, and `.com` extensions are ignored.
+
+`turbo setup`, `turbo run`, and `turbo exec` also refuse to activate an executable that would shadow one a built-in tool installs.
+
+```txt title="Terminal"
+  x Invalid additional tool "lint": executable "acme" is also declared by "acme".
+```
+
+## Limitations
+
+- **A native declaration is still required.** To create `turbo.lock`, the repository also needs a supported toolchain declaration, such as `.nvmrc`.
+- **Platforms.** Additional tools install on the same platforms as other managed tools. See [Platforms](#platforms) and [Managed toolchain platforms](/docs/reference/managed-toolchain-platforms).
+- **No authenticated downloads.** Artifacts must be downloadable without credentials, from their URL or your mirror.
+- **No archives with `./` entries.** Some release archives, created with `tar -C dir .`, name every entry with a leading `./`. `turbo setup` rejects them as unsafe. Repackage the archive, or use another artifact the release publishes.
+
+## Troubleshooting
+
+| Message                                                                          | Fix                                                                                                                            |
+| -------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| `Invalid additional tool "<id>": ...`                                            | Fix the field that the message and its label point at.                                                                         |
+| `"<id>" is managed by a built-in setup adapter`                                  | Declare the tool in its native file, such as `.nvmrc` or `package.json`.                                                       |
+| `tool declarations changed for {"<id>"}`                                         | In CI, run `turbo setup` locally and commit `turbo.lock`.                                                                      |
+| `additional tool "<id>" has no artifact for <platform>`                          | Add an artifact for that platform under `setup.additionalTools.<id>.artifacts`.                                                |
+| `cannot download additional tool "<id>": artifact SHA-256 does not match`        | The bytes at the URL changed or the digest is wrong. Verify the artifact and fix `sha256`.                                     |
+| `cannot unpack additional tool "<id>": archive contains an unsafe or nonportable path` | The archive has `./`, absolute, or `..` entries. See [Limitations](#limitations).                                        |
+| `download redirect is not to an approved HTTPS origin, or exceeds the hop limit` | The URL redirects to HTTP, to a URL with credentials, or more than three times. Use a URL that serves the artifact over HTTPS. |
+| `invalid inventory, tool identity or executable collision`                       | Check that every executable path exists in the archive and has its executable permission set.                                  |
+| `additional tool "<id>" exports "<name>", which "<tool>" also exports`           | Rename the executable under `setup.additionalTools.<id>.artifacts`.                                                            |
+| `managed installation is damaged or unsafe; run turbo setup`                     | A file in the installed tree changed. Run `turbo setup` to reinstall it.                                                       |
+| `a native Node declaration is required`                                          | Add a Node.js declaration, such as `.nvmrc`, at the repository root.                                                           |
+| `TURBO_SETUP_ARTIFACT_MIRROR must be an absolute HTTPS URL`                      | Use an `https://` mirror without credentials, a query, or a fragment.                                                          |
