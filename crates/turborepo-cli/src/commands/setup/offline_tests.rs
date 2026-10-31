@@ -1,4 +1,5 @@
 //! Offline repeat is strict external provenance, not a repo-readiness shortcut.
+//! Anything it cannot repeat installs from intact trees in the tool store.
 use std::os::unix::fs::{PermissionsExt, symlink};
 
 use turborepo_setup::activation::ActivationPlan;
@@ -36,25 +37,56 @@ fn attempt(f: &Fixture, u: &LoopbackServer, flags: &[&str]) -> Result<i32, Error
     f.no_execution();
     result
 }
-fn unavailable(f: &Fixture, u: &LoopbackServer) -> Error {
-    // Offline force has no other repair source than verified local bytes.
+/// Offline setup, forced or not, fails without effects naming exactly the
+/// `missing` tools' locked artifacts.
+fn missing(f: &Fixture, u: &LoopbackServer, missing: &[&str]) {
     let forced = attempt(f, u, OFFLINE_FORCE).unwrap_err();
     let error = attempt(f, u, OFFLINE).unwrap_err();
     assert_eq!(forced.to_string(), error.to_string());
-    assert!(matches!(error, Error::Offline(_)), "{error}");
+    assert!(matches!(error, Error::OfflineMissing(_)), "{error}");
     let message = error.to_string();
-    for fragment in [
-        "node 24.0.0",
-        "pnpm 10.0.0",
-        &f.node_path,
-        "pnpm-10.0.0.tgz",
-        "SHA-256",
-        "without --offline",
-        "No complete verified download-cache source is available",
-    ] {
-        assert!(message.contains(fragment), "{fragment}: {message}");
+    let lines = [
+        (
+            "node",
+            format!(
+                "node 24.0.0 [distribution]: https://nodejs.org{} (SHA-256 {:x})",
+                f.node_path,
+                Sha256::digest(&f.node)
+            ),
+        ),
+        (
+            "pnpm",
+            format!(
+                "pnpm 10.0.0 [package]: https://registry.npmjs.org/pnpm/-/pnpm-10.0.0.tgz \
+                 (SHA-256 {:x})",
+                Sha256::digest(&f.pnpm)
+            ),
+        ),
+    ];
+    for (id, line) in lines {
+        assert_eq!(
+            message.contains(&line),
+            missing.contains(&id),
+            "{id}: {message}"
+        );
     }
-    error
+    assert!(message.contains("without --offline"), "{message}");
+}
+
+/// Offline setup succeeds once by installing from the store, then repeats
+/// without effects.
+fn installs_offline(f: &Fixture, u: &LoopbackServer) {
+    assert_eq!(f.run(u, OFFLINE).unwrap(), 0);
+    assert_eq!(
+        Installed::open(&f.owned)
+            .current()
+            .unwrap()
+            .unwrap()
+            .tools
+            .len(),
+        2
+    );
+    assert_eq!(attempt(f, u, OFFLINE).unwrap(), 0);
 }
 
 #[test]
@@ -164,7 +196,7 @@ fn offline_force_reverifies_trusted_cohorts_and_preserves_sources_dependencies_a
 }
 
 #[test]
-fn unsafe_storage_reports_complete_urls_hashes_and_repair_limits_without_effects() {
+fn unsafe_storage_fails_before_any_effect() {
     let empty = LoopbackServer::new([], |_| {}).unwrap();
     for path in [".turbo", ".turbo/setup-lock"] {
         for link in [false, true] {
@@ -176,17 +208,9 @@ fn unsafe_storage_reports_complete_urls_hashes_and_repair_limits_without_effects
             } else {
                 fs::write(&destination, "not a directory").unwrap();
             }
-            let error = unavailable(&f, &empty);
-            let message = error.to_string();
-            assert!(std::error::Error::source(&error).is_some());
-            assert!(message.contains("unsafe .turbo storage path"), "{message}");
-            assert!(message.contains(&format!("https://nodejs.org{}", f.node_path)));
-            assert!(message.contains("https://registry.npmjs.org/pnpm/-/pnpm-10.0.0.tgz"));
-            for digest in [Sha256::digest(&f.node), Sha256::digest(&f.pnpm)] {
-                assert!(
-                    message.contains(&format!("SHA-256 {digest:x}")),
-                    "{message}"
-                );
+            for flags in [OFFLINE, OFFLINE_FORCE] {
+                let message = attempt(&f, &empty, flags).unwrap_err().to_string();
+                assert!(message.contains("unsafe .turbo storage path"), "{message}");
             }
         }
     }
@@ -194,10 +218,10 @@ fn unsafe_storage_reports_complete_urls_hashes_and_repair_limits_without_effects
 }
 
 #[test]
-fn missing_and_damaged_installations_report_the_complete_unverified_artifact_set() {
+fn missing_and_damaged_trees_are_named_and_other_damage_rebuilds_from_the_store() {
     let empty = LoopbackServer::new([], |_| {}).unwrap();
     let fresh = Fixture::new();
-    unavailable(&fresh, &empty);
+    missing(&fresh, &empty, &["node", "pnpm"]);
     assert!(!fresh.owned.root().join(".turbo").exists());
     assert!(!fresh.owned.home().join("repos").exists());
     for case in 0..5 {
@@ -213,12 +237,19 @@ fn missing_and_damaged_installations_report_the_complete_unverified_artifact_set
             ),
             _ => fs::remove_file(current.bin.join("pnpx")).unwrap(),
         }
-        unavailable(&f, &empty);
+        match case {
+            1 | 3 => missing(&f, &empty, &["node"]),
+            2 => missing(&f, &empty, &["pnpm"]),
+            // The environment is rebuilt from intact trees.
+            _ => installs_offline(&f, &empty),
+        }
+        f.no_execution();
     }
+    assert_eq!(empty.hits(), 0);
 }
 
 #[test]
-fn missing_corrupt_unsafe_and_stale_external_evidence_never_becomes_offline_authority() {
+fn unsafe_external_evidence_fails_closed_and_stale_evidence_is_rebound_from_the_store() {
     let empty = LoopbackServer::new([], |_| {}).unwrap();
     for case in 0..7 {
         let f = installed();
@@ -248,8 +279,19 @@ fn missing_corrupt_unsafe_and_stale_external_evidence_never_becomes_offline_auth
             )
             .is_ok()
         );
-        unavailable(&f, &empty);
+        match case {
+            2..=4 => {
+                for flags in [OFFLINE, OFFLINE_FORCE] {
+                    let message = attempt(&f, &empty, flags).unwrap_err().to_string();
+                    assert!(message.contains("unsafe setup user state"), "{message}");
+                }
+            }
+            // Missing, corrupt, or stale records bind again to intact trees.
+            _ => installs_offline(&f, &empty),
+        }
+        f.no_execution();
     }
+    assert_eq!(empty.hits(), 0);
 }
 
 #[test]
@@ -330,8 +372,21 @@ fn offline_repeat_rechecks_original_sources_discovery_and_trust_before_success()
                 Ok(f.owned.policy_at(&f.owned.root().join("apps/web/src"))?)
             })
         }).unwrap();
-        assert!(result.is_err(), "case {case}");
-        assert_eq!(called.get(), 2);
+        if case == 2 {
+            // A record removed during the repeat binds again to intact trees.
+            assert_eq!(result.unwrap(), 0);
+            assert!(record(&f).is_file());
+            f.no_execution();
+            continue;
+        }
+        let message = result.unwrap_err().to_string();
+        if case == 3 {
+            // An unsafe record also fails provisioning's trust check.
+            assert!(message.contains("unsafe setup user state"), "{message}");
+        } else {
+            // Changed sources fail the repeat's own recheck.
+            assert_eq!(called.get(), 2, "case {case}: {message}");
+        }
         assert_eq!(
             snapshot(f.owned.root().parent().unwrap()),
             expected.into_inner().unwrap()

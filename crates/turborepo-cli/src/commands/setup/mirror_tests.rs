@@ -33,7 +33,7 @@ fn run_mirrored(
         Ok(f.owned.policy_at(&f.owned.root().join("apps/web/src"))?)
     };
     crate::cli::dispatch_setup(&f.args(flags), |args, setup_args| {
-        let mut transports = provision::Transports::configured(&policy()?, &mirrors, None)?;
+        let mut transports = provision::Transports::configured(&policy()?, &mirrors)?;
         transports.tool_store = Some(f.owned.home().to_owned());
         run_with_policy(args, setup_args, Some(transports), f.git.clone(), policy)
     })
