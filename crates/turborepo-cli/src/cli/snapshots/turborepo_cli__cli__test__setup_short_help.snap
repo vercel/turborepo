@@ -9,8 +9,8 @@ Usage: turbo setup [FLAGS]
 Flags:
       --plan                      Report the proposed setup without writing or
                                   installing
-      --check                     Check installed state without writing,
-                                  resolving, or downloading
+      --check                     Re-hash installed tools and check dependencies
+                                  without writing, resolving, or downloading
       --force                     Reinstall selected versions without refreshing
                                   resolution
       --frozen                    Require an existing, current turbo.lock (the

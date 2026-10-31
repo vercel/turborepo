@@ -1154,7 +1154,8 @@ pub struct SetupArgs {
     /// Report the proposed setup without writing or installing
     #[usage(long, conflicts = "check")]
     pub plan: bool,
-    /// Check installed state without writing, resolving, or downloading
+    /// Re-hash installed tools and check dependencies without writing,
+    /// resolving, or downloading
     #[usage(long, conflicts("force", "update_lock", "no_lock"))]
     pub check: bool,
     /// Reinstall selected versions without refreshing resolution
@@ -1358,6 +1359,25 @@ pub enum Command {
     /// implemented)
     ///
     /// Requires root futureFlags.experimentalSetup. Never runs tasks.
+    ///
+    /// Setup installs tools into one tool store per user: $TURBO_TOOL_STORE if
+    /// set, else turborepo/tools in the local data directory. That directory
+    /// is $XDG_DATA_HOME or ~/.local/share on Linux, ~/Library/Application
+    /// Support on macOS, and %LOCALAPPDATA% on Windows. Setup installs a tool
+    /// once, however many repositories select it in turbo.lock. The store also
+    /// holds each repository's setup record.
+    ///
+    /// For editors and scripts, setup links .turbo/bin to the repository's
+    /// managed tools. The path stays the same when setup changes the tools. On
+    /// Windows, setup skips the link when the user cannot create symbolic
+    /// links. 'turbo exec --print-env' prints the same environment.
+    ///
+    /// In CI, cache the directory that TURBO_TOOL_STORE names, keyed on
+    /// turbo.lock. Setup trusts the tools in a restored store. 'turbo setup
+    /// --check' re-hashes them.
+    ///
+    /// After each run, setup deletes tools that no repository using the store
+    /// has selected for 7 days.
     Setup {
         #[usage(flatten)]
         setup_args: SetupArgs,
@@ -1369,6 +1389,9 @@ pub enum Command {
     /// Requires root futureFlags.experimentalSetup. Pass the command after
     /// '--'; turbo does not interpret its arguments. Never installs tools,
     /// updates turbo.lock, or runs tasks.
+    ///
+    /// With --print-env, turbo exec prints the managed environment for
+    /// editors, direnv, and scripts instead of running a command.
     Exec {
         /// Print the managed environment instead of running a command
         #[usage(long, value_enum, require_equals = true, value_name = "FORMAT")]
@@ -1426,7 +1449,7 @@ pub enum Command {
 /// How `turbo exec --print-env` prints the managed environment.
 #[derive(Copy, Clone, Debug, ValueEnum, Serialize, Eq, PartialEq)]
 pub enum PrintEnv {
-    /// The repository's stable bin directory
+    /// A stable path to the repository's managed bin directory
     Bin,
     /// POSIX shell `export` statements
     Sh,
