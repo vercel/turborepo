@@ -1,6 +1,11 @@
+use std::collections::HashMap;
+
 use rayon::prelude::*;
 use tracing::{debug, info};
-use turbopath::{AbsoluteSystemPath, AnchoredSystemPathBuf, RelativeUnixPath, RelativeUnixPathBuf};
+use turbopath::{
+    AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPathBuf, RelativeUnixPath,
+    RelativeUnixPathBuf,
+};
 
 use crate::{Error, GitHashes, OidHash};
 
@@ -184,12 +189,149 @@ pub(crate) fn has_symlink(root: &AbsoluteSystemPath, path: &AbsoluteSystemPath) 
     false
 }
 
+/// Reuses ancestor checks only within a single tracked-file selection pass.
+/// The leaf is always checked afresh; directories shared by sibling files are
+/// checked once. Do not retain this across hashing operations, since links can
+/// change between runs.
+pub(crate) struct SymlinkCache<'a> {
+    root: &'a AbsoluteSystemPath,
+    ancestors: HashMap<AbsoluteSystemPathBuf, bool>,
+}
+
+impl<'a> SymlinkCache<'a> {
+    pub(crate) fn new(root: &'a AbsoluteSystemPath) -> Self {
+        Self {
+            root,
+            ancestors: HashMap::new(),
+        }
+    }
+
+    pub(crate) fn has_symlink(&mut self, path: &AbsoluteSystemPath) -> bool {
+        if path == self.root {
+            return false;
+        }
+        if path
+            .symlink_metadata()
+            .is_ok_and(|meta| meta.file_type().is_symlink())
+        {
+            return true;
+        }
+
+        let mut current = path.parent();
+        let mut visited = Vec::new();
+        let mut linked = false;
+        while let Some(parent) = current.filter(|parent| *parent != self.root) {
+            if let Some(&cached) = self.ancestors.get(parent) {
+                linked = cached;
+                break;
+            }
+            visited.push(parent);
+            if parent
+                .symlink_metadata()
+                .is_ok_and(|meta| meta.file_type().is_symlink())
+            {
+                linked = true;
+                break;
+            }
+            current = parent.parent();
+        }
+        for parent in visited {
+            self.ancestors.insert(parent.to_owned(), linked);
+        }
+        linked
+    }
+}
+
 #[cfg(test)]
 mod test {
     use turbopath::{AbsoluteSystemPathBuf, RelativeUnixPathBuf, RelativeUnixPathBufTestExt};
 
-    use super::{hash_discovered_objects, hash_objects};
+    use super::{SymlinkCache, has_symlink, hash_discovered_objects, hash_objects};
     use crate::{GitHashes, OidHash, find_git_root};
+
+    #[test]
+    fn test_cached_symlink_checks() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(tmp.path()).unwrap();
+        let nested = root.join_components(&["src", "nested"]);
+        nested.create_dir_all().unwrap();
+        nested
+            .join_component("file")
+            .create_with_contents("data")
+            .unwrap();
+        let paths = [
+            "src/nested/file",
+            "src/nested/missing",
+            "missing/child",
+            "src",
+            "",
+        ];
+        let mut cache = SymlinkCache::new(&root);
+        for _ in 0..2 {
+            for relative in paths {
+                let path = root.join_components(&relative.split('/').collect::<Vec<_>>());
+                assert_eq!(cache.has_symlink(&path), has_symlink(&root, &path));
+            }
+        }
+        assert!(!cache.ancestors.contains_key(&root));
+        assert!(!cache.ancestors.contains_key(&nested.join_component("file")));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn test_cached_symlink_ancestors_and_fresh_leaves() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(tmp.path()).unwrap();
+        let nested = root.join_components(&["src", "nested"]);
+        nested.create_dir_all().unwrap();
+        let file = nested.join_component("file");
+        file.create_with_contents("data").unwrap();
+        root.join_component("linked").symlink_to_dir("src").unwrap();
+        root.join_component("dangling")
+            .symlink_to_file("absent")
+            .unwrap();
+        root.join_component("cycle")
+            .symlink_to_dir("cycle")
+            .unwrap();
+        let paths = [
+            "linked/nested/file",
+            "linked/nested/missing",
+            "linked/other",
+            "dangling",
+            "dangling/child",
+            "cycle/child",
+            "src/nested/file",
+        ];
+        let mut cache = SymlinkCache::new(&root);
+        for _ in 0..2 {
+            for relative in paths {
+                let path = root.join_components(&relative.split('/').collect::<Vec<_>>());
+                assert_eq!(
+                    cache.has_symlink(&path),
+                    has_symlink(&root, &path),
+                    "{relative}"
+                );
+            }
+        }
+        assert!(!cache.has_symlink(&file));
+        file.remove().unwrap();
+        file.symlink_to_file("missing").unwrap();
+        assert!(cache.has_symlink(&file), "leaf checks must not be cached");
+
+        // A new pass must observe changes to directories too.
+        root.join_component("linked").remove().unwrap();
+        root.join_component("linked").create_dir_all().unwrap();
+        let mut cache = SymlinkCache::new(&root);
+        assert!(!cache.has_symlink(&root.join_components(&["linked", "missing"])));
+
+        // A symlink at the trusted root is deliberately not inspected.
+        let trusted = tmp.path().join("trusted");
+        std::os::unix::fs::symlink(&nested, &trusted).unwrap();
+        let trusted = AbsoluteSystemPathBuf::try_from(trusted).unwrap();
+        let mut cache = SymlinkCache::new(&trusted);
+        assert!(!cache.has_symlink(&trusted));
+        assert!(!cache.has_symlink(&trusted.join_component("missing")));
+    }
 
     #[test]
     fn test_read_object_hashes() {
