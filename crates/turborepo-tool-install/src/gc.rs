@@ -21,7 +21,7 @@ use std::{
 
 use crate::{
     Error, UserStore, is_sha256,
-    store::{EnvKey, lock_file, staging, tree_key},
+    store::{EnvKey, lock_file, staging},
     sync_directory,
 };
 
@@ -223,7 +223,7 @@ impl UserStore {
     fn env_trees(&self, env: &EnvKey) -> Result<Vec<String>, Error> {
         Ok(self
             .env_seal(&self.env_dir(env), env)?
-            .map(|selection| selection.tools().iter().map(tree_key).collect())
+            .map(|selection| selection.tree_keys().map(str::to_owned).collect())
             .unwrap_or_default())
     }
 }

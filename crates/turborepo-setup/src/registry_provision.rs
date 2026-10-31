@@ -9,12 +9,13 @@ use std::{
 };
 
 use semver::Version;
+use serde::Serialize;
 use sha2::{Digest, Sha224, Sha256, Sha512};
 use turborepo_archive::{ExtractedArtifact, Layout};
 use turborepo_download::{
     ApprovedOrigin, DownloadClient, ExpectedSha256, ExpectedSha512, Limits, VerifiedArtifact,
 };
-use turborepo_tool_install::{Export, Launch, LaunchArg, SetupSession, Tool, TreeRef};
+use turborepo_tool_install::{Export, Launch, LaunchArg, SetupSession, Staging, Tool, TreeRef};
 
 use crate::{
     lock::{self, Format, Installation, Lock, Platform},
@@ -53,6 +54,25 @@ pub enum Error {
 }
 
 const PACKAGE_LIMIT: usize = 64 * 1024 * 1024;
+/// Bump when this adapter stages different bytes for the same staging inputs.
+const STAGING_REVISION: u32 = 1;
+/// Every registry package keeps its files under `package/`.
+const PACKAGE_ROOT: &str = "package";
+
+/// The package's `package/` entries, and for native pnpm the platform
+/// package's binary at `binary` copied beside them as `placed`.
+#[derive(Serialize)]
+struct Staged<'a> {
+    #[serde(flatten)]
+    archive: crate::staging::Archive<'a>,
+    native: Option<NativeStaged<'a>>,
+}
+
+#[derive(Serialize)]
+struct NativeStaged<'a> {
+    binary: &'a str,
+    placed: &'static str,
+}
 
 pub struct RegistryTransport {
     client: DownloadClient,
@@ -312,7 +332,7 @@ fn registry_artifact(url: String, bytes: &VerifiedArtifact, mappings: Mappings) 
         sha256: bytes.sha256_hex(),
         format: Format::TarGz,
         alternates: BTreeMap::new(),
-        root_prefix: Some("package".into()),
+        root_prefix: Some(PACKAGE_ROOT.into()),
         destination: None,
         executables: mappings
             .iter()
@@ -337,7 +357,7 @@ pub(crate) fn locked_parts<'a>(
     let canonical = |artifact: &lock::Artifact, package: &str| {
         artifact.url == format!("{REGISTRY}/{}", tarball_path(package, version))
             && artifact.format == Format::TarGz
-            && artifact.root_prefix.as_deref() == Some("package")
+            && artifact.root_prefix.as_deref() == Some(PACKAGE_ROOT)
             && artifact.destination.is_none()
             && artifact.alternates.is_empty()
     };
@@ -450,7 +470,7 @@ fn extract_package(
         turborepo_archive::Format::TarGz,
         turborepo_archive::Limits::new(256 * 1024 * 1024, 100_000, 4096, 64)?,
         Layout {
-            root: "package",
+            root: PACKAGE_ROOT,
             required_files: &required,
         },
     )?;
@@ -590,6 +610,22 @@ impl RegistryPlan {
                 .map_err(|_| Error::InvalidLock)?;
             artifact_sha256 = format!("{:x}", Sha256::digest(pin));
         }
+        let staging = Staged {
+            archive: crate::staging::Archive {
+                format: artifact.format,
+                root: PACKAGE_ROOT,
+            },
+            native: (native.as_ref())
+                .map(|native| {
+                    let binary = native.executables.get("pnpm").ok_or(Error::InvalidLock)?;
+                    Ok::<_, Error>(NativeStaged {
+                        binary,
+                        placed: NATIVE_BINARY,
+                    })
+                })
+                .transpose()?,
+        };
+        let staging = Staging::new(id, STAGING_REVISION, &staging)?;
         let native = native
             .map(|native| native_package(platform).map(|(name, _)| (name, native)))
             .map(|native| native.ok_or(Error::UnsupportedTarget))
@@ -602,6 +638,7 @@ impl RegistryPlan {
                 artifact_sha256,
                 executables,
                 vars: BTreeMap::new(),
+                staging,
             },
             node,
             artifact,

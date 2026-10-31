@@ -12,7 +12,7 @@ use std::{
 };
 
 use turborepo_download::{ApprovedOrigin, DownloadClient, ExpectedSha256, Limits};
-use turborepo_tool_install::{Export, SetupSession, Tool};
+use turborepo_tool_install::{Export, SetupSession, Staging, Tool};
 
 use crate::{
     lock::{self, Artifact, Declaration, Format, Installation, Lock, Platform},
@@ -21,6 +21,8 @@ use crate::{
 
 const PART: &str = "rustup-init";
 const MAX_INSTALLER_BYTES: usize = 64 * 1024 * 1024;
+/// Bump when this adapter stages different bytes for the same staging inputs.
+const STAGING_REVISION: u32 = 1;
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
@@ -205,6 +207,8 @@ impl RustupPlan {
                 version: version.to_string(),
                 platform: spelling.into(),
                 artifact_sha256: artifact.sha256.clone(),
+                // The one binary, written at its executable path.
+                staging: Staging::new("rustup", STAGING_REVISION, &executables)?,
                 executables: Export::files(&executables),
                 vars: BTreeMap::new(),
             },

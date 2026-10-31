@@ -20,6 +20,7 @@ fn tool(id: &str) -> Tool {
         artifact_sha256: "a".repeat(64),
         executables: BTreeMap::from([(id.into(), "bin/tool".into())]),
         vars: Default::default(),
+        staging: Staging::new("fixture", 1, &()).unwrap(),
     }
 }
 
@@ -85,6 +86,51 @@ fn a_second_repository_with_the_same_selection_stages_nothing_and_shares_the_env
     let three = ensure(&f.store, second.path(), &tools[..1], &staged);
     assert_eq!(staged.get(), 2);
     assert_ne!(three.env, one.env);
+}
+
+#[test]
+fn tools_that_stage_the_same_artifact_differently_never_share_a_tree() {
+    let f = fixture();
+    let (first, second) = (repo(), repo());
+    let plain = tool("node");
+    let nested = Tool {
+        staging: Staging::new("fixture", 1, &serde_json::json!({"root": "pkg"})).unwrap(),
+        ..tool("node")
+    };
+    let staged = Cell::new(0);
+    let one = ensure(
+        &f.store,
+        first.path(),
+        std::slice::from_ref(&nested),
+        &staged,
+    );
+    let two = ensure(
+        &f.store,
+        second.path(),
+        std::slice::from_ref(&plain),
+        &staged,
+    );
+    assert_eq!(
+        staged.get(),
+        2,
+        "the second repository reused the first's tree"
+    );
+    assert_ne!(one.env, two.env);
+    let tree = |tool: &Tool| f.store.sealed_tree(tool).unwrap().unwrap();
+    assert_ne!(tree(&plain), tree(&nested));
+
+    // A tree sealed for other staging is never reused under this tool's key.
+    let seal = |tool: &Tool| tree(tool).with_file_name("seal.json");
+    fs::copy(seal(&nested), seal(&plain)).unwrap();
+    assert!(f.store.sealed_tree(&plain).unwrap().is_none());
+    ensure(
+        &f.store,
+        second.path(),
+        std::slice::from_ref(&plain),
+        &staged,
+    );
+    assert_eq!(staged.get(), 3, "a mismatched seal was trusted");
+    assert!(f.store.sealed_tree(&plain).unwrap().is_some());
 }
 
 #[test]

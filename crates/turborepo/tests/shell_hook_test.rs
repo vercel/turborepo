@@ -70,6 +70,7 @@ fn tool(id: &str) -> Tool {
         artifact_sha256: "a".repeat(64),
         executables: [(id.into(), format!("bin/{id}").into())].into(),
         vars: vars.into_iter().collect(),
+        staging: turborepo_tool_install::Staging::new("fixture", 1, &()).unwrap(),
     }
 }
 

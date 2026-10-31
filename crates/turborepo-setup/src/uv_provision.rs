@@ -13,7 +13,9 @@ use std::{collections::BTreeMap, fs, io, path::Path, time::Duration};
 
 use turborepo_archive::{ExtractedArtifact, Layout};
 use turborepo_download::{ExpectedSha256, VerifiedArtifact};
-use turborepo_tool_install::{Export, Launch, ManagedVar, SetupSession, Tool, TreeRef, VarValue};
+use turborepo_tool_install::{
+    Export, Launch, ManagedVar, SetupSession, Staging, Tool, TreeRef, VarValue,
+};
 
 use crate::{
     lock::{self, Installation, Lock, Platform},
@@ -50,6 +52,9 @@ pub(crate) fn interpreter_vars(python: Option<String>) -> BTreeMap<ManagedVar, V
     }
     vars
 }
+
+/// Bump when this adapter stages different bytes for the same staging inputs.
+const STAGING_REVISION: u32 = 1;
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
@@ -147,6 +152,14 @@ impl UvPlan {
                 artifact_sha256: artifact.sha256.clone(),
                 executables,
                 vars: interpreter_vars(python),
+                staging: Staging::new(
+                    "uv",
+                    STAGING_REVISION,
+                    &crate::staging::Archive {
+                        format: artifact.format,
+                        root: artifact.root_prefix.as_deref().unwrap_or_default(),
+                    },
+                )?,
             },
             artifact,
             windows,

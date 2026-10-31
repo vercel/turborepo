@@ -484,6 +484,7 @@ async fn selected_node_only_mapping_composes_with_separate_npm_inventory() {
             ("npx".into(), "bin/npx".into()),
         ]),
         vars: Default::default(),
+        staging: turborepo_tool_install::Staging::new("fixture", 1, &()).unwrap(),
     };
     let desired = [npm.clone(), plan.inventory_tool().clone()];
     let repo = tempfile::tempdir().unwrap();
