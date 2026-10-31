@@ -88,8 +88,8 @@ fn bun_with_and_without_node_installs_the_baseline_build_and_repeats_without_tra
             [format!("{RELEASE}/bun-windows-x64-baseline.zip")]
         );
 
-        let plan = f.plan();
-        let bin = plan.path_prepend().to_path_buf();
+        let activation = f.activation();
+        let bin = activation.bin().to_path_buf();
         let mut names: Vec<_> = fs::read_dir(&bin)
             .unwrap()
             .map(|e| e.unwrap().file_name().into_string().unwrap())
@@ -103,12 +103,12 @@ fn bun_with_and_without_node_installs_the_baseline_build_and_repeats_without_tra
         };
         assert_eq!(names, expected);
         // Both names are the verified binary, which Bun dispatches on by name.
-        let binary = bin.join("../tools/bun/bun.exe");
+        let binary = f.installed().trees["bun"].join("bun.exe");
         for name in ["bun.exe", "bunx.exe"] {
             assert!(same_file::is_same_file(bin.join(name), &binary).unwrap());
         }
-        assert!(plan.runtime_env().is_empty());
-        let path = plan.path(Some(system32().as_os_str())).unwrap();
+        assert!(activation.vars().is_empty());
+        let path = activation.path(Some(system32().as_os_str())).unwrap();
         assert_eq!(exit_code(&path, "bun /d /c exit 4"), Some(4));
         assert_eq!(exit_code(&path, "bunx /d /c exit 5"), Some(5));
 

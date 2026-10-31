@@ -56,10 +56,6 @@ fn go_only() -> Fixture {
     f
 }
 
-fn installed(f: &Fixture) -> Current {
-    Installed::open(&f.owned).current().unwrap().unwrap()
-}
-
 #[test]
 fn go_zip_installs_exe_exports_locks_every_target_and_repeats_offline() {
     if unqualified_host() {
@@ -81,14 +77,14 @@ fn go_zip_installs_exe_exports_locks_every_target_and_repeats_offline() {
     );
     assert!(artifacts["linux-x64-gnu"].is_object() && artifacts["windows-arm64"].is_object());
 
-    let current = installed(&f);
+    let current = f.installed();
     let mut names: Vec<_> = fs::read_dir(&current.bin)
         .unwrap()
         .map(|e| e.unwrap().file_name().into_string().unwrap())
         .collect();
     names.sort();
     assert_eq!(names, ["go.exe", "gofmt.exe"]);
-    let tree = current.tree("go").to_owned();
+    let tree = current.trees["go"].clone();
     for name in ["go.exe", "gofmt.exe"] {
         let target = tree.join("bin").join(name);
         assert!(same_file::is_same_file(current.bin.join(name), target).unwrap());
@@ -109,8 +105,6 @@ fn go_zip_installs_exe_exports_locks_every_target_and_repeats_offline() {
 /// The overrides managed `turbo run`, `turbo exec` and turbo's own Go probes
 /// receive after revalidation.
 fn run_overrides(f: &Fixture) -> Result<turborepo_run::EnvironmentVariableMap, String> {
-    use turborepo_run::ManagedEnvironment;
-
     use crate::commands::managed::{ManagedTools, context};
     let root = f.owned.root();
     let config = root.join("turbo.json");
@@ -214,11 +208,12 @@ fn damaged_go_exports_fail_check_and_frozen_setup_repairs_them() {
     let u = go_upstream(&go_zip());
     assert_eq!(f.run(&u, LOCAL).unwrap(), 0);
     let manifest = f.manifest();
-    fs::remove_file(installed(&f).bin.join("gofmt.exe")).unwrap();
+    fs::remove_file(f.installed().bin.join("gofmt.exe")).unwrap();
     assert!(f.run(&u, CHECK).is_err());
+    // Setup renders the export again from the sealed tree, without a download.
     assert_eq!(f.run(&u, FROZEN).unwrap(), 0);
-    assert_eq!(u.requests(), [INDEX_PATH, ZIP, ZIP]);
-    assert_ne!(f.manifest(), manifest);
+    assert_eq!(u.requests(), [INDEX_PATH, ZIP]);
+    assert_eq!(f.manifest(), manifest);
     assert_eq!(f.run(&u, CHECK).unwrap(), 0);
-    assert!(installed(&f).bin.join("gofmt.exe").is_file());
+    assert!(f.installed().bin.join("gofmt.exe").is_file());
 }

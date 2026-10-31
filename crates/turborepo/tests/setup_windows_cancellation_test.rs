@@ -17,7 +17,7 @@ use std::{
     io::{BufRead, BufReader, Read, Write},
     net::TcpListener,
     os::windows::process::CommandExt,
-    path::Path,
+    path::{Path, PathBuf},
     process::Command,
     sync::{Arc, Mutex, mpsc},
     thread,
@@ -115,6 +115,11 @@ fn fixture(root: &Path) {
     common::git(root, &["init", "--quiet"]);
 }
 
+/// The tool store each test's setup uses, outside its repository.
+fn store(root: &Path) -> PathBuf {
+    root.parent().unwrap().join("store")
+}
+
 /// Repository files with contents, plus the shape of ignored setup state.
 fn state(root: &Path) -> (BTreeMap<String, Vec<u8>>, Vec<String>) {
     let (mut files, mut setup) = (BTreeMap::new(), Vec::new());
@@ -182,6 +187,7 @@ fn command(launcher: &ProcessLauncher, launch: Launch, root: &Path, proxy: &str)
         .env("TURBO_CONFIG_DIR_PATH", &home)
         .env("VERCEL_CONFIG_DIR_PATH", &home)
         .env("TURBO_DOWNLOAD_LOCAL_ENABLED", "0")
+        .env("TURBO_TOOL_STORE", store(root))
         .env("HTTP_PROXY", proxy)
         .env("HTTPS_PROXY", proxy)
         .env("ALL_PROXY", proxy)
@@ -386,11 +392,6 @@ fn start_blocked(
         );
     };
     assert_eq!(request, "CONNECT nodejs.org:443 HTTP/1.1");
-    // The download runs inside the setup transaction.
-    assert!(matches!(
-        turborepo_tool_install::Store::open(root),
-        Err(turborepo_tool_install::Error::Busy)
-    ));
     let tree = Tree::capture(run.pid());
     (run, tree)
 }
@@ -452,22 +453,22 @@ fn interrupted_download_releases_locks_and_leaves_resumable_state() {
                 after, before,
                 "committed files, including turbo.lock\n{context}"
             );
-            // Only the reusable lock files remain: no staging, partial
-            // artifact, or published generation.
+            // Only the reusable writer lock remains in the repository, and the
+            // store holds no published tree, environment or record.
             assert_eq!(
                 setup,
-                [
-                    ".turbo/",
-                    ".turbo/setup-lock/",
-                    ".turbo/setup-lock/writer",
-                    ".turbo/tools/",
-                    ".turbo/tools/transaction.lock",
-                ],
+                [".turbo/", ".turbo/setup-lock/", ".turbo/setup-lock/writer"],
                 "{context}"
             );
-            let store = turborepo_tool_install::Store::open(&root).expect(&context);
-            assert!(store.current().unwrap().is_none(), "{context}");
-            drop(store);
+            let store = store(&root);
+            for dir in ["trees", "envs"] {
+                let entries = std::fs::read_dir(store.join(dir)).map_or(0, |d| d.count());
+                assert_eq!(entries, 0, "{dir}\n{context}");
+            }
+            assert!(
+                common::setup::installed(&root, &store).is_none(),
+                "{context}"
+            );
             // A retry reaches the download again instead of waiting on a stale
             // writer lock or rejecting the interrupted state.
             let (Run::Console(mut retry), retry_tree) =
