@@ -12,7 +12,6 @@ use turborepo_tool_install::{Export, SetupSession, Tool};
 
 use crate::{
     NodeArtifact,
-    artifact_cache::ArtifactCache,
     lock::{self, Format, Installation, Lock, Platform},
     mirror::Mirror,
 };
@@ -32,8 +31,6 @@ pub enum Error {
     InventoryMismatch,
     #[error("bundled npm package identity or entrypoints do not match the selected resolution")]
     InvalidBundledNpm,
-    #[error("offline setup has no verified cached Node artifact and never contacts upstream")]
-    Offline,
     #[error(transparent)]
     Resolution(#[from] crate::node_resolution::Error),
     #[error(transparent)]
@@ -53,16 +50,12 @@ pub struct NodeTransport {
     // Mirrors and fixtures change only this `/dist` base; lock provenance
     // remains official.
     dist: String,
-    cache: Option<ArtifactCache>,
-    offline: bool,
 }
 impl NodeTransport {
     pub fn official(_policy: &crate::source_policy::ToolDownloadPolicy) -> Result<Self, Error> {
         Ok(Self {
             client: DownloadClient::new([ApprovedOrigin::https("https://nodejs.org")?])?,
             dist: "https://nodejs.org/dist".into(),
-            cache: None,
-            offline: false,
         })
     }
 
@@ -74,29 +67,7 @@ impl NodeTransport {
         Ok(Self {
             client: mirror.client()?,
             dist: mirror.base().into(),
-            cache: None,
-            offline: false,
         })
-    }
-
-    /// Reuse locked archive bytes from a caller-selected user cache. Hits are
-    /// re-verified against the lock digest; extraction stays per repository.
-    pub fn with_cache(mut self, cache: Option<ArtifactCache>) -> Self {
-        self.cache = cache;
-        self
-    }
-
-    /// Serve only verified cache hits; every request path fails before
-    /// traffic with [`Error::Offline`].
-    pub fn offline(mut self) -> Self {
-        self.offline = true;
-        self
-    }
-
-    /// The actual caller-selected cache used by this transport, for best-effort
-    /// cleanup after successful setup. Never a repository-authored setting.
-    pub fn cache(&self) -> Option<&ArtifactCache> {
-        self.cache.as_ref()
     }
 
     /// Read only bounded official metadata for a native portable selection.
@@ -110,9 +81,6 @@ impl NodeTransport {
             node_metadata::{MAX_CHECKSUM_BYTES, MAX_INDEX_BYTES, ReleaseIndex},
             node_resolution,
         };
-        if self.offline {
-            return Err(Error::Offline);
-        }
         let read = async |path: &str, limit| {
             self.client
                 .read_metadata(
@@ -146,15 +114,12 @@ impl NodeTransport {
         Ok(Self {
             client: DownloadClient::loopback_http_for_tests(origin)?,
             dist: format!("{}/dist", origin.trim_end_matches('/')),
-            cache: None,
-            offline: false,
         })
     }
 }
 
 pub struct NodePlan {
     tool: Tool,
-    platform: Platform,
     artifact: lock::Artifact,
     windows: bool,
     bundled_npm: Option<String>,
@@ -227,7 +192,6 @@ impl NodePlan {
                 executables: Export::files(&artifact.executables),
                 vars: Default::default(),
             },
-            platform,
             artifact,
             windows,
             bundled_npm: node
@@ -283,51 +247,25 @@ impl NodePlan {
         self.download(transport).await.map(Some)
     }
 
-    /// Read-only cache preflight. Preparation re-verifies again under the
-    /// writer guard; this is never installation or authorization evidence.
-    pub fn cache_available(&self, transport: &NodeTransport) -> bool {
-        transport
-            .cache
-            .as_ref()
-            .and_then(|cache| cache.get(self.platform, &self.artifact.sha256, ARCHIVE_LIMIT))
-            .is_some()
-    }
-
     /// Download/verify/extract only, with no installation or executable
     /// probing.
     pub async fn download(&self, transport: &NodeTransport) -> Result<PreparedNode, Error> {
-        let cached = transport
-            .cache
-            .as_ref()
-            .and_then(|cache| cache.get(self.platform, &self.artifact.sha256, ARCHIVE_LIMIT));
-        let from_cache = cached.is_some();
-        let bytes = match cached {
-            Some(bytes) => bytes,
-            None if transport.offline => return Err(Error::Offline),
-            None => {
-                let url = format!(
-                    "{}{}",
-                    transport.dist,
-                    self.artifact
-                        .url
-                        .strip_prefix("https://nodejs.org/dist")
-                        .ok_or(Error::InvalidLock)?
-                );
-                let bytes = transport
-                    .client
-                    .download_verified(
-                        &url,
-                        ExpectedSha256::from_hex(&self.artifact.sha256)?,
-                        turborepo_download::Limits::new(ARCHIVE_LIMIT, Duration::from_secs(120))?,
-                    )
-                    .await?;
-                // Best effort: a cache write failure never fails verified setup.
-                if let Some(cache) = &transport.cache {
-                    let _ = cache.put(self.platform, &bytes);
-                }
-                bytes
-            }
-        };
+        let url = format!(
+            "{}{}",
+            transport.dist,
+            self.artifact
+                .url
+                .strip_prefix("https://nodejs.org/dist")
+                .ok_or(Error::InvalidLock)?
+        );
+        let bytes = transport
+            .client
+            .download_verified(
+                &url,
+                ExpectedSha256::from_hex(&self.artifact.sha256)?,
+                turborepo_download::Limits::new(ARCHIVE_LIMIT, Duration::from_secs(120))?,
+            )
+            .await?;
         let mut required = vec![self.artifact.executables["node"].clone()];
         let base = if self.windows { "" } else { "lib/" };
         for name in ["npm", "npx"] {
@@ -371,13 +309,7 @@ impl NodePlan {
         Ok(PreparedNode {
             tree,
             tool: self.tool.clone(),
-            // Cache hits transfer nothing.
-            downloaded_bytes: if from_cache {
-                0
-            } else {
-                bytes.as_bytes().len() as u64
-            },
-            from_cache,
+            downloaded_bytes: bytes.as_bytes().len() as u64,
         })
     }
 
@@ -431,17 +363,11 @@ pub struct PreparedNode {
     tree: ExtractedArtifact,
     tool: Tool,
     downloaded_bytes: u64,
-    from_cache: bool,
 }
 impl PreparedNode {
     /// Verified artifact bytes transferred for this preparation.
     pub fn downloaded_bytes(&self) -> u64 {
         self.downloaded_bytes
-    }
-
-    /// Whether verified bytes came from the shared download cache.
-    pub fn from_cache(&self) -> bool {
-        self.from_cache
     }
 
     /// Staging callback for `SetupSession::ensure`. Copy the FULL verified

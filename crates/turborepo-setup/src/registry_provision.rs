@@ -17,7 +17,6 @@ use turborepo_download::{
 use turborepo_tool_install::{Export, Launch, LaunchArg, SetupSession, Tool, TreeRef};
 
 use crate::{
-    artifact_cache::ArtifactCache,
     lock::{self, Format, Installation, Lock, Platform},
     mirror::Mirror,
     node_discovery::UniqueJson,
@@ -39,8 +38,6 @@ pub enum Error {
     UnsupportedTarget,
     #[error("package identity or bin entries do not match the selected lock")]
     InvalidPackage,
-    #[error("offline setup has no verified cached package artifact and never contacts upstream")]
-    Offline,
     #[error(transparent)]
     Authored(#[from] crate::package_manager::Error),
     #[error(transparent)]
@@ -62,8 +59,6 @@ pub struct RegistryTransport {
     origin: String,
     // Mirrors may serve metadata whose tarball points at the mirror itself.
     mirrored: bool,
-    cache: Option<ArtifactCache>,
-    offline: bool,
 }
 impl RegistryTransport {
     // A configured mirror uses `mirrored` instead; neither falls back to
@@ -73,8 +68,6 @@ impl RegistryTransport {
             client: DownloadClient::new([ApprovedOrigin::https(policy.registry())?])?,
             origin: policy.registry().into(),
             mirrored: false,
-            cache: None,
-            offline: false,
         })
     }
 
@@ -87,50 +80,7 @@ impl RegistryTransport {
             client: mirror.client()?,
             origin: mirror.base().into(),
             mirrored: true,
-            cache: None,
-            offline: false,
         })
-    }
-
-    /// Reuse locked package bytes during locked preparation only; resolution
-    /// always verifies registry metadata.
-    pub fn with_cache(mut self, cache: Option<ArtifactCache>) -> Self {
-        self.cache = cache;
-        self
-    }
-
-    /// Serve only verified cache hits; metadata and artifact requests fail
-    /// before traffic with [`Error::Offline`].
-    pub fn offline(mut self) -> Self {
-        self.offline = true;
-        self
-    }
-
-    // A hit is already verified against the locked SHA-256. An authored
-    // SHA-256 equals that digest (`locked_integrity`); an authored SHA-512 is
-    // verified here. Any failure falls back to the registry path, which owns
-    // the canonical error.
-    fn cached(
-        &self,
-        platform: Platform,
-        sha256: &str,
-        authored: Option<&CorepackIntegrity>,
-    ) -> Option<VerifiedArtifact> {
-        let bytes = self.cache.as_ref()?.get(platform, sha256, PACKAGE_LIMIT)?;
-        match authored {
-            None => Some(bytes),
-            Some(pin) if pin.algorithm == "sha256" => (pin.digest == sha256).then_some(bytes),
-            Some(pin) if pin.algorithm == "sha224" => {
-                (sha224_hex(&bytes) == pin.digest).then_some(bytes)
-            }
-            Some(pin) if pin.algorithm == "sha512" => VerifiedArtifact::verify_bytes_sha512(
-                bytes.into_bytes(),
-                ExpectedSha512::from_hex(&pin.digest).ok()?,
-                None,
-            )
-            .ok(),
-            Some(_) => None,
-        }
     }
 
     /// Resolve only a canonical exact npm/pnpm release, verifying registry
@@ -214,9 +164,6 @@ impl RegistryTransport {
         authored: Option<&CorepackIntegrity>,
         locked_sha256: Option<&str>,
     ) -> Result<(registry_metadata::RegistryArtifact, VerifiedArtifact), Error> {
-        if self.offline {
-            return Err(Error::Offline);
-        }
         // Validate before interpolating any request path or making traffic.
         registry_metadata::validate_selection(manager, version)?;
         let metadata = self
@@ -275,8 +222,6 @@ impl RegistryTransport {
             client: DownloadClient::loopback_http_for_tests(origin)?,
             origin: origin.trim_end_matches('/').into(),
             mirrored: false,
-            cache: None,
-            offline: false,
         })
     }
 }
@@ -526,8 +471,6 @@ fn extract_package(
 pub(crate) struct RegistryPlan {
     tool: Tool,
     node: Tool,
-    // The lock key that selected this artifact (host platform or `any`).
-    platform: Platform,
     artifact: lock::Artifact,
     /// Native pnpm's platform package name, binary path and locked artifact.
     native: Option<(&'static str, lock::Artifact)>,
@@ -592,7 +535,7 @@ impl RegistryPlan {
         let Installation::Managed { artifacts } = &package.installation else {
             return Err(Error::InvalidLock);
         };
-        let (&artifact_platform, parts) = artifacts
+        let (_, parts) = artifacts
             .get_key_value(&platform)
             .or_else(|| artifacts.get_key_value(&Platform::Any))
             .ok_or(Error::InvalidLock)?;
@@ -661,7 +604,6 @@ impl RegistryPlan {
                 vars: BTreeMap::new(),
             },
             node,
-            platform: artifact_platform,
             artifact,
             native,
             authored: authored.cloned(),
@@ -672,18 +614,6 @@ impl RegistryPlan {
 
     pub fn inventory_tool(&self) -> &Tool {
         &self.tool
-    }
-
-    /// Read-only cache preflight; preparation verifies every part again.
-    pub fn cache_available(&self, transport: &RegistryTransport) -> bool {
-        transport
-            .cached(self.platform, &self.artifact.sha256, self.authored.as_ref())
-            .is_some()
-            && self.native.as_ref().is_none_or(|(_, native)| {
-                transport
-                    .cached(self.platform, &native.sha256, None)
-                    .is_some()
-            })
     }
 
     /// Prepare without executing Node, then ensure the SAME complete desired
@@ -713,35 +643,15 @@ impl RegistryPlan {
         {
             return Ok(None);
         }
-        let cached = transport.cached(
-            self.platform,
-            &self.artifact.sha256,
-            self.authored.as_ref().filter(|_| !self.bundled),
-        );
-        let mut from_cache = cached.is_some();
-        let bytes = match cached {
-            Some(bytes) => bytes,
-            None => {
-                let (_, bytes) = transport
-                    .verified_release(
-                        self.manager,
-                        &self.tool.version,
-                        self.authored.as_ref().filter(|_| !self.bundled),
-                        Some(&self.artifact.sha256),
-                    )
-                    .await?;
-                // Best effort: a cache write failure never fails verified setup.
-                if let Some(cache) = &transport.cache {
-                    let _ = cache.put(self.platform, &bytes);
-                }
-                bytes
-            }
-        };
-        let mut downloaded_bytes = if from_cache {
-            0
-        } else {
-            bytes.as_bytes().len() as u64
-        };
+        let (_, bytes) = transport
+            .verified_release(
+                self.manager,
+                &self.tool.version,
+                self.authored.as_ref().filter(|_| !self.bundled),
+                Some(&self.artifact.sha256),
+            )
+            .await?;
+        let mut downloaded_bytes = bytes.as_bytes().len() as u64;
         let (tree, native) = match &self.native {
             None => {
                 let executables = &self.artifact.executables;
@@ -753,27 +663,16 @@ impl RegistryPlan {
             Some((name, native)) => {
                 let tree = extract_wrapper(&bytes, &self.tool.version)?;
                 let binary = native.executables.get("pnpm").ok_or(Error::InvalidLock)?;
-                let cached = transport.cached(self.platform, &native.sha256, None);
-                from_cache &= cached.is_some();
-                let bytes = match cached {
-                    Some(bytes) => bytes,
-                    None => {
-                        let (_, bytes) = transport
-                            .verified_package(
-                                self.manager,
-                                name,
-                                &self.tool.version,
-                                None,
-                                Some(&native.sha256),
-                            )
-                            .await?;
-                        if let Some(cache) = &transport.cache {
-                            let _ = cache.put(self.platform, &bytes);
-                        }
-                        downloaded_bytes += bytes.as_bytes().len() as u64;
-                        bytes
-                    }
-                };
+                let (_, bytes) = transport
+                    .verified_package(
+                        self.manager,
+                        name,
+                        &self.tool.version,
+                        None,
+                        Some(&native.sha256),
+                    )
+                    .await?;
+                downloaded_bytes += bytes.as_bytes().len() as u64;
                 let native = extract_native(&bytes, name, &self.tool.version, binary)?;
                 (tree, Some((native, binary.clone())))
             }
@@ -787,7 +686,6 @@ impl RegistryPlan {
             native,
             downloaded_bytes,
             tool: self.tool.clone(),
-            from_cache,
         }))
     }
 }
@@ -798,16 +696,9 @@ pub struct PreparedRegistry {
     native: Option<(ExtractedArtifact, String)>,
     downloaded_bytes: u64,
     tool: Tool,
-    from_cache: bool,
 }
 impl PreparedRegistry {
-    /// Whether all verified bytes came from the shared download cache.
-    pub fn from_cache(&self) -> bool {
-        self.from_cache
-    }
-
-    /// Verified package bytes transferred for this preparation; cache hits
-    /// transfer nothing.
+    /// Verified package bytes transferred for this preparation.
     pub fn downloaded_bytes(&self) -> u64 {
         self.downloaded_bytes
     }
@@ -882,10 +773,6 @@ impl PnpmPlan {
 
     pub fn inventory_tool(&self) -> &Tool {
         self.0.inventory_tool()
-    }
-
-    pub fn cache_available(&self, transport: &RegistryTransport) -> bool {
-        self.0.cache_available(transport)
     }
 
     /// Prepare only; reconcile the same complete desired inventory afterward.

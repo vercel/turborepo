@@ -25,7 +25,7 @@ fn tools() -> ToolReport {
     ToolReport {
         rows: vec![
             row("node", "22.11.0", ToolOutcome::Installed),
-            row("pnpm", "9.15.0", ToolOutcome::InstalledFromCache),
+            row("pnpm", "9.15.0", ToolOutcome::Installed),
             row("npm", "10.9.0", ToolOutcome::BundledWithNode),
             ToolRow {
                 source: Some("github:acme/lint".into()),

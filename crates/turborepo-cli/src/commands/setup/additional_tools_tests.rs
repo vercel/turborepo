@@ -116,7 +116,7 @@ fn drift_and_checksum_failures_keep_the_previous_installation() {
     f.no_execution();
 }
 
-#[path = "additional_cache_tests.rs"]
-mod cached;
 #[path = "additional_matrix_tests.rs"]
 mod matrix;
+#[path = "additional_offline_tests.rs"]
+mod offline;

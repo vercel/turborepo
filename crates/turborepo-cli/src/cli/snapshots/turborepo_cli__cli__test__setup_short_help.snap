@@ -17,8 +17,8 @@ Flags:
                                   default in CI)
       --no-frozen                 Allow lock creation or updates, including in
                                   CI
-      --offline                   Use cached artifacts only; never make HTTP
-                                  requests
+      --offline                   Use only tools already in the tool store;
+                                  never make HTTP requests
       --tools-only                Skip dependency installation
       --no-lock                   Provision without writing turbo.lock;
                                   overrides CI-inferred frozen mode

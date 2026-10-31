@@ -144,11 +144,7 @@ impl Fixture {
         words.extend(flags.iter().map(std::ffi::OsString::from));
         Args::parse_args(words).unwrap()
     }
-    fn transports(
-        &self,
-        origin: &str,
-        cache: Option<turborepo_setup::artifact_cache::ArtifactCache>,
-    ) -> provision::Transports {
+    fn transports(&self, origin: &str) -> provision::Transports {
         provision::Transports {
             tool_store: Some(self.owned.home().to_owned()),
             registry:
@@ -157,11 +153,9 @@ impl Fixture {
                 )
                 .unwrap(),
             node: turborepo_setup::node_provision::NodeTransport::loopback_http_for_tests(origin)
-                .unwrap()
-                .with_cache(cache.clone()),
+                .unwrap(),
             pnpm: turborepo_setup::pnpm_provision::PnpmTransport::loopback_http_for_tests(origin)
-                .unwrap()
-                .with_cache(cache),
+                .unwrap(),
             uv: turborepo_setup::uv_resolution::UvTransport::loopback_http_for_tests(origin)
                 .unwrap(),
             rustup: turborepo_setup::rustup_provision::RustupTransport::loopback_http_for_tests(
@@ -185,28 +179,25 @@ impl Fixture {
         }
     }
     fn run(&self, upstream: &LoopbackServer, flags: &[&str]) -> Result<i32, Error> {
-        self.run_with(upstream.origin(), None, flags)
+        self.run_with(upstream.origin(), self.owned.home(), flags)
     }
+    /// Setup against `origin`, installing into the tool store at `store`,
+    /// which another fixture's repository may share.
     fn run_with(
         &self,
         origin: &str,
-        cache: Option<&std::path::Path>,
+        store: &std::path::Path,
         flags: &[&str],
     ) -> Result<i32, Error> {
         let args = self.args(flags);
-        let cache = cache.and_then(turborepo_setup::artifact_cache::ArtifactCache::new);
         crate::cli::dispatch_setup(&args, |args, setup_args| {
-            run_with_policy(
-                args,
-                setup_args,
-                Some(self.transports(origin, cache.clone())),
-                self.git.clone(),
-                || {
-                    Ok(self
-                        .owned
-                        .policy_at(&self.owned.root().join("apps/web/src"))?)
-                },
-            )
+            let mut transports = self.transports(origin);
+            transports.tool_store = Some(store.to_owned());
+            run_with_policy(args, setup_args, Some(transports), self.git.clone(), || {
+                Ok(self
+                    .owned
+                    .policy_at(&self.owned.root().join("apps/web/src"))?)
+            })
         })
         .unwrap()
     }
@@ -337,14 +328,14 @@ impl Upstream {
         )
     }
 }
-#[path = "cache_tests.rs"]
-mod cache;
 #[path = "check_tests.rs"]
 mod checks;
 #[path = "cleanup_tests.rs"]
 mod cleanups;
 #[path = "plan_tests.rs"]
 mod plans;
+#[path = "shared_store_tests.rs"]
+mod shared_store;
 
 const FROZEN: &[&str] = &["--frozen", "--tools-only"];
 #[path = "additional_tools_tests.rs"]
@@ -590,7 +581,7 @@ fn unsupported_modes_and_policy_fail_before_traffic_or_storage() {
                 }
                 _ if flags.contains(&"--offline") && !flags.contains(&"--no-lock") => {
                     assert!(
-                        matches!(&result, Err(Error::Offline(_))),
+                        matches!(&result, Err(Error::OfflineMissing(_))),
                         "{flags:?}: {result:?}"
                     );
                 }
@@ -665,7 +656,7 @@ fn readonly_modes_accept_late_ambient_npmrc_drift_without_traffic_or_mutation() 
                 run_with_policy(
                     args,
                     setup,
-                    Some(f.transports(u.origin(), None)),
+                    Some(f.transports(u.origin())),
                     f.git.clone(),
                     || {
                         calls.set(calls.get() + 1);
@@ -811,7 +802,7 @@ fn telemetry_report_counts_artifact_bytes_and_reuse() {
     let run = |flags: &[&str]| {
         let mut report = telemetry::Report::default();
         let result = crate::cli::dispatch_setup(&f.args(flags), |args, setup_args| {
-            let transports = f.transports(u.origin(), None);
+            let transports = f.transports(u.origin());
             run_reporting(
                 args,
                 setup_args,
