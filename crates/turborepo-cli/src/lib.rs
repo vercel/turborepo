@@ -65,6 +65,23 @@ pub fn main(
     if let Some(code) = capabilities::run_query(std::env::args_os()) {
         return Ok(code);
     }
+    // Generated shell scripts ask for candidates before normal CLI/shim parsing.
+    let words: Vec<_> = std::env::args_os().skip(1).collect();
+    // The global shim prefixes requests handed to a repository-local binary.
+    let completion_words = match words.as_slice() {
+        [flag, rest @ ..] if flag == "--skip-infer" => rest,
+        _ => &words,
+    };
+    if let Some(answer) = Args::completion_request(completion_words) {
+        use std::io::Write;
+
+        return Ok(i32::from(
+            std::io::stdout()
+                .lock()
+                .write_all(answer.as_bytes())
+                .is_err(),
+        ));
+    }
     raise_open_file_limit();
     shim::run(query_server)
 }
