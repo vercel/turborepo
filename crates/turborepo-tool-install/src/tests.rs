@@ -1,30 +1,14 @@
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
 use std::{
+    cell::Cell,
     os::unix::fs::{PermissionsExt, symlink},
     process::Command,
 };
 
 use super::*;
 
-mod cleanup;
-mod force;
-mod inherited_child;
-mod inherited_lock;
-mod paths_permissions;
-mod read_only;
-mod record;
-mod recovery;
-mod shallow;
 mod user_store;
-
-fn damage(path: &Path) {
-    let path = fs::canonicalize(path).unwrap();
-    let permissions = fs::metadata(&path).unwrap().permissions();
-    fs::remove_file(&path).unwrap();
-    fs::write(&path, b"damaged").unwrap();
-    fs::set_permissions(path, permissions).unwrap();
-}
 
 fn tool(id: &str) -> Tool {
     Tool {
@@ -34,337 +18,282 @@ fn tool(id: &str) -> Tool {
         artifact_sha256: "a".repeat(64),
         executables: BTreeMap::from([(id.into(), "bin/tool".into())]),
         vars: Default::default(),
+        staging: Staging::new("fixture", 1, &()).unwrap(),
     }
 }
 
 fn populate(tool: &Tool, root: &Path) -> Result<(), Error> {
     fs::create_dir(root.join("bin"))?;
-    fs::write(root.join("bin/tool"), &tool.version)?;
+    let script = "#!/bin/sh\necho \"$GOTOOLCHAIN|$CARGO_HOME|$*\"\n";
+    fs::write(root.join("bin/tool"), script)?;
     fs::set_permissions(root.join("bin/tool"), fs::Permissions::from_mode(0o755))?;
-    fs::write(root.join("resource"), b"adjacent resource")?;
-    fs::write(root.join(".resource"), b"hidden adjacent resource")?;
+    fs::write(root.join("resource"), &tool.id)?;
     symlink("tool", root.join("bin/alias"))?;
     Ok(())
 }
 
-fn manifest(store: &Store) -> Vec<u8> {
-    fs::read(store.root.join("manifest.json")).unwrap()
+struct Fixture {
+    _home: tempfile::TempDir,
+    store: UserStore,
 }
 
-#[test]
-fn checked_reconciliation_preserves_selection_on_staged_and_noop_conflicts() {
-    let repo = tempfile::tempdir().unwrap();
-    let mut store = Store::open(repo.path()).unwrap();
-    let node = tool("node");
-    store
-        .reconcile(std::slice::from_ref(&node), populate)
-        .unwrap();
-    let before = manifest(&store);
-    for desired in [vec![node.clone()], vec![node.clone(), tool("pnpm")]] {
-        let mut checked = false;
-        assert!(
-            store
-                .reconcile_checked(&desired, populate, || {
-                    checked = true;
-                    Err(io::Error::other("source changed").into())
-                })
-                .is_err()
-        );
-        assert!(checked);
-        assert_eq!(manifest(&store), before);
-        assert_eq!(store.current().unwrap().unwrap().tools, vec![node.clone()]);
-    }
-}
-
-#[test]
-fn inspect_does_not_initialize_or_lock_storage() {
-    let repo = tempfile::tempdir().unwrap();
-    assert!(Store::inspect(repo.path()).unwrap().is_none());
-    assert!(!repo.path().join(".turbo").exists());
-    fs::create_dir(repo.path().join(".turbo")).unwrap();
-    assert!(Store::inspect(repo.path()).unwrap().is_none());
-    assert!(!repo.path().join(".turbo/tools").exists());
-    let mut store = Store::open(repo.path()).unwrap();
-    store.reconcile(&[tool("node")], populate).unwrap();
-    let before = manifest(&store);
-    // Reader works even while the writer lock is held, without reacquiring it.
-    let current = Store::inspect(repo.path()).unwrap().unwrap();
-    assert_eq!(current.tools, store.current().unwrap().unwrap().tools);
-    assert!(current.tool_tree(&tool("node")).unwrap().is_dir());
-    assert!(current.tool_tree(&tool("other")).is_none());
-    assert_eq!(manifest(&store), before);
-    drop(store);
-    fs::remove_file(repo.path().join(".turbo/tools/transaction.lock")).unwrap();
-    assert!(Store::inspect(repo.path()).unwrap().is_some());
-    assert!(!repo.path().join(".turbo/tools/transaction.lock").exists());
-    damage(&current.bin.join("../tools/node/resource"));
-    assert!(Store::inspect(repo.path()).unwrap().is_some());
-    assert!(matches!(
-        Store::inspect_with(repo.path(), Verification::Full),
-        Err(Error::DamagedContents)
-    ));
-    assert_eq!(
-        fs::read(repo.path().join(".turbo/tools/manifest.json")).unwrap(),
-        before
-    );
-    // Content damage must not hide structural corruption elsewhere.
-    fs::remove_file(current.bin.join("node")).unwrap();
-    symlink(repo.path(), current.bin.join("node")).unwrap();
-    for verification in [Verification::Full, Verification::Shallow] {
-        assert!(matches!(
-            Store::inspect_with(repo.path(), verification),
-            Err(Error::UnsafePath)
-        ));
-    }
-}
-
-#[test]
-fn no_op_replacement_removal_and_full_layout() {
-    let repo = tempfile::tempdir().unwrap();
-    let mut store = Store::open(repo.path()).unwrap();
-    let a = tool("node");
-    let b = tool("pnpm");
-    assert!(store.current().unwrap().is_none());
-    assert_eq!(
-        store.reconcile(&[b.clone(), a.clone()], populate).unwrap(),
-        Outcome::Replaced
-    );
-    let before = manifest(&store);
-    let old_bin = store.current().unwrap().unwrap().bin;
-    assert_eq!(
-        store
-            .reconcile(&[a.clone(), b.clone()], |_, _| panic!(
-                "no-op must not stage"
-            ))
-            .unwrap(),
-        Outcome::Unchanged
-    );
-    assert_eq!(manifest(&store), before);
-    assert_eq!(fs::read(old_bin.join("node")).unwrap(), b"1.2.3");
-    assert_eq!(
-        fs::read(old_bin.join("../tools/node/resource")).unwrap(),
-        b"adjacent resource"
-    );
-    assert_eq!(
-        store
-            .reconcile(&[a], |_, _| panic!("unchanged tools are reused"))
-            .unwrap(),
-        Outcome::Replaced
-    );
-    let current = store.current().unwrap().unwrap();
-    assert_eq!(current.tools.len(), 1);
-    assert!(!current.bin.join("pnpm").exists());
-    assert!(current.bin.join("node").exists());
-    assert_eq!(
-        store.reconcile(&[], |_, _| panic!()).unwrap(),
-        Outcome::Replaced
-    );
-    assert_eq!(
-        fs::read_dir(store.current().unwrap().unwrap().bin)
-            .unwrap()
-            .count(),
-        0
-    );
-    assert_eq!(
-        store.reconcile(&[], |_, _| panic!()).unwrap(),
-        Outcome::Unchanged
-    );
-}
-
-#[test]
-fn failed_staging_and_invalid_tree_preserve_prior_bytes() {
-    let repo = tempfile::tempdir().unwrap();
-    let mut store = Store::open(repo.path()).unwrap();
-    let mut a = tool("node");
-    store.reconcile(&[a.clone()], populate).unwrap();
-    let before = manifest(&store);
-    let bin = store.current().unwrap().unwrap().bin;
-    a.version = "2.0.0".into();
-    let failed = store.reconcile(&[a.clone()], |_, root| {
-        fs::write(root.join("partial"), b"incomplete")?;
-        Err(Error::Io(io::Error::other("interrupted")))
-    });
-    assert!(failed.is_err());
-    assert!(store.reconcile(&[a.clone()], |_, _| Ok(())).is_err());
-    assert!(
-        store
-            .reconcile(&[a], |tool, root| {
-                populate(tool, root)?;
-                symlink(repo.path(), root.join("escape"))?;
-                Ok(())
-            })
-            .is_err()
-    );
-    assert_eq!(manifest(&store), before);
-    assert_eq!(fs::read(bin.join("node")).unwrap(), b"1.2.3");
-    assert_eq!(fs::read_dir(&store.root).unwrap().count(), 3); // lock, manifest, prior generation
-}
-
-#[test]
-fn exact_identity_and_damage_require_reinstallation() {
-    let repo = tempfile::tempdir().unwrap();
-    let mut store = Store::open(repo.path()).unwrap();
-    let mut a = tool("node");
-    store.reconcile(&[a.clone()], populate).unwrap();
-    for change in 0..4 {
-        match change {
-            0 => a.artifact_sha256 = "b".repeat(64),
-            1 => a.platform = "darwin-arm64".into(),
-            2 => a.version = "2.0.0".into(),
-            _ => {
-                a.executables.insert("alias".into(), "bin/alias".into());
-            }
-        }
-        let mut calls = 0;
-        assert_eq!(
-            store
-                .reconcile(&[a.clone()], |tool, root| {
-                    calls += 1;
-                    populate(tool, root)
-                })
-                .unwrap(),
-            Outcome::Replaced
-        );
-        assert_eq!(calls, 1);
-    }
-    let bin = store.current().unwrap().unwrap().bin;
-    damage(&bin.join("node"));
-    assert!(Store::inspect_with(repo.path(), Verification::Full).is_err());
-    assert_eq!(
-        store.reconcile(&[a.clone()], populate).unwrap(),
-        Outcome::Unchanged
-    );
-    assert_eq!(
-        store
-            .force_reconcile_checked(&[a], populate, || Ok(()))
-            .unwrap(),
-        Outcome::Replaced
-    );
-    assert_eq!(
-        fs::read(store.current().unwrap().unwrap().bin.join("node")).unwrap(),
-        b"2.0.0"
-    );
-}
-
-#[test]
-fn untrusted_paths_collisions_and_bookkeeping_cannot_escape() {
-    let repo = tempfile::tempdir().unwrap();
+fn fixture() -> Fixture {
+    let home = tempfile::tempdir().unwrap();
+    // Locating checks containment against one repository; every test
+    // repository is a separate temporary directory outside the store.
     let outside = tempfile::tempdir().unwrap();
-    symlink(outside.path(), repo.path().join(".turbo")).unwrap();
-    assert!(matches!(Store::open(repo.path()), Err(Error::UnsafePath)));
-    assert_eq!(fs::read_dir(outside.path()).unwrap().count(), 0);
-    fs::remove_file(repo.path().join(".turbo")).unwrap();
-    fs::create_dir(repo.path().join(".turbo")).unwrap();
-    symlink(outside.path(), repo.path().join(".turbo/tools")).unwrap();
-    assert!(matches!(Store::open(repo.path()), Err(Error::UnsafePath)));
-    fs::remove_file(repo.path().join(".turbo/tools")).unwrap();
-    fs::set_permissions(
-        repo.path().join(".turbo"),
-        fs::Permissions::from_mode(0o777),
-    )
-    .unwrap();
-    assert!(matches!(Store::open(repo.path()), Err(Error::UnsafePath)));
-    fs::set_permissions(
-        repo.path().join(".turbo"),
-        fs::Permissions::from_mode(0o755),
-    )
-    .unwrap();
-    let mut store = Store::open(repo.path()).unwrap();
-    for bad in [
-        "../escape",
-        "/absolute",
-        "a/b",
-        "Node",
-        "con",
-        "a:",
-        ".",
-        "",
-    ] {
-        let mut a = tool("node");
-        a.id = bad.into();
-        assert!(store.reconcile(&[a], |_, _| panic!()).is_err());
-    }
-    let a = tool("node");
-    let mut b = tool("pnpm");
-    b.executables = a.executables.clone();
-    assert!(store.reconcile(&[a.clone(), b], |_, _| panic!()).is_err());
-    let mut b = tool("pnpm");
-    b.executables.insert("escape".into(), "../escape".into());
-    assert!(store.reconcile(&[b], |_, _| panic!()).is_err());
-    store.reconcile(&[a], populate).unwrap();
-    let before = manifest(&store);
-    let mut forged: Inventory = serde_json::from_slice(&before).unwrap();
-    forged.generation = "../outside".into();
-    fs::write(
-        store.root.join("manifest.json"),
-        serde_json::to_vec(&forged).unwrap(),
-    )
-    .unwrap();
-    assert!(store.reconcile(&[], |_, _| panic!()).is_err());
-    fs::remove_file(store.root.join("manifest.json")).unwrap();
-    let victim = outside.path().join("victim");
-    fs::write(&victim, &before).unwrap();
-    symlink(&victim, store.root.join("manifest.json")).unwrap();
-    assert!(store.reconcile(&[], |_, _| panic!()).is_err());
-    assert_eq!(fs::read(victim).unwrap(), before);
+    // Quotes and spaces in the store path must reach launchers intact.
+    let store = UserStore::at(&home.path().join("it's a store"), outside.path()).unwrap();
+    Fixture { _home: home, store }
 }
 
-#[test]
-fn lock_is_clone_local_and_released_on_drop() {
-    let repo = tempfile::tempdir().unwrap();
-    let other = tempfile::tempdir().unwrap();
-    let store = Store::open(repo.path()).unwrap();
-    assert!(matches!(Store::open(repo.path()), Err(Error::Busy)));
-    assert!(Store::open(other.path()).is_ok());
-    drop(store);
-    assert!(Store::open(repo.path()).is_ok());
+fn repo() -> tempfile::TempDir {
+    tempfile::tempdir().unwrap()
 }
 
-#[test]
-fn abrupt_process_exit_keeps_prior_generation_and_releases_lock() {
-    let repo = tempfile::tempdir().unwrap();
-    let a = tool("node");
-    let before = {
-        let mut store = Store::open(repo.path()).unwrap();
-        store.reconcile(std::slice::from_ref(&a), populate).unwrap();
-        manifest(&store)
-    };
-    let status = Command::new(std::env::current_exe().unwrap())
-        .args(["--exact", "tests::crash_child", "--ignored"])
-        .env("TURBO_INSTALL_CRASH_REPO", repo.path())
-        .status()
-        .unwrap();
-    assert_eq!(status.code(), Some(79));
-    let mut store = Store::open(repo.path()).unwrap();
-    assert_eq!(manifest(&store), before);
-    assert_eq!(
-        fs::read(store.current().unwrap().unwrap().bin.join("node")).unwrap(),
-        b"1.2.3"
-    );
-    let mut a = a;
-    a.version = "2.0.0".into();
-    assert_eq!(store.reconcile(&[a], populate).unwrap(), Outcome::Replaced);
-}
-
-#[test]
-#[ignore = "subprocess fixture for abrupt interruption without destructors"]
-fn crash_child() {
-    let repo = std::env::var_os("TURBO_INSTALL_CRASH_REPO").expect("child fixture path");
-    let mut store = Store::open(Path::new(&repo)).unwrap();
-    let mut a = tool("node");
-    a.version = "2.0.0".into();
+/// Ensures `tools` for `repo`, counting how many trees were staged.
+fn ensure(store: &UserStore, repo: &Path, tools: &[Tool], staged: &Cell<usize>) -> Ensured {
+    let selection = Selection::new(tools.to_vec()).unwrap();
     store
-        .reconcile(&[a], |tool, root| {
-            populate(tool, root)?;
-            std::process::exit(79);
-        })
-        .unwrap();
+        .begin_setup(repo, Reuse::Sealed)
+        .unwrap()
+        .ensure(
+            &selection,
+            |tool, root| {
+                staged.set(staged.get() + 1);
+                populate(tool, root)
+            },
+            |_| Ok(()),
+        )
+        .unwrap()
 }
 
 #[test]
-fn launchers_run_other_trees_and_a_variable_change_republishes_without_restaging() {
-    let repo = tempfile::tempdir().unwrap();
-    let mut store = Store::open(repo.path()).unwrap();
+fn a_second_repository_with_the_same_selection_stages_nothing_and_shares_the_environment() {
+    let f = fixture();
+    let (first, second) = (repo(), repo());
+    let tools = [tool("node"), tool("pnpm")];
+    let staged = Cell::new(0);
+    let one = ensure(&f.store, first.path(), &tools, &staged);
+    assert_eq!(staged.get(), 2);
+    let two = ensure(&f.store, second.path(), &tools, &staged);
+    assert_eq!(staged.get(), 2, "the second repository staged a tree");
+    assert_eq!(one.env, two.env);
+    assert!(two.installed.is_empty());
+    // A different selection reuses the shared trees it has in common.
+    let three = ensure(&f.store, second.path(), &tools[..1], &staged);
+    assert_eq!(staged.get(), 2);
+    assert_ne!(three.env, one.env);
+}
+
+#[test]
+fn tools_that_stage_the_same_artifact_differently_never_share_a_tree() {
+    let f = fixture();
+    let (first, second) = (repo(), repo());
+    let plain = tool("node");
+    let nested = Tool {
+        staging: Staging::new("fixture", 1, &serde_json::json!({"root": "pkg"})).unwrap(),
+        ..tool("node")
+    };
+    let staged = Cell::new(0);
+    let one = ensure(
+        &f.store,
+        first.path(),
+        std::slice::from_ref(&nested),
+        &staged,
+    );
+    let two = ensure(
+        &f.store,
+        second.path(),
+        std::slice::from_ref(&plain),
+        &staged,
+    );
+    assert_eq!(
+        staged.get(),
+        2,
+        "the second repository reused the first's tree"
+    );
+    assert_ne!(one.env, two.env);
+    let tree = |tool: &Tool| f.store.sealed_tree(tool).unwrap().unwrap();
+    assert_ne!(tree(&plain), tree(&nested));
+
+    // A tree sealed for other staging is never reused under this tool's key.
+    let seal = |tool: &Tool| tree(tool).with_file_name("seal.json");
+    fs::copy(seal(&nested), seal(&plain)).unwrap();
+    assert!(f.store.sealed_tree(&plain).unwrap().is_none());
+    ensure(
+        &f.store,
+        second.path(),
+        std::slice::from_ref(&plain),
+        &staged,
+    );
+    assert_eq!(staged.get(), 3, "a mismatched seal was trusted");
+    assert!(f.store.sealed_tree(&plain).unwrap().is_some());
+}
+
+#[test]
+fn the_repository_holds_only_an_editor_link_to_its_stable_bin() {
+    let f = fixture();
+    let repo = repo();
+    let old = repo.path().join(".turbo/tools/generation-old/tools/node");
+    fs::create_dir_all(&old).unwrap();
+    fs::write(old.join("file"), "old").unwrap();
+    fs::set_permissions(old.join("file"), fs::Permissions::from_mode(0o444)).unwrap();
+    let ensured = ensure(&f.store, repo.path(), &[tool("node")], &Cell::new(0));
+    assert!(!repo.path().join(".turbo/tools").exists());
+    let root = fs::canonicalize(repo.path()).unwrap();
+    let activation = f.store.activate(&root, &ensured.env).unwrap();
+    let editor = repo.path().join(".turbo/bin");
+    assert_eq!(fs::read_link(&editor).unwrap(), activation.stable_bin());
+    assert_eq!(
+        fs::canonicalize(&editor).unwrap(),
+        fs::canonicalize(activation.bin()).unwrap()
+    );
+    let output = Command::new(editor.join("node")).output().unwrap();
+    assert!(output.status.success());
+
+    // Switching environments moves the stable link, not the editor link.
+    let mut other = tool("node");
+    other.version = "2.0.0".into();
+    let switched = ensure(&f.store, repo.path(), &[other], &Cell::new(0));
+    assert_eq!(fs::read_link(&editor).unwrap(), activation.stable_bin());
+    assert_eq!(
+        fs::canonicalize(&editor).unwrap(),
+        fs::canonicalize(f.store.activate(&root, &switched.env).unwrap().bin()).unwrap()
+    );
+}
+
+#[test]
+fn trees_are_read_only_and_check_finds_a_modified_file() {
+    let f = fixture();
+    let repo = repo();
+    let tools = vec![tool("node")];
+    ensure(&f.store, repo.path(), &tools, &Cell::new(0));
+    let selection = Selection::new(tools).unwrap();
+    f.store.check(&selection).unwrap();
+    let root = fs::canonicalize(repo.path()).unwrap();
+    let bin = f
+        .store
+        .activate(&root, selection.key())
+        .unwrap()
+        .bin()
+        .to_owned();
+    let file = fs::canonicalize(bin.join("node")).unwrap();
+    let mode = fs::metadata(&file).unwrap().permissions().mode();
+    assert_eq!(mode & 0o222, 0, "tree files are writable: {mode:o}");
+
+    fs::set_permissions(&file, fs::Permissions::from_mode(0o755)).unwrap();
+    fs::write(&file, "#!/bin/sh\necho tampered\n").unwrap();
+    assert!(matches!(f.store.check(&selection), Err(Error::Damaged(tool)) if tool == "node 1.2.3"));
+
+    // Forced setup re-verifies, restages only the damaged tree, and heals it.
+    let staged = Cell::new(0);
+    f.store
+        .begin_setup(repo.path(), Reuse::Verified)
+        .unwrap()
+        .ensure(
+            &selection,
+            |tool, root| {
+                staged.set(staged.get() + 1);
+                populate(tool, root)
+            },
+            |_| Ok(()),
+        )
+        .unwrap();
+    assert_eq!(staged.get(), 1);
+    f.store.check(&selection).unwrap();
+}
+
+#[test]
+fn forced_setup_restages_a_tree_with_a_dangling_link() {
+    let f = fixture();
+    let repo = repo();
+    let tools = vec![tool("node")];
+    ensure(&f.store, repo.path(), &tools, &Cell::new(0));
+    let selection = Selection::new(tools).unwrap();
+    let root = fs::canonicalize(repo.path()).unwrap();
+    let bin = f
+        .store
+        .activate(&root, selection.key())
+        .unwrap()
+        .bin()
+        .join("node");
+    let tree_bin = fs::canonicalize(&bin).unwrap();
+    std::os::unix::fs::symlink("missing", tree_bin.with_file_name("dangling")).unwrap();
+
+    let staged = Cell::new(0);
+    f.store
+        .begin_setup(repo.path(), Reuse::Verified)
+        .unwrap()
+        .ensure(
+            &selection,
+            |tool, root| {
+                staged.set(staged.get() + 1);
+                populate(tool, root)
+            },
+            |_| Ok(()),
+        )
+        .unwrap();
+    assert_eq!(staged.get(), 1);
+    f.store.check(&selection).unwrap();
+}
+
+#[test]
+fn check_reports_an_environment_that_was_never_installed() {
+    let f = fixture();
+    let selection = Selection::new(vec![tool("node")]).unwrap();
+    assert!(matches!(
+        f.store.check(&selection),
+        Err(Error::NotInstalled(_))
+    ));
+    let root = fs::canonicalize(repo().path()).unwrap();
+    assert!(matches!(
+        f.store.activate(&root, selection.key()),
+        Err(Error::NotInstalled(_))
+    ));
+}
+
+#[test]
+fn setups_racing_on_the_same_missing_tree_both_succeed_and_leave_one_tree() {
+    let f = fixture();
+    let repos = [repo(), repo()];
+    let barrier = std::sync::Barrier::new(2);
+    let tools = vec![tool("node")];
+    let results: Vec<_> = std::thread::scope(|scope| {
+        let handles: Vec<_> = repos
+            .iter()
+            .map(|repo| {
+                let (store, barrier, tools) = (&f.store, &barrier, &tools);
+                scope.spawn(move || {
+                    let selection = Selection::new(tools.clone()).unwrap();
+                    let session = store.begin_setup(repo.path(), Reuse::Sealed).unwrap();
+                    session.ensure(
+                        &selection,
+                        |tool, root| {
+                            populate(tool, root)?;
+                            // Both have staged before either publishes.
+                            barrier.wait();
+                            Ok(())
+                        },
+                        |_| Ok(()),
+                    )
+                })
+            })
+            .collect();
+        handles.into_iter().map(|h| h.join().unwrap()).collect()
+    });
+    let keys: Vec<_> = results.into_iter().map(|r| r.unwrap().env).collect();
+    assert_eq!(keys[0], keys[1]);
+    let trees = fs::read_dir(f.store.root().join("trees")).unwrap().count();
+    assert_eq!(trees, 1);
+    assert_eq!(fs::read_dir(f.store.root().join("tmp")).unwrap().count(), 0);
+    f.store.check(&Selection::new(tools).unwrap()).unwrap();
+}
+
+#[test]
+fn launchers_run_other_trees_without_an_inherited_environment_and_leave_cargo_home_to_activation() {
+    let f = fixture();
+    let repo = repo();
     let mut runner = tool("runner");
     runner.executables = BTreeMap::from([(
         "run".into(),
@@ -376,61 +305,93 @@ fn launchers_run_other_trees_and_a_variable_change_republishes_without_restaging
             ],
         }),
     )]);
-    runner.vars = BTreeMap::from([(ManagedVar::Gotoolchain, VarValue::Word("local".into()))]);
-    let mut node = tool("node");
-    let stage = |tool: &Tool, root: &Path| -> Result<(), Error> {
-        fs::create_dir(root.join("bin"))?;
-        let script = "#!/bin/sh\necho \"$GOTOOLCHAIN|$*\"\n";
-        fs::write(root.join("bin/tool"), script)?;
-        fs::set_permissions(root.join("bin/tool"), fs::Permissions::from_mode(0o755))?;
-        Ok(fs::write(root.join("resource"), &tool.id)?)
-    };
+    runner.vars = BTreeMap::from([
+        (ManagedVar::Gotoolchain, VarValue::Word("local".into())),
+        (ManagedVar::CargoHome, VarValue::RepoCargoHome),
+        (ManagedVar::Goroot, VarValue::Tree(TreeRef::new("node", ""))),
+        (
+            ManagedVar::UvPythonInstallDir,
+            VarValue::Tree(TreeRef::new("python", "")),
+        ),
+    ]);
     // A launcher may only name selected trees.
     assert!(matches!(
-        store.reconcile(std::slice::from_ref(&runner), stage),
+        Selection::new(vec![runner.clone()]),
         Err(Error::InvalidInventory)
     ));
-    let desired = [node.clone(), runner.clone()];
-    store.reconcile(&desired, stage).unwrap();
-    let current = store.current().unwrap().unwrap();
-    let tools = fs::canonicalize(current.bin.join("../tools")).unwrap();
-    let output = Command::new(current.bin.join("run"))
+    let ensured = ensure(
+        &f.store,
+        repo.path(),
+        &[tool("node"), runner.clone()],
+        &Cell::new(0),
+    );
+    // Run through the editor link, as an editor would.
+    let output = Command::new(repo.path().join(".turbo/bin/run"))
         .arg("x y")
         .env_clear()
         .output()
         .unwrap();
+    let selection = Selection::new(vec![tool("node"), runner]).unwrap();
+    let root = fs::canonicalize(repo.path()).unwrap();
+    let activation = f.store.activate(&root, selection.key()).unwrap();
+    assert_eq!(activation.env(), &ensured.env);
+    let resource = f
+        .store
+        .root()
+        .join("trees")
+        .join(TreeSpecKey::of(&tool("runner")))
+        .join("root/resource");
     assert_eq!(
         String::from_utf8(output.stdout).unwrap(),
-        format!(
-            "local|{} --flag x y\n",
-            tools.join("runner/resource").display()
-        )
+        format!("local||{} --flag x y\n", resource.display())
     );
-    // Exports without variables stay links into their own tree.
-    assert!(current.bin.join("node").is_symlink());
+    // Activation resolves every variable, including the per-repository ones.
+    let vars = activation.vars();
+    assert_eq!(
+        vars["CARGO_HOME"],
+        f.store.cargo_home(&root).into_os_string()
+    );
+    assert_eq!(
+        vars["GOROOT"],
+        f.store
+            .root()
+            .join("trees")
+            .join(TreeSpecKey::of(&tool("node")))
+            .join("root")
+            .into_os_string()
+    );
+    let unselected = PathBuf::from(&vars["UV_PYTHON_INSTALL_DIR"]);
+    assert!(unselected.starts_with(f.store.root().join("envs")));
+    assert!(!unselected.exists());
+    assert_eq!(activation.targets(), ["node", "run"]);
+    // Never a Cargo home that is not a plain directory.
+    fs::write(f.store.cargo_home(&root), "").unwrap();
+    assert!(matches!(
+        f.store.activate(&root, selection.key()),
+        Err(Error::UnsafePath)
+    ));
+}
 
-    // New variables republish `bin` and copy, never restage, the trees.
-    runner.vars = BTreeMap::from([(ManagedVar::Gotoolchain, VarValue::Word("auto".into()))]);
-    node.vars = BTreeMap::from([(ManagedVar::Goroot, VarValue::Tree(TreeRef::new("node", "")))]);
-    let desired = [node, runner];
-    assert!(!store.is_current(&desired).unwrap());
-    for tool in &desired {
-        assert!(store.can_reuse(tool).unwrap());
-    }
-    let outcome = store
-        .reconcile(&desired, |_, _| Err(Error::InvalidInventory))
-        .unwrap();
-    assert_eq!(outcome, Outcome::Replaced);
-    let current = store.current().unwrap().unwrap();
-    let output = Command::new(current.bin.join("run"))
-        .env_clear()
-        .output()
-        .unwrap();
-    assert!(
-        String::from_utf8(output.stdout)
+/// The tree key, as the store names directories, without exposing it.
+struct TreeSpecKey;
+impl TreeSpecKey {
+    fn of(tool: &Tool) -> String {
+        let session_free = fixture();
+        let repo = repo();
+        let selection = Selection::new(vec![tool.clone()]).unwrap();
+        session_free
+            .store
+            .begin_setup(repo.path(), Reuse::Sealed)
             .unwrap()
-            .starts_with("auto|")
-    );
+            .ensure(&selection, populate, |_| Ok(()))
+            .unwrap();
+        let entry = fs::read_dir(session_free.store.root().join("trees"))
+            .unwrap()
+            .next()
+            .unwrap()
+            .unwrap();
+        entry.file_name().into_string().unwrap()
+    }
 }
 
 #[test]

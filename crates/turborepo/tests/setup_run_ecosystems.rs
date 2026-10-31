@@ -366,9 +366,10 @@ impl Journey {
         calls
     }
 
-    /// The managed bin directory setup selected.
+    /// The environment `bin` the repository's setup record names.
     fn bin(&self) -> PathBuf {
-        turborepo_tool_install::Store::inspect(self.root())
+        let store = self.user_base().join("turborepo/tools");
+        turborepo_cli::test_support::recorded_installation_for_tests(self.root(), &store)
             .unwrap()
             .unwrap()
             .bin

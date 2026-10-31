@@ -12,7 +12,6 @@ use std::{
 };
 
 use nix::sys::signal::Signal;
-use turborepo_tool_install::Store;
 
 use super::{
     diagnostic_contains,
@@ -64,18 +63,10 @@ fn assert_idle(monitor: &TcpListener) {
     );
 }
 
-fn generations(repo: &Repo) -> usize {
-    fs::read_dir(repo.root.join(".turbo/tools"))
-        .unwrap()
-        .filter(|entry| {
-            entry
-                .as_ref()
-                .unwrap()
-                .file_name()
-                .to_string_lossy()
-                .starts_with("generation-")
-        })
-        .count()
+/// How many trees and environments the repository's store holds.
+fn published(repo: &Repo) -> (usize, usize) {
+    let count = |dir: &str| fs::read_dir(repo.store().join(dir)).unwrap().count();
+    (count("trees"), count("envs"))
 }
 
 /// Every cache file, which must be exactly the seeded verified entries.
@@ -91,14 +82,24 @@ fn cache_files(repo: &Repo) -> Vec<PathBuf> {
 
 fn assert_ready(repo: &Repo) {
     assert!(repo.inventory().is_some());
-    let bin = Store::inspect(&repo.root).unwrap().unwrap().bin;
-    assert!(bin.starts_with(repo.root.join(".turbo/tools")), "{bin:?}");
+    let installed = crate::common::setup::installed(&repo.root, &repo.store()).unwrap();
+    assert!(
+        installed.bin.starts_with(repo.store()),
+        "{:?}",
+        installed.bin
+    );
+    // The editor link resolves to the same environment, in the store.
+    assert_eq!(
+        fs::canonicalize(repo.root.join(".turbo/bin")).unwrap(),
+        fs::canonicalize(&installed.bin).unwrap()
+    );
+    assert!(!repo.root.join(".turbo/tools").exists());
     repo.expect(CHECK, 0, &["node 24.0.0: ready", "pnpm 10.0.0: ready"]);
     repo.assert_committed();
 }
 
 #[test]
-fn concurrent_writers_in_one_repository_publish_one_generation_or_nothing() {
+fn concurrent_writers_in_one_repository_publish_one_installation_or_nothing() {
     let repo = Repo::new();
     let monitor = monitor();
     // A torn entry fails every racer the same way and publishes nothing.
@@ -111,14 +112,15 @@ fn concurrent_writers_in_one_repository_publish_one_generation_or_nothing() {
     // Writers serialize on the repository lock: one installs, the rest reuse.
     repo.seed();
     assert_eq!(finish(spawn(&repo, 4, &monitor), 0, "pnpm 10.0.0"), 1);
-    assert_eq!(generations(&repo), 1);
+    assert_eq!(published(&repo), (2, 1));
     assert_ready(&repo);
     assert_idle(&monitor);
 }
 
 #[test]
-fn cancelled_writer_releases_waiters_while_another_repository_shares_the_cache() {
+fn cancelled_writer_releases_waiters_while_another_repository_shares_the_store() {
     let (first, mut second) = (Repo::new(), Repo::new());
+    // One home: the same download cache and the same tool store.
     second.share_cache(&first);
     // Holds the first repository's writer lock until it is killed.
     let (mut writer, held) = first.stalled_writer();
@@ -139,11 +141,20 @@ fn cancelled_writer_releases_waiters_while_another_repository_shares_the_cache()
         Some(Signal::SIGKILL as i32)
     );
     drop(held);
-    assert_eq!(finish(waiting, 0, "pnpm 10.0.0"), 1);
+    // The other repository already installed both trees into the shared
+    // store, so these setups only record and link them.
+    assert_eq!(finish(waiting, 0, "pnpm 10.0.0"), 0);
     for repo in [&first, &second] {
-        assert_eq!(generations(repo), 1);
+        assert_eq!(published(repo), (2, 1));
         assert_ready(repo);
     }
+    assert_eq!(first.inventory().map(|_| ()), Some(()));
+    let env = |repo: &Repo| {
+        crate::common::setup::installed(&repo.root, &repo.store())
+            .unwrap()
+            .bin
+    };
+    assert_eq!(env(&first), env(&second));
     // Readers never rewrite, extend, or leave partials in the shared cache.
     let mut seeded = seeded.to_vec();
     seeded.sort();

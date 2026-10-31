@@ -44,33 +44,19 @@ fn declared_executables_share_the_managed_bin_and_removal_is_drift() {
         json!({"fixture": tool("macos-arm64", "fixture")}),
     );
     let value = locked(repo.path());
-    let bin = seed(repo.path(), &with_artifacts(&value));
-    for plan in [
-        inspect(repo.path(), context()).unwrap(),
-        ActivationPlan::captured(
-            &Snapshot::capture(repo.path()).unwrap(),
-            context(),
-            Verification::Full,
-        )
-        .unwrap(),
-    ] {
-        assert_eq!(plan.tools(), with_artifacts(&value));
-        assert_eq!(plan.path_prepend(), bin.as_path());
-        assert_eq!(plan.snapshot().tools().len(), 3);
-        assert!(plan.runtime_env().is_empty());
-    }
+    let plan = inspect(repo.path(), context()).unwrap();
+    assert_eq!(plan.tools(), with_artifacts(&value));
+    assert_eq!(plan.snapshot().tools().len(), 3);
+    let installed = activate(repo.path(), &plan);
+    assert!(installed.vars().is_empty());
     // The export resolves into the full tree, beside its adjacent resources.
-    let target = bin.join(fs::read_link(bin.join("fixture")).unwrap());
+    let target = fs::canonicalize(installed.bin().join("fixture")).unwrap();
     let tree = target.parent().unwrap().parent().unwrap();
     assert!(tree.join("resources/template.json").is_file());
 
-    // An installation without the tool never activates the rest.
-    seed(repo.path(), &desired(&value, None));
-    assert!(matches!(
-        inspect(repo.path(), context()),
-        Err(Error::StaleInventory)
-    ));
-    seed(repo.path(), &with_artifacts(&value));
+    // A selection without the tool is another environment.
+    let without = turborepo_tool_install::Selection::new(desired(&value, None)).unwrap();
+    assert_ne!(without.key(), plan.selection().key());
     // Removing or editing the declaration is drift with the old lock.
     for tools in [
         json!({}),
@@ -91,8 +77,7 @@ fn a_tool_without_an_artifact_for_this_platform_never_activates() {
         repo.path(),
         json!({"fixture": tool("linux-x64-gnu", "fixture")}),
     );
-    let value = locked(repo.path());
-    seed(repo.path(), &desired(&value, None));
+    locked(repo.path());
     let error = inspect(repo.path(), context()).err().unwrap();
     assert!(
         matches!(&error, Error::AdditionalTool(artifact_provision::Error::MissingTarget {
@@ -114,6 +99,7 @@ fn exports_that_would_shadow_another_tool_are_rejected() {
             .map(|name| (name.to_string(), format!("bin/{name}").into()))
             .collect(),
         vars: Default::default(),
+        staging: turborepo_tool_install::Staging::new("fixture", 1, &()).unwrap(),
     };
     let node = tool("node", "macos-arm64", &["node", "npm", "npx"]);
     let check = |additional: &[Tool]| artifact_provision::check_exports([&node], additional);

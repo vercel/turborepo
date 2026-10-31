@@ -330,7 +330,7 @@ impl Dependencies {
     }
 
     /// `--tools-only` for a JavaScript repository, for direct plan tests.
-    #[cfg(test)]
+    #[cfg(all(test, unix))]
     pub fn tools_only() -> Self {
         Self {
             steps: vec![(ToolchainId::JAVASCRIPT, Step::Skip("--tools-only".into()))],
@@ -432,8 +432,8 @@ impl Dependencies {
                 .collect();
             return Ok(report);
         }
-        let store = super::provision::user_store(tool_store.as_deref(), root)
-            .map_err(std::io::Error::other)?;
+        let store =
+            super::trust::user_store(tool_store.as_deref(), root).map_err(std::io::Error::other)?;
         // The lock and installation that provisioning just published.
         let sources = Snapshot::capture_with(root, ecosystems)?;
         let lock = sources
@@ -543,22 +543,21 @@ impl Environment {
         store: &turborepo_tool_install::UserStore,
     ) -> Result<Self, Error> {
         let context = crate::commands::managed::context().map_err(Error::Host)?;
-        let plan = ActivationPlan::captured(
-            sources,
-            context,
-            turborepo_tool_install::Verification::Shallow,
-        )?;
+        let plan = ActivationPlan::captured(sources, context)?;
         let trust = super::trust::TrustStore::new(store, root)?;
-        if !trust.authorizes(&plan)? {
-            return Err(Error::Untrusted);
-        }
+        let activation = match trust.authorize(&plan) {
+            Ok(Some(activation)) => activation,
+            Ok(None) => return Err(Error::Untrusted),
+            Err(error) => return Err(Error::Io(std::io::Error::other(error))),
+        };
         let cargo_home = trust.cargo_home();
-        let mut vars = plan.runtime_env().clone();
-        let path = plan.path(std::env::var_os("PATH").as_deref())?;
+        let mut vars = activation.vars().clone();
+        let path = activation
+            .path(std::env::var_os("PATH").as_deref())
+            .map_err(std::io::Error::other)?;
         vars.insert("PATH".into(), path);
-        let bin = plan.path_prepend().to_owned();
         Ok(Self {
-            bin,
+            bin: activation.bin().to_owned(),
             vars,
             cargo_home,
         })

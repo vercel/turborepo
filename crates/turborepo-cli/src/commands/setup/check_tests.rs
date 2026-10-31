@@ -44,7 +44,9 @@ impl Fixture {
         let before = snapshot(self.owned.root().parent().unwrap());
         let args = self.args(flags);
         let result = crate::cli::dispatch_setup(&args, |args, setup| {
-            run_with_policy(args, setup, None, self.git.clone(), || {
+            // An unreachable origin: check never downloads.
+            let transports = self.transports("http://127.0.0.1:1", None);
+            run_with_policy(args, setup, Some(transports), self.git.clone(), || {
                 Ok(self
                     .owned
                     .policy_at(&self.owned.root().join("apps/web/src"))?)
@@ -72,11 +74,9 @@ pub(super) fn assert_manager_check_failures(
         assert_eq!(f.run(&u, FROZEN).unwrap(), 0);
         let hits = u.hits();
         let root = f.owned.root();
-        let current = turborepo_tool_install::Store::inspect(root)
-            .unwrap()
-            .unwrap();
+        let current = Installed::open(&f.owned).current().unwrap().unwrap();
         match case {
-            0 => fs::write(current.bin.join(format!("../tools/{id}/extra")), "x").unwrap(),
+            0 => fs::write(current.tree(id).join("extra"), "x").unwrap(),
             1 => fs::write(
                 root.join("package.json"),
                 json!({ "packageManager": switched }).to_string(),
@@ -88,7 +88,7 @@ pub(super) fn assert_manager_check_failures(
                 lock["tools"][id]["version"] = json!("9.9.9");
                 fs::write(root.join("turbo.lock"), lock.to_string()).unwrap();
             }
-            _ => fs::remove_file(root.join(".turbo/tools/manifest.json")).unwrap(),
+            _ => fs::remove_dir_all(current.bin.parent().unwrap()).unwrap(),
         }
         let error = f.check(CHECK).unwrap_err().to_string();
         assert!(
@@ -105,9 +105,9 @@ fn install_repeat_and_check_all_readonly_modes_without_traffic_or_locks() {
     let u = Upstream::new(&f, false, None);
     assert!(matches!(
         f.check(CHECK),
-        Err(Error::Activation(
-            turborepo_setup::activation::Error::MissingInventory
-        ))
+        Err(Error::Install(turborepo_tool_install::Error::NotInstalled(
+            _
+        )))
     ));
     assert_eq!(u.hits(), 0);
     f.install(&u);
@@ -125,7 +125,7 @@ fn install_repeat_and_check_all_readonly_modes_without_traffic_or_locks() {
     assert_eq!(u.hits(), 3);
     let sources = f.sources().unwrap();
     let writer = sources.guard().unwrap();
-    let store = turborepo_tool_install::Store::open(f.owned.root()).unwrap();
+    let store = Installed::open(&f.owned);
     // Held by another transaction. Check must neither wait for nor take locks.
     std::thread::scope(|scope| {
         let (send, receive) = std::sync::mpsc::channel();
@@ -146,16 +146,14 @@ fn check_damage_declaration_inventory_and_lock_drift_are_actionable_readonly_fai
         let mut f = Fixture::new();
         let u = Upstream::new(&f, false, None);
         f.install(&u);
-        let current = turborepo_tool_install::Store::inspect(f.owned.root())
-            .unwrap()
-            .unwrap();
+        let current = Installed::open(&f.owned).current().unwrap().unwrap();
         match case {
-            0 => fs::remove_file(f.owned.root().join(".turbo/tools/manifest.json")).unwrap(),
+            0 => fs::remove_dir_all(current.bin.parent().unwrap()).unwrap(),
             1 => turborepo_setup::test_support::damage(
-                &current.bin.join("../tools/node/resource"),
+                &current.tree("node").join("resource"),
                 "damage",
             ),
-            2 => fs::remove_file(current.bin.join("../tools/pnpm/dist/resource")).unwrap(),
+            2 => fs::remove_file(current.tree("pnpm").join("dist/resource")).unwrap(),
             3 => fs::write(f.owned.root().join(".nvmrc"), "26.0.0").unwrap(),
             4 => {
                 f.lock["tools"]["pnpm"]["version"] = json!("11.0.0");
@@ -178,8 +176,11 @@ fn check_damage_declaration_inventory_and_lock_drift_are_actionable_readonly_fai
             .unwrap(),
             _ => {
                 fs::remove_file(current.bin.join("node")).unwrap();
-                std::os::unix::fs::symlink("../tools/pnpm/bin/pnpm.cjs", current.bin.join("node"))
-                    .unwrap();
+                std::os::unix::fs::symlink(
+                    current.tree("pnpm").join("bin/pnpm.cjs"),
+                    current.bin.join("node"),
+                )
+                .unwrap();
             }
         }
         let error = f.check(CHECK).unwrap_err().to_string();
@@ -252,7 +253,8 @@ fn check_revalidates_captured_discovery_sources_and_policy_before_success() {
         let mut after_edit = None;
         let result = crate::cli::dispatch_setup(&args, |args, setup| {
             let after_edit = std::cell::RefCell::new(&mut after_edit);
-            run_with_policy(args, setup, None, f.git.clone(), || {
+            let transports = f.transports("http://127.0.0.1:1", None);
+            run_with_policy(args, setup, Some(transports), f.git.clone(), || {
                 calls.set(calls.get() + 1);
                 if calls.get() == 2 {
                     let (path, contents) = match case {

@@ -83,7 +83,7 @@ impl ToolReport {
                 matches!(
                     row.outcome,
                     ToolOutcome::Reused
-                        | ToolOutcome::Reinstalled
+                        | ToolOutcome::Verified
                         | ToolOutcome::ReusedTrusted
                         | ToolOutcome::Reverified
                 )
@@ -106,8 +106,8 @@ pub(super) enum ToolOutcome {
     Installed,
     InstalledFromCache,
     Reused,
-    /// `--force` over a verified installation.
-    Reinstalled,
+    /// `--force` re-hashed a healthy installed tree.
+    Verified,
     /// Offline trusted repeat.
     ReusedTrusted,
     /// Offline trusted repeat with `--force`.
@@ -122,7 +122,7 @@ impl ToolOutcome {
             Self::Installed => "installed",
             Self::InstalledFromCache => "installed (cached)",
             Self::Reused => "reused",
-            Self::Reinstalled => "reinstalled",
+            Self::Verified => "re-verified",
             Self::ReusedTrusted => "reused (offline)",
             Self::Reverified => "re-verified (offline)",
             Self::BundledWithNode => "bundled with node",
@@ -467,6 +467,7 @@ impl Captured {
         String::from_utf8_lossy(&self.out.lock().unwrap()).into_owned()
     }
 
+    #[cfg(unix)]
     pub fn err(&self) -> String {
         String::from_utf8_lossy(&self.err.lock().unwrap()).into_owned()
     }

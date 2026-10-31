@@ -1,17 +1,17 @@
 //! `turbo exec`: run one program with the managed environment that `turbo run`
 //! gives tasks. Never provisions, downloads, or writes setup state.
 
-use std::{env, ffi::OsString, io, process::ExitStatus};
+use std::{collections::BTreeMap, env, ffi::OsString, io, path::Path, process::ExitStatus};
 
 use miette::Diagnostic;
 use thiserror::Error;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
-use turborepo_run::ManagedEnvironment;
+use turborepo_run::{EnvironmentVariableMap, ManagedEnvironment};
 use turborepo_shim::{INVOCATION_CWD_ENV_VAR, INVOCATION_DIR_ENV_VAR};
 use turborepo_ui::ColorConfig;
 
 use crate::{
-    cli::{self, Args},
+    cli::{self, Args, PrintEnv},
     commands::{CommandBase, managed},
     get_version,
 };
@@ -55,6 +55,8 @@ pub enum Error {
     Spawn { program: String, source: io::Error },
     #[error(transparent)]
     Path(#[from] turbopath::PathError),
+    #[error(transparent)]
+    Json(#[from] serde_json::Error),
 }
 
 pub fn run(
@@ -84,6 +86,85 @@ pub fn run(
         &cwd,
         turborepo_process::hand_off,
     )?)
+}
+
+/// `turbo exec --print-env`: the environment `turbo exec` would give a
+/// program, under the same strict authorization. Never installs anything and
+/// never runs a command.
+pub fn print_env(
+    repo_root: &AbsoluteSystemPath,
+    args: &Args,
+    format: PrintEnv,
+    color_config: ColorConfig,
+) -> Result<i32, cli::Error> {
+    let base = CommandBase::new(
+        args.clone(),
+        repo_root.to_owned(),
+        get_version(),
+        color_config,
+    )?;
+    if !base.opts.future_flags.experimental_setup {
+        return Err(Error::Disabled.into());
+    }
+    let Some(tools) = managed::select_tools(&base)? else {
+        return Err(Error::ManagedSetupRequired.into());
+    };
+    let (overrides, bin) = tools.activation().map_err(Error::Stale)?;
+    print!("{}", render(format, &overrides, &bin)?);
+    Ok(0)
+}
+
+pub(crate) fn render(
+    format: PrintEnv,
+    overrides: &EnvironmentVariableMap,
+    bin: &Path,
+) -> Result<String, Error> {
+    let vars: BTreeMap<&str, &str> = overrides
+        .iter()
+        .map(|(key, value)| (key.as_str(), value.as_str()))
+        .collect();
+    // POSIX and fish single quotes, PowerShell single quotes.
+    let sh = |value: &str| format!("'{}'", value.replace('\'', r"'\''"));
+    let fish = |value: &str| format!("'{}'", value.replace('\\', r"\\").replace('\'', r"\'"));
+    let pwsh = |value: &str| format!("'{}'", value.replace('\'', "''"));
+    let mut out = String::new();
+    match format {
+        PrintEnv::Bin => {
+            let bin = bin
+                .to_str()
+                .ok_or_else(|| Error::Stale("the managed bin path is not UTF-8".into()))?;
+            out.push_str(bin);
+            out.push('\n');
+        }
+        PrintEnv::Sh => {
+            for (key, value) in vars {
+                out.push_str(&format!("export {key}={}\n", sh(value)));
+            }
+        }
+        PrintEnv::Fish => {
+            for (key, value) in vars {
+                // fish keeps PATH as a list of directories.
+                let words: Vec<String> = if key == "PATH" {
+                    env::split_paths(value)
+                        .map(|path| fish(&path.to_string_lossy()))
+                        .collect()
+                } else {
+                    vec![fish(value)]
+                };
+                out.push_str(&format!("set -gx {key} {}\n", words.join(" ")));
+            }
+        }
+        PrintEnv::Pwsh => {
+            for (key, value) in vars {
+                out.push_str(&format!("$env:{key} = {}\n", pwsh(value)));
+            }
+        }
+        PrintEnv::Json => {
+            out.push_str(&serde_json::to_string_pretty(&vars)?);
+            out.push('\n');
+        }
+    }
+    Ok(out)
 }
 
 /// The program runs in `--cwd`, else where the user invoked turbo. Global

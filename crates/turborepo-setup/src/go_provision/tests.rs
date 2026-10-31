@@ -5,7 +5,9 @@ use std::{collections::BTreeMap, io::Write, os::unix::fs::PermissionsExt};
 use sha2::{Digest, Sha256};
 
 use super::*;
-use crate::{Preparation, lock::Document, source_policy::test_support::LoopbackServer};
+use crate::{
+    Preparation, lock::Document, source_policy::test_support::LoopbackServer, test_store::TestStore,
+};
 
 const ROUTE: &str = "/go/go1.22.3.linux-amd64.tar.gz";
 
@@ -92,7 +94,7 @@ async fn verified_archive_installs_go_and_gofmt_then_reuses_healthy_trees() {
     let server = LoopbackServer::new([(ROUTE.to_owned(), bytes)], |_| {}).unwrap();
     let transport = GoTransport::loopback_http_for_tests(server.origin()).unwrap();
     let repo = tempfile::tempdir().unwrap();
-    let mut store = Store::open(repo.path()).unwrap();
+    let store = TestStore::open(repo.path());
     let desired = [plan.inventory_tool().clone()];
     let prepared = plan
         .prepare(&store, &desired, &transport, Preparation::IfNeeded)
@@ -103,8 +105,8 @@ async fn verified_archive_installs_go_and_gofmt_then_reuses_healthy_trees() {
     store
         .reconcile(&desired, |tool, path| prepared.stage(tool, path))
         .unwrap();
-    let current = Store::inspect(repo.path()).unwrap().unwrap();
-    let tree = current.tool_tree(plan.inventory_tool()).unwrap();
+    let current = store.current().unwrap().unwrap();
+    let tree = store.tree_of(plan.inventory_tool());
     for name in ["go", "gofmt"] {
         let mode = fs::metadata(tree.join("bin").join(name))
             .unwrap()
@@ -141,7 +143,7 @@ async fn unix_go_launchers_pin_the_toolchain_without_any_parent_environment() {
     let server = LoopbackServer::new([(ROUTE.to_owned(), bytes)], |_| {}).unwrap();
     let transport = GoTransport::loopback_http_for_tests(server.origin()).unwrap();
     let repo = tempfile::tempdir().unwrap();
-    let mut store = Store::open(repo.path()).unwrap();
+    let store = TestStore::open(repo.path());
     let desired = [plan.inventory_tool().clone()];
     let prepared = plan
         .prepare(&store, &desired, &transport, Preparation::IfNeeded)
@@ -151,8 +153,8 @@ async fn unix_go_launchers_pin_the_toolchain_without_any_parent_environment() {
     store
         .reconcile(&desired, |tool, path| prepared.stage(tool, path))
         .unwrap();
-    let current = Store::inspect(repo.path()).unwrap().unwrap();
-    let goroot = fs::canonicalize(current.tool_tree(plan.inventory_tool()).unwrap()).unwrap();
+    let current = store.current().unwrap().unwrap();
+    let goroot = fs::canonicalize(store.tree_of(plan.inventory_tool())).unwrap();
     for name in ["go", "gofmt"] {
         let output = std::process::Command::new(current.bin.join(name))
             .args(["env", "GOTOOLCHAIN"])
@@ -198,7 +200,7 @@ async fn one_mirror_base_serves_the_official_index_and_archive_paths() {
     // Planning accepts only the official dl.google.com URL.
     let plan = GoPlan::from_lock(&lock.unwrap(), Platform::LinuxX64Gnu).unwrap();
     let repo = tempfile::tempdir().unwrap();
-    let store = Store::open(repo.path()).unwrap();
+    let store = TestStore::open(repo.path());
     let desired = [plan.inventory_tool().clone()];
     let prepared = plan.prepare(&store, &desired, &transport, Preparation::IfNeeded);
     assert!(prepared.await.unwrap().is_some());
@@ -213,7 +215,7 @@ async fn invalid_complete_cohorts_fail_before_traffic_including_fresh_preparatio
     let server = LoopbackServer::new([(ROUTE.to_owned(), bytes)], |_| {}).unwrap();
     let transport = GoTransport::loopback_http_for_tests(server.origin()).unwrap();
     let repo = tempfile::tempdir().unwrap();
-    let store = Store::open(repo.path()).unwrap();
+    let store = TestStore::open(repo.path());
     let tool = plan.inventory_tool().clone();
     let mut collision = tool.clone();
     collision.id = "other".into();
@@ -231,7 +233,7 @@ async fn invalid_complete_cohorts_fail_before_traffic_including_fresh_preparatio
                 Err(Error::Install(_))
             ));
             assert_eq!(server.hits(), 0);
-            assert!(Store::inspect(repo.path()).unwrap().is_none());
+            assert!(store.current().unwrap().is_none());
         }
     }
 }
@@ -247,7 +249,7 @@ async fn corrupt_or_incomplete_archives_never_stage() {
         let server = LoopbackServer::new([(ROUTE.to_owned(), served)], |_| {}).unwrap();
         let transport = GoTransport::loopback_http_for_tests(server.origin()).unwrap();
         let repo = tempfile::tempdir().unwrap();
-        let store = Store::open(repo.path()).unwrap();
+        let store = TestStore::open(repo.path());
         let desired = [plan.inventory_tool().clone()];
         let result = plan
             .prepare(&store, &desired, &transport, Preparation::IfNeeded)
@@ -257,7 +259,7 @@ async fn corrupt_or_incomplete_archives_never_stage() {
             Err(Error::Download(turborepo_download::Error::DigestMismatch)
                 | Error::Archive(turborepo_archive::Error::LayoutMismatch))
         ));
-        assert!(Store::inspect(repo.path()).unwrap().is_none());
+        assert!(store.current().unwrap().is_none());
     }
 }
 
@@ -296,7 +298,7 @@ async fn locks_must_match_the_official_layout_for_qualified_targets() {
     let windows = plan(document(Platform::WindowsX64, &bytes), Platform::WindowsX64).unwrap();
     let transport = GoTransport::loopback_http_for_tests("http://127.0.0.1:9").unwrap();
     let repo = tempfile::tempdir().unwrap();
-    let store = Store::open(repo.path()).unwrap();
+    let store = TestStore::open(repo.path());
     let desired = [windows.inventory_tool().clone()];
     let result = windows.prepare(&store, &desired, &transport, Preparation::IfNeeded);
     assert!(matches!(result.await, Err(Error::UnsupportedTarget)));

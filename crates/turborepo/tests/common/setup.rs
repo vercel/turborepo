@@ -553,3 +553,46 @@ fn normalize_lockfile_on_windows(_dir: &Path, _filename: &str) {
         }
     }
 }
+
+/// The tool store turbo locates under `home` when `XDG_DATA_HOME` is
+/// `xdg_data_home`, or unset, as integration tests run the binary. Windows
+/// locates it through the shell, not `HOME`; tests there set
+/// `TURBO_TOOL_STORE` instead.
+pub fn user_tool_store(home: &Path, xdg_data_home: Option<&Path>) -> PathBuf {
+    let data = if cfg!(target_os = "macos") {
+        home.join("Library/Application Support")
+    } else {
+        xdg_data_home.map_or_else(|| home.join(".local/share"), Path::to_owned)
+    };
+    data.join("turborepo").join("tools")
+}
+
+/// Installs `tools` for `root` into `store` exactly as setup publishes them,
+/// without downloads, and returns what the repository's record names.
+/// `selection` is a `--no-lock` clone's recorded selection.
+pub fn install_tools(
+    root: &Path,
+    store: &Path,
+    tools: Vec<turborepo_tool_install::Tool>,
+    selection: Option<&[u8]>,
+    stage: impl FnMut(&turborepo_tool_install::Tool, &Path) -> Result<(), turborepo_tool_install::Error>,
+) -> turborepo_cli::test_support::RecordedInstallation {
+    turborepo_cli::test_support::install_tools_for_tests(
+        root,
+        Some(store),
+        tools,
+        selection,
+        stage,
+    )
+    .expect("install fixture tools");
+    installed(root, store).expect("recorded installation")
+}
+
+/// What `root`'s setup record in `store` names, if anything.
+pub fn installed(
+    root: &Path,
+    store: &Path,
+) -> Option<turborepo_cli::test_support::RecordedInstallation> {
+    turborepo_cli::test_support::recorded_installation_for_tests(root, store)
+        .expect("read the recorded installation")
+}

@@ -10,7 +10,7 @@ use turborepo_types::{ContinueMode, DryRunMode, LogOrder, LogPrefix, OutputLogsM
 use crate::cli::{
     ContinueModeArg, DryRunModeArg, EnvModeArg, ExecutionArgs, GenerateCommand,
     GeneratorCustomArgs, GraphOutput, LogOrderArg, LogPrefixArg, NonEmptyPath, OutputLogsModeArg,
-    RunArgs, should_maintain_agent_guidance,
+    PrintEnv, RunArgs, should_maintain_agent_guidance,
 };
 
 fn parse_args<I, S>(args: I) -> Result<Args, String>
@@ -443,6 +443,7 @@ fn setup_global_classification_uses_the_command_grammar() {
 
 fn exec(command: &[&str]) -> Option<Command> {
     Some(Command::Exec {
+        print_env: None,
         command: command.iter().map(OsString::from).collect(),
     })
 }
@@ -475,6 +476,35 @@ fn exec_preserves_every_word_after_the_separator() {
 }
 
 #[test]
+fn exec_print_env_takes_a_format_and_no_command() {
+    for (word, format) in [
+        ("bin", PrintEnv::Bin),
+        ("sh", PrintEnv::Sh),
+        ("fish", PrintEnv::Fish),
+        ("pwsh", PrintEnv::Pwsh),
+        ("json", PrintEnv::Json),
+    ] {
+        let flag = format!("--print-env={word}");
+        let args = parse_args(["turbo", "exec", flag.as_str()]).unwrap();
+        assert_eq!(
+            args.command,
+            Some(Command::Exec {
+                print_env: Some(format),
+                command: vec![],
+            })
+        );
+    }
+    for words in [
+        vec!["turbo", "exec", "--print-env=json", "--", "node"],
+        vec!["turbo", "exec", "--print-env"],
+        vec!["turbo", "exec", "--print-env=yaml"],
+        vec!["turbo", "exec"],
+    ] {
+        assert!(parse_args(words.clone()).is_err(), "{words:?}");
+    }
+}
+
+#[test]
 #[cfg(unix)]
 fn exec_preserves_non_utf8_arguments() {
     use std::os::unix::ffi::OsStringExt;
@@ -490,6 +520,7 @@ fn exec_preserves_non_utf8_arguments() {
     assert_eq!(
         args.command,
         Some(Command::Exec {
+            print_env: None,
             command: vec![word]
         })
     );

@@ -7,6 +7,7 @@ use crate::{
     Preparation::{Fresh, IfNeeded},
     rust_metadata::tests::fixture,
     rust_resolution,
+    test_store::TestStore,
 };
 
 const TARGET: Platform = Platform::LinuxX64Gnu;
@@ -86,12 +87,7 @@ fn locked_toolchains_install_through_private_rustup_and_publish_toolchain_shims(
         &fixture("1.99.0", "2026-10-01"),
         0,
     );
-    let user_store =
-        turborepo_tool_install::UserStore::at(&fixtures.path().join("store"), repo.path()).unwrap();
-    let mut store = Store::open(repo.path())
-        .unwrap()
-        .with_user_store(&user_store)
-        .unwrap();
+    let store = TestStore::open(repo.path());
     let transport = official();
     let prepared = plan
         .prepare(&store, &desired, &binary, &transport, IfNeeded)
@@ -109,10 +105,11 @@ fn locked_toolchains_install_through_private_rustup_and_publish_toolchain_shims(
         (dist, update),
         (rustup::ORIGIN, "https://static.rust-lang.org/rustup")
     );
-    // Both homes are fresh and private beside the Store, never the caller's.
-    let tools = repo.path().canonicalize().unwrap().join(".turbo/tools");
+    // Both homes are fresh and private in the store's staging, never the
+    // caller's.
+    let staging = store.store().root().join("tmp");
     for home in [rustup_home, cargo_home] {
-        assert!(Path::new(home).starts_with(&tools), "{home}");
+        assert!(Path::new(home).starts_with(&staging), "{home}");
     }
     store
         .reconcile(&desired, |tool, path| prepared.stage(tool, path))
@@ -136,14 +133,10 @@ fn locked_toolchains_install_through_private_rustup_and_publish_toolchain_shims(
         .output()
         .unwrap();
     assert_eq!(String::from_utf8(cargo.stdout).unwrap(), "cargo\n");
-    let tree = current.tool_tree(plan.inventory_tool()).unwrap();
+    let tree = store.tree_of(plan.inventory_tool());
     assert!(tree.join("settings.toml").is_file());
     // Scratch homes are gone once the prepared toolchain is dropped.
-    let leftovers = fs::read_dir(&tools).unwrap().filter(|entry| {
-        let name = entry.as_ref().unwrap().file_name();
-        name.to_string_lossy().starts_with(".rust-")
-    });
-    assert_eq!(leftovers.count(), 0);
+    assert_eq!(fs::read_dir(&staging).unwrap().count(), 0);
 
     assert!(
         plan.prepare(&store, &desired, &binary, &transport, IfNeeded)
@@ -167,7 +160,7 @@ fn mirrored_installs_still_bind_rustups_manifest_to_the_lock() {
     let repo = tempfile::tempdir().unwrap();
     let plan = RustPlan::from_lock(&lock(locked()), TARGET).unwrap();
     let desired = vec![plan.inventory_tool().clone()];
-    let store = Store::open(repo.path()).unwrap();
+    let store = TestStore::open(repo.path());
     let owned = crate::source_policy::test_support::OwnedSetupFixture::new().unwrap();
     let mirror = crate::mirror::Mirror::loopback_for_tests("http://127.0.0.1:9/rust/").unwrap();
     let transport = RustupTransport::mirrored(&owned.policy().unwrap(), &mirror).unwrap();
@@ -190,7 +183,7 @@ fn failed_or_mismatched_installs_publish_nothing() {
     let repo = tempfile::tempdir().unwrap();
     let plan = RustPlan::from_lock(&lock(locked()), TARGET).unwrap();
     let desired = vec![plan.inventory_tool().clone()];
-    let store = Store::open(repo.path()).unwrap();
+    let store = TestStore::open(repo.path());
     let manifest = fixture("1.99.0", "2026-10-01");
     // A re-spun rustc tarball (gzip or the xz copy rustup downloads): same
     // layout, different locked digest, as a mirror's manifest could claim.

@@ -32,7 +32,7 @@ pub enum Error {
 }
 
 pub struct UvSync<'a> {
-    /// The managed `uv` launcher from the setup generation, not a PATH lookup.
+    /// The managed `uv` launcher from the setup environment, not a PATH lookup.
     pub uv: &'a Path,
     pub root: &'a Path,
     /// Use only uv's cache; never contact package indexes.

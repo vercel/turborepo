@@ -9,7 +9,6 @@ use turborepo_setup::{
     activation::ActivationPlan,
     execution_identity::{ExecutionContext, Libc},
 };
-use turborepo_tool_install::Store;
 
 use super::*;
 use crate::commands::setup::authorization::{Authorization, Error as AuthorizationError};
@@ -59,7 +58,7 @@ fn record(f: &Fixture) -> PathBuf {
 #[derive(Debug, PartialEq, Eq)]
 struct Entry(PathBuf, u32, SystemTime, Vec<u8>, Option<PathBuf>);
 
-// Include all owned state: repo, Git index, generations, locks and user state.
+// Include all owned state: repo, Git index, locks and the tool store.
 fn snapshot(root: &Path) -> Vec<Entry> {
     fn visit(path: &Path, entries: &mut Vec<Entry>) {
         let metadata = fs::symlink_metadata(path).unwrap();
@@ -95,7 +94,7 @@ fn rejects_without_effects(f: &Fixture, u: &Upstream, selected: &Authorization) 
     let before = snapshot(f.owned.root().parent().unwrap());
     let hits = u.hits();
     let called = Cell::new(false);
-    let error = selected.with_current(|_| called.set(true)).unwrap_err();
+    let error = selected.with_current(|_, _| called.set(true)).unwrap_err();
     assert!(error.to_string().contains("turbo setup"), "{error}");
     assert!(!called.get());
     assert!(inspect(f).is_err());
@@ -107,20 +106,21 @@ fn rejects_without_effects(f: &Fixture, u: &Upstream, selected: &Authorization) 
 #[test]
 fn authorization_success_is_readonly_and_rechecks_at_every_use_without_locks() {
     let (f, u) = installed();
-    fs::remove_file(f.owned.root().join(".turbo/tools/transaction.lock")).unwrap();
     let before = snapshot(f.owned.root().parent().unwrap());
     let environment: std::collections::BTreeMap<_, _> = std::env::vars_os().collect();
     let selected = inspect(&f).unwrap();
     for _ in 0..2 {
         selected
-            .with_current(|plan| {
+            .with_current(|plan, activation| {
                 assert_eq!(plan.tools().len(), 2);
-                assert!(plan.runtime_env().is_empty());
-                let path = plan.path(Some(std::ffi::OsStr::new("/host/bin"))).unwrap();
+                assert!(activation.vars().is_empty());
+                let path = activation
+                    .path(Some(std::ffi::OsStr::new("/host/bin")))
+                    .unwrap();
                 let entries: Vec<_> = std::env::split_paths(&path).collect();
                 assert_eq!(
                     entries,
-                    vec![plan.path_prepend().to_owned(), "/host/bin".into()]
+                    vec![activation.bin().to_owned(), "/host/bin".into()]
                 );
             })
             .unwrap();
@@ -136,16 +136,20 @@ fn authorization_success_is_readonly_and_rechecks_at_every_use_without_locks() {
     // Neither inspection nor use may acquire producer locks.
     let sources = f.sources().unwrap();
     let writer = sources.guard().unwrap();
-    let store = Store::open(f.owned.root()).unwrap();
+    let installed = Installed::open(&f.owned);
+    let session = installed
+        .store
+        .begin_setup(f.owned.root(), turborepo_tool_install::Reuse::Sealed)
+        .unwrap();
     std::thread::scope(|scope| {
         let (send, receive) = std::sync::mpsc::channel();
         let fixture = &f;
         let pending = scope.spawn(move || {
-            send.send(inspect(fixture).and_then(|a| a.with_current(|_| ())))
+            send.send(inspect(fixture).and_then(|a| a.with_current(|_, _| ())))
                 .unwrap()
         });
         let result = receive.recv_timeout(std::time::Duration::from_secs(5));
-        drop(store);
+        drop(session);
         drop(writer);
         pending.join().unwrap();
         result.unwrap().unwrap();
@@ -163,25 +167,26 @@ fn removed_corrupt_stale_or_unsafe_external_records_never_authorize() {
             0 => fs::remove_file(&path).unwrap(),
             1 => fs::write(&path, "corrupt").unwrap(),
             2 => {
-                value["schema"] = json!(2);
+                value["schema"] = json!(1);
             }
             3 => {
                 value["lock_sha256"] = json!("0".repeat(64));
             }
+            // Another environment, even one that exists, is not this one.
             4 => {
-                value["installation"]["manifest_sha256"] = json!("0".repeat(64));
+                value["env"] = json!("0".repeat(64));
             }
             5 => {
-                value["installation"]["bin"] = json!(f.owned.root().join(".turbo/tools/bin"));
+                value["env"] = json!("not-a-key");
             }
             6 => {
-                value["installation"]["inode"] = json!(0);
+                value["inode"] = json!(0);
             }
             7 => {
-                value["installation"]["tools"][0]["executables"] = json!({"git":"bin/node"});
+                value["selection"] = json!(f.lock.to_string());
             }
             8 => {
-                value["installation"]["root"] = json!(f.owned.home());
+                value["root"] = json!(f.owned.home());
             }
             9 => fs::set_permissions(&path, fs::Permissions::from_mode(0o644)).unwrap(),
             10 => fs::set_permissions(path.parent().unwrap(), fs::Permissions::from_mode(0o777))
@@ -221,7 +226,7 @@ fn lock_declaration_and_captured_source_drift_fail_closed() {
         }
         let before = snapshot(f.owned.root().parent().unwrap());
         let called = Cell::new(false);
-        assert!(selected.with_current(|_| called.set(true)).is_err());
+        assert!(selected.with_current(|_, _| called.set(true)).is_err());
         assert!(!called.get());
         // Policy gating is future caller work; recapture can inspect a changed
         // non-declaration config, but the original selection must reject it.
@@ -235,17 +240,22 @@ fn lock_declaration_and_captured_source_drift_fail_closed() {
 }
 
 #[test]
-fn every_export_and_generation_is_freshly_checked_before_use() {
-    for case in 0..5 {
+fn a_missing_or_unsealed_environment_is_checked_before_every_use() {
+    for case in 0..3 {
         let (f, u) = installed();
         let selected = inspect(&f).unwrap();
-        let current = Store::inspect(f.owned.root()).unwrap().unwrap();
+        let env = Installed::open(&f.owned)
+            .current()
+            .unwrap()
+            .unwrap()
+            .bin
+            .parent()
+            .unwrap()
+            .to_owned();
         match case {
-            0 => fs::remove_file(current.bin.join("node")).unwrap(),
-            1 => fs::remove_file(current.bin.join("pnpm")).unwrap(),
-            2 => fs::remove_file(current.bin.join("pnpx")).unwrap(),
-            3 => symlink("../tools/node/bin/node", current.bin.join("git")).unwrap(),
-            _ => fs::remove_file(f.owned.root().join(".turbo/tools/manifest.json")).unwrap(),
+            0 => fs::remove_dir_all(&env).unwrap(),
+            1 => fs::remove_file(env.join("seal.json")).unwrap(),
+            _ => fs::write(env.join("seal.json"), "{}").unwrap(),
         }
         rejects_without_effects(&f, &u, &selected);
     }
@@ -256,69 +266,35 @@ fn damaged_contents_are_left_to_setup_verification() {
     for case in 0..3 {
         let (f, u) = installed();
         let selected = inspect(&f).unwrap();
-        selected.with_current(|_| ()).unwrap();
-        let manifest = f.manifest().unwrap();
+        selected.with_current(|_, _| ()).unwrap();
         let evidence = fs::read(record(&f)).unwrap();
-        let tools = Store::inspect(f.owned.root())
-            .unwrap()
-            .unwrap()
-            .bin
-            .join("../tools");
+        let current = Installed::open(&f.owned).current().unwrap().unwrap();
         match case {
-            0 => turborepo_setup::test_support::damage(&tools.join("node/resource"), "damaged"),
-            1 => fs::remove_file(tools.join("pnpm/dist/resource")).unwrap(),
+            0 => turborepo_setup::test_support::damage(
+                &current.tree("node").join("resource"),
+                "damaged",
+            ),
+            1 => fs::remove_file(current.tree("pnpm").join("dist/resource")).unwrap(),
             _ => turborepo_setup::test_support::damage(
-                &tools.join("node/bin/node"),
+                &current.tree("node").join("bin/node"),
                 "#!/bin/sh\nexit 0\n",
             ),
         }
         let before = snapshot(f.owned.root().parent().unwrap());
-        selected.with_current(|_| ()).unwrap();
-        inspect(&f).unwrap().with_current(|_| ()).unwrap();
+        selected.with_current(|_, _| ()).unwrap();
+        inspect(&f).unwrap().with_current(|_, _| ()).unwrap();
         assert_eq!(snapshot(f.owned.root().parent().unwrap()), before);
-        assert_eq!(f.manifest().unwrap(), manifest);
         assert_eq!(fs::read(record(&f)).unwrap(), evidence);
 
+        // `turbo setup --check` re-hashes the trees and names the damage.
         let error = f.check(super::checks::CHECK).unwrap_err().to_string();
-        assert!(error.contains("turbo setup"), "case {case}: {error}");
         assert!(
-            matches!(
-                Store::inspect_with(f.owned.root(), turborepo_tool_install::Verification::Full),
-                Err(turborepo_tool_install::Error::DamagedContents)
-            ),
-            "case {case}: a full check sees the damage"
+            error.contains("turbo setup --force"),
+            "case {case}: {error}"
         );
         assert_eq!(u.hits(), 3);
         f.no_execution();
     }
-}
-
-#[test]
-fn a_manifest_that_no_longer_matches_the_setup_record_is_untrusted() {
-    let (f, u) = installed();
-    let selected = inspect(&f).unwrap();
-    let path = f.owned.root().join(".turbo/tools/manifest.json");
-    let mut manifest: Value = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
-    manifest["tools"][0]["tree_sha256"] = json!("0".repeat(64));
-    fs::write(&path, manifest.to_string()).unwrap();
-    assert!(
-        turborepo_tool_install::Store::inspect_with(
-            f.owned.root(),
-            turborepo_tool_install::Verification::Shallow
-        )
-        .unwrap()
-        .is_some()
-    );
-
-    let called = Cell::new(false);
-    assert!(matches!(
-        selected.with_current(|_| called.set(true)),
-        Err(AuthorizationError::Untrusted)
-    ));
-    assert!(!called.get());
-    assert!(matches!(inspect(&f), Err(AuthorizationError::Untrusted)));
-    assert_eq!(u.hits(), 3);
-    f.no_execution();
 }
 
 #[test]
@@ -328,7 +304,7 @@ fn source_errors_include_local_repair_guidance_and_preserve_the_cause() {
     let (f, u) = installed();
     let selected = inspect(&f).unwrap();
     fs::write(f.owned.root().join(".nvmrc"), "26.0.0").unwrap();
-    let error = selected.with_current(|_| ()).unwrap_err();
+    let error = selected.with_current(|_, _| ()).unwrap_err();
     assert!(matches!(error, AuthorizationError::Sources(_)));
     let message = error.to_string();
     assert!(message.contains("run turbo setup locally"));
@@ -339,56 +315,36 @@ fn source_errors_include_local_repair_guidance_and_preserve_the_cause() {
 }
 
 #[test]
-fn a_new_trusted_generation_cannot_replace_an_existing_selection() {
+fn forced_reverification_keeps_an_existing_selection_usable() {
     let (f, u) = installed();
     let selected = inspect(&f).unwrap();
     f.run(&u, &["--force", "--tools-only", "--frozen"]).unwrap();
-    let before = snapshot(f.owned.root().parent().unwrap());
     let called = Cell::new(false);
-    assert!(matches!(
-        selected.with_current(|_| called.set(true)),
-        Err(AuthorizationError::Changed)
-    ));
-    assert!(!called.get());
-    inspect(&f).unwrap().with_current(|_| ()).unwrap();
-    assert_eq!(snapshot(f.owned.root().parent().unwrap()), before);
-    assert_eq!(u.hits(), 6);
+    selected.with_current(|_, _| called.set(true)).unwrap();
+    assert!(called.get());
+    // Healthy trees are re-hashed, never downloaded again.
+    assert_eq!(u.hits(), 3);
     f.no_execution();
 }
 
 #[test]
-fn healthy_repository_forgery_is_readiness_not_authority() {
+fn the_repository_editor_link_is_never_read() {
     let (f, u) = installed();
     let selected = inspect(&f).unwrap();
-    let tools = Store::inspect(f.owned.root()).unwrap().unwrap().tools;
-    Store::open(f.owned.root())
-        .unwrap()
-        .force_reconcile_checked(
-            &tools,
-            |tool, root| {
-                for path in tool.tree_files() {
-                    let path = root.join(path);
-                    fs::create_dir_all(path.parent().unwrap())?;
-                    fs::write(&path, "#!/bin/sh\ntouch probe-ran\nexit 91\n")?;
-                    fs::set_permissions(&path, fs::Permissions::from_mode(0o755))?;
-                }
-                Ok(())
-            },
-            || Ok(()),
-        )
+    let decoy = tempfile::tempdir().unwrap();
+    fs::write(decoy.path().join("node"), "#!/bin/sh\ntouch probe-ran\n").unwrap();
+    let editor = f.owned.root().join(".turbo/bin");
+    let current = Installed::open(&f.owned).current().unwrap().unwrap();
+    assert_eq!(fs::read_link(&editor).unwrap(), current.stable_bin);
+    fs::remove_file(&editor).unwrap();
+    symlink(decoy.path(), &editor).unwrap();
+    let bin = selected
+        .with_current(|_, activation| activation.bin().to_owned())
         .unwrap();
-    // A self-consistent manifest and valid trees cannot mint external evidence.
-    assert!(
-        ActivationPlan::captured(
-            &turborepo_setup::lock::Snapshot::capture(f.owned.root()).unwrap(),
-            context(),
-            turborepo_tool_install::Verification::Shallow,
-        )
-        .is_ok()
-    );
-    rejects_without_effects(&f, &u, &selected);
-    fs::remove_file(record(&f)).unwrap();
-    rejects_without_effects(&f, &u, &selected);
+    assert!(bin.starts_with(f.owned.home()));
+    assert!(!bin.starts_with(f.owned.root()));
+    assert_eq!(u.hits(), 3);
+    f.no_execution();
 }
 
 #[test]
@@ -424,7 +380,7 @@ fn moved_and_same_path_recloned_roots_require_new_setup() {
         }
         let before = snapshot(f.owned.root().parent().unwrap());
         let called = Cell::new(false);
-        assert!(selected.with_current(|_| called.set(true)).is_err());
+        assert!(selected.with_current(|_, _| called.set(true)).is_err());
         assert!(!called.get());
         let root = if reclone {
             f.owned.root()
@@ -435,7 +391,6 @@ fn moved_and_same_path_recloned_roots_require_new_setup() {
             ActivationPlan::captured(
                 &turborepo_setup::lock::Snapshot::capture(root).unwrap(),
                 context(),
-                turborepo_tool_install::Verification::Shallow,
             )
             .is_ok()
         );

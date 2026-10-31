@@ -1,7 +1,5 @@
 use std::{os::unix::fs::PermissionsExt, path::Path};
 
-use turborepo_tool_install::Store;
-
 use super::*;
 
 fn unreachable_origin() -> String {
@@ -46,6 +44,50 @@ pub(super) fn change_node(f: &mut Fixture) {
 }
 
 #[test]
+fn a_second_repository_with_the_same_lock_downloads_nothing_and_shares_the_environment() {
+    let (first, second) = (Fixture::new(), Fixture::new());
+    assert_eq!(first.lock, second.lock);
+    let u = Upstream::new(&first, false, None);
+    assert_eq!(first.run(&u, FROZEN).unwrap(), 0);
+    assert_eq!(u.hits(), 3);
+    // The same user sets up another clone: `first`'s tool store, no cache.
+    let code = crate::cli::dispatch_setup(&second.args(FROZEN), |args, setup| {
+        run_with_policy(
+            args,
+            setup,
+            Some(first.transports(u.origin(), None)),
+            second.git.clone(),
+            || {
+                Ok(second
+                    .owned
+                    .policy_at(&second.owned.root().join("apps/web/src"))?)
+            },
+        )
+    })
+    .unwrap()
+    .unwrap();
+    assert_eq!(code, 0);
+    // No request at all: every tree is already sealed in the store.
+    assert_eq!(u.hits(), 3);
+    let store = trust::user_store(Some(first.owned.home()), first.owned.root()).unwrap();
+    let env = |f: &Fixture| {
+        trust::TrustStore::new(&store, f.owned.root())
+            .unwrap()
+            .recorded_env()
+            .unwrap()
+            .unwrap()
+    };
+    assert_eq!(env(&first), env(&second));
+    // Each repository's editor link resolves to that one environment.
+    let bin = |f: &Fixture| fs::canonicalize(f.owned.root().join(".turbo/bin")).unwrap();
+    assert_eq!(bin(&first), bin(&second));
+    assert!(bin(&second).starts_with(fs::canonicalize(first.owned.home()).unwrap()));
+    assert!(!second.owned.root().join(".turbo/tools").exists());
+    first.no_execution();
+    second.no_execution();
+}
+
+#[test]
 fn two_repositories_reuse_verified_bytes_with_separate_activation() {
     let cache = tempfile::tempdir().unwrap();
     let (first, second) = (Fixture::new(), Fixture::new());
@@ -71,10 +113,10 @@ fn two_repositories_reuse_verified_bytes_with_separate_activation() {
     // Only verified, non-executable archives are shared; no bin or shims.
     assert_eq!(entries(cache.path()), expected);
     for f in [&first, &second] {
-        let current = Store::inspect(f.owned.root()).unwrap().unwrap();
-        assert!(current.bin.starts_with(f.owned.root().join(".turbo/tools")));
+        let current = Installed::open(&f.owned).current().unwrap().unwrap();
+        assert!(current.bin.starts_with(f.owned.home()));
         assert_eq!(
-            fs::read(current.bin.join("../tools/node/resource")).unwrap(),
+            fs::read(current.tree("node").join("resource")).unwrap(),
             b"node resource"
         );
         f.no_execution();
@@ -82,7 +124,8 @@ fn two_repositories_reuse_verified_bytes_with_separate_activation() {
     // Each repository keeps its own activation.
     fs::remove_dir_all(first.owned.root().join(".turbo")).unwrap();
     assert_eq!(
-        Store::inspect(second.owned.root())
+        Installed::open(&second.owned)
+            .current()
             .unwrap()
             .unwrap()
             .tools
@@ -109,7 +152,8 @@ fn unreachable_upstream_installs_cache_hits_and_publishes_nothing_on_a_miss() {
         0
     );
     assert_eq!(
-        Store::inspect(hit.owned.root())
+        Installed::open(&hit.owned)
+            .current()
             .unwrap()
             .unwrap()
             .tools
@@ -212,7 +256,12 @@ fn offline_setup_installs_only_installed_or_cached_bytes_without_traffic() {
             0
         );
         assert_eq!(
-            Store::inspect(f.owned.root()).unwrap().unwrap().tools.len(),
+            Installed::open(&f.owned)
+                .current()
+                .unwrap()
+                .unwrap()
+                .tools
+                .len(),
             2
         );
         f.no_execution();
@@ -296,7 +345,7 @@ fn offline_never_creates_refreshes_or_re_resolves_a_lock() {
 }
 
 #[test]
-fn offline_force_reinstalls_from_cached_or_verified_installed_bytes() {
+fn offline_force_reverifies_installed_bytes_and_lists_every_artifact_it_cannot() {
     const FORCE: &[&str] = &["--frozen", "--tools-only", "--offline", "--force"];
     let cache = tempfile::tempdir().unwrap();
     let (seed, f) = (Fixture::new(), Fixture::new());
@@ -314,20 +363,18 @@ fn offline_force_reinstalls_from_cached_or_verified_installed_bytes() {
         Sha256::digest(&f.pnpm)
     );
     fs::remove_file(cache.path().join(pnpm)).unwrap();
-    // Cached Node with installed-only pnpm, then installed-only for both.
+    // Cached Node with installed-only pnpm, then installed-only for both:
+    // healthy trees are re-verified in place and the record stays.
     for cache in [Some(cache.path()), None] {
         let before = f.manifest().unwrap();
         assert_eq!(f.run_with(&unreachable_origin(), cache, FORCE).unwrap(), 0);
-        assert_ne!(f.manifest().unwrap(), before);
-        let current = Store::inspect(f.owned.root()).unwrap().unwrap();
+        assert_eq!(f.manifest().unwrap(), before);
+        let current = Installed::open(&f.owned).current().unwrap().unwrap();
         assert_eq!(current.tools.len(), 2);
     }
     // Neither cached nor healthy: every artifact is listed, nothing published.
-    let current = Store::inspect(f.owned.root()).unwrap().unwrap();
-    turborepo_setup::test_support::damage(
-        &current.bin.join("../tools/pnpm/dist/resource"),
-        "damage",
-    );
+    let current = Installed::open(&f.owned).current().unwrap().unwrap();
+    turborepo_setup::test_support::damage(&current.tree("pnpm").join("dist/resource"), "damage");
     let before = f.manifest().unwrap();
     let text = f
         .run_with(&unreachable_origin(), None, FORCE)

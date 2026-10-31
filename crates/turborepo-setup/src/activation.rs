@@ -1,19 +1,13 @@
-//! Read-only Node/npm/pnpm/Yarn/Bun/Rust/Go environment planning, plus
-//! uv/Python when enabled, and repository-declared additional tools, not
-//! execution authorization.
-//! Repo-writable inventory proves readiness only. Consumers must separately
-//! authorize setup-recorded tools with trusted-root user state, gate managed
-//! mode, and revalidate before use. No CLI support is advertised by this
-//! module.
+//! Pure Node/npm/pnpm/Yarn/Bun/Rust/Go selection planning, plus uv/Python
+//! when enabled, and repository-declared additional tools, not execution
+//! authorization. A plan names the tool selection a lock implies; it never
+//! reads installed tools. Consumers must separately bind the repository to
+//! that selection's environment with trusted user state, gate managed mode,
+//! and revalidate before use.
 
-use std::{
-    collections::{BTreeMap, BTreeSet},
-    ffi::{OsStr, OsString},
-    io,
-    path::{Path, PathBuf},
-};
+use std::collections::BTreeSet;
 
-use turborepo_tool_install::{Record, Store, Tool, VarValue, Verification};
+use turborepo_tool_install::{Selection, Tool};
 
 use crate::{
     artifact_provision::{self, ArtifactPlan},
@@ -67,47 +61,33 @@ pub enum Error {
         "invalid locked adapter metadata; run turbo setup locally and commit the repaired lock"
     )]
     InvalidLock,
-    #[error("managed installation is missing; run turbo setup")]
-    MissingInventory,
-    #[error("managed installation does not match turbo.lock; run turbo setup")]
-    StaleInventory,
-    #[error("managed installation is damaged or unsafe; run turbo setup: {0}")]
-    DamagedInventory(#[source] turborepo_tool_install::Error),
-    #[error("unsafe private CARGO_HOME; remove {0} and rerun turbo setup")]
-    UnsafeCargoHome(PathBuf),
     #[error("cannot capture or revalidate setup sources; run turbo setup: {0}")]
     Sources(#[from] StorageError),
     #[error("cannot select the locked execution snapshot; run turbo setup: {0}")]
     Selection(#[from] crate::execution_identity::Error),
     #[error("invalid clone-local setup selection; run turbo setup --no-lock")]
     InvalidSelection,
-    #[error("cannot compose managed PATH with the caller PATH: {0}")]
-    Path(#[from] std::env::JoinPathsError),
 }
 
-/// An owned selection bound to a checked repo-local generation. This is NOT a
-/// ready-to-execute capability: trust/authorization and actual process wiring
-/// belong to the consumer. Planning never reads or mutates process environment.
+/// The tool selection, and execution snapshot, that a lock or clone-local
+/// selection implies for one host. This is NOT a ready-to-execute capability:
+/// trust/authorization and actual process wiring belong to the consumer.
 pub struct ActivationPlan {
     snapshot: ExecutionSnapshot,
-    bin: PathBuf,
-    tools: Vec<Tool>,
-    // Rust, Go and uv/Python settings derived from this generation alone; see
-    // [`runtime_env`].
-    runtime_env: BTreeMap<String, OsString>,
+    selection: Selection,
 }
 
 impl ActivationPlan {
-    /// A `turbo setup --no-lock` clone: plan the sealed clone-local selection
-    /// its generation records, in place of turbo.lock, with the same
-    /// declaration, adapter and installation checks. A turbo.lock in the root
-    /// is the committed resolution and is never overridden. Node/npm/pnpm
-    /// ecosystems only, like `--no-lock` setup. The snapshot identity is
-    /// clone-local (see `ExecutionSnapshot::select_clone_local`).
+    /// A `turbo setup --no-lock` clone: plan the clone-local selection its
+    /// user record holds, in place of turbo.lock, with the same declaration,
+    /// adapter and installation checks. A turbo.lock in the root is the
+    /// committed resolution and is never overridden. Node/npm/pnpm ecosystems
+    /// only, like `--no-lock` setup. The snapshot identity is clone-local (see
+    /// `ExecutionSnapshot::select_clone_local`).
     pub fn clone_local(
         sources: &Snapshot,
         context: ExecutionContext,
-        verification: Verification,
+        recorded: &[u8],
     ) -> Result<Self, Error> {
         Self::qualify(&context)?;
         if context.musl() {
@@ -117,35 +97,21 @@ impl ActivationPlan {
         if sources.previous_lock().is_some() {
             return Err(StorageError::Conflict.into());
         }
-        let current = Store::inspect_with(sources.repository_root(), verification)
-            .map_err(Error::DamagedInventory)?
-            .ok_or(Error::MissingInventory)?;
-        let record = current.record.ok_or(Error::StaleInventory)?;
-        let native = crate::native_baseline::NativeRecord::decode(record.bytes())
+        let native = crate::native_baseline::NativeRecord::decode(recorded)
             .map_err(|_| Error::InvalidSelection)?;
-        Self::from_selection(
-            sources.repository_root(),
-            sources,
-            native.selection(),
-            Some(&record),
-            context,
-            verification,
-        )
+        Self::from_selection(sources, native.selection(), true, context)
     }
 
     /// Caller selects the exact sources and execution context; no root/host
     /// probes, ancestor search, system-tool fallback, resolution, or
-    /// storage creation. A missing lock is an error, not unconfigured-mode
+    /// storage access. A missing lock is an error, not unconfigured-mode
     /// policy for future callers. Sources captured without Rust ecosystems
     /// ignore Rust declarations, so a lock with Rust selections is drift.
-    pub fn captured(
-        sources: &Snapshot,
-        context: ExecutionContext,
-        verification: Verification,
-    ) -> Result<Self, Error> {
+    pub fn captured(sources: &Snapshot, context: ExecutionContext) -> Result<Self, Error> {
         Self::qualify(&context)?;
         sources.ensure_current()?;
-        Self::from_sources(sources.repository_root(), sources, context, verification)
+        let lock = sources.previous_lock().ok_or(Error::MissingLock)?;
+        Self::from_selection(sources, lock, false, context)
     }
 
     fn qualify(context: &ExecutionContext) -> Result<(), Error> {
@@ -165,25 +131,12 @@ impl ActivationPlan {
         Ok(())
     }
 
-    fn from_sources(
-        repo: &Path,
-        sources: &Snapshot,
-        context: ExecutionContext,
-        verification: Verification,
-    ) -> Result<Self, Error> {
-        let lock = sources.previous_lock().ok_or(Error::MissingLock)?;
-        Self::from_selection(repo, sources, lock, None, context, verification)
-    }
-
-    /// `lock` is turbo.lock, or with `recorded`, the clone-local selection
-    /// decoded from that exact generation record.
+    /// `lock` is turbo.lock, or the clone-local selection a user record holds.
     fn from_selection(
-        repo: &Path,
         sources: &Snapshot,
         lock: &Lock,
-        recorded: Option<&Record>,
+        clone_local: bool,
         context: ExecutionContext,
-        verification: Verification,
     ) -> Result<Self, Error> {
         // Before adapter checks, so musl users get the actionable reason.
         if context.musl() {
@@ -249,7 +202,7 @@ impl ActivationPlan {
                 tools.push(tool);
             }
         }
-        // Inventory records tools in ID order.
+        // A selection holds its tools in ID order.
         if lock.tools().contains_key("uv") {
             let plan = UvPlan::from_lock(lock, platform).map_err(|_| Error::InvalidLock)?;
             let requirement = sources.uv_requirement()?.ok_or(Error::DeclarationDrift)?;
@@ -268,7 +221,7 @@ impl ActivationPlan {
             }
             tools.push(plan.inventory_tool().clone());
         }
-        // The Store records a generation's tools in id order.
+        // A selection holds its tools in id order.
         if let Some(tool) = lock.tools().get("rust") {
             if !lock.tools().contains_key("rustup") {
                 return Err(Error::InvalidLock);
@@ -314,41 +267,17 @@ impl ActivationPlan {
         artifact_provision::check_exports(&tools, declared.clone())
             .map_err(Error::AdditionalTool)?;
         tools.extend(declared.cloned());
-        // Inventory records its cohort in ID order.
-        tools.sort_by(|a, b| a.id.cmp(&b.id));
         let selected: BTreeSet<_> = lock.tools().keys().cloned().collect();
-        let snapshot = match recorded {
-            None => ExecutionSnapshot::select(lock, context, &selected)?,
-            Some(_) => ExecutionSnapshot::select_clone_local(lock, context, &selected)?,
+        let snapshot = if clone_local {
+            ExecutionSnapshot::select_clone_local(lock, context, &selected)?
+        } else {
+            ExecutionSnapshot::select(lock, context, &selected)?
         };
-        let current = Store::inspect_with(repo, verification)
-            .map_err(Error::DamagedInventory)?
-            .ok_or(Error::MissingInventory)?;
-        // Complete set equality prevents unrelated exports sharing our PATH.
-        // A clone-local plan also stays bound to the record it decoded.
-        if current.tools != tools || recorded.is_some_and(|r| current.record.as_ref() != Some(r)) {
-            return Err(Error::StaleInventory);
-        }
-        if let Some(node) = &node {
-            let tree = current
-                .tool_tree(node.inventory_tool())
-                .ok_or(Error::StaleInventory)?;
-            node.verify_bundled_npm(&tree)
-                .map_err(|_| Error::StaleInventory)?;
-        }
-        // The shell hook derives the same values from its trusted record.
-        let runtime_env = runtime_env(&current.bin, current.cargo_home.as_deref(), &tools)?;
+        let selection = Selection::new(tools).map_err(|_| Error::InvalidLock)?;
         sources.ensure_current()?;
         Ok(Self {
             snapshot,
-            // PATH consumers such as cmd.exe do not resolve `%~dp0..` under a
-            // verbatim `\\?\` prefix; use the ordinary spelling when exact.
-            #[cfg(windows)]
-            bin: dunce::simplified(&current.bin).to_path_buf(),
-            #[cfg(not(windows))]
-            bin: current.bin,
-            tools,
-            runtime_env,
+            selection,
         })
     }
 
@@ -356,85 +285,15 @@ impl ActivationPlan {
         &self.snapshot
     }
 
-    /// Validated installation bookkeeping only, never trusted-root evidence.
+    /// The selected tools, in id order.
     pub fn tools(&self) -> &[Tool] {
-        &self.tools
+        self.selection.tools()
     }
 
-    /// The verified managed bin directory.
-    pub fn path_prepend(&self) -> &Path {
-        &self.bin
+    /// The selection whose environment must be installed and recorded.
+    pub fn selection(&self) -> &Selection {
+        &self.selection
     }
-
-    /// Absolute values to set for tasks and turbo's own tool probes, after
-    /// any strict/loose filtering. They contain local paths: never hash them.
-    pub fn runtime_env(&self) -> &BTreeMap<String, OsString> {
-        &self.runtime_env
-    }
-
-    /// Pure composition; the caller supplies PATH and decides whether/how to
-    /// apply it after separate authorization. Preserve the original suffix.
-    pub fn path(&self, inherited: Option<&OsStr>) -> Result<OsString, Error> {
-        let mut paths = vec![self.bin.clone()];
-        if let Some(inherited) = inherited {
-            paths.extend(std::env::split_paths(inherited));
-        }
-        Ok(std::env::join_paths(paths)?)
-    }
-}
-
-/// The variables an installed generation's tools need beside PATH: each
-/// tool's `vars`, resolved against the generation's `bin` and the
-/// `CARGO_HOME` it was published with. Managed run and exec set exactly
-/// these, Unix launchers set the same values for their own tool, and the
-/// shell hook derives them from its trusted installation, so the prompt and
-/// tasks always agree. Never inherited or host-dependent settings.
-pub fn runtime_env(
-    bin: &Path,
-    cargo_home: Option<&Path>,
-    tools: &[Tool],
-) -> Result<BTreeMap<String, OsString>, Error> {
-    let mut env = BTreeMap::new();
-    for tool in tools {
-        for (var, value) in &tool.vars {
-            let value = match value {
-                VarValue::Tree(tree) => {
-                    let generation = bin.parent().ok_or(Error::StaleInventory)?;
-                    let path = (tree.path.split('/').filter(|part| !part.is_empty()))
-                        .fold(generation.join("tools").join(&tree.tool), |p, c| p.join(c));
-                    plain(path)
-                }
-                VarValue::Word(word) => OsString::from(word),
-                VarValue::RepoCargoHome => {
-                    let cargo_home = cargo_home.ok_or(Error::StaleInventory)?.to_owned();
-                    // Cargo creates a missing home on first use; never create it here.
-                    match std::fs::symlink_metadata(&cargo_home) {
-                        Ok(m) if !m.is_dir() || m.file_type().is_symlink() => {
-                            return Err(Error::UnsafeCargoHome(cargo_home));
-                        }
-                        Err(e) if e.kind() != io::ErrorKind::NotFound => {
-                            return Err(StorageError::from(e).into());
-                        }
-                        _ => {}
-                    }
-                    plain(cargo_home)
-                }
-            };
-            // Two tools that set one variable must agree on its value.
-            if (env.insert(var.name().to_owned(), value.clone())).is_some_and(|old| old != value) {
-                return Err(Error::InvalidLock);
-            }
-        }
-    }
-    Ok(env)
-}
-
-/// Like `bin`, the ordinary spelling tools print and compare, never a
-/// verbatim `\\?\` path.
-fn plain(path: PathBuf) -> OsString {
-    #[cfg(windows)]
-    let path = dunce::simplified(&path).to_path_buf();
-    path.into_os_string()
 }
 
 /// The installed identity setup provisions for the declared manager. Each plan

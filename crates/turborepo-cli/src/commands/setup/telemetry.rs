@@ -58,7 +58,6 @@ fn native_failure(error: &turborepo_setup::native_baseline::Error) -> SetupFailu
     match error {
         Native::Invalid | Native::Storage(_) => SetupFailure::LockInvalid,
         Native::RuntimeArrayGap(_) => SetupFailure::Unsupported,
-        Native::Install(_) => SetupFailure::Install,
     }
 }
 
@@ -157,7 +156,6 @@ pub(super) fn failure(error: &Error) -> SetupFailure {
                 Ephemeral::Native(error) => native_failure(error),
                 Ephemeral::Reconcile(_) => SetupFailure::Resolution,
                 Ephemeral::Storage(_) => SetupFailure::LockInvalid,
-                Ephemeral::Install(_) => SetupFailure::Install,
                 Ephemeral::Node(_) | Ephemeral::Pnpm(_) => SetupFailure::Download,
                 Ephemeral::Check(_) => SetupFailure::Io,
             }
@@ -296,8 +294,7 @@ mod tests {
         for (error, expected) in [
             (Activation::MissingLock, SetupFailure::LockMissing),
             (Activation::DeclarationDrift, SetupFailure::LockStale),
-            (Activation::MissingInventory, SetupFailure::Readiness),
-            (Activation::StaleInventory, SetupFailure::Readiness),
+            (Activation::InvalidSelection, SetupFailure::Readiness),
         ] {
             assert_eq!(failure(&Error::Activation(error)), expected);
         }

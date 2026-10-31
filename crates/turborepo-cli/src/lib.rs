@@ -25,7 +25,8 @@ mod shim;
 #[cfg(feature = "test-support")]
 pub mod test_support {
     pub use crate::commands::setup::{
-        frozen_tools_for_tests, record_trust_for_tests, setup_for_tests,
+        RecordedInstallation, frozen_tools_for_tests, install_tools_for_tests,
+        recorded_installation_for_tests, setup_for_tests,
     };
 }
 

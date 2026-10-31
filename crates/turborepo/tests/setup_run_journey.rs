@@ -500,11 +500,22 @@ impl Journey {
         fs::read(self.root.join(path)).unwrap()
     }
 
+    fn store(&self) -> PathBuf {
+        common::setup::user_tool_store(&self.home, None)
+    }
+
+    /// The repository's setup record.
+    fn record(&self) -> Vec<u8> {
+        common::setup::installed(&self.root, &self.store())
+            .expect("recorded installation")
+            .record
+    }
+
     /// Plain `turbo run build`: managed pnpm dispatch with managed Node first
     /// on the task PATH, env-mode filtering, no network and no setup writes.
     fn build(&self, cwd: &Path, mode: &str, node: &str, extra: &[&str]) -> Outcome {
         let lock = self.read("turbo.lock");
-        let manifest = self.read(".turbo/tools/manifest.json");
+        let manifest = self.record();
         let env_mode = format!("--env-mode={mode}");
         let mut args = vec!["run", "build", env_mode.as_str()];
         args.extend(extra);
@@ -522,7 +533,7 @@ impl Journey {
             assert!(outcome.text.contains(&expected), "{}", outcome.text);
         }
         assert_eq!(self.read("turbo.lock"), lock);
-        assert_eq!(self.read(".turbo/tools/manifest.json"), manifest);
+        assert_eq!(self.record(), manifest);
         outcome
     }
 }
@@ -552,14 +563,14 @@ fn global_setup_then_plain_run_repeat_repair_and_drift() {
     }
 
     // Repeat setup is a no-op without network.
-    let manifest = j.read(".turbo/tools/manifest.json");
+    let manifest = j.record();
     j.turbo(&j.root, TOOLS_ONLY, &[]).succeeds().offline();
     assert_eq!(j.read("turbo.lock"), lock);
-    assert_eq!(j.read(".turbo/tools/manifest.json"), manifest);
+    assert_eq!(j.record(), manifest);
 
     // A deleted shim fails before tasks without network; setup repairs it.
-    let current = turborepo_tool_install::Store::inspect(&j.root).unwrap();
-    fs::remove_file(current.unwrap().bin.join("pnpm")).unwrap();
+    let current = common::setup::installed(&j.root, &j.store()).unwrap();
+    fs::remove_file(current.bin.join("pnpm")).unwrap();
     for env in [&[][..], &ci[..]] {
         j.turbo(&j.web, &["run", "build"], env)
             .fails("run turbo setup")
@@ -613,7 +624,8 @@ fn setup_records_the_repository_in_the_user_tool_store() {
     let default = data.join("turborepo/tools");
     let value: serde_json::Value =
         serde_json::from_slice(&fs::read(record(&default)).unwrap()).unwrap();
-    assert_eq!(value["installation"]["root"], json!(root));
+    assert_eq!(value["root"], json!(root));
+    assert!(value["env"].is_string());
     assert!(!data.join("turborepo/setup-roots").exists());
     assert!(!j.root.join(".turbo/cargo-home").exists());
     j.build(&j.root, "strict", "24.0.0", &[]);
@@ -721,13 +733,12 @@ fn ambient_npm_configuration_does_not_affect_tool_downloads_or_installed_repeats
     let mut requests = j.upstream.origin.requests();
     requests.sort();
     assert_eq!(requests, expected_requests);
-    // Store inspection verifies the published installation, not just exit status.
-    let installed = turborepo_tool_install::Store::inspect(&j.root)
-        .unwrap()
-        .expect("verified managed installation");
+    // The recorded installation, not just exit status.
+    let installed =
+        common::setup::installed(&j.root, &j.store()).expect("recorded managed installation");
     assert!(installed.bin.join("node").exists());
     assert!(installed.bin.join("pnpm").exists());
-    let manifest = j.read(".turbo/tools/manifest.json");
+    let manifest = j.record();
 
     // Unresolved npm interpolation is also irrelevant to tools-only reuse.
     fs::write(
@@ -744,12 +755,8 @@ fn ambient_npm_configuration_does_not_affect_tool_downloads_or_installed_repeats
     ] {
         j.turbo(&j.root, args, &ci).succeeds().offline();
         assert_eq!(j.read("turbo.lock"), expected_lock);
-        assert_eq!(j.read(".turbo/tools/manifest.json"), manifest);
-        assert!(
-            turborepo_tool_install::Store::inspect(&j.root)
-                .unwrap()
-                .is_some()
-        );
+        assert_eq!(j.record(), manifest);
+        assert!(common::setup::installed(&j.root, &j.store()).is_some());
     }
     assert_eq!(j.upstream.origin.requests().len(), requests.len());
 }
