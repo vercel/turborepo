@@ -89,3 +89,33 @@ fn a_deleted_repositorys_tools_and_state_go_only_after_the_grace_period() {
     assert!(cleanup::collect(&store, now + GRACE * 3).is_empty());
     first.no_execution();
 }
+
+#[test]
+fn a_corrupt_record_keeps_its_state_but_not_its_tools_until_setup_replaces_it() {
+    use turborepo_tool_install::GRACE;
+    let f = Fixture::new();
+    assert_eq!(f.run(&Upstream::new(&f, false, None), FROZEN).unwrap(), 0);
+    let home = f.owned.home();
+    let store = trust::user_store(Some(home), f.owned.root()).unwrap();
+    let own = trust::TrustStore::new(&store, f.owned.root()).unwrap();
+    let env = own.recorded_env().unwrap().unwrap().to_string();
+    let record = own.path();
+    fs::write(&record, "{not a record").unwrap();
+
+    let now = SystemTime::now();
+    cleanup::collect(&store, now);
+    assert_eq!(names(home, "envs"), std::slice::from_ref(&env));
+    cleanup::collect(&store, now + GRACE);
+    // Collection cannot judge the record, so it never deletes it, but the
+    // record protects nothing: its tools age out like any unused ones.
+    assert_eq!(fs::read(&record).unwrap(), b"{not a record");
+    assert!(names(home, "envs").is_empty());
+    assert!(names(home, "trees").is_empty());
+
+    let u = Upstream::new(&f, false, None);
+    assert_eq!(f.run(&u, FROZEN).unwrap(), 0);
+    assert!(u.hits() > 0, "setup reinstalled nothing");
+    assert_eq!(own.recorded_env().unwrap().unwrap().to_string(), env);
+    assert!(own.recorded().unwrap().is_some());
+    f.no_execution();
+}
