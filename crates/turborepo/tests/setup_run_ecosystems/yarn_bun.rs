@@ -11,7 +11,7 @@ const TURBO_JSON: &str = r#"{"futureFlags":{"experimentalSetup":true},"agentGuid
 /// Managed Node runs a JS entrypoint as a shell script, like setup's launchers.
 const NODE: &str = "#!/bin/sh\ncase \"$1\" in *.js) entry=$1; shift; exec /bin/sh \"$entry\" \
                     \"$@\";; esac\necho managed-node\n";
-const YARN: &str = r#"case "$(command -v node)" in */.turbo/tools/*) node=managed ;; *) node=other ;; esac
+const YARN: &str = r#"case "$(command -v node)" in */turborepo/tools/envs/*) node=managed ;; *) node=other ;; esac
 echo "managed-yarn $* node=$node secret=${JOURNEY_SECRET:-filtered}"
 "#;
 const BUN: &str = "#!/bin/sh\necho \"managed-bun $* secret=${JOURNEY_SECRET:-filtered}\"\n";

@@ -1,32 +1,24 @@
-//! Automatic cleanup of managed storage that turbo.lock no longer selects.
-//! Best effort: nothing here can fail setup.
-use std::{path::Path, time::Duration};
+//! Automatic cleanup of the shared download cache. Best effort: nothing here
+//! can fail setup.
+use std::time::Duration;
 
 use turborepo_setup::{
     artifact_cache::ArtifactCache,
     lock::{Installation, Lock, Platform},
 };
-use turborepo_tool_install::{StorageUse, Store};
 
 const DAY: Duration = Duration::from_secs(24 * 60 * 60);
-/// `turbo run` uses the selected generation without the setup lock, so a
-/// replaced generation stays this long for runs that started before setup.
-const GRACE_DAYS: u32 = 7;
 /// Shared downloads that no setup in any clone referenced for this long are
 /// evicted, like Cargo's automatic cleanup of downloaded crates.
 const UNUSED_DAYS: u32 = 90;
 
-/// After a successful reconcile, under the Store guard.
+/// After a successful setup, under the writer guard.
 pub(super) fn after_provisioning(
-    store: &mut Store,
     cache: Option<&ArtifactCache>,
     lock: &Lock,
     host: Platform,
 ) -> Vec<String> {
-    let mut lines = match store.remove_inactive(DAY * GRACE_DAYS) {
-        Ok(usage) => report(&usage, "Removed"),
-        Err(error) => vec![warning("replaced managed tools", &error)],
-    };
+    let mut lines = Vec::new();
     let Some(cache) = cache else {
         return lines;
     };
@@ -44,35 +36,6 @@ pub(super) fn after_provisioning(
             }
         }
         Err(error) => lines.push(warning("the shared download cache", &error)),
-    }
-    lines
-}
-
-/// Read-only report of what the next setup removes from this clone.
-pub(super) fn inspect(root: &Path) -> Vec<String> {
-    match Store::storage_use(root, DAY * GRACE_DAYS) {
-        Ok(Some(usage)) => report(&usage, "turbo setup will remove"),
-        Ok(None) => Vec::new(),
-        Err(error) => vec![format!(
-            "Warning: could not measure managed tool disk use ({error})."
-        )],
-    }
-}
-
-fn report(usage: &StorageUse, removal: &str) -> Vec<String> {
-    let mut lines = Vec::new();
-    if usage.removable.entries > 0 {
-        lines.push(format!(
-            "{removal} {} of managed tools turbo.lock no longer selects.",
-            size(usage.removable.bytes)
-        ));
-    }
-    if usage.retained.entries > 0 {
-        lines.push(format!(
-            "Keeping {} of replaced managed tools for {GRACE_DAYS} days after replacement in case \
-             a running task still uses them.",
-            size(usage.retained.bytes)
-        ));
     }
     lines
 }

@@ -45,7 +45,7 @@ fn fixture() -> (Fixture, LoopbackServer) {
 }
 
 fn installed(f: &Fixture) -> Vec<String> {
-    let store = turborepo_tool_install::Store::open(f.owned.root()).unwrap();
+    let store = Installed::open(&f.owned);
     let current = store.current().unwrap().unwrap();
     current.tools.into_iter().map(|tool| tool.id).collect()
 }
@@ -59,14 +59,14 @@ fn local_setup_locks_installs_reuses_and_removes_additional_tools() {
         serde_json::from_slice(&fs::read(f.owned.root().join("turbo.lock")).unwrap()).unwrap();
     assert_eq!(lock["tools"]["fixture"]["adapter"], "artifact");
     assert_eq!(installed(&f), ["fixture", "node"]);
-    let store = turborepo_tool_install::Store::open(f.owned.root()).unwrap();
-    let bin = store.current().unwrap().unwrap().bin;
-    let output = std::process::Command::new(bin.join("fixture"))
+    let store = Installed::open(&f.owned);
+    let current = store.current().unwrap().unwrap();
+    let output = std::process::Command::new(current.bin.join("fixture"))
         .output()
         .unwrap();
     assert_eq!(output.stdout, b"fixture 1.2.3\n");
     assert_eq!(
-        fs::read(bin.join("../tools/fixture/share/data.txt")).unwrap(),
+        fs::read(current.tree("fixture").join("share/data.txt")).unwrap(),
         b"fixture resource"
     );
     drop(store);

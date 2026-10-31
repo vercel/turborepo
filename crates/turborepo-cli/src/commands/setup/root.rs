@@ -20,7 +20,7 @@ pub enum Error {
         code(turbo::setup::ambiguous_root),
         help(
             "Select the intended repository explicitly with turbo setup --cwd=<root>. No \
-             neighboring .turbo/tools directory will be used."
+             neighboring repository's managed tools will be used."
         )
     )]
     Ambiguous {

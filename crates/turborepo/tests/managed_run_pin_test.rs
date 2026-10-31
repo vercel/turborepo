@@ -97,10 +97,21 @@ impl Repo {
         let lock = Lock::parse(lock.to_string().as_bytes()).unwrap();
         let node = NodePlan::from_lock(&lock, platform).unwrap();
         let pnpm = PnpmPlan::from_lock(&lock, platform, &node, None).unwrap();
-        let tools = [node.inventory_tool().clone(), pnpm.inventory_tool().clone()];
-        turborepo_tool_install::Store::open(&root)
-            .unwrap()
-            .reconcile(&tools, |tool, tree| {
+        let tools = vec![node.inventory_tool().clone(), pnpm.inventory_tool().clone()];
+        let home = root.parent().unwrap().join("home");
+        let user_base = if cfg!(target_os = "macos") {
+            home.join("Library/Application Support")
+        } else if cfg!(windows) {
+            home.join("AppData/Local")
+        } else {
+            home.join("data")
+        };
+        let trust = turborepo_cli::test_support::install_tools_for_tests(
+            &root,
+            Some(&user_base.join("turborepo/tools")),
+            tools,
+            None,
+            |tool, tree| {
                 for relative in tool.tree_files() {
                     let target = tree.join(relative);
                     fs::create_dir_all(target.parent().unwrap())?;
@@ -113,19 +124,7 @@ impl Repo {
                     }
                 }
                 Ok(())
-            })
-            .unwrap();
-        let home = root.parent().unwrap().join("home");
-        let user_base = if cfg!(target_os = "macos") {
-            home.join("Library/Application Support")
-        } else if cfg!(windows) {
-            home.join("AppData/Local")
-        } else {
-            home.join("data")
-        };
-        let trust = turborepo_cli::test_support::record_trust_for_tests(
-            &root,
-            Some(&user_base.join("turborepo/tools")),
+            },
         )
         .unwrap();
         Self {

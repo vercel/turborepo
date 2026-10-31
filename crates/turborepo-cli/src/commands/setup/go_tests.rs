@@ -60,8 +60,8 @@ fn go_only() -> Fixture {
 fn go_version(f: &Fixture) -> String {
     selected(f).tools()["go"].version.clone()
 }
-fn current(f: &Fixture) -> turborepo_tool_install::Current {
-    let store = turborepo_tool_install::Store::open(f.owned.root()).unwrap();
+fn current(f: &Fixture) -> Current {
+    let store = Installed::open(&f.owned);
     store.current().unwrap().unwrap()
 }
 
@@ -304,14 +304,11 @@ fn check_reports_go_readiness_and_fails_closed_without_the_flag_or_on_damage() {
         Err(Error::Activation(Activation::DeclarationDrift))
     ));
     fs::write(root.join("turbo.json"), GO).unwrap();
-    turborepo_setup::test_support::damage(
-        &current(&f).bin.join("../tools/go/src/go.mod"),
-        "damage",
-    );
+    turborepo_setup::test_support::damage(&current(&f).tree("go").join("src/go.mod"), "damage");
     let result = f.check(CHECK);
     assert!(matches!(
         result,
-        Err(Error::Activation(Activation::DamagedInventory(_)))
+        Err(Error::Install(turborepo_tool_install::Error::Damaged(_)))
     ));
     assert_eq!(u.hits(), hits);
     untouched(&f);

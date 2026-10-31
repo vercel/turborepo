@@ -1,6 +1,7 @@
 //! The user's tool store: one private directory per user, outside every
-//! repository, that holds setup's per-repository state. `TURBO_TOOL_STORE`
-//! relocates it, for example to a directory CI caches.
+//! repository, that holds the shared trees and environments plus setup's
+//! per-repository state. `TURBO_TOOL_STORE` relocates it, for example to a
+//! directory CI caches.
 
 use std::{
     ffi::OsString,
@@ -20,21 +21,27 @@ pub const TOOL_STORE_VAR: &str = "TURBO_TOOL_STORE";
 /// repository it was located for.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct UserStore {
-    root: PathBuf,
+    pub(crate) root: PathBuf,
 }
 
 impl UserStore {
     /// `$TURBO_TOOL_STORE`, else `<data_local_dir>/turborepo/tools`, checked
     /// and created like [`UserStore::at`]. An empty variable counts as unset.
     pub fn locate(repo: &Path) -> Result<Self, Error> {
-        let path = match std::env::var_os(TOOL_STORE_VAR).filter(|path| !path.is_empty()) {
-            Some(path) => PathBuf::from(path),
-            None => dirs_next::data_local_dir()
-                .ok_or(Error::NoStore)?
-                .join("turborepo")
-                .join("tools"),
-        };
-        Self::at(&path, repo)
+        Self::at(&Self::default_root()?, repo)
+    }
+
+    /// Where [`UserStore::locate`] looks, unchecked and never created.
+    pub fn default_root() -> Result<PathBuf, Error> {
+        Ok(
+            match std::env::var_os(TOOL_STORE_VAR).filter(|path| !path.is_empty()) {
+                Some(path) => PathBuf::from(path),
+                None => dirs_next::data_local_dir()
+                    .ok_or(Error::NoStore)?
+                    .join("turborepo")
+                    .join("tools"),
+            },
+        )
     }
 
     /// The store at `path`, creating missing directories with mode 0700.
@@ -76,6 +83,10 @@ impl UserStore {
         if fs::canonicalize(path)? != root {
             return Err(unsafe_store());
         }
+        // Environments embed absolute store paths in `.cmd` forwarders, which
+        // cmd.exe cannot run under a verbatim `\\?\` prefix.
+        #[cfg(windows)]
+        let root = dunce::simplified(&root).to_path_buf();
         Ok(Self { root })
     }
 
@@ -91,10 +102,16 @@ impl UserStore {
     /// One repository's state directory, named by the SHA-256 of its
     /// canonical root's native bytes, so non-UTF-8 roots never collide.
     pub fn repo(&self, canonical_root: &Path) -> PathBuf {
+        Self::repo_in(&self.root, canonical_root)
+    }
+
+    /// [`UserStore::repo`] under an unchecked store root, for lookups that
+    /// must not create or validate the store.
+    pub fn repo_in(store: &Path, canonical_root: &Path) -> PathBuf {
         let name = hex::encode(Sha256::digest(
             canonical_root.as_os_str().as_encoded_bytes(),
         ));
-        self.repos().join(name)
+        store.join("repos").join(name)
     }
 
     /// The repository's private `CARGO_HOME`, which Cargo creates on first

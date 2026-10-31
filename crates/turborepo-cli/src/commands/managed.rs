@@ -11,12 +11,11 @@ use turborepo_setup::{
     lock::{self, Ecosystems},
 };
 use turborepo_shim::capabilities::Requirement;
-use turborepo_tool_install::Store;
 use turborepo_turbo_json::{FutureFlags, RawTurboJson, SetupPolicy};
 
 use crate::commands::setup::{
     authorization::{self, Authorization},
-    effective,
+    effective, trust,
 };
 
 pub(crate) fn validate(base: &crate::commands::CommandBase) -> Result<bool, turborepo_run::Error> {
@@ -92,7 +91,7 @@ pub(crate) fn select(
     let flags = &base.opts.future_flags;
     let clone_local = || {
         std::fs::symlink_metadata(base.repo_root.join_component("turbo.lock")).is_err()
-            && Store::selects_record(base.repo_root.as_std_path()).unwrap_or(true)
+            && trust::records_clone_local(base.repo_root.as_std_path(), None).unwrap_or(true)
     };
     for (enabled, marker) in [
         (flags.experimental_cargo_workspaces, "Cargo.toml"),
@@ -127,8 +126,8 @@ pub(crate) struct ManagedTools {
 }
 
 impl ManagedTools {
-    /// A root turbo.lock, or without one the sealed selection of this clone's
-    /// `turbo setup --no-lock` generation, selects managed mode. Either way
+    /// A root turbo.lock, or without one this clone's `turbo setup --no-lock`
+    /// record, selects managed mode. Either way
     /// activation is equally strict and never downloads. `store` names a
     /// fixture's tool store; otherwise authorization locates the user's.
     pub(crate) fn inspect(
@@ -145,7 +144,7 @@ impl ManagedTools {
         let clone_local = match std::fs::symlink_metadata(root.join("turbo.lock")) {
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
                 // Lock-only leftovers and ordinary repositories stay unmanaged.
-                if !Store::selects_record(root).map_err(|e| {
+                if !trust::records_clone_local(root, store).map_err(|e| {
                     format!("cannot read managed tools; run turbo setup --no-lock: {e}")
                 })? {
                     return Ok(None);
@@ -183,7 +182,7 @@ impl ManagedTools {
         }
         .map_err(explain)?;
         let snapshot = authorization
-            .with_current(|p| p.snapshot().clone())
+            .with_current(|plan, _| plan.snapshot().clone())
             .map_err(explain)?;
         let identity = snapshot.fingerprint().to_owned();
         let inherited_path = std::env::var_os("PATH");
@@ -245,9 +244,9 @@ pub(crate) fn activate_probes(tools: &ManagedRun) -> Result<(), turborepo_run::E
 impl ManagedEnvironment for ManagedTools {
     fn revalidate(&self) -> Result<EnvironmentVariableMap, String> {
         self.authorization
-            .with_current(|plan| {
+            .with_current(|_, activation| {
                 let mut overrides = EnvironmentVariableMap::default();
-                let path = plan
+                let path = activation
                     .path(self.inherited_path.as_deref())
                     .map_err(|e| e.to_string())?;
                 overrides.insert(
@@ -256,7 +255,7 @@ impl ManagedEnvironment for ManagedTools {
                         "managed PATH is not UTF-8; run from a UTF-8 repository path".to_owned()
                     })?,
                 );
-                for (key, value) in plan.runtime_env() {
+                for (key, value) in activation.vars() {
                     overrides.insert(
                         key.clone(),
                         value

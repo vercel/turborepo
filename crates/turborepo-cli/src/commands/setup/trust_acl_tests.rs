@@ -77,7 +77,11 @@ fn inherited_acl_on_new_state_component_fails_before_trust_publication() {
     assert_eq!(upstream.hits(), 3);
     let private = f.owned.home().join("repos");
     assert_eq!(fs::metadata(&private).unwrap().mode() & 0o777, 0o700);
-    assert_eq!(fs::read_dir(&private).unwrap().count(), 0);
-    assert!(f.manifest().is_some()); // Published installation is still untrusted.
+    assert!(f.manifest().is_none());
+    // The verified trees are published; nothing trusts them for this root.
+    assert_eq!(
+        fs::read_dir(f.owned.home().join("trees")).unwrap().count(),
+        2
+    );
     f.no_execution();
 }

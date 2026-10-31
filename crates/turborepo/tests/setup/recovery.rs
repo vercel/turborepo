@@ -122,7 +122,7 @@ impl Repo {
         assert!(
             diagnostic_contains(
                 &check.text,
-                "managed installation is missing; run turbo setup"
+                "is not installed in the tool store; run turbo setup"
             ),
             "{}",
             check.text
@@ -331,11 +331,16 @@ impl Repo {
         assert!(status.is_empty(), "{status}");
     }
 
-    /// The active, verified manifest bytes, if any generation is active.
+    /// The tool store this repository's home locates.
+    pub(super) fn store(&self) -> PathBuf {
+        crate::common::setup::user_tool_store(&self.home, None)
+    }
+
+    /// The setup record's bytes, if it names a usable environment.
     pub(super) fn inventory(&self) -> Option<Vec<u8>> {
-        let current = turborepo_tool_install::Store::inspect(&self.root).unwrap()?;
-        assert_eq!(current.tools.len(), 2);
-        Some(fs::read(self.root.join(".turbo/tools/manifest.json")).unwrap())
+        let installed = crate::common::setup::installed(&self.root, &self.store())?;
+        assert_eq!(installed.tools.len(), 2);
+        Some(installed.record)
     }
 }
 
@@ -386,7 +391,7 @@ fn killed_download_releases_locks_and_offline_lists_every_missing_artifact() {
     repo.expect(
         CHECK,
         1,
-        &["managed installation is missing; run turbo setup"],
+        &["is not installed in the tool store; run turbo setup"],
     );
     // The dead process's writer and Store locks are gone: the retry runs now,
     // and offline names every artifact still needed.
@@ -416,7 +421,7 @@ fn killed_unpack_corrupt_cache_and_repeats_never_publish_partial_tools() {
     repo.expect(
         CHECK,
         1,
-        &["managed installation is missing; run turbo setup"],
+        &["is not installed in the tool store; run turbo setup"],
     );
     // A torn cache entry is a miss, not a partial install.
     fs::remove_file(&node).unwrap();
@@ -443,7 +448,7 @@ fn killed_unpack_corrupt_cache_and_repeats_never_publish_partial_tools() {
     assert_eq!(repo.inventory().unwrap(), first);
     repo.expect(CHECK, 0, &["node 24.0.0: ready", "pnpm 10.0.0: ready"]);
     repo.assert_committed();
-    // An interrupted upgrade keeps the previous complete generation active.
+    // An interrupted upgrade keeps the previous record and environment.
     repo.set_node("second");
     repo.seed();
     repo.killed_unpack();
@@ -452,7 +457,7 @@ fn killed_unpack_corrupt_cache_and_repeats_never_publish_partial_tools() {
     repo.expect(
         CHECK,
         1,
-        &["managed installation does not match turbo.lock; run turbo setup"],
+        &["is not installed in the tool store; run turbo setup"],
     );
     repo.expect(OFFLINE, 0, &[&format!("node 24.0.0 {installed}")]);
     assert_ne!(repo.inventory().unwrap(), first);
@@ -496,17 +501,13 @@ fn killed_additional_tool_download_publishes_nothing_and_recovers_from_the_cache
     assert_eq!(child.wait().unwrap().signal(), Some(Signal::SIGKILL as i32));
     drop(held);
     repo.assert_committed();
-    assert!(
-        turborepo_tool_install::Store::inspect(&repo.root)
-            .unwrap()
-            .is_none()
-    );
+    assert!(crate::common::setup::installed(&repo.root, &repo.store()).is_none());
     let entry = repo.cache().join(repo.platform).join(sha256(&tool));
     assert!(!entry.exists(), "no unverified bytes may be cached");
     repo.expect(
         CHECK,
         1,
-        &["managed installation is missing; run turbo setup"],
+        &["is not installed in the tool store; run turbo setup"],
     );
     // The dead process's locks are gone, and offline names only the tool.
     let text = repo.expect(OFFLINE_FORCE, 1, &["fixture 1.2.3 [artifact]"]);
@@ -514,11 +515,7 @@ fn killed_additional_tool_download_publishes_nothing_and_recovers_from_the_cache
         !diagnostic_contains(&text, "node 24.0.0 [distribution]"),
         "{text}"
     );
-    assert!(
-        turborepo_tool_install::Store::inspect(&repo.root)
-            .unwrap()
-            .is_none()
-    );
+    assert!(crate::common::setup::installed(&repo.root, &repo.store()).is_none());
     // Verified bytes another clone cached complete the cohort without traffic.
     fs::write(&entry, &tool).unwrap();
     let installed = "installed (cached)";
