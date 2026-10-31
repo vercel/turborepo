@@ -74,10 +74,6 @@ impl NpmPlan {
         self.0.inventory_tool()
     }
 
-    pub fn cache_available(&self, transport: &NpmTransport) -> bool {
-        self.0.cache_available(transport)
-    }
-
     /// Force verifies fresh bytes without changing the selected resolution.
     pub async fn prepare(
         &self,

@@ -273,8 +273,8 @@ impl UvPlan {
         Ok(PreparedUv {
             tree,
             tool: self.tool.clone(),
-            // uv has no shared download cache. Archive bytes retained from
-            // resolution were still transferred during this setup run.
+            // Archive bytes retained from resolution were still transferred
+            // during this setup run.
             downloaded_bytes: bytes.as_bytes().len() as u64,
             windows: self.windows,
             entrypoints: self.artifact.executables.clone(),
