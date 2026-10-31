@@ -21,7 +21,7 @@ use crate::{
     execution_identity::{ExecutionContext, ExecutionSnapshot},
     go_discovery::GoVersion,
     go_provision::GoPlan,
-    lock::{Ecosystems, Installation, Lock, Platform, Snapshot, StorageError, additional},
+    lock::{Installation, Lock, Platform, Snapshot, StorageError, additional},
     node_provision::NodePlan,
     npm_provision::NpmPlan,
     package_manager::{Declaration, Manager},
@@ -98,88 +98,26 @@ pub struct ActivationPlan {
 }
 
 impl ActivationPlan {
-    /// Caller selects the exact root and execution context; no root/host
-    /// probes, ancestor search, system-tool fallback, resolution, or
-    /// storage creation. A missing lock is an error, not unconfigured-mode
-    /// policy for future callers. Rust declarations are ignored, so a lock
-    /// with Rust selections is drift; see `inspect_with`.
-    pub fn inspect(repo: &Path, context: ExecutionContext) -> Result<Self, Error> {
-        Self::inspect_with(repo, context, Ecosystems::default())
-    }
-
-    /// Use setup's exact workspace-flag eligibility when capturing
-    /// declarations.
-    /// Repeated inspection uses publication stamps; explicit verification
-    /// hashes bytes.
-    pub fn inspect_with(
-        repo: &Path,
-        context: ExecutionContext,
-        ecosystems: Ecosystems,
-    ) -> Result<Self, Error> {
-        Self::qualify(&context)?;
-        let sources = Snapshot::capture_with(repo, ecosystems)?;
-        Self::inspect_captured(&sources, context)
-    }
-
-    /// Inspect the original source snapshot with publication-stamp caching.
-    pub fn inspect_captured(sources: &Snapshot, context: ExecutionContext) -> Result<Self, Error> {
-        Self::captured(sources, context, Verification::Stamped)
-    }
-
-    /// Re-hash all installed bytes while retaining the caller's original
-    /// sources.
-    pub fn verify_captured(sources: &Snapshot, context: ExecutionContext) -> Result<Self, Error> {
-        Self::captured(sources, context, Verification::Full)
-    }
-
-    /// Full verification for callers selecting declaration ecosystems
-    /// explicitly.
-    pub fn verify_with(
-        repo: &Path,
-        context: ExecutionContext,
-        ecosystems: Ecosystems,
-    ) -> Result<Self, Error> {
-        Self::qualify(&context)?;
-        let sources = Snapshot::capture_with(repo, ecosystems)?;
-        Self::verify_captured(&sources, context)
-    }
-
     /// A `turbo setup --no-lock` clone: plan the sealed clone-local selection
     /// its generation records, in place of turbo.lock, with the same
     /// declaration, adapter and installation checks. A turbo.lock in the root
     /// is the committed resolution and is never overridden. Node/npm/pnpm
     /// ecosystems only, like `--no-lock` setup. The snapshot identity is
     /// clone-local (see `ExecutionSnapshot::select_clone_local`).
-    pub fn inspect_clone_local(repo: &Path, context: ExecutionContext) -> Result<Self, Error> {
-        Self::qualify(&context)?;
-        // A clone-local selection is always an installed generation.
-        if context.musl() {
-            return Err(Error::MuslHost);
-        }
-        let sources = Snapshot::capture(repo)?;
-        Self::clone_local(&sources, context, Verification::Stamped)
-    }
-
-    /// `inspect_clone_local` over the caller's original sources, re-hashing
-    /// all installed bytes.
-    pub fn verify_clone_local_captured(
-        sources: &Snapshot,
-        context: ExecutionContext,
-    ) -> Result<Self, Error> {
-        Self::clone_local(sources, context, Verification::Full)
-    }
-
-    fn clone_local(
+    pub fn clone_local(
         sources: &Snapshot,
         context: ExecutionContext,
         verification: Verification,
     ) -> Result<Self, Error> {
         Self::qualify(&context)?;
+        if context.musl() {
+            return Err(Error::MuslHost);
+        }
         sources.ensure_current()?;
         if sources.previous_lock().is_some() {
             return Err(StorageError::Conflict.into());
         }
-        let current = Store::inspect(sources.repository_root())
+        let current = Store::inspect_with(sources.repository_root(), verification)
             .map_err(Error::DamagedInventory)?
             .ok_or(Error::MissingInventory)?;
         let record = current.record.ok_or(Error::StaleInventory)?;
@@ -195,7 +133,12 @@ impl ActivationPlan {
         )
     }
 
-    fn captured(
+    /// Caller selects the exact sources and execution context; no root/host
+    /// probes, ancestor search, system-tool fallback, resolution, or
+    /// storage creation. A missing lock is an error, not unconfigured-mode
+    /// policy for future callers. Sources captured without Rust ecosystems
+    /// ignore Rust declarations, so a lock with Rust selections is drift.
+    pub fn captured(
         sources: &Snapshot,
         context: ExecutionContext,
         verification: Verification,

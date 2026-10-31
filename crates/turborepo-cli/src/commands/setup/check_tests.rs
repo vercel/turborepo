@@ -151,7 +151,10 @@ fn check_damage_declaration_inventory_and_lock_drift_are_actionable_readonly_fai
             .unwrap();
         match case {
             0 => fs::remove_file(f.owned.root().join(".turbo/tools/manifest.json")).unwrap(),
-            1 => fs::write(current.bin.join("../tools/node/resource"), "damage").unwrap(),
+            1 => turborepo_setup::test_support::damage(
+                &current.bin.join("../tools/node/resource"),
+                "damage",
+            ),
             2 => fs::remove_file(current.bin.join("../tools/pnpm/dist/resource")).unwrap(),
             3 => fs::write(f.owned.root().join(".nvmrc"), "26.0.0").unwrap(),
             4 => {

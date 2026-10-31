@@ -84,11 +84,6 @@ pub(super) fn run(
     // Repo inventory proves health, never provenance. Without a matching user
     // record the whole cohort is freshly verified before it can be recorded.
     let recorded = trust.allows_reuse(&store)?;
-    let preparation = if recorded {
-        Preparation::IfNeeded
-    } else {
-        Preparation::Fresh
-    };
     let staged = if existing.is_none() {
         Some(ephemeral_reconcile::stage(
             &snapshot,
@@ -110,9 +105,9 @@ pub(super) fn run(
     } else {
         None
     };
-    let selection = match (&staged, &existing) {
-        (Some(staged), _) => staged.selection(),
-        (_, Some(native)) => native.selection(),
+    let (selection, record) = match (&staged, &existing) {
+        (Some(staged), _) => (staged.selection(), staged.record()),
+        (_, Some(native)) => (native.selection(), native.record()),
         _ => return Err(Error::Unsupported("missing native selection")),
     };
     // NativeRecord::preflight admits only Node with npm or pnpm; Node-bundled
@@ -131,6 +126,11 @@ pub(super) fn run(
     desired.extend(pnpm.as_ref().map(|plan| plan.inventory_tool().clone()));
     desired.extend(npm.as_ref().map(|plan| plan.inventory_tool().clone()));
     let expected = store.generation().or_else(|_| store.repair_generation())?;
+    let preparation = if recorded && !store.republishes_damage(&desired, Some(record))? {
+        Preparation::IfNeeded
+    } else {
+        Preparation::Fresh
+    };
     let (prepared_node, prepared_manager) = runtime.block_on(async {
         let node = node
             .prepare(&store, &desired, &sources.node, preparation)

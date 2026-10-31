@@ -15,7 +15,7 @@ use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
     net::TcpListener,
 };
-use turborepo_tool_install::Outcome;
+use turborepo_tool_install::{Outcome, Verification};
 
 use super::*;
 
@@ -209,7 +209,7 @@ async fn fresh_cohort_resources_bound_launchers_reuse_and_repair() {
             .permissions()
             .mode()
             & 0o777,
-        0o640
+        0o440
     );
     assert_eq!(
         fs::metadata(root.join("bin/npm-cli.js"))
@@ -268,31 +268,35 @@ async fn fresh_cohort_resources_bound_launchers_reuse_and_repair() {
             .unwrap()
             .is_none()
     );
-    store.reconcile(&expanded, node_stage).unwrap();
     assert_eq!(registry.requests.lock().unwrap().len(), 2);
     for damaged in [
         "bin/npm",
         "tools/npm/node_modules/resource/data.json",
         "tools/node/bin/node",
     ] {
+        store.reconcile(&expanded, node_stage).unwrap();
         let bin = store.current().unwrap().unwrap().bin;
         let path = bin.parent().unwrap().join(damaged);
         if damaged == "bin/npm" {
             fs::remove_file(&path).unwrap();
             std::os::unix::fs::symlink("../tools/npm/bin/npm-cli.js", &path).unwrap();
         } else {
-            fs::write(&path, "corrupt").unwrap();
+            crate::source_policy::test_support::damage(&path, "corrupt");
         }
         let before = manifest(repo.path());
-        assert!(
-            npm.prepare_if_needed(&store, &desired, &registry.transport)
-                .await
-                .unwrap()
-                .is_some()
-        );
+        let prepared = npm
+            .prepare_if_needed(&store, &desired, &registry.transport)
+            .await
+            .unwrap();
+        assert_eq!(prepared.is_some(), damaged != "tools/node/bin/node");
         assert_eq!(manifest(repo.path()), before);
         install(&mut store, &node, &npm, &registry).await.unwrap();
         assert!(store.is_current(&desired).unwrap());
+        assert!(
+            Store::inspect_with(repo.path(), Verification::Full)
+                .unwrap()
+                .is_some()
+        );
     }
 }
 

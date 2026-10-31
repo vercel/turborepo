@@ -185,11 +185,15 @@ fn no_lock_repairs_missing_or_damaged_full_tree_without_refreshing_pins() {
         match case {
             0 => fs::remove_dir_all(&tree).unwrap(),
             1 => fs::remove_dir_all(tree.join("tools/node")).unwrap(),
-            2 => fs::write(tree.join("tools/pnpm/dist/resource"), "damaged").unwrap(),
+            2 => {
+                fs::remove_file(tree.join("bin/pnpm")).unwrap();
+                std::os::unix::fs::symlink("../tools/pnpm/dist/resource", tree.join("bin/pnpm"))
+                    .unwrap();
+            }
             3 => fs::remove_file(tree.join("bin/pnpm")).unwrap(),
             _ => {
                 fs::remove_file(recovery(&f, &pinned)).unwrap();
-                fs::write(tree.join("tools/pnpm/dist/resource"), "legacy damage").unwrap();
+                fs::remove_file(tree.join("bin/pnpm")).unwrap();
             }
         }
         let mut repair_routes = routes(&f, "24.0.0", "10.0.0");
@@ -215,6 +219,63 @@ fn no_lock_repairs_missing_or_damaged_full_tree_without_refreshing_pins() {
     }
 }
 #[test]
+fn no_lock_record_only_change_repairs_a_damaged_resource_it_republishes() {
+    let f = fresh();
+    fs::write(f.owned.root().join(".nvmrc"), "24.x").unwrap();
+    let u = LoopbackServer::new(routes(&f, "24.0.0", "10.0.0"), |_| {}).unwrap();
+    f.run(&u, NO_LOCK).unwrap();
+    let before = current(&f);
+    turborepo_setup::test_support::damage(
+        &before.bin.join("../tools/pnpm/dist/resource"),
+        "damage",
+    );
+    // A new declaration that resolves to the same tools changes only the
+    // record, which still publishes a new generation.
+    fs::write(f.owned.root().join(".nvmrc"), "24.0.x").unwrap();
+    let repair = LoopbackServer::new(routes(&f, "24.0.0", "10.0.0"), |_| {}).unwrap();
+    f.run(&repair, NO_LOCK).unwrap();
+    let after = current(&f);
+    assert_eq!(after.tools, before.tools);
+    let record = |c: &turborepo_tool_install::Current| c.record.as_ref().unwrap().bytes().to_vec();
+    assert_ne!(record(&after), record(&before));
+    assert_eq!(
+        fs::read(after.bin.join("../tools/pnpm/dist/resource")).unwrap(),
+        b"complete pnpm resource"
+    );
+    assert!(
+        Store::inspect_with(f.owned.root(), turborepo_tool_install::Verification::Full)
+            .unwrap()
+            .is_some()
+    );
+    untouched(&f);
+}
+#[test]
+fn locked_setup_repairs_a_damaged_resource_of_a_no_lock_generation_it_republishes() {
+    let f = fresh();
+    fs::write(f.owned.root().join(".nvmrc"), "24.x").unwrap();
+    let u = LoopbackServer::new(routes(&f, "24.0.0", "10.0.0"), |_| {}).unwrap();
+    f.run(&u, NO_LOCK).unwrap();
+    let before = current(&f);
+    turborepo_setup::test_support::damage(
+        &before.bin.join("../tools/pnpm/dist/resource"),
+        "damage",
+    );
+    let locked = LoopbackServer::new(routes(&f, "24.0.0", "10.0.0"), |_| {}).unwrap();
+    f.run(&locked, &["--tools-only", "--no-frozen"]).unwrap();
+    let after = current(&f);
+    assert_eq!(after.tools, before.tools);
+    assert!(after.record.is_none());
+    assert_eq!(
+        fs::read(after.bin.join("../tools/pnpm/dist/resource")).unwrap(),
+        b"complete pnpm resource"
+    );
+    assert!(
+        Store::inspect_with(f.owned.root(), turborepo_tool_install::Verification::Full)
+            .unwrap()
+            .is_some()
+    );
+}
+#[test]
 fn no_lock_legacy_repair_keeps_original_record_cas_after_copy_creation() {
     let f = fresh();
     fs::write(f.owned.root().join(".nvmrc"), "24.x").unwrap();
@@ -224,7 +285,7 @@ fn no_lock_legacy_repair_keeps_original_record_cas_after_copy_creation() {
     let independent = recovery(&f, &pinned);
     let tree = current(&f).bin.parent().unwrap().to_owned();
     fs::remove_file(&independent).unwrap();
-    fs::write(tree.join("tools/pnpm/dist/resource"), "legacy damage").unwrap();
+    fs::remove_file(tree.join("bin/pnpm")).unwrap();
     let before = f.manifest();
     let repair = LoopbackServer::new(routes(&f, "24.0.0", "10.0.0"), |_| {}).unwrap();
     let fired = std::cell::Cell::new(false);
@@ -365,7 +426,7 @@ fn no_lock_atomic_final_record_inventory_failures_preserve_previous_selection() 
             }
             match case {
                 0 => fs::write(staged.join("record.json"), "corrupt").unwrap(),
-                1 => fs::write(staged.join("tools/pnpm/dist/resource"), "corrupt").unwrap(),
+                1 => fs::remove_file(staged.join("bin/pnpm")).unwrap(),
                 2 => fs::write(f.owned.root().join("turbo.lock"), "{}").unwrap(),
                 3 => fs::write(f.owned.root().join("turbo.json"), UNSUPPORTED_SETUP).unwrap(),
                 _ => fs::write(f.owned.root().join("pnpm-workspace.yaml"), "packages: []").unwrap(),
@@ -429,7 +490,12 @@ fn digest(bytes: &[u8]) -> String {
 }
 fn locked_plan(f: &Fixture) -> turborepo_setup::activation::ActivationPlan {
     let context = crate::commands::managed::context().unwrap();
-    turborepo_setup::activation::ActivationPlan::inspect(f.owned.root(), context).unwrap()
+    turborepo_setup::activation::ActivationPlan::captured(
+        &turborepo_setup::lock::Snapshot::capture(f.owned.root()).unwrap(),
+        context,
+        turborepo_tool_install::Verification::Shallow,
+    )
+    .unwrap()
 }
 #[test]
 fn no_lock_records_clone_local_trust_that_a_committed_lock_never_inherits() {

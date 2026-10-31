@@ -99,8 +99,7 @@ fn forced_replacement_copies_only_tools_without_fresh_bytes() {
     assert_eq!(staged, ["pnpm"]);
     let current = store.current().unwrap().unwrap();
     assert!(current.bin != old && current.tools == desired);
-    // Reuse needs a healthy selection; otherwise the caller must stage.
-    fs::write(current.bin.join("../tools/pnpm/resource"), b"damaged").unwrap();
+    damage(&current.bin.join("../tools/pnpm/resource"));
     let before = manifest(&store);
     let fail = |_: &Tool, _: &Path| Err(Error::InvalidInventory);
     assert!(

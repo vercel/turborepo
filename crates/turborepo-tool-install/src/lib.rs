@@ -19,8 +19,6 @@ use std::{
 };
 
 mod repair;
-#[cfg(windows)]
-mod windows_stat;
 
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -77,73 +75,19 @@ struct Inventory {
 }
 
 const RECORD_LIMIT: u64 = 1024 * 1024;
-const STAMPS: &str = "stamps.json";
 
 /// How much installed content a readiness check reads.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Verification {
     /// Re-hash every installed file's bytes against the recorded tree hash.
     Full,
-    /// Trust a tree's recorded hash while the stat stamp taken when its
-    /// generation was published still matches: every entry's name, type,
-    /// size, mode, inode, mtime, ctime and link target. A mismatch, or a
-    /// missing or unreadable stamp, re-hashes that tree as `Full` does. Any
-    /// write, replacement, chmod or added or removed entry changes the stamp;
-    /// only a same-size in-place write within the same filesystem timestamp
-    /// tick as the stamped state, or forged stamps, can go unseen.
-    ///
-    /// Windows stamps NTFS and ReFS trees only (`windows_stat`): each file's
-    /// volume and file ID, link count, attributes, last-write time and change
-    /// time take the place of mode, inode, mtime and ctime. A write changes
-    /// the stamp by the time its handle closes. Unlike ctime, a change time
-    /// can be set back, or its updates suspended on a handle, but only by a
-    /// writer deliberately hiding its write.
-    Stamped,
-}
-
-/// Per-generation cache beside (not in) the manifest, so readers that predate
-/// it still parse the manifest and hash in full. Each stamp is bound to the
-/// content hash it vouches for.
-#[derive(Default, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-struct Stamps {
-    tools: BTreeMap<String, Stamp>,
-}
-
-#[derive(Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-struct Stamp {
-    tree_sha256: String,
-    stat_sha256: String,
-}
-
-impl Stamps {
-    /// A missing, unsafe or malformed file is only a cache miss.
-    fn read(generation: &Path) -> Self {
-        let path = generation.join(STAMPS);
-        let read = || -> Result<Self, Error> {
-            let m = fs::symlink_metadata(&path)?;
-            if !m.is_file() || m.file_type().is_symlink() {
-                return Err(Error::UnsafePath);
-            }
-            let mut bytes = Vec::new();
-            File::open(&path)?
-                .take(RECORD_LIMIT)
-                .read_to_end(&mut bytes)?;
-            Ok(serde_json::from_slice(&bytes)?)
-        };
-        read().unwrap_or_default()
-    }
-
-    /// Whether this tree still has the stat stamp recorded for its hash.
-    fn fresh(&self, installed: &Installed, tree: &Path) -> Result<bool, Error> {
-        match self.tools.get(&installed.tool.id) {
-            Some(stamp) if stamp.tree_sha256 == installed.tree_sha256 => {
-                Ok(stat_digest(tree)?.is_some_and(|stat| stat == stamp.stat_sha256))
-            }
-            _ => Ok(false),
-        }
-    }
+    /// Never reads installed trees. Checks only the generation layout, each
+    /// tool's exported executables and their shims, the exact `bin` listing
+    /// and the generation record. Valid only for callers that bind the
+    /// manifest, whose generation and per-tree hashes name the verified
+    /// bytes, to external evidence such as a user-owned setup record written
+    /// after setup verified those trees. `Full` finds damage in place.
+    Shallow,
 }
 
 /// Opaque bookkeeping, never execution authorization. The caller must exclude
@@ -393,7 +337,7 @@ impl Store {
         Ok(expected)
     }
 
-    /// Reverify exact bytes, held root identity, complete trees/shims and
+    /// Reverify exact bytes, held root identity, generation layout/shims and
     /// record. Tokens are valid only on the acquiring live Store, including
     /// after waits.
     pub fn check_generation(&self, expected: &GenerationExpectation) -> Result<(), Error> {
@@ -413,13 +357,13 @@ impl Store {
     }
 
     /// Read-only readiness at this exact repository root, never an ancestor.
-    /// No directories, transaction lock, or user state are created. This is
-    /// integrity/bookkeeping evidence, NOT authorization to execute repo data.
-    /// Reject publication observed during inspection; callers must still handle
-    /// later changes (this does not lease a generation against hostile edits).
-    /// Stamped, for repeated run-time validation.
+    /// Nothing is created or written: no directories, transaction lock, or
+    /// user state. This is integrity/bookkeeping evidence, NOT authorization
+    /// to execute repo data. Reject publication observed during inspection;
+    /// callers must still handle later changes (this does not lease a
+    /// generation against hostile edits). Shallow.
     pub fn inspect(repo: &Path) -> Result<Option<Current>, Error> {
-        Self::inspect_with(repo, Verification::Stamped)
+        Self::inspect_with(repo, Verification::Shallow)
     }
 
     /// `inspect` with an explicit content verification level.
@@ -513,7 +457,7 @@ impl Store {
         let Some(inventory) = Self::inventory(&self.root)? else {
             return Ok(None);
         };
-        let record = Self::check(&self.root, &inventory, Verification::Stamped)?;
+        let record = Self::check(&self.root, &inventory, Verification::Shallow)?;
         Ok(Some(Current {
             bin: self.root.join(inventory.generation).join("bin"),
             tools: inventory.tools.into_iter().map(|t| t.tool).collect(),
@@ -529,8 +473,8 @@ impl Store {
     }
 
     /// Readiness for a complete desired tool set, without downloading or
-    /// staging. Damaged trees return false so provisioning can repair them
-    /// atomically.
+    /// staging or reading trees. A broken layout, export or record returns
+    /// false so provisioning can repair it atomically.
     pub fn is_current(&self, desired: &[Tool]) -> Result<bool, Error> {
         validate_tools(desired)?;
         let mut desired = desired.to_vec();
@@ -541,8 +485,8 @@ impl Store {
     }
 
     /// Whether reconciliation can copy this exact tool without preparation.
-    /// A damaged sibling tree or shim invalidates reuse of the entire
-    /// generation.
+    /// A broken sibling layout or shim invalidates reuse of the entire
+    /// generation. Trees are not read; see `reusable_tree`.
     pub fn can_reuse(&self, tool: &Tool) -> Result<bool, Error> {
         validate_tools(std::slice::from_ref(tool))?;
         Ok(self
@@ -552,15 +496,64 @@ impl Store {
 
     /// Healthy tree for adapter-specific resource verification while holding
     /// this Store guard. Not activation authorization or resolution semantics.
+    /// An unchanged cohort publishes nothing, so its trees are not read. A
+    /// changed cohort copies this tree into a new generation, so it must
+    /// match its recorded hash; otherwise the caller prepares it afresh.
+    /// Unchanged means the same tools under the same record; callers check
+    /// `republishes_damage` first.
     pub fn reusable_tree(&self, tool: &Tool, desired: &[Tool]) -> Result<Option<PathBuf>, Error> {
         validate_tools(desired)?;
         if !desired.contains(tool) {
             return Err(Error::InvalidInventory);
         }
-        Ok(self
-            .healthy_inventory()?
-            .filter(|old| old.contains(tool))
-            .map(|old| self.root.join(old.generation).join("tools").join(&tool.id)))
+        let Some(old) = self.healthy_inventory()? else {
+            return Ok(None);
+        };
+        let Some(entry) = old.tools.iter().find(|entry| &entry.tool == tool) else {
+            return Ok(None);
+        };
+        let tree = self.root.join(&old.generation).join("tools").join(&tool.id);
+        let unchanged =
+            old.tools.len() == desired.len() && desired.iter().all(|tool| old.contains(tool));
+        if !unchanged {
+            match tree_hash(&tree) {
+                Ok(hash) if hash == entry.tree_sha256 => {}
+                Ok(_) | Err(Error::UnsafePath) => return Ok(None),
+                Err(Error::Io(e)) if e.kind() == io::ErrorKind::NotFound => return Ok(None),
+                Err(e) => return Err(e),
+            }
+        }
+        Ok(Some(tree))
+    }
+
+    /// Whether reconciling `desired` with `record` republishes the current
+    /// tools under a different record while a tree no longer matches its
+    /// recorded hash. That new generation copies and re-hashes every tree,
+    /// which `reusable_tree` does not check for the tools alone, so the
+    /// caller must prepare every tool afresh. Hashes trees only when the
+    /// record alone changes.
+    pub fn republishes_damage(
+        &self,
+        desired: &[Tool],
+        record: Option<&Record>,
+    ) -> Result<bool, Error> {
+        validate_tools(desired)?;
+        let Some(old) = self.healthy_inventory()? else {
+            return Ok(false);
+        };
+        let mut desired = desired.to_vec();
+        desired.sort_by(|a, b| a.id.cmp(&b.id));
+        if !old.tools.iter().map(|t| &t.tool).eq(desired.iter())
+            || old.record_sha256 == record.map(Record::hash)
+        {
+            return Ok(false);
+        }
+        match Self::check(&self.root, &old, Verification::Full) {
+            Ok(_) => Ok(false),
+            Err(Error::DamagedContents | Error::UnsafePath) => Ok(true),
+            Err(Error::Io(e)) if e.kind() == io::ErrorKind::NotFound => Ok(true),
+            Err(e) => Err(e),
+        }
     }
 
     fn healthy_inventory(&self) -> Result<Option<Inventory>, Error> {
@@ -568,10 +561,8 @@ impl Store {
         let Some(old) = Self::inventory(&self.root)? else {
             return Ok(None);
         };
-        match Self::check(&self.root, &old, Verification::Stamped) {
+        match Self::check(&self.root, &old, Verification::Shallow) {
             Ok(_) => Ok(Some(old)),
-            // Metadata/path validation above remains fail-closed. Damaged install
-            // contents can be rebuilt, but must never be copied into staging.
             Err(Error::InvalidInventory | Error::UnsafePath | Error::DamagedContents) => Ok(None),
             Err(Error::Io(e)) if e.kind() == io::ErrorKind::NotFound => Ok(None),
             Err(e) => Err(e),
@@ -626,16 +617,13 @@ impl Store {
         real_directory(&tools)?;
         let bin = generation.join("bin");
         real_directory(&bin)?;
-        let stamps = match verification {
-            Verification::Stamped => Stamps::read(&generation),
-            Verification::Full => Stamps::default(),
-        };
         let mut names = BTreeSet::new();
         let mut damaged = false;
         for installed in &inventory.tools {
             let tree = tools.join(&installed.tool.id);
-            damaged |=
-                !stamps.fresh(installed, &tree)? && tree_hash(&tree)? != installed.tree_sha256;
+            if verification == Verification::Full && tree_hash(&tree)? != installed.tree_sha256 {
+                damaged = true;
+            }
             check_executables(&tree, &installed.tool)?;
             for (name, executable) in &installed.tool.executables {
                 let shim = shim_name(name, executable)?;
@@ -661,6 +649,10 @@ impl Store {
     /// Stages a whole desired generation before publishing it. The callback
     /// writes only into the provided empty private tool directory. It must
     /// not mutate any prior generation or run untrusted installation hooks.
+    /// Tools in the selection are copied and re-hashed; a copy that no
+    /// longer matches its recorded hash is staged through the callback
+    /// instead. An unchanged cohort is not re-read: `Verification::Full`
+    /// finds damage in place, and forced reconciliation repairs it.
     /// Failures before publication leave the prior manifest and trees
     /// untouched. After publication a durability error may mean the new
     /// state is selected.
@@ -701,7 +693,8 @@ impl Store {
     /// Forced replacement that copies `reused` tools from the healthy
     /// selection instead of staging them, for reinstalls (such as offline)
     /// with fresh bytes for only some tools. A reused tool missing from the
-    /// healthy selection is staged, so the caller must be able to fail it.
+    /// healthy selection, or whose copy does not match its recorded hash, is
+    /// staged, so the caller must be able to fail it.
     pub fn force_reconcile_reusing_checked(
         &mut self,
         desired: &[Tool],
@@ -782,7 +775,6 @@ impl Store {
         let bin = stage.path().join("bin");
         directory(&bin)?;
         let mut installed = Vec::new();
-        let mut stamps = Stamps::default();
         for tool in desired {
             let tree = tools.join(&tool.id);
             directory(&tree)?;
@@ -792,47 +784,38 @@ impl Store {
             };
             let reused = reuse.and_then(|old| {
                 let entry = old.tools.iter().find(|entry| entry.tool == tool)?;
-                Some((old, entry))
+                Some((&old.generation, &entry.tree_sha256))
             });
-            if let Some((old, _)) = reused {
-                copy_tree(
-                    &self.root.join(&old.generation).join("tools").join(&tool.id),
-                    &tree,
-                )?;
-            } else {
+            let copied = match reused {
+                Some((generation, expected)) => {
+                    let source = self.root.join(generation).join("tools").join(&tool.id);
+                    copy_tree(&source, &tree)?;
+                    match tree_hash(&tree) {
+                        Ok(hash) if hash == *expected => Some(hash),
+                        Ok(_) | Err(Error::UnsafePath) => {
+                            fs::remove_dir_all(&tree)?;
+                            directory(&tree)?;
+                            None
+                        }
+                        Err(e) => return Err(e),
+                    }
+                }
+                None => None,
+            };
+            if copied.is_none() {
                 stage_tool(&tool, &tree)?;
             }
-            // Windows `.exe` exports are hard links, which change their
-            // target's link count and change time, so they precede its stamp.
-            if cfg!(windows) {
-                export(&tree, &bin, &tool)?;
-            }
-            // Stamp before hashing: a change while hashing can only leave a
-            // stale stamp, never one vouching for bytes that were not hashed.
-            let stat_sha256 = stat_digest(&tree)?;
-            let tree_sha256 = tree_hash(&tree)?;
-            // A stamped health check did not re-read the reused source tree.
-            if reused.is_some_and(|(_, entry)| entry.tree_sha256 != tree_sha256) {
-                return Err(Error::InvalidInventory);
-            }
-            if !cfg!(windows) {
-                export(&tree, &bin, &tool)?;
-            }
-            if let Some(stat_sha256) = stat_sha256 {
-                stamps.tools.insert(
-                    tool.id.clone(),
-                    Stamp {
-                        tree_sha256: tree_sha256.clone(),
-                        stat_sha256,
-                    },
-                );
-            }
+            let modes_changed = make_read_only(&tree)?;
+            let tree_sha256 = match copied {
+                Some(hash) if !modes_changed => hash,
+                _ => tree_hash(&tree)?,
+            };
+            export(&tree, &bin, &tool)?;
             installed.push(Installed { tool, tree_sha256 });
         }
         if let Some((record, _)) = recorded {
             write_private(&stage.path().join("record.json"), record.bytes())?;
         }
-        write_private(&stage.path().join(STAMPS), &serde_json::to_vec(&stamps)?)?;
         let inventory = Inventory {
             schema: 1,
             record_sha256,
@@ -860,7 +843,7 @@ impl Store {
         sync_directory(&self.root)?;
         before_publish()?;
         self.check_root()?;
-        Self::check(&self.root, &inventory, Verification::Stamped)?;
+        Self::check(&self.root, &inventory, Verification::Shallow)?;
         if let Some((record, expected)) = recorded {
             self.check_generation(expected)?;
             self.preserve_record(record)?;
@@ -925,8 +908,6 @@ impl Store {
         Ok(Some(inventory.generation))
     }
 
-    // Stamp the outgoing selection before it can become inactive, so its
-    // modification time is when its cleanup grace started.
     fn retire_selected(&self) -> Result<(), Error> {
         let Some(generation) = Self::selected_generation(&self.root)? else {
             return Ok(());
@@ -939,7 +920,7 @@ impl Store {
         #[cfg(windows)]
         let directory = {
             use std::os::windows::fs::OpenOptionsExt;
-            // FILE_WRITE_ATTRIBUTES is sufficient for the retirement stamp.
+            // FILE_WRITE_ATTRIBUTES is sufficient to set the retirement time.
             // Open the directory itself, without following reparse points or
             // permitting replacement while its timestamp is updated.
             let directory = OpenOptions::new()
@@ -1342,59 +1323,17 @@ fn check_executables(root: &Path, tool: &Tool) -> Result<(), Error> {
     Ok(())
 }
 
-#[derive(Clone, Copy, PartialEq, Eq)]
-enum TreeDigest {
-    /// File bytes: the recorded tree hash.
-    Bytes,
-    /// File inode, mtime and ctime (Windows: `windows_stat`) instead of
-    /// bytes: a publication stamp.
-    Stat,
-}
-
-fn tree_hash(root: &Path) -> Result<String, Error> {
-    tree_digest(root, TreeDigest::Bytes)
-}
-
-/// A tree's publication stamp, or `None` where its stats cannot vouch for
-/// its contents, so stamped checks hash it in full.
-fn stat_digest(root: &Path) -> Result<Option<String>, Error> {
-    #[cfg(windows)]
-    if !windows_stat::stampable(root)? {
-        return Ok(None);
-    }
-    if cfg!(any(unix, windows)) {
-        tree_digest(root, TreeDigest::Stat).map(Some)
-    } else {
-        Ok(None)
-    }
-}
-
 // Walk without following directory links. Accept only relative, existing
 // symlinks confined to this tool's full tree, preserving adjacent
-// libraries/resources. Both digests preserve the same names, types, modes
-// and links. Repair snapshots retain their separate unhealthy-link allowance.
-fn tree_digest(root: &Path, digest: TreeDigest) -> Result<String, Error> {
-    state_digest(root, digest, true)
+// libraries/resources.
+fn tree_hash(root: &Path) -> Result<String, Error> {
+    state_hash(root, true)
 }
 
 fn state_hash(root: &Path, healthy_links: bool) -> Result<String, Error> {
-    state_digest(root, TreeDigest::Bytes, healthy_links)
-}
-
-fn state_digest(root: &Path, digest: TreeDigest, healthy_links: bool) -> Result<String, Error> {
     real_directory(root)?;
     let mut hash = Sha256::new();
-    descend(root, &mut |path| {
-        // A Windows stamp reads each entry's type and stats from one handle.
-        #[cfg(windows)]
-        let (m, stat) = match digest {
-            TreeDigest::Stat => {
-                let file = windows_stat::open(path)?;
-                (file.metadata()?, Some(file))
-            }
-            TreeDigest::Bytes => (fs::symlink_metadata(path)?, None),
-        };
-        #[cfg(not(windows))]
+    walk(root, &mut |path| {
         let m = fs::symlink_metadata(path)?;
         let name = path
             .strip_prefix(root)
@@ -1423,60 +1362,26 @@ fn state_digest(root: &Path, digest: TreeDigest, healthy_links: bool) -> Result<
             }
             hash.update(b"file");
             hash.update(m.len().to_le_bytes());
-            match digest {
-                TreeDigest::Bytes => {
-                    let mut file = File::open(path)?;
-                    let mut bytes = [0; 8192];
-                    loop {
-                        let n = file.read(&mut bytes)?;
-                        if n == 0 {
-                            break;
-                        }
-                        hash.update(&bytes[..n]);
-                    }
+            let mut file = File::open(path)?;
+            let mut bytes = [0; 8192];
+            loop {
+                let n = file.read(&mut bytes)?;
+                if n == 0 {
+                    break;
                 }
-                // Writes, replacement and chmod all advance ctime, which the
-                // owner cannot set back.
-                #[cfg(unix)]
-                TreeDigest::Stat => {
-                    use std::os::unix::fs::MetadataExt;
-                    hash.update(m.ino().to_le_bytes());
-                    for time in [m.mtime(), m.mtime_nsec(), m.ctime(), m.ctime_nsec()] {
-                        hash.update(time.to_le_bytes());
-                    }
-                }
-                #[cfg(windows)]
-                TreeDigest::Stat => {
-                    windows_stat::update(stat.as_ref().ok_or(Error::UnsafePath)?, &mut hash)?;
-                }
-                #[cfg(not(any(unix, windows)))]
-                TreeDigest::Stat => return Err(Error::UnsupportedPlatform),
+                hash.update(&bytes[..n]);
             }
         } else if m.is_dir() {
             hash.update(b"directory");
         } else {
             return Err(Error::UnsafePath);
         }
-        // A Windows stamp's handle also decides descent. Other digests re-read
-        // the type, as `walk` does.
-        #[cfg(windows)]
-        if stat.is_some() {
-            return Ok(m.is_dir());
-        }
-        Ok(fs::symlink_metadata(path)?.is_dir())
+        Ok(())
     })?;
     Ok(hex::encode(hash.finalize()))
 }
 
 fn walk(dir: &Path, visit: &mut impl FnMut(&Path) -> Result<(), Error>) -> Result<(), Error> {
-    descend(dir, &mut |path| {
-        visit(path)?;
-        Ok(fs::symlink_metadata(path)?.is_dir())
-    })
-}
-
-/// `walk`, entering each entry that `visit` reports as a real directory.
-fn descend(dir: &Path, visit: &mut impl FnMut(&Path) -> Result<bool, Error>) -> Result<(), Error> {
     let mut entries = fs::read_dir(dir)?
         .map(|e| e.map(|e| e.path()))
         .collect::<Result<Vec<_>, _>>()?;
@@ -1487,8 +1392,9 @@ fn descend(dir: &Path, visit: &mut impl FnMut(&Path) -> Result<bool, Error>) -> 
             .and_then(|n| n.to_str())
             .ok_or(Error::UnsafePath)?;
         artifact_component(name)?;
-        if visit(&path)? {
-            descend(&path, visit)?;
+        visit(&path)?;
+        if fs::symlink_metadata(&path)?.is_dir() {
+            walk(&path, visit)?;
         }
     }
     Ok(())
@@ -1507,6 +1413,32 @@ fn copy_tree(source: &Path, dest: &Path) -> Result<(), Error> {
         }
         Ok(())
     })
+}
+
+/// Directories stay writable so `rm -rf` and `git clean` still work. Unix
+/// only: on Windows the read-only attribute also blocks the deletion and
+/// replacement the store relies on.
+fn make_read_only(root: &Path) -> Result<bool, Error> {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let mut changed = false;
+        walk(root, &mut |path| {
+            let m = fs::symlink_metadata(path)?;
+            let mode = m.permissions().mode() & 0o7777;
+            if m.is_file() && mode & 0o222 != 0 {
+                fs::set_permissions(path, fs::Permissions::from_mode(mode & !0o222))?;
+                changed = true;
+            }
+            Ok(())
+        })?;
+        Ok(changed)
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = root;
+        Ok(false)
+    }
 }
 
 /// A new owner-only file in a private staged generation.

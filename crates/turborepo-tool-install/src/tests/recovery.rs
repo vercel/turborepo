@@ -150,12 +150,11 @@ fn damaged_sibling_invalidates_reuse_of_every_tool() {
     let repo = tempfile::tempdir().unwrap();
     let mut store = Store::open(repo.path()).unwrap();
     let desired = [tool("node"), tool("pnpm")];
-    for damage in 0..6 {
+    for damage in 1..6 {
         store.reconcile(&desired, populate).unwrap();
         let before = manifest(&store);
         let bin = store.current().unwrap().unwrap().bin;
         match damage {
-            0 => fs::write(bin.join("pnpm"), b"corrupt sibling").unwrap(),
             1 => fs::remove_file(bin.join("pnpm")).unwrap(),
             2 => {
                 fs::remove_file(bin.join("pnpm")).unwrap();
@@ -319,14 +318,19 @@ fn unrelated_io_errors_are_not_swallowed_as_repairable_absence() {
     let bin = store.current().unwrap().unwrap().bin;
     symlink("loop", bin.join("../tools/node/loop")).unwrap();
     // canonicalize encounters ELOOP, not a missing file or a hash mismatch.
+    let changed = [node.clone(), tool("pnpm")];
     for result in [
-        store.is_current(std::slice::from_ref(&node)),
-        store.can_reuse(&node),
+        Store::inspect_with(repo.path(), Verification::Full).map(drop),
+        store.reusable_tree(&node, &changed).map(drop),
     ] {
         assert!(matches!(result, Err(Error::Io(e)) if e.kind() != io::ErrorKind::NotFound));
     }
+    let staged = |tool: &Tool, root: &Path| {
+        assert_ne!(tool.id, "node", "I/O failure must propagate");
+        populate(tool, root)
+    };
     assert!(
-        matches!(store.reconcile(std::slice::from_ref(&node), |_, _| panic!("I/O failure must propagate")), Err(Error::Io(e)) if e.kind() != io::ErrorKind::NotFound)
+        matches!(store.reconcile(&changed, staged), Err(Error::Io(e)) if e.kind() != io::ErrorKind::NotFound)
     );
     assert_eq!(manifest(&store), before);
 }

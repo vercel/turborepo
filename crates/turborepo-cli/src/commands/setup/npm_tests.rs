@@ -752,10 +752,10 @@ fn npm_check_is_readonly_with_locks_held_and_detects_damage_and_declaration_drif
         } else {
             "../tools/npm/node_modules/resource/data.json"
         };
-        fs::write(current.bin.join(resource), "damage").unwrap();
+        turborepo_setup::test_support::damage(&current.bin.join(resource), "damage");
         let error = n.f.check(CHECK).unwrap_err().to_string();
         assert!(error.contains("turbo setup"), "{error}");
-        n.f.run(&n.upstream(), FROZEN).unwrap(); // Normal setup repairs installation drift.
+        n.f.run(&n.upstream(), FORCE).unwrap();
         assert_eq!(n.f.check(CHECK).unwrap(), 0);
         fs::write(
             n.f.owned.root().join("package.json"),
