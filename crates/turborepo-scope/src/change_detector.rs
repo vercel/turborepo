@@ -187,6 +187,8 @@ impl<'a> ScopeChangeDetector<'a> {
     pub fn get_lockfile_contents(
         &self,
         from_ref: Option<&str>,
+        to_ref: Option<&str>,
+        include_uncommitted: bool,
         changed_files: &HashSet<AnchoredSystemPathBuf>,
     ) -> LockfileContents {
         let resolution_paths = self.pkg_graph.change_knowledge().resolution_paths();
@@ -217,6 +219,61 @@ impl<'a> ScopeChangeDetector<'a> {
             debug!("lockfile changed but was outside the repository");
             return LockfileContents::UnknownChange;
         };
+        if let Some(to_ref) = to_ref {
+            let Ok(current) = self.scm.previous_content(Some(to_ref), &lockfile_path) else {
+                return LockfileContents::UnknownChange;
+            };
+            // Native resolvers can reuse the execution graph only when the
+            // checkout is identical to the requested snapshot.
+            let javascript = self
+                .pkg_graph
+                .package_manager()
+                .is_some_and(|pm| pm.lockfile_name() == path.as_str());
+            if !javascript
+                && self
+                    .scm
+                    .changed_files(self.turbo_root, Some(to_ref), None, true, false, false)
+                    .is_ok_and(|result| result.is_ok_and(|files| files.is_empty()))
+            {
+                return LockfileContents::Changed {
+                    path,
+                    previous_contents: content,
+                };
+            }
+            let mut changes = match self.pkg_graph.changed_packages_from_lockfile_snapshots(
+                &path,
+                &content,
+                &current,
+                |file| self.scm.previous_content(Some(to_ref), file).ok(),
+            ) {
+                Ok(changes) => changes,
+                Err(error) => {
+                    debug!(%error, "unable to resolve the head lockfile snapshot");
+                    return LockfileContents::UnknownChange;
+                }
+            };
+            if include_uncommitted {
+                // File selection unions base..head with local changes relative
+                // to the checkout. Compare those lockfile changes separately,
+                // so later committed dependencies do not leak into base..head.
+                let Ok(checkout) = self.scm.previous_content(Some("HEAD"), &lockfile_path) else {
+                    return LockfileContents::UnknownChange;
+                };
+                let Ok(working) = std::fs::read(&lockfile_path) else {
+                    return LockfileContents::UnknownChange;
+                };
+                if checkout != working {
+                    let Ok(local_changes) = self
+                        .pkg_graph
+                        .changed_packages_from_lockfile_contents(&path, &checkout)
+                    else {
+                        return LockfileContents::UnknownChange;
+                    };
+                    changes.extend(local_changes);
+                }
+            }
+            return LockfileContents::Resolved(changes);
+        }
         debug!("lockfile changed, have the previous content");
         LockfileContents::Changed {
             path,
@@ -266,7 +323,8 @@ impl<'a> GitChangeDetector for ScopeChangeDetector<'a> {
             Err(err) => return Err(err.into()),
         };
 
-        let lockfile_contents = self.get_lockfile_contents(from_ref, &changed_files);
+        let lockfile_contents =
+            self.get_lockfile_contents(from_ref, to_ref, include_uncommitted, &changed_files);
 
         debug!(
             "changed files: {:?}",

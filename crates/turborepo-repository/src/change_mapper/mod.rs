@@ -38,6 +38,8 @@ pub enum LockfileChange {
 
 /// This describes the state of a change to a lockfile.
 pub enum LockfileContents {
+    /// Changes resolved from two explicit SCM snapshots.
+    Resolved(Vec<ExternalDependencyChange>),
     /// We know the lockfile did not change
     Unchanged,
     /// We know the lockfile changed but don't have the file contents of the
@@ -180,48 +182,12 @@ impl<'a, PD: PackageChangeMapper> ChangeMapper<'a, PD> {
                     LockfileContents::Changed {
                         path,
                         previous_contents,
-                    } => {
-                        // if we run into issues, don't error, just assume all packages have changed
-                        let Ok(lockfile_changes) =
-                            self.get_changed_packages_from_lockfile(&path, &previous_contents)
-                        else {
-                            debug!(
-                                "unable to determine lockfile changes, assuming all packages \
-                                 changed"
-                            );
-                            return Ok(PackageChanges::All(
-                                AllPackageChangeReason::LockfileChangeDetectionFailed,
-                            ));
-                        };
-                        debug!(
-                            "found {} packages changed by lockfile",
-                            lockfile_changes.len()
-                        );
-                        merge_changed_packages(
-                            &mut changed_pkgs,
-                            lockfile_changes.into_iter().map(|change| {
-                                let ExternalDependencyChange {
-                                    package,
-                                    added,
-                                    removed,
-                                } = change;
-                                (
-                                    package,
-                                    PackageInclusionReason::LockfileChanged { added, removed },
-                                )
-                            }),
-                        );
-
-                        if let Err(error) =
-                            self.add_relationship_affected_packages(&mut changed_pkgs)
-                        {
-                            tracing::error!(%error, "relationship affectedness projection failed");
-                            return Ok(PackageChanges::All(
-                                AllPackageChangeReason::ConservativeFallback,
-                            ));
-                        }
-
-                        Ok(PackageChanges::Some(changed_pkgs))
+                    } => self.apply_lockfile_changes(
+                        changed_pkgs,
+                        self.get_changed_packages_from_lockfile(&path, &previous_contents),
+                    ),
+                    LockfileContents::Resolved(changes) => {
+                        self.apply_lockfile_changes(changed_pkgs, Ok(changes))
                     }
 
                     // We don't have the actual contents, so just invalidate everything
@@ -252,6 +218,48 @@ impl<'a, PD: PackageChangeMapper> ChangeMapper<'a, PD> {
                 }
             }
         }
+    }
+
+    fn apply_lockfile_changes(
+        &self,
+        mut changed_pkgs: HashMap<WorkspacePackage, PackageInclusionReason>,
+        changes: Result<Vec<ExternalDependencyChange>, ChangeMapError>,
+    ) -> Result<PackageChanges, ChangeMapError> {
+        // if we run into issues, don't error, just assume all packages have changed
+        let Ok(lockfile_changes) = changes else {
+            debug!("unable to determine lockfile changes, assuming all packages changed");
+            return Ok(PackageChanges::All(
+                AllPackageChangeReason::LockfileChangeDetectionFailed,
+            ));
+        };
+
+        debug!(
+            "found {} packages changed by lockfile",
+            lockfile_changes.len()
+        );
+        merge_changed_packages(
+            &mut changed_pkgs,
+            lockfile_changes.into_iter().map(|change| {
+                let ExternalDependencyChange {
+                    package,
+                    added,
+                    removed,
+                } = change;
+                (
+                    package,
+                    PackageInclusionReason::LockfileChanged { added, removed },
+                )
+            }),
+        );
+
+        if let Err(error) = self.add_relationship_affected_packages(&mut changed_pkgs) {
+            tracing::error!(%error, "relationship affectedness projection failed");
+            return Ok(PackageChanges::All(
+                AllPackageChangeReason::ConservativeFallback,
+            ));
+        }
+
+        Ok(PackageChanges::Some(changed_pkgs))
     }
 
     fn filter_ignored_files<'b>(

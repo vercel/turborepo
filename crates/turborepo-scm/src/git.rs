@@ -958,7 +958,7 @@ impl GitRepo {
     ) -> Result<Vec<u8>, Error> {
         let anchored_file_path = self.root.anchor(file_path)?;
         let valid_from = self.resolve_base(from_commit, CIEnv::new())?;
-        let arg = format!("{}:{}", valid_from, anchored_file_path.as_str());
+        let arg = format!("{}:{}", valid_from, anchored_file_path.to_unix());
 
         self.execute_git_command(&["show", "--end-of-options", &arg], "")
     }
@@ -1025,6 +1025,31 @@ mod tests {
         Error, GitRepo, RepoGitIndex, SCM,
         git::{GitHubCommit, GitHubEvent},
     };
+
+    #[test]
+    fn previous_content_reads_nested_paths() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        run_git(root, &["init", "--quiet", "--initial-branch=main"]);
+        fs::create_dir_all(root.join("packages").join("a")).unwrap();
+        let contents = b"{\"name\":\"a\"}\n";
+        fs::write(
+            root.join("packages").join("a").join("package.json"),
+            contents,
+        )
+        .unwrap();
+        run_git(root, &["add", "."]);
+        run_git(root, &["commit", "--quiet", "-m", "nested manifest"]);
+        assert_eq!(
+            previous_content(
+                root.to_path_buf(),
+                Some("HEAD"),
+                "packages/a/package.json".to_string()
+            )
+            .unwrap(),
+            contents
+        );
+    }
 
     fn run_git(repo_root: &Path, args: &[&str]) -> String {
         let output = Command::new("git")
