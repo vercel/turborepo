@@ -1,10 +1,11 @@
 use std::os::unix::fs::PermissionsExt;
 
 use super::*;
+use crate::test_store::{Outcome, TestStore};
 
 struct ReadyNode {
-    repo: tempfile::TempDir,
-    store: Store,
+    _repo: tempfile::TempDir,
+    store: TestStore,
     plan: NodePlan,
     upstream: Upstream,
     transport: NodeTransport,
@@ -15,13 +16,13 @@ async fn ready_node() -> ReadyNode {
     let transport = NodeTransport::loopback_http_for_tests(&upstream.origin).unwrap();
     let plan = plan(&fixture(Platform::MacosArm64, &bytes), Platform::MacosArm64).unwrap();
     let repo = tempfile::tempdir().unwrap();
-    let mut store = Store::open(repo.path()).unwrap();
+    let store = TestStore::open(repo.path());
     assert_eq!(
-        install(&mut store, &plan, &transport).await.unwrap(),
+        install(&store, &plan, &transport).await.unwrap(),
         Outcome::Replaced
     );
     ReadyNode {
-        repo,
+        _repo: repo,
         store,
         plan,
         upstream,
@@ -55,35 +56,29 @@ fn stage_sibling(tool: &Tool, root: &Path) -> Result<(), turborepo_tool_install:
     fs::set_permissions(path, fs::Permissions::from_mode(0o755))?;
     Ok(())
 }
-pub(super) fn assert_scoped_resource(store: &Store) {
-    let current = store.current().unwrap().unwrap();
-    let root = current.bin.parent().unwrap().join("tools/node");
+pub(super) fn assert_scoped_resource(store: &TestStore) {
+    let node = &store.current().unwrap().unwrap().tools;
+    let node = node.iter().find(|tool| tool.id == "node").unwrap();
     assert_eq!(
-        fs::read(root.join(SCOPED_RESOURCE)).unwrap(),
+        fs::read(store.tree_of(node).join(SCOPED_RESOURCE)).unwrap(),
         b"{\"name\":\"@npmcli/config\"}"
     );
 }
-fn assert_no_generation(repo: &Path) {
-    assert!(
-        fs::read_dir(repo.join(".turbo/tools"))
-            .unwrap()
-            .all(|entry| !entry
-                .unwrap()
-                .file_name()
-                .to_string_lossy()
-                .starts_with("generation-"))
-    );
+/// Nothing a failed setup staged is left in the store.
+fn assert_nothing_staged(store: &TestStore) {
+    let tmp = store.store().root().join("tmp");
+    assert_eq!(fs::read_dir(tmp).unwrap().count(), 0);
 }
 
 #[tokio::test]
 async fn unrelated_inventory_changes_reuse_node_with_unavailable_transport() {
-    let mut ready = ready_node().await;
+    let ready = ready_node().await;
     let node = ready.plan.inventory_tool().clone();
     let sibling = sibling(&node);
     let desired = [node.clone(), sibling.clone()];
     let offline = unavailable_transport();
     assert!(!ready.store.is_current(&desired).unwrap());
-    assert!(ready.store.can_reuse(&node).unwrap());
+    assert!(ready.store.tree(&node).unwrap().is_some());
     assert!(
         ready
             .plan
@@ -115,7 +110,7 @@ async fn unrelated_inventory_changes_reuse_node_with_unavailable_transport() {
     changed_sibling.executables = BTreeMap::from([("fixture-next".into(), "bin/fixture".into())]);
     let changed_desired = [node.clone(), changed_sibling.clone()];
     assert!(!ready.store.is_current(&changed_desired).unwrap());
-    assert!(ready.store.can_reuse(&node).unwrap());
+    assert!(ready.store.tree(&node).unwrap().is_some());
     assert!(
         ready
             .plan
@@ -139,11 +134,11 @@ async fn unrelated_inventory_changes_reuse_node_with_unavailable_transport() {
     assert_eq!(staged, [changed_sibling.clone()]);
     assert!(ready.store.is_current(&changed_desired).unwrap());
     let current = ready.store.current().unwrap().unwrap();
-    assert_eq!(current.tools, [changed_sibling, node.clone()]);
+    assert_eq!(current.tools, [changed_sibling.clone(), node.clone()]);
     assert!(!current.bin.join("fixture").exists());
     assert_eq!(
-        fs::read_link(current.bin.join("fixture-next")).unwrap(),
-        Path::new("../tools/fixture/bin/fixture")
+        fs::canonicalize(current.bin.join("fixture-next")).unwrap(),
+        fs::canonicalize(ready.store.tree_of(&changed_sibling).join("bin/fixture")).unwrap()
     );
     assert_scoped_resource(&ready.store);
     assert_eq!(ready.upstream.requests.load(Ordering::SeqCst), 1);
@@ -172,32 +167,18 @@ async fn unrelated_inventory_changes_reuse_node_with_unavailable_transport() {
     assert_scoped_resource(&ready.store);
     assert_eq!(ready.upstream.requests.load(Ordering::SeqCst), 1);
     assert_eq!(
-        install(&mut ready.store, &ready.plan, &offline)
-            .await
-            .unwrap(),
+        install(&ready.store, &ready.plan, &offline).await.unwrap(),
         Outcome::Unchanged
     );
 }
 
 #[tokio::test]
-async fn missing_generation_repairs_and_failed_repair_never_publishes_partial_state() {
-    let mut ready = ready_node().await;
+async fn a_missing_tree_restages_and_failed_staging_never_publishes_partial_state() {
+    let ready = ready_node().await;
     let desired = [ready.plan.inventory_tool().clone()];
-    let manifest = ready.repo.path().join(".turbo/tools/manifest.json");
-    let before = fs::read(&manifest).unwrap();
-    let generation = ready
-        .store
-        .current()
-        .unwrap()
-        .unwrap()
-        .bin
-        .parent()
-        .unwrap()
-        .to_owned();
-    fs::remove_dir_all(generation).unwrap();
-    assert!(!ready.store.is_current(&desired).unwrap());
-    assert!(!ready.store.can_reuse(&desired[0]).unwrap());
-    assert!(ready.store.current().unwrap().is_none());
+    let tree = ready.store.tree_of(&desired[0]);
+    fs::remove_dir_all(tree.parent().unwrap()).unwrap();
+    assert!(ready.store.tree(&desired[0]).unwrap().is_none());
     assert!(matches!(
         ready
             .plan
@@ -205,8 +186,6 @@ async fn missing_generation_repairs_and_failed_repair_never_publishes_partial_st
             .await,
         Err(Error::Download(_))
     ));
-    assert_eq!(fs::read(&manifest).unwrap(), before);
-    assert_no_generation(ready.repo.path());
     assert_eq!(ready.upstream.requests.load(Ordering::SeqCst), 1);
 
     let prepared = ready
@@ -214,7 +193,7 @@ async fn missing_generation_repairs_and_failed_repair_never_publishes_partial_st
         .prepare_if_needed(&ready.store, &desired, &ready.transport)
         .await
         .unwrap()
-        .expect("missing generation requires Node bytes");
+        .expect("a missing tree requires Node bytes");
     assert!(
         ready
             .store
@@ -226,9 +205,8 @@ async fn missing_generation_repairs_and_failed_repair_never_publishes_partial_st
             })
             .is_err()
     );
-    assert_eq!(fs::read(&manifest).unwrap(), before);
-    assert!(ready.store.current().unwrap().is_none());
-    assert_no_generation(ready.repo.path());
+    assert!(ready.store.tree(&desired[0]).unwrap().is_none());
+    assert_nothing_staged(&ready.store);
     assert_eq!(
         ready
             .store
@@ -236,11 +214,10 @@ async fn missing_generation_repairs_and_failed_repair_never_publishes_partial_st
             .unwrap(),
         Outcome::Replaced
     );
-    assert!(ready.store.is_current(&desired).unwrap());
     assert_scoped_resource(&ready.store);
     assert_eq!(ready.upstream.requests.load(Ordering::SeqCst), 2);
     assert_eq!(
-        install(&mut ready.store, &ready.plan, &unavailable_transport())
+        install(&ready.store, &ready.plan, &unavailable_transport())
             .await
             .unwrap(),
         Outcome::Unchanged
@@ -248,62 +225,28 @@ async fn missing_generation_repairs_and_failed_repair_never_publishes_partial_st
 }
 
 #[tokio::test]
-async fn damaged_sibling_or_shim_requires_node_preparation_before_reconcile() {
-    let mut ready = ready_node().await;
+async fn a_missing_environment_is_rebuilt_from_sealed_trees_without_staging() {
+    let ready = ready_node().await;
     let node = ready.plan.inventory_tool().clone();
     let desired = [node.clone(), sibling(&node)];
     ready.store.reconcile(&desired, stage_sibling).unwrap();
-    for (index, damage) in ["tree", "shim"].into_iter().enumerate() {
-        let current = ready.store.current().unwrap().unwrap();
-        let node_bytes = fs::read(current.bin.join("node")).unwrap();
-        if damage == "tree" {
-            fs::remove_file(
-                current
-                    .bin
-                    .parent()
-                    .unwrap()
-                    .join("tools/fixture/bin/fixture"),
-            )
-            .unwrap();
-        } else {
-            let shim = current.bin.join("fixture");
-            fs::remove_file(&shim).unwrap();
-            fs::write(shim, "not a symlink").unwrap();
-        }
-        assert_eq!(fs::read(current.bin.join("node")).unwrap(), node_bytes);
-        assert!(!ready.store.can_reuse(&node).unwrap());
-        assert!(matches!(
-            ready
-                .plan
-                .prepare_if_needed(&ready.store, &desired, &unavailable_transport())
-                .await,
-            Err(Error::Download(_))
-        ));
-        let prepared = ready
+    let bin = ready.store.bin();
+    fs::remove_dir_all(bin.parent().unwrap()).unwrap();
+    assert!(ready.store.current().is_err());
+    assert!(
+        ready
             .plan
-            .prepare_if_needed(&ready.store, &desired, &ready.transport)
+            .prepare_if_needed(&ready.store, &desired, &unavailable_transport())
             .await
             .unwrap()
-            .expect("unhealthy generation requires Node bytes too");
-        let mut staged = Vec::new();
-        assert_eq!(
-            ready
-                .store
-                .reconcile(&desired, |tool, path| {
-                    staged.push(tool.id.clone());
-                    if tool.id == "node" {
-                        prepared.stage(tool, path)
-                    } else {
-                        stage_sibling(tool, path)
-                    }
-                })
-                .unwrap(),
-            Outcome::Replaced
-        );
-        assert_eq!(staged, ["fixture", "node"]);
-        assert!(ready.store.can_reuse(&node).unwrap());
-        assert!(ready.store.is_current(&desired).unwrap());
-        assert_scoped_resource(&ready.store);
-        assert_eq!(ready.upstream.requests.load(Ordering::SeqCst), index + 2);
-    }
+            .is_none()
+    );
+    ready
+        .store
+        .reconcile(&desired, |_, _| panic!("sealed trees are reused"))
+        .unwrap();
+    assert_eq!(ready.store.bin(), bin);
+    assert!(bin.join("fixture").exists());
+    assert_scoped_resource(&ready.store);
+    assert_eq!(ready.upstream.requests.load(Ordering::SeqCst), 1);
 }

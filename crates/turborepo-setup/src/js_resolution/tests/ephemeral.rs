@@ -1,13 +1,17 @@
-use turborepo_tool_install::{Outcome, Store, Tool as InstalledTool};
+use turborepo_tool_install::Tool as InstalledTool;
 #[path = "ephemeral_races.rs"]
 mod races;
 
 use super::*;
-use crate::ephemeral_reconcile::{self, Staged};
+use crate::{
+    ephemeral_reconcile::{self, Staged},
+    test_store::{Outcome, TestStore},
+};
 
+/// Stages from `previous`, the selection the repository's user record holds.
 fn staged(
     snapshot: &Snapshot,
-    store: &Store,
+    previous: Option<&[u8]>,
     world: &World,
 ) -> Result<Staged, ephemeral_reconcile::Error> {
     let runtime = tokio::runtime::Builder::new_current_thread()
@@ -16,7 +20,7 @@ fn staged(
         .unwrap();
     ephemeral_reconcile::stage(
         snapshot,
-        store,
+        previous,
         Platform::MacosArm64,
         false,
         |request| {
@@ -56,21 +60,11 @@ fn populate(tool: &InstalledTool, tree: &Path) -> Result<(), turborepo_tool_inst
     fs::write(tree.join("resource"), b"adjacent resource")?;
     Ok(())
 }
-fn manifest(root: &Path) -> Vec<u8> {
-    fs::read(root.join(".turbo/tools/manifest.json")).unwrap()
-}
-// Legacy fixtures remove only this copy, keeping the bound generation record.
-fn recovery(root: &Path, lock: &Lock) -> std::path::PathBuf {
-    let hash = format!("{:x}", Sha256::digest(lock.canonical_bytes().unwrap()));
-    root.join(format!(".turbo/tools/record-{hash}.json"))
-}
-fn assert_installed(root: &Path, lock: &Lock) -> turborepo_tool_install::Current {
-    let current = Store::inspect(root).unwrap().unwrap();
-    let record = current.record.as_ref().unwrap();
-    assert_eq!(record.bytes(), lock.canonical_bytes().unwrap());
+fn assert_installed(store: &TestStore, root: &Path) {
+    let current = store.current().unwrap().unwrap();
     for tool in &current.tools {
         assert_eq!(
-            fs::read(current.tool_tree(tool).unwrap().join("resource")).unwrap(),
+            fs::read(store.tree_of(tool).join("resource")).unwrap(),
             b"adjacent resource"
         );
         for name in tool.executables.keys() {
@@ -78,71 +72,76 @@ fn assert_installed(root: &Path, lock: &Lock) -> turborepo_tool_install::Current
         }
     }
     assert!(!root.join("turbo.lock").exists());
-    current
 }
-fn publish(next: Staged, snapshot: &Snapshot, store: &mut Store) -> Outcome {
-    next.publish(snapshot, store, false, populate, || Ok(()))
-        .unwrap()
+/// Publishes like `turbo setup --no-lock`: every freshly staged tree is
+/// verified, and the selection becomes the record's.
+fn publish(
+    next: Staged,
+    snapshot: &Snapshot,
+    store: &TestStore,
+    record: &mut Option<Vec<u8>>,
+) -> Outcome {
+    next.check(snapshot).unwrap();
+    let outcome = store
+        .reconcile(next.desired(), |tool, tree| {
+            populate(tool, tree)?;
+            Ok(next.verify(tool, tree)?)
+        })
+        .unwrap();
+    *record = Some(next.selection_bytes().to_vec());
+    outcome
 }
-fn seed_ephemeral(root: &Path, store: &mut Store) -> Lock {
-    let snapshot = Snapshot::capture_with(root, Ecosystems::default()).unwrap();
-    let selection = staged(&snapshot, store, &fixture(&["24.0.0"])).unwrap();
+
+fn installed(node: &str, manifest: Value) -> (tempfile::TempDir, TestStore, Lock, Vec<u8>) {
+    let repo = root(Some(node), manifest);
+    let store = TestStore::open(repo.path());
+    let snapshot = Snapshot::capture_with(repo.path(), Ecosystems::default()).unwrap();
+    let selection = staged(&snapshot, None, &fixture(&["24.0.0"])).unwrap();
     let lock = selection.selection().clone();
-    assert_eq!(publish(selection, &snapshot, store), Outcome::Replaced);
+    let mut record = None;
+    assert_eq!(
+        publish(selection, &snapshot, &store, &mut record),
+        Outcome::Replaced
+    );
     assert!(snapshot.previous_lock().is_none());
     snapshot.ensure_current().unwrap();
     assert!(snapshot.after_publication(&lock).is_err());
-    lock
-}
-
-fn installed(node: &str, manifest: Value) -> (tempfile::TempDir, Store, Lock) {
-    let repo = root(Some(node), manifest);
-    let mut store = Store::open(repo.path()).unwrap();
-    let lock = seed_ephemeral(repo.path(), &mut store);
-    (repo, store, lock)
+    let record = record.unwrap();
+    assert_eq!(record, lock.canonical_bytes().unwrap());
+    (repo, store, lock, record)
 }
 
 #[test]
-fn healthy_repeat_preserves_floating_pins_record_resources_and_zero_metadata_after_advance() {
-    for legacy in [false, true] {
-        let (repo, mut store, lock) = installed("24.x", json!({"packageManager":"pnpm@10.0.0"}));
-        let p = repo.path();
-        if legacy {
-            fs::remove_file(recovery(p, &lock)).unwrap();
-        }
-        let before = manifest(p);
-        for (force, expected, expected_calls) in [
-            (false, Outcome::Unchanged, vec![]),
-            (true, Outcome::Replaced, vec!["node", "pnpm"]),
-        ] {
-            let snapshot = Snapshot::capture_with(p, Ecosystems::default()).unwrap();
-            let world = fixture(&["24.1.0", "24.0.0"]);
-            let selection = staged(&snapshot, &store, &world).unwrap();
-            assert_eq!(selection.selection(), &lock);
-            assert!(world.paths().is_empty());
-            let mut calls = Vec::new();
-            let stage_tool = |tool: &InstalledTool, tree: &Path| {
-                calls.push(tool.id.clone());
-                populate(tool, tree)
-            };
-            let result = selection
-                .publish(&snapshot, &mut store, force, stage_tool, || Ok(()))
-                .unwrap();
-            assert_eq!(result, expected);
-            assert_eq!(calls, expected_calls);
-            assert_installed(p, &lock);
-            assert_eq!(
-                fs::read(recovery(p, &lock)).unwrap(),
-                lock.canonical_bytes().unwrap()
-            );
-            assert_eq!(manifest(p) == before, !force);
-        }
-    }
+fn healthy_repeat_preserves_floating_pins_and_resources_with_zero_metadata_after_advance() {
+    let (repo, store, lock, record) = installed("24.x", json!({"packageManager":"pnpm@10.0.0"}));
+    let p = repo.path();
+    let snapshot = Snapshot::capture_with(p, Ecosystems::default()).unwrap();
+    let world = fixture(&["24.1.0", "24.0.0"]);
+    let selection = staged(&snapshot, Some(&record), &world).unwrap();
+    assert_eq!(selection.selection(), &lock);
+    assert!(world.paths().is_empty());
+    assert_eq!(
+        store
+            .reconcile(selection.desired(), |_, _| panic!(
+                "healthy trees are reused"
+            ))
+            .unwrap(),
+        Outcome::Unchanged
+    );
+    // A forced setup re-verifies the healthy trees without restaging them.
+    assert_eq!(
+        store
+            .force_reconcile(selection.desired(), |_, _| panic!("healthy trees verify"))
+            .unwrap(),
+        Outcome::Unchanged
+    );
+    assert_installed(&store, p);
 }
 
 #[test]
 fn targeted_manager_node_drift_and_removal_preserve_unaffected_selection_bytes() {
-    let (repo, mut store, old) = installed("24.x", json!({"packageManager":"pnpm@10.0.0"}));
+    let (repo, store, old, record) = installed("24.x", json!({"packageManager":"pnpm@10.0.0"}));
+    let mut record = Some(record);
     let p = repo.path();
     write_manifest(
         p,
@@ -150,15 +149,15 @@ fn targeted_manager_node_drift_and_removal_preserve_unaffected_selection_bytes()
     );
     let snapshot = Snapshot::capture_with(p, Ecosystems::default()).unwrap();
     let world = World::new(registry_routes(&pnpm_bytes()), |_| {});
-    let next = staged(&snapshot, &store, &world).unwrap();
+    let next = staged(&snapshot, record.as_deref(), &world).unwrap();
     assert_eq!(next.selection().tools()["node"], old.tools()["node"]);
     assert_eq!(world.paths(), PNPM_PATHS);
     let manager = next.selection().tools()["pnpm"].clone();
-    assert_eq!(publish(next, &snapshot, &mut store), Outcome::Replaced);
+    publish(next, &snapshot, &store, &mut record);
     fs::write(p.join(".nvmrc"), "^24.0.0").unwrap();
     let snapshot = Snapshot::capture_with(p, Ecosystems::default()).unwrap();
     let world = World::new(node_routes(&["24.1.0", "24.0.0"]), |_| {});
-    let next = staged(&snapshot, &store, &world).unwrap();
+    let next = staged(&snapshot, record.as_deref(), &world).unwrap();
     assert_eq!(next.selection().tools()["pnpm"], manager);
     assert_eq!(next.selection().tools()["node"].version, "24.1.0");
     assert_eq!(
@@ -166,23 +165,21 @@ fn targeted_manager_node_drift_and_removal_preserve_unaffected_selection_bytes()
         ["/dist/index.json", "/dist/v24.1.0/SHASUMS256.txt"]
     );
     let node = next.selection().tools()["node"].clone();
-    assert_eq!(publish(next, &snapshot, &mut store), Outcome::Replaced);
+    assert_eq!(
+        publish(next, &snapshot, &store, &mut record),
+        Outcome::Replaced
+    );
     write_manifest(p, json!({}));
     let snapshot = Snapshot::capture_with(p, Ecosystems::default()).unwrap();
     let world = World::new(vec![], |_| {});
-    let next = staged(&snapshot, &store, &world).unwrap();
+    let next = staged(&snapshot, record.as_deref(), &world).unwrap();
     assert_eq!(
         next.selection().tools(),
         &BTreeMap::from([("node".into(), node)])
     );
-    next.publish(
-        &snapshot,
-        &mut store,
-        false,
-        |_, _| panic!("reuse Node resources"),
-        || Ok(()),
-    )
-    .unwrap();
+    store
+        .reconcile(next.desired(), |_, _| panic!("reuse Node resources"))
+        .unwrap();
     let current = store.current().unwrap().unwrap();
     assert!(current.bin.join("npm").exists());
     assert!(!current.bin.join("pnpm").exists());
@@ -190,130 +187,73 @@ fn targeted_manager_node_drift_and_removal_preserve_unaffected_selection_bytes()
 }
 
 #[test]
-fn missing_and_damaged_generations_repair_exact_record_not_refresh_floating_requests() {
-    for damage in 0..6 {
-        let (repo, mut store, lock) = installed("lts/*", json!({"packageManager":"pnpm@10.0.0"}));
+fn missing_trees_repair_the_exact_recorded_selection_not_refreshed_floating_requests() {
+    for damage in 0..3 {
+        let (repo, store, lock, record) =
+            installed("lts/*", json!({"packageManager":"pnpm@10.0.0"}));
         let p = repo.path();
         let current = store.current().unwrap().unwrap();
-        let tree = current.tool_tree(&current.tools[0]).unwrap();
+        let tree = store.tree_of(&current.tools[0]);
         match damage {
             0 => fs::remove_dir_all(current.bin.parent().unwrap()).unwrap(),
-            1 => fs::remove_dir_all(&tree).unwrap(),
-            2 => {
-                fs::remove_file(current.bin.join("node")).unwrap();
-                std::os::unix::fs::symlink("../tools/node/resource", current.bin.join("node"))
-                    .unwrap();
+            1 => fs::remove_dir_all(tree.parent().unwrap()).unwrap(),
+            _ => {
+                for tree in fs::read_dir(store.store().root().join("trees")).unwrap() {
+                    fs::remove_dir_all(tree.unwrap().path()).unwrap();
+                }
             }
-            3 => fs::remove_file(current.bin.join("node")).unwrap(),
-            5 => {
-                fs::remove_file(recovery(p, &lock)).unwrap();
-                fs::remove_dir_all(&tree).unwrap();
-            }
-            _ => fs::remove_file(current.bin.parent().unwrap().join("record.json")).unwrap(),
         }
-        assert!(store.generation().is_err());
-        assert!(!store.is_current(&current.tools).unwrap());
         let snapshot = Snapshot::capture_with(p, Ecosystems::default()).unwrap();
         let world = fixture(&["24.1.0", "24.0.0"]);
-        let next = staged(&snapshot, &store, &world).unwrap();
+        let next = staged(&snapshot, Some(&record), &world).unwrap();
         assert_eq!(next.selection(), &lock);
-        next.check(&snapshot, &store).unwrap();
-        assert_eq!(publish(next, &snapshot, &mut store), Outcome::Replaced);
-        assert!(store.is_current(&current.tools).unwrap());
-        let selected = assert_installed(p, &lock);
         assert!(world.paths().is_empty());
-        if damage < 2 {
-            fs::remove_dir_all(selected.bin.parent().unwrap()).unwrap();
-            let record = recovery(p, &lock);
-            if damage == 0 {
-                fs::remove_file(record).unwrap();
-            } else {
-                fs::write(record, b"corrupt").unwrap();
-            }
-            assert!(staged(&snapshot, &store, &world).is_err());
-            assert!(world.paths().is_empty());
-        }
+        let mut record = Some(record);
+        publish(next, &snapshot, &store, &mut record);
+        assert!(store.is_current(&current.tools).unwrap());
+        assert_installed(&store, p);
+        // A corrupt record never silently becomes a fresh resolution.
+        assert!(staged(&snapshot, Some(b"corrupt"), &world).is_err());
+        assert!(world.paths().is_empty());
     }
 }
 
 #[test]
-fn final_noop_and_changed_publication_recheck_sources_lock_generation_and_root() {
-    for (changed, force) in [(false, false), (true, false), (false, true)] {
-        for race in 0..if changed { 6 } else { 7 } {
-            let (repo, mut store, lock) =
-                installed("24.x", json!({"packageManager":"pnpm@10.0.0"}));
-            let p = repo.path();
-            if changed {
-                write_manifest(p, json!({}));
-            }
-            let snapshot = Snapshot::capture_with(p, Ecosystems::default()).unwrap();
-            let selection = staged(&snapshot, &store, &World::new(vec![], |_| {})).unwrap();
-            let before = manifest(p);
-            let current = store.current().unwrap().unwrap();
-            let mut calls = 0;
-            let result = selection.publish(&snapshot, &mut store, force, populate, || {
-                calls += 1;
-                if calls == 3 {
-                    match race {
-                        0 => fs::write(p.join("package.json"), b"{} ").unwrap(),
-                        1 => fs::write(p.join("turbo.lock"), lock.canonical_bytes().unwrap())
-                            .unwrap(),
-                        2 => fs::write(p.join("turbo.json"), b"{}").unwrap(),
-                        3 => fs::remove_file(current.bin.join("node")).unwrap(),
-                        6 => fs::write(recovery(p, &lock), b"corrupt").unwrap(),
-                        5 => {
-                            fs::rename(p.join(".turbo/tools"), p.join(".turbo/old-tools")).unwrap();
-                            fs::create_dir(p.join(".turbo/tools")).unwrap();
-                            fs::write(p.join(".turbo/tools/manifest.json"), &before).unwrap();
-                        }
-                        _ => fs::write(
-                            p.join(".turbo/tools/manifest.json"),
-                            [before.as_slice(), b" "].concat(),
-                        )
-                        .unwrap(),
-                    }
-                }
-                Ok(())
-            });
-            assert!(result.is_err(), "changed={changed}, race={race}");
-            let expected_manifest = if race == 4 {
-                [before.as_slice(), b" "].concat()
-            } else {
-                before
-            };
-            assert_eq!(manifest(p), expected_manifest);
-            if race == 6 {
-                assert_installed(p, &lock);
-                assert_eq!(fs::read(recovery(p, &lock)).unwrap(), b"corrupt");
-            }
+fn staged_selections_recheck_their_sources_before_publication() {
+    for race in 0..3 {
+        let (repo, _store, lock, record) =
+            installed("24.x", json!({"packageManager":"pnpm@10.0.0"}));
+        let p = repo.path();
+        let snapshot = Snapshot::capture_with(p, Ecosystems::default()).unwrap();
+        let selection = staged(&snapshot, Some(&record), &World::new(vec![], |_| {})).unwrap();
+        selection.check(&snapshot).unwrap();
+        match race {
+            0 => fs::write(p.join("package.json"), b"{} ").unwrap(),
+            1 => fs::write(p.join("turbo.lock"), lock.canonical_bytes().unwrap()).unwrap(),
+            _ => fs::write(p.join("turbo.json"), b"{}").unwrap(),
         }
+        assert!(selection.check(&snapshot).is_err(), "race={race}");
     }
 }
 
 #[test]
-fn foreign_live_store_and_real_lock_and_unsupported_integrity_fail_closed() {
-    let (repo, store, lock) = installed("24.x", json!({}));
+fn foreign_roots_real_locks_and_unsupported_integrity_fail_closed() {
+    let (repo, _store, lock, record) = installed("24.x", json!({}));
     let other = root(Some("24.x"), json!({}));
     let snapshot = Snapshot::capture_with(repo.path(), Ecosystems::default()).unwrap();
-    let selection = staged(&snapshot, &store, &World::new(vec![], |_| {})).unwrap();
-    let foreign = Store::open(other.path()).unwrap();
-    assert!(selection.check(&snapshot, &foreign).is_err());
-    drop(store);
-    let mut reopened = Store::open(repo.path()).unwrap();
-    let result = selection.publish(&snapshot, &mut reopened, false, |_, _| panic!(), || Ok(()));
-    assert!(result.is_err());
+    let selection = staged(&snapshot, Some(&record), &World::new(vec![], |_| {})).unwrap();
+    let foreign = Snapshot::capture_with(other.path(), Ecosystems::default()).unwrap();
+    assert!(selection.check(&foreign).is_err());
     save(repo.path(), &lock);
     let actual = Snapshot::capture_with(repo.path(), Ecosystems::default()).unwrap();
-    assert!(staged(&actual, &reopened, &World::new(vec![], |_| {})).is_err());
+    assert!(staged(&actual, Some(&record), &World::new(vec![], |_| {})).is_err());
     fs::remove_file(repo.path().join("turbo.lock")).unwrap();
     write_manifest(
         repo.path(),
         json!({"packageManager":format!("pnpm@10.0.0+sha512.{:x}", Sha512::digest(pnpm_bytes()))}),
     );
     let snapshot = Snapshot::capture_with(repo.path(), Ecosystems::default()).unwrap();
-    let before = manifest(repo.path());
     let world = fixture(&["24.0.0"]);
-    assert!(staged(&snapshot, &reopened, &world).is_err());
+    assert!(staged(&snapshot, Some(&record), &world).is_err());
     assert!(world.paths().is_empty()); // Unsupported record constraints preflight before traffic.
-    assert_eq!(manifest(repo.path()), before);
 }

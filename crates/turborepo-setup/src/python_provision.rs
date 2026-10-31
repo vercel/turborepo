@@ -1,7 +1,7 @@
 //! Locked CPython adapter: a verified python-build-standalone archive staged at
-//! uv's key directory inside the generation's `python` tool, which is where the
+//! uv's key directory inside the `python` tool's tree, which is where the
 //! managed uv launchers point `UV_PYTHON_INSTALL_DIR`. No resolution, no uv
-//! installer (it writes absolute links that a relocatable generation rejects)
+//! installer (it writes absolute links that a relocatable tree rejects)
 //! and no system Python. The only subprocess is the verified interpreter
 //! compiling its own standard library while staging.
 //!
@@ -21,7 +21,7 @@ use std::{
 use sha2::{Digest, Sha256};
 use turborepo_archive::{Allowances, ExtractedArtifact, Layout};
 use turborepo_download::ExpectedSha256;
-use turborepo_tool_install::{Store, Tool};
+use turborepo_tool_install::{SetupSession, Tool};
 
 use crate::{
     lock::{self, Installation, Lock, Platform},
@@ -163,11 +163,11 @@ impl PythonPlan {
         &self.key
     }
 
-    /// The caller supplies ALL desired tools and reconciles that same set,
-    /// holding this Store lock throughout preparation and reconciliation.
+    /// The caller supplies ALL desired tools and ensures that same set
+    /// in the same setup session.
     pub async fn prepare(
         &self,
-        store: &Store,
+        store: &SetupSession<'_>,
         desired: &[Tool],
         transport: &PythonTransport,
         preparation: crate::Preparation,
@@ -236,9 +236,10 @@ impl PreparedPython {
         self.downloaded_bytes
     }
 
-    /// Callback for Store::reconcile: copy the FULL verified interpreter tree
-    /// into uv's key directory, preserving relative links and modes. Windows
-    /// adds the batch launchers that the Store's forwarders run.
+    /// Staging callback for `SetupSession::ensure`: copy the FULL verified
+    /// interpreter tree into uv's key directory, preserving relative links
+    /// and modes. Windows adds the batch launchers that the Store's
+    /// forwarders run.
     pub fn stage(
         &self,
         tool: &Tool,

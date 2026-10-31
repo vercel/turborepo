@@ -217,11 +217,6 @@ fn interrupted_download_releases_locks_and_leaves_resumable_state() {
             let (before, _) = state(&root);
             let (process, pids, mut guards) = start_blocked(&launcher, entry, &root);
             let entrypoint = process.child.id() as i32;
-            // The download runs inside the setup transaction.
-            assert!(matches!(
-                turborepo_tool_install::Store::open(&root),
-                Err(turborepo_tool_install::Error::Busy)
-            ));
             stop(&process, request);
             let output = process.finish(TIMEOUT);
             let context = format!("{entry:?} {request:?}\n{}", combined_output(&output));
@@ -235,23 +230,22 @@ fn interrupted_download_releases_locks_and_leaves_resumable_state() {
                 after, before,
                 "committed files, including turbo.lock\n{context}"
             );
-            // Only the reusable lock files remain: no staging, partial
-            // artifact, or published generation.
+            // Only the reusable writer lock remains in the repository, and the
+            // store holds no published tree, environment or record.
             assert_eq!(
                 setup,
-                [
-                    ".turbo/",
-                    ".turbo/setup-lock/",
-                    ".turbo/setup-lock/writer",
-                    ".turbo/tools/",
-                    ".turbo/tools/transaction.lock",
-                ],
+                [".turbo/", ".turbo/setup-lock/", ".turbo/setup-lock/writer"],
                 "{context}"
             );
-            // Store::open fails with Busy instead of waiting if the lock is held.
-            let store = turborepo_tool_install::Store::open(&root).expect(&context);
-            assert!(store.current().unwrap().is_none(), "{context}");
-            drop(store);
+            let store = common::setup::user_tool_store(&root.parent().unwrap().join("home"), None);
+            for dir in ["trees", "envs"] {
+                let entries = fs::read_dir(store.join(dir)).map_or(0, |d| d.count());
+                assert_eq!(entries, 0, "{dir}\n{context}");
+            }
+            assert!(
+                common::setup::installed(&root, &store).is_none(),
+                "{context}"
+            );
 
             // A retry reaches the download again instead of waiting on a stale
             // writer lock or rejecting the interrupted state.

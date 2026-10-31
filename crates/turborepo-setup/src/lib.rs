@@ -57,6 +57,9 @@ pub mod version_request;
 pub mod writer_storage;
 pub mod yarn_provision;
 
+#[cfg(test)]
+mod test_store;
+
 /// Locked artifact preparation policy; never changes resolution or health
 /// evidence.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

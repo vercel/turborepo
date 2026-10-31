@@ -1,6 +1,6 @@
 //! Pure selection and cache identity, not activation, tool verification or
 //! runtime platform detection. Execution consumes this same owned selection:
-//! turbo.lock, or the sealed `--no-lock` record of the selected generation,
+//! turbo.lock, or the `--no-lock` selection a clone's setup record holds,
 //! never a reconstruction from installation inventory.
 
 use std::collections::{BTreeMap, BTreeSet};

@@ -9,7 +9,7 @@ fn plan(f: &Fixture) -> String {
     let discovery =
         root::Discovery::capture(&f.args(&["--plan", "--tools-only"]), f.git.clone()).unwrap();
     let sources = f.sources().unwrap();
-    plan::inspect(&discovery, sources, false, || {
+    plan::inspect(&discovery, sources, false, f.owned.home(), || {
         Ok(f.owned.policy_at(&f.owned.root().join("apps/web/src"))?)
     })
     .unwrap()
@@ -37,17 +37,17 @@ fn plan_and_check_are_read_only_and_check_rehashes_adjacent_resources() {
 
     // --check re-hashes the whole tree, so damage beside the executable is
     // caught, and it never repairs anything.
-    let store = turborepo_tool_install::Store::open(f.owned.root()).unwrap();
+    let store = Installed::open(&f.owned);
     let current = store.current().unwrap().unwrap();
     let tool = current.tools.iter().find(|t| t.id == "fixture").unwrap();
-    let data = current.tool_tree(tool).unwrap().join("share/data.txt");
+    let data = current.tree(&tool.id).to_owned().join("share/data.txt");
     drop(store);
     turborepo_setup::test_support::damage(&data, "tampered");
     let error = f.check(CHECK).unwrap_err();
     assert!(
         matches!(
             error,
-            Error::Activation(turborepo_setup::activation::Error::DamagedInventory(_))
+            Error::Install(turborepo_tool_install::Error::Damaged(_))
         ),
         "{error}"
     );

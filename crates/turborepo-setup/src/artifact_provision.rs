@@ -1,6 +1,6 @@
 //! Locked installer for repository-declared additional tools: one verified
 //! download per tool, either safely extracted or placed as a single binary,
-//! then staged as a full tree into a Store generation. This is the
+//! then staged as a full tree into the tool store. This is the
 //! installer-adapter boundary for additional tools; another installation
 //! source would add its own plan type. No resolution, hooks, tool-provided
 //! scripts, privileged installers, source builds, or PATH changes.
@@ -9,7 +9,7 @@ use std::{collections::BTreeSet, fs, io, path::Path, time::Duration};
 
 use turborepo_archive::{ExtractedArtifact, Layout};
 use turborepo_download::{ApprovedOrigin, DownloadClient, ExpectedSha256, VerifiedArtifact};
-use turborepo_tool_install::{Export, Store, Tool};
+use turborepo_tool_install::{Export, SetupSession, Tool};
 use url::Url;
 
 use crate::{
@@ -236,12 +236,12 @@ impl ArtifactPlan {
         &self.artifact.url
     }
 
-    /// The caller supplies ALL desired tools and reconciles that same set,
-    /// holding this Store lock through preparation and reconciliation. A
+    /// The caller supplies ALL desired tools and ensures that same set
+    /// in the same setup session. A
     /// healthy identical tool is reused unless `preparation` is fresh.
     pub async fn prepare(
         &self,
-        store: &Store,
+        store: &SetupSession<'_>,
         desired: &[Tool],
         transport: &ArtifactTransport,
         preparation: Preparation,
@@ -418,8 +418,9 @@ impl PreparedArtifact {
         self.downloaded_bytes
     }
 
-    /// Callback for Store::reconcile. Copies the FULL verified tree, keeping
-    /// adjacent resources, executable modes, and safe relative links.
+    /// Staging callback for `SetupSession::ensure`. Copies the FULL verified
+    /// tree, keeping adjacent resources, executable modes, and safe
+    /// relative links.
     pub fn stage(
         &self,
         tool: &Tool,

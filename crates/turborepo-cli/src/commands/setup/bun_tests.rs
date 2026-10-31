@@ -54,7 +54,7 @@ fn locked_bun_provisions_checks_repeats_and_rejects_frozen_drift() {
     let lock = fs::read(&lock_path).unwrap();
     assert_eq!(f.run(&u, FROZEN).unwrap(), 0);
     assert_eq!(u.hits(), 2);
-    let store = turborepo_tool_install::Store::open(f.owned.root()).unwrap();
+    let store = Installed::open(&f.owned);
     let current = store.current().unwrap().unwrap();
     let selected: Vec<_> = current.tools.iter().map(|t| t.id.as_str()).collect();
     assert_eq!(selected, ["bun", "node"]);
@@ -94,9 +94,9 @@ fn bun_check_failures_are_readonly_and_actionable() {
         let (f, u) = bun();
         assert!(matches!(
             f.check(super::checks::CHECK),
-            Err(Error::Activation(
-                turborepo_setup::activation::Error::MissingInventory
-            ))
+            Err(Error::Install(turborepo_tool_install::Error::NotInstalled(
+                _
+            )))
         ));
         (f, u)
     };

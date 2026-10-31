@@ -18,6 +18,7 @@ tempfile = { workspace = true }
 thiserror = { workspace = true }
 
 [target.'cfg(windows)'.dependencies]
+dunce = { workspace = true }
 same-file = "1.0.6"
 
 # sha2 0.10 uses the ARMv8 SHA instructions only with `asm`.

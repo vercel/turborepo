@@ -9,7 +9,7 @@ use std::{collections::BTreeMap, io, path::Path, time::Duration};
 use semver::Version;
 use turborepo_archive::{ExtractedArtifact, Layout};
 use turborepo_download::{ApprovedOrigin, DownloadClient, ExpectedSha256, Limits};
-use turborepo_tool_install::{Export, Store, Tool};
+use turborepo_tool_install::{Export, SetupSession, Tool};
 
 use crate::{
     lock::{Artifact, Format, Installation, Lock, Platform},
@@ -275,7 +275,7 @@ impl BunPlan {
 
     pub async fn prepare_if_needed(
         &self,
-        store: &Store,
+        store: &SetupSession<'_>,
         desired: &[Tool],
         transport: &BunTransport,
     ) -> Result<Option<PreparedBun>, Error> {
@@ -283,11 +283,11 @@ impl BunPlan {
             .await
     }
 
-    /// Reuse only a healthy selected generation; otherwise download, verify
+    /// Reuse only a sealed tree in the tool store; otherwise download, verify
     /// the locked SHA-256, and extract. Never publishes or executes Bun.
     pub async fn prepare(
         &self,
-        store: &Store,
+        store: &SetupSession<'_>,
         desired: &[Tool],
         transport: &BunTransport,
         preparation: crate::Preparation,
@@ -345,7 +345,8 @@ impl PreparedBun {
         self.downloaded_bytes
     }
 
-    /// Callback for Store::reconcile: copy the verified release tree as-is.
+    /// Staging callback for `SetupSession::ensure`: copy the verified release
+    /// tree as-is.
     pub fn stage(
         &self,
         tool: &Tool,

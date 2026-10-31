@@ -10,6 +10,7 @@ use super::*;
 use crate::{
     Preparation::{Fresh, IfNeeded},
     source_policy::test_support::{LoopbackServer, OwnedSetupFixture},
+    test_store::TestStore,
 };
 
 const INSTALLER: &[u8] = b"MZ stand-in rustup-init.exe, never executed";
@@ -61,7 +62,7 @@ async fn windows_x64_bootstrap_exports_one_hard_linked_rustup_exe() {
     );
     let desired = vec![plan.inventory_tool().clone()];
     let repo = tempfile::tempdir().unwrap();
-    let mut store = Store::open(repo.path()).unwrap();
+    let store = TestStore::open(repo.path());
     let prepared = plan.prepare(&store, &desired, &transport, IfNeeded);
     let prepared = prepared.await.unwrap().unwrap();
     store
@@ -73,7 +74,7 @@ async fn windows_x64_bootstrap_exports_one_hard_linked_rustup_exe() {
         .map(|entry| entry.unwrap().file_name())
         .collect();
     assert_eq!(names, ["rustup.exe"]);
-    let tree = current.tool_tree(plan.inventory_tool()).unwrap();
+    let tree = store.tree_of(plan.inventory_tool());
     let binary = tree.join("bin").join("rustup.exe");
     assert!(same_file::is_same_file(current.bin.join("rustup.exe"), &binary).unwrap());
     assert_eq!(fs::read(&binary).unwrap(), INSTALLER);
@@ -104,7 +105,7 @@ async fn windows_arm64_and_unix_installers_are_locked_but_never_promoted() {
     let (server, transport) = serve(INSTALLER);
     let lock = locked(&transport).await;
     let repo = tempfile::tempdir().unwrap();
-    let store = Store::open(repo.path()).unwrap();
+    let store = TestStore::open(repo.path());
     let hits = server.hits();
     for platform in [
         Platform::WindowsArm64,

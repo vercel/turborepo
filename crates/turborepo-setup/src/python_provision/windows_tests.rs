@@ -6,13 +6,13 @@ use std::{collections::BTreeMap, ffi::OsStr, io::Write, path::PathBuf};
 
 use semver::Version;
 use sha2::{Digest, Sha256};
-use turborepo_tool_install::Outcome;
 
 use super::*;
 use crate::{
     lock::{Declaration, Document},
     python_resolution::{RELEASES, official_artifact},
     source_policy::test_support::LoopbackServer,
+    test_store::{Outcome, TestStore},
 };
 
 const PATH: &str =
@@ -70,7 +70,7 @@ fn plan(bytes: &[u8]) -> PythonPlan {
     PythonPlan::from_lock(&lock, platform).unwrap()
 }
 async fn install(
-    store: &mut Store,
+    store: &TestStore,
     plan: &PythonPlan,
     upstream: &LoopbackServer,
 ) -> Result<Outcome, Error> {
@@ -103,13 +103,13 @@ async fn verified_build_runs_in_place_through_the_batch_launcher() {
         LoopbackServer::new([(format!("{RELEASES}{PATH}"), bytes.clone())], |_| {}).unwrap();
     let plan = plan(&bytes);
     let repo = tempfile::tempdir().unwrap();
-    let mut store = Store::open(repo.path()).unwrap();
+    let store = TestStore::open(repo.path());
     assert_eq!(
-        install(&mut store, &plan, &upstream).await.unwrap(),
+        install(&store, &plan, &upstream).await.unwrap(),
         Outcome::Replaced
     );
     let current = store.current().unwrap().unwrap();
-    let tree = current.tool_tree(plan.inventory_tool()).unwrap();
+    let tree = store.tree_of(plan.inventory_tool());
     assert!(tree.join(KEY).join("Lib").join("os.py").is_file());
     assert!(tree.join(KEY).join("python312.dll").is_file());
     assert_eq!(names(&current.bin), ["python.cmd"]);
@@ -136,7 +136,7 @@ async fn verified_build_runs_in_place_through_the_batch_launcher() {
         .unwrap();
     assert_eq!(status.code(), Some(4));
     assert_eq!(
-        install(&mut store, &plan, &upstream).await.unwrap(),
+        install(&store, &plan, &upstream).await.unwrap(),
         Outcome::Unchanged
     );
     assert_eq!(upstream.hits(), 1);
@@ -149,9 +149,9 @@ async fn failed_bytecode_compilation_publishes_nothing() {
     let upstream =
         LoopbackServer::new([(format!("{RELEASES}{PATH}"), bytes.clone())], |_| {}).unwrap();
     let repo = tempfile::tempdir().unwrap();
-    let mut store = Store::open(repo.path()).unwrap();
+    let store = TestStore::open(repo.path());
     assert!(matches!(
-        install(&mut store, &plan(&bytes), &upstream).await,
+        install(&store, &plan(&bytes), &upstream).await,
         Err(Error::Install(turborepo_tool_install::Error::Io(_)))
     ));
     assert!(store.current().unwrap().is_none());

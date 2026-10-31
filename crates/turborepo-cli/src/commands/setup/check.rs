@@ -1,11 +1,11 @@
-//! Readiness only. Repo-writable inventory is NOT execution authorization.
+//! Readiness only: re-hashes every installed tree the lock selects. This is
+//! NOT execution authorization.
 use turborepo_setup::{
     activation::ActivationPlan,
     execution_identity::{ExecutionContext, Libc},
     lock::{Platform, Snapshot},
     source_policy::ToolDownloadPolicy,
 };
-use turborepo_tool_install::Verification;
 
 use super::{Error, root::Discovery};
 
@@ -31,14 +31,17 @@ pub(super) fn run(
     discovery: &Discovery,
     sources: Snapshot,
     dependencies: &super::dependencies::Dependencies,
+    tool_store: Option<&std::path::Path>,
     preflight: impl Fn() -> Result<ToolDownloadPolicy, Error>,
 ) -> Result<i32, Error> {
     let context = context()?;
     preflight()?;
     // Keep the original captured sources and their workspace-flag gating.
-    let plan = ActivationPlan::captured(&sources, context, Verification::Full)?;
+    let plan = ActivationPlan::captured(&sources, context)?;
+    let root = discovery.snapshot_root()?.as_std_path();
+    super::trust::user_store(tool_store, root)?.check(plan.selection())?;
     // Recheck policy as well as original invocation/root and source bytes. Do
-    // not recapture discovery after drift, acquire locks, or initialize Store.
+    // not recapture discovery after drift or acquire locks.
     preflight()?;
     if !discovery.revalidate()? {
         return Err(Error::Unsupported(
@@ -58,11 +61,6 @@ pub(super) fn run(
         )
     {
         println!("npm {}: ready (bundled with managed Node)", npm.version);
-    }
-    // Reports what setup would clean up; checks never remove anything.
-    let root = discovery.snapshot_root()?.as_std_path();
-    for line in super::cleanup::inspect(root) {
-        println!("{line}");
     }
     // The activation plan above already required turbo.lock. Dependency
     // readiness is never claimed.

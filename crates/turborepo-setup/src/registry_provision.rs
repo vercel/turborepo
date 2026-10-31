@@ -14,7 +14,7 @@ use turborepo_archive::{ExtractedArtifact, Layout};
 use turborepo_download::{
     ApprovedOrigin, DownloadClient, ExpectedSha256, ExpectedSha512, Limits, VerifiedArtifact,
 };
-use turborepo_tool_install::{Export, Launch, LaunchArg, Store, Tool, TreeRef};
+use turborepo_tool_install::{Export, Launch, LaunchArg, SetupSession, Tool, TreeRef};
 
 use crate::{
     artifact_cache::ArtifactCache,
@@ -686,11 +686,11 @@ impl RegistryPlan {
             })
     }
 
-    /// Prepare without executing Node, then reconcile the SAME complete desired
-    /// set with all adapter callbacks. Only healthy generations allow reuse.
+    /// Prepare without executing Node, then ensure the SAME complete desired
+    /// set with all adapter callbacks. Only sealed trees allow reuse.
     pub async fn prepare_if_needed(
         &self,
-        store: &Store,
+        store: &SetupSession<'_>,
         desired: &[Tool],
         transport: &RegistryTransport,
     ) -> Result<Option<PreparedRegistry>, Error> {
@@ -700,7 +700,7 @@ impl RegistryPlan {
 
     pub async fn prepare(
         &self,
-        store: &Store,
+        store: &SetupSession<'_>,
         desired: &[Tool],
         transport: &RegistryTransport,
         preparation: crate::Preparation,
@@ -891,7 +891,7 @@ impl PnpmPlan {
     /// Prepare only; reconcile the same complete desired inventory afterward.
     pub async fn prepare_if_needed(
         &self,
-        store: &Store,
+        store: &SetupSession<'_>,
         desired: &[Tool],
         transport: &RegistryTransport,
     ) -> Result<Option<PreparedRegistry>, Error> {
@@ -901,7 +901,7 @@ impl PnpmPlan {
     /// Select fresh verification without changing the locked identity.
     pub async fn prepare(
         &self,
-        store: &Store,
+        store: &SetupSession<'_>,
         desired: &[Tool],
         transport: &RegistryTransport,
         preparation: crate::Preparation,

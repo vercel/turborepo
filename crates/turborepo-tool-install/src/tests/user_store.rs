@@ -32,6 +32,26 @@ fn a_store_is_created_private_and_keys_each_repository_by_its_canonical_root() {
 }
 
 #[test]
+fn readers_find_an_existing_store_and_never_create_one() {
+    let (home, repo) = (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
+    let path = home.path().join("data").join("tools");
+    assert_eq!(UserStore::existing(&path, repo.path()).unwrap(), None);
+    assert!(!home.path().join("data").exists());
+    // A missing store is still checked exactly like `at` checks it.
+    for unsafe_path in [PathBuf::from("store"), repo.path().join(".turbo/store")] {
+        assert!(matches!(
+            UserStore::existing(&unsafe_path, repo.path()),
+            Err(Error::UnsafeStore(_))
+        ));
+    }
+    let store = UserStore::at(&path, repo.path()).unwrap();
+    assert_eq!(
+        UserStore::existing(&path, repo.path()).unwrap(),
+        Some(store)
+    );
+}
+
+#[test]
 fn unsafe_store_paths_are_rejected_before_anything_is_created() {
     let (home, repo) = (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
     assert!(rejected(UserStore::at(Path::new("store"), repo.path())));
@@ -61,74 +81,4 @@ fn unsafe_store_paths_are_rejected_before_anything_is_created() {
     assert!(UserStore::at(&real, repo.path()).is_ok());
     fs::set_permissions(&real, fs::Permissions::from_mode(0o775)).unwrap();
     assert!(rejected(UserStore::at(&real, repo.path())));
-}
-
-#[test]
-fn launchers_and_inspection_use_the_cargo_home_the_store_was_published_with() {
-    let (home, repo) = (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
-    let mut rust = tool("rust");
-    rust.executables = BTreeMap::from([(
-        "cargo".into(),
-        Export::Launch(Launch {
-            program: TreeRef::new("rust", "bin/tool"),
-            args: Vec::new(),
-        }),
-    )]);
-    rust.vars = BTreeMap::from([(ManagedVar::CargoHome, VarValue::RepoCargoHome)]);
-    let desired = [rust];
-    let stage = |_: &Tool, root: &Path| -> Result<(), Error> {
-        fs::create_dir(root.join("bin"))?;
-        fs::write(root.join("bin/tool"), "#!/bin/sh\necho \"$CARGO_HOME\"\n")?;
-        fs::set_permissions(root.join("bin/tool"), fs::Permissions::from_mode(0o755))?;
-        Ok(())
-    };
-    let cargo = |store: &Store| {
-        let bin = store.current().unwrap().unwrap().bin;
-        let output = Command::new(bin.join("cargo"))
-            .env_clear()
-            .output()
-            .unwrap();
-        String::from_utf8(output.stdout).unwrap()
-    };
-    let root = fs::canonicalize(repo.path()).unwrap();
-
-    // A Store that knows no Cargo home cannot publish a tool that needs one.
-    let mut store = Store::open(repo.path()).unwrap();
-    assert!(matches!(
-        store.reconcile(&desired, stage),
-        Err(Error::InvalidInventory)
-    ));
-    assert!(store.current().unwrap().is_none());
-    drop(store);
-
-    // Quotes and spaces in the store path reach the launcher intact.
-    let first = UserStore::at(&home.path().join("it's a store"), repo.path()).unwrap();
-    let mut store = Store::open(repo.path())
-        .unwrap()
-        .with_user_store(&first)
-        .unwrap();
-    store.reconcile(&desired, stage).unwrap();
-    let expected = first.cargo_home(&root);
-    assert_eq!(cargo(&store), format!("{}\n", expected.display()));
-    assert_eq!(
-        Store::inspect(repo.path()).unwrap().unwrap().cargo_home,
-        Some(expected)
-    );
-    assert!(!repo.path().join(".turbo/cargo-home").exists());
-    drop(store);
-
-    // Another store republishes the launchers from the same trees.
-    let second = UserStore::at(&home.path().join("second"), repo.path()).unwrap();
-    let mut store = Store::open(repo.path())
-        .unwrap()
-        .with_user_store(&second)
-        .unwrap();
-    let outcome = store
-        .reconcile(&desired, |_, _| Err(Error::InvalidInventory))
-        .unwrap();
-    assert_eq!(outcome, Outcome::Replaced);
-    assert_eq!(
-        cargo(&store),
-        format!("{}\n", second.cargo_home(&root).display())
-    );
 }

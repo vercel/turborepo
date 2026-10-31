@@ -56,10 +56,8 @@ fn go_only() -> Fixture {
     f
 }
 
-fn installed(f: &Fixture) -> turborepo_tool_install::Current {
-    turborepo_tool_install::Store::inspect(f.owned.root())
-        .unwrap()
-        .unwrap()
+fn installed(f: &Fixture) -> Current {
+    Installed::open(&f.owned).current().unwrap().unwrap()
 }
 
 #[test]
@@ -90,7 +88,7 @@ fn go_zip_installs_exe_exports_locks_every_target_and_repeats_offline() {
         .collect();
     names.sort();
     assert_eq!(names, ["go.exe", "gofmt.exe"]);
-    let tree = current.bin.join("../tools/go");
+    let tree = current.tree("go").to_owned();
     for name in ["go.exe", "gofmt.exe"] {
         let target = tree.join("bin").join(name);
         assert!(same_file::is_same_file(current.bin.join(name), target).unwrap());

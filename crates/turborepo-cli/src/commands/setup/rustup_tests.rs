@@ -208,8 +208,11 @@ cp "OUTSIDE/manifest-$3.toml" "$tc/lib/rustlib/multirust-channel-manifest.toml"
             .map(str::to_owned)
             .collect()
     }
+    /// This repository's setup record, which names its environment.
     fn manifest(&self) -> Option<Vec<u8>> {
-        fs::read(self.owned.root().join(".turbo/tools/manifest.json")).ok()
+        let repos = fs::read_dir(self.owned.home().join("repos")).ok()?;
+        let record = repos.into_iter().next()?.ok()?.path().join("record.json");
+        fs::read(record).ok()
     }
 }
 
@@ -223,9 +226,7 @@ fn locked_rust_setup_is_private_atomic_repeatable_and_reinstallable() {
         assert_eq!(repo.run(&upstream, flags).unwrap(), 0);
         assert_eq!(upstream.hits(), 1);
     }
-    let current = turborepo_tool_install::Store::inspect(repo.owned.root())
-        .unwrap()
-        .unwrap();
+    let current = Installed::open(&repo.owned).current().unwrap().unwrap();
     let mut shims: Vec<_> = fs::read_dir(&current.bin)
         .unwrap()
         .map(|entry| entry.unwrap().file_name())
@@ -233,46 +234,40 @@ fn locked_rust_setup_is_private_atomic_repeatable_and_reinstallable() {
     shims.sort();
     assert_eq!(shims, ["cargo", "rustc", "rustdoc", "rustup"]);
     let cargo = fs::read_to_string(current.bin.join("cargo")).unwrap();
-    assert!(cargo.contains(&format!(
-        "exec \"$generation\"'/tools/rust/toolchains/1.99.0-{}/bin/cargo'",
-        triple()
-    )));
+    let toolchain = format!("toolchains/1.99.0-{}/bin/cargo", triple());
+    assert!(cargo.contains(&format!("exec {}", current.launched("rust", &toolchain))));
     // Never execute the installer or create a toolchain in the caller's home.
     // Only the producer's private, external setup receipt may be written.
     assert!(!repo.owned.root().join("installer-ran").exists());
     assert!(!repo.owned.home().join(".cargo").exists());
     assert!(!repo.owned.home().join(".rustup").exists());
-    let home_entries: Vec<_> = fs::read_dir(repo.owned.home())
+    let mut home_entries: Vec<_> = fs::read_dir(repo.owned.home())
         .unwrap()
         .map(|entry| entry.unwrap().file_name())
         .collect();
-    assert_eq!(home_entries, ["repos"]);
+    home_entries.sort();
+    assert_eq!(home_entries, ["envs", "gc.lock", "repos", "tmp", "trees"]);
     let repos: Vec<_> = fs::read_dir(repo.owned.home().join("repos"))
         .unwrap()
         .map(|entry| entry.unwrap().path())
         .collect();
     assert_eq!(repos.len(), 1);
-    let state_entries: Vec<_> = fs::read_dir(&repos[0])
+    let mut state_entries: Vec<_> = fs::read_dir(&repos[0])
         .unwrap()
         .map(|entry| entry.unwrap().file_name())
         .collect();
-    assert_eq!(state_entries, ["record.json"]);
+    state_entries.sort();
+    assert_eq!(state_entries, ["bin", "record.json"]);
     let records = [repos[0].join("record.json")];
     assert!(!records[0].starts_with(repo.owned.root()));
     let receipt: Value = serde_json::from_slice(&fs::read(&records[0]).unwrap()).unwrap();
-    assert_eq!(receipt["schema"], 1);
+    assert_eq!(receipt["schema"], 2);
     assert_eq!(
         receipt["lock_sha256"],
         format!("{:x}", Sha256::digest(&lock))
     );
-    assert_eq!(
-        receipt["installation"]["manifest_sha256"],
-        format!("{:x}", Sha256::digest(repo.manifest().unwrap()))
-    );
-    assert_eq!(
-        receipt["installation"]["tools"],
-        serde_json::to_value(&current.tools).unwrap()
-    );
+    let env = current.bin.parent().unwrap().file_name().unwrap();
+    assert_eq!(receipt["env"], env.to_str().unwrap());
     // Exactly one private multicall rustup install, without a lock rewrite.
     let install = "rustup|toolchain install 1.99.0 --no-self-update --profile minimal";
     assert_eq!(repo.calls(), [install]);
@@ -281,17 +276,36 @@ fn locked_rust_setup_is_private_atomic_repeatable_and_reinstallable() {
         lock
     );
 
-    // A failed fresh bootstrap leaves the published generation selected.
+    // Force re-verifies a healthy tree without running rustup again.
     let manifest = repo.manifest().unwrap();
-    let corrupt = repo.upstream(true);
     let force = &["--frozen", "--tools-only", "--force"];
+    assert_eq!(repo.run(&upstream, force).unwrap(), 0);
+    assert_eq!(repo.calls(), [install]);
+    // Damaged trees need fresh rustup bytes and a fresh bootstrap; a failed
+    // one keeps the record.
+    turborepo_setup::test_support::damage(&current.tree("rust").join(&toolchain), "damaged");
+    let rustup = current
+        .tools
+        .iter()
+        .find(|tool| tool.id == "rustup")
+        .unwrap();
+    let file = rustup
+        .executables
+        .values()
+        .find_map(|export| match export {
+            turborepo_tool_install::Export::File(path) => Some(path),
+            _ => None,
+        })
+        .unwrap();
+    turborepo_setup::test_support::damage(&current.tree("rustup").join(file), "damaged");
+    let corrupt = repo.upstream(true);
     assert!(repo.run(&corrupt, force).is_err());
     assert_eq!(repo.manifest().unwrap(), manifest);
     assert_eq!(repo.calls().len(), 1);
-    // Clean reinstall: the same lock, a fresh rustup run and a new generation.
+    // Clean repair: the same lock and environment, and a fresh rustup run.
     assert_eq!(repo.run(&upstream, force).unwrap(), 0);
     assert_eq!(repo.calls(), [install, install]);
-    assert_ne!(repo.manifest().unwrap(), manifest);
+    assert_eq!(repo.manifest().unwrap(), manifest);
 }
 
 #[test]
@@ -342,11 +356,8 @@ fn failed_first_bootstrap_publishes_no_shims() {
     assert!(matches!(repo.run(&corrupt, FROZEN), Err(Error::Rustup(_))));
     assert_eq!(corrupt.hits(), 1);
     assert!(repo.manifest().is_none());
-    let tools = fs::read_dir(repo.owned.root().join(".turbo/tools")).unwrap();
-    assert!(tools.into_iter().all(|entry| {
-        let entry = entry.unwrap();
-        !entry.path().join("bin").exists()
-    }));
+    let envs = fs::read_dir(repo.owned.home().join("envs"));
+    assert_eq!(envs.map_or(0, |envs| envs.count()), 0);
 }
 
 #[test]
@@ -377,7 +388,9 @@ fn rust_readiness_checks_are_read_only_and_detect_damage() {
     let upstream = repo.upstream(false);
     assert!(matches!(
         repo.run(&upstream, CHECK),
-        Err(Error::Activation(ActivationError::MissingInventory))
+        Err(Error::Install(turborepo_tool_install::Error::NotInstalled(
+            _
+        )))
     ));
     assert_eq!(repo.manifest(), None);
     assert_eq!(repo.run(&upstream, FROZEN).unwrap(), 0);
@@ -389,13 +402,11 @@ fn rust_readiness_checks_are_read_only_and_detect_damage() {
     assert!(!repo.cargo_home().exists());
 
     // A damaged toolchain file is reported, never repaired.
-    let current = turborepo_tool_install::Store::inspect(repo.owned.root())
-        .unwrap()
-        .unwrap();
+    let current = Installed::open(&repo.owned).current().unwrap().unwrap();
     turborepo_setup::test_support::damage(&current.bin.join("rustdoc"), "exit 1\n");
     assert!(matches!(
         repo.run(&upstream, CHECK),
-        Err(Error::Activation(ActivationError::DamagedInventory(_)))
+        Err(Error::Install(turborepo_tool_install::Error::Damaged(_)))
     ));
     assert_eq!(repo.manifest(), manifest);
 }

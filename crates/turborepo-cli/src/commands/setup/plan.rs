@@ -3,11 +3,10 @@
 use std::{cell::Cell, io};
 
 use turborepo_setup::{
-    activation::{ActivationPlan, Error as ReadinessError},
+    activation::ActivationPlan,
     lock::{Installation, Platform, Snapshot, Tool, reconcile},
     source_policy::ToolDownloadPolicy,
 };
-use turborepo_tool_install::{Store, Verification};
 
 use super::{
     Error, LockMode, SetupRequest, check, dependencies::Dependencies, provision, root::Discovery,
@@ -31,7 +30,17 @@ pub(super) fn report(
             }
         };
     if request.force || !proposed {
-        return inspect_with(discovery, sources, request.force, dependencies, preflight);
+        let tool_store = transports
+            .as_ref()
+            .and_then(provision::Transports::tool_store);
+        return inspect_with(
+            discovery,
+            sources,
+            request.force,
+            dependencies,
+            tool_store.as_deref(),
+            preflight,
+        );
     }
     propose(
         discovery,
@@ -58,10 +67,18 @@ pub(super) fn inspect(
     discovery: &Discovery,
     sources: Snapshot,
     force: bool,
+    tool_store: &std::path::Path,
     preflight: impl Fn() -> Result<ToolDownloadPolicy, Error>,
 ) -> Result<String, Error> {
     let dependencies = Dependencies::tools_only();
-    inspect_with(discovery, sources, force, &dependencies, preflight)
+    inspect_with(
+        discovery,
+        sources,
+        force,
+        &dependencies,
+        Some(tool_store),
+        preflight,
+    )
 }
 
 fn inspect_with(
@@ -69,6 +86,7 @@ fn inspect_with(
     sources: Snapshot,
     force: bool,
     dependencies: &Dependencies,
+    tool_store: Option<&std::path::Path>,
     preflight: impl Fn() -> Result<ToolDownloadPolicy, Error>,
 ) -> Result<String, Error> {
     let context = check::context()?;
@@ -80,14 +98,26 @@ fn inspect_with(
     // Share frozen provisioning's native request, artifact and integrity gates.
     provision::plans(&sources, lock)?;
     provision::storage(discovery.snapshot_root()?.as_std_path())?;
-    let action = match ActivationPlan::captured(&sources, context, Verification::Shallow) {
-        Ok(_) => "reuse (healthy installation)",
-        Err(ReadinessError::MissingInventory) => "install (missing installation)",
-        Err(ReadinessError::StaleInventory) => "repair (installation does not match turbo.lock)",
-        Err(error) => return Err(error.into()),
-    };
-    let action = if force { "reinstall (--force)" } else { action };
     let root = discovery.snapshot_root()?.as_std_path();
+    let plan = ActivationPlan::captured(&sources, context)?;
+    let store = super::trust::user_store(tool_store, root)?;
+    let recorded = super::trust::TrustStore::new(&store, root)?.recorded_env()?;
+    // What run and exec would check: the environment's shims and seals.
+    let action = match recorded {
+        None => "install (missing installation)",
+        Some(env) if &env != plan.selection().key() => {
+            "repair (installation does not match turbo.lock)"
+        }
+        Some(env) => match store.activate(root, &env) {
+            Ok(_) => "reuse (healthy installation)",
+            Err(
+                turborepo_tool_install::Error::NotInstalled(_)
+                | turborepo_tool_install::Error::Damaged(_),
+            ) => "repair (damaged installation)",
+            Err(error) => return Err(error.into()),
+        },
+    };
+    let action = if force { "re-verify (--force)" } else { action };
     let mut lines = vec![format!(
         "Locked {} (turbo.lock unchanged):",
         kind(dependencies)
@@ -111,6 +141,9 @@ fn propose(
 ) -> Result<String, Error> {
     let platform = provision::platform()?;
     let root = discovery.snapshot_root()?.as_std_path();
+    let tool_store = transports
+        .as_ref()
+        .and_then(provision::Transports::tool_store);
     provision::resolvable(&sources)?;
     // The same gates as setup's resolution, minus the writer it would take.
     let check = || {
@@ -176,10 +209,17 @@ fn propose(
     desired.extend(go.as_ref().map(|plan| plan.inventory_tool().clone()));
     desired.extend(yarn.as_ref().map(|plan| plan.inventory_tool().clone()));
     desired.extend(bun.as_ref().map(|plan| plan.inventory_tool().clone()));
-    // Same per-tool reuse as setup's preparation; inspection never writes.
-    let installed = Store::inspect(root)?
-        .map(|current| current.tools)
-        .unwrap_or_default();
+    // Same per-tool reuse as setup's preparation: a sealed tree in the store.
+    let store = super::trust::user_store(tool_store.as_deref(), root)?;
+    let installed = desired
+        .iter()
+        .filter_map(|tool| {
+            store
+                .sealed_tree(tool)
+                .map(|tree| tree.map(|_| tool))
+                .transpose()
+        })
+        .collect::<Result<Vec<_>, _>>()?;
     let previous = sources.previous_lock();
     let change = match previous {
         None => Some("created"),
@@ -199,8 +239,7 @@ fn propose(
         let inventory = desired
             .iter()
             .find(|inventory| &inventory.id == inventory_id);
-        // A tool bound to a changed Node is re-staged even if its bytes exist.
-        let action = if inventory.is_some_and(|inventory| installed.contains(inventory)) {
+        let action = if inventory.is_some_and(|inventory| installed.contains(&inventory)) {
             "reuse (healthy installation)"
         } else if installed.is_empty() {
             "install (missing installation)"
@@ -271,7 +310,7 @@ fn revalidate(discovery: &Discovery) -> Result<(), Error> {
 }
 
 /// Recheck original discovery, policy and exact source/lock bytes before
-/// printing anything. Never take a writer guard or open Store for writing.
+/// printing anything. Never take a writer guard or install anything.
 fn recheck(
     discovery: &Discovery,
     sources: &Snapshot,

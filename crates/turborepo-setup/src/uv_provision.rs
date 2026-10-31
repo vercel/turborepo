@@ -13,7 +13,7 @@ use std::{collections::BTreeMap, fs, io, path::Path, time::Duration};
 
 use turborepo_archive::{ExtractedArtifact, Layout};
 use turborepo_download::{ExpectedSha256, VerifiedArtifact};
-use turborepo_tool_install::{Export, Launch, ManagedVar, Store, Tool, TreeRef, VarValue};
+use turborepo_tool_install::{Export, Launch, ManagedVar, SetupSession, Tool, TreeRef, VarValue};
 
 use crate::{
     lock::{self, Installation, Lock, Platform},
@@ -23,9 +23,9 @@ use crate::{
 };
 
 /// uv's interpreter settings. They pin uv's interpreter directory to the
-/// `python` tool tree of the SAME generation, so managed interpreters stay
-/// repo-scoped and never land in the user's global uv data. uv must not
-/// download interpreters into an immutable generation. With a locked
+/// selected `python` tool's tree, so managed interpreters never land in the
+/// user's global uv data. uv must not download interpreters into an
+/// immutable tree. With a locked
 /// interpreter (`python`, its uv download key), uv uses only that tree and
 /// requests it by key rather than path: a path request makes `uv pip` install
 /// into the managed interpreter itself instead of the project's virtual
@@ -157,11 +157,11 @@ impl UvPlan {
         &self.tool
     }
 
-    /// The caller supplies ALL desired tools and reconciles that same set,
-    /// holding this Store lock throughout preparation and reconciliation.
+    /// The caller supplies ALL desired tools and ensures that same set
+    /// in the same setup session.
     pub async fn prepare_if_needed(
         &self,
-        store: &Store,
+        store: &SetupSession<'_>,
         desired: &[Tool],
         transport: &UvTransport,
     ) -> Result<Option<PreparedUv>, Error> {
@@ -170,10 +170,10 @@ impl UvPlan {
     }
 
     /// Fresh preparation verifies a new complete artifact even for a healthy
-    /// tool. Reuse requires a healthy selected generation with this exact tool.
+    /// tool. Reuse requires a sealed tree for this exact tool.
     pub async fn prepare(
         &self,
-        store: &Store,
+        store: &SetupSession<'_>,
         desired: &[Tool],
         transport: &UvTransport,
         preparation: crate::Preparation,
@@ -291,7 +291,8 @@ pub struct PreparedUv {
 }
 
 impl PreparedUv {
-    /// Callback for Store::reconcile: copy the FULL verified tree.
+    /// Staging callback for `SetupSession::ensure`: copy the FULL verified
+    /// tree.
     pub fn stage(
         &self,
         tool: &Tool,

@@ -1,12 +1,9 @@
 #![allow(clippy::unwrap_used)]
-use std::{fs, path::Path};
-
-use turborepo_tool_install::{Error as InstallError, Tool as InstalledTool};
+use std::fs;
 
 use super::*;
 use crate::{
-    ephemeral_reconcile::{Error as EphemeralError, stage},
-    lock::{Artifact, Document, Format},
+    lock::{Artifact, Document, Format, Platform},
     node_resolution::PLATFORMS as TARGETS,
 };
 
@@ -48,22 +45,11 @@ fn selection(snapshot: &Snapshot) -> Lock {
     }
     Lock::parse(&serde_json::to_vec(&wire).unwrap()).unwrap()
 }
-fn desired(lock: &Lock, snapshot: &Snapshot) -> Vec<InstalledTool> {
-    let node = NodePlan::from_lock(lock, Platform::MacosArm64).unwrap();
-    let mut tools = vec![node.inventory_tool().clone()];
-    if let Some(manager) = snapshot.package_manager().unwrap() {
-        let pnpm = PnpmPlan::from_declaration(lock, Platform::MacosArm64, &node, &manager).unwrap();
-        tools.push(pnpm.inventory_tool().clone());
-    }
-    tools
-}
-fn fixture(manifest: Value) -> (tempfile::TempDir, Snapshot, Lock, Vec<InstalledTool>, Store) {
+fn fixture(manifest: Value) -> (tempfile::TempDir, Snapshot, Lock) {
     let repo = root(manifest);
     let snapshot = Snapshot::capture(repo.path()).unwrap();
     let lock = selection(&snapshot);
-    let tools = desired(&lock, &snapshot);
-    let store = Store::open(repo.path()).unwrap();
-    (repo, snapshot, lock, tools, store)
+    (repo, snapshot, lock)
 }
 type Artifacts = BTreeMap<Platform, BTreeMap<String, Artifact>>;
 fn artifacts<'a>(wire: &'a mut Document, id: &str) -> &'a mut Artifacts {
@@ -72,78 +58,46 @@ fn artifacts<'a>(wire: &'a mut Document, id: &str) -> &'a mut Artifacts {
         _ => panic!("managed fixture required"),
     }
 }
-fn populate(tool: &InstalledTool, tree: &Path) -> Result<(), InstallError> {
-    for path in tool.tree_files() {
-        let path = tree.join(path);
-        fs::create_dir_all(path.parent().unwrap())?;
-        fs::write(&path, b"fixture; never executed")?;
-        use std::os::unix::fs::PermissionsExt;
-        fs::set_permissions(&path, fs::Permissions::from_mode(0o755))?;
-    }
-    if tool.id == "pnpm" {
-        fs::write(tree.join("package.json"), json!({"name":"pnpm","version":tool.version,"bin":{"pnpm":"bin/pnpm.cjs","pnpx":"bin/pnpx.cjs"}}).to_string())?;
-    }
-    Ok(())
-}
-fn publish(store: &mut Store, tools: &[InstalledTool], bytes: Vec<u8>) {
-    publish_with(store, tools, bytes, populate);
-}
-fn publish_with(
-    store: &mut Store,
-    tools: &[InstalledTool],
-    bytes: Vec<u8>,
-    stage: impl FnMut(&InstalledTool, &Path) -> Result<(), InstallError>,
-) {
-    let record = Record::new(bytes).unwrap();
-    let expected = store.generation().unwrap();
-    store
-        .reconcile_recorded_checked(tools, &record, &expected, false, stage, || Ok(()))
-        .unwrap();
-}
-fn assert_invalid(result: Result<Option<Baseline>, Error>) {
-    assert!(matches!(result, Err(Error::Invalid)));
-}
-fn reject(snapshot: &Snapshot, store: &mut Store, tools: &[InstalledTool], lock: Lock) {
-    publish(store, tools, lock.canonical_bytes().unwrap());
-    assert_invalid(Baseline::capture(snapshot, store));
+/// A user record holding `lock` never decodes into a previous selection.
+fn reject(lock: Lock) {
+    assert!(matches!(
+        NativeRecord::decode(&lock.canonical_bytes().unwrap()),
+        Err(Error::Invalid)
+    ));
 }
 
 #[test]
 fn canonical_record_retains_typed_previous_provenance_not_a_fabricated_disk_lock() {
-    let (repo, snapshot, lock, tools, mut store) = fixture(
+    let (repo, snapshot, lock) = fixture(
         json!({"packageManager":"pnpm@10.1.0", "secret":"never-record-me",
         "devEngines":{"runtime":[{"name":"node"},{"name":"node","version":"24.x","onFail":"error"}],
         "packageManager":[{"name":"pnpm","version":"10.1.0","onFail":"error"}]}}),
     );
     let native = NativeRecord::from_snapshot(&snapshot, &lock).unwrap();
-    let bytes = native.record().bytes();
+    let bytes = native.bytes();
     let repeated = NativeRecord::from_snapshot(&snapshot, &lock).unwrap();
     assert_eq!(bytes, lock.canonical_bytes().unwrap());
-    assert_eq!(bytes, repeated.record().bytes());
+    assert_eq!(bytes, repeated.bytes());
     let text = String::from_utf8_lossy(bytes);
     assert!(!text.contains("never-record-me"));
     assert!(!text.contains(repo.path().to_str().unwrap()));
-    publish(&mut store, &tools, bytes.to_vec());
-    let before = Baseline::capture(&snapshot, &store).unwrap().unwrap();
+    // The recorded selection is the previous provenance after declarations
+    // change, never a disk lock.
     fs::write(repo.path().join(".nvmrc"), "22.x").unwrap();
-    assert!(before.check(&snapshot, &store).is_err());
     let changed = Snapshot::capture(repo.path()).unwrap();
-    let baseline = Baseline::capture(&changed, &store).unwrap().unwrap();
-    let prior = baseline.native(&changed, &store).unwrap();
+    let prior = NativeRecord::decode(bytes).unwrap();
     assert_eq!(prior.selection(), &lock);
     let version = semver::Version::new(24, 1, 0);
     assert!(prior.node_requirements().matches_locked_version(&version));
     assert_eq!(prior.package_manager().unwrap().manager, Manager::Pnpm);
     assert!(changed.previous_lock().is_none());
     assert!(!repo.path().join("turbo.lock").exists());
-    changed.ensure_current().unwrap();
-    store.check_generation(baseline.generation()).unwrap();
     assert!(NativeRecord::from_snapshot(&changed, &lock).is_err());
 }
 
 #[test]
 fn strict_decode_rejects_noncanonical_unknown_duplicate_schema_and_oversized_records() {
-    let (_repo, snapshot, lock, tools, mut store) = fixture(json!({"engines":{"node":"24.x"}}));
+    let (_repo, snapshot, lock) = fixture(json!({"engines":{"node":"24.x"}}));
     let bytes = lock.canonical_bytes().unwrap();
     let text = String::from_utf8(bytes.clone()).unwrap();
     let mut unknown = serde_json::to_value(lock.document()).unwrap();
@@ -169,23 +123,18 @@ fn strict_decode_rejects_noncanonical_unknown_duplicate_schema_and_oversized_rec
             NativeRecord::decode(&invalid_bytes).is_err(),
             "case {index} must be rejected"
         );
-        if invalid_bytes.len() <= crate::lock::MAX_LOCK_BYTES {
-            publish(&mut store, &tools, invalid_bytes);
-            assert_invalid(Baseline::capture(&snapshot, &store));
-        }
     }
     let mut reordered = lock.document().clone();
     let node = reordered.tools.get_mut("node").unwrap();
     node.declarations.reverse();
     let reordered = Lock::new(reordered).unwrap();
     let canonical = NativeRecord::from_snapshot(&snapshot, &reordered).unwrap();
-    assert_eq!(canonical.record().bytes(), bytes);
+    assert_eq!(canonical.bytes(), bytes);
 }
 
 #[test]
 fn native_grammar_roundtrip_rejects_invented_and_malformed_sources() {
-    let (_repo, snapshot, lock, tools, mut store) =
-        fixture(json!({"packageManager":"pnpm@10.1.0"}));
+    let (_repo, _snapshot, lock) = fixture(json!({"packageManager":"pnpm@10.1.0"}));
     for (field, request) in [
         (Some("engines.rust"), Some("24.x")),
         (Some("devEngines.runtime[01].version"), Some("24.x")),
@@ -200,7 +149,7 @@ fn native_grammar_roundtrip_rejects_invented_and_malformed_sources() {
             field: field.map(str::to_owned),
             request: request.map(str::to_owned),
         }];
-        reject(&snapshot, &mut store, &tools, Lock::new(wire).unwrap());
+        reject(Lock::new(wire).unwrap());
     }
     for pointer in [
         "/secret",
@@ -209,19 +158,18 @@ fn native_grammar_roundtrip_rejects_invented_and_malformed_sources() {
     ] {
         let mut wire = lock.document().clone();
         wire.tools.get_mut("pnpm").unwrap().declarations[0].field = Some(pointer.into());
-        reject(&snapshot, &mut store, &tools, Lock::new(wire).unwrap());
+        reject(Lock::new(wire).unwrap());
     }
     for request in ["22.x", "v24.1.0", "lts/SECRET"] {
         let mut wire = lock.document().clone();
         wire.tools.get_mut("node").unwrap().declarations[0].request = Some(request.into());
-        reject(&snapshot, &mut store, &tools, Lock::new(wire).unwrap());
+        reject(Lock::new(wire).unwrap());
     }
 }
 
 #[test]
 fn every_portable_variant_is_validated_not_just_the_selected_target() {
-    let (_repo, snapshot, lock, tools, mut store) =
-        fixture(json!({"packageManager":"pnpm@10.1.0"}));
+    let (_repo, _snapshot, lock) = fixture(json!({"packageManager":"pnpm@10.1.0"}));
     for id in ["node", "pnpm"] {
         for platform in TARGETS {
             for mutation in 0..7 {
@@ -253,9 +201,9 @@ fn every_portable_variant_is_validated_not_just_the_selected_target() {
                     }
                 }
                 // Collision-invalid documents fail at schema validation; others
-                // must fail the native adapter checks through actual Store data.
+                // must fail the native adapter checks a record decodes with.
                 match Lock::new(wire) {
-                    Ok(bad) => reject(&snapshot, &mut store, &tools, bad),
+                    Ok(bad) => reject(bad),
                     Err(error) => assert_eq!(
                         error,
                         crate::lock::Error::Invalid("co-active executable names collide")
@@ -279,7 +227,7 @@ fn exact_versions_and_every_authored_integrity_constraint_are_enforced() {
         let snapshot = Snapshot::capture(repo.path()).unwrap();
         assert!(NativeRecord::from_snapshot(&snapshot, &selection(&snapshot)).is_err());
     }
-    let (_repo, snapshot, lock, tools, mut store) =
+    let (_repo, snapshot, lock) =
         fixture(json!({"packageManager":format!("pnpm@10.1.0+sha256.{}", "b".repeat(64))}));
     NativeRecord::from_snapshot(&snapshot, &lock).unwrap();
     let mut wire = lock.document().clone();
@@ -288,134 +236,30 @@ fn exact_versions_and_every_authored_integrity_constraint_are_enforced() {
     artifacts.insert(Platform::MacosArm64, foreign.clone());
     foreign.values_mut().next().unwrap().sha256 = "c".repeat(64);
     artifacts.insert(Platform::WindowsX64, foreign);
-    reject(&snapshot, &mut store, &tools, Lock::new(wire).unwrap());
-}
-
-#[test]
-fn root_live_guard_real_lock_sources_and_generation_remain_bound() {
-    let (repo, snapshot, lock, tools, mut store) = fixture(json!({}));
-    let other = root(json!({}));
-    let bytes = lock.canonical_bytes().unwrap();
-    assert!(Baseline::capture(&snapshot, &store).unwrap().is_none());
-    store.reconcile(&tools, populate).unwrap();
-    assert!(Baseline::capture(&snapshot, &store).unwrap().is_none());
-    let expected = store.generation().unwrap();
-    let result = stage(
-        &snapshot,
-        &store,
-        Platform::MacosArm64,
-        false,
-        |_| panic!("present unrecorded inventory must never resolve"),
-        || Ok(()),
-    );
-    assert!(matches!(result, Err(EphemeralError::Unsupported)));
-    store.check_generation(&expected).unwrap();
-    publish(&mut store, &tools, lock.canonical_bytes().unwrap());
-    let baseline = Baseline::capture(&snapshot, &store).unwrap().unwrap();
-    let other_snapshot = Snapshot::capture(other.path()).unwrap();
-    let other_store = Store::open(other.path()).unwrap();
-    assert!(Baseline::capture(&other_snapshot, &store).is_err());
-    assert!(baseline.check(&other_snapshot, &other_store).is_err());
-    drop(store);
-    let mut reopened = Store::open(repo.path()).unwrap();
-    assert!(baseline.check(&snapshot, &reopened).is_err());
-    let current = Baseline::capture(&snapshot, &reopened).unwrap().unwrap();
-    reopened
-        .reconcile(&tools, |_, _| panic!("reuse required"))
-        .unwrap();
-    assert!(current.native(&snapshot, &reopened).is_err());
-    publish(&mut reopened, &tools, bytes.clone());
-    let current = Baseline::capture(&snapshot, &reopened).unwrap().unwrap();
-    fs::write(repo.path().join("turbo.lock"), bytes).unwrap();
-    assert!(current.check(&snapshot, &reopened).is_err());
-    let actual = Snapshot::capture(repo.path()).unwrap();
-    let present = Baseline::capture(&actual, &reopened).unwrap().unwrap();
-    assert_eq!(actual.previous_lock(), Some(&lock));
-    present.check(&actual, &reopened).unwrap();
-    fs::write(repo.path().join(".nvmrc"), "24.x\n ").unwrap();
-    assert!(present.check(&actual, &reopened).is_err());
-}
-
-#[test]
-fn selected_payload_inventory_and_corruption_cannot_be_replaced_by_caller_data() {
-    for case in 0..8 {
-        let (_repo, snapshot, lock, mut tools, mut store) =
-            fixture(json!({"packageManager":"pnpm@10.1.0"}));
-        match case {
-            0 => tools[0].version = "24.2.0".into(),
-            1 => tools[1].artifact_sha256 = "c".repeat(64),
-            2 => {
-                tools.pop();
-            }
-            3 => {
-                tools[1]
-                    .executables
-                    .insert("pnpm".into(), "pnpm-forged".into());
-            }
-            _ => {}
-        }
-        publish_with(
-            &mut store,
-            &tools,
-            lock.canonical_bytes().unwrap(),
-            |tool, tree| {
-                populate(tool, tree)?;
-                if tool.id == "pnpm" && case == 4 {
-                    fs::write(
-                        tree.join("package.json"),
-                        json!({"name":"alien","version":"10.1.0"}).to_string(),
-                    )?;
-                }
-                Ok(())
-            },
-        );
-        if case >= 5 {
-            let baseline = Baseline::capture(&snapshot, &store).unwrap().unwrap();
-            let current = store.current().unwrap().unwrap();
-            let generation = current.bin.parent().unwrap();
-            match case {
-                5 => fs::write(generation.join("record.json"), b"corrupt").unwrap(),
-                6 => fs::remove_file(current.bin.join("node")).unwrap(),
-                _ => fs::remove_dir_all(generation).unwrap(),
-            }
-            assert!(baseline.check(&snapshot, &store).is_err());
-        }
-        if case >= 6 {
-            let repair = Baseline::capture(&snapshot, &store).unwrap().unwrap();
-            assert!(!repair.generation().healthy());
-            assert_eq!(repair.native(&snapshot, &store).unwrap().selection(), &lock);
-        } else {
-            assert!(Baseline::capture(&snapshot, &store).is_err(), "case {case}");
-        }
-    }
+    reject(Lock::new(wire).unwrap());
 }
 
 #[test]
 fn selected_cohort_does_not_require_unselected_pnpm_coverage() {
-    let (_repo, snapshot, lock, tools, mut store) =
-        fixture(json!({"packageManager":"pnpm@10.1.0"}));
+    let (_repo, snapshot, lock) = fixture(json!({"packageManager":"pnpm@10.1.0"}));
     let mut wire = lock.document().clone();
     let variants = artifacts(&mut wire, "pnpm");
     let payload = variants.remove(&Platform::Any).unwrap();
     variants.insert(Platform::MacosArm64, payload.clone());
     let partial = Lock::new(wire.clone()).unwrap();
     let native = NativeRecord::from_snapshot(&snapshot, &partial).unwrap();
-    publish(&mut store, &tools, native.record().bytes().to_vec());
-    assert!(store.is_current(&tools).unwrap());
-    let baseline = Baseline::capture(&snapshot, &store).unwrap().unwrap();
-    let prior = baseline.native(&snapshot, &store).unwrap();
+    let prior = NativeRecord::decode(native.bytes()).unwrap();
     assert_eq!(prior.selection(), &partial);
     let variants = artifacts(&mut wire, "pnpm");
     variants.clear();
     variants.insert(Platform::MacosX64, payload);
     let missing = Lock::new(wire).unwrap();
     NativeRecord::from_snapshot(&snapshot, &missing).unwrap();
-    reject(&snapshot, &mut store, &tools, missing);
 }
 
 #[test]
 fn ignored_runtime_entries_and_forged_holes_have_an_explicit_format_diagnosis() {
-    let (_repo, snapshot, lock, tools, mut store) = fixture(json!({"devEngines":{"runtime":[
+    let (_repo, snapshot, lock) = fixture(json!({"devEngines":{"runtime":[
         {"name":"deno","version":"2.x"},{"name":"node","version":"24.x"}]}}));
     assert!(lock.matches_native(snapshot.declarations()).unwrap());
     let requirements = snapshot.node_requirements().unwrap();
@@ -425,9 +269,8 @@ fn ignored_runtime_entries_and_forged_holes_have_an_explicit_format_diagnosis() 
     let message = error.to_string();
     assert!(message.contains("package.json#devEngines.runtime[0]"));
     assert!(message.contains("does not retain ignored non-Node runtime entries"));
-    publish(&mut store, &tools, lock.canonical_bytes().unwrap());
     assert!(matches!(
-        Baseline::capture(&snapshot, &store),
+        NativeRecord::decode(&lock.canonical_bytes().unwrap()),
         Err(Error::RuntimeArrayGap(0))
     ));
     let mut forged = lock.document().clone();

@@ -8,7 +8,7 @@ use semver::Version;
 use turborepo_archive::{ExtractedArtifact, Layout};
 use turborepo_download::{ApprovedOrigin, DownloadClient, ExpectedSha256};
 use turborepo_platform::OperatingSystem::Windows;
-use turborepo_tool_install::{Export, Store, Tool};
+use turborepo_tool_install::{Export, SetupSession, Tool};
 
 use crate::{
     NodeArtifact,
@@ -241,16 +241,15 @@ impl NodePlan {
         &self.tool
     }
 
-    /// The caller supplies ALL desired tools and reconciles that same set,
-    /// holding this Store lock throughout preparation and reconciliation.
-    /// Reuse requires a healthy entire selected
-    /// generation with an identical Node tool, not complete desired-set
-    /// equality. Unrelated tool changes need no Node download. Only a
+    /// The caller supplies ALL desired tools and ensures that same set in the
+    /// same setup session. Reuse requires a sealed tree for this exact Node
+    /// tool, not complete desired-set equality. Unrelated tool changes need
+    /// no Node download. Only a
     /// native Windows x64 host promotes Windows trees; arm64 stays
     /// unqualified and never borrows the x64 artifact.
     pub async fn prepare_if_needed(
         &self,
-        store: &Store,
+        store: &SetupSession<'_>,
         desired: &[Tool],
         transport: &NodeTransport,
     ) -> Result<Option<PreparedNode>, Error> {
@@ -263,7 +262,7 @@ impl NodePlan {
     /// publication.
     pub async fn prepare(
         &self,
-        store: &Store,
+        store: &SetupSession<'_>,
         desired: &[Tool],
         transport: &NodeTransport,
         preparation: crate::Preparation,
@@ -445,8 +444,9 @@ impl PreparedNode {
         self.from_cache
     }
 
-    /// Callback for Store::reconcile. Copy the FULL verified resource tree,
-    /// preserving executable modes and safe relative links; never run hooks.
+    /// Staging callback for `SetupSession::ensure`. Copy the FULL verified
+    /// resource tree, preserving executable modes and safe relative links;
+    /// never run hooks.
     pub fn stage(
         &self,
         tool: &Tool,
