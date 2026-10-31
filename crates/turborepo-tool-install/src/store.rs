@@ -4,6 +4,7 @@
 //!
 //! ```text
 //! <store>/gc.lock                      shared by setups (collection takes it exclusively)
+//! <store>/gc-state.json                when collection first saw each entry unused
 //! <store>/tmp/                         private staging on the store's filesystem
 //! <store>/trees/<tree>/{seal.json, root/}   immutable, verified once at install
 //! <store>/envs/<env>/{seal.json, bin/}      immutable, shared by equal selections
@@ -19,7 +20,6 @@ use std::{
     fs::{self, File, OpenOptions},
     io,
     path::{Path, PathBuf},
-    time::{Duration, SystemTime},
 };
 
 use serde::{Deserialize, Serialize};
@@ -37,8 +37,6 @@ const TREE_REVISION: u32 = 1;
 /// rendered differently.
 const ENV_REVISION: u32 = 1;
 const SEAL_SCHEMA: u32 = 1;
-/// Staging older than this belongs to no running setup.
-const STALE_STAGING: Duration = Duration::from_secs(24 * 60 * 60);
 
 /// Names a selection's environment: the SHA-256 of its canonical tool list.
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
@@ -142,7 +140,7 @@ impl TreeSpec {
     }
 }
 
-fn tree_key(tool: &Tool) -> String {
+pub(crate) fn tree_key(tool: &Tool) -> String {
     TreeSpec::of(tool).key()
 }
 
@@ -170,23 +168,32 @@ struct SharedLease {
 
 impl SharedLease {
     fn acquire(store: &Path) -> Result<Self, Error> {
-        let path = store.join("gc.lock");
-        match fs::symlink_metadata(&path) {
-            Ok(m) if !m.is_file() || m.file_type().is_symlink() => return Err(Error::UnsafePath),
-            _ => {}
-        }
-        let mut options = OpenOptions::new();
-        options.read(true).write(true).create(true).truncate(false);
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::OpenOptionsExt;
-            options.mode(0o600);
-        }
-        // Never unlink the lock file: every process must lock the same inode.
-        let lock = options.open(path)?;
+        let lock = lock_file(store, true)?;
         lock.lock_shared()?;
         Ok(Self { _lock: lock })
     }
+}
+
+/// `<store>/gc.lock`, unlocked.
+pub(crate) fn lock_file(store: &Path, create: bool) -> Result<File, Error> {
+    let path = store.join("gc.lock");
+    match fs::symlink_metadata(&path) {
+        Ok(m) if !m.is_file() || m.file_type().is_symlink() => return Err(Error::UnsafePath),
+        _ => {}
+    }
+    let mut options = OpenOptions::new();
+    options
+        .read(true)
+        .write(true)
+        .create(create)
+        .truncate(false);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.mode(0o600);
+    }
+    // Never unlink the lock file: every process must lock the same inode.
+    Ok(options.open(path)?)
 }
 
 /// How setup decides a sealed tree or environment is reusable.
@@ -266,7 +273,7 @@ impl Activation {
 }
 
 impl UserStore {
-    fn tmp(&self) -> PathBuf {
+    pub(crate) fn tmp(&self) -> PathBuf {
         self.root.join("tmp")
     }
 
@@ -278,19 +285,19 @@ impl UserStore {
         self.tree_dir(&tree_key(tool)).join("root")
     }
 
-    fn env_dir(&self, key: &EnvKey) -> PathBuf {
+    pub(crate) fn env_dir(&self, key: &EnvKey) -> PathBuf {
         self.root.join("envs").join(key.as_str())
     }
 
     /// Takes the shared collection lease and creates the store skeleton.
-    /// Staging that no setup can still be using is removed first.
+    /// Abandoned staging is collection's to remove: only it can prove that no
+    /// setup is still using it.
     pub fn begin_setup(&self, repo: &Path, reuse: Reuse) -> Result<SetupSession<'_>, Error> {
         let repo = fs::canonicalize(repo)?;
         for dir in ["tmp", "trees", "envs", "repos"] {
             directory(&self.root.join(dir))?;
         }
         let lease = SharedLease::acquire(&self.root)?;
-        remove_stale(&self.tmp());
         Ok(SetupSession {
             store: self,
             lease,
@@ -430,7 +437,7 @@ impl UserStore {
 
     /// The selection an environment directory seals, when its seal names
     /// exactly `key` and `bin` is a real directory.
-    fn env_seal(&self, dir: &Path, key: &EnvKey) -> Result<Option<Selection>, Error> {
+    pub(crate) fn env_seal(&self, dir: &Path, key: &EnvKey) -> Result<Option<Selection>, Error> {
         let bytes = match read_bounded(&dir.join("seal.json")) {
             Ok(bytes) => bytes,
             Err(Error::Io(e)) if e.kind() == io::ErrorKind::NotFound => return Ok(None),
@@ -774,7 +781,7 @@ fn publish(
     }
 }
 
-fn staging(tmp: &Path, prefix: &str) -> Result<tempfile::TempDir, Error> {
+pub(crate) fn staging(tmp: &Path, prefix: &str) -> Result<tempfile::TempDir, Error> {
     let mut builder = tempfile::Builder::new();
     builder.prefix(prefix);
     #[cfg(unix)]
@@ -783,27 +790,6 @@ fn staging(tmp: &Path, prefix: &str) -> Result<tempfile::TempDir, Error> {
         builder.permissions(fs::Permissions::from_mode(0o700));
     }
     Ok(builder.tempdir_in(tmp)?)
-}
-
-/// Best effort: a later setup retries whatever is still held open.
-fn remove_stale(tmp: &Path) {
-    let Ok(entries) = fs::read_dir(tmp) else {
-        return;
-    };
-    let now = SystemTime::now();
-    for entry in entries.flatten() {
-        let stale = entry
-            .metadata()
-            .and_then(|m| m.modified())
-            .is_ok_and(|modified| {
-                now.duration_since(modified)
-                    .is_ok_and(|age| age >= STALE_STAGING)
-            });
-        if stale {
-            let path = entry.path();
-            let _ = fs::remove_dir_all(&path).or_else(|_| fs::remove_file(&path));
-        }
-    }
 }
 
 /// Exactly what an environment's `bin` entry must be.

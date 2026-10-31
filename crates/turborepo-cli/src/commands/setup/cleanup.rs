@@ -1,11 +1,12 @@
-//! Automatic cleanup of the shared download cache. Best effort: nothing here
-//! can fail setup.
-use std::time::Duration;
+//! Automatic cleanup of the tool store and the shared download cache. Best
+//! effort: nothing here can fail setup.
+use std::time::{Duration, SystemTime};
 
 use turborepo_setup::{
     artifact_cache::ArtifactCache,
     lock::{Installation, Lock, Platform},
 };
+use turborepo_tool_install::{GRACE, UserStore};
 
 const DAY: Duration = Duration::from_secs(24 * 60 * 60);
 /// Shared downloads that no setup in any clone referenced for this long are
@@ -36,6 +37,39 @@ pub(super) fn after_provisioning(
             }
         }
         Err(error) => lines.push(warning("the shared download cache", &error)),
+    }
+    lines
+}
+
+/// After setup released its own lease: collects what no repository using
+/// `store` has referenced for the grace period, and reports store-wide disk
+/// use. Skipped while another setup holds the store.
+pub(super) fn collect(store: &UserStore, now: SystemTime) -> Vec<String> {
+    let collected = match store.collect(now, |dir| super::trust::repo_state(store, dir)) {
+        Ok(Some(collected)) => collected,
+        Ok(None) => {
+            tracing::debug!("skipped tool store collection: another setup is running");
+            return Vec::new();
+        }
+        Err(error) => {
+            tracing::debug!("could not collect unused managed tools: {error}");
+            return Vec::new();
+        }
+    };
+    let mut lines = Vec::new();
+    if collected.removed.entries > 0 {
+        lines.push(format!(
+            "Removed {} of managed tools no repository selects.",
+            size(collected.removed.bytes)
+        ));
+    }
+    if collected.retained.entries > 0 {
+        lines.push(format!(
+            "Keeping {} of replaced managed tools for {} days after replacement in case a running \
+             task still uses them.",
+            size(collected.retained.bytes),
+            GRACE.as_secs() / DAY.as_secs()
+        ));
     }
     lines
 }
