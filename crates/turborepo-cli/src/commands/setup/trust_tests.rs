@@ -256,7 +256,7 @@ fn existing_store_ancestors_only_need_to_be_unwritable_by_everyone() {
 }
 
 #[test]
-fn setup_prunes_only_records_whose_root_is_gone_or_replaced() {
+fn collection_removes_only_state_whose_root_is_gone_or_replaced_after_grace() {
     use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt};
     let f = Fixture::new();
     let u = Upstream::new(&f, false, None);
@@ -308,12 +308,23 @@ fn setup_prunes_only_records_whose_root_is_gone_or_replaced() {
     // A record filed under another root's name never describes that root.
     let misfiled = write("0".repeat(64), &deleted, identity(&live));
 
-    // A repeat setup prunes without traffic and keeps its own authority.
+    // A repeat setup removes nothing yet, without traffic. Its collection
+    // round may be skipped here, so this test starts the grace period itself.
     let empty = LoopbackServer::new([], |_| {}).unwrap();
     f.run(&empty, FROZEN).unwrap();
     assert_eq!(empty.hits(), 0);
+    for path in [&own, &kept, &misfiled, &replaced, &gone] {
+        assert!(path.exists(), "{path:?}");
+    }
+    let store = UserStore::at(f.owned.home(), f.owned.root()).unwrap();
+    let now = std::time::SystemTime::now();
+    collect_round(&store, now);
+    for path in [&own, &kept, &misfiled, &replaced, &gone] {
+        assert!(path.exists(), "{path:?}");
+    }
+    collect_round(&store, now + turborepo_tool_install::GRACE);
     assert!(own.exists() && kept.exists() && misfiled.exists());
-    // A pruned repository's whole directory goes, its Cargo home included.
+    // A dropped repository's whole directory goes, its Cargo home included.
     assert!(!replaced.parent().unwrap().exists() && !gone.parent().unwrap().exists());
     assert!(kept.parent().unwrap().join("cargo-home").is_dir());
     assert!(trust(&f).recorded().unwrap().is_some());
