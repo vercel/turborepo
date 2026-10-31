@@ -13,11 +13,9 @@ use std::{
 
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
-use turborepo_tool_install::{Activation, EnvKey, UserStore};
+use turborepo_tool_install::{Activation, EnvKey, RepoState, UserStore};
 
 const LIMIT: u64 = 1024 * 1024;
-/// Bounds one pruning pass over the user's records.
-const MAX_RECORDS: usize = 4096;
 
 const SCHEMA: u32 = 2;
 
@@ -397,64 +395,11 @@ impl TrustStore {
 
     /// Binds this repository to `env`, which setup just converged, under the
     /// source and writer guards. `selection` is a `--no-lock` clone's
-    /// selection; with neither it nor turbo.lock, no record remains. Then
-    /// prunes other roots' records that can never authorize.
+    /// selection; with neither it nor turbo.lock, no record remains. Records
+    /// that can never authorize again are collection's to remove, after its
+    /// grace period ([`repo_state`]).
     pub(crate) fn publish(&self, env: &EnvKey, selection: Option<&[u8]>) -> io::Result<()> {
-        self.write_record(env, selection)?;
-        // Stale records already never authorize, so failing to remove one must
-        // not fail an otherwise successful setup.
-        if let Err(error) = self.prune() {
-            tracing::debug!("could not prune stale setup records: {error}");
-        }
-        Ok(())
-    }
-
-    /// Remove other roots' state whose root is gone or is now a different
-    /// directory (deleted, moved or re-cloned). Reads stay bounded and never
-    /// follow links. Unsafe, corrupt or misfiled records are left alone.
-    fn prune(&self) -> io::Result<usize> {
-        let repos = self.store.repos();
-        let mut removed = 0;
-        let entries = match fs::read_dir(&repos) {
-            Ok(entries) => entries,
-            Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(0),
-            Err(error) => return Err(error),
-        };
-        for entry in entries.take(MAX_RECORDS) {
-            let entry = entry?;
-            let directory = entry.path();
-            if directory == self.directory || !entry.file_type()?.is_dir() {
-                continue;
-            }
-            let path = directory.join("record.json");
-            let Ok(Some(bytes)) = read(&path, true) else {
-                continue;
-            };
-            let Ok(record) = serde_json::from_slice::<Record>(&bytes) else {
-                continue;
-            };
-            if directory != self.store.repo(&record.root) {
-                continue;
-            }
-            let stale = match identity(&record.root) {
-                Err(error) => error.kind() == io::ErrorKind::NotFound,
-                Ok(found) => found != (record.device, record.inode),
-            };
-            // A concurrent setup may have just replaced this record; keep it.
-            if stale && read(&path, true)?.as_deref() == Some(bytes.as_slice()) {
-                fs::remove_file(&path)?;
-                removed += 1;
-                // Without its record nothing can reach the rest, such as the
-                // repository's Cargo home.
-                if let Err(error) = fs::remove_dir_all(&directory) {
-                    tracing::debug!("could not remove {}: {error}", directory.display());
-                }
-            }
-        }
-        if removed > 0 {
-            sync_directory(&repos)?;
-        }
-        Ok(removed)
+        self.write_record(env, selection)
     }
 
     fn write_record(&self, env: &EnvKey, selection: Option<&[u8]>) -> io::Result<()> {
@@ -521,6 +466,31 @@ impl TrustStore {
         staged.as_file().sync_all()?;
         staged.persist(self.path()).map_err(|e| e.error)?;
         sync_directory(&self.directory)
+    }
+}
+
+/// Whether the repository state `directory` keeps its environment: only a
+/// record filed under its own root, for a root that still has the recorded
+/// identity. A deleted, moved or re-cloned repository's state is dropped and
+/// collected after the grace period. Unsafe, corrupt or misfiled records are
+/// left alone and keep nothing. Never follows links.
+pub(crate) fn repo_state(store: &UserStore, directory: &Path) -> RepoState {
+    let bytes = match read(&directory.join("record.json"), true) {
+        Ok(Some(bytes)) => bytes,
+        Ok(None) => return RepoState::Dropped,
+        Err(_) => return RepoState::Unknown,
+    };
+    let Ok(record) = serde_json::from_slice::<Record>(&bytes) else {
+        return RepoState::Unknown;
+    };
+    if directory != store.repo(&record.root) {
+        return RepoState::Unknown;
+    }
+    match identity(&record.root) {
+        Err(error) if error.kind() == io::ErrorKind::NotFound => RepoState::Dropped,
+        Ok(found) if found != (record.device, record.inode) => RepoState::Dropped,
+        // An unreadable root may still exist: keep what it names.
+        _ => RepoState::Root(record.env),
     }
 }
 

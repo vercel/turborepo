@@ -487,19 +487,27 @@ fn run_reporting(
         let ids: Vec<_> = declared.keys().map(String::as_str).collect();
         console.spinner(&format!("Preparing {}", ids.join(", ")))
     });
-    let tools = if request.offline {
+    let mut tools = if request.offline {
         offline::run(&discovery, snapshot, &request, transports, preflight)
     } else if request.lock == LockMode::NoLock {
         no_lock::run(&discovery, snapshot, transports, preflight)
     } else {
         provision::run(&discovery, snapshot, &request, transports, preflight)
     }?;
+    let root = discovery.snapshot_root()?.as_std_path();
+    // Each path above released its store lease on return.
+    if let Ok(store) = trust::user_store(tool_store.as_deref(), root) {
+        tools.notes.extend(
+            cleanup::collect(&store, std::time::SystemTime::now())
+                .into_iter()
+                .map(output::Note::Cleanup),
+        );
+    }
     drop(preparing);
     report.downloaded_bytes = tools.downloaded_bytes;
     report.tools_installed = tools.installed();
     report.tools_reused = tools.reused();
     console.tools(&tools)?;
-    let root = discovery.snapshot_root()?.as_std_path();
     let deps = dependencies.install(root, ecosystems, tool_store, console)?;
     console.skips(&deps)?;
     Ok(output::Completed::Provisioned(deps))
