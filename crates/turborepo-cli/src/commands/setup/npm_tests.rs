@@ -26,7 +26,7 @@ fn npm_telemetry_counts_managed_owners_and_artifact_bytes() {
         ] {
             let mut report = telemetry::Report::default();
             let result = crate::cli::dispatch_setup(&f.args(flags), |args, setup_args| {
-                let transports = f.transports(u.origin(), None);
+                let transports = f.transports(u.origin());
                 run_reporting(
                     args,
                     setup_args,

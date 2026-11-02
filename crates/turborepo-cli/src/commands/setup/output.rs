@@ -66,12 +66,7 @@ impl ToolReport {
     pub fn installed(&self) -> usize {
         self.rows
             .iter()
-            .filter(|row| {
-                matches!(
-                    row.outcome,
-                    ToolOutcome::Installed | ToolOutcome::InstalledFromCache
-                )
-            })
+            .filter(|row| row.outcome == ToolOutcome::Installed)
             .count()
     }
 
@@ -104,7 +99,6 @@ pub(super) struct ToolRow {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum ToolOutcome {
     Installed,
-    InstalledFromCache,
     Reused,
     /// `--force` re-hashed a healthy installed tree.
     Verified,
@@ -120,7 +114,6 @@ impl ToolOutcome {
     fn label(self) -> &'static str {
         match self {
             Self::Installed => "installed",
-            Self::InstalledFromCache => "installed (cached)",
             Self::Reused => "reused",
             Self::Verified => "re-verified",
             Self::ReusedTrusted => "reused (offline)",
@@ -246,7 +239,7 @@ fn render_note(note: &Note) -> String {
                 .collect::<Vec<_>>();
             format!("turbo.lock updated ({}), {COMMIT}", changes.join(", "))
         }
-        Note::Offline => "Offline: used only installed tools and verified cached artifacts.".into(),
+        Note::Offline => "Offline: used only tools already in the tool store.".into(),
         Note::TrustedRepeat => "Tools: no resolution, downloads, writes, or probes.".into(),
         Note::NoLock => "No turbo.lock written (--no-lock). Clone-local selections do not \
                          establish cross-machine reproducibility or frozen readiness.\nturbo run \

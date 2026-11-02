@@ -86,8 +86,9 @@ pub enum Error {
     #[diagnostic(transparent)]
     LockDiagnostics(#[from] lock_diagnostics::Error),
     #[error(
-        "offline setup is missing verified cached artifacts; nothing was installed:\n{0}\nRun \
-         turbo setup --tools-only without --offline to download and verify them."
+        "offline setup needs tools that are missing or changed in the tool store; nothing was \
+         installed:\n{0}\nRun turbo setup --tools-only without --offline to download and verify \
+         them."
     )]
     OfflineMissing(String),
     #[error("--no-lock needs a Node declaration in the repository root")]
@@ -115,8 +116,6 @@ pub enum Error {
     Mirror(#[from] turborepo_setup::mirror::Error),
     #[error(transparent)]
     Activation(#[from] turborepo_setup::activation::Error),
-    #[error(transparent)]
-    Offline(#[from] offline::Error),
     #[error(transparent)]
     Storage(#[from] turborepo_setup::lock::StorageError),
     #[error(transparent)]
@@ -476,8 +475,9 @@ fn run_reporting(
         );
         return Ok(output::Completed::Reported(0));
     }
-    // Offline setup reuses the trusted installation or verified cached bytes;
-    // enabled dependencies then install offline from the native caches.
+    // Offline setup reuses the trusted installation or trees already in the
+    // tool store; enabled dependencies then install offline from the native
+    // caches.
     // Clone-local --no-lock runs only when every dependency is skipped
     // (`validate`).
     let declared = snapshot.declarations();
@@ -715,7 +715,7 @@ fn validate(request: &SetupRequest, tools_only: bool) -> Result<(), Error> {
     {
         return Err(Error::NotImplemented);
     }
-    // Offline reinstalls only verified local bytes; resolution needs the network.
+    // Offline installs only from the tool store; resolution needs the network.
     if request.offline && request.update_lock {
         return Err(Error::Unsupported(
             "--offline cannot resolve --update-lock; run turbo setup --tools-only --no-frozen \

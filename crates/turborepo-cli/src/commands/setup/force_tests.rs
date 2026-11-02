@@ -180,8 +180,8 @@ fn force_modes_parse_but_unimplemented_combinations_never_mutate() {
             // pnpm-lock.yaml before anything else.
             assert!(matches!(result, Err(Error::Dependencies(_))));
         } else if flags.contains(&"--offline") {
-            // Nothing is installed, so offline force has no verified bytes.
-            assert!(matches!(result, Err(Error::Offline(_))));
+            // Nothing is in the tool store, so offline force names it all.
+            assert!(matches!(result, Err(Error::OfflineMissing(_))));
         } else {
             assert!(matches!(result, Err(Error::NotImplemented)));
         }

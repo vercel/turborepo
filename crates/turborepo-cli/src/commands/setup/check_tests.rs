@@ -45,7 +45,7 @@ impl Fixture {
         let args = self.args(flags);
         let result = crate::cli::dispatch_setup(&args, |args, setup| {
             // An unreachable origin: check never downloads.
-            let transports = self.transports("http://127.0.0.1:1", None);
+            let transports = self.transports("http://127.0.0.1:1");
             run_with_policy(args, setup, Some(transports), self.git.clone(), || {
                 Ok(self
                     .owned
@@ -253,7 +253,7 @@ fn check_revalidates_captured_discovery_sources_and_policy_before_success() {
         let mut after_edit = None;
         let result = crate::cli::dispatch_setup(&args, |args, setup| {
             let after_edit = std::cell::RefCell::new(&mut after_edit);
-            let transports = f.transports("http://127.0.0.1:1", None);
+            let transports = f.transports("http://127.0.0.1:1");
             run_with_policy(args, setup, Some(transports), f.git.clone(), || {
                 calls.set(calls.get() + 1);
                 if calls.get() == 2 {

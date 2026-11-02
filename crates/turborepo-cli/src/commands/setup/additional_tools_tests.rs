@@ -158,15 +158,7 @@ fn repositories_sharing_a_store_each_stage_the_root_they_declared() {
     let u = LoopbackServer::new(routes, |_| {}).unwrap();
     let store = attacker.owned.home();
     let run = |f: &Fixture| {
-        let status = crate::cli::dispatch_setup(&f.args(LOCAL), |args, setup_args| {
-            let mut transports = f.transports(u.origin(), None);
-            transports.tool_store = Some(store.to_owned());
-            run_with_policy(args, setup_args, Some(transports), f.git.clone(), || {
-                Ok(f.owned.policy_at(&f.owned.root().join("apps/web/src"))?)
-            })
-        })
-        .unwrap();
-        assert_eq!(status.unwrap(), 0);
+        assert_eq!(f.run_with(u.origin(), store, LOCAL).unwrap(), 0);
         let current = super::super::recorded_installation_for_tests(f.owned.root(), store)
             .unwrap()
             .unwrap();
@@ -191,7 +183,7 @@ fn repositories_sharing_a_store_each_stage_the_root_they_declared() {
     victim.no_execution();
 }
 
-#[path = "additional_cache_tests.rs"]
-mod cached;
 #[path = "additional_matrix_tests.rs"]
 mod matrix;
+#[path = "additional_offline_tests.rs"]
+mod offline;

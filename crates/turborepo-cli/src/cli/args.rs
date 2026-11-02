@@ -1166,7 +1166,7 @@ pub struct SetupArgs {
     /// Allow lock creation or updates, including in CI
     #[usage(long)]
     pub no_frozen: bool,
-    /// Use cached artifacts only; never make HTTP requests
+    /// Use only tools already in the tool store; never make HTTP requests
     #[usage(long)]
     pub offline: bool,
     /// Skip dependency installation
