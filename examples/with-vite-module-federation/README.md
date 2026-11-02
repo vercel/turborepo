@@ -30,9 +30,10 @@ This Turborepo includes:
 - [Vite](https://vite.dev/) for local development and production builds
 - [Module Federation](https://module-federation.io/) for runtime composition between the host and remote applications
 
-Install dependencies with the pinned package manager:
+Use Node.js 26.13.0 or newer. Install Corepack explicitly (it is no longer bundled with Node.js), then install dependencies with the pinned pnpm 12.16.1 package manager:
 
 ```sh
+npm install --global corepack
 corepack enable
 pnpm install
 ```
@@ -66,6 +67,8 @@ Start a specific app with a filter:
 ```sh
 pnpm dev:filter react-host
 ```
+
+The filtered command starts only the host; run the remote separately with `pnpm dev:filter react-remote` to load its federated component.
 
 ### Type checking
 
