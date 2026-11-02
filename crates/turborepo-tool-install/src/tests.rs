@@ -163,6 +163,77 @@ fn the_repository_holds_only_an_editor_link_to_its_stable_bin() {
     );
 }
 
+/// Another account that can write the checkout root renames `.turbo` and puts
+/// a link to the victim's data in its place after setup checked it. Cleanup
+/// and the editor link stay in the `.turbo` setup checked.
+#[test]
+fn a_turbo_swapped_after_the_check_redirects_neither_cleanup_nor_the_editor_link() {
+    let repo = repo();
+    let turbo = repo.path().join(".turbo");
+    fs::create_dir_all(turbo.join("tools/generation-old")).unwrap();
+    let victim = tempfile::tempdir().unwrap();
+    fs::create_dir_all(victim.path().join("tools/private")).unwrap();
+    fs::write(victim.path().join("tools/private/record"), "keep").unwrap();
+
+    let checked = repo_turbo::RepoTurbo::open(repo.path()).unwrap();
+    let moved = repo.path().join("moved");
+    fs::rename(&turbo, &moved).unwrap();
+    symlink(victim.path(), &turbo).unwrap();
+
+    checked.remove_legacy_tools();
+    checked.link_editor(Path::new("/stable/bin")).unwrap();
+    assert_eq!(
+        fs::read(victim.path().join("tools/private/record")).unwrap(),
+        b"keep"
+    );
+    assert!(fs::symlink_metadata(victim.path().join("bin")).is_err());
+    assert!(fs::symlink_metadata(moved.join("tools")).is_err());
+    assert_eq!(
+        fs::read_link(moved.join("bin")).unwrap(),
+        Path::new("/stable/bin")
+    );
+}
+
+#[test]
+fn cleanup_unlinks_links_inside_tools_without_following_them() {
+    let repo = repo();
+    let tools = repo.path().join(".turbo/tools");
+    fs::create_dir_all(tools.join("nested")).unwrap();
+    let victim = tempfile::tempdir().unwrap();
+    fs::write(victim.path().join("record"), "keep").unwrap();
+    symlink(victim.path(), tools.join("dir-link")).unwrap();
+    symlink(victim.path(), tools.join("nested/dir-link")).unwrap();
+    symlink(victim.path().join("record"), tools.join("file-link")).unwrap();
+
+    repo_turbo::RepoTurbo::open(repo.path())
+        .unwrap()
+        .remove_legacy_tools();
+    assert!(fs::symlink_metadata(&tools).is_err());
+    assert_eq!(fs::read(victim.path().join("record")).unwrap(), b"keep");
+}
+
+#[test]
+fn a_turbo_that_is_a_link_or_world_writable_is_refused() {
+    let repo = repo();
+    let turbo = repo.path().join(".turbo");
+    let victim = tempfile::tempdir().unwrap();
+    fs::create_dir(victim.path().join("tools")).unwrap();
+    symlink(victim.path(), &turbo).unwrap();
+    assert!(matches!(
+        repo_turbo::RepoTurbo::open(repo.path()),
+        Err(Error::UnsafePath)
+    ));
+    assert!(victim.path().join("tools").is_dir());
+
+    fs::remove_file(&turbo).unwrap();
+    fs::create_dir(&turbo).unwrap();
+    fs::set_permissions(&turbo, fs::Permissions::from_mode(0o777)).unwrap();
+    assert!(matches!(
+        repo_turbo::RepoTurbo::open(repo.path()),
+        Err(Error::UnsafePath)
+    ));
+}
+
 #[test]
 fn trees_are_read_only_and_check_finds_a_modified_file() {
     let f = fixture();

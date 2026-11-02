@@ -16,6 +16,9 @@ use std::{
     path::{Path, PathBuf},
 };
 
+#[cfg(windows)]
+pub mod dacl;
+mod repo_turbo;
 mod selection;
 mod store;
 mod user_store;
@@ -251,12 +254,23 @@ fn real_directory(path: &Path) -> Result<(), Error> {
             return Err(Error::UnsafePath);
         }
     }
-    // Junctions are symlinks above; also reject every other reparse point.
+    // Opened without following, which rejects junctions and every other
+    // reparse point; owner and DACL are then read from that handle.
     #[cfg(windows)]
-    if std::os::windows::fs::MetadataExt::file_attributes(&m) & 0x400 != 0 {
-        return Err(Error::UnsafePath);
+    match dacl::open(path, true) {
+        Ok(file) => store_object(&file)?,
+        Err(e) if e.kind() == io::ErrorKind::NotFound => return Err(e.into()),
+        Err(_) => return Err(Error::UnsafePath),
     }
     Ok(())
+}
+
+/// Windows store objects are owned by this user, SYSTEM or Administrators,
+/// and grant nobody else access: anyone else who could write a tree file
+/// could change what an unchanged seal vouches for.
+#[cfg(windows)]
+fn store_object(file: &File) -> Result<(), Error> {
+    dacl::check_store(file).map_err(|_| Error::UnsafePath)
 }
 
 #[cfg(unix)]
@@ -266,7 +280,9 @@ fn private_to_user(mode: u32, uid: u32) -> bool {
 
 /// The repository root and the `.turbo` directory other turbo commands share
 /// keep the modes the user's umask gave them (0775 under Ubuntu's default),
-/// so only world-writable directories are rejected.
+/// so only world-writable directories are rejected. Unix setup checks
+/// `.turbo` through a pinned descriptor instead (see `repo_turbo`).
+#[cfg_attr(not(windows), allow(dead_code))]
 fn shared_directory(path: &Path) -> Result<(), Error> {
     let m = fs::symlink_metadata(path)?;
     if !m.is_dir() || m.file_type().is_symlink() {
@@ -328,14 +344,7 @@ fn create_directory(path: &Path, existing: fn(&Path) -> Result<(), Error>) -> Re
     match fs::symlink_metadata(path) {
         Ok(_) => existing(path),
         Err(e) if e.kind() == io::ErrorKind::NotFound => {
-            let mut builder = fs::DirBuilder::new();
-            builder.recursive(false);
-            #[cfg(unix)]
-            {
-                use std::os::unix::fs::DirBuilderExt;
-                builder.mode(0o700);
-            }
-            match builder.create(path) {
+            match create_private_directory(path) {
                 Ok(()) => {}
                 // A concurrent setup created it first.
                 Err(e) if e.kind() == io::ErrorKind::AlreadyExists => return existing(path),
@@ -350,6 +359,25 @@ fn create_directory(path: &Path, existing: fn(&Path) -> Result<(), Error>) -> Re
 
 fn directory(path: &Path) -> Result<(), Error> {
     create_directory(path, real_directory)
+}
+
+/// A new directory only this user can access: mode 0700, or a protected
+/// owner-only DACL that its children inherit, so nothing under it inherits
+/// grants from wherever the store lives.
+fn create_private_directory(path: &Path) -> io::Result<()> {
+    #[cfg(windows)]
+    return dacl::create_directory(path);
+    #[cfg(not(windows))]
+    {
+        let mut builder = fs::DirBuilder::new();
+        builder.recursive(false);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::DirBuilderExt;
+            builder.mode(0o700);
+        }
+        builder.create(path)
+    }
 }
 
 /// Every tree file an export runs or passes exists inside its own tree, and
@@ -419,6 +447,8 @@ fn tree_hash(root: &Path) -> Result<String, Error> {
             hash.update(b"file");
             hash.update(m.len().to_le_bytes());
             let mut file = File::open(path)?;
+            #[cfg(windows)]
+            store_object(&file)?;
             let mut bytes = [0; 8192];
             loop {
                 let n = file.read(&mut bytes)?;
@@ -542,3 +572,5 @@ fn sync_tree(root: &Path) -> Result<(), Error> {
 
 #[cfg(all(test, unix))]
 mod tests;
+#[cfg(all(test, windows))]
+mod windows_tests;

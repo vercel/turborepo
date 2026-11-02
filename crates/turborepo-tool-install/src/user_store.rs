@@ -11,7 +11,7 @@ use std::{
 
 use sha2::{Digest, Sha256};
 
-use crate::{Error, real_directory};
+use crate::{Error, create_private_directory, real_directory};
 
 /// Overrides the default store location.
 pub const TOOL_STORE_VAR: &str = "TURBO_TOOL_STORE";
@@ -135,14 +135,7 @@ impl UserStore {
 }
 
 fn create_private(path: &Path) -> Result<(), Error> {
-    #[cfg(unix)]
-    let created = {
-        use std::os::unix::fs::DirBuilderExt;
-        fs::DirBuilder::new().mode(0o700).create(path)
-    };
-    #[cfg(not(unix))]
-    let created = fs::create_dir(path);
-    match created {
+    match create_private_directory(path) {
         Err(e) if e.kind() != io::ErrorKind::AlreadyExists => Err(e.into()),
         _ => Ok(()),
     }

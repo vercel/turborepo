@@ -25,10 +25,9 @@ use std::{
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    Error, Export, Staging, Tool, TreeRef, UserStore, VarValue, create_directory, directory,
-    is_sha256, make_read_only, read_bounded, real_directory, relative_path, selection, sha256_hex,
-    shared_directory, shim_name, sync_directory, sync_tree, tree_hash, validate_tools,
-    write_private,
+    Error, Export, Staging, Tool, TreeRef, UserStore, VarValue, directory, is_sha256,
+    make_read_only, read_bounded, real_directory, relative_path, repo_turbo::RepoTurbo, selection,
+    sha256_hex, shim_name, sync_directory, sync_tree, tree_hash, validate_tools, write_private,
 };
 
 /// Bump when the store's tree layout or seal changes. A change in how one
@@ -613,12 +612,6 @@ impl SetupSession<'_> {
         }
         record(selection.key())?;
         self.link(selection.key())?;
-        // Pre-store generations: never read, only removed. Best effort, like
-        // any other removal a running process may still hold open.
-        let old = self.repo.join(".turbo").join("tools");
-        if fs::symlink_metadata(&old).is_ok_and(|m| m.is_dir()) {
-            let _ = fs::remove_dir_all(&old);
-        }
         Ok(Ensured {
             env: selection.key().clone(),
             installed,
@@ -699,11 +692,13 @@ impl SetupSession<'_> {
 
     /// `<store>/repos/<repo>/bin` names the environment, and `.turbo/bin` in
     /// the repository names that link, for editors. Turbo never reads either.
+    /// Then removes the repository's pre-store generations, which nothing
+    /// reads. Both go through one checked `.turbo` handle.
     fn link(&self, env: &EnvKey) -> Result<(), Error> {
         let state = self.store.repo(&self.repo);
         directory(&state)?;
         let stable = state.join("bin");
-        let linked = replace_link(
+        let stable_linked = replace_link(
             &stable,
             &Path::new("..")
                 .join("..")
@@ -711,17 +706,10 @@ impl SetupSession<'_> {
                 .join(env.as_str())
                 .join("bin"),
             &self.store.env_dir(env).join("bin"),
-        )
-        .and_then(|()| {
-            let turbo = self.repo.join(".turbo");
-            create_directory(&turbo, shared_directory)?;
-            let editor = turbo.join("bin");
-            // Never replace a directory or file someone else put there.
-            match fs::symlink_metadata(&editor) {
-                Ok(m) if !m.file_type().is_symlink() => Ok(()),
-                _ => replace_link(&editor, &stable, &stable),
-            }
-        });
+        );
+        let turbo = RepoTurbo::open(&self.repo)?;
+        let linked = stable_linked.and_then(|()| turbo.link_editor(&stable));
+        turbo.remove_legacy_tools();
         // Windows links need a privilege many users lack; activation and
         // `turbo exec --print-env` work without them.
         #[cfg(windows)]
@@ -732,7 +720,7 @@ impl SetupSession<'_> {
 
 /// Atomically points `link` at `target` (a relative Unix target, or the
 /// absolute `directory` on Windows).
-fn replace_link(link: &Path, target: &Path, directory: &Path) -> Result<(), Error> {
+pub(crate) fn replace_link(link: &Path, target: &Path, directory: &Path) -> Result<(), Error> {
     #[cfg(not(windows))]
     let (target, _) = (target, directory);
     #[cfg(windows)]
@@ -866,9 +854,14 @@ fn make_shim(path: &Path, shim: Shim) -> Result<(), Error> {
 
 fn check_shim(path: &Path, shim: Shim) -> Result<bool, Error> {
     let metadata = fs::symlink_metadata(path)?;
+    // A hard link shares its tree file's descriptor, so this also covers
+    // the bytes it runs.
     #[cfg(windows)]
     let regular = metadata.is_file()
-        && std::os::windows::fs::MetadataExt::file_attributes(&metadata) & 0x400 == 0;
+        && std::os::windows::fs::MetadataExt::file_attributes(&metadata) & 0x400 == 0
+        && crate::dacl::open(path, false)
+            .ok()
+            .is_some_and(|file| crate::store_object(&file).is_ok());
     #[cfg(not(windows))]
     let regular = metadata.is_file();
     Ok(match shim {
