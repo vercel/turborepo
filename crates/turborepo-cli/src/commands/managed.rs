@@ -108,14 +108,11 @@ pub(crate) fn select(
             ));
         }
     }
-    let user_base = dirs_next::data_local_dir().ok_or_else(|| {
-        turborepo_run::Error::ManagedTools("cannot locate setup user state directory".into())
-    })?;
     ManagedTools::inspect(
         base.repo_root.as_std_path(),
         base.opts.repo_opts.root_turbo_json_path.as_std_path(),
         true,
-        &user_base,
+        None,
         context,
     )
     .map_err(turborepo_run::Error::ManagedTools)
@@ -132,12 +129,13 @@ pub(crate) struct ManagedTools {
 impl ManagedTools {
     /// A root turbo.lock, or without one the sealed selection of this clone's
     /// `turbo setup --no-lock` generation, selects managed mode. Either way
-    /// activation is equally strict and never downloads.
+    /// activation is equally strict and never downloads. `store` names a
+    /// fixture's tool store; otherwise authorization locates the user's.
     pub(crate) fn inspect(
         root: &Path,
         config: &Path,
         enabled: bool,
-        user_base: &Path,
+        store: Option<&Path>,
         context: impl FnOnce() -> Result<ExecutionContext, String>,
     ) -> Result<Option<Arc<ManagedRun>>, String> {
         // A lock alone must never change unconfigured-repository behavior.
@@ -175,13 +173,13 @@ impl ManagedTools {
         let ci = turborepo_ci::is_ci();
         let explain = |e: authorization::Error| guidance(&e, ci, clone_local);
         let authorization = if clone_local {
-            Authorization::inspect_clone_local(&canonical, user_base, context()?)
+            Authorization::inspect_clone_local(&canonical, store, context()?)
         } else {
             // Same guidance as an invalid declaration in the captured sources.
             let ecosystems = ecosystems(&canonical, config).map_err(|error| {
                 format!("tool declarations are invalid ({error}); fix them, then run turbo setup")
             })?;
-            Authorization::inspect(&canonical, user_base, context()?, ecosystems)
+            Authorization::inspect(&canonical, store, context()?, ecosystems)
         }
         .map_err(explain)?;
         let snapshot = authorization

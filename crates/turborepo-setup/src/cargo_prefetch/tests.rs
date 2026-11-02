@@ -33,6 +33,11 @@ impl Workspace {
         path
     }
 
+    /// Where the Cargo home goes; any private path works.
+    fn home(&self) -> PathBuf {
+        self.root.path().join(".turbo").join("home")
+    }
+
     fn calls(&self) -> Vec<String> {
         fs::read_to_string(&self.log)
             .unwrap_or_default()
@@ -46,10 +51,11 @@ impl Workspace {
 fn locked_fetch_uses_the_private_home_and_honors_offline() {
     let workspace = Workspace::new();
     let root = workspace.root.path();
-    let home = cargo_home(root).unwrap();
+    let home = cargo_home(&workspace.home()).unwrap();
+    assert_eq!(home, workspace.home());
     let mode = fs::metadata(&home).unwrap().permissions().mode();
     assert_eq!(mode & 0o777, 0o700);
-    assert_eq!(cargo_home(root).unwrap(), home);
+    assert_eq!(cargo_home(&home).unwrap(), home);
     let cargo = workspace.cargo("echo progress >&2");
     prefetch(root, &cargo, &home, false, &BTreeMap::new()).unwrap();
     prefetch(root, &cargo, &home, true, &BTreeMap::new()).unwrap();
@@ -72,7 +78,7 @@ fn locked_fetch_uses_the_private_home_and_honors_offline() {
 fn missing_stale_and_unreachable_locks_are_actionable() {
     let workspace = Workspace::new();
     let root = workspace.root.path();
-    let home = cargo_home(root).unwrap();
+    let home = cargo_home(&workspace.home()).unwrap();
     for (body, expected) in [
         (
             "echo 'error: the lock file Cargo.lock needs to be updated but --locked was passed to \
@@ -109,8 +115,10 @@ fn missing_stale_and_unreachable_locks_are_actionable() {
 #[test]
 fn a_redirected_cargo_home_is_rejected() {
     let workspace = Workspace::new();
-    let root = workspace.root.path();
     let outside = tempfile::tempdir().unwrap();
-    std::os::unix::fs::symlink(outside.path(), root.join(".turbo/cargo-home")).unwrap();
-    assert!(matches!(cargo_home(root), Err(Error::UnsafeHome(_))));
+    std::os::unix::fs::symlink(outside.path(), workspace.home()).unwrap();
+    assert!(matches!(
+        cargo_home(&workspace.home()),
+        Err(Error::UnsafeHome(_))
+    ));
 }

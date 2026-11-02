@@ -1660,7 +1660,11 @@ fn plain_setup_provisions_tools_and_reports_dependencies_skipped() {
     } else {
         ".local/share"
     });
-    let records = user_data.join("turborepo/setup-roots");
+    let canonical_root = root.canonicalize().unwrap();
+    let records = user_data.join("turborepo/tools/repos").join(format!(
+        "{:x}",
+        Sha256::digest(canonical_root.as_os_str().as_encoded_bytes())
+    ));
     // Keep every fixture-owned state ancestor private even with umask 0002.
     fs::DirBuilder::new()
         .recursive(true)
@@ -1668,7 +1672,6 @@ fn plain_setup_provisions_tools_and_reports_dependencies_skipped() {
         .create(&records)
         .unwrap();
     fs::set_permissions(&records, fs::Permissions::from_mode(0o700)).unwrap();
-    let canonical_root = root.canonicalize().unwrap();
     assert!(!records.starts_with(&canonical_root));
     assert_eq!(
         fs::metadata(&records).unwrap().permissions().mode() & 0o077,
@@ -1688,10 +1691,7 @@ fn plain_setup_provisions_tools_and_reports_dependencies_skipped() {
             "tools": current.tools,
         },
     });
-    let receipt = records.join(format!(
-        "{:x}.json",
-        Sha256::digest(canonical_root.as_os_str().as_encoded_bytes())
-    ));
+    let receipt = records.join("record.json");
     fs::write(&receipt, serde_json::to_vec(&record).unwrap()).unwrap();
     fs::set_permissions(&receipt, fs::Permissions::from_mode(0o600)).unwrap();
     assert_eq!(

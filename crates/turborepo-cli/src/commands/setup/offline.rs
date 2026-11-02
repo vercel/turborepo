@@ -102,15 +102,12 @@ fn inspect(
     let storage = || provision::storage(root).map_err(|error| unavailable(error, &artifacts));
     storage()?;
     // The only fixture override is already private to setup's test transport
-    // seam. Production always uses the caller's user data directory, never a
+    // seam. Production always locates the user's tool store, never a
     // repository-authored state path. Do NOT construct official transports.
-    let base = transports
-        .map(provision::Transports::trust_base)
-        .transpose()?
-        .or_else(dirs_next::data_local_dir)
-        .ok_or_else(|| std::io::Error::other("cannot locate setup user state directory"))?;
-    let authorization = Authorization::verify(root, &base, context, sources.ecosystems())
-        .map_err(|error| unavailable(error, &artifacts))?;
+    let fixture = transports.and_then(provision::Transports::tool_store);
+    let authorization =
+        Authorization::verify(root, fixture.as_deref(), context, sources.ecosystems())
+            .map_err(|error| unavailable(error, &artifacts))?;
     // Keep the original discovery/source/lock expectations even though the
     // authorization consumer captures its own snapshot. Recheck them BEFORE the
     // final fresh external-evidence check, not after it or inside its callback.

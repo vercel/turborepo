@@ -45,6 +45,14 @@ struct Repo {
 }
 
 impl Repo {
+    /// The repository's Cargo home in the fixture's tool store.
+    fn cargo_home(&self) -> PathBuf {
+        let root = self.owned.root().canonicalize().unwrap();
+        turborepo_tool_install::UserStore::at(self.owned.home(), &root)
+            .unwrap()
+            .cargo_home(&root)
+    }
+
     fn new() -> Self {
         let owned = OwnedSetupFixture::new().unwrap();
         let root = owned.root();
@@ -159,7 +167,7 @@ impl Repo {
                     go: turborepo_setup::go_resolution::GoTransport::loopback_http_for_tests(origin).unwrap(),
                     bun: turborepo_setup::bun_provision::BunTransport::loopback_http_for_tests(origin).unwrap(),
                     artifact: None,
-                    trust_base: Some(self.owned.home().to_owned()),
+                    tool_store: Some(self.owned.home().to_owned()),
                 }),
                 turborepo_setup::git::FakeGit::shared(),
                 || Ok(self.owned.policy_at(self.owned.root())?),
@@ -201,7 +209,7 @@ impl Repo {
             root,
             &root.join("turbo.json"),
             true,
-            self.owned.home(),
+            Some(self.owned.home()),
             context,
         );
         let env = tools.unwrap().unwrap().revalidate().unwrap();
@@ -253,7 +261,7 @@ fn frozen_rust_setup_runs_the_verified_rustup_and_activates_its_proxies() {
     assert!(same_file::is_same_file(home, tools.join("rust")).unwrap());
     let toolchain = home.join("toolchains").join(format!("1.99.0-{HOST}"));
     assert!(toolchain.join("bin").join("rustc.exe").is_file());
-    let cargo_home = repo.owned.root().join(".turbo").join("cargo-home");
+    let cargo_home = repo.cargo_home();
     assert_eq!(
         Path::new(&env["CARGO_HOME"]),
         dunce::simplified(&cargo_home)
@@ -283,7 +291,7 @@ fn frozen_rust_setup_runs_the_verified_rustup_and_activates_its_proxies() {
     let home: Vec<_> = fs::read_dir(repo.owned.home())
         .unwrap()
         .map(|entry| entry.unwrap().file_name())
-        .filter(|name| name != "turborepo")
+        .filter(|name| name != "repos")
         .collect();
     assert_eq!(home, Vec::<OsString>::new());
 
@@ -353,7 +361,8 @@ fn locked_cargo_dependencies_prefetch_through_the_managed_proxy_and_home() {
     for flags in [&["--frozen"][..], &["--frozen"]] {
         assert_eq!(repo.run(&upstream, flags).ok(), proxy, "{flags:?}");
     }
-    assert!(root.join(".turbo").join("cargo-home").is_dir());
+    assert!(repo.cargo_home().is_dir());
+    assert!(!root.join(".turbo").join("cargo-home").exists());
     assert_eq!(fs::read(root.join("Cargo.lock")).unwrap(), b"version = 4\n");
     assert_eq!(repo.calls(), [INSTALL]);
 

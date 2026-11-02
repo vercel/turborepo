@@ -275,7 +275,7 @@ fn loopback(f: &Fixture, u: &LoopbackServer) -> provision::Transports {
         registry_resolution::RegistryTransport,
     };
     provision::Transports {
-        trust_base: Some(f.owned.home().to_owned()),
+        tool_store: Some(f.owned.home().to_owned()),
         node: NodeTransport::loopback_http_for_tests(u.origin()).unwrap(),
         pnpm: PnpmTransport::loopback_http_for_tests(u.origin()).unwrap(),
         registry: RegistryTransport::loopback_http_for_tests(u.origin()).unwrap(),

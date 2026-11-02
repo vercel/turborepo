@@ -113,7 +113,7 @@ impl NativeArtifacts {
                 rustup: turborepo_setup::rustup_provision::RustupTransport::loopback_http_for_tests(upstream.origin()).unwrap(),
                 python: turborepo_setup::python_resolution::PythonTransport::loopback_http_for_tests(upstream.origin()).unwrap(),
                 go: turborepo_setup::go_resolution::GoTransport::loopback_http_for_tests(upstream.origin()).unwrap(),
-                trust_base: Some(user_base(&f)),
+                tool_store: Some(user_base(&f).join("turborepo/tools")),
             }), f.git.clone(), || Ok(f.owned.policy_at(&f.owned.root().join("apps/web/src"))?))).unwrap();
         assert_eq!(result.unwrap(), 0);
         assert!(root.join("turbo.lock").exists());
@@ -129,12 +129,13 @@ fn user_base(f: &Fixture) -> PathBuf {
     }
 }
 fn record(f: &Fixture) -> PathBuf {
-    fs::read_dir(user_base(f).join("turborepo/setup-roots"))
+    fs::read_dir(user_base(f).join("turborepo/tools/repos"))
         .unwrap()
         .next()
         .unwrap()
         .unwrap()
         .path()
+        .join("record.json")
 }
 fn inherited(f: &Fixture) -> EnvironmentVariableMap {
     HashMap::from([

@@ -41,8 +41,9 @@ pub(super) struct Transports {
     pub uv: UvTransport,
     pub rustup: RustupTransport,
     pub python: PythonTransport,
+    /// A fixture's tool store in place of the user's.
     #[cfg(any(test, feature = "test-support"))]
-    pub trust_base: Option<std::path::PathBuf>,
+    pub tool_store: Option<std::path::PathBuf>,
     /// A mirror or fixture; otherwise built from the locked artifact origins.
     /// Either way it uses the shared download cache, and offline setup makes
     /// it cache-only.
@@ -102,7 +103,7 @@ impl Transports {
             rustup,
             python,
             #[cfg(any(test, feature = "test-support"))]
-            trust_base: None,
+            tool_store: None,
             // Otherwise built from the locked artifact origins.
             artifact: mirrors
                 .artifact
@@ -114,13 +115,12 @@ impl Transports {
         })
     }
 
-    pub(super) fn trust_base(&self) -> Result<std::path::PathBuf, io::Error> {
+    /// The fixture's tool store, if any.
+    pub(super) fn tool_store(&self) -> Option<std::path::PathBuf> {
         #[cfg(any(test, feature = "test-support"))]
-        if let Some(base) = &self.trust_base {
-            return Ok(base.clone());
-        }
-        dirs_next::data_local_dir()
-            .ok_or_else(|| io::Error::other("cannot locate setup user state directory"))
+        return self.tool_store.clone();
+        #[cfg(not(any(test, feature = "test-support")))]
+        None
     }
 
     // Only Node/registry adapters and additional tools enter cached offline
@@ -244,6 +244,17 @@ pub(super) fn revalidate(discovery: &super::root::Discovery) -> Result<(), Error
         ));
     }
     Ok(())
+}
+
+/// The fixture's tool store, else the user's.
+pub(super) fn user_store(
+    fixture: Option<&Path>,
+    root: &Path,
+) -> Result<turborepo_tool_install::UserStore, turborepo_tool_install::Error> {
+    match fixture {
+        Some(path) => turborepo_tool_install::UserStore::at(path, root),
+        None => turborepo_tool_install::UserStore::locate(root),
+    }
 }
 
 pub(super) fn storage(root: &Path) -> Result<(), Error> {
@@ -639,21 +650,15 @@ pub(super) fn run(
     }
     // User state is checked before the first writer or download, but after the
     // read-only lock/plan diagnostics above and below, which never need it.
-    let trust_base = transports
-        .as_ref()
-        .map(Transports::trust_base)
-        .transpose()?;
+    let tool_store = transports.as_ref().and_then(Transports::tool_store);
     let open_trust = || -> Result<super::trust::TrustStore, Error> {
         // Preserve actionable read-only source/Git diagnostics before checking
         // user state; none of these checks creates a writer or downloads tools.
         preflight()?;
         revalidate(discovery)?;
         storage(root)?;
-        let base = trust_base
-            .clone()
-            .or_else(dirs_next::data_local_dir)
-            .ok_or_else(|| io::Error::other("cannot locate setup user state directory"))?;
-        let trust = super::trust::TrustStore::new(&base, root)?;
+        let store = user_store(tool_store.as_deref(), root)?;
+        let trust = super::trust::TrustStore::new(&store, root)?;
         trust.preflight()?;
         Ok(trust)
     };
@@ -799,7 +804,7 @@ pub(super) fn run(
     // final precondition and manifest selection, including unchanged results.
     let guard = snapshot.guard()?;
     storage(root)?;
-    let mut store = Store::open(root)?;
+    let mut store = Store::open(root)?.with_user_store(trust.store())?;
     storage(root)?;
     // Locks may have waited behind another transaction: recheck before traffic.
     preflight()?;

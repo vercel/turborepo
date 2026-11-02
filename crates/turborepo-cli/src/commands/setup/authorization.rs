@@ -31,6 +31,8 @@ pub(crate) enum Error {
     Sources(#[from] turborepo_setup::lock::StorageError),
     #[error("cannot validate private setup user state; run turbo setup: {0}")]
     State(#[from] std::io::Error),
+    #[error(transparent)]
+    Store(#[from] turborepo_tool_install::Error),
 }
 
 impl Error {
@@ -144,19 +146,20 @@ pub(crate) struct Authorization {
 
 #[allow(dead_code)]
 impl Authorization {
-    /// User-state base must come from the caller's user directory, never config
-    /// authored by the repository. Missing state fails closed without creating
-    /// it. `ecosystems` must be the ones setup captured with (root workspace
-    /// flags and tools policy), or Rust, Python and Go selections drift.
+    /// `store` names a fixture's tool store; otherwise the user's is located
+    /// from their environment, never from config the repository authors. A
+    /// missing record fails closed without creating it. `ecosystems` must be
+    /// the ones setup captured with (root workspace flags and tools
+    /// policy), or Rust, Python and Go selections drift.
     pub(crate) fn inspect(
         root: &Path,
-        user_state_base: &Path,
+        store: Option<&Path>,
         context: ExecutionContext,
         ecosystems: Ecosystems,
     ) -> Result<Self, Error> {
         Self::authorize(
             root,
-            user_state_base,
+            store,
             context,
             ecosystems,
             Verification::Shallow,
@@ -168,18 +171,11 @@ impl Authorization {
     /// offline repeat, which reports the installation as re-verified.
     pub(crate) fn verify(
         root: &Path,
-        user_state_base: &Path,
+        store: Option<&Path>,
         context: ExecutionContext,
         ecosystems: Ecosystems,
     ) -> Result<Self, Error> {
-        Self::authorize(
-            root,
-            user_state_base,
-            context,
-            ecosystems,
-            Verification::Full,
-            false,
-        )
+        Self::authorize(root, store, context, ecosystems, Verification::Full, false)
     }
 
     /// `inspect` for a `turbo setup --no-lock` clone: the sealed clone-local
@@ -188,12 +184,12 @@ impl Authorization {
     /// setup.
     pub(crate) fn inspect_clone_local(
         root: &Path,
-        user_state_base: &Path,
+        store: Option<&Path>,
         context: ExecutionContext,
     ) -> Result<Self, Error> {
         Self::authorize(
             root,
-            user_state_base,
+            store,
             context,
             Ecosystems::default(),
             Verification::Shallow,
@@ -203,7 +199,7 @@ impl Authorization {
 
     fn authorize(
         root: &Path,
-        user_state_base: &Path,
+        store: Option<&Path>,
         context: ExecutionContext,
         ecosystems: Ecosystems,
         verification: Verification,
@@ -214,7 +210,8 @@ impl Authorization {
         if context.musl() {
             return Err(turborepo_setup::activation::Error::MuslHost.into());
         }
-        let trust = TrustStore::new(user_state_base, &root)?;
+        let store = super::provision::user_store(store, &root)?;
+        let trust = TrustStore::new(&store, &root)?;
         trust.preflight()?;
         let plan = Self::plan(&sources, context.clone(), verification, clone_local)?;
         if !trust.authorizes(&plan)? {

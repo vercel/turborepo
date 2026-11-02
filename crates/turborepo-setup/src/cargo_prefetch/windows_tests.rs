@@ -32,6 +32,11 @@ impl Workspace {
         path
     }
 
+    /// Where the Cargo home goes; any private path works.
+    fn home(&self) -> PathBuf {
+        self.root.path().join(".turbo").join("home")
+    }
+
     fn calls(&self) -> Vec<String> {
         fs::read_to_string(&self.log)
             .unwrap_or_default()
@@ -45,9 +50,9 @@ impl Workspace {
 fn locked_fetch_uses_the_private_home_and_managed_env_and_honors_offline() {
     let workspace = Workspace::new();
     let root = workspace.root.path();
-    let home = cargo_home(root).unwrap();
-    assert_eq!(home, root.join(".turbo").join("cargo-home"));
-    assert_eq!(cargo_home(root).unwrap(), home);
+    let home = cargo_home(&workspace.home()).unwrap();
+    assert_eq!(home, workspace.home());
+    assert_eq!(cargo_home(&home).unwrap(), home);
     let cargo = workspace.cargo("echo progress 1>&2");
     let env = BTreeMap::from([("RUSTUP_TOOLCHAIN".to_owned(), OsString::from(TOOLCHAIN))]);
     prefetch(root, &cargo, &home, false, &env).unwrap();
@@ -70,7 +75,7 @@ fn locked_fetch_uses_the_private_home_and_managed_env_and_honors_offline() {
 fn stale_failed_rewritten_and_missing_locks_are_actionable() {
     let workspace = Workspace::new();
     let root = workspace.root.path();
-    let home = cargo_home(root).unwrap();
+    let home = cargo_home(&workspace.home()).unwrap();
     for (body, expected) in [
         (
             "echo error: the lock file Cargo.lock needs to be updated but --locked was passed to \
@@ -101,16 +106,18 @@ fn stale_failed_rewritten_and_missing_locks_are_actionable() {
 #[test]
 fn a_junctioned_cargo_home_is_rejected() {
     let workspace = Workspace::new();
-    let root = workspace.root.path();
     let outside = tempfile::tempdir().unwrap();
     // Junctions need no symlink privilege, so any user can plant one.
     let status = Command::new("cmd.exe")
         .args(["/d", "/c", "mklink", "/J"])
-        .arg(root.join(".turbo").join("cargo-home"))
+        .arg(workspace.home())
         .arg(outside.path())
         .stdout(Stdio::null())
         .status()
         .unwrap();
     assert!(status.success());
-    assert!(matches!(cargo_home(root), Err(Error::UnsafeHome(_))));
+    assert!(matches!(
+        cargo_home(&workspace.home()),
+        Err(Error::UnsafeHome(_))
+    ));
 }

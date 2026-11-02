@@ -1,8 +1,8 @@
 //! `turbo hook <shell>`: prompt-time activation of the tools `turbo setup`
-//! recorded in this user's state directory. Runs in the invoking global binary,
+//! recorded in this user's tool store. Runs in the invoking global binary,
 //! never a repository-local turbo, and never resolves, downloads, installs, or
-//! writes locks or user state. Out-of-date tools stay active with a notice;
-//! `turbo run` stays strict.
+//! writes locks or records; it creates at most the empty store directory.
+//! Out-of-date tools stay active with a notice; `turbo run` stays strict.
 
 use std::{
     collections::BTreeMap,
@@ -14,7 +14,7 @@ use std::{
 
 use sha2::{Digest, Sha256};
 use turbopath::AbsoluteSystemPath;
-use turborepo_tool_install::ManagedVar;
+use turborepo_tool_install::{ManagedVar, UserStore};
 use turborepo_turbo_json::RawTurboJson;
 
 use crate::{cli::HookShell, commands::setup::trust::TrustStore};
@@ -323,7 +323,6 @@ pub(crate) fn run(shell: HookShell, export: bool) -> i32 {
         };
         let previous = std::env::var(STATE).ok().and_then(|s| State::parse(&s));
         let cwd = std::env::current_dir().ok();
-        let base = dirs_next::data_local_dir();
         let host = Host::current();
         let musl = || {
             matches!(
@@ -332,15 +331,7 @@ pub(crate) fn run(shell: HookShell, export: bool) -> i32 {
             )
         };
         let vars = |name: &str| std::env::var(name).ok();
-        let changes = changes(
-            previous,
-            &path,
-            cwd.as_deref(),
-            base.as_deref(),
-            &host,
-            musl,
-            vars,
-        );
+        let changes = changes(previous, &path, cwd.as_deref(), None, &host, musl, vars);
         if let Some(notice) = &changes.notice {
             let _ = writeln!(std::io::stderr(), "turbo: {notice}");
         }
@@ -371,11 +362,12 @@ pub(crate) fn run(shell: HookShell, export: bool) -> i32 {
     }
 }
 
+/// `store` names a fixture's tool store; otherwise the user's is located.
 fn changes(
     previous: Option<State>,
     path: &str,
     cwd: Option<&Path>,
-    base: Option<&Path>,
+    store: Option<&Path>,
     host: &Host,
     musl: impl FnOnce() -> bool,
     vars: impl Fn(&str) -> Option<String>,
@@ -390,9 +382,12 @@ fn changes(
         });
     };
     let id = digest(root.as_os_str().as_encoded_bytes());
-    let trust = base
-        .ok_or_else(|| "cannot locate the user state directory".to_owned())
-        .and_then(|base| TrustStore::new(base, &root).map_err(|e| e.to_string()));
+    let trust = match store {
+        Some(path) => UserStore::at(path, &root),
+        None => UserStore::locate(&root),
+    }
+    .map_err(|e| e.to_string())
+    .and_then(|store| TrustStore::new(&store, &root).map_err(|e| e.to_string()));
     // Fast path: unchanged root and inputs need no verification.
     let mut stamp = b"managed-only-v1".to_vec();
     for file in [
@@ -519,7 +514,7 @@ pub(crate) fn powershell_for_tests(
     state: Option<&str>,
     path: &str,
     cwd: &Path,
-    base: &Path,
+    store: &Path,
     vars: impl Fn(&str) -> Option<String>,
 ) -> (String, Option<String>) {
     let previous = state.and_then(State::parse);
@@ -529,7 +524,15 @@ pub(crate) fn powershell_for_tests(
         qualified: true,
         pathext: Some(".COM;.EXE;.BAT;.CMD".to_owned()),
     };
-    let changes = changes(previous, path, Some(cwd), Some(base), &host, || false, vars);
+    let changes = changes(
+        previous,
+        path,
+        Some(cwd),
+        Some(store),
+        &host,
+        || false,
+        vars,
+    );
     (
         render(HookShell::PowerShell, &changes),
         changes.state.flatten(),
@@ -802,14 +805,14 @@ mod tests {
         previous: Option<State>,
         path: &str,
         cwd: Option<&Path>,
-        base: Option<&Path>,
+        store: Option<&Path>,
         musl: impl FnOnce() -> bool,
     ) -> Changes {
         let host = Host {
             qualified: true,
             pathext: None,
         };
-        super::changes(previous, path, cwd, base, &host, musl, |_| None)
+        super::changes(previous, path, cwd, store, &host, musl, |_| None)
     }
 
     #[test]
@@ -1123,12 +1126,12 @@ mod tests {
             "manifest_sha256": sha(&fs::read(root.join(".turbo/tools/manifest.json")).unwrap()),
             "bin": current.bin, "tools": current.tools, "selection_sha256": sha(&selection),
         }});
-        let records = home.join("turborepo/setup-roots");
+        let records = home.join("repos").join(sha(root.as_os_str().as_bytes()));
         fs::create_dir_all(&records).unwrap();
-        for dir in [home.clone(), home.join("turborepo"), records.clone()] {
+        for dir in [home.clone(), home.join("repos"), records.clone()] {
             fs::set_permissions(dir, fs::Permissions::from_mode(0o700)).unwrap();
         }
-        let path = records.join(format!("{}.json", sha(root.as_os_str().as_bytes())));
+        let path = records.join("record.json");
         fs::write(&path, record.to_string()).unwrap();
         fs::set_permissions(&path, fs::Permissions::from_mode(0o600)).unwrap();
         let bin = current.bin.to_str().unwrap();
@@ -1191,7 +1194,8 @@ mod tests {
                     ] {
                         metadata(&mut stamp, &root.join(file));
                     }
-                    let trust = TrustStore::new(base, &root).unwrap();
+                    let store = UserStore::at(base, &root).unwrap();
+                    let trust = TrustStore::new(&store, &root).unwrap();
                     metadata(&mut stamp, &trust.path());
                     let previous = State {
                         root: digest(root.as_os_str().as_encoded_bytes()),
@@ -1361,6 +1365,7 @@ mod tests {
         let root = temp.path();
         let generation = root.join(".turbo").join("tools").join("generation-a");
         let bin = generation.join("bin");
+        let cargo_home = root.join("store").join("cargo-home");
         let installdir = (
             ManagedVar::UvPythonInstallDir,
             VarValue::Tree(TreeRef::new("python", "")),
@@ -1378,10 +1383,12 @@ mod tests {
             tool("uv", std::slice::from_ref(&installdir)),
             tool("python", std::slice::from_ref(&installdir)),
         ];
-        assert!(runtime_env(root, &bin, &tools[..1]).unwrap().is_empty());
-        let env = runtime_env(root, &bin, &tools).unwrap();
+        let home = Some(cargo_home.as_path());
+        assert!(runtime_env(&bin, None, &tools[..1]).unwrap().is_empty());
+        // A Cargo home comes only from the published generation.
+        assert!(runtime_env(&bin, None, &tools).is_err());
+        let env = runtime_env(&bin, home, &tools).unwrap();
         let tree = |id: &str| generation.join("tools").join(id).into_os_string();
-        let cargo_home = root.join(".turbo").join("cargo-home");
         let expected = BTreeMap::from([
             ("CARGO_HOME".to_owned(), cargo_home.clone().into_os_string()),
             ("GOROOT".to_owned(), tree("go")),
@@ -1398,10 +1405,10 @@ mod tests {
             "uv",
             &[(ManagedVar::Gotoolchain, VarValue::Word("auto".into()))],
         );
-        assert!(runtime_env(root, &bin, &[tools[1].clone(), conflict]).is_err());
+        assert!(runtime_env(&bin, home, &[tools[1].clone(), conflict]).is_err());
         // Like managed run, never a Cargo home that is not a plain directory.
-        fs::create_dir_all(root.join(".turbo")).unwrap();
+        fs::create_dir_all(root.join("store")).unwrap();
         fs::write(&cargo_home, "").unwrap();
-        assert!(runtime_env(root, &bin, &tools).is_err());
+        assert!(runtime_env(&bin, home, &tools).is_err());
     }
 }

@@ -202,19 +202,22 @@ fn pruned_docker_output_without_git_provisions_and_checks() {
     // Inventory alone is not authority. Seed the same private, external
     // receipt that verified setup publishes, without weakening its guards.
     let home = tempfile::tempdir().unwrap();
-    let records = home.path().join(if cfg!(target_os = "macos") {
-        "Library/Application Support/turborepo/setup-roots"
-    } else {
-        "data/turborepo/setup-roots"
-    });
-    fs::create_dir_all(&records).unwrap();
-    fs::set_permissions(&records, fs::Permissions::from_mode(0o700)).unwrap();
-    let canonical_root = root.canonicalize().unwrap();
-    assert!(!records.starts_with(&canonical_root));
     use std::os::unix::fs::MetadataExt;
 
     use sha2::{Digest, Sha256};
     let hash = |bytes: &[u8]| format!("{:x}", Sha256::digest(bytes));
+    let canonical_root = root.canonicalize().unwrap();
+    let records = home
+        .path()
+        .join(if cfg!(target_os = "macos") {
+            "Library/Application Support/turborepo/tools/repos"
+        } else {
+            "data/turborepo/tools/repos"
+        })
+        .join(hash(canonical_root.as_os_str().as_encoded_bytes()));
+    fs::create_dir_all(&records).unwrap();
+    fs::set_permissions(&records, fs::Permissions::from_mode(0o700)).unwrap();
+    assert!(!records.starts_with(&canonical_root));
     let identity = fs::metadata(&canonical_root).unwrap();
     let current = store.current().unwrap().unwrap();
     let record = serde_json::json!({
@@ -229,10 +232,7 @@ fn pruned_docker_output_without_git_provisions_and_checks() {
             "tools": current.tools,
         },
     });
-    let receipt = records.join(format!(
-        "{}.json",
-        hash(canonical_root.as_os_str().as_encoded_bytes())
-    ));
+    let receipt = records.join("record.json");
     fs::write(&receipt, serde_json::to_vec(&record).unwrap()).unwrap();
     fs::set_permissions(&receipt, fs::Permissions::from_mode(0o600)).unwrap();
     drop(store);

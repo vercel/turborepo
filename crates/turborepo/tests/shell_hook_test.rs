@@ -7,16 +7,13 @@ use std::{
     collections::BTreeMap,
     fs,
     io::Write,
-    os::unix::{
-        ffi::OsStrExt,
-        fs::{MetadataExt, PermissionsExt},
-    },
+    os::unix::fs::{MetadataExt, PermissionsExt},
     path::{Path, PathBuf},
     process::{Command, Stdio},
 };
 
 use sha2::{Digest, Sha256};
-use turborepo_tool_install::{Store, Tool};
+use turborepo_tool_install::{Store, Tool, UserStore};
 
 // A duplicate entry proves the hook removes only what it added.
 const BASE_PATH: &str = "/usr/bin:/bin:/usr/bin";
@@ -31,6 +28,11 @@ fn user_state(home: &Path) -> PathBuf {
     } else {
         home.join("data")
     }
+}
+
+/// The tool store `turbo` locates under `home`.
+fn user_store(home: &Path, root: &Path) -> UserStore {
+    UserStore::at(&user_state(home).join("turborepo/tools"), root).unwrap()
 }
 
 /// A recorded tool exporting `bin/<id>`, with the variables its adapter
@@ -92,7 +94,10 @@ fn repo(dir: &Path, flagged: bool, home: Option<&Path>, tools: &[&str]) -> Optio
     let home = home?;
     let root = dir.canonicalize().unwrap();
     let tools: Vec<_> = tools.iter().map(|id| tool(id)).collect();
+    let store = user_store(home, &root);
     Store::open(&root)
+        .unwrap()
+        .with_user_store(&store)
         .unwrap()
         .reconcile(&tools, |tool, tree| {
             let export = tree.join("bin").join(&tool.id);
@@ -116,12 +121,13 @@ fn repo(dir: &Path, flagged: bool, home: Option<&Path>, tools: &[&str]) -> Optio
             "tools": current.tools,
         },
     });
-    let records = user_state(home).join("turborepo/setup-roots");
+    let records = store.repo(&root);
     fs::create_dir_all(&records).unwrap();
-    for dir in records.ancestors().take_while(|dir| dir.starts_with(home)) {
+    let home = home.canonicalize().unwrap();
+    for dir in records.ancestors().take_while(|dir| dir.starts_with(&home)) {
         fs::set_permissions(dir, fs::Permissions::from_mode(0o700)).unwrap();
     }
-    let path = records.join(format!("{}.json", sha(root.as_os_str().as_bytes())));
+    let path = records.join("record.json");
     fs::write(&path, record.to_string()).unwrap();
     fs::set_permissions(&path, fs::Permissions::from_mode(0o600)).unwrap();
     Some(current.bin.to_str().unwrap().to_owned())
@@ -385,10 +391,11 @@ fn runtime_journey(shell: &str) {
     let tree =
         |bin: &str, id: &str| format!("{}/tools/{id}", Path::new(bin).parent().unwrap().display());
     let root = temp.path().join("r").canonicalize().unwrap();
-    let cargo_home = format!("{}/.turbo/cargo-home", root.display());
+    let cargo_home = user_store(&home, &root).cargo_home(&root);
+    let cargo_home = cargo_home.to_str().unwrap();
     let managed = vars(&[
         ("PATH", &format!("{r}:{path}")),
-        ("CARGO_HOME", &cargo_home),
+        ("CARGO_HOME", cargo_home),
         ("GOROOT", &tree(&r, "go")),
         ("GOTOOLCHAIN", "local"),
         ("RUSTUP_HOME", &tree(&r, "rust")),

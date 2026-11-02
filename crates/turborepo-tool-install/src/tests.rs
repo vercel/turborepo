@@ -16,6 +16,7 @@ mod read_only;
 mod record;
 mod recovery;
 mod shallow;
+mod user_store;
 
 fn damage(path: &Path) {
     let path = fs::canonicalize(path).unwrap();

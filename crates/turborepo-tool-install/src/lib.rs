@@ -20,10 +20,12 @@ use std::{
 
 mod repair;
 mod selection;
+mod user_store;
 
 pub use selection::{Export, Launch, LaunchArg, ManagedVar, TreeRef, VarValue};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
+pub use user_store::{TOOL_STORE_VAR, UserStore};
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
@@ -45,6 +47,13 @@ pub enum Error {
     Io(#[from] io::Error),
     #[error("invalid local installation manifest")]
     Json(#[from] serde_json::Error),
+    #[error("cannot locate the user tool store; set TURBO_TOOL_STORE to an absolute directory")]
+    NoStore,
+    #[error(
+        "unsafe tool store {0}; TURBO_TOOL_STORE must name an absolute directory outside the \
+         repository that only you can write"
+    )]
+    UnsafeStore(PathBuf),
 }
 
 /// Exact identity independent of turbo.lock; artifact/platform identify bytes,
@@ -105,6 +114,10 @@ struct Inventory {
     tools: Vec<Installed>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     record_sha256: Option<String>,
+    /// The `CARGO_HOME` this generation's launchers and activation use,
+    /// recorded only when a tool needs one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    cargo_home: Option<PathBuf>,
 }
 
 const RECORD_LIMIT: u64 = 1024 * 1024;
@@ -164,6 +177,7 @@ pub struct Store {
     root_handle: File,
     repo_handle: File,
     identity: Arc<()>,
+    cargo_home: Option<PathBuf>,
 }
 
 /// Sealed evidence from one live Store guard, not a caller-authored path or
@@ -209,6 +223,9 @@ pub struct Current {
     /// Hash-checked bookkeeping from this generation. Caller validation
     /// required.
     pub record: Option<Record>,
+    /// The `CARGO_HOME` the generation was published with, if a tool needs
+    /// one.
+    pub cargo_home: Option<PathBuf>,
 }
 
 impl Current {
@@ -305,9 +322,18 @@ impl Store {
             root_handle,
             repo_handle,
             identity: Arc::new(()),
+            cargo_home: None,
         };
         store.check_root()?;
         Ok(store)
+    }
+
+    /// Publishes generations whose tools need a `CARGO_HOME` with this
+    /// repository's one in `user_store`. Without it, publishing such a tool
+    /// fails.
+    pub fn with_user_store(mut self, user_store: &UserStore) -> Result<Self, Error> {
+        self.cargo_home = Some(user_store.cargo_home(self.repository_root()?));
+        Ok(self)
     }
 
     /// Canonical actual caller-selected repository, never derived from
@@ -435,6 +461,7 @@ impl Store {
             bin: root.join(inventory.generation).join("bin"),
             tools: inventory.tools.into_iter().map(|t| t.tool).collect(),
             record: record?,
+            cargo_home: inventory.cargo_home,
         }))
     }
 
@@ -459,6 +486,10 @@ impl Store {
                 .as_ref()
                 .is_some_and(|h| !is_sha256(h))
             || !inventory.generation.starts_with("generation-")
+            || inventory
+                .cargo_home
+                .as_ref()
+                .is_some_and(|home| !home.is_absolute())
             || inventory
                 .tools
                 .iter()
@@ -498,6 +529,7 @@ impl Store {
             bin: self.root.join(inventory.generation).join("bin"),
             tools: inventory.tools.into_iter().map(|t| t.tool).collect(),
             record,
+            cargo_home: inventory.cargo_home,
         }))
     }
 
@@ -661,7 +693,13 @@ impl Store {
             check_executables(&tools, &installed.tool)?;
             for (name, export) in &installed.tool.executables {
                 let shim = shim_name(name, export)?;
-                check_shim(&bin.join(&shim), &tools, &installed.tool, export)?;
+                check_shim(
+                    &bin.join(&shim),
+                    &tools,
+                    &installed.tool,
+                    export,
+                    inventory.cargo_home.as_deref(),
+                )?;
                 names.insert(shim);
             }
         }
@@ -780,12 +818,18 @@ impl Store {
             self.preserve_record(record)?;
         }
         let record_sha256 = recorded.map(|(record, _)| record.hash());
+        let cargo_home = desired
+            .iter()
+            .any(|tool| tool.vars.values().any(|v| *v == VarValue::RepoCargoHome))
+            .then(|| self.cargo_home.clone().ok_or(Error::InvalidInventory))
+            .transpose()?;
         let old = self.healthy_inventory()?;
         let valid_old = old.as_ref().filter(|_| force.is_none());
         let desired = sorted(desired);
         if valid_old.is_some_and(|old| {
             old.tools.iter().map(|t| &t.tool).eq(desired.iter())
                 && old.record_sha256 == record_sha256
+                && old.cargo_home == cargo_home
         }) {
             before_publish()?;
             self.check_root()?;
@@ -847,7 +891,7 @@ impl Store {
         }
         // Launchers may name other trees, so export once every tree is staged.
         for installed in &installed {
-            export(&tools, &bin, &installed.tool)?;
+            export(&tools, &bin, &installed.tool, cargo_home.as_deref())?;
         }
         if let Some((record, _)) = recorded {
             write_private(&stage.path().join("record.json"), record.bytes())?;
@@ -862,6 +906,7 @@ impl Store {
                 .to_string_lossy()
                 .into_owned(),
             tools: installed,
+            cargo_home,
         };
         // Flush all files and containing directories BEFORE selecting this tree.
         sync_tree(stage.path())?;
@@ -1269,9 +1314,15 @@ enum Shim {
     Script(Vec<u8>),
 }
 
-fn shim(tools: &Path, tool: &Tool, export: &Export) -> Result<Shim, Error> {
+fn shim(
+    tools: &Path,
+    tool: &Tool,
+    export: &Export,
+    cargo_home: Option<&Path>,
+) -> Result<Shim, Error> {
     #[cfg(windows)]
     {
+        let _ = cargo_home;
         Ok(match export {
             Export::File(path) if windows_kind(path)? == "exe" => {
                 Shim::HardLink(tools.join(&tool.id).join(relative_path(path)))
@@ -1288,7 +1339,9 @@ fn shim(tools: &Path, tool: &Tool, export: &Export) -> Result<Shim, Error> {
         let _ = tools;
         Ok(match export {
             Export::File(path) => Shim::Link(PathBuf::from("../tools").join(&tool.id).join(path)),
-            Export::Launch(launch) => Shim::Script(selection::unix_launcher(tool, launch)),
+            Export::Launch(launch) => {
+                Shim::Script(selection::unix_launcher(tool, launch, cargo_home)?)
+            }
         })
     }
 }
@@ -1316,25 +1369,31 @@ fn make_shim(path: &Path, shim: Shim) -> Result<(), Error> {
 }
 
 /// Check a staged generation's exports of `tool`, then export them into `bin`.
-fn export(tools: &Path, bin: &Path, tool: &Tool) -> Result<(), Error> {
+fn export(tools: &Path, bin: &Path, tool: &Tool, cargo_home: Option<&Path>) -> Result<(), Error> {
     check_executables(tools, tool)?;
     for (name, export) in &tool.executables {
         make_shim(
             &bin.join(shim_name(name, export)?),
-            shim(tools, tool, export)?,
+            shim(tools, tool, export, cargo_home)?,
         )?;
     }
     Ok(())
 }
 
-fn check_shim(path: &Path, tools: &Path, tool: &Tool, export: &Export) -> Result<(), Error> {
+fn check_shim(
+    path: &Path,
+    tools: &Path,
+    tool: &Tool,
+    export: &Export,
+    cargo_home: Option<&Path>,
+) -> Result<(), Error> {
     let metadata = fs::symlink_metadata(path)?;
     #[cfg(windows)]
     let regular = metadata.is_file()
         && std::os::windows::fs::MetadataExt::file_attributes(&metadata) & 0x400 == 0;
     #[cfg(not(windows))]
     let regular = metadata.is_file();
-    let valid = match shim(tools, tool, export)? {
+    let valid = match shim(tools, tool, export, cargo_home)? {
         #[cfg(not(windows))]
         Shim::Link(target) => metadata.file_type().is_symlink() && fs::read_link(path)? == target,
         #[cfg(windows)]

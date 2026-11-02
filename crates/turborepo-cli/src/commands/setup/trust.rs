@@ -8,12 +8,12 @@
 use std::{
     fs::{self, File},
     io::{self, Read, Write},
-    path::{Component, Path, PathBuf},
+    path::{Path, PathBuf},
 };
 
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
-use turborepo_tool_install::{Store, Tool};
+use turborepo_tool_install::{Store, Tool, UserStore};
 
 const LIMIT: u64 = 1024 * 1024;
 /// Bounds one pruning pass over the user's records.
@@ -55,6 +55,8 @@ impl Record {
 }
 
 pub(crate) struct TrustStore {
+    store: UserStore,
+    /// This repository's directory in the user store.
     directory: PathBuf,
     root: PathBuf,
 }
@@ -209,54 +211,37 @@ fn private_directory(path: &Path) -> io::Result<()> {
 }
 
 impl TrustStore {
-    // The caller chooses a user location, never a repository-authored path.
-    // No writes until publication. Missing user state simply prohibits reuse.
-    pub(crate) fn new(base: &Path, root: &Path) -> io::Result<Self> {
-        if !cfg!(any(unix, windows))
-            || !base.is_absolute()
-            || base.components().any(|c| matches!(c, Component::ParentDir))
-        {
-            return Err(unsafe_state());
-        }
+    // `UserStore` located the store outside the repository. No writes until
+    // publication. Missing user state simply prohibits reuse.
+    pub(crate) fn new(store: &UserStore, root: &Path) -> io::Result<Self> {
         let root = root.canonicalize()?;
-        // Resolve an existing ancestor without accepting a symlink as a new
-        // state component. macOS's /var alias is allowed in the supplied base.
-        let mut ancestor = base;
-        let mut missing = Vec::new();
-        while !ancestor.exists() {
-            if fs::symlink_metadata(ancestor).is_ok() {
-                return Err(unsafe_state());
-            }
-            missing.push(ancestor.file_name().ok_or_else(unsafe_state)?.to_owned());
-            ancestor = ancestor.parent().ok_or_else(unsafe_state)?;
-        }
-        let mut directory = ancestor.canonicalize()?;
-        for part in missing.into_iter().rev() {
-            directory.push(part);
-        }
-        directory.push("turborepo");
-        directory.push("setup-roots");
-        if directory.starts_with(&root) || root.starts_with(&directory) {
-            return Err(unsafe_state());
-        }
-        Ok(Self { directory, root })
+        Ok(Self {
+            directory: store.repo(&root),
+            store: store.clone(),
+            root,
+        })
     }
 
     pub(crate) fn path(&self) -> PathBuf {
-        // Encoded native bytes avoid lossy collisions for non-UTF8 Unix roots.
-        self.directory.join(format!(
-            "{}.json",
-            hash(self.root.as_os_str().as_encoded_bytes())
-        ))
+        self.directory.join("record.json")
+    }
+
+    pub(crate) fn store(&self) -> &UserStore {
+        &self.store
+    }
+
+    /// The repository's private `CARGO_HOME`, beside its record.
+    pub(super) fn cargo_home(&self) -> PathBuf {
+        self.store.cargo_home(&self.root)
     }
 
     fn load(&self) -> io::Result<Option<Record>> {
         // Reject links in any existing state component before opening a record.
-        // Only the record directory setup creates must be private: on macOS its
-        // parent is turbo's shared config directory, and existing ancestors keep
-        // the modes the user's umask gave them (a 0775 `~/.local/share` under
-        // Ubuntu's 0002). Another user who can write an ancestor still cannot
-        // substitute the owned, private record directory or records below it.
+        // Only the record directory setup creates must be private: existing
+        // ancestors keep the modes the user's umask gave them (a 0775
+        // `~/.local/share` under Ubuntu's 0002). Another user who can write an
+        // ancestor still cannot substitute the owned, private record directory
+        // or records below it.
         for path in self.directory.ancestors() {
             match fs::symlink_metadata(path) {
                 Ok(metadata) => {
@@ -328,13 +313,17 @@ impl TrustStore {
         if store.repository_root().map_err(io::Error::other)? != self.root {
             return Err(unsafe_state());
         }
-        self.inspect_installation(|| store.current().map_err(io::Error::other))
+        Ok(self
+            .inspect_installation(|| store.current().map_err(io::Error::other))?
+            .map(|(installation, _)| installation))
     }
 
+    /// The installation and the `CARGO_HOME` its generation was published
+    /// with, which the manifest digest binds.
     fn inspect_installation(
         &self,
         inspect: impl FnOnce() -> io::Result<Option<turborepo_tool_install::Current>>,
-    ) -> io::Result<Option<Installation>> {
+    ) -> io::Result<Option<(Installation, Option<PathBuf>)>> {
         // Split components: `/` is not a separator under a `\\?\` root.
         let path = self.root.join(".turbo").join("tools").join("manifest.json");
         let Some(before) = read(&path, false)? else {
@@ -347,7 +336,7 @@ impl TrustStore {
             return Err(unsafe_state());
         }
         let (device, inode) = identity(&self.root)?;
-        Ok(Some(Installation {
+        let installation = Installation {
             root: self.root.clone(),
             device,
             inode,
@@ -357,7 +346,8 @@ impl TrustStore {
             bin: dunce::simplified(&current.bin).to_path_buf(),
             tools: current.tools,
             selection_sha256: current.record.map(|record| hash(record.bytes())),
-        }))
+        };
+        Ok(Some((installation, current.cargo_home)))
     }
 
     /// Setup-only reuse of previously verified bytes. Deliberately ignores lock
@@ -381,11 +371,14 @@ impl TrustStore {
         let Some(record) = self.load()? else {
             return Ok(None);
         };
-        let installation = self
+        let Some((installation, cargo_home)) = self
             .inspect_installation(|| Store::inspect(&self.root).map_err(io::Error::other))
             .ok()
-            .flatten();
-        if installation.as_ref() != Some(&record.installation) {
+            .flatten()
+        else {
+            return Ok(None);
+        };
+        if installation != record.installation {
             return Ok(None);
         }
         let lock = read(&self.root.join("turbo.lock"), false)?;
@@ -395,8 +388,8 @@ impl TrustStore {
         }
         let installation = &record.installation;
         let env = turborepo_setup::activation::runtime_env(
-            &self.root,
             &installation.bin,
+            cargo_home.as_deref(),
             &installation.tools,
         )
         .map_err(io::Error::other)?;
@@ -424,8 +417,9 @@ impl TrustStore {
         if !record.resolves(lock.as_deref()) {
             return Ok(false);
         }
-        let installation =
-            self.inspect_installation(|| Store::inspect(&self.root).map_err(io::Error::other))?;
+        let installation = self
+            .inspect_installation(|| Store::inspect(&self.root).map_err(io::Error::other))?
+            .map(|(installation, _)| installation);
         Ok(installation.as_ref() == Some(&record.installation)
             && plan.path_prepend() == record.installation.bin.as_path()
             && record.installation.tools == plan.tools()
@@ -448,22 +442,24 @@ impl TrustStore {
         Ok(())
     }
 
-    /// Remove other roots' records whose root is gone or is now a different
+    /// Remove other roots' state whose root is gone or is now a different
     /// directory (deleted, moved or re-cloned). Reads stay bounded and never
     /// follow links. Unsafe, corrupt or misfiled records are left alone.
     fn prune(&self) -> io::Result<usize> {
-        let own = self.path();
+        let repos = self.store.repos();
         let mut removed = 0;
-        let entries = match fs::read_dir(&self.directory) {
+        let entries = match fs::read_dir(&repos) {
             Ok(entries) => entries,
             Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(0),
             Err(error) => return Err(error),
         };
         for entry in entries.take(MAX_RECORDS) {
-            let path = entry?.path();
-            if path == own || path.extension().is_none_or(|extension| extension != "json") {
+            let entry = entry?;
+            let directory = entry.path();
+            if directory == self.directory || !entry.file_type()?.is_dir() {
                 continue;
             }
+            let path = directory.join("record.json");
             let Ok(Some(bytes)) = read(&path, true) else {
                 continue;
             };
@@ -471,8 +467,7 @@ impl TrustStore {
                 continue;
             };
             let installation = &record.installation;
-            let name = hash(installation.root.as_os_str().as_encoded_bytes());
-            if path != self.directory.join(format!("{name}.json")) {
+            if directory != self.store.repo(&installation.root) {
                 continue;
             }
             let stale = match identity(&installation.root) {
@@ -483,10 +478,15 @@ impl TrustStore {
             if stale && read(&path, true)?.as_deref() == Some(bytes.as_slice()) {
                 fs::remove_file(&path)?;
                 removed += 1;
+                // Without its record nothing can reach the rest, such as the
+                // repository's Cargo home.
+                if let Err(error) = fs::remove_dir_all(&directory) {
+                    tracing::debug!("could not remove {}: {error}", directory.display());
+                }
             }
         }
         if removed > 0 {
-            sync_directory(&self.directory)?;
+            sync_directory(&repos)?;
         }
         Ok(removed)
     }
