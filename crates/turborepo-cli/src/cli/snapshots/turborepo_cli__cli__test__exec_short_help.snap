@@ -5,12 +5,14 @@ expression: "Args::render_help(get_subcommand(\"exec\"), false).unwrap()"
 EXPERIMENTAL: Run a command with the repository's managed tools (not yet
 implemented)
 
-Usage: turbo exec <-- COMMAND>…
+Usage: turbo exec [--print-env=<FORMAT>] [-- COMMAND]…
 
 Arguments:
-  <-- COMMAND>…  The program to run and its arguments
+  [-- COMMAND]…  The program to run and its arguments
 
 Flags:
+      --print-env=<FORMAT>        Print the managed environment instead of
+                                  running a command [bin, sh, fish, pwsh, json]
   -h, --help                      Print help
 
 Global flags:

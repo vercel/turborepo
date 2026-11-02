@@ -1,15 +1,16 @@
 //! Locked installer for repository-declared additional tools: one verified
 //! download per tool, either safely extracted or placed as a single binary,
-//! then staged as a full tree into a Store generation. This is the
+//! then staged as a full tree into the tool store. This is the
 //! installer-adapter boundary for additional tools; another installation
 //! source would add its own plan type. No resolution, hooks, tool-provided
 //! scripts, privileged installers, source builds, or PATH changes.
 
 use std::{collections::BTreeSet, fs, io, path::Path, time::Duration};
 
+use serde::Serialize;
 use turborepo_archive::{ExtractedArtifact, Layout};
 use turborepo_download::{ApprovedOrigin, DownloadClient, ExpectedSha256, VerifiedArtifact};
-use turborepo_tool_install::{Export, Store, Tool};
+use turborepo_tool_install::{Export, SetupSession, Staging, Tool};
 use url::Url;
 
 use crate::{
@@ -26,6 +27,8 @@ use crate::{
 const MAX_DOWNLOAD_BYTES: usize = 256 * 1024 * 1024;
 const MAX_EXTRACTED_BYTES: usize = 512 * 1024 * 1024;
 const DOWNLOAD_TIMEOUT: Duration = Duration::from_secs(300);
+/// Bump when this adapter stages different bytes for the same [`Staged`].
+const STAGING_REVISION: u32 = 1;
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
@@ -151,10 +154,29 @@ impl ArtifactTransport {
     }
 }
 
+/// Everything this adapter's staging reads besides the verified bytes.
+#[derive(Clone, Debug, Serialize)]
+#[serde(tag = "kind", rename_all = "kebab-case")]
+enum Staged {
+    /// The bytes, written as the one executable at `path`.
+    Binary { path: String },
+    /// The archive's entries below `root`; an empty root is its top level.
+    Archive { format: ArchiveFormat, root: String },
+}
+
+#[derive(Clone, Copy, Debug, Serialize)]
+#[serde(rename_all = "kebab-case")]
+enum ArchiveFormat {
+    Tar,
+    TarGz,
+    Zip,
+}
+
 pub struct ArtifactPlan {
     tool: Tool,
     platform: Platform,
     artifact: lock::Artifact,
+    staged: Staged,
     origin: String,
     /// `host[:port]` of the locked URL, the mirror path's first component.
     authority: String,
@@ -206,6 +228,29 @@ impl ArtifactPlan {
         {
             return Err(invalid());
         }
+        let root = || artifact.root_prefix.clone().unwrap_or_default();
+        let staged = match artifact.format {
+            Format::Binary => Staged::Binary {
+                path: artifact
+                    .executables
+                    .values()
+                    .next()
+                    .ok_or_else(invalid)?
+                    .clone(),
+            },
+            Format::Tar => Staged::Archive {
+                format: ArchiveFormat::Tar,
+                root: root(),
+            },
+            Format::TarGz => Staged::Archive {
+                format: ArchiveFormat::TarGz,
+                root: root(),
+            },
+            Format::Zip => Staged::Archive {
+                format: ArchiveFormat::Zip,
+                root: root(),
+            },
+        };
         Ok(Self {
             tool: Tool {
                 id: id.into(),
@@ -214,9 +259,11 @@ impl ArtifactPlan {
                 artifact_sha256: artifact.sha256.clone(),
                 executables: Export::files(&artifact.executables),
                 vars: Default::default(),
+                staging: Staging::new(ADAPTER, STAGING_REVISION, &staged)?,
             },
             platform,
             artifact: artifact.clone(),
+            staged,
             origin: url.origin().ascii_serialization(),
             authority: match url.port() {
                 Some(port) => format!("{}:{port}", url.host_str().ok_or_else(invalid)?),
@@ -236,12 +283,12 @@ impl ArtifactPlan {
         &self.artifact.url
     }
 
-    /// The caller supplies ALL desired tools and reconciles that same set,
-    /// holding this Store lock through preparation and reconciliation. A
+    /// The caller supplies ALL desired tools and ensures that same set
+    /// in the same setup session. A
     /// healthy identical tool is reused unless `preparation` is fresh.
     pub async fn prepare(
         &self,
-        store: &Store,
+        store: &SetupSession<'_>,
         desired: &[Tool],
         transport: &ArtifactTransport,
         preparation: Preparation,
@@ -307,11 +354,19 @@ impl ArtifactPlan {
             from_cache,
             downloaded_bytes,
         };
-        let format = match self.artifact.format {
-            Format::Binary => return Ok(prepared(Payload::Binary(bytes))),
-            Format::Tar => turborepo_archive::Format::Tar,
-            Format::TarGz => turborepo_archive::Format::TarGz,
-            Format::Zip => turborepo_archive::Format::Zip,
+        let (format, root) = match &self.staged {
+            Staged::Binary { path } => {
+                return Ok(prepared(Payload::Binary {
+                    bytes,
+                    path: path.clone(),
+                }));
+            }
+            Staged::Archive { format, root } => (*format, root.as_str()),
+        };
+        let format = match format {
+            ArchiveFormat::Tar => turborepo_archive::Format::Tar,
+            ArchiveFormat::TarGz => turborepo_archive::Format::TarGz,
+            ArchiveFormat::Zip => turborepo_archive::Format::Zip,
         };
         let unpack = |source| Error::Archive {
             tool: self.tool.id.clone(),
@@ -323,8 +378,6 @@ impl ArtifactPlan {
             .values()
             .map(String::as_str)
             .collect();
-        // Without a `rootPrefix`, entries sit at the archive's top level.
-        let root = self.artifact.root_prefix.as_deref().unwrap_or_default();
         let limits = turborepo_archive::Limits::new(MAX_EXTRACTED_BYTES, 100_000, 4096, 64)
             .map_err(unpack)?;
         let layout = Layout {
@@ -397,7 +450,10 @@ fn fold(name: &str, windows: bool) -> String {
 
 enum Payload {
     Archive(ExtractedArtifact),
-    Binary(VerifiedArtifact),
+    Binary {
+        bytes: VerifiedArtifact,
+        path: String,
+    },
 }
 
 pub struct PreparedArtifact {
@@ -418,8 +474,9 @@ impl PreparedArtifact {
         self.downloaded_bytes
     }
 
-    /// Callback for Store::reconcile. Copies the FULL verified tree, keeping
-    /// adjacent resources, executable modes, and safe relative links.
+    /// Staging callback for `SetupSession::ensure`. Copies the FULL verified
+    /// tree, keeping adjacent resources, executable modes, and safe
+    /// relative links.
     pub fn stage(
         &self,
         tool: &Tool,
@@ -433,13 +490,10 @@ impl PreparedArtifact {
         }
         match &self.payload {
             Payload::Archive(tree) => copy_tree(&tree.root_path(), destination)?,
-            Payload::Binary(bytes) => {
-                let relative = (tool.executables.values().next())
-                    .and_then(Export::as_file)
-                    .ok_or(turborepo_tool_install::Error::InvalidInventory)?;
+            Payload::Binary { bytes, path } => {
                 // Lock paths use `/`; never join them unsplit onto a Windows
                 // verbatim destination.
-                let path: std::path::PathBuf = relative.split('/').collect();
+                let path: std::path::PathBuf = path.split('/').collect();
                 write_executable(&destination.join(path), bytes.as_bytes())?;
             }
         }

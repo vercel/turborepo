@@ -6,7 +6,7 @@ impl Fixture {
     fn plan_report(&self, force: bool) -> Result<String, Error> {
         let discovery = root::Discovery::capture(&self.args(PLAN), self.git.clone())?;
         let sources = self.sources()?;
-        plan::inspect(&discovery, sources, force, || {
+        plan::inspect(&discovery, sources, force, self.owned.home(), || {
             Ok(self
                 .owned
                 .policy_at(&self.owned.root().join("apps/web/src"))?)
@@ -66,14 +66,14 @@ fn locked_plans_report_missing_reuse_and_force_in_every_readonly_mode() {
                 },
             );
             flags.push("--force");
-            f.assert_plan(&u, &flags, "reinstall (--force)");
+            f.assert_plan(&u, &flags, "re-verify (--force)");
         }
         assert_eq!(f.owned.root().join(".turbo").exists(), installed);
     }
     assert_eq!(u.hits(), 3);
     let sources = f.sources().unwrap();
     let writer = sources.guard().unwrap();
-    let store = turborepo_tool_install::Store::open(f.owned.root()).unwrap();
+    let store = Installed::open(&f.owned);
     std::thread::scope(|scope| {
         let (send, receive) = std::sync::mpsc::channel();
         let fixture = &f;
@@ -119,24 +119,25 @@ fn damaged_plans_never_change_any_owned_bytes() {
         let mut f = Fixture::new();
         let u = Upstream::new(&f, false, None);
         f.install(&u);
-        let current = turborepo_tool_install::Store::inspect(f.owned.root())
-            .unwrap()
-            .unwrap();
+        let current = Installed::open(&f.owned).current().unwrap().unwrap();
         match case {
             0 => turborepo_setup::test_support::damage(
-                &current.bin.join("../tools/node/resource"),
+                &current.tree("node").join("resource"),
                 "damage",
             ),
-            1 => fs::remove_file(current.bin.join("../tools/pnpm/dist/resource")).unwrap(),
-            2 => fs::write(f.owned.root().join(".turbo/tools/manifest.json"), "invalid").unwrap(),
+            1 => fs::remove_file(current.tree("pnpm").join("dist/resource")).unwrap(),
+            2 => fs::remove_dir_all(current.bin.parent().unwrap()).unwrap(),
             3 => {
                 turborepo_setup::test_support::damage(
-                    &current.bin.join("../tools/node/resource"),
+                    &current.tree("node").join("resource"),
                     "damage",
                 );
                 fs::remove_file(current.bin.join("node")).unwrap();
-                std::os::unix::fs::symlink("../tools/pnpm/bin/pnpm.cjs", current.bin.join("node"))
-                    .unwrap();
+                std::os::unix::fs::symlink(
+                    current.tree("pnpm").join("bin/pnpm.cjs"),
+                    current.bin.join("node"),
+                )
+                .unwrap();
             }
             _ => {
                 f.lock["tools"]["node"]["installation"]["artifacts"]
@@ -154,33 +155,19 @@ fn damaged_plans_never_change_any_owned_bytes() {
             if force {
                 flags.push("--force");
             }
-            if matches!(case, 0 | 1 | 4) {
-                assert_eq!(f.run(&u, &flags).unwrap(), 0);
-                let action = if force {
-                    "reinstall (--force)"
-                } else if case == 4 {
-                    "repair (installation does not match turbo.lock)"
-                } else {
-                    "reuse (healthy installation)"
-                };
-                let report = f.plan_report(force).unwrap();
-                assert!(report.contains(action));
-                if case != 4 {
-                    assert_eq!(report, f.expected_plan(action));
-                }
-            } else {
-                assert!(matches!(
-                    f.run(&u, &flags),
-                    Err(Error::Activation(
-                        turborepo_setup::activation::Error::DamagedInventory(_)
-                    ))
-                ));
-                assert!(matches!(
-                    f.plan_report(force),
-                    Err(Error::Activation(
-                        turborepo_setup::activation::Error::DamagedInventory(_)
-                    ))
-                ));
+            assert_eq!(f.run(&u, &flags).unwrap(), 0);
+            // Like run and exec, a plan reads shims and seals, never tree
+            // contents: damage inside a tree is for --check to find.
+            let action = match case {
+                _ if force => "re-verify (--force)",
+                2 | 3 => "repair (damaged installation)",
+                4 => "repair (installation does not match turbo.lock)",
+                _ => "reuse (healthy installation)",
+            };
+            let report = f.plan_report(force).unwrap();
+            assert!(report.contains(action), "case {case}: {report}");
+            if case != 4 {
+                assert_eq!(report, f.expected_plan(action));
             }
         }
         assert_eq!(snapshot(f.owned.root().parent().unwrap()), before);
@@ -190,7 +177,9 @@ fn damaged_plans_never_change_any_owned_bytes() {
                 f.run(&u, &["--force", "--tools-only", "--frozen"]).unwrap(),
                 0
             );
-            assert_eq!(u.hits(), 6);
+            // Only the damaged tree is fetched again: Node's archive, or
+            // pnpm's exact metadata and tarball.
+            assert_eq!(u.hits(), if case == 0 { 4 } else { 5 });
             assert_eq!(
                 f.plan_report(false).unwrap(),
                 f.expected_plan("reuse (healthy installation)")
@@ -514,7 +503,7 @@ fn plan_rejects_drift_of_original_discovery_sources_and_policy_before_reporting(
         let sources = f.sources().unwrap();
         let calls = std::cell::Cell::new(0);
         let edited = std::cell::RefCell::new(None);
-        let result = plan::inspect(&discovery, sources, false, || {
+        let result = plan::inspect(&discovery, sources, false, f.owned.home(), || {
             calls.set(calls.get() + 1);
             if calls.get() == 2 {
                 let (path, contents) = match case {

@@ -188,17 +188,29 @@ impl Repo {
     /// Each install's rustup arguments, after checking it ran the staged image.
     fn calls(&self) -> Vec<String> {
         let calls = fs::read_to_string(self.outside.join("rustup-calls")).unwrap_or_default();
+        let store = dunce::canonicalize(self.owned.home()).unwrap();
         let staged = |line: &str| {
             let (exe, args) = line.split_once(' ').unwrap();
             assert!(exe.ends_with(r"\bin\rustup.exe"), "{line}");
-            assert!(exe.contains(r"\.turbo\tools\"), "{line}");
+            assert!(Path::new(exe).starts_with(&store), "{line}");
             args.to_owned()
         };
         calls.lines().map(staged).collect()
     }
 
+    /// The repository's record, if setup published one.
     fn manifest(&self) -> Option<Vec<u8>> {
-        fs::read(self.owned.root().join(".turbo/tools/manifest.json")).ok()
+        let root = self.owned.root().canonicalize().unwrap();
+        let store = trust::user_store(Some(self.owned.home()), &root).unwrap();
+        fs::read(trust::TrustStore::new(&store, &root).unwrap().path()).ok()
+    }
+
+    /// Each sealed tree's root, by tool id.
+    fn trees(&self) -> std::collections::BTreeMap<String, PathBuf> {
+        recorded_installation_for_tests(self.owned.root(), self.owned.home())
+            .unwrap()
+            .unwrap()
+            .trees
     }
 
     /// What managed `turbo run` and `turbo exec` apply, plus the managed bin.
@@ -242,15 +254,15 @@ fn frozen_rust_setup_runs_the_verified_rustup_and_activates_its_proxies() {
         names,
         ["cargo.exe", "rustc.exe", "rustdoc.exe", "rustup.exe"]
     );
-    let tools = bin.join("..").join("tools");
-    let proxy = tools.join("rust").join("proxy").join("rustup.exe");
+    let trees = repo.trees();
+    let proxy = trees["rust"].join("proxy").join("rustup.exe");
     for name in ["cargo.exe", "rustc.exe", "rustdoc.exe"] {
         assert!(
             same_file::is_same_file(bin.join(name), &proxy).unwrap(),
             "{name}"
         );
     }
-    let rustup = tools.join("rustup").join("bin").join("rustup.exe");
+    let rustup = trees["rustup"].join("bin").join("rustup.exe");
     assert!(same_file::is_same_file(bin.join("rustup.exe"), rustup).unwrap());
     assert_eq!(fs::read(&proxy).unwrap(), repo.installer);
 
@@ -258,7 +270,7 @@ fn frozen_rust_setup_runs_the_verified_rustup_and_activates_its_proxies() {
     assert_eq!(env["RUSTUP_TOOLCHAIN"], format!("1.99.0-{HOST}"));
     assert_eq!(env["RUSTUP_AUTO_INSTALL"], "0");
     let home = Path::new(&env["RUSTUP_HOME"]);
-    assert!(same_file::is_same_file(home, tools.join("rust")).unwrap());
+    assert!(same_file::is_same_file(home, &trees["rust"]).unwrap());
     let toolchain = home.join("toolchains").join(format!("1.99.0-{HOST}"));
     assert!(toolchain.join("bin").join("rustc.exe").is_file());
     let cargo_home = repo.cargo_home();
@@ -287,20 +299,22 @@ fn frozen_rust_setup_runs_the_verified_rustup_and_activates_its_proxies() {
         fs::read(repo.owned.root().join("turbo.lock")).unwrap(),
         lock
     );
-    // Setup's trusted-root record is the only user state; no ~/.rustup.
+    // The tool store is the only user state; no ~/.rustup or ~/.cargo.
+    let store = ["envs", "gc.lock", "repos", "tmp", "trees"];
     let home: Vec<_> = fs::read_dir(repo.owned.home())
         .unwrap()
         .map(|entry| entry.unwrap().file_name())
-        .filter(|name| name != "repos")
+        .filter(|name| !store.iter().any(|entry| name == *entry))
         .collect();
     assert_eq!(home, Vec::<OsString>::new());
 
-    // A damaged proxy is reported by --check, and setup reinstalls it.
+    // A damaged proxy is reported by --check, and setup renders it again from
+    // the sealed tree without rerunning rustup.
     fs::remove_file(bin.join("rustc.exe")).unwrap();
     assert!(repo.run(&upstream, CHECK).is_err());
     assert_eq!(repo.ok(&upstream, FROZEN), 0);
-    assert_eq!(repo.calls(), [INSTALL, INSTALL]);
-    assert_ne!(repo.manifest(), manifest);
+    assert_eq!(repo.calls(), [INSTALL]);
+    assert_eq!(repo.manifest(), manifest);
     assert_eq!(repo.ok(&upstream, CHECK), 0);
 }
 

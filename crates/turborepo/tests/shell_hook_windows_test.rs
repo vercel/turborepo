@@ -1,5 +1,5 @@
 //! Windows PowerShell 5.1 and PowerShell 7 prompts on native Windows, driving
-//! `turbo hook powershell` against repositories with real Windows generations
+//! `turbo hook powershell` against repositories with real Windows environments
 //! and trusted setup records, under a non-ASCII directory that PowerShell
 //! would decode with the console code page. Setup refuses Windows arm64
 //! hosts, so nothing activates there even with a record present.
@@ -15,7 +15,7 @@ use std::{
     process::{Command, Stdio},
 };
 
-use turborepo_tool_install::{Store, Tool};
+use turborepo_tool_install::Tool;
 
 // A duplicate entry proves the hook removes only what it added, and a
 // non-ASCII entry that a console code page cannot corrupt it.
@@ -24,23 +24,11 @@ const BASE_PATH: &str = "C:\\Windows\\System32;C:\\Windows;C:\\Windows\\System32
                          tools";
 const PATHEXT: &str = ".COM;.EXE;.BAT;.CMD";
 
-/// The hook reads the real user state directory, which `LOCALAPPDATA` does
-/// not redirect, so records are removed even when an assertion fails.
-#[derive(Default)]
-struct Records(Vec<PathBuf>);
-
-impl Drop for Records {
-    fn drop(&mut self) {
-        for record in &self.0 {
-            let _ = fs::remove_file(record);
-        }
-    }
-}
-
-/// A clone with its own Git boundary. Repositories given `records` get a real
-/// Windows generation (an `.exe` hard link and a `.cmd` forwarder) plus the
-/// record `turbo setup` publishes for it, and return its PATH entry.
-fn repo(dir: &Path, flagged: bool, records: Option<&mut Records>) -> Option<String> {
+/// A clone with its own Git boundary. Repositories given a tool `store` get a
+/// real Windows environment there (an `.exe` hard link and a `.cmd`
+/// forwarder) plus the record `turbo setup` publishes for it, and return the
+/// environment's `bin`.
+fn repo(dir: &Path, flagged: bool, store: Option<&Path>) -> Option<PathBuf> {
     fs::create_dir_all(dir.join(r"apps\web")).unwrap();
     fs::create_dir(dir.join(".git")).unwrap();
     let flags = if flagged {
@@ -50,7 +38,7 @@ fn repo(dir: &Path, flagged: bool, records: Option<&mut Records>) -> Option<Stri
     };
     fs::write(dir.join("turbo.json"), format!("{{{flags}}}")).unwrap();
     fs::write(dir.join("turbo.lock"), r#"{"schemaVersion":0,"tools":{}}"#).unwrap();
-    let records = records?;
+    let store = store?;
     let root = dir.canonicalize().unwrap();
     let node = Tool {
         id: "node".into(),
@@ -63,24 +51,19 @@ fn repo(dir: &Path, flagged: bool, records: Option<&mut Records>) -> Option<Stri
         ]
         .into(),
         vars: Default::default(),
+        staging: turborepo_tool_install::Staging::new("fixture", 1, &()).unwrap(),
     };
     let system32 = PathBuf::from(std::env::var_os("SystemRoot").unwrap()).join("System32");
-    Store::open(&root)
-        .unwrap()
-        .reconcile(&[node], |_, tree| {
-            // A real PE image stands in for node.exe so running it is observable.
-            fs::copy(system32.join("cmd.exe"), tree.join("node.exe"))?;
-            fs::write(tree.join("npm.cmd"), "@echo managed-npm %*\r\n")?;
-            Ok(())
-        })
-        .unwrap();
-    let record = turborepo_cli::test_support::record_trust_for_tests(&root, None).unwrap();
-    records.0.push(record.clone());
-    let record: serde_json::Value = serde_json::from_slice(&fs::read(record).unwrap()).unwrap();
-    let bin = record["installation"]["bin"].as_str().unwrap().to_owned();
-    // cmd.exe cannot resolve a forwarder's `%~dp0..` under `\\?\`.
+    let installed = common::setup::install_tools(&root, store, vec![node], None, |_, tree| {
+        // A real PE image stands in for node.exe so running it is observable.
+        fs::copy(system32.join("cmd.exe"), tree.join("node.exe"))?;
+        fs::write(tree.join("npm.cmd"), "@echo managed-npm %*\r\n")?;
+        Ok(())
+    });
+    // cmd.exe cannot run forwarders or PATH entries under `\\?\`.
+    let bin = installed.bin.to_string_lossy().into_owned();
     assert!(!bin.starts_with(r"\\"), "{bin}");
-    Some(bin)
+    Some(installed.bin)
 }
 
 /// Prints `key=<UTF-8 hex>`, so the console code page cannot change what the
@@ -107,7 +90,7 @@ const STEPS: &[&str] = &[
     "Show b $env:PATH",
     "Add-Content turbo.lock ' '",
     "Show stale $env:PATH",
-    "Remove-Item -Recurse -Force .turbo/tools",
+    "Remove-Item -Recurse -Force $env:REMOVE",
     "Show removed $env:PATH",
     "cd ../off",
     "Show off $env:PATH",
@@ -125,12 +108,18 @@ fn journey(shell: &str) {
     // Like a profile under a non-ASCII user name. PowerShell itself would
     // close a single-quoted literal at the typographic quote.
     let temp = dir.path().join("J\u{fc}rgen\u{2019}s");
-    let mut records = Records::default();
-    let a = repo(&temp.join("a"), true, Some(&mut records)).unwrap();
-    let b = repo(&temp.join("b"), true, Some(&mut records)).unwrap();
+    // Outside every repository, and found by the hook through the variable.
+    let store = dir.path().join("store");
+    let a = repo(&temp.join("a"), true, Some(&store)).unwrap();
+    let b = repo(&temp.join("b"), true, Some(&store)).unwrap();
+    // The same selection shares one environment, which the removal step
+    // deletes under b.
+    assert_eq!(a, b);
+    let remove = b.parent().unwrap().to_owned();
+    let (a, b) = (a.display().to_string(), b.display().to_string());
     // Nested, flagged, never set up: untrusted. Flag off: ignored even if set up.
     repo(&temp.join(r"a\vendor\c"), true, None);
-    repo(&temp.join("off"), false, Some(&mut records));
+    repo(&temp.join("off"), false, Some(&store));
     fs::create_dir(temp.join("plain")).unwrap();
 
     let turbo = assert_cmd::cargo::cargo_bin("turbo");
@@ -152,6 +141,8 @@ fn journey(shell: &str) {
         .current_dir(temp.join("plain"))
         .env("PATH", BASE_PATH)
         .env("PATHEXT", PATHEXT)
+        .env("TURBO_TOOL_STORE", &store)
+        .env("REMOVE", &remove)
         .env_remove("__TURBO_HOOK_STATE")
         .env("POWERSHELL_TELEMETRY_OPTOUT", "1")
         .env("POWERSHELL_UPDATECHECK", "Off")

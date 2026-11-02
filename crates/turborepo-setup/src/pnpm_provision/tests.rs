@@ -15,10 +15,13 @@ use tokio::{
     net::TcpListener,
 };
 use turborepo_download::Error as DownloadError;
-use turborepo_tool_install::Outcome;
 
 use super::*;
-use crate::{pnpm_provision::PnpmTransport, source_policy::test_support::LoopbackServer};
+use crate::{
+    pnpm_provision::PnpmTransport,
+    source_policy::test_support::LoopbackServer,
+    test_store::{Outcome, TestStore},
+};
 
 const TARGET: Platform = Platform::MacosArm64;
 
@@ -158,18 +161,15 @@ fn node_stage(_: &Tool, destination: &Path) -> Result<(), turborepo_tool_install
     )?;
     Ok(())
 }
-fn manifest(repo: &Path) -> Vec<u8> {
-    fs::read(repo.join(".turbo/tools/manifest.json")).unwrap()
-}
-fn seeded(repo: &Path, node: &NodePlan) -> Store {
-    let mut store = Store::open(repo).unwrap();
+fn seeded(repo: &Path, node: &NodePlan) -> TestStore {
+    let store = TestStore::open(repo);
     store
         .reconcile(&[node.inventory_tool().clone()], node_stage)
         .unwrap();
     store
 }
 async fn install(
-    store: &mut Store,
+    store: &TestStore,
     node: &NodePlan,
     pnpm: &PnpmPlan,
     registry: &Registry,
@@ -227,7 +227,7 @@ async fn full_tree_bound_shims_repeat_reuse_and_stale_replacement() {
         .prefix("pnpm repo ' spaces ")
         .tempdir()
         .unwrap();
-    let mut store = Store::open(repo.path()).unwrap();
+    let store = TestStore::open(repo.path());
     let desired = [node.inventory_tool().clone(), pnpm.inventory_tool().clone()];
     let prepared = pnpm
         .prepare_if_needed(&store, &desired, &registry.transport)
@@ -244,14 +244,10 @@ async fn full_tree_bound_shims_repeat_reuse_and_stale_replacement() {
             }
         })
         .unwrap();
-    assert_eq!(
-        fs::read_dir(repo.path().join(".turbo/tools"))
-            .unwrap()
-            .count(),
-        3
-    );
+    // Two trees and the environment that shares them.
+    assert_eq!(store.published().len(), 3);
     let current = store.current().unwrap().unwrap();
-    let root = current.bin.parent().unwrap().join("tools/pnpm");
+    let root = store.tree_of(pnpm.inventory_tool());
     assert_eq!(
         fs::read_to_string(root.join("dist/templates/config.json")).unwrap(),
         "adjacent runtime resource"
@@ -281,12 +277,12 @@ async fn full_tree_bound_shims_repeat_reuse_and_stale_replacement() {
         assert!(!stdout.contains("ambient-node"));
     }
     assert!(!repo.path().join("should-never-run").exists());
-    let before = manifest(repo.path());
+    let before = store.published();
     assert_eq!(
-        install(&mut store, &node, &pnpm, &registry).await.unwrap(),
+        install(&store, &node, &pnpm, &registry).await.unwrap(),
         Outcome::Unchanged
     );
-    assert_eq!(manifest(repo.path()), before);
+    assert_eq!(store.published(), before);
     assert_eq!(registry.requests.lock().unwrap().len(), 2);
     let extra = Tool {
         id: "extra".into(),
@@ -295,6 +291,7 @@ async fn full_tree_bound_shims_repeat_reuse_and_stale_replacement() {
         artifact_sha256: "ab".repeat(32),
         executables: BTreeMap::from([("extra".into(), "bin/node".into())]),
         vars: Default::default(),
+        staging: turborepo_tool_install::Staging::new("fixture", 1, &()).unwrap(),
     };
     let expanded = [
         node.inventory_tool().clone(),
@@ -309,11 +306,11 @@ async fn full_tree_bound_shims_repeat_reuse_and_stale_replacement() {
     );
     store.reconcile(&expanded, node_stage).unwrap();
     assert_eq!(registry.requests.lock().unwrap().len(), 2);
-    let bin = store.current().unwrap().unwrap().bin;
+    let bin = store.bin();
     fs::remove_file(bin.join("pnpm")).unwrap();
-    std::os::unix::fs::symlink("../tools/pnpm/bin/pnpm.cjs", bin.join("pnpm")).unwrap();
-    install(&mut store, &node, &pnpm, &registry).await.unwrap();
-    let bin = store.current().unwrap().unwrap().bin;
+    std::os::unix::fs::symlink("../../../elsewhere/pnpm.cjs", bin.join("pnpm")).unwrap();
+    install(&store, &node, &pnpm, &registry).await.unwrap();
+    let bin = store.bin();
     let output = Command::new(bin.join("pnpm")).output().unwrap();
     assert_eq!(output.status.code(), Some(19));
     assert!(
@@ -349,11 +346,11 @@ async fn metadata_security_failures_do_not_download_or_mutate() {
         let registry = serve(meta, bytes.clone()).await;
         let (node, pnpm) = plans(&fixture(&bytes));
         let repo = tempfile::tempdir().unwrap();
-        let mut store = seeded(repo.path(), &node);
-        let snapshot = manifest(repo.path());
-        assert!(install(&mut store, &node, &pnpm, &registry).await.is_err());
+        let store = seeded(repo.path(), &node);
+        let snapshot = store.published();
+        assert!(install(&store, &node, &pnpm, &registry).await.is_err());
         assert_eq!(registry.requests.lock().unwrap().len(), 1);
-        assert_eq!(manifest(repo.path()), snapshot);
+        assert_eq!(store.published(), snapshot);
         assert_eq!(
             store.current().unwrap().unwrap().tools,
             [node.inventory_tool().clone()]
@@ -390,11 +387,9 @@ async fn both_hashes_and_package_layout_are_mandatory() {
         let (node, pnpm) = plans(&value);
         let registry = serve(meta, bytes).await;
         let repo = tempfile::tempdir().unwrap();
-        let mut store = seeded(repo.path(), &node);
-        let snapshot = manifest(repo.path());
-        let error = install(&mut store, &node, &pnpm, &registry)
-            .await
-            .unwrap_err();
+        let store = seeded(repo.path(), &node);
+        let snapshot = store.published();
+        let error = install(&store, &node, &pnpm, &registry).await.unwrap_err();
         let kind = match error {
             Error::Download(DownloadError::DigestMismatch) => "sha256",
             Error::Download(DownloadError::Sha512DigestMismatch) => "sha512",
@@ -403,7 +398,7 @@ async fn both_hashes_and_package_layout_are_mandatory() {
             _ => panic!("unexpected error: {error}"),
         };
         assert_eq!(kind, expected);
-        assert_eq!(manifest(repo.path()), snapshot);
+        assert_eq!(store.published(), snapshot);
     }
 }
 
@@ -413,7 +408,7 @@ async fn desired_node_binding_and_damaged_generation_repair() {
     let registry = serve(metadata(&bytes), bytes.clone()).await;
     let (node, pnpm) = plans(&fixture(&bytes));
     let repo = tempfile::tempdir().unwrap();
-    let mut store = Store::open(repo.path()).unwrap();
+    let store = TestStore::open(repo.path());
     let mut wrong = node.inventory_tool().clone();
     wrong.artifact_sha256 = "22".repeat(32);
     for nodes in [vec![], vec![wrong]] {
@@ -426,22 +421,22 @@ async fn desired_node_binding_and_damaged_generation_repair() {
         assert!(registry.requests.lock().unwrap().is_empty());
         assert!(store.current().unwrap().is_none());
     }
-    install(&mut store, &node, &pnpm, &registry).await.unwrap();
-    let snapshot = manifest(repo.path());
+    install(&store, &node, &pnpm, &registry).await.unwrap();
     registry.requests.lock().unwrap().clear();
-    let old = store.current().unwrap().unwrap().bin;
-    fs::remove_file(old.join("node")).unwrap();
+    // A missing environment is rebuilt from the sealed trees, offline.
+    let old = store.bin();
+    fs::remove_dir_all(old.parent().unwrap()).unwrap();
     let desired = [node.inventory_tool().clone(), pnpm.inventory_tool().clone()];
     assert!(
         pnpm.prepare_if_needed(&store, &desired, &registry.transport)
             .await
             .unwrap()
-            .is_some()
+            .is_none()
     );
-    assert_eq!(registry.requests.lock().unwrap().len(), 2);
-    assert_eq!(manifest(repo.path()), snapshot);
-    install(&mut store, &node, &pnpm, &registry).await.unwrap();
+    install(&store, &node, &pnpm, &registry).await.unwrap();
     assert!(store.is_current(&desired).unwrap());
+    assert_eq!(store.bin(), old);
+    assert!(registry.requests.lock().unwrap().is_empty());
     registry.requests.lock().unwrap().clear();
     let mut changed = fixture(&bytes);
     changed["tools"]["node"]["installation"]["artifacts"]["macos-arm64"]["distribution"]
@@ -481,20 +476,15 @@ async fn pnpm_tree_hash_is_the_same_beside_any_node() {
     for value in [fixture(&bytes), other] {
         let (node, pnpm) = plans(&value);
         let repo = tempfile::tempdir().unwrap();
-        let mut store = Store::open(repo.path()).unwrap();
-        install(&mut store, &node, &pnpm, &registry).await.unwrap();
-        let manifest: Value = serde_json::from_slice(&manifest(repo.path())).unwrap();
-        let tools = manifest["tools"].as_array().unwrap();
-        let installed = |id: &str| {
-            tools
-                .iter()
-                .find(|t| t["tool"]["id"] == id)
-                .unwrap()
-                .clone()
+        let store = TestStore::open(repo.path());
+        install(&store, &node, &pnpm, &registry).await.unwrap();
+        let seal = |tool: &Tool| -> Value {
+            let tree = store.tree_of(tool);
+            serde_json::from_slice(&fs::read(tree.with_file_name("seal.json")).unwrap()).unwrap()
         };
         hashes.push((
-            installed("node")["tool"].clone(),
-            installed("pnpm")["tree_sha256"].clone(),
+            seal(node.inventory_tool())["spec"].clone(),
+            seal(pnpm.inventory_tool())["tree_sha256"].clone(),
         ));
     }
     assert_ne!(hashes[0].0, hashes[1].0, "the two Node selections differ");
@@ -561,10 +551,10 @@ async fn authored_pins_and_bounded_metadata_fail_before_artifacts() {
     let lock = Lock::parse(&serde_json::to_vec(&value).unwrap()).unwrap();
     let (node, unpinned) = plans(&value);
     let repo = tempfile::tempdir().unwrap();
-    let mut store = seeded(repo.path(), &node);
+    let store = seeded(repo.path(), &node);
     let good = serve(metadata(&bytes), bytes.clone()).await;
-    install(&mut store, &node, &unpinned, &good).await.unwrap();
-    let snapshot = manifest(repo.path());
+    install(&store, &node, &unpinned, &good).await.unwrap();
+    let snapshot = store.published();
     for (algorithm, digest) in [
         ("sha512", "00".repeat(64)),
         ("sha256", "00".repeat(32)),
@@ -575,18 +565,18 @@ async fn authored_pins_and_bounded_metadata_fail_before_artifacts() {
         let pnpm = PnpmPlan::from_lock(&lock, TARGET, &node, Some(&pin)).unwrap();
         assert_ne!(pnpm.inventory_tool(), unpinned.inventory_tool());
         let registry = serve(metadata(&bytes), bytes.clone()).await;
-        assert!(install(&mut store, &node, &pnpm, &registry).await.is_err());
+        assert!(install(&store, &node, &pnpm, &registry).await.is_err());
         assert_eq!(registry.requests.lock().unwrap().len(), 1);
-        assert_eq!(manifest(repo.path()), snapshot);
+        assert_eq!(store.published(), snapshot);
     }
     let registry = serve_raw(vec![b' '; MAX_METADATA_BYTES + 1], bytes).await;
     let (_, pnpm) = plans(&fixture(b"force metadata recheck"));
-    let result = install(&mut store, &node, &pnpm, &registry).await;
+    let result = install(&store, &node, &pnpm, &registry).await;
     assert!(matches!(
         result,
         Err(Error::Download(DownloadError::TooLarge))
     ));
-    assert_eq!(manifest(repo.path()), snapshot);
+    assert_eq!(store.published(), snapshot);
 }
 
 #[tokio::test]
@@ -596,8 +586,8 @@ async fn corepack_sha224_pins_check_downloaded_bytes_in_addition_to_sha512() {
     let lock = Lock::parse(&serde_json::to_vec(&value).unwrap()).unwrap();
     let (node, unpinned) = plans(&value);
     let repo = tempfile::tempdir().unwrap();
-    let mut store = seeded(repo.path(), &node);
-    let snapshot = manifest(repo.path());
+    let store = seeded(repo.path(), &node);
+    let snapshot = store.published();
     let pin = |digest: String| CorepackIntegrity {
         algorithm: "sha224",
         digest,
@@ -619,17 +609,17 @@ async fn corepack_sha224_pins_check_downloaded_bytes_in_addition_to_sha512() {
     ] {
         let pnpm = PnpmPlan::from_lock(&lock, TARGET, &node, Some(&authored)).unwrap();
         let registry = serve(document, bytes.clone()).await;
-        let result = install(&mut store, &node, &pnpm, &registry).await;
+        let result = install(&store, &node, &pnpm, &registry).await;
         assert!(matches!(&result, Err(Error::Download(error))
             if std::mem::discriminant(error) == std::mem::discriminant(&expected)));
         assert_eq!(registry.requests.lock().unwrap().len(), 2);
-        assert_eq!(manifest(repo.path()), snapshot);
+        assert_eq!(store.published(), snapshot);
     }
     let pnpm = PnpmPlan::from_lock(&lock, TARGET, &node, Some(&good)).unwrap();
     assert_ne!(pnpm.inventory_tool(), unpinned.inventory_tool());
     let registry = serve(metadata(&bytes), bytes.clone()).await;
-    install(&mut store, &node, &pnpm, &registry).await.unwrap();
-    assert_ne!(manifest(repo.path()), snapshot);
+    install(&store, &node, &pnpm, &registry).await.unwrap();
+    assert_ne!(store.published(), snapshot);
 }
 
 #[tokio::test]
@@ -665,9 +655,9 @@ async fn pnpm_11_module_entry_points_and_aliases_run_on_managed_node() {
     artifact["executables"] = bins;
     let (node, pnpm) = plans(&value);
     let repo = tempfile::tempdir().unwrap();
-    let mut store = seeded(repo.path(), &node);
-    install(&mut store, &node, &pnpm, &registry).await.unwrap();
-    let bin = store.current().unwrap().unwrap().bin;
+    let store = seeded(repo.path(), &node);
+    install(&store, &node, &pnpm, &registry).await.unwrap();
+    let bin = store.bin();
     for (name, entry) in [
         ("pn", "pnpm"),
         ("pnpm", "pnpm"),
@@ -682,7 +672,7 @@ async fn pnpm_11_module_entry_points_and_aliases_run_on_managed_node() {
         let stdout = String::from_utf8(output.stdout).unwrap();
         assert!(stdout.starts_with("managed-node\n<"), "{stdout}");
         assert!(
-            stdout.ends_with(&format!("/pnpm/bin/{entry}.mjs>\n<--version>\n")),
+            stdout.ends_with(&format!("/root/bin/{entry}.mjs>\n<--version>\n")),
             "{stdout}"
         );
     }
@@ -741,7 +731,7 @@ async fn native_pnpm_runs_the_verified_platform_binary_beside_its_wrapper() {
         );
     }
     let repo = tempfile::tempdir().unwrap();
-    let mut store = seeded(repo.path(), &node);
+    let store = seeded(repo.path(), &node);
     let desired = [node.inventory_tool().clone(), pnpm.inventory_tool().clone()];
     let prepared = pnpm
         .prepare_if_needed(&store, &desired, &transport)
@@ -776,7 +766,7 @@ async fn native_pnpm_runs_the_verified_platform_binary_beside_its_wrapper() {
         assert_eq!(output.status.code(), Some(0));
     }
     // The wrapper's placeholders stay as published; its hooks never run.
-    let root = current.bin.parent().unwrap().join("tools/pnpm");
+    let root = store.tree_of(pnpm.inventory_tool());
     assert_eq!(
         fs::read_to_string(root.join("pnpm")).unwrap(),
         fx::PLACEHOLDER
@@ -881,7 +871,7 @@ async fn native_pnpm_cache_reuses_and_reverifies_both_locked_parts_across_reposi
             fs::write(&entry, b"torn native archive").unwrap();
         }
         let repo = tempfile::tempdir().unwrap();
-        let mut store = seeded(repo.path(), &node);
+        let store = seeded(repo.path(), &node);
         let prepared = pnpm
             .prepare(&store, &desired, &transport, crate::Preparation::Fresh)
             .await
@@ -900,14 +890,13 @@ async fn native_pnpm_cache_reuses_and_reverifies_both_locked_parts_across_reposi
                 }
             })
             .unwrap();
-        let current = store.current().unwrap().unwrap();
+        let root = store.tree_of(pnpm.inventory_tool());
         assert_eq!(
-            fs::read_to_string(current.bin.parent().unwrap().join("tools/pnpm/pnpm-native"))
-                .unwrap(),
+            fs::read_to_string(root.join("pnpm-native")).unwrap(),
             fx::BINARY
         );
         assert_eq!(
-            fs::read_to_string(current.bin.parent().unwrap().join("tools/pnpm/pnpm")).unwrap(),
+            fs::read_to_string(root.join("pnpm")).unwrap(),
             fx::PLACEHOLDER
         );
     }

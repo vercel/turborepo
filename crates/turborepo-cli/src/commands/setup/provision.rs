@@ -1,6 +1,7 @@
-//! Local reconciliation followed by locked tool provisioning.
-//! Force reinstalls committed selections without resolution or lock writes.
-//! Offline uses only trusted healthy installs and verified cached artifacts.
+//! Local reconciliation followed by locked tool provisioning into the user's
+//! shared tool store. Force re-verifies committed selections, restaging what
+//! changed, without resolution or lock writes. Offline uses only installed
+//! trees and verified cached artifacts.
 //! No probes, dependency execution or activation. Declared additional tools
 //! install through the generic artifact adapter.
 use std::{fs, io, path::Path};
@@ -26,7 +27,7 @@ use turborepo_setup::{
     uv_resolution::UvTransport,
     yarn_provision::YarnPlan,
 };
-use turborepo_tool_install::Store;
+use turborepo_tool_install::{Reuse, Selection};
 use turborepo_turbo_json::SetupMirrors;
 
 use super::{
@@ -56,7 +57,7 @@ impl Transports {
     /// `setup.mirrors` policy select a mirror, in that order.
     pub fn official(policy: &ToolDownloadPolicy, mirrors: &SetupMirrors) -> Result<Self, Error> {
         // Verified archive bytes are shared through the user's cache directory;
-        // extraction and activation stay in each repository's .turbo/tools.
+        // extracted trees through the user's tool store.
         let cache = dirs_next::cache_dir().and_then(|base| ArtifactCache::new(&base));
         Self::configured(policy, &Mirrors::configured(mirrors)?, cache)
     }
@@ -246,23 +247,8 @@ pub(super) fn revalidate(discovery: &super::root::Discovery) -> Result<(), Error
     Ok(())
 }
 
-/// The fixture's tool store, else the user's.
-pub(super) fn user_store(
-    fixture: Option<&Path>,
-    root: &Path,
-) -> Result<turborepo_tool_install::UserStore, turborepo_tool_install::Error> {
-    match fixture {
-        Some(path) => turborepo_tool_install::UserStore::at(path, root),
-        None => turborepo_tool_install::UserStore::locate(root),
-    }
-}
-
 pub(super) fn storage(root: &Path) -> Result<(), Error> {
-    for path in [
-        root.join(".turbo"),
-        root.join(".turbo/tools"),
-        root.join(".turbo/setup-lock"),
-    ] {
+    for path in [root.join(".turbo"), root.join(".turbo/setup-lock")] {
         match fs::symlink_metadata(path) {
             Ok(m) if !m.is_dir() || m.file_type().is_symlink() => {
                 return Err(Error::Unsupported("unsafe .turbo storage path"));
@@ -657,7 +643,7 @@ pub(super) fn run(
         preflight()?;
         revalidate(discovery)?;
         storage(root)?;
-        let store = user_store(tool_store.as_deref(), root)?;
+        let store = super::trust::user_store(tool_store.as_deref(), root)?;
         let trust = super::trust::TrustStore::new(&store, root)?;
         trust.preflight()?;
         Ok(trust)
@@ -800,12 +786,16 @@ pub(super) fn run(
     revalidate(discovery)?;
     storage(root)?;
     snapshot.ensure_current()?;
-    // Fixed acquisition order: writer, then Store. Both remain held through the
-    // final precondition and manifest selection, including unchanged results.
+    let selection = Selection::new(desired.clone())?;
+    // Fixed acquisition order: writer, then the store's collection lease. Both
+    // remain held through the record's publication, including no-op results.
     let guard = snapshot.guard()?;
-    storage(root)?;
-    let mut store = Store::open(root)?.with_user_store(trust.store())?;
-    storage(root)?;
+    let reuse = if force {
+        Reuse::Verified
+    } else {
+        Reuse::Sealed
+    };
+    let session = trust.store().begin_setup(root, reuse)?;
     // Locks may have waited behind another transaction: recheck before traffic.
     preflight()?;
     revalidate(discovery)?;
@@ -813,24 +803,12 @@ pub(super) fn run(
     let runtime = tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()?;
-    // Repo inventory can prove health, never provenance. A missing/stale user
-    // record forces the entire cohort through verified artifact preparation.
-    let recorded = trust.allows_reuse(&store)?;
-    let replace = force || !recorded;
-    // Locked setup publishes no record, so it republishes a --no-lock
-    // generation by copying every tree, and must restage a damaged one.
-    let preparation = if replace || store.republishes_damage(&desired, None)? {
-        turborepo_setup::Preparation::Fresh
-    } else {
-        turborepo_setup::Preparation::IfNeeded
-    };
+    // The store decides reuse: a sealed tree is reused, re-hashed first under
+    // --force, and anything else is prepared from verified artifacts.
+    let preparation = turborepo_setup::Preparation::IfNeeded;
     // Offline misses are collected, not short-circuited, so the report names
     // every missing artifact. Nothing is published unless all are present.
     let mut offline_missing = Vec::new();
-    let mut reused = Vec::new();
-    // Repository health alone is never a reinstall source. Both guards are
-    // held and the complete cohort has fresh external trust evidence.
-    let reuse_installed = offline && force && recorded;
     let (
         prepared_node,
         prepared_pnpm,
@@ -851,30 +829,9 @@ pub(super) fn run(
         };
         let node = match &node {
             Some(plan) => match plan
-                .prepare(&store, &desired, &transports.node, preparation)
+                .prepare(&session, &desired, &transports.node, preparation)
                 .await
             {
-                Err(turborepo_setup::node_provision::Error::Offline) if reuse_installed => {
-                    match plan
-                        .prepare(
-                            &store,
-                            &desired,
-                            &transports.node,
-                            turborepo_setup::Preparation::IfNeeded,
-                        )
-                        .await
-                    {
-                        Ok(None) => {
-                            reused.push(plan.inventory_tool().clone());
-                            None
-                        }
-                        Err(turborepo_setup::node_provision::Error::Offline) => {
-                            offline_missing.push("node");
-                            None
-                        }
-                        result => result?,
-                    }
-                }
                 Err(turborepo_setup::node_provision::Error::Offline) => {
                     offline_missing.push("node");
                     None
@@ -886,30 +843,9 @@ pub(super) fn run(
         recheck()?;
         let pnpm = match &pnpm {
             Some(plan) => match plan
-                .prepare(&store, &desired, &transports.pnpm, preparation)
+                .prepare(&session, &desired, &transports.pnpm, preparation)
                 .await
             {
-                Err(turborepo_setup::pnpm_provision::Error::Offline) if reuse_installed => {
-                    match plan
-                        .prepare(
-                            &store,
-                            &desired,
-                            &transports.pnpm,
-                            turborepo_setup::Preparation::IfNeeded,
-                        )
-                        .await
-                    {
-                        Ok(None) => {
-                            reused.push(plan.inventory_tool().clone());
-                            None
-                        }
-                        Err(turborepo_setup::pnpm_provision::Error::Offline) => {
-                            offline_missing.push("pnpm");
-                            None
-                        }
-                        result => result?,
-                    }
-                }
                 Err(turborepo_setup::pnpm_provision::Error::Offline) => {
                     offline_missing.push("pnpm");
                     None
@@ -921,30 +857,9 @@ pub(super) fn run(
         recheck()?;
         let npm = match &npm {
             Some(plan) => match plan
-                .prepare(&store, &desired, &transports.pnpm, preparation)
+                .prepare(&session, &desired, &transports.pnpm, preparation)
                 .await
             {
-                Err(turborepo_setup::pnpm_provision::Error::Offline) if reuse_installed => {
-                    match plan
-                        .prepare(
-                            &store,
-                            &desired,
-                            &transports.pnpm,
-                            turborepo_setup::Preparation::IfNeeded,
-                        )
-                        .await
-                    {
-                        Ok(None) => {
-                            reused.push(plan.inventory_tool().clone());
-                            None
-                        }
-                        Err(turborepo_setup::pnpm_provision::Error::Offline) => {
-                            offline_missing.push("npm");
-                            None
-                        }
-                        result => result?,
-                    }
-                }
                 Err(turborepo_setup::pnpm_provision::Error::Offline) => {
                     offline_missing.push("npm");
                     None
@@ -956,7 +871,7 @@ pub(super) fn run(
         recheck()?;
         let uv = match &uv {
             Some(plan) => {
-                plan.prepare(&store, &desired, &transports.uv, preparation)
+                plan.prepare(&session, &desired, &transports.uv, preparation)
                     .await?
             }
             None => None,
@@ -964,7 +879,7 @@ pub(super) fn run(
         recheck()?;
         let python = match &python {
             Some(plan) => {
-                plan.prepare(&store, &desired, &transports.python, preparation)
+                plan.prepare(&session, &desired, &transports.python, preparation)
                     .await?
             }
             None => None,
@@ -972,7 +887,7 @@ pub(super) fn run(
         recheck()?;
         let rustup = match &rustup {
             Some(plan) => {
-                plan.prepare(&store, &desired, &transports.rustup, preparation)
+                plan.prepare(&session, &desired, &transports.rustup, preparation)
                     .await?
             }
             None => None,
@@ -983,31 +898,12 @@ pub(super) fn run(
             for plan in &artifacts {
                 recheck()?;
                 let tool = plan.inventory_tool();
-                // Same offline rules as Node: collect misses, and let a forced
-                // reinstall reuse the recorded tree when nothing is cached.
+                // Same offline rules as Node: collect misses.
                 prepared.push(
-                    match plan.prepare(&store, &desired, transport, preparation).await {
-                        Err(Offline) if reuse_installed => {
-                            match plan
-                                .prepare(
-                                    &store,
-                                    &desired,
-                                    transport,
-                                    turborepo_setup::Preparation::IfNeeded,
-                                )
-                                .await
-                            {
-                                Ok(None) => {
-                                    reused.push(tool.clone());
-                                    None
-                                }
-                                Err(Offline) => {
-                                    offline_missing.push(tool.id.as_str());
-                                    None
-                                }
-                                result => result?,
-                            }
-                        }
+                    match plan
+                        .prepare(&session, &desired, transport, preparation)
+                        .await
+                    {
                         Err(Offline) => {
                             offline_missing.push(tool.id.as_str());
                             None
@@ -1020,7 +916,7 @@ pub(super) fn run(
         recheck()?;
         let go = match &go {
             Some(plan) => {
-                plan.prepare(&store, &desired, &transports.go, preparation)
+                plan.prepare(&session, &desired, &transports.go, preparation)
                     .await?
             }
             None => None,
@@ -1028,7 +924,7 @@ pub(super) fn run(
         recheck()?;
         let yarn = match &yarn {
             Some(plan) => {
-                plan.prepare(&store, &desired, &transports.pnpm, preparation)
+                plan.prepare(&session, &desired, &transports.pnpm, preparation)
                     .await?
             }
             None => None,
@@ -1036,7 +932,7 @@ pub(super) fn run(
         recheck()?;
         let bun = match &bun {
             Some(plan) => {
-                plan.prepare(&store, &desired, &transports.bun, preparation)
+                plan.prepare(&session, &desired, &transports.bun, preparation)
                     .await?
             }
             None => None,
@@ -1056,12 +952,9 @@ pub(super) fn run(
     trust.preflight()?;
     let prepared_rust = match (&rust, &rustup) {
         (Some(plan), Some(rustup)) => {
-            let scratch = tempfile::Builder::new()
-                .prefix(".rustup-")
-                .tempdir_in(root.join(".turbo").join("tools"))?;
-            let rustup =
-                rustup.executable(&store, &desired, prepared_rustup.as_ref(), scratch.path())?;
-            plan.prepare(&store, &desired, &rustup, &transports.rustup, preparation)?
+            let scratch = session.scratch("rustup-")?;
+            let rustup = rustup.executable(&session, prepared_rustup.as_ref(), scratch.path())?;
+            plan.prepare(&session, &desired, &rustup, &transports.rustup, preparation)?
         }
         _ => None,
     };
@@ -1118,23 +1011,16 @@ pub(super) fn run(
             _ => Err(missing()),
         }
     };
-    let before_publish = || {
+    let ensured = session.ensure(&selection, stage, |env| {
+        // The record binds this repository to the environment only once the
+        // lock, sources and policy it was planned from are still current.
         trust.preflight()?;
         storage(root).map_err(io::Error::other)?;
         preflight().map_err(io::Error::other)?;
         revalidate(discovery).map_err(io::Error::other)?;
         snapshot.check_guard(&guard).map_err(io::Error::other)?;
-        Ok(())
-    };
-    if replace {
-        store.force_reconcile_reusing_checked(&desired, &reused, stage, before_publish)?;
-    } else {
-        store.reconcile_checked(&desired, stage, before_publish)?;
-    }
-    // A published generation without this second, external publication is not
-    // trusted. On failure, rerunning setup freshly verifies it before repair.
-    before_publish()?;
-    trust.publish(&store)?;
+        Ok(trust.publish(env, None)?)
+    })?;
     // Every adapter that transfers verified bytes itself. A Rust toolchain is
     // fetched by the private rustup, so only its installer is counted.
     let mut report = ToolReport {
@@ -1161,22 +1047,8 @@ pub(super) fn run(
         ..ToolReport::default()
     };
     for tool in &desired {
-        let (reused, source) = match additional(tool) {
-            Some((plan, prepared)) => (prepared.is_none(), Some(plan.source().to_string())),
-            None => (
-                (tool.id == "node" && prepared_node.is_none())
-                    || (tool.id == "pnpm" && prepared_pnpm.is_none())
-                    || (tool.id == "npm" && prepared_npm.is_none())
-                    || (tool.id == "uv" && prepared_uv.is_none())
-                    || (tool.id == "rustup" && prepared_rustup.is_none())
-                    || (tool.id == "python" && prepared_python.is_none())
-                    || (tool.id == "rust" && prepared_rust.is_none())
-                    || (tool.id == "yarn" && prepared_yarn.is_none())
-                    || (tool.id == "bun" && prepared_bun.is_none())
-                    || (tool.id == "go" && prepared_go.is_none()),
-                None,
-            ),
-        };
+        let reused = !ensured.installed.contains(&tool.id);
+        let source = additional(tool).map(|(plan, _)| plan.source().to_string());
         let from_cache = match tool.id.as_str() {
             _ if additional(tool).is_some() => additional(tool)
                 .and_then(|(_, prepared)| prepared)
@@ -1187,7 +1059,7 @@ pub(super) fn run(
             _ => false,
         };
         let outcome = match (reused, force, from_cache) {
-            (true, true, _) => ToolOutcome::Reinstalled,
+            (true, true, _) => ToolOutcome::Verified,
             (true, false, _) => ToolOutcome::Reused,
             (false, _, true) => ToolOutcome::InstalledFromCache,
             (false, _, false) => ToolOutcome::Installed,
@@ -1215,10 +1087,10 @@ pub(super) fn run(
     if offline {
         notes.push(Note::Offline);
     }
-    // Cleanup follows both generation and external trust publication, while
-    // the writer and Store guards are still held. It never fails setup.
+    // Cleanup follows the record's publication, while the writer guard is
+    // still held. It never fails setup.
     notes.extend(
-        super::cleanup::after_provisioning(&mut store, transports.node.cache(), lock, host)
+        super::cleanup::after_provisioning(transports.node.cache(), lock, host)
             .into_iter()
             .map(Note::Cleanup),
     );

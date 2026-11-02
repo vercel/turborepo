@@ -1,18 +1,16 @@
-//! Sealed clone-local resolution bookkeeping, never execution authorization.
-//! Previous native provenance is semantic data, not a replacement disk lock.
+//! Clone-local resolution bookkeeping, never execution authorization. The
+//! selection lives in the repository's user record; previous native
+//! provenance is semantic data, not a replacement disk lock.
 
 use std::collections::BTreeMap;
 
 use serde_json::{Value, json};
-use turborepo_tool_install::{GenerationExpectation, Record, Store};
 
 use crate::{
     NodeRequirements,
-    lock::{Installation, Lock, Platform, Snapshot},
+    lock::{Installation, Lock, Snapshot},
     node_provision::NodePlan,
-    npm_provision::NpmPlan,
     package_manager::{self, Declaration, Manager},
-    pnpm_provision::PnpmPlan,
 };
 
 #[derive(Debug, thiserror::Error)]
@@ -26,15 +24,13 @@ pub enum Error {
     RuntimeArrayGap(usize),
     #[error(transparent)]
     Storage(#[from] crate::lock::StorageError),
-    #[error(transparent)]
-    Install(#[from] turborepo_tool_install::Error),
 }
 
-/// Validated bounded semantic data. This is NOT a root/generation capability.
-/// No public decoder: only the actual selected Store record becomes a Baseline.
+/// Validated bounded semantic data, never a capability.
 pub struct NativeRecord {
     selection: Lock,
-    record: Record,
+    /// The selection's canonical lock bytes, as the user record keeps them.
+    bytes: Vec<u8>,
     node: NodeRequirements,
     manager: Option<Declaration>,
 }
@@ -82,8 +78,8 @@ impl NativeRecord {
         Ok(native)
     }
 
-    pub fn record(&self) -> &Record {
-        &self.record
+    pub fn bytes(&self) -> &[u8] {
+        &self.bytes
     }
     pub fn selection(&self) -> &Lock {
         &self.selection
@@ -95,9 +91,9 @@ impl NativeRecord {
         self.manager.as_ref()
     }
 
-    /// Crate-private: activation reads only the record of the generation it
-    /// also checks, never caller bytes.
-    pub(crate) fn decode(bytes: &[u8]) -> Result<Self, Error> {
+    /// The selection a user record holds, validated as strictly as setup
+    /// produced it.
+    pub fn decode(bytes: &[u8]) -> Result<Self, Error> {
         let selection = validated(Lock::parse(bytes))?;
         if validated(selection.canonical_bytes())? != bytes
             || !selection.tools().contains_key("node")
@@ -162,142 +158,11 @@ impl NativeRecord {
         }
         Ok(Self {
             selection,
-            record: Record::new(bytes.to_vec())?,
+            bytes: bytes.to_vec(),
             node,
             manager,
         })
     }
-}
-
-/// Only capture constructs this capability, from a canonical Snapshot and the
-/// actual sealed expectation of one live Store. No arbitrary Lock/Current/path.
-/// ```compile_fail
-/// use turborepo_setup::{lock::Snapshot, native_baseline::{Baseline, NativeRecord}};
-/// use turborepo_tool_install::GenerationExpectation;
-/// fn forge(snapshot: Snapshot, generation: GenerationExpectation, native: NativeRecord) {
-///     let _ = Baseline { snapshot, generation, native };
-/// }
-/// ```
-pub struct Baseline {
-    snapshot: Snapshot,
-    generation: GenerationExpectation,
-    native: NativeRecord,
-}
-
-impl Baseline {
-    pub fn capture(snapshot: &Snapshot, store: &Store) -> Result<Option<Self>, Error> {
-        snapshot.ensure_current()?;
-        if snapshot.repository_root() != store.repository_root()? {
-            return Err(Error::Invalid);
-        }
-        let generation = store.generation().or_else(|_| store.repair_generation())?;
-        let Some(current) = generation.current() else {
-            return Ok(None);
-        };
-        let Some(record) = &current.record else {
-            return Ok(None);
-        };
-        let native = NativeRecord::decode(record.bytes())?;
-        let mut desired = None;
-        let Installation::Managed { artifacts } = &native.selection.tools()["node"].installation
-        else {
-            return Err(Error::Invalid);
-        };
-        // Select by the actual complete inventory, never caller platform/path.
-        for platform in artifacts
-            .keys()
-            .filter(|p| !matches!(p, Platform::WindowsX64 | Platform::WindowsArm64))
-        {
-            let node = validated(NodePlan::from_lock(&native.selection, *platform))?;
-            if !current.tools.contains(node.inventory_tool()) {
-                continue;
-            }
-            let mut tools = vec![node.inventory_tool().clone()];
-            if let Some(manager) = &native.manager {
-                tools.extend(manager_tool(&native.selection, *platform, &node, manager)?);
-            }
-            tools.sort_by(|a, b| a.id.cmp(&b.id));
-            if tools == current.tools {
-                desired = Some(node);
-                break;
-            }
-        }
-        let node = desired.ok_or(Error::Invalid)?;
-        if !generation.healthy() {
-            let baseline = Self {
-                snapshot: snapshot.clone(),
-                generation,
-                native,
-            };
-            baseline.check(snapshot, store)?;
-            return Ok(Some(baseline));
-        }
-        let tree = current
-            .tool_tree(node.inventory_tool())
-            .ok_or(Error::Invalid)?;
-        validated(node.verify_bundled_npm(&tree))?;
-        for tool in current.tools.iter().filter(|tool| tool.id != "node") {
-            let tree = current.tool_tree(tool).ok_or(Error::Invalid)?;
-            validated(crate::ephemeral_reconcile::verify_manager(&tree, tool))?;
-        }
-        let baseline = Self {
-            snapshot: snapshot.clone(),
-            generation,
-            native,
-        };
-        baseline.check(snapshot, store)?;
-        Ok(Some(baseline))
-    }
-
-    /// Recheck after waits; original real lock/source CAS is never substituted.
-    pub fn check(&self, snapshot: &Snapshot, store: &Store) -> Result<(), Error> {
-        if self.snapshot.repository_root() != snapshot.repository_root()
-            || snapshot.repository_root() != store.repository_root()?
-        {
-            return Err(Error::Invalid);
-        }
-        self.snapshot.ensure_current()?;
-        snapshot.ensure_current()?;
-        store.check_generation(&self.generation)?;
-        Ok(())
-    }
-
-    pub fn native<'a>(
-        &'a self,
-        snapshot: &Snapshot,
-        store: &Store,
-    ) -> Result<&'a NativeRecord, Error> {
-        self.check(snapshot, store)?;
-        Ok(&self.native)
-    }
-
-    /// Sealed Store evidence for a later consumer's checked generation publish.
-    pub fn generation(&self) -> &GenerationExpectation {
-        &self.generation
-    }
-}
-
-/// The installed tool of the record's declared manager: pnpm, or npm unless
-/// Node bundles it.
-fn manager_tool(
-    selection: &Lock,
-    platform: Platform,
-    node: &NodePlan,
-    manager: &Declaration,
-) -> Result<Option<turborepo_tool_install::Tool>, Error> {
-    Ok(match manager.manager {
-        Manager::Npm => validated(NpmPlan::from_declaration(
-            selection, platform, node, manager,
-        ))?
-        .map(|npm| npm.inventory_tool().clone()),
-        _ => Some(
-            validated(PnpmPlan::from_declaration(
-                selection, platform, node, manager,
-            ))?
-            .inventory_tool()
-            .clone(),
-        ),
-    })
 }
 
 // Reconstruct only native declaration fields, never raw manifests, secrets or

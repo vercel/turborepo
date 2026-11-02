@@ -69,7 +69,7 @@ impl TurboRunner for TurboCliRunner<'_> {
         // to managed selection to report.
         let lock = std::fs::symlink_metadata(root.join_component("turbo.lock").as_std_path());
         if lock.is_err_and(|error| error.kind() == std::io::ErrorKind::NotFound)
-            && turborepo_tool_install::Store::selects_record(root.as_std_path())
+            && crate::commands::setup::trust::records_clone_local(root.as_std_path(), None)
                 .is_ok_and(|selected| !selected)
         {
             return Ok(None);

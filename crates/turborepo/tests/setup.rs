@@ -3,7 +3,12 @@
 
 mod common;
 
-use std::{fs, io, net::TcpListener, path::Path, process::Command};
+use std::{
+    fs, io,
+    net::TcpListener,
+    path::{Path, PathBuf},
+    process::Command,
+};
 
 #[cfg(all(
     target_os = "linux",
@@ -92,6 +97,16 @@ fn snapshot(root: &Path) -> Vec<Entry> {
     files
 }
 
+/// The fixture's tool store. A store may not live inside the repository it
+/// serves, and the fixture's `HOME` does, so it sits beside the root.
+fn tool_store(root: &Path) -> PathBuf {
+    let name = root
+        .file_name()
+        .expect("fixture root name")
+        .to_string_lossy();
+    root.with_file_name(format!("{name}.tool-store"))
+}
+
 fn invoke_raw(root: &Path, words: &[&str], ci: bool) -> (i32, String, String) {
     invoke_raw_with(root, words, ci, &[])
 }
@@ -150,6 +165,7 @@ fn invoke_raw_options(
         .args(words)
         .env("PATH", path)
         .env("HOME", root.join("home"))
+        .env("TURBO_TOOL_STORE", tool_store(root))
         .env("USERPROFILE", root.join("home"))
         .env("APPDATA", root.join("appdata"))
         .env("XDG_CONFIG_HOME", root.join("config"))
@@ -618,7 +634,7 @@ fn ambiguous_configs_require_an_exact_explicit_root() {
         "ambiguous setup roots",
     );
     assert!(
-        text.contains("--cwd=<root>") && text.contains(".turbo/tools"),
+        text.contains("--cwd=<root>") && text.contains("managed tools"),
         "{text}"
     );
     assert!(text.contains("inner"), "{text}");
@@ -1036,7 +1052,7 @@ fn npm_and_pnpm_wrapper_environments_and_custom_registries_do_not_affect_setup()
 }
 
 /// A managed Node/pnpm repository whose `turbo.lock` records `.nvmrc` and
-/// `package.json#/packageManager`. Returns the tools a healthy generation
+/// `package.json#/packageManager`. Returns the tools a healthy installation
 /// holds.
 #[cfg(all(
     any(target_arch = "x86_64", target_arch = "aarch64"),
@@ -1094,17 +1110,18 @@ fn managed_fixture(root: &Path) -> Vec<turborepo_tool_install::Tool> {
     vec![node.inventory_tool().clone(), pnpm.inventory_tool().clone()]
 }
 
-/// Seed a repo-local generation through the real Store/adapter contract.
-/// Production has no loopback override; the CLI library fixtures separately
-/// exercise actual downloads. Executables fail loudly if anything probes them.
+/// Install the fixture's tools into its tool store and record them, as setup
+/// does. Production has no loopback override; the CLI library fixtures
+/// separately exercise actual downloads. Executables fail loudly if anything
+/// probes them.
 #[cfg(all(
     any(target_arch = "x86_64", target_arch = "aarch64"),
     any(target_os = "macos", all(target_os = "linux", target_env = "gnu"))
 ))]
-fn seed_generation(
+fn seed_installation(
     root: &Path,
     tools: &[turborepo_tool_install::Tool],
-) -> turborepo_tool_install::Current {
+) -> turborepo_cli::test_support::RecordedInstallation {
     use std::os::unix::fs::PermissionsExt;
     let stage = |tool: &turborepo_tool_install::Tool, destination: &Path| {
         for relative in tool.tree_files() {
@@ -1116,12 +1133,7 @@ fn seed_generation(
         fs::write(destination.join("resource"), "adjacent resource")?;
         Ok::<_, turborepo_tool_install::Error>(())
     };
-    let mut store = turborepo_tool_install::Store::open(root).expect("open tool store");
-    store.reconcile(tools, stage).expect("seed generation");
-    store
-        .current()
-        .expect("read generation")
-        .expect("current generation")
+    common::setup::install_tools(root, &tool_store(root), tools.to_vec(), None, stage)
 }
 
 /// The real `turbo prune` binary, without network or writes to the source.
@@ -1196,15 +1208,15 @@ fn pruned_outputs_pass_real_setup_check_against_their_own_lock() {
                 );
             }
             // Ignored installation state is never copied: each output gets its
-            // own setup, so the check first reports the missing generation.
+            // own setup, so the check first reports the missing installation.
             assert!(!pruned.join(".turbo").exists());
             check_failure(
                 &pruned,
                 &["setup", "--check", "--tools-only"],
                 true,
-                "managed installation is missing; run turbo setup",
+                "is not installed in the tool store; run turbo setup",
             );
-            let current = seed_generation(&pruned, &tools);
+            let current = seed_installation(&pruned, &tools);
             for ci in [false, true] {
                 for words in [
                     &["setup", "--check", "--tools-only"][..],
@@ -1223,15 +1235,12 @@ fn pruned_outputs_pass_real_setup_check_against_their_own_lock() {
                     proven += 1;
                 }
             }
-            turborepo_setup::test_support::damage(
-                &current.bin.join("../tools/pnpm/resource"),
-                "damage",
-            );
+            turborepo_setup::test_support::damage(&current.tree("pnpm").join("resource"), "damage");
             check_failure(
                 &pruned,
                 &["setup", "--check", "--tools-only", "--offline"],
                 false,
-                "managed installation is damaged or unsafe; run turbo setup",
+                "changed since turbo setup installed it; run turbo setup --force",
             );
         }
     }
@@ -1291,7 +1300,6 @@ fn standalone_check_and_locked_plan_report_only_node_pnpm_and_reject_damage() {
         pnpm_provision::PnpmPlan,
         test_support::OwnedSetupFixture,
     };
-    use turborepo_tool_install::Verification;
     if common::windows_arm64_host() {
         eprintln!("Skipped: managed setup refuses Windows arm64 hosts, even for x64 turbo.");
         return;
@@ -1384,7 +1392,7 @@ fn standalone_check_and_locked_plan_report_only_node_pnpm_and_reject_damage() {
                     }
                     let (code, stdout, stderr) = invoke_raw(root, &words, ci);
                     let action = if force {
-                        "reinstall (--force)"
+                        "re-verify (--force)"
                     } else if installed {
                         "reuse (healthy installation)"
                     } else {
@@ -1407,10 +1415,8 @@ fn standalone_check_and_locked_plan_report_only_node_pnpm_and_reject_damage() {
         }
     };
     assert_plans(false);
-    let mut store = turborepo_tool_install::Store::open(root).unwrap();
-    store.reconcile(&tools, stage).unwrap();
-    let current = store.current().unwrap().unwrap();
-    drop(store);
+    let current =
+        common::setup::install_tools(root, &tool_store(root), tools.to_vec(), None, stage);
     assert_plans(true);
     eprintln!(
         "Native locked-plan qualification: {}/32 positive",
@@ -1506,12 +1512,16 @@ fn standalone_check_and_locked_plan_report_only_node_pnpm_and_reject_damage() {
                     &output_root,
                     &["setup", "--check", "--tools-only"],
                     true,
-                    "managed installation is missing; run turbo setup",
+                    "is not installed in the tool store; run turbo setup",
                 );
-                // A separate repo-local generation, not copied ignored state.
-                let mut store = turborepo_tool_install::Store::open(&output_root).unwrap();
-                store.reconcile(&tools, stage).unwrap();
-                drop(store);
+                // Its own recorded installation, not copied ignored state.
+                let installed = common::setup::install_tools(
+                    &output_root,
+                    &tool_store(&output_root),
+                    tools.to_vec(),
+                    None,
+                    stage,
+                );
                 let (code, text) = invoke(
                     &output_root,
                     &["setup", "--check", "--tools-only", "--offline"],
@@ -1524,9 +1534,7 @@ fn standalone_check_and_locked_plan_report_only_node_pnpm_and_reject_damage() {
                 let before = snapshot(pruned.root().parent().unwrap());
                 let sources = Snapshot::capture(&output_root).unwrap();
                 pruned.policy_at(&output_root).unwrap();
-                let plan =
-                    ActivationPlan::captured(&sources, context.clone(), Verification::Shallow)
-                        .unwrap();
+                let plan = ActivationPlan::captured(&sources, context.clone()).unwrap();
                 assert_eq!(plan.tools(), tools);
                 pruned.policy_at(&output_root).unwrap();
                 sources.ensure_current().unwrap();
@@ -1535,30 +1543,35 @@ fn standalone_check_and_locked_plan_report_only_node_pnpm_and_reject_damage() {
                     "Real prune output {}: owned typed Node/pnpm readiness passed",
                     output_root.display()
                 );
+                // Damage inside a tree is for `--check` to find, read-only.
                 turborepo_setup::test_support::damage(
-                    &plan.path_prepend().join("../tools/pnpm/resource"),
+                    &installed.tree("pnpm").join("resource"),
                     "damage",
                 );
                 let damaged = snapshot(pruned.root().parent().unwrap());
-                assert!(matches!(
-                    ActivationPlan::captured(&sources, context.clone(), Verification::Full),
-                    Err(turborepo_setup::activation::Error::DamagedInventory(_))
-                ));
+                check_failure(
+                    &output_root,
+                    &["setup", "--check", "--tools-only", "--offline"],
+                    true,
+                    "changed since turbo setup installed it; run turbo setup --force",
+                );
                 assert_eq!(snapshot(pruned.root().parent().unwrap()), damaged);
             }
         }
         assert!(matches!(monitor.accept(), Err(e) if e.kind() == io::ErrorKind::WouldBlock));
     }
-    turborepo_setup::test_support::damage(&current.bin.join("../tools/pnpm/resource"), "damage");
+    turborepo_setup::test_support::damage(&current.tree("pnpm").join("resource"), "damage");
     check_failure(
         root,
         &["setup", "--check", "--tools-only"],
         true,
-        "managed installation is damaged or unsafe; run turbo setup",
+        "changed since turbo setup installed it; run turbo setup --force",
     );
-    for corrupt_manifest in [false, true] {
-        if corrupt_manifest {
-            write(root, ".turbo/tools/manifest.json", "invalid");
+    // A plan reads the environment's shims and seals, like run and exec; damage
+    // inside a tree is for `--check` to find.
+    for unsealed in [false, true] {
+        if unsealed {
+            fs::remove_file(current.bin.with_file_name("seal.json")).unwrap();
         }
         for force in [false, true] {
             let mut words = vec!["setup", "--plan", "--tools-only", "--offline"];
@@ -1566,22 +1579,14 @@ fn standalone_check_and_locked_plan_report_only_node_pnpm_and_reject_damage() {
                 words.push("--force");
             }
             let (code, stdout, stderr) = invoke_raw(root, &words, true);
-            if corrupt_manifest {
-                assert_eq!(code, 1, "{stderr}");
-                assert_eq!(stdout, "");
-                assert!(
-                    diagnostic_contains(&stderr, "managed installation is damaged or unsafe"),
-                    "{stderr}"
-                );
-            } else {
-                assert_eq!(code, 0, "{stderr}");
-                assert_eq!(stderr, "");
-                assert!(stdout.contains(if force {
-                    "reinstall (--force)"
-                } else {
-                    "reuse (healthy installation)"
-                }));
-            }
+            assert_eq!(code, 0, "{stderr}");
+            assert_eq!(stderr, "");
+            let action = match (force, unsealed) {
+                (true, _) => "re-verify (--force)",
+                (false, true) => "repair (damaged installation)",
+                (false, false) => "reuse (healthy installation)",
+            };
+            assert!(stdout.contains(action), "{stdout}");
         }
     }
 }
@@ -1592,7 +1597,7 @@ fn standalone_check_and_locked_plan_report_only_node_pnpm_and_reject_damage() {
 ))]
 #[test]
 fn plain_setup_provisions_tools_and_reports_dependencies_skipped() {
-    use std::os::unix::fs::{DirBuilderExt, MetadataExt, PermissionsExt};
+    use std::os::unix::fs::PermissionsExt;
 
     use sha2::{Digest, Sha256};
     use turborepo_setup::{
@@ -1632,27 +1637,10 @@ fn plain_setup_provisions_tools_and_reports_dependencies_skipped() {
         .unwrap()
         .unwrap();
     let pnpm = PnpmPlan::from_declaration(&lock, platform, &node, &declaration).unwrap();
-    // Seed the locked generation so frozen setup reuses it without downloads;
-    // the CLI library fixtures cover actual downloads.
-    let mut store = turborepo_tool_install::Store::open(root).unwrap();
-    store
-        .reconcile(
-            &[node.inventory_tool().clone(), pnpm.inventory_tool().clone()],
-            |tool, destination| {
-                for relative in tool.tree_files() {
-                    let file = destination.join(relative);
-                    fs::create_dir_all(file.parent().unwrap())?;
-                    fs::write(&file, "#!/bin/sh\ntouch probe-ran\nexit 99\n")?;
-                    fs::set_permissions(file, fs::Permissions::from_mode(0o755))?;
-                }
-                Ok::<_, turborepo_tool_install::Error>(())
-            },
-        )
-        .unwrap();
-    // Seed setup's private user receipt as well as its synthetic installation.
-    // Repo-writable inventory alone must never authorize reuse. Library fixtures
-    // cover verified downloads and receipt publication; this fixture observes
-    // the real binary's plain/frozen/check reporting without traffic or probes.
+    // Install and record the locked tools in the user's store so frozen setup
+    // reuses them without downloads; the CLI library fixtures cover actual
+    // downloads and record publication. This fixture observes the real
+    // binary's plain/frozen/check reporting without traffic or probes.
     let home = tempfile::tempdir().unwrap();
     fs::set_permissions(home.path(), fs::Permissions::from_mode(0o700)).unwrap();
     let user_data = home.path().join(if cfg!(target_os = "macos") {
@@ -1660,45 +1648,43 @@ fn plain_setup_provisions_tools_and_reports_dependencies_skipped() {
     } else {
         ".local/share"
     });
-    let canonical_root = root.canonicalize().unwrap();
-    let records = user_data.join("turborepo/tools/repos").join(format!(
-        "{:x}",
-        Sha256::digest(canonical_root.as_os_str().as_encoded_bytes())
-    ));
-    // Keep every fixture-owned state ancestor private even with umask 0002.
-    fs::DirBuilder::new()
-        .recursive(true)
-        .mode(0o700)
-        .create(&records)
-        .unwrap();
-    fs::set_permissions(&records, fs::Permissions::from_mode(0o700)).unwrap();
-    assert!(!records.starts_with(&canonical_root));
-    assert_eq!(
-        fs::metadata(&records).unwrap().permissions().mode() & 0o077,
-        0
-    );
-    let identity = fs::metadata(&canonical_root).unwrap();
-    let current = store.current().unwrap().unwrap();
-    let record = serde_json::json!({
-        "schema": 1,
-        "lock_sha256": format!("{:x}", Sha256::digest(fs::read(root.join("turbo.lock")).unwrap())),
-        "installation": {
-            "root": canonical_root,
-            "device": identity.dev(),
-            "inode": identity.ino(),
-            "manifest_sha256": format!("{:x}", Sha256::digest(fs::read(root.join(".turbo/tools/manifest.json")).unwrap())),
-            "bin": current.bin,
-            "tools": current.tools,
+    let store = common::setup::user_tool_store(home.path(), Some(&user_data));
+    let installed = common::setup::install_tools(
+        root,
+        &store,
+        vec![node.inventory_tool().clone(), pnpm.inventory_tool().clone()],
+        None,
+        |tool, destination| {
+            for relative in tool.tree_files() {
+                let file = destination.join(relative);
+                fs::create_dir_all(file.parent().unwrap())?;
+                fs::write(&file, "#!/bin/sh\ntouch probe-ran\nexit 99\n")?;
+                fs::set_permissions(file, fs::Permissions::from_mode(0o755))?;
+            }
+            Ok::<_, turborepo_tool_install::Error>(())
         },
-    });
-    let receipt = records.join("record.json");
-    fs::write(&receipt, serde_json::to_vec(&record).unwrap()).unwrap();
-    fs::set_permissions(&receipt, fs::Permissions::from_mode(0o600)).unwrap();
+    );
+    let canonical_root = root.canonicalize().unwrap();
+    assert!(!installed.bin.starts_with(&canonical_root));
+    let record: serde_json::Value = serde_json::from_slice(&installed.record).unwrap();
+    assert_eq!(
+        record["lock_sha256"],
+        format!(
+            "{:x}",
+            Sha256::digest(fs::read(root.join("turbo.lock")).unwrap())
+        )
+    );
+    let receipt = store
+        .join("repos")
+        .join(format!(
+            "{:x}",
+            Sha256::digest(canonical_root.as_os_str().as_encoded_bytes())
+        ))
+        .join("record.json");
     assert_eq!(
         fs::metadata(&receipt).unwrap().permissions().mode() & 0o077,
         0
     );
-    drop(store);
     let git = which::which("git").unwrap();
     assert!(
         Command::new(&git)
@@ -2326,7 +2312,7 @@ fn python_frozen_setup_requires_and_checks_the_uv_lock_read_only() {
             root,
             &["setup", "--check", "--tools-only"],
             ci,
-            "managed installation is missing; run turbo setup",
+            "is not installed in the tool store; run turbo setup",
         );
     }
     assert!(!root.join(".turbo").exists());

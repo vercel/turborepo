@@ -2,7 +2,7 @@
 //! owns npm/npx. Matching native pins use `bundled_npm`: Node remains the sole
 //! resource/executable owner, with a separate npm resolution identity.
 
-use turborepo_tool_install::{Store, Tool};
+use turborepo_tool_install::{SetupSession, Tool};
 
 pub use crate::registry_provision::{
     Error, PreparedRegistry as PreparedNpm, RegistryTransport as NpmTransport,
@@ -81,7 +81,7 @@ impl NpmPlan {
     /// Force verifies fresh bytes without changing the selected resolution.
     pub async fn prepare(
         &self,
-        store: &Store,
+        store: &SetupSession<'_>,
         desired: &[Tool],
         transport: &NpmTransport,
         preparation: crate::Preparation,
@@ -93,7 +93,7 @@ impl NpmPlan {
     /// SAME complete cohort, including Node even when it is not installed yet.
     pub async fn prepare_if_needed(
         &self,
-        store: &Store,
+        store: &SetupSession<'_>,
         desired: &[Tool],
         transport: &NpmTransport,
     ) -> Result<Option<PreparedNpm>, Error> {

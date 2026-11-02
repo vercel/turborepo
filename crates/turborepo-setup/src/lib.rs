@@ -46,6 +46,7 @@ pub mod rust_resolution;
 pub mod rustup;
 pub mod rustup_provision;
 pub mod source_policy;
+mod staging;
 pub mod uv;
 pub mod uv_discovery;
 pub mod uv_metadata;
@@ -56,6 +57,9 @@ pub mod version_managers;
 pub mod version_request;
 pub mod writer_storage;
 pub mod yarn_provision;
+
+#[cfg(test)]
+mod test_store;
 
 /// Locked artifact preparation policy; never changes resolution or health
 /// evidence.

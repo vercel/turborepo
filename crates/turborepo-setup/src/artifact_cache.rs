@@ -1,12 +1,11 @@
 //! Shared, content-addressed cache of verified setup downloads: archive bytes
-//! only, never extracted trees, shims, or anything on a PATH. Every repository
-//! still extracts into its own `.turbo/tools` generation, so activation stays
-//! repository-scoped. Entries are keyed by the lock's artifact identity
-//! (platform key plus trusted SHA-256), and every read re-verifies that digest.
-//! Writers publish complete verified files by atomic rename, so concurrent
-//! writers and interrupted downloads never expose partial bytes. Hits and lock
-//! references record their last use for age-based pruning. No network or
-//! cross-process locking.
+//! only, never extracted trees, shims, or anything on a PATH; installed trees
+//! live in the user tool store. Entries are keyed by the lock's artifact
+//! identity (platform key plus trusted SHA-256), and every read re-verifies
+//! that digest. Writers publish complete verified files by atomic rename, so
+//! concurrent writers and interrupted downloads never expose partial bytes.
+//! Hits and lock references record their last use for age-based pruning. No
+//! network or cross-process locking.
 
 use std::{
     fs::{self, File},

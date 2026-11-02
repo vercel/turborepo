@@ -2,7 +2,6 @@
 use std::os::unix::fs::{PermissionsExt, symlink};
 
 use turborepo_setup::activation::ActivationPlan;
-use turborepo_tool_install::Store;
 
 use super::{checks::snapshot, *};
 
@@ -38,7 +37,7 @@ fn attempt(f: &Fixture, u: &LoopbackServer, flags: &[&str]) -> Result<i32, Error
     result
 }
 fn unavailable(f: &Fixture, u: &LoopbackServer) -> Error {
-    // Offline force has no other reinstall source than verified local bytes.
+    // Offline force has no other repair source than verified local bytes.
     let forced = attempt(f, u, OFFLINE_FORCE).unwrap_err();
     let error = attempt(f, u, OFFLINE).unwrap_err();
     assert_eq!(forced.to_string(), error.to_string());
@@ -74,7 +73,7 @@ fn healthy_offline_repeat_uses_trusted_bytes_without_writes_locks_traffic_or_pro
         .unwrap();
         fs::write(f.owned.root().join("pnpm-lock.yaml"), "dependency sentinel").unwrap();
         // Prove repeat doesn't recreate even an absent producer lock file.
-        fs::remove_file(f.owned.root().join(".turbo/tools/transaction.lock")).unwrap();
+        fs::remove_file(f.owned.home().join("gc.lock")).unwrap();
         let empty = LoopbackServer::new([], |_| {}).unwrap();
         // Plain --offline also installs locked dependencies, which this
         // fixture's pnpm cannot run; dependency offline installs have their
@@ -86,12 +85,7 @@ fn healthy_offline_repeat_uses_trusted_bytes_without_writes_locks_traffic_or_pro
         ] {
             assert_eq!(attempt(&f, &empty, flags).unwrap(), 0);
         }
-        assert!(
-            !f.owned
-                .root()
-                .join(".turbo/tools/transaction.lock")
-                .exists()
-        );
+        assert!(!f.owned.home().join("gc.lock").exists());
         for file in ["package-lock.json", "pnpm-lock.yaml"] {
             assert_eq!(
                 fs::read(f.owned.root().join(file)).unwrap(),
@@ -103,7 +97,7 @@ fn healthy_offline_repeat_uses_trusted_bytes_without_writes_locks_traffic_or_pro
 }
 
 #[test]
-fn offline_force_reinstalls_trusted_cohorts_and_preserves_sources_dependencies_and_environment() {
+fn offline_force_reverifies_trusted_cohorts_and_preserves_sources_dependencies_and_environment() {
     for node_only in [false, true] {
         let mut f = Fixture::new();
         if node_only {
@@ -123,12 +117,12 @@ fn offline_force_reinstalls_trusted_cohorts_and_preserves_sources_dependencies_a
         let declaration = fs::read(f.owned.root().join("package.json")).unwrap();
         let environment: std::collections::BTreeMap<_, _> = std::env::vars_os().collect();
         let empty = LoopbackServer::new([], |_| {}).unwrap();
-        // Repeated forced reinstalls; plain --offline --force would also
+        // Repeated forced re-verification; plain --offline --force would also
         // install locked dependencies, which this fixture's pnpm cannot run.
         for _ in 0..2 {
             let before = f.manifest().unwrap();
             assert_eq!(f.run(&empty, OFFLINE_FORCE).unwrap(), 0);
-            assert_ne!(f.manifest().unwrap(), before);
+            assert_eq!(f.manifest().unwrap(), before);
             let authorization = super::super::authorization::Authorization::inspect(
                 f.owned.root(),
                 Some(f.owned.home()),
@@ -138,7 +132,7 @@ fn offline_force_reinstalls_trusted_cohorts_and_preserves_sources_dependencies_a
             .unwrap();
             assert_eq!(
                 authorization
-                    .with_current(|plan| plan.tools().len())
+                    .with_current(|plan, _| plan.tools().len())
                     .unwrap(),
                 if node_only { 1 } else { 2 }
             );
@@ -172,7 +166,7 @@ fn offline_force_reinstalls_trusted_cohorts_and_preserves_sources_dependencies_a
 #[test]
 fn unsafe_storage_reports_complete_urls_hashes_and_repair_limits_without_effects() {
     let empty = LoopbackServer::new([], |_| {}).unwrap();
-    for path in [".turbo", ".turbo/tools"] {
+    for path in [".turbo", ".turbo/setup-lock"] {
         for link in [false, true] {
             let f = Fixture::new();
             let destination = f.owned.root().join(path);
@@ -208,13 +202,13 @@ fn missing_and_damaged_installations_report_the_complete_unverified_artifact_set
     assert!(!fresh.owned.home().join("repos").exists());
     for case in 0..5 {
         let f = installed();
-        let current = Store::inspect(f.owned.root()).unwrap().unwrap();
+        let current = Installed::open(&f.owned).current().unwrap().unwrap();
         match case {
-            0 => fs::remove_file(f.owned.root().join(".turbo/tools/manifest.json")).unwrap(),
-            1 => fs::remove_file(current.bin.join("../tools/node/bin/node")).unwrap(),
-            2 => fs::remove_file(current.bin.join("../tools/pnpm/dist/resource")).unwrap(),
+            0 => fs::remove_dir_all(current.bin.parent().unwrap()).unwrap(),
+            1 => fs::remove_file(current.tree("node").join("bin/node")).unwrap(),
+            2 => fs::remove_file(current.tree("pnpm").join("dist/resource")).unwrap(),
             3 => turborepo_setup::test_support::damage(
-                &current.bin.join("../tools/node/resource"),
+                &current.tree("node").join("resource"),
                 "damaged",
             ),
             _ => fs::remove_file(current.bin.join("pnpx")).unwrap(),
@@ -242,7 +236,7 @@ fn missing_corrupt_unsafe_and_stale_external_evidence_never_becomes_offline_auth
             5 => fs::write(f.owned.root().join("turbo.lock"), format!("{}\n", f.lock)).unwrap(),
             _ => {
                 let mut value: Value = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
-                value["installation"]["inode"] = json!(0);
+                value["inode"] = json!(0);
                 fs::write(&path, value.to_string()).unwrap();
             }
         }
@@ -251,44 +245,11 @@ fn missing_corrupt_unsafe_and_stale_external_evidence_never_becomes_offline_auth
             ActivationPlan::captured(
                 &turborepo_setup::lock::Snapshot::capture(f.owned.root()).unwrap(),
                 check::context().unwrap(),
-                turborepo_tool_install::Verification::Shallow,
             )
             .is_ok()
         );
         unavailable(&f, &empty);
     }
-}
-
-#[test]
-fn coherent_repository_only_forgery_is_healthy_but_never_authorized_offline() {
-    let f = installed();
-    let tools = Store::inspect(f.owned.root()).unwrap().unwrap().tools;
-    Store::open(f.owned.root())
-        .unwrap()
-        .force_reconcile_checked(
-            &tools,
-            |tool, root| {
-                for path in tool.tree_files() {
-                    let file = root.join(path);
-                    fs::create_dir_all(file.parent().unwrap())?;
-                    fs::write(&file, "#!/bin/sh\ntouch probe-ran\nexit 91\n")?;
-                    fs::set_permissions(&file, fs::Permissions::from_mode(0o755))?;
-                }
-                Ok(())
-            },
-            || Ok(()),
-        )
-        .unwrap();
-    assert!(
-        ActivationPlan::captured(
-            &turborepo_setup::lock::Snapshot::capture(f.owned.root()).unwrap(),
-            check::context().unwrap(),
-            turborepo_tool_install::Verification::Shallow,
-        )
-        .is_ok()
-    );
-    let empty = LoopbackServer::new([], |_| {}).unwrap();
-    unavailable(&f, &empty);
 }
 
 #[test]
@@ -380,12 +341,16 @@ fn offline_repeat_rechecks_original_sources_discovery_and_trust_before_success()
 }
 
 #[test]
-fn offline_repeat_does_not_wait_for_writer_or_store_guards() {
+fn offline_repeat_does_not_wait_for_writer_or_store_leases() {
     let f = installed();
     let empty = LoopbackServer::new([], |_| {}).unwrap();
     let sources = f.sources().unwrap();
     let writer = sources.guard().unwrap();
-    let store = Store::open(f.owned.root()).unwrap();
+    let installed = Installed::open(&f.owned);
+    let store = installed
+        .store
+        .begin_setup(f.owned.root(), turborepo_tool_install::Reuse::Sealed)
+        .unwrap();
     std::thread::scope(|scope| {
         let (tx, rx) = std::sync::mpsc::channel();
         let fixture = &f;

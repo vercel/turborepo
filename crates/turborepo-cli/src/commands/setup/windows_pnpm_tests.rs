@@ -1,7 +1,7 @@
 //! Native Windows x64 pnpm 11 (ES module entry points on the managed node.exe)
 //! and pnpm 12 (the verified `@pnpm/exe.win32-x64` binary beside its wrapper's
 //! `dist/`), through portable lock creation and reuse. Local fixtures only.
-use turborepo_setup::activation::ActivationPlan;
+use turborepo_tool_install::Activation;
 
 use super::*;
 
@@ -37,7 +37,7 @@ fn declare(f: &Fixture, version: &str) {
 
 /// Local setup creates the lock, then frozen, local and check repeats make no
 /// requests. Returns the activation and its sorted bin exports.
-fn provision(f: &Fixture, routes: Vec<(String, Vec<u8>)>) -> (ActivationPlan, Vec<String>) {
+fn provision(f: &Fixture, routes: Vec<(String, Vec<u8>)>) -> (Activation, Vec<String>) {
     let u = f.upstream_with(routes);
     assert_eq!(f.run(&u, LOCAL).unwrap(), 0);
     let (hits, manifest) = (u.hits(), f.manifest());
@@ -46,18 +46,18 @@ fn provision(f: &Fixture, routes: Vec<(String, Vec<u8>)>) -> (ActivationPlan, Ve
     }
     assert_eq!(u.hits(), hits);
     assert_eq!(f.manifest(), manifest);
-    let plan = f.plan();
-    let mut names: Vec<_> = fs::read_dir(plan.path_prepend())
+    let activation = f.activation();
+    let mut names: Vec<_> = fs::read_dir(activation.bin())
         .unwrap()
         .map(|e| e.unwrap().file_name().into_string().unwrap())
         .collect();
     names.sort();
-    (plan, names)
+    (activation, names)
 }
 
 /// The generated bin forwarder; pnpm's own tree holds no launchers.
-fn launcher(plan: &ActivationPlan, name: &str) -> String {
-    fs::read_to_string(plan.path_prepend().join(format!("{name}.cmd"))).unwrap()
+fn launcher(activation: &Activation, name: &str) -> String {
+    fs::read_to_string(activation.bin().join(format!("{name}.cmd"))).unwrap()
 }
 
 /// Node and its bundled npm, then the four pnpm names.
@@ -82,8 +82,10 @@ fn pnpm_11_runs_its_module_entry_points_on_the_managed_node() {
     ]);
     let f = Fixture::new(false);
     declare(&f, version);
-    let (plan, names) = provision(&f, package("pnpm", version, bytes).into());
+    let (activation, names) = provision(&f, package("pnpm", version, bytes).into());
     assert_eq!(names, EXPORTS);
+    let installed = f.installed();
+    let (node, pnpm) = (&installed.trees["node"], &installed.trees["pnpm"]);
     for (name, entry) in [
         ("pnpm", "pnpm"),
         ("pn", "pnpm"),
@@ -91,14 +93,15 @@ fn pnpm_11_runs_its_module_entry_points_on_the_managed_node() {
         ("pnx", "pnpx"),
     ] {
         assert_eq!(
-            launcher(&plan, name),
+            launcher(&activation, name),
             format!(
-                "@\"%~dp0..\\tools\\node\\node.exe\" \"%~dp0..\\tools\\pnpm\\bin\\{entry}.mjs\" \
-                 %*\r\n"
+                "@\"{}\\node.exe\" \"{}\\bin\\{entry}.mjs\" %*\r\n",
+                node.display(),
+                pnpm.display()
             )
         );
     }
-    let path = plan.path(Some(system32().as_os_str())).unwrap();
+    let path = activation.path(Some(system32().as_os_str())).unwrap();
     for (code, name) in NAMES.iter().enumerate() {
         let line = format!("{name} /d /c exit {}", code + 10);
         assert_eq!(exit_code(&path, &line), Some(code as i32 + 10), "{name}");
@@ -150,7 +153,7 @@ fn pnpm_12_locks_every_platform_and_runs_the_windows_binary_beside_its_wrapper()
     }
     let f = Fixture::new(false);
     declare(&f, version);
-    let (plan, names) = provision(&f, routes);
+    let (activation, names) = provision(&f, routes);
     assert_eq!(names, EXPORTS);
 
     // Every platform is locked, so a new host never mutates the lock.
@@ -173,7 +176,7 @@ fn pnpm_12_locks_every_platform_and_runs_the_windows_binary_beside_its_wrapper()
 
     // The binary sits at the wrapper's own Windows Corepack location, beside
     // `dist/`, and launchers run it by that path, never a bin hard link.
-    let tools = plan.path_prepend().join("../tools/pnpm");
+    let tools = f.installed().trees["pnpm"].clone();
     assert_eq!(fs::read(tools.join("pnpm-native.exe")).unwrap(), windows);
     assert!(tools.join("dist/node-gyp-bin/node-gyp.cmd").is_file());
     assert!(!tools.join("pnpm-native").exists());
@@ -184,11 +187,11 @@ fn pnpm_12_locks_every_platform_and_runs_the_windows_binary_beside_its_wrapper()
             ""
         };
         assert_eq!(
-            launcher(&plan, name),
-            format!("@\"%~dp0..\\tools\\pnpm\\pnpm-native.exe\"{dlx} %*\r\n")
+            launcher(&activation, name),
+            format!("@\"{}\\pnpm-native.exe\"{dlx} %*\r\n", tools.display())
         );
     }
-    let path = plan.path(Some(system32().as_os_str())).unwrap();
+    let path = activation.path(Some(system32().as_os_str())).unwrap();
     for (code, name) in NAMES.iter().enumerate() {
         let line = format!("{name} /d /c exit {}", code + 20);
         assert_eq!(exit_code(&path, &line), Some(code as i32 + 20), "{name}");

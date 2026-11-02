@@ -119,10 +119,10 @@ fn exec_check_and_hook_expose_the_tool_and_stale_states_never_fall_back() {
     let store = turborepo_tool_install::UserStore::at(f.owned.home(), root).unwrap();
     let trust = TrustStore::new(&store, &root.canonicalize().unwrap()).unwrap();
     let recorded = trust.recorded().unwrap().unwrap();
-    assert!(!recorded.stale && recorded.bin.join("fixture").is_file());
+    assert!(!recorded.stale && recorded.activation.bin().join("fixture").is_file());
 
     // A deleted export is a repair, never a download or a host fallback.
-    fs::remove_file(recorded.bin.join("fixture")).unwrap();
+    fs::remove_file(recorded.activation.bin().join("fixture")).unwrap();
     let error = select(&f).err().unwrap();
     assert!(error.contains("run turbo setup to repair"), "{error}");
     assert!(matches!(

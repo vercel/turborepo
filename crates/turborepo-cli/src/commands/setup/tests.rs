@@ -244,13 +244,70 @@ impl Fixture {
     fn sources(&self) -> Result<Snapshot, StorageError> {
         Snapshot::capture_with(self.owned.root(), Ecosystems::default())
     }
+    /// The repository's record: setup rewrites it only when what it binds
+    /// changes.
     fn manifest(&self) -> Option<Vec<u8>> {
-        fs::read(self.owned.root().join(".turbo/tools/manifest.json")).ok()
+        Installed::open(&self.owned).record()
     }
     fn no_execution(&self) {
         for path in ["node_modules", "task-ran", "hook-ran", "probe-ran"] {
             assert!(!self.owned.root().join(path).exists());
         }
+    }
+}
+/// The installation setup recorded for a fixture root in its tool store.
+struct Installed {
+    root: PathBuf,
+    store: turborepo_tool_install::UserStore,
+}
+/// The environment the record names: its tools, bin and tree roots.
+struct Current {
+    tools: Vec<turborepo_tool_install::Tool>,
+    bin: PathBuf,
+    /// The repository's stable link to `bin`, which `.turbo/bin` names.
+    stable_bin: PathBuf,
+    trees: std::collections::BTreeMap<String, PathBuf>,
+    /// A `--no-lock` clone's recorded selection.
+    record: Option<SelectionBytes>,
+}
+struct SelectionBytes(Vec<u8>);
+impl SelectionBytes {
+    fn bytes(&self) -> &[u8] {
+        &self.0
+    }
+}
+impl Current {
+    fn tree(&self, id: &str) -> &std::path::Path {
+        &self.trees[id]
+    }
+    /// How a Unix launcher names `path` in `id`'s tree.
+    fn launched(&self, id: &str, path: &str) -> String {
+        let key = self.tree(id).parent().unwrap().file_name().unwrap();
+        format!("\"$store\"'/trees/{}/root/{path}'", key.to_str().unwrap())
+    }
+}
+impl Installed {
+    fn open(owned: &OwnedSetupFixture) -> Self {
+        let root = owned.root().canonicalize().unwrap();
+        let store = trust::user_store(Some(owned.home()), &root).unwrap();
+        Self { root, store }
+    }
+    fn trust(&self) -> trust::TrustStore {
+        trust::TrustStore::new(&self.store, &self.root).unwrap()
+    }
+    fn record(&self) -> Option<Vec<u8>> {
+        fs::read(self.trust().path()).ok()
+    }
+    fn current(&self) -> Result<Option<Current>, turborepo_tool_install::Error> {
+        let installed = super::recorded_installation_for_tests(&self.root, self.store.root())
+            .map_err(|e| turborepo_tool_install::Error::Io(std::io::Error::other(e)))?;
+        Ok(installed.map(|installed| Current {
+            tools: installed.tools,
+            bin: installed.bin,
+            stable_bin: installed.stable_bin,
+            trees: installed.trees,
+            record: installed.selection.map(SelectionBytes),
+        }))
     }
 }
 struct Upstream(LoopbackServer);
@@ -410,15 +467,15 @@ fn frozen_node_pnpm_command_repeat_is_noop_and_preserves_complete_resources() {
     assert_eq!(f.run(&u, FROZEN).unwrap(), 0);
     assert_eq!(u.hits(), 3);
     let manifest = f.manifest().unwrap();
-    let store = turborepo_tool_install::Store::open(f.owned.root()).unwrap();
+    let store = Installed::open(&f.owned);
     let current = store.current().unwrap().unwrap();
     assert_eq!(current.tools.len(), 2);
     assert_eq!(
-        fs::read(current.bin.join("../tools/node/resource")).unwrap(),
+        fs::read(current.tree("node").join("resource")).unwrap(),
         b"node resource"
     );
     assert_eq!(
-        fs::read(current.bin.join("../tools/pnpm/dist/resource")).unwrap(),
+        fs::read(current.tree("pnpm").join("dist/resource")).unwrap(),
         b"pnpm resource"
     );
     drop(store);
@@ -730,7 +787,7 @@ fn late_failures_preserve_previous_inventory_and_never_publish_partial_node() {
         assert!(f.run(&u, FROZEN).is_err(), "case {case}");
         assert_eq!(u.hits(), 3);
         assert_eq!(f.manifest().unwrap(), selected);
-        let store = turborepo_tool_install::Store::open(f.owned.root()).unwrap();
+        let store = Installed::open(&f.owned);
         assert_eq!(store.current().unwrap().unwrap().tools.len(), 2);
         f.no_execution();
     }
@@ -739,15 +796,9 @@ fn late_failures_preserve_previous_inventory_and_never_publish_partial_node() {
     assert!(f.run(&u, FROZEN).is_err());
     assert_eq!(u.hits(), 3);
     assert!(f.manifest().is_none());
-    assert!(
-        !fs::read_dir(f.owned.root().join(".turbo/tools"))
-            .unwrap()
-            .any(|e| e
-                .unwrap()
-                .file_name()
-                .to_string_lossy()
-                .starts_with("generation-"))
-    );
+    // Verification failed before publication: no tree, partial or whole.
+    let trees = fs::read_dir(f.owned.home().join("trees"));
+    assert_eq!(trees.map_or(0, |trees| trees.count()), 0);
 }
 
 #[test]

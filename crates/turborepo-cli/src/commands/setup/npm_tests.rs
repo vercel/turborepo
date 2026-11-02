@@ -21,7 +21,8 @@ fn npm_telemetry_counts_managed_owners_and_artifact_bytes() {
         for (flags, downloaded_bytes, tools_installed, tools_reused) in [
             (FROZEN, artifacts, owners, 0),
             (FROZEN, 0, 0, owners),
-            (FORCE, artifacts, owners, 0),
+            // Force re-verifies healthy trees: nothing to download.
+            (FORCE, 0, 0, owners),
         ] {
             let mut report = telemetry::Report::default();
             let result = crate::cli::dispatch_setup(&f.args(flags), |args, setup_args| {
@@ -452,38 +453,32 @@ fn npm_local_first_lock_repeat_frozen_force_and_check_use_complete_host_cohort()
         }
         assert_eq!(f.check(CHECK).unwrap(), 0);
         assert_eq!(empty.hits(), 0);
-        let current = turborepo_tool_install::Store::inspect(f.owned.root())
-            .unwrap()
-            .unwrap();
+        let current = Installed::open(&f.owned).current().unwrap().unwrap();
         assert_eq!(current.tools.len(), if bundled { 1 } else { 2 });
         assert_eq!(current.tools[0].id, "node");
         for name in ["npm", "npx"] {
             assert!(current.bin.join(name).exists());
             if !bundled {
                 let shim = fs::read_to_string(current.bin.join(name)).unwrap();
-                assert!(shim.contains("exec \"$generation\"'/tools/node/bin/node'"));
-                assert!(shim.contains(&format!("/tools/npm/bin/{name}-cli.js'")));
+                assert!(shim.contains(&format!("exec {}", current.launched("node", "bin/node"))));
+                assert!(shim.contains(&current.launched("npm", &format!("bin/{name}-cli.js"))));
             }
         }
         assert_eq!(
-            fs::read(current.bin.join("../tools/node/resource")).unwrap(),
+            fs::read(current.tree("node").join("resource")).unwrap(),
             b"complete Node resource"
         );
         if !bundled {
             assert_eq!(
-                fs::read(
-                    current
-                        .bin
-                        .join("../tools/npm/node_modules/resource/data.json")
-                )
-                .unwrap(),
+                fs::read(current.tree("npm").join("node_modules/resource/data.json")).unwrap(),
                 b"complete npm resource"
             );
         }
         let lock = fs::read(f.owned.root().join("turbo.lock")).unwrap();
         let force = n.upstream();
         assert_eq!(f.run(&force, FORCE).unwrap(), 0);
-        assert_eq!(force.hits(), if bundled { 1 } else { 3 });
+        // Healthy trees are re-verified in place.
+        assert_eq!(force.hits(), 0);
         assert!(
             force
                 .requests()
@@ -529,9 +524,7 @@ fn npm_changed_pin_preserves_node_then_removal_reconciles_both_exports() {
     fs::write(n.f.owned.root().join("package.json"), "{}").unwrap();
     assert_eq!(n.f.run(&empty, LOCAL).unwrap(), 0);
     assert_eq!(empty.hits(), 0);
-    let current = turborepo_tool_install::Store::inspect(n.f.owned.root())
-        .unwrap()
-        .unwrap();
+    let current = Installed::open(&n.f.owned).current().unwrap().unwrap();
     assert_eq!(current.tools.len(), 1);
     for name in ["npm", "npx"] {
         assert!(!current.bin.join(name).exists());
@@ -554,7 +547,8 @@ fn npm_bundled_to_independent_then_pnpm_switch_reconciles_executable_owners() {
     .unwrap();
     let u = n.upstream();
     n.f.run(&u, LOCAL).unwrap();
-    assert_eq!(u.hits(), 5); // Ownership changes restage the exact same Node artifact.
+    // Ownership is the environment's; Node's tree is reused as it is.
+    assert_eq!(u.hits(), 4);
     let after = n.lock().tools()["node"].clone();
     assert_eq!(after.version, before.version);
     let (Installation::Managed { artifacts: old }, Installation::Managed { artifacts: new }) =
@@ -581,9 +575,7 @@ fn npm_bundled_to_independent_then_pnpm_switch_reconciles_executable_owners() {
     assert_eq!(pnpm.hits(), 4);
     assert_eq!(n.lock().tools()["node"], after);
     assert!(!n.lock().tools().contains_key("npm"));
-    let current = turborepo_tool_install::Store::inspect(n.f.owned.root())
-        .unwrap()
-        .unwrap();
+    let current = Installed::open(&n.f.owned).current().unwrap().unwrap();
     for name in ["npm", "npx"] {
         assert!(!current.bin.join(name).exists());
     }
@@ -602,6 +594,14 @@ fn npm_failed_integrity_or_late_drift_never_publishes_a_partial_generation() {
         f.run(&n.upstream(), FROZEN).unwrap();
         let before = f.manifest().unwrap();
         let lock = fs::read(f.owned.root().join("turbo.lock")).unwrap();
+        // Damage both trees, so force must download and verify both again.
+        let installed = Installed::open(&f.owned).current().unwrap().unwrap();
+        for (id, path) in [
+            ("node", "resource"),
+            ("npm", "node_modules/resource/data.json"),
+        ] {
+            turborepo_setup::test_support::damage(&installed.tree(id).join(path), "damaged");
+        }
         let mut routes = n.routes();
         if case == 0 {
             routes.last_mut().unwrap().1 = b"corrupt".to_vec();
@@ -634,7 +634,8 @@ fn npm_failed_integrity_or_late_drift_never_publishes_a_partial_generation() {
         assert_eq!(f.manifest().unwrap(), before);
         assert_eq!(fs::read(f.owned.root().join("turbo.lock")).unwrap(), lock);
         assert_eq!(
-            turborepo_tool_install::Store::inspect(f.owned.root())
+            Installed::open(&f.owned)
+                .current()
                 .unwrap()
                 .unwrap()
                 .tools
@@ -733,7 +734,7 @@ fn npm_check_is_readonly_with_locks_held_and_detects_damage_and_declaration_drif
         n.f.run(&n.upstream(), FROZEN).unwrap();
         let sources = n.f.sources().unwrap();
         let writer = sources.guard().unwrap();
-        let store = turborepo_tool_install::Store::open(n.f.owned.root()).unwrap();
+        let store = Installed::open(&n.f.owned);
         std::thread::scope(|scope| {
             let (tx, rx) = std::sync::mpsc::channel();
             let f = &n.f;
@@ -744,15 +745,15 @@ fn npm_check_is_readonly_with_locks_held_and_detects_damage_and_declaration_drif
             check.join().unwrap();
             assert_eq!(result.unwrap().unwrap(), 0);
         });
-        let current = turborepo_tool_install::Store::inspect(n.f.owned.root())
-            .unwrap()
-            .unwrap();
+        let current = Installed::open(&n.f.owned).current().unwrap().unwrap();
         let resource = if bundled {
-            "../tools/node/lib/node_modules/npm/package.json"
+            current
+                .tree("node")
+                .join("lib/node_modules/npm/package.json")
         } else {
-            "../tools/npm/node_modules/resource/data.json"
+            current.tree("npm").join("node_modules/resource/data.json")
         };
-        turborepo_setup::test_support::damage(&current.bin.join(resource), "damage");
+        turborepo_setup::test_support::damage(&resource, "damage");
         let error = n.f.check(CHECK).unwrap_err().to_string();
         assert!(error.contains("turbo setup"), "{error}");
         n.f.run(&n.upstream(), FORCE).unwrap();
@@ -829,7 +830,10 @@ fn locked_npm_dependencies_install_with_managed_npm_and_repeat_safely() {
         std::path::Path::new(path.trim()).join("npm").exists(),
         "{path}"
     );
-    assert!(path.contains(".turbo"), "{path}");
+    assert!(
+        path.trim().starts_with(n.f.owned.home().to_str().unwrap()),
+        "{path}"
+    );
     assert!(root.join("node_modules/.installed").exists());
     // A repeat reruns npm ci, so removed dependencies are repaired.
     fs::remove_dir_all(root.join("node_modules")).unwrap();
@@ -953,9 +957,7 @@ fn missing_stale_and_rewritten_npm_locks_fail_readably_and_stay_unchanged() {
 
 const NO_LOCK: &[&str] = &["--no-lock", "--tools-only"];
 fn selection(f: &Fixture) -> Lock {
-    let current = turborepo_tool_install::Store::inspect(f.owned.root())
-        .unwrap()
-        .unwrap();
+    let current = Installed::open(&f.owned).current().unwrap().unwrap();
     Lock::parse(current.record.unwrap().bytes()).unwrap()
 }
 
@@ -977,18 +979,14 @@ fn npm_no_lock_provisions_bundled_or_registry_npm_that_turbo_run_activates() {
             matches!(npm.installation, Installation::Bundled { .. }),
             bundled
         );
-        let current = turborepo_tool_install::Store::inspect(root)
-            .unwrap()
-            .unwrap();
+        let current = Installed::open(&f.owned).current().unwrap().unwrap();
         assert_eq!(current.tools.len(), if bundled { 1 } else { 2 });
         // Healthy repeats keep pins and generation without traffic.
         let empty = LoopbackServer::new([], |_| {}).unwrap();
         assert_eq!(f.run(&empty, NO_LOCK).unwrap(), 0);
         assert_eq!(empty.hits(), 0);
         assert_eq!(selection(f), pinned);
-        let repeat = turborepo_tool_install::Store::inspect(root)
-            .unwrap()
-            .unwrap();
+        let repeat = Installed::open(&f.owned).current().unwrap().unwrap();
         assert_eq!(repeat.bin, current.bin);
         // Plain turbo run puts the same clone-local npm first on PATH.
         let tools = crate::commands::managed::ManagedTools::inspect(
@@ -1027,7 +1025,8 @@ fn npm_no_lock_pin_change_reconciles_owners_without_a_lock() {
     .unwrap();
     let u = n.upstream();
     n.f.run(&u, NO_LOCK).unwrap();
-    assert_eq!(u.hits(), 5); // Ownership changes restage the exact same Node artifact.
+    // Ownership is the environment's; Node's tree is reused as it is.
+    assert_eq!(u.hits(), 4);
     assert!(!root.join("turbo.lock").exists());
     let after = selection(&n.f);
     assert_eq!(after.tools()["node"].version, before.version);
@@ -1035,13 +1034,13 @@ fn npm_no_lock_pin_change_reconciles_owners_without_a_lock() {
         after.tools()["npm"].installation,
         Installation::Managed { .. }
     ));
-    let current = turborepo_tool_install::Store::inspect(&root)
-        .unwrap()
-        .unwrap();
+    let current = Installed::open(&n.f.owned).current().unwrap().unwrap();
     assert_eq!(current.tools.len(), 2);
+    let tree = current.tree("npm").parent().unwrap().file_name().unwrap();
     for name in ["npm", "npx"] {
         let shim = fs::read_to_string(current.bin.join(name)).unwrap();
-        assert!(shim.contains(&format!("/tools/npm/bin/{name}-cli.js'")));
+        let target = format!("/trees/{}/root/bin/{name}-cli.js'", tree.to_str().unwrap());
+        assert!(shim.contains(&target), "{shim}");
     }
     n.untouched();
 }

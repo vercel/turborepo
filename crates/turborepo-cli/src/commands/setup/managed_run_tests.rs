@@ -121,7 +121,7 @@ fn setup_then_run_uses_managed_node_pnpm_in_strict_and_loose_modes() {
         let first = std::env::split_paths(std::ffi::OsStr::new(&overrides["PATH"]))
             .next()
             .unwrap();
-        assert!(first.starts_with(f.owned.root()));
+        assert!(first.starts_with(f.owned.home()));
         let output = execute(&f, mode, tools);
         let lines: Vec<_> = output.lines().collect();
         assert_eq!(
@@ -308,9 +308,7 @@ fn managed_overrides_do_not_modify_host_environment_and_damage_never_falls_back(
     let tools = select(&f).unwrap().unwrap();
     let environment = tools.revalidate().unwrap();
     assert_eq!(environment.len(), 1); // PATH only; no unrelated host env exposed.
-    let current = turborepo_tool_install::Store::inspect(f.owned.root())
-        .unwrap()
-        .unwrap();
+    let current = Installed::open(&f.owned).current().unwrap().unwrap();
     fs::remove_file(current.bin.join("pnpm")).unwrap();
     assert!(tools.revalidate().is_err());
     assert!(select(&f).is_err());
@@ -319,9 +317,10 @@ fn managed_overrides_do_not_modify_host_environment_and_damage_never_falls_back(
         before
     );
     assert_eq!(u.hits(), 3);
-    f.run(&u, FROZEN).unwrap(); // Explicit setup repairs the complete cohort.
+    // Explicit setup renders the shims again from the sealed trees.
+    f.run(&u, FROZEN).unwrap();
     assert!(!execute(&f, "strict", select(&f).unwrap().unwrap()).is_empty());
-    assert_eq!(u.hits(), 6);
+    assert_eq!(u.hits(), 3);
 }
 
 #[test]
@@ -343,8 +342,10 @@ fn guidance_says_whether_setup_repairs_tools_or_updates_the_lock() {
             !ci
         );
         for error in [
-            Error::Plan(Plan::MissingInventory),
-            Error::Plan(Plan::StaleInventory),
+            Error::Store(turborepo_tool_install::Error::NotInstalled(
+                "node 24.1.0".into(),
+            )),
+            Error::Store(turborepo_tool_install::Error::Damaged("environment".into())),
             Error::Untrusted,
             Error::Changed,
         ] {
@@ -374,9 +375,7 @@ fn deleted_shims_and_declaration_drift_never_download_and_setup_recovers() {
     let u = Upstream::new(&f, false, None);
     f.run(&u, FROZEN).unwrap();
     let lock = fs::read(f.owned.root().join("turbo.lock")).unwrap();
-    let current = turborepo_tool_install::Store::inspect(f.owned.root())
-        .unwrap()
-        .unwrap();
+    let current = Installed::open(&f.owned).current().unwrap().unwrap();
     fs::remove_file(current.bin.join("node")).unwrap();
     let hits = u.hits();
     let error = select(&f).err().unwrap();
@@ -440,7 +439,7 @@ fn no_lock_setup_then_run_uses_clone_local_tools_in_strict_and_loose_modes() {
         let first = std::env::split_paths(std::ffi::OsStr::new(&overrides["PATH"]))
             .next()
             .unwrap();
-        assert!(first.starts_with(f.owned.root()));
+        assert!(first.starts_with(f.owned.home()));
         let output = execute(&f, mode, tools);
         let lines: Vec<_> = output.lines().collect();
         assert_eq!(
@@ -463,9 +462,7 @@ fn no_lock_task_hashes_never_match_the_same_tools_under_a_committed_lock() {
         .nth(2)
         .unwrap()
         .to_owned();
-    let current = turborepo_tool_install::Store::inspect(f.owned.root())
-        .unwrap()
-        .unwrap();
+    let current = Installed::open(&f.owned).current().unwrap().unwrap();
     let selection = current.record.unwrap();
     fs::write(f.owned.root().join("turbo.lock"), selection.bytes()).unwrap();
     // Setup from that lock records its digest for the same generation.
@@ -483,19 +480,23 @@ fn no_lock_run_fails_closed_with_clone_local_guidance() {
     for case in 0..4 {
         let f = clone_local();
         let root = f.owned.root();
-        let current = turborepo_tool_install::Store::inspect(root)
-            .unwrap()
-            .unwrap();
+        let current = Installed::open(&f.owned).current().unwrap().unwrap();
+        let records = || {
+            fs::read_dir(f.owned.home().join("repos"))
+                .unwrap()
+                .map(|entry| entry.unwrap().path().join("record.json"))
+        };
         match case {
             0 => fs::write(root.join(".nvmrc"), "24.1.0\n").unwrap(),
             1 => fs::remove_dir_all(current.bin.parent().unwrap()).unwrap(),
-            2 => {
-                for entry in fs::read_dir(f.owned.home().join("repos")).unwrap() {
-                    fs::remove_file(entry.unwrap().path().join("record.json")).unwrap();
-                }
-            }
-            // Removing the clone-local inventory is the opt-out.
-            _ => fs::remove_dir_all(root.join(".turbo/tools")).unwrap(),
+            // A record for another directory at this path is not this clone's.
+            2 => records().for_each(|record| {
+                let mut value: Value = serde_json::from_slice(&fs::read(&record).unwrap()).unwrap();
+                value["inode"] = json!(0);
+                fs::write(record, value.to_string()).unwrap();
+            }),
+            // Removing the clone-local record is the opt-out.
+            _ => records().for_each(|record| fs::remove_file(record).unwrap()),
         }
         match select(&f) {
             Ok(None) if case == 3 => {}

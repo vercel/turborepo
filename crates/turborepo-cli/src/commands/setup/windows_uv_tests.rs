@@ -126,6 +126,12 @@ impl Repo {
         let bin = std::env::split_paths(&env["PATH"]).next().unwrap();
         (env, bin)
     }
+    /// The recorded environment's record, tools and tree roots.
+    fn installed(&self) -> RecordedInstallation {
+        recorded_installation_for_tests(self.owned.root(), self.owned.home())
+            .unwrap()
+            .unwrap()
+    }
 }
 
 #[test]
@@ -149,7 +155,8 @@ fn frozen_setup_exports_uv_and_python_and_activation_pins_the_managed_interprete
     assert_eq!(exit_code(&path, "uvx /d /c exit 6"), Some(6));
     assert_eq!(exit_code(&path, "python /d /c exit 4"), Some(4));
     // Every uv process gets the launchers' settings, with ordinary paths.
-    let python_dir = bin.parent().unwrap().join("tools").join("python");
+    let installed = repo.installed();
+    let python_dir = &installed.trees["python"];
     assert_eq!(env["UV_PYTHON_INSTALL_DIR"], python_dir.to_str().unwrap());
     assert!(!env["UV_PYTHON_INSTALL_DIR"].starts_with(r"\\?\"));
     assert!(python_dir.join(KEY).join("python.exe").is_file());
@@ -157,15 +164,12 @@ fn frozen_setup_exports_uv_and_python_and_activation_pins_the_managed_interprete
     assert_eq!(env["UV_PYTHON"], KEY);
     assert_eq!(env["UV_PYTHON_DOWNLOADS"], "never");
     assert_eq!(env["UV_PYTHON_PREFERENCE"], "only-managed");
-    let manifest = fs::read(repo.owned.root().join(".turbo/tools/manifest.json")).unwrap();
+    let record = installed.record;
     for flags in [FROZEN, &["--check", "--tools-only", "--offline"][..]] {
         assert_eq!(repo.run(flags).unwrap(), 0);
     }
     assert_eq!(repo.upstream.hits(), 2);
-    assert_eq!(
-        fs::read(repo.owned.root().join(".turbo/tools/manifest.json")).unwrap(),
-        manifest
-    );
+    assert_eq!(repo.installed().record, record);
 }
 
 #[test]

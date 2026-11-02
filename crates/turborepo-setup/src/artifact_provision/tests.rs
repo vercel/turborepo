@@ -16,9 +16,9 @@ use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
     net::TcpListener,
 };
-use turborepo_tool_install::Outcome;
 
 use super::*;
+use crate::test_store::{Outcome, TestStore};
 
 const PLATFORM: Platform = Platform::LinuxX64Gnu;
 const SCRIPT: &str = "#!/bin/sh\necho fixture 1.2.3\n";
@@ -114,7 +114,7 @@ fn plan(tool: Value) -> ArtifactPlan {
 }
 
 async fn install(
-    store: &mut Store,
+    store: &TestStore,
     plans: &[ArtifactPlan],
     transport: &ArtifactTransport,
     preparation: Preparation,
@@ -137,8 +137,8 @@ async fn install(
     })
 }
 
-fn run(store: &Store, name: &str) -> String {
-    let bin = store.current().unwrap().unwrap().bin;
+fn run(store: &TestStore, name: &str) -> String {
+    let bin = store.bin();
     let output = std::process::Command::new(bin.join(name)).output().unwrap();
     assert!(output.status.success());
     String::from_utf8(output.stdout).unwrap()
@@ -160,25 +160,25 @@ async fn archives_install_with_resources_and_repeat_without_network() {
         "https://downloads.example.test/fixture-1.2.3.tar.gz"
     );
     let repo = tempfile::tempdir().unwrap();
-    let mut store = Store::open(repo.path()).unwrap();
+    let store = TestStore::open(repo.path());
     let ifneeded = Preparation::IfNeeded;
-    let outcome = install(&mut store, &plans, &transport, ifneeded).await;
+    let outcome = install(&store, &plans, &transport, ifneeded).await;
     assert_eq!(outcome.unwrap(), Outcome::Replaced);
     assert_eq!(run(&store, "fixture"), "fixture 1.2.3\n");
-    let current = store.current().unwrap().unwrap();
-    let tree = current.tool_tree(plans[0].inventory_tool()).unwrap();
+    let tree = store.tree_of(plans[0].inventory_tool());
     assert_eq!(
         fs::read_to_string(tree.join("share/fixture/data.txt")).unwrap(),
         "resource"
     );
     assert!(tree.join("lib/libfixture.so").is_file());
 
-    let outcome = install(&mut store, &plans, &transport, ifneeded).await;
+    let outcome = install(&store, &plans, &transport, ifneeded).await;
     assert_eq!(outcome.unwrap(), Outcome::Unchanged);
     assert_eq!(upstream.requests.load(Ordering::SeqCst), 1);
-    // Force downloads and verifies fresh bytes even for a healthy tool.
-    let outcome = install(&mut store, &plans, &transport, Preparation::Fresh).await;
-    assert_eq!(outcome.unwrap(), Outcome::Replaced);
+    // Fresh preparation downloads and verifies again; the store keeps the
+    // identical sealed tree.
+    let outcome = install(&store, &plans, &transport, Preparation::Fresh).await;
+    assert_eq!(outcome.unwrap(), Outcome::Unchanged);
     assert_eq!(upstream.requests.load(Ordering::SeqCst), 2);
 }
 
@@ -188,8 +188,8 @@ async fn binaries_install_at_their_declared_path() {
     let transport = ArtifactTransport::loopback_http_for_tests(&upstream.origin).unwrap();
     let plans = [plan(entry("1.2.3", "fixture", SCRIPT.as_bytes(), "binary"))];
     let repo = tempfile::tempdir().unwrap();
-    let mut store = Store::open(repo.path()).unwrap();
-    let outcome = install(&mut store, &plans, &transport, Preparation::IfNeeded).await;
+    let store = TestStore::open(repo.path());
+    let outcome = install(&store, &plans, &transport, Preparation::IfNeeded).await;
     assert_eq!(outcome.unwrap(), Outcome::Replaced);
     assert_eq!(run(&store, "fixture"), "fixture 1.2.3\n");
 }
@@ -207,12 +207,11 @@ async fn archives_without_a_top_level_directory_install_their_whole_tree() {
     let transport = ArtifactTransport::loopback_http_for_tests(&upstream.origin).unwrap();
     let plans = [plan(tool)];
     let repo = tempfile::tempdir().unwrap();
-    let mut store = Store::open(repo.path()).unwrap();
-    let outcome = install(&mut store, &plans, &transport, Preparation::IfNeeded).await;
+    let store = TestStore::open(repo.path());
+    let outcome = install(&store, &plans, &transport, Preparation::IfNeeded).await;
     assert_eq!(outcome.unwrap(), Outcome::Replaced);
     assert_eq!(run(&store, "fixture"), "fixture 1.2.3\n");
-    let current = store.current().unwrap().unwrap();
-    let tree = current.tool_tree(plans[0].inventory_tool()).unwrap();
+    let tree = store.tree_of(plans[0].inventory_tool());
     assert_eq!(
         fs::read_to_string(tree.join("include/fixture.proto")).unwrap(),
         "resource"
@@ -238,10 +237,10 @@ async fn failures_leave_the_previous_installation_usable() {
     .await;
     let transport = ArtifactTransport::loopback_http_for_tests(&upstream.origin).unwrap();
     let repo = tempfile::tempdir().unwrap();
-    let mut store = Store::open(repo.path()).unwrap();
+    let store = TestStore::open(repo.path());
     let ifneeded = Preparation::IfNeeded;
     let previous = [plan(entry("1.2.3", "good.tar.gz", &good, "tar-gz"))];
-    install(&mut store, &previous, &transport, ifneeded)
+    install(&store, &previous, &transport, ifneeded)
         .await
         .unwrap();
 
@@ -263,7 +262,7 @@ async fn failures_leave_the_previous_installation_usable() {
             "Install",
         ),
     ] {
-        let error = install(&mut store, &[plan(tool)], &transport, ifneeded)
+        let error = install(&store, &[plan(tool)], &transport, ifneeded)
             .await
             .unwrap_err();
         assert!(format!("{error:?}").starts_with(expected), "{error:?}");
@@ -294,14 +293,12 @@ async fn removed_tools_leave_the_next_generation() {
     )
     .unwrap();
     let repo = tempfile::tempdir().unwrap();
-    let mut store = Store::open(repo.path()).unwrap();
+    let store = TestStore::open(repo.path());
     let ifneeded = Preparation::IfNeeded;
-    install(&mut store, &both, &transport, ifneeded)
-        .await
-        .unwrap();
+    install(&store, &both, &transport, ifneeded).await.unwrap();
     assert_eq!(run(&store, "other"), "fixture 1.2.3\n");
 
-    let outcome = install(&mut store, &both[..1], &transport, ifneeded).await;
+    let outcome = install(&store, &both[..1], &transport, ifneeded).await;
     assert_eq!(outcome.unwrap(), Outcome::Replaced);
     let current = store.current().unwrap().unwrap();
     assert_eq!(current.tools, [both[0].inventory_tool().clone()]);
@@ -364,7 +361,7 @@ async fn plans_require_the_exact_locked_platform_and_shape() {
     let lock = Lock::parse(&serde_json::to_vec(&lock).unwrap()).unwrap();
     let plans = ArtifactPlan::from_lock(&lock, Platform::WindowsX64).unwrap();
     let repo = tempfile::tempdir().unwrap();
-    let store = Store::open(repo.path()).unwrap();
+    let store = TestStore::open(repo.path());
     let transport = ArtifactTransport::loopback_http_for_tests("http://127.0.0.1:9").unwrap();
     let desired = [plans[0].inventory_tool().clone()];
     let prepared = plans[0]

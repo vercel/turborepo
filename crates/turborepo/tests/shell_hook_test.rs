@@ -7,20 +7,16 @@ use std::{
     collections::BTreeMap,
     fs,
     io::Write,
-    os::unix::fs::{MetadataExt, PermissionsExt},
+    os::unix::fs::PermissionsExt,
     path::{Path, PathBuf},
     process::{Command, Stdio},
 };
 
-use sha2::{Digest, Sha256};
-use turborepo_tool_install::{Store, Tool, UserStore};
+use turborepo_cli::test_support::RecordedInstallation;
+use turborepo_tool_install::{Tool, UserStore};
 
 // A duplicate entry proves the hook removes only what it added.
 const BASE_PATH: &str = "/usr/bin:/bin:/usr/bin";
-
-fn sha(bytes: &[u8]) -> String {
-    format!("{:x}", Sha256::digest(bytes))
-}
 
 fn user_state(home: &Path) -> PathBuf {
     if cfg!(target_os = "macos") {
@@ -74,13 +70,19 @@ fn tool(id: &str) -> Tool {
         artifact_sha256: "a".repeat(64),
         executables: [(id.into(), format!("bin/{id}").into())].into(),
         vars: vars.into_iter().collect(),
+        staging: turborepo_tool_install::Staging::new("fixture", 1, &()).unwrap(),
     }
 }
 
 /// A clone with its own Git boundary. `home` set-up repositories get a real
-/// installation of `tools` (sorted ids) plus the external record `turbo setup`
-/// publishes for it.
-fn repo(dir: &Path, flagged: bool, home: Option<&Path>, tools: &[&str]) -> Option<String> {
+/// installation of `tools` (sorted ids) in the user's tool store plus the
+/// record `turbo setup` publishes for it.
+fn repo(
+    dir: &Path,
+    flagged: bool,
+    home: Option<&Path>,
+    tools: &[&str],
+) -> Option<RecordedInstallation> {
     fs::create_dir_all(dir.join("apps/web")).unwrap();
     fs::set_permissions(dir, fs::Permissions::from_mode(0o755)).unwrap();
     fs::create_dir(dir.join(".git")).unwrap();
@@ -94,43 +96,33 @@ fn repo(dir: &Path, flagged: bool, home: Option<&Path>, tools: &[&str]) -> Optio
     let home = home?;
     let root = dir.canonicalize().unwrap();
     let tools: Vec<_> = tools.iter().map(|id| tool(id)).collect();
-    let store = user_store(home, &root);
-    Store::open(&root)
-        .unwrap()
-        .with_user_store(&store)
-        .unwrap()
-        .reconcile(&tools, |tool, tree| {
+    let store = user_state(home).join("turborepo/tools");
+    turborepo_cli::test_support::install_tools_for_tests(
+        &root,
+        Some(&store),
+        tools,
+        None,
+        |tool, tree| {
             let export = tree.join("bin").join(&tool.id);
             fs::create_dir_all(tree.join("bin"))?;
             fs::write(&export, format!("#!/bin/sh\necho managed-{}\n", tool.id))?;
             fs::set_permissions(&export, fs::Permissions::from_mode(0o755))?;
             Ok(())
-        })
-        .unwrap();
-    let current = Store::inspect(&root).unwrap().unwrap();
-    let identity = fs::metadata(&root).unwrap();
-    let record = serde_json::json!({
-        "schema": 1,
-        "lock_sha256": sha(&fs::read(root.join("turbo.lock")).unwrap()),
-        "installation": {
-            "root": root,
-            "device": identity.dev(),
-            "inode": identity.ino(),
-            "manifest_sha256": sha(&fs::read(root.join(".turbo/tools/manifest.json")).unwrap()),
-            "bin": current.bin,
-            "tools": current.tools,
         },
-    });
-    let records = store.repo(&root);
-    fs::create_dir_all(&records).unwrap();
-    let home = home.canonicalize().unwrap();
-    for dir in records.ancestors().take_while(|dir| dir.starts_with(&home)) {
-        fs::set_permissions(dir, fs::Permissions::from_mode(0o700)).unwrap();
-    }
-    let path = records.join("record.json");
-    fs::write(&path, record.to_string()).unwrap();
-    fs::set_permissions(&path, fs::Permissions::from_mode(0o600)).unwrap();
-    Some(current.bin.to_str().unwrap().to_owned())
+    )
+    .unwrap();
+    turborepo_cli::test_support::recorded_installation_for_tests(&root, &store).unwrap()
+}
+
+/// The environment directory `installed` names, which `Step::RemoveTools`
+/// deletes through `REMOVE`.
+fn env_dir(installed: &RecordedInstallation) -> String {
+    installed.bin.parent().unwrap().to_str().unwrap().to_owned()
+}
+
+/// The `bin` a repository's hook activation prepends.
+fn bin(installed: &RecordedInstallation) -> String {
+    installed.bin.to_str().unwrap().to_owned()
 }
 
 /// One shell-neutral command per prompt; each shell renders its own syntax.
@@ -181,8 +173,8 @@ fn line(shell: &str, step: &Step) -> String {
         Step::Node => "echo \"node=$(node)\"".into(),
         Step::TouchLock if pwsh => "Add-Content turbo.lock ' '".into(),
         Step::TouchLock => "printf ' ' >> turbo.lock".into(),
-        Step::RemoveTools if pwsh => "Remove-Item -Recurse -Force .turbo/tools".into(),
-        Step::RemoveTools => "rm -rf .turbo/tools".into(),
+        Step::RemoveTools if pwsh => "Remove-Item -Recurse -Force $env:REMOVE".into(),
+        Step::RemoveTools => "rm -rf \"$REMOVE\"".into(),
         Step::Nothing if pwsh => "$null = 0".into(),
         Step::Nothing => "true".into(),
     }
@@ -265,11 +257,15 @@ fn journey(shell: &str) {
     let node = &["node"];
     let a = repo(&temp.path().join("a"), true, Some(&home), node).unwrap();
     let b = repo(&temp.path().join("b"), true, Some(&home), node).unwrap();
+    // The same selection shares one environment.
+    assert_eq!(a.bin, b.bin);
+    let remove = env_dir(&b);
+    let (a, b) = (bin(&a), bin(&b));
     // Nested, flagged, never set up: untrusted. Flag off: ignored even if set up.
     repo(&temp.path().join("a/vendor/c"), true, None, node);
     repo(&temp.path().join("off"), false, Some(&home), node);
     fs::create_dir(temp.path().join("plain")).unwrap();
-    let Some((stdout, stderr)) = session(shell, temp.path(), &[], STEPS) else {
+    let Some((stdout, stderr)) = session(shell, temp.path(), &[("REMOVE", &remove)], STEPS) else {
         return;
     };
     let value = |key: &str| {
@@ -368,10 +364,14 @@ fn runtime_journey(shell: &str) {
     let temp = tempfile::tempdir().unwrap();
     let home = temp.path().join("home");
     let all = &["go", "node", "python", "rust", "uv"];
-    let r = repo(&temp.path().join("r"), true, Some(&home), all).unwrap();
-    let s = repo(&temp.path().join("s"), true, Some(&home), &["go"]).unwrap();
+    let r_installed = repo(&temp.path().join("r"), true, Some(&home), all).unwrap();
+    let s_installed = repo(&temp.path().join("s"), true, Some(&home), &["go"]).unwrap();
+    let (r, s) = (bin(&r_installed), bin(&s_installed));
     fs::create_dir(temp.path().join("plain")).unwrap();
-    let Some((stdout, stderr)) = session(shell, temp.path(), USER_VARS, RUNTIME_STEPS) else {
+    let mut session_vars = USER_VARS.to_vec();
+    let remove = env_dir(&s_installed);
+    session_vars.push(("REMOVE", &remove));
+    let Some((stdout, stderr)) = session(shell, temp.path(), &session_vars, RUNTIME_STEPS) else {
         return;
     };
     let vars = |pairs: &[(&str, &str)]| -> BTreeMap<String, String> {
@@ -388,21 +388,22 @@ fn runtime_journey(shell: &str) {
     assert_eq!(start, user, "{stderr}");
 
     // Exactly what managed run sets for these tools, over the user's values.
-    let tree =
-        |bin: &str, id: &str| format!("{}/tools/{id}", Path::new(bin).parent().unwrap().display());
+    let tree = |installed: &RecordedInstallation, id: &str| {
+        installed.tree(id).to_str().unwrap().to_owned()
+    };
     let root = temp.path().join("r").canonicalize().unwrap();
     let cargo_home = user_store(&home, &root).cargo_home(&root);
     let cargo_home = cargo_home.to_str().unwrap();
     let managed = vars(&[
         ("PATH", &format!("{r}:{path}")),
         ("CARGO_HOME", cargo_home),
-        ("GOROOT", &tree(&r, "go")),
+        ("GOROOT", &tree(&r_installed, "go")),
         ("GOTOOLCHAIN", "local"),
-        ("RUSTUP_HOME", &tree(&r, "rust")),
+        ("RUSTUP_HOME", &tree(&r_installed, "rust")),
         ("RUSTUP_TOOLCHAIN", "1.90.0-x86_64-unknown-linux-gnu"),
         ("UV_PYTHON", "cpython-3.12.12-linux-x86_64-gnu"),
         ("UV_PYTHON_DOWNLOADS", "never"),
-        ("UV_PYTHON_INSTALL_DIR", &tree(&r, "python")),
+        ("UV_PYTHON_INSTALL_DIR", &tree(&r_installed, "python")),
         ("UV_PYTHON_PREFERENCE", "only-managed"),
     ]);
     assert_eq!(printed(&stdout, "r"), (managed.clone(), true), "{stderr}");
@@ -416,7 +417,7 @@ fn runtime_journey(shell: &str) {
     // Straight to another repository: r's variables are restored first.
     let mut only_go = user.clone();
     only_go.insert("PATH".into(), format!("{s}:{path}"));
-    only_go.insert("GOROOT".into(), tree(&s, "go"));
+    only_go.insert("GOROOT".into(), tree(&s_installed, "go"));
     only_go.insert("GOTOOLCHAIN".into(), "local".into());
     assert_eq!(printed(&stdout, "s"), (only_go, true), "{stderr}");
     // Leaving every managed variable restores the shell exactly, keeping the

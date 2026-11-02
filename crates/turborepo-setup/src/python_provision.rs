@@ -1,7 +1,7 @@
 //! Locked CPython adapter: a verified python-build-standalone archive staged at
-//! uv's key directory inside the generation's `python` tool, which is where the
+//! uv's key directory inside the `python` tool's tree, which is where the
 //! managed uv launchers point `UV_PYTHON_INSTALL_DIR`. No resolution, no uv
-//! installer (it writes absolute links that a relocatable generation rejects)
+//! installer (it writes absolute links that a relocatable tree rejects)
 //! and no system Python. The only subprocess is the verified interpreter
 //! compiling its own standard library while staging.
 //!
@@ -18,10 +18,11 @@ use std::{
     time::Duration,
 };
 
+use serde::Serialize;
 use sha2::{Digest, Sha256};
 use turborepo_archive::{Allowances, ExtractedArtifact, Layout};
 use turborepo_download::ExpectedSha256;
-use turborepo_tool_install::{Store, Tool};
+use turborepo_tool_install::{SetupSession, Staging, Tool};
 
 use crate::{
     lock::{self, Installation, Lock, Platform},
@@ -41,6 +42,21 @@ const OFFICIAL_ARCHIVE: Allowances = Allowances {
 /// Windows launcher beside uv's key directory: `%~dp0` is its own directory,
 /// and the interpreter keeps its image path inside the build.
 const WINDOWS_LAUNCHER: &str = "@\"%~dp0..\\@KEY@\\@ENTRYPOINT@\" %*\r\n";
+/// Bump when this adapter stages different bytes for the same staging inputs.
+const STAGING_REVISION: u32 = 1;
+
+/// The official archive's `python/` entries copied into uv's `key`
+/// directory, its standard library compiled with `interpreter`, and on
+/// Windows one launcher per entry point in `launch_directory`.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct Staged<'a> {
+    key: &'a str,
+    interpreter: &'a str,
+    stdlib: &'a str,
+    launch_directory: Option<&'a str>,
+    entrypoints: &'a BTreeMap<String, String>,
+}
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
@@ -136,6 +152,14 @@ impl PythonPlan {
                 (format!("bin/python{minor}"), format!("lib/python{minor}"));
             (executables, interpreter, stdlib, None)
         };
+        let staging = Staged {
+            key: &key,
+            interpreter: &interpreter,
+            stdlib: &stdlib,
+            launch_directory: launch_directory.as_deref(),
+            entrypoints: &artifact.executables,
+        };
+        let staging = Staging::new("python", STAGING_REVISION, &staging)?;
         Ok(Self {
             tool: Tool {
                 id: "python".into(),
@@ -145,6 +169,7 @@ impl PythonPlan {
                 executables,
                 // Activation only: Python's own exports need none of them.
                 vars: crate::uv_provision::interpreter_vars(Some(key.clone())),
+                staging,
             },
             artifact,
             key,
@@ -163,11 +188,11 @@ impl PythonPlan {
         &self.key
     }
 
-    /// The caller supplies ALL desired tools and reconciles that same set,
-    /// holding this Store lock throughout preparation and reconciliation.
+    /// The caller supplies ALL desired tools and ensures that same set
+    /// in the same setup session.
     pub async fn prepare(
         &self,
-        store: &Store,
+        store: &SetupSession<'_>,
         desired: &[Tool],
         transport: &PythonTransport,
         preparation: crate::Preparation,
@@ -236,9 +261,10 @@ impl PreparedPython {
         self.downloaded_bytes
     }
 
-    /// Callback for Store::reconcile: copy the FULL verified interpreter tree
-    /// into uv's key directory, preserving relative links and modes. Windows
-    /// adds the batch launchers that the Store's forwarders run.
+    /// Staging callback for `SetupSession::ensure`: copy the FULL verified
+    /// interpreter tree into uv's key directory, preserving relative links
+    /// and modes. Windows adds the batch launchers that the Store's
+    /// forwarders run.
     pub fn stage(
         &self,
         tool: &Tool,

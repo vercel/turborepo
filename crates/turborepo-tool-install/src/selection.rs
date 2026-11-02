@@ -1,7 +1,7 @@
-//! What each tool exports into a generation's `bin`, and the runtime
-//! variables its programs need, as data. The Store renders Unix launchers and
-//! Windows forwarders from it, and activation and the shell hook resolve the
-//! same variables, so a launcher and a managed task always agree.
+//! What each tool exports into an environment's `bin`, and the runtime
+//! variables its programs need, as data. The store renders Unix launchers and
+//! Windows forwarders from it, and activation resolves the same variables, so
+//! a launcher and a managed task always agree.
 
 use std::collections::BTreeMap;
 #[cfg(not(windows))]
@@ -128,8 +128,8 @@ pub enum VarValue {
     /// so it never uses the user's uv-managed interpreters.
     Tree(TreeRef),
     Word(String),
-    /// The repository's private Cargo home in the user's tool store, which the
-    /// Store records when it publishes the generation.
+    /// The repository's private Cargo home in the user's tool store. Only
+    /// activation sets it: environments are shared across repositories.
     RepoCargoHome,
 }
 
@@ -227,47 +227,45 @@ fn script_word(word: &str) -> Result<(), Error> {
     artifact_component(word)
 }
 
-/// A launcher in `<generation>/bin`. It resolves the generation's physical
-/// directory from its own path, so tree paths stay relative and the launcher
-/// works when run directly, without any inherited environment.
+/// A launcher in an environment's `bin`. It resolves the store's physical
+/// directory from its own path, so tree paths stay relative to the store and
+/// the launcher works when run through the stable per-repository link,
+/// without any inherited environment. `tree` names a tool's tree root
+/// relative to the store. `CARGO_HOME` is per
+/// repository, so a launcher shared by every repository never sets it.
 #[cfg(not(windows))]
 pub(crate) fn unix_launcher(
     tool: &Tool,
     launch: &Launch,
-    cargo_home: Option<&std::path::Path>,
+    tree: impl Fn(&str) -> String,
 ) -> Result<Vec<u8>, Error> {
-    fn tree(tree: &TreeRef) -> String {
-        match tree.path.as_str() {
-            "" => format!("\"$generation\"'/tools/{}'", tree.tool),
-            path => format!("\"$generation\"'/tools/{}/{path}'", tree.tool),
-        }
-    }
+    let path = |reference: &TreeRef| match reference.path.as_str() {
+        "" => format!("\"$store\"'/{}'", tree(&reference.tool)),
+        path => format!("\"$store\"'/{}/{path}'", tree(&reference.tool)),
+    };
     let mut script = String::from(
-        "#!/bin/sh\ncase \"$0\" in */*) ;; *) exit 126;; esac\ngeneration=$(CDPATH= cd -P -- \
-         \"${0%/*}/..\" && pwd) || exit 126\n",
+        "#!/bin/sh\ncase \"$0\" in */*) ;; *) exit 126;; esac\nstore=$(CDPATH= cd -P -- \
+         \"${0%/*}/../../..\" && pwd) || exit 126\n",
     );
+    let mut names = Vec::new();
     for (var, value) in &tool.vars {
         let value = match value {
-            VarValue::Tree(path) => tree(path),
+            VarValue::Tree(reference) => path(reference),
             VarValue::Word(word) => format!("'{word}'"),
-            VarValue::RepoCargoHome => {
-                let home = cargo_home.ok_or(Error::InvalidInventory)?;
-                let home = home.to_str().ok_or(Error::UnsafePath)?;
-                format!("'{}'", home.replace('\'', "'\\''"))
-            }
+            VarValue::RepoCargoHome => continue,
         };
         let _ = writeln!(script, "{}={value}", var.name());
+        names.push(var.name());
     }
-    if !tool.vars.is_empty() {
-        let names: Vec<_> = tool.vars.keys().map(|var| var.name()).collect();
+    if !names.is_empty() {
         let _ = writeln!(script, "export {}", names.join(" "));
     }
     script.push_str("exec ");
-    script.push_str(&tree(&launch.program));
+    script.push_str(&path(&launch.program));
     for arg in &launch.args {
         script.push(' ');
         match arg {
-            LaunchArg::Tree(path) => script.push_str(&tree(path)),
+            LaunchArg::Tree(reference) => script.push_str(&path(reference)),
             LaunchArg::Word(word) => {
                 let _ = write!(script, "'{word}'");
             }
@@ -278,24 +276,25 @@ pub(crate) fn unix_launcher(
 }
 
 /// Transfers control to `program`, preserving `%*` and its exit status.
-/// `%~dp0` is this bin directory.
+/// `tree` names a selected tool's absolute tree root: `%~dp0` would be the
+/// stable junction's path, not the environment's, so paths are absolute.
 #[cfg(windows)]
-pub(crate) fn windows_forwarder(launch: &Launch) -> Vec<u8> {
-    let tree = |tree: &TreeRef| {
-        format!(
-            "\"%~dp0..\\tools\\{}\\{}\"",
-            tree.tool,
-            tree.path.replace('/', "\\")
-        )
+pub(crate) fn windows_forwarder(
+    launch: &Launch,
+    tree: impl Fn(&str) -> Option<String>,
+) -> Result<Vec<u8>, Error> {
+    let path = |reference: &TreeRef| -> Result<String, Error> {
+        let root = tree(&reference.tool).ok_or(Error::InvalidInventory)?;
+        Ok(format!("\"{root}\\{}\"", reference.path.replace('/', "\\")))
     };
-    let mut line = format!("@{}", tree(&launch.program));
+    let mut line = format!("@{}", path(&launch.program)?);
     for arg in &launch.args {
         line.push(' ');
         match arg {
-            LaunchArg::Tree(path) => line.push_str(&tree(path)),
+            LaunchArg::Tree(reference) => line.push_str(&path(reference)?),
             LaunchArg::Word(word) => line.push_str(word),
         }
     }
     line.push_str(" %*\r\n");
-    line.into_bytes()
+    Ok(line.into_bytes())
 }

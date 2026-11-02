@@ -11,7 +11,7 @@ fn initialized() -> Fixture {
 }
 fn healthy_previous(f: &Fixture, manifest: &[u8]) {
     assert_eq!(f.manifest().unwrap(), manifest);
-    let store = turborepo_tool_install::Store::open(f.owned.root()).unwrap();
+    let store = Installed::open(&f.owned);
     let current = store.current().unwrap().unwrap();
     assert_eq!(current.tools.len(), 2);
     assert_eq!(current.tools[0].version, "24.0.0");

@@ -12,7 +12,7 @@ use std::{
 };
 
 use turborepo_download::{ApprovedOrigin, DownloadClient, ExpectedSha256, Limits};
-use turborepo_tool_install::{Export, Store, Tool};
+use turborepo_tool_install::{Export, SetupSession, Staging, Tool};
 
 use crate::{
     lock::{self, Artifact, Declaration, Format, Installation, Lock, Platform},
@@ -21,6 +21,8 @@ use crate::{
 
 const PART: &str = "rustup-init";
 const MAX_INSTALLER_BYTES: usize = 64 * 1024 * 1024;
+/// Bump when this adapter stages different bytes for the same staging inputs.
+const STAGING_REVISION: u32 = 1;
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
@@ -205,6 +207,8 @@ impl RustupPlan {
                 version: version.to_string(),
                 platform: spelling.into(),
                 artifact_sha256: artifact.sha256.clone(),
+                // The one binary, written at its executable path.
+                staging: Staging::new("rustup", STAGING_REVISION, &executables)?,
                 executables: Export::files(&executables),
                 vars: BTreeMap::new(),
             },
@@ -216,11 +220,11 @@ impl RustupPlan {
         &self.tool
     }
 
-    /// The caller supplies ALL desired tools and reconciles that same set while
-    /// holding this Store lock. A healthy identical tool needs no download.
+    /// The caller supplies ALL desired tools and ensures that same set in
+    /// the same setup session. A healthy identical tool needs no download.
     pub async fn prepare(
         &self,
-        store: &Store,
+        store: &SetupSession<'_>,
         desired: &[Tool],
         transport: &RustupTransport,
         preparation: crate::Preparation,
@@ -261,8 +265,7 @@ impl RustupPlan {
     /// bytes staged into the empty `scratch`, or the healthy selected tree.
     pub fn executable(
         &self,
-        store: &Store,
-        desired: &[Tool],
+        store: &SetupSession<'_>,
         prepared: Option<&PreparedRustup>,
         scratch: &Path,
     ) -> Result<PathBuf, Error> {
@@ -271,9 +274,7 @@ impl RustupPlan {
                 prepared.stage(&self.tool, scratch)?;
                 scratch.to_owned()
             }
-            None => store
-                .reusable_tree(&self.tool, desired)?
-                .ok_or(Error::InventoryMismatch)?,
+            None => store.tree(&self.tool)?.ok_or(Error::InventoryMismatch)?,
         };
         // Split components: Windows images must not carry a lock path's `/`
         // (a `cmd.exe` image there cannot even run its own commands).
@@ -294,8 +295,9 @@ impl PreparedRustup {
         self.bytes.len() as u64
     }
 
-    /// Callback for Store::reconcile: write the one owner-executable multicall
-    /// binary. Toolchains, proxies and homes are never created here.
+    /// Staging callback for `SetupSession::ensure`: write the one
+    /// owner-executable multicall binary. Toolchains, proxies and homes are
+    /// never created here.
     pub fn stage(
         &self,
         tool: &Tool,

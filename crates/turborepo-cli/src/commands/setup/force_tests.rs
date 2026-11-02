@@ -20,7 +20,7 @@ fn assert_locked_traffic(f: &Fixture, u: &Upstream, rounds: usize) {
 }
 
 #[test]
-fn healthy_force_replaces_one_complete_generation_then_normal_reuses() {
+fn force_reverifies_healthy_trees_without_traffic_and_restages_only_damage() {
     for flags in [
         FORCE,
         &["--force", "--tools-only", "--frozen"][..],
@@ -51,44 +51,28 @@ fn healthy_force_replaces_one_complete_generation_then_normal_reuses() {
         let u = Upstream::new(&f, false, None);
         f.run(&u, FROZEN).unwrap();
         let before = f.manifest().unwrap();
-        let current = turborepo_tool_install::Store::inspect(f.owned.root())
-            .unwrap()
-            .unwrap();
-        let generations = || {
-            fs::read_dir(f.owned.root().join(".turbo/tools"))
-                .unwrap()
-                .filter(|e| {
-                    e.as_ref()
-                        .unwrap()
-                        .file_name()
-                        .to_string_lossy()
-                        .starts_with("generation-")
-                })
-                .count()
-        };
-        assert_eq!(generations(), 1);
+        let current = Installed::open(&f.owned).current().unwrap().unwrap();
+        // A healthy tree is byte-equal to a fresh install: nothing to fetch.
         f.run(&u, flags).unwrap();
-        assert_locked_traffic(&f, &u, 2);
-        let after = f.manifest().unwrap();
-        assert_ne!(after, before);
-        assert_eq!(generations(), 2);
-        let replacement = turborepo_tool_install::Store::inspect(f.owned.root())
-            .unwrap()
-            .unwrap();
-        assert_eq!(replacement.tools, current.tools); // No fabricated identity.
-        assert_ne!(replacement.bin, current.bin);
+        assert_locked_traffic(&f, &u, 1);
+        assert_eq!(f.manifest().unwrap(), before);
+        // A damaged tree is restaged from its locked artifact, alone.
+        turborepo_setup::test_support::damage(&current.tree("node").join("resource"), "damaged");
+        f.run(&u, flags).unwrap();
+        assert_eq!(u.requests().len(), 4);
+        assert_eq!(u.requests()[3], f.node_path);
+        let repaired = Installed::open(&f.owned).current().unwrap().unwrap();
+        assert_eq!(repaired.tools, current.tools); // No fabricated identity.
+        assert_eq!(repaired.bin, current.bin);
         for (id, resource, bytes) in [
             ("node", "resource", b"node resource".as_slice()),
             ("pnpm", "dist/resource", b"pnpm resource".as_slice()),
         ] {
-            assert_eq!(
-                fs::read(replacement.bin.join(format!("../tools/{id}/{resource}"))).unwrap(),
-                bytes
-            );
+            assert_eq!(fs::read(repaired.tree(id).join(resource)).unwrap(), bytes);
         }
         f.run(&u, FROZEN).unwrap();
-        assert_locked_traffic(&f, &u, 2);
-        assert_eq!(f.manifest().unwrap(), after);
+        assert_eq!(u.requests().len(), 4);
+        assert_eq!(f.manifest().unwrap(), before);
         assert_eq!(worktree(), tracked);
         f.no_execution();
     }
@@ -137,15 +121,16 @@ fn force_missing_stale_no_host_and_unsupported_locks_fail_before_mutation() {
 }
 
 #[test]
-fn force_late_failures_keep_the_healthy_complete_inventory() {
+fn force_late_failures_keep_the_previous_record() {
     for case in 0..6 {
         let f = Fixture::new();
         let first = Upstream::new(&f, false, None);
         f.run(&first, FROZEN).unwrap();
         let before = f.manifest().unwrap();
-        let old = turborepo_tool_install::Store::inspect(f.owned.root())
-            .unwrap()
-            .unwrap();
+        let old = Installed::open(&f.owned).current().unwrap().unwrap();
+        // Both trees must be restaged, so force downloads both again.
+        turborepo_setup::test_support::damage(&old.tree("node").join("resource"), "damaged");
+        turborepo_setup::test_support::damage(&old.tree("pnpm").join("dist/resource"), "damaged");
         let lock = fs::read(f.owned.root().join("turbo.lock")).unwrap();
         let drift = match case {
             2 => Some((f.owned.root().join(".nvmrc"), "26.0.0".into())),
@@ -162,7 +147,8 @@ fn force_late_failures_keep_the_healthy_complete_inventory() {
         assert!(corrupted.run(&u, FORCE).is_err(), "case {case}");
         assert_eq!(u.hits(), if case == 0 { 1 } else { 3 });
         assert_eq!(corrupted.manifest().unwrap(), before);
-        let retained = turborepo_tool_install::Store::inspect(corrupted.owned.root())
+        let retained = Installed::open(&corrupted.owned)
+            .current()
             .unwrap()
             .unwrap();
         assert_eq!(retained.bin, old.bin);
@@ -223,11 +209,12 @@ fn force_node_only_uses_locked_bytes_without_selection_traffic() {
     f.run(&u, FORCE).unwrap();
     let before = f.manifest().unwrap();
     f.run(&u, FORCE).unwrap();
-    assert_ne!(f.manifest().unwrap(), before);
-    assert_eq!(u.requests(), [f.node_path.clone(), f.node_path.clone()]);
+    assert_eq!(f.manifest().unwrap(), before);
+    assert_eq!(u.requests(), [f.node_path.clone()]);
     assert_eq!(fs::read(f.owned.root().join("turbo.lock")).unwrap(), lock);
     assert_eq!(
-        turborepo_tool_install::Store::inspect(f.owned.root())
+        Installed::open(&f.owned)
+            .current()
             .unwrap()
             .unwrap()
             .tools
@@ -245,22 +232,18 @@ fn force_keeps_authored_sha512_verification_and_binding() {
     let u = Upstream::new(&f, false, None);
     f.run(&u, FROZEN).unwrap();
     f.run(&u, FORCE).unwrap();
-    assert_locked_traffic(&f, &u, 2);
+    assert_locked_traffic(&f, &u, 1);
     let before = f.manifest().unwrap();
-    let selected = turborepo_tool_install::Store::inspect(f.owned.root())
-        .unwrap()
-        .unwrap();
+    let selected = Installed::open(&f.owned).current().unwrap().unwrap();
     let pin = format!("pnpm@10.0.0+sha512.{}", "0".repeat(128));
     f.declare(json!({"packageManager":pin}));
     assert!(f.run(&u, FORCE).is_err());
-    // Node artifact and exact registry verification only; reject before tarball.
-    assert_eq!(u.hits(), 8);
+    // Exact registry verification only; reject before the tarball. The
+    // healthy Node tree needs no download.
+    assert_eq!(u.hits(), 4);
     assert_eq!(f.manifest().unwrap(), before);
     assert_eq!(
-        turborepo_tool_install::Store::inspect(f.owned.root())
-            .unwrap()
-            .unwrap()
-            .tools,
+        Installed::open(&f.owned).current().unwrap().unwrap().tools,
         selected.tools
     );
     f.no_execution();
