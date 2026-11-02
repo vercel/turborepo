@@ -184,12 +184,140 @@ pub(crate) fn has_symlink(root: &AbsoluteSystemPath, path: &AbsoluteSystemPath) 
     false
 }
 
+/// Batch-local ancestry checks for index-backed inputs. Leaves are always
+/// checked afresh; sibling files share only their directory ancestry results.
+/// Like the Git index snapshot, this assumes directories are not replaced
+/// during a batch. Never retain it between input collections.
+pub(crate) struct SymlinkCache<'a> {
+    root: &'a AbsoluteSystemPath,
+    ancestors: std::collections::HashMap<turbopath::AbsoluteSystemPathBuf, bool>,
+}
+
+impl<'a> SymlinkCache<'a> {
+    pub(crate) fn new(root: &'a AbsoluteSystemPath) -> Self {
+        Self {
+            root,
+            ancestors: std::collections::HashMap::new(),
+        }
+    }
+
+    pub(crate) fn has_symlink(&mut self, path: &AbsoluteSystemPath) -> bool {
+        if path == self.root {
+            return false;
+        }
+        if path
+            .symlink_metadata()
+            .is_ok_and(|meta| meta.file_type().is_symlink())
+        {
+            return true;
+        }
+
+        let mut unchecked = Vec::new();
+        let mut current = path.parent();
+        let linked = loop {
+            let Some(path) = current.filter(|path| *path != self.root) else {
+                break false;
+            };
+            if let Some(&linked) = self.ancestors.get(path) {
+                break linked;
+            }
+            if let Ok(metadata) = path.symlink_metadata() {
+                unchecked.push(path);
+                if metadata.file_type().is_symlink() {
+                    break true;
+                }
+            }
+            // Do not cache failed metadata queries, matching the uncached
+            // check's best-effort handling of missing/inaccessible paths.
+            current = path.parent();
+        };
+        for path in unchecked {
+            self.ancestors.insert(path.to_owned(), linked);
+        }
+        linked
+    }
+}
+
 #[cfg(test)]
 mod test {
     use turbopath::{AbsoluteSystemPathBuf, RelativeUnixPathBuf, RelativeUnixPathBufTestExt};
 
     use super::{hash_discovered_objects, hash_objects};
     use crate::{GitHashes, OidHash, find_git_root};
+
+    #[cfg(unix)]
+    #[test]
+    fn test_cached_symlink_ancestry() {
+        let (_tmp, root) = crate::test_utils::tmp_dir();
+        root.join_components(&["real", "nested"])
+            .create_dir_all()
+            .unwrap();
+        root.join_components(&["real", "nested", "a"])
+            .create_with_contents("a")
+            .unwrap();
+        root.join_components(&["real", "nested", "b"])
+            .create_with_contents("b")
+            .unwrap();
+        std::os::unix::fs::symlink("real", root.join_component("link")).unwrap();
+        std::os::unix::fs::symlink("link", root.join_component("chain")).unwrap();
+        std::os::unix::fs::symlink("missing", root.join_component("dangling")).unwrap();
+        let mut cache = super::SymlinkCache::new(&root);
+        for _ in 0..2 {
+            for path in [
+                "",
+                "real",
+                "real/nested/a",
+                "real/nested/b",
+                "link/nested/a",
+                "link/nested/b",
+                "chain/nested/a",
+                "dangling",
+                "dangling/file",
+                "missing/dir/file",
+            ] {
+                let path = root.join_components(
+                    &path
+                        .split('/')
+                        .filter(|s| !s.is_empty())
+                        .collect::<Vec<_>>(),
+                );
+                assert_eq!(
+                    cache.has_symlink(&path),
+                    super::has_symlink(&root, &path),
+                    "{path}"
+                );
+            }
+        }
+        // The trusted root itself may be reached through a symlink.
+        let linked_root = root.join_component("link");
+        let mut cache = super::SymlinkCache::new(&linked_root);
+        assert!(!cache.has_symlink(&linked_root.join_components(&["nested", "a"])));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn test_symlink_cache_refreshes_leaves_and_batches() {
+        let (_tmp, root) = crate::test_utils::tmp_dir();
+        let dir = root.join_component("dir");
+        dir.create_dir_all().unwrap();
+        let leaf = dir.join_component("leaf");
+        leaf.create_with_contents("a").unwrap();
+        let mut cache = super::SymlinkCache::new(&root);
+        assert!(!cache.has_symlink(&leaf));
+        leaf.remove().unwrap();
+        std::os::unix::fs::symlink("missing", &leaf).unwrap();
+        assert!(cache.has_symlink(&leaf));
+        leaf.remove().unwrap();
+        leaf.create_with_contents("b").unwrap();
+        assert!(!cache.has_symlink(&leaf));
+        drop(cache);
+
+        // An ancestor replacement must be observed by the next collection.
+        std::fs::rename(&dir, root.join_component("target")).unwrap();
+        std::os::unix::fs::symlink("target", &dir).unwrap();
+        let mut cache = super::SymlinkCache::new(&root);
+        assert!(cache.has_symlink(&leaf));
+    }
 
     #[test]
     fn test_read_object_hashes() {

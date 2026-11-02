@@ -5,7 +5,7 @@ use turborepo_telemetry::events::task::{FileHashMethod, PackageTaskEventBuilder}
 
 use crate::{
     Error, GitHashes, GitRepo, RepoGitIndex, SCM,
-    hash_object::{hash_discovered_objects, hash_objects},
+    hash_object::{SymlinkCache, hash_discovered_objects, hash_objects},
 };
 
 fn excluded_link(
@@ -395,11 +395,10 @@ impl GitRepo {
             (hashes, to_hash)
         };
 
+        let mut symlinks = SymlinkCache::new(turbo_root);
         let linked = hashes
             .keys()
-            .filter(|path| {
-                crate::hash_object::has_symlink(turbo_root, &full_pkg_path.join_unix_path(path))
-            })
+            .filter(|path| symlinks.has_symlink(&full_pkg_path.join_unix_path(path)))
             .cloned()
             .collect::<Vec<_>>();
         for path in linked {
@@ -565,12 +564,10 @@ impl GitRepo {
         };
 
         hashes.reserve(known_hashes.len() + to_hash.len());
+        let mut symlinks = SymlinkCache::new(turbo_root);
         for (git_relative, oid) in known_hashes {
             if crate::crlf::is_env_local(git_relative.as_str())
-                || crate::hash_object::has_symlink(
-                    turbo_root,
-                    &self.root.join_unix_path(&git_relative),
-                )
+                || symlinks.has_symlink(&self.root.join_unix_path(&git_relative))
             {
                 to_hash.push(git_relative);
                 continue;
