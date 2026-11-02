@@ -147,7 +147,7 @@ jobs:
       version: ${{ steps.version.outputs.version }}
       previous-tag: ${{ steps.previous-tag.outputs.tag }}
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           ref: ${{ inputs.sha || github.sha }}
           filter: blob:none
@@ -302,7 +302,7 @@ jobs:
   #   needs: [stage]
   #   if: ${{ always() && needs.stage.result == 'success' }}
   #   steps:
-  #     - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+  #     - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
   #       with:
   #         ref: ${{ needs.stage.outputs.stage-branch }}
   #
@@ -328,7 +328,7 @@ jobs:
     needs: [stage]
     if: ${{ always() && needs.stage.result == 'success' }}
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           ref: ${{ needs.stage.outputs.stage-branch }}
           filter: blob:none
@@ -381,7 +381,7 @@ jobs:
     timeout-minutes: 45
     steps:
       - name: Checkout repo
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           ref: ${{ needs.stage.outputs.stage-branch }}
           filter: blob:none
@@ -519,7 +519,7 @@ jobs:
         run: rm -f "${APPLE_CERT_PATH:-}" "${APPLE_API_KEY_PATH:-}"
 
       - name: Upload Artifacts
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: turbo-${{ matrix.settings.target }}
           path: target/${{ matrix.settings.target }}/release-turborepo/turbo*
@@ -531,7 +531,7 @@ jobs:
     needs: [stage, build-rust]
     if: ${{ always() && needs.stage.result == 'success' && needs.build-rust.result == 'success' }}
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           ref: ${{ needs.stage.outputs.stage-branch }}
           filter: blob:none
@@ -543,7 +543,7 @@ jobs:
           package-install: false
 
       - name: Download Rust artifacts
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           pattern: turbo-*
           path: rust-artifacts
@@ -555,7 +555,7 @@ jobs:
         run: node scripts/package-standalone-archives.mjs "${{ needs.stage.outputs.version }}"
 
       - name: Upload standalone archives
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: standalone-turbo-${{ needs.stage.outputs.version }}
           path: |
@@ -578,7 +578,7 @@ jobs:
     outputs:
       publish-started: ${{ steps.publish-state.outputs.started }}
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           ref: ${{ needs.stage.outputs.stage-branch }}
           fetch-depth: 2
@@ -591,7 +591,7 @@ jobs:
           extra-flags: "--no-frozen-lockfile"
 
       - name: Download Rust artifacts
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           pattern: turbo-*
           path: rust-artifacts
@@ -636,7 +636,7 @@ jobs:
 
       # Upload published artifacts in case they are needed for debugging later
       - name: Upload Artifacts
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: turbo-combined
           path: release-artifacts/dist
@@ -650,7 +650,7 @@ jobs:
     needs: [stage, npm-publish]
     if: ${{ always() && !inputs.dry_run && needs.npm-publish.result == 'success' }}
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           ref: ${{ needs.stage.outputs.stage-branch }}
           filter: blob:none
@@ -723,7 +723,7 @@ jobs:
     if: ${{ always() && !inputs.dry_run && needs.stage.result == 'success' && needs.standalone-archives.result == 'success' && needs.create-release-tag.result == 'success' }}
     steps:
       - name: Download standalone release assets
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: standalone-turbo-${{ needs.stage.outputs.version }}
           path: standalone-artifacts
@@ -781,7 +781,7 @@ jobs:
       docs_url: ${{ steps.alias.outputs.docs_url }}
     steps:
       - name: Checkout staging branch
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           ref: ${{ needs.stage.outputs.stage-branch }}
           filter: blob:none
@@ -877,8 +877,10 @@ jobs:
 
       - name: Notify Slack on failure
         if: failure()
-        uses: slackapi/slack-github-action@007b2c3c751a190b6f0f040e47ed024deaa72844 # v1.23.0
+        uses: slackapi/slack-github-action@0d95c9a7becc1e6e297d76df9bc735c44f4cbcbc # v3.0.5
         with:
+          webhook: ${{ secrets.DOCS_ALIAS_FAILURE_SLACK_WEBHOOK_URL }}
+          webhook-type: incoming-webhook
           payload: |
             {
               "text": "Versioned docs aliasing failed for v${{ steps.version.outputs.version }}",
@@ -900,8 +902,6 @@ jobs:
                 }
               ]
             }
-        env:
-          SLACK_WEBHOOK_URL: ${{ secrets.DOCS_ALIAS_FAILURE_SLACK_WEBHOOK_URL }}
 
   update-examples:
     name: "Update Examples"
@@ -930,7 +930,7 @@ jobs:
       contents: write
       pull-requests: write
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           ref: ${{ needs.stage.outputs.stage-branch }}
           filter: blob:none
@@ -1018,7 +1018,7 @@ jobs:
           fi
 
       - name: Checkout trusted release validator
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           ref: ${{ github.sha }}
           path: .release-validator
