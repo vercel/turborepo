@@ -1355,7 +1355,9 @@ fn test_prune_composable_config() {
     setup::setup_integration_test(
         tempdir.path(),
         "monorepo_with_root_dep",
-        "pnpm@7.25.1",
+        // pnpm 7.25's bundled fetch fails on current Node (ERR_INVALID_THIS)
+        // when it downloads, and this fixture installs a registry package.
+        "pnpm@7.33.7",
         true,
     )
     .unwrap();
