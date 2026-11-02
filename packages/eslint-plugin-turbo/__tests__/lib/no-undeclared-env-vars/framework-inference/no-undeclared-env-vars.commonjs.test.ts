@@ -31,6 +31,11 @@ ruleTester.run(RULES.noUndeclaredEnvVars, rule, {
       filename: nextJsFilename
     },
     {
+      code: `const { NEXT_DEPLOYMENT_ID } = process.env;`,
+      ...options(),
+      filename: nextJsFilename
+    },
+    {
       code: `const { VITE_THINGS } = process.env;`,
       ...options(),
       filename: viteFilename
@@ -70,6 +75,17 @@ ruleTester.run(RULES.noUndeclaredEnvVars, rule, {
       errors: [
         {
           message: "INVITE_CODE is not listed as a dependency in turbo.json"
+        }
+      ]
+    },
+    {
+      code: `const { NEXT_DEPLOYMENT_ID_SECRET } = process.env;`,
+      ...options(),
+      filename: nextJsFilename,
+      errors: [
+        {
+          message:
+            "NEXT_DEPLOYMENT_ID_SECRET is not listed as a dependency in turbo.json"
         }
       ]
     },
