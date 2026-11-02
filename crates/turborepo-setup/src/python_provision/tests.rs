@@ -219,6 +219,7 @@ async fn windows_x64_plans_export_batch_launchers_and_install_only_on_windows() 
     let (name, launcher) = plan.inventory_tool().executables.first_key_value().unwrap();
     assert_eq!(plan.inventory_tool().executables.len(), 1);
     assert_eq!(name, "python");
+    let launcher = launcher.as_file().unwrap();
     assert!(launcher.starts_with(".launch-") && launcher.ends_with("/python.cmd"));
     let repo = tempfile::tempdir().unwrap();
     let mut store = Store::open(repo.path()).unwrap();

@@ -9,7 +9,7 @@ use std::{collections::BTreeMap, io, path::Path, time::Duration};
 use semver::Version;
 use turborepo_archive::{ExtractedArtifact, Layout};
 use turborepo_download::{ApprovedOrigin, DownloadClient, ExpectedSha256, Limits};
-use turborepo_tool_install::{Store, Tool};
+use turborepo_tool_install::{Export, Store, Tool};
 
 use crate::{
     lock::{Artifact, Format, Installation, Lock, Platform},
@@ -262,7 +262,8 @@ impl BunPlan {
                 version: bun.version.clone(),
                 platform: spelling.into(),
                 artifact_sha256: artifact.sha256.clone(),
-                executables: artifact.executables.clone(),
+                executables: Export::files(&artifact.executables),
+                vars: Default::default(),
             },
             artifact: expected,
         })
@@ -322,7 +323,7 @@ impl BunPlan {
                     .root_prefix
                     .as_deref()
                     .ok_or(Error::InvalidLock)?,
-                required_files: &[&self.tool.executables["bun"]],
+                required_files: &[&self.artifact.executables["bun"]],
             },
         )?;
         Ok(Some(PreparedBun {

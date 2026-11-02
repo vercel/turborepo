@@ -57,7 +57,7 @@ async fn windows_x64_bootstrap_exports_one_hard_linked_rustup_exe() {
     assert_eq!(plan.inventory_tool().platform, "windows-x64");
     assert_eq!(
         plan.inventory_tool().executables["rustup"],
-        "bin/rustup.exe"
+        "bin/rustup.exe".into()
     );
     let desired = vec![plan.inventory_tool().clone()];
     let repo = tempfile::tempdir().unwrap();

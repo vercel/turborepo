@@ -1,21 +1,19 @@
-//! Locked uv adapter: verified official archive, full resource tree, and
-//! repo-scoped `uv`/`uvx` launchers. No resolution, Python installation,
-//! dependency sync or subprocesses. Plans compose with the complete desired
-//! inventory; preparation never publishes.
+//! Locked uv adapter: verified official archive and full resource tree. No
+//! resolution, Python installation, dependency sync or subprocesses. Plans
+//! compose with the complete desired inventory; preparation never publishes.
 //!
-//! Windows x64 exports the official `uv.exe` and `uvx.exe` as the Store's
-//! hard links instead of launchers, so programs that start `uv` without a
-//! shell still find it. Both are self-contained, and `uvx.exe` starts the
-//! `uv.exe` exported beside it. The managed activation that `turbo run`,
-//! `turbo exec` and setup's own `uv sync` apply supplies the launchers'
-//! interpreter settings there.
+//! Unix exports `uv`/`uvx` as Store launchers that set the interpreter
+//! variables. Windows x64 exports the official `uv.exe` and `uvx.exe` as the
+//! Store's hard links, so programs that start `uv` without a shell still find
+//! it. Both are self-contained, and `uvx.exe` starts the `uv.exe` exported
+//! beside it. The managed activation that `turbo run`, `turbo exec` and
+//! setup's own `uv sync` apply supplies the variables there.
 
-use std::{fs, io, path::Path, time::Duration};
+use std::{collections::BTreeMap, fs, io, path::Path, time::Duration};
 
-use sha2::{Digest, Sha256};
 use turborepo_archive::{ExtractedArtifact, Layout};
 use turborepo_download::{ExpectedSha256, VerifiedArtifact};
-use turborepo_tool_install::{Store, Tool};
+use turborepo_tool_install::{Export, Launch, ManagedVar, Store, Tool, TreeRef, VarValue};
 
 use crate::{
     lock::{self, Installation, Lock, Platform},
@@ -24,23 +22,34 @@ use crate::{
     uv_resolution::UvTransport,
 };
 
-/// Launchers pin uv's interpreter directory to the `python` tool tree of the
-/// SAME generation, so managed interpreters stay repo-scoped and never land in
-/// the user's global uv data. uv must not download interpreters into an
-/// immutable generation, and when setup provisions that tree uv uses only it,
-/// never a system Python.
-const LAUNCHER: &str = "#!/bin/sh
-case \"$0\" in */*) ;; *) exit 126;; esac
-here=${0%/*}
-case \"${here##*/}\" in @LAUNCH@) tools=\"$here/../..\";; *) tools=\"$here/../tools\";; esac
-tools=$(CDPATH= cd -- \"$tools\" && pwd -P) || exit 126
-UV_PYTHON_INSTALL_DIR=\"$tools/python\"
-UV_PYTHON_DOWNLOADS=never
-export UV_PYTHON_INSTALL_DIR UV_PYTHON_DOWNLOADS
-if [ -d \"$tools/python\" ]; then UV_PYTHON_PREFERENCE=only-managed; export UV_PYTHON_PREFERENCE; \
-                        fi
-exec \"$tools/uv/@ENTRYPOINT@\" \"$@\"
-";
+/// uv's interpreter settings. They pin uv's interpreter directory to the
+/// `python` tool tree of the SAME generation, so managed interpreters stay
+/// repo-scoped and never land in the user's global uv data. uv must not
+/// download interpreters into an immutable generation. With a locked
+/// interpreter (`python`, its uv download key), uv uses only that tree and
+/// requests it by key rather than path: a path request makes `uv pip` install
+/// into the managed interpreter itself instead of the project's virtual
+/// environment.
+pub(crate) fn interpreter_vars(python: Option<String>) -> BTreeMap<ManagedVar, VarValue> {
+    let mut vars = BTreeMap::from([
+        (
+            ManagedVar::UvPythonDownloads,
+            VarValue::Word("never".into()),
+        ),
+        (
+            ManagedVar::UvPythonInstallDir,
+            VarValue::Tree(TreeRef::new("python", "")),
+        ),
+    ]);
+    if let Some(key) = python {
+        vars.insert(
+            ManagedVar::UvPythonPreference,
+            VarValue::Word("only-managed".into()),
+        );
+        vars.insert(ManagedVar::UvPython, VarValue::Word(key));
+    }
+    vars
+}
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
@@ -68,8 +77,7 @@ pub enum Error {
 pub struct UvPlan {
     tool: Tool,
     artifact: lock::Artifact,
-    /// The Unix launchers' directory; Windows exports the binaries directly.
-    launch_directory: Option<String>,
+    windows: bool,
 }
 
 impl UvPlan {
@@ -102,23 +110,35 @@ impl UvPlan {
             return Err(Error::InvalidLock);
         }
         ExpectedSha256::from_hex(&artifact.sha256)?;
-        // Launcher semantics are part of reuse identity: a changed launcher must
-        // restage instead of copying an older generation's tree.
-        let launch_directory =
-            (!windows).then(|| format!("launch-{}", &hex::encode(Sha256::digest(LAUNCHER))[..16]));
-        let executables = match &launch_directory {
-            Some(launch) => artifact
-                .executables
-                .keys()
-                .map(|name| (name.clone(), format!("{launch}/{name}")))
-                .collect(),
+        let executables = if windows {
             // `uv.exe` and `uvx.exe` at the zip's top level.
-            None => artifact.executables.clone(),
+            Export::files(&artifact.executables)
+        } else {
+            artifact
+                .executables
+                .iter()
+                .map(|(name, path)| {
+                    let program = TreeRef::new("uv", path.clone());
+                    let launch = Launch {
+                        program,
+                        args: Vec::new(),
+                    };
+                    (name.clone(), Export::Launch(launch))
+                })
+                .collect()
         };
         let spelling = serde_json::to_value(platform)
             .ok()
             .and_then(|value| value.as_str().map(str::to_owned))
             .ok_or(Error::InvalidLock)?;
+        let python = lock
+            .tools()
+            .get("python")
+            .map(|python| {
+                crate::python_resolution::installed_key(&python.version, &spelling)
+                    .ok_or(Error::InvalidLock)
+            })
+            .transpose()?;
         Ok(Self {
             tool: Tool {
                 id: "uv".into(),
@@ -126,9 +146,10 @@ impl UvPlan {
                 platform: spelling,
                 artifact_sha256: artifact.sha256.clone(),
                 executables,
+                vars: interpreter_vars(python),
             },
             artifact,
-            launch_directory,
+            windows,
         })
     }
 
@@ -157,7 +178,7 @@ impl UvPlan {
         transport: &UvTransport,
         preparation: crate::Preparation,
     ) -> Result<Option<PreparedUv>, Error> {
-        if !host_matches(self.launch_directory.as_deref()) {
+        if !host_matches(self.windows) {
             return Err(Error::UnsupportedTarget);
         }
         if !desired.contains(&self.tool) {
@@ -236,18 +257,13 @@ impl UvPlan {
                 required_files: &required,
             },
         )?;
-        if let Some(launch) = &self.launch_directory
-            && tree.root_path().join(launch).try_exists()?
-        {
-            return Err(Error::InvalidLock);
-        }
         Ok(PreparedUv {
             tree,
             tool: self.tool.clone(),
             // uv has no shared download cache. Archive bytes retained from
             // resolution were still transferred during this setup run.
             downloaded_bytes: bytes.as_bytes().len() as u64,
-            launch_directory: self.launch_directory.clone(),
+            windows: self.windows,
             entrypoints: self.artifact.executables.clone(),
         })
     }
@@ -270,20 +286,18 @@ pub struct PreparedUv {
     tree: ExtractedArtifact,
     tool: Tool,
     downloaded_bytes: u64,
-    launch_directory: Option<String>,
-    entrypoints: std::collections::BTreeMap<String, String>,
+    windows: bool,
+    entrypoints: BTreeMap<String, String>,
 }
 
 impl PreparedUv {
-    /// Callback for Store::reconcile. Copy the FULL verified tree, then add
-    /// launchers that export the repo-scoped interpreter location. Windows
-    /// adds none: the Store hard-links the official `.exe` files into bin.
+    /// Callback for Store::reconcile: copy the FULL verified tree.
     pub fn stage(
         &self,
         tool: &Tool,
         destination: &Path,
     ) -> Result<(), turborepo_tool_install::Error> {
-        if !host_matches(self.launch_directory.as_deref()) {
+        if !host_matches(self.windows) {
             return Err(turborepo_tool_install::Error::UnsupportedPlatform);
         }
         if tool != &self.tool
@@ -292,34 +306,14 @@ impl PreparedUv {
         {
             return Err(turborepo_tool_install::Error::InvalidInventory);
         }
-        copy_tree(&self.tree.root_path(), destination)?;
-        let Some(launch) = &self.launch_directory else {
-            return Ok(());
-        };
-        fs::create_dir(destination.join(launch))?;
-        for (name, path) in &self.tool.executables {
-            let script = LAUNCHER
-                .replace("@LAUNCH@", launch)
-                .replace("@ENTRYPOINT@", &self.entrypoints[name]);
-            fs::write(destination.join(path), script)?;
-            #[cfg(unix)]
-            {
-                use std::os::unix::fs::PermissionsExt;
-                fs::set_permissions(destination.join(path), fs::Permissions::from_mode(0o755))?;
-            }
-        }
-        Ok(())
+        Ok(copy_tree(&self.tree.root_path(), destination)?)
     }
 }
 
-/// Unix plans stage launchers and Windows plans stage `.exe` exports, so each
+/// Unix plans export launchers and Windows plans export `.exe` files, so each
 /// installs only on its own host family.
-fn host_matches(launch_directory: Option<&str>) -> bool {
-    if cfg!(windows) {
-        launch_directory.is_none()
-    } else {
-        cfg!(unix) && launch_directory.is_some()
-    }
+fn host_matches(windows: bool) -> bool {
+    cfg!(any(unix, windows)) && windows == cfg!(windows)
 }
 
 #[cfg(all(test, unix))]

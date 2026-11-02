@@ -33,22 +33,45 @@ fn user_state(home: &Path) -> PathBuf {
     }
 }
 
-/// A recorded tool exporting `bin/<id>`. The hook reads Rust's host triple and
-/// uv's Python key from the record's platform, the same on every host.
+/// A recorded tool exporting `bin/<id>`, with the variables its adapter
+/// records for a `linux-x64-gnu` selection, the same on every host.
 fn tool(id: &str) -> Tool {
-    let version = match id {
-        "go" => "1.23.0",
-        "python" => "3.12.12",
-        "rust" => "1.90.0",
-        "uv" => "0.9.0",
-        _ => "24.0.0",
+    use turborepo_tool_install::{ManagedVar as V, TreeRef, VarValue};
+    let tree = |id: &str| VarValue::Tree(TreeRef::new(id, ""));
+    let word = |word: &str| VarValue::Word(word.into());
+    let uv = [
+        (V::UvPythonDownloads, word("never")),
+        (V::UvPythonInstallDir, tree("python")),
+    ];
+    let (version, vars) = match id {
+        "go" => (
+            "1.23.0",
+            vec![(V::Goroot, tree("go")), (V::Gotoolchain, word("local"))],
+        ),
+        "python" => {
+            let mut vars = uv.to_vec();
+            vars.push((V::UvPythonPreference, word("only-managed")));
+            vars.push((V::UvPython, word("cpython-3.12.12-linux-x86_64-gnu")));
+            ("3.12.12", vars)
+        }
+        "rust" => (
+            "1.90.0",
+            vec![
+                (V::CargoHome, VarValue::RepoCargoHome),
+                (V::RustupHome, tree("rust")),
+                (V::RustupToolchain, word("1.90.0-x86_64-unknown-linux-gnu")),
+            ],
+        ),
+        "uv" => ("0.9.0", uv.to_vec()),
+        _ => ("24.0.0", Vec::new()),
     };
     Tool {
         id: id.into(),
         version: version.into(),
         platform: "linux-x64-gnu".into(),
         artifact_sha256: "a".repeat(64),
-        executables: [(id.into(), format!("bin/{id}"))].into(),
+        executables: [(id.into(), format!("bin/{id}").into())].into(),
+        vars: vars.into_iter().collect(),
     }
 }
 
@@ -324,7 +347,7 @@ fn printed(stdout: &str, key: &str) -> (BTreeMap<String, String>, bool) {
         .filter_map(|line| line.split_once('='))
         .filter(|(name, _)| {
             ["PATH", "__TURBO_HOOK_STATE"].contains(name)
-                || turborepo_setup::activation::HOOK_ENV.contains(name)
+                || turborepo_tool_install::ManagedVar::from_name(name).is_some()
         })
         .map(|(name, value)| (name.to_owned(), value.to_owned()))
         .collect();

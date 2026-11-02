@@ -53,7 +53,7 @@ fn seeded(script: &str) -> (OwnedSetupFixture, Lock, turborepo_tool_install::Cur
     let mut store = Store::open(root).unwrap();
     let expected = store.generation().unwrap();
     store.reconcile_recorded_checked(&[node.inventory_tool().clone(), pnpm.inventory_tool().clone()], native.record(), &expected, false, |tool, tree| {
-        for relative in tool.executables.values() {
+        for relative in tool.tree_files() {
             let path = tree.join(relative);
             fs::create_dir_all(path.parent().unwrap())?;
             fs::write(&path, script)?;

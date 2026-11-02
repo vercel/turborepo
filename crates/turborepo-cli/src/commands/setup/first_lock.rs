@@ -320,7 +320,7 @@ fn local_create_repeat_targeted_update_removal_and_frozen_drift() {
     let node = LoopbackServer::new(routes(&f, "24.1.0", "10.1.0"), |_| {}).unwrap();
     let prior_manager = selected(&f).tools()["pnpm"].clone();
     assert_eq!(f.run(&node, LOCAL).unwrap(), 0);
-    assert_eq!(node.hits(), 5); // Two Node metadata reads; frozen generation also re-stages pnpm.
+    assert_eq!(node.hits(), 3); // Two Node metadata reads; pnpm's tree is reused beside any Node.
     assert_eq!(selected(&f).tools()["pnpm"], prior_manager);
     fs::write(f.owned.root().join(".node-version"), "24.1.x").unwrap();
     f.run(&node, LOCAL).unwrap();

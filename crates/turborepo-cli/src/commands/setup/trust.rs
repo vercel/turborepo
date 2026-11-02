@@ -68,8 +68,8 @@ pub(crate) struct Recorded {
     /// turbo.lock changed since setup recorded this installation, including a
     /// lock added after `turbo setup --no-lock`.
     pub(crate) stale: bool,
-    /// Each export's relative target. On Windows its extension is the export's
-    /// PATHEXT type (`.exe` or `.cmd`).
+    /// Each export's file name in `bin`. On Windows its extension is the
+    /// export's PATHEXT type (`.exe` or `.cmd`).
     pub(crate) targets: Vec<String>,
 }
 
@@ -389,9 +389,10 @@ impl TrustStore {
             return Ok(None);
         }
         let lock = read(&self.root.join("turbo.lock"), false)?;
-        let targets = (record.installation.tools.iter())
-            .flat_map(|tool| tool.executables.values().cloned())
-            .collect();
+        let mut targets = Vec::new();
+        for tool in &record.installation.tools {
+            targets.extend(tool.bin_entries().map_err(io::Error::other)?);
+        }
         let installation = &record.installation;
         let env = turborepo_setup::activation::runtime_env(
             &self.root,

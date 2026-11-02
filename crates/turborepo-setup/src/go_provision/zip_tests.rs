@@ -84,8 +84,8 @@ async fn windows_zips_skip_go_test_and_promote_only_on_native_x64() {
         let bytes = archive(true);
         let plan = plan(platform, &bytes);
         let executables = &plan.inventory_tool().executables;
-        assert_eq!(executables["go"], "bin/go.exe");
-        assert_eq!(executables["gofmt"], "bin/gofmt.exe");
+        assert_eq!(executables["go"], "bin/go.exe".into());
+        assert_eq!(executables["gofmt"], "bin/gofmt.exe".into());
         let server = LoopbackServer::new([(route(platform), bytes)], |_| {}).unwrap();
         let transport = GoTransport::loopback_http_for_tests(server.origin()).unwrap();
         // Every host verifies and extracts the zip without writing `go/test`.

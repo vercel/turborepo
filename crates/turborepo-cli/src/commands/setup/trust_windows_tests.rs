@@ -47,6 +47,7 @@ impl Fixture {
             platform: "windows-x64".into(),
             artifact_sha256: "a".repeat(64),
             executables: [("node".into(), "node.exe".into())].into(),
+            vars: Default::default(),
         }];
         let current = Current {
             tools,

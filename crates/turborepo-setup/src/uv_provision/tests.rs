@@ -13,7 +13,9 @@ use crate::{
 };
 
 // Prints how it was reached; must never be a real uv.
-const FIXTURE: &str = "#!/bin/sh\necho \"$0|$UV_PYTHON_INSTALL_DIR|$UV_PYTHON_DOWNLOADS|$*\"\n";
+const FIXTURE: &str =
+    "#!/bin/sh\necho \
+     \"$0|$UV_PYTHON_INSTALL_DIR|$UV_PYTHON_DOWNLOADS|$UV_PYTHON_PREFERENCE|$UV_PYTHON|$*\"\n";
 const QUALIFIED: [Platform; 4] = [
     Platform::MacosX64,
     Platform::MacosArm64,
@@ -126,24 +128,24 @@ async fn locked_uv_installs_verified_tree_with_repo_scoped_launchers() {
         let current = store.current().unwrap().unwrap();
         assert_eq!(current.tools, [plan.inventory_tool().clone()]);
         let tools = fs::canonicalize(current.bin.join("../tools")).unwrap();
-        let launch = &plan.inventory_tool().executables["uv"];
-        assert!(launch.starts_with("launch-") && launch.ends_with("/uv"));
-        // Through the generation bin link and directly through the launcher, the
-        // caller's global interpreter settings are replaced by repo scope.
-        for (program, binary) in [
-            (current.bin.join("uv"), "uv"),
-            (current.bin.join("uvx"), "uvx"),
-            (tools.join("uv").join(launch), "uv"),
-        ] {
+        // Through the generation's bin launchers, the caller's global
+        // interpreter settings are replaced by repo scope. The tree holds only
+        // the verified archive.
+        for binary in ["uv", "uvx"] {
             assert_eq!(
-                run(&program),
+                run(&current.bin.join(binary)),
                 format!(
-                    "{}|{}|never|sync --locked",
+                    "{}|{}|never|||sync --locked",
                     tools.join("uv").join(binary).display(),
                     tools.join("python").display()
                 )
             );
         }
+        let tree: Vec<_> = fs::read_dir(tools.join("uv"))
+            .unwrap()
+            .map(|entry| entry.unwrap().file_name())
+            .collect();
+        assert_eq!(tree.len(), 2, "{tree:?}");
         assert!(!tools.join("python").exists());
         // Healthy repeat is network-free; fresh preparation re-verifies bytes.
         assert_eq!(
@@ -159,6 +161,63 @@ async fn locked_uv_installs_verified_tree_with_repo_scoped_launchers() {
         assert!(prepared.is_some());
         assert_eq!(upstream.hits(), 2);
     }
+}
+
+#[tokio::test(flavor = "current_thread")]
+async fn uv_launchers_request_the_locked_interpreter_without_any_parent_environment() {
+    let platform = Platform::MacosArm64;
+    let bytes = archive(platform, &["uv", "uvx"]);
+    let (_upstream, transport) = serve(platform, bytes.clone());
+    let mut document = document(platform, &bytes);
+    let python = lock::Tool {
+        adapter: "python".into(),
+        version: "3.12.12".into(),
+        declarations: vec![Declaration {
+            file: ".python-version".into(),
+            field: None,
+            request: Some("3.12".into()),
+        }],
+        options: BTreeMap::new(),
+        installation: Installation::Managed {
+            artifacts: BTreeMap::from([(
+                platform,
+                BTreeMap::from([(
+                    "distribution".into(),
+                    crate::python_resolution::official_artifact(
+                        &Version::new(3, 12, 12),
+                        platform,
+                        "20260211/cpython-3.12.12%\
+                         2B20260211-aarch64-apple-darwin-install_only_stripped.tar.gz",
+                        "22".repeat(32),
+                    )
+                    .unwrap(),
+                )]),
+            )]),
+        },
+    };
+    document.tools.insert("python".into(), python);
+    let plan = UvPlan::from_lock(&Lock::new(document).unwrap(), platform).unwrap();
+    let repo = tempfile::tempdir().unwrap();
+    let mut store = Store::open(repo.path()).unwrap();
+    install(&mut store, &plan, &transport, crate::Preparation::IfNeeded)
+        .await
+        .unwrap();
+    let bin = store.current().unwrap().unwrap().bin;
+    let output = Command::new(bin.join("uv"))
+        .arg("sync")
+        .env_clear()
+        .output()
+        .unwrap();
+    assert!(output.status.success());
+    let tools = fs::canonicalize(bin.join("../tools")).unwrap();
+    assert_eq!(
+        String::from_utf8(output.stdout).unwrap().trim(),
+        format!(
+            "{}|{}|never|only-managed|cpython-3.12.12-macos-aarch64-none|sync",
+            tools.join("uv/uv").display(),
+            tools.join("python").display()
+        )
+    );
 }
 
 #[tokio::test(flavor = "current_thread")]

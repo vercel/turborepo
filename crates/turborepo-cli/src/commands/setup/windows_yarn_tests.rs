@@ -81,14 +81,10 @@ fn yarn_classic_and_modern_lock_launch_the_managed_node_and_repeat_without_traff
             fs::read(tools.join("yarn/lib/resource")).unwrap(),
             b"yarn resource"
         );
-        let yarn = plan.tools().iter().find(|tool| tool.id == "yarn").unwrap();
         for name in ["yarn", "yarnpkg"] {
-            let launcher = &yarn.executables[name];
-            assert!(launcher.starts_with("managed-node-"), "{launcher}");
-            assert!(launcher.ends_with(&format!("/{name}.cmd")), "{launcher}");
             assert_eq!(
-                fs::read_to_string(tools.join("yarn").join(launcher)).unwrap(),
-                "@\"%~dp0..\\..\\node\\node.exe\" \"%~dp0..\\bin\\yarn.js\" %*\r\n"
+                fs::read_to_string(bin.join(format!("{name}.cmd"))).unwrap(),
+                "@\"%~dp0..\\tools\\node\\node.exe\" \"%~dp0..\\tools\\yarn\\bin\\yarn.js\" %*\r\n"
             );
         }
         // No runtime variables such as YARN_IGNORE_PATH, so Yarn keeps its
@@ -148,9 +144,8 @@ fn modern_yarn_bundle_pins_verify_and_a_committed_yarn_path_is_left_to_yarn() {
     // Yarn's bundle re-runs a committed yarnPath with its own process.execPath,
     // which the launcher makes the managed node.exe.
     let bin = plan.path_prepend().to_path_buf();
-    let launcher = bin.join("../tools/yarn").join(&yarn.executables["yarn"]);
-    let launcher = fs::read_to_string(launcher).unwrap();
-    assert!(launcher.starts_with("@\"%~dp0..\\..\\node\\node.exe\" "));
+    let launcher = fs::read_to_string(bin.join("yarn.cmd")).unwrap();
+    assert!(launcher.starts_with("@\"%~dp0..\\tools\\node\\node.exe\" "));
     assert!(plan.runtime_env().is_empty());
     assert_eq!(
         fs::read_to_string(&release).unwrap(),

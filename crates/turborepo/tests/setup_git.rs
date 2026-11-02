@@ -189,7 +189,7 @@ fn pruned_docker_output_without_git_provisions_and_checks() {
     let pnpm = PnpmPlan::from_declaration(&lock, platform, &node, &declaration).unwrap();
     let tools = [node.inventory_tool().clone(), pnpm.inventory_tool().clone()];
     let stage = |tool: &turborepo_tool_install::Tool, destination: &Path| {
-        for relative in tool.executables.values() {
+        for relative in tool.tree_files() {
             let file = destination.join(relative);
             fs::create_dir_all(file.parent().unwrap())?;
             fs::write(&file, "#!/bin/sh\nexit 99\n")?;

@@ -4,11 +4,11 @@
 //! downloads, or subprocesses. Plans compose with the complete desired
 //! inventory; preparation never publishes.
 
-use std::{fs, time::Duration};
+use std::{collections::BTreeMap, fs, time::Duration};
 
 use turborepo_archive::{ExtractedArtifact, Layout};
 use turborepo_download::ExpectedSha256;
-use turborepo_tool_install::{Store, Tool};
+use turborepo_tool_install::{Export, Launch, ManagedVar, Store, Tool, TreeRef, VarValue};
 
 use crate::{
     go_discovery::GoVersion,
@@ -16,11 +16,6 @@ use crate::{
     lock::{self, Installation, Lock, Platform},
 };
 
-/// Runtime environment every managed `go` invocation must receive.
-/// `GOTOOLCHAIN=local` keeps the go command on this locked toolchain instead
-/// of switching to, and downloading, a release named by `go`/`toolchain`
-/// lines, `go env -w`, or the caller's environment.
-pub const RUNTIME_ENV: [(&str, &str); 1] = [("GOTOOLCHAIN", "local")];
 // Exactly `go/test`, Go's own compiler regression suite: unused by the go
 // command, and it contains PAX-named non-ASCII fixtures. A Go-only constant;
 // no lock, index, or repository input can change it.
@@ -82,13 +77,40 @@ impl GoPlan {
         {
             return Err(Error::InvalidLock);
         }
+        // `GOTOOLCHAIN=local` keeps the go command on this locked toolchain
+        // instead of switching to, and downloading, a release named by
+        // `go`/`toolchain` lines, `go env -w`, or the caller's environment.
+        // `GOROOT` pins this verified tree, so the locked `go` never builds
+        // with another release's standard library and tools.
+        let vars = BTreeMap::from([
+            (ManagedVar::Gotoolchain, VarValue::Word("local".into())),
+            (ManagedVar::Goroot, VarValue::Tree(TreeRef::new("go", ""))),
+        ]);
+        // Unix launchers set them for every invocation. A Windows `go.exe` is
+        // a hard link that relies on activation, which also gives it `GOROOT`
+        // to find its tree.
+        let executables = if matches!(platform, Platform::WindowsX64 | Platform::WindowsArm64) {
+            Export::files(&artifact.executables)
+        } else {
+            (artifact.executables.iter())
+                .map(|(name, path)| {
+                    let program = TreeRef::new("go", path.clone());
+                    let launch = Launch {
+                        program,
+                        args: Vec::new(),
+                    };
+                    (name.clone(), Export::Launch(launch))
+                })
+                .collect()
+        };
         Ok(Self {
             tool: Tool {
                 id: "go".into(),
                 version: go.version.clone(),
                 platform: spelling.into(),
                 artifact_sha256: artifact.sha256.clone(),
-                executables: artifact.executables.clone(),
+                executables,
+                vars,
             },
             artifact,
         })
@@ -149,7 +171,12 @@ impl GoPlan {
         };
         // Both formats share the `go/test` exclusion: the Windows zip carries
         // the same UTF-8 named fixtures, flagged rather than PAX-named.
-        let required: Vec<_> = self.tool.executables.values().map(String::as_str).collect();
+        let required: Vec<_> = self
+            .artifact
+            .executables
+            .values()
+            .map(String::as_str)
+            .collect();
         let tree = turborepo_archive::extract_excluding(
             &bytes,
             format,

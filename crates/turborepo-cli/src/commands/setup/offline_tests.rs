@@ -267,7 +267,7 @@ fn coherent_repository_only_forgery_is_healthy_but_never_authorized_offline() {
         .force_reconcile_checked(
             &tools,
             |tool, root| {
-                for path in tool.executables.values() {
+                for path in tool.tree_files() {
                     let file = root.join(path);
                     fs::create_dir_all(file.parent().unwrap())?;
                     fs::write(&file, "#!/bin/sh\ntouch probe-ran\nexit 91\n")?;
