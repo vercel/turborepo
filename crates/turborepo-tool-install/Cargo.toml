@@ -18,10 +18,10 @@ thiserror = { workspace = true }
 
 [target.'cfg(windows)'.dependencies]
 same-file = "1.0.6"
-windows-sys = { version = "0.59", features = [
-  "Win32_Foundation",
-  "Win32_Storage_FileSystem",
-] }
+
+# sha2 0.10 uses the ARMv8 SHA instructions only with `asm`.
+[target.'cfg(all(target_arch = "aarch64", target_os = "macos"))'.dependencies]
+sha2 = { workspace = true, features = ["asm"] }
 
 [target.'cfg(unix)'.dependencies]
 rustix = { version = "1.1", features = ["process"] }

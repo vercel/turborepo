@@ -324,7 +324,10 @@ fn offline_force_reinstalls_from_cached_or_verified_installed_bytes() {
     }
     // Neither cached nor healthy: every artifact is listed, nothing published.
     let current = Store::inspect(f.owned.root()).unwrap().unwrap();
-    fs::write(current.bin.join("../tools/pnpm/dist/resource"), "damage").unwrap();
+    turborepo_setup::test_support::damage(
+        &current.bin.join("../tools/pnpm/dist/resource"),
+        "damage",
+    );
     let before = f.manifest().unwrap();
     let text = f
         .run_with(&unreachable_origin(), None, FORCE)

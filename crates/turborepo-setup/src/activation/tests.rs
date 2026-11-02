@@ -10,8 +10,11 @@ use turborepo_platform::{Architecture, OperatingSystem, Platform as HostPlatform
 
 use super::*;
 use crate::{
-    execution_identity::Libc, lock::Lock, rust_discovery::Toolchain,
-    rust_metadata::tests::fixture as manifest, rust_resolution,
+    execution_identity::Libc,
+    lock::{Ecosystems, Lock},
+    rust_discovery::Toolchain,
+    rust_metadata::tests::fixture as manifest,
+    rust_resolution,
 };
 
 const TOOLCHAIN: &str = "[toolchain]\nchannel = \"1.99\"\nprofile = \"minimal\"\n";
@@ -29,6 +32,33 @@ fn context() -> ExecutionContext {
         BTreeSet::from(["baseline".into()]),
     )
     .unwrap()
+}
+
+fn inspect(repo: &Path, context: ExecutionContext) -> Result<ActivationPlan, Error> {
+    inspect_with(repo, context, Ecosystems::default())
+}
+
+fn inspect_with(
+    repo: &Path,
+    context: ExecutionContext,
+    ecosystems: Ecosystems,
+) -> Result<ActivationPlan, Error> {
+    let sources = Snapshot::capture_with(repo, ecosystems)?;
+    ActivationPlan::captured(&sources, context, Verification::Shallow)
+}
+
+fn verify_with(
+    repo: &Path,
+    context: ExecutionContext,
+    ecosystems: Ecosystems,
+) -> Result<ActivationPlan, Error> {
+    let sources = Snapshot::capture_with(repo, ecosystems)?;
+    ActivationPlan::captured(&sources, context, Verification::Full)
+}
+
+fn inspect_clone_local(repo: &Path, context: ExecutionContext) -> Result<ActivationPlan, Error> {
+    let sources = Snapshot::capture(repo)?;
+    ActivationPlan::clone_local(&sources, context, Verification::Shallow)
 }
 
 fn fixture() -> Value {
@@ -265,7 +295,7 @@ fn complete_plan_is_read_only_and_preserves_caller_path() {
     fs::remove_file(repo.path().join(".turbo/tools/transaction.lock")).unwrap();
     let before = state(repo.path());
     let env: BTreeMap<_, _> = std::env::vars_os().collect();
-    let plan = ActivationPlan::inspect(repo.path(), context()).unwrap();
+    let plan = inspect(repo.path(), context()).unwrap();
     assert_eq!(plan.tools(), desired(&fixture(), None));
     assert_eq!(plan.snapshot().tools().len(), 2);
     assert!(plan.runtime_env().is_empty());
@@ -291,7 +321,7 @@ fn captured_inspection_preserves_original_root_and_source_bytes() {
         let repo = installed();
         let sources = Snapshot::capture(repo.path()).unwrap();
         let before = state(repo.path());
-        let plan = ActivationPlan::inspect_captured(&sources, context()).unwrap();
+        let plan = ActivationPlan::captured(&sources, context(), Verification::Shallow).unwrap();
         assert_eq!(plan.tools(), desired(&fixture(), None));
         assert_eq!(state(repo.path()), before);
         match case {
@@ -306,7 +336,7 @@ fn captured_inspection_preserves_original_root_and_source_bytes() {
         }
         let after_edit = state(repo.path());
         assert!(matches!(
-            ActivationPlan::inspect_captured(&sources, context()),
+            ActivationPlan::captured(&sources, context(), Verification::Shallow),
             Err(Error::Sources(StorageError::Conflict))
         ));
         assert_eq!(state(repo.path()), after_edit);
@@ -316,11 +346,11 @@ fn captured_inspection_preserves_original_root_and_source_bytes() {
 #[test]
 fn compatible_relocation_keeps_snapshot_not_absolute_install_paths() {
     let repo = installed();
-    let before = ActivationPlan::inspect(repo.path(), context()).unwrap();
+    let before = inspect(repo.path(), context()).unwrap();
     let relocated = tempfile::tempdir().unwrap();
     let target = relocated.path().join("repo ' relocated");
     fs::rename(repo.path(), &target).unwrap();
-    let after = ActivationPlan::inspect(&target, context()).unwrap();
+    let after = inspect(&target, context()).unwrap();
     assert_ne!(before.path_prepend(), after.path_prepend());
     assert!(
         after
@@ -343,15 +373,12 @@ fn missing_lock_and_inventory_never_create_storage_or_use_ancestors() {
     let repo = parent.path().join("nested");
     fs::create_dir(&repo).unwrap();
     let before = state(&repo);
-    assert!(matches!(
-        ActivationPlan::inspect(&repo, context()),
-        Err(Error::MissingLock)
-    ));
+    assert!(matches!(inspect(&repo, context()), Err(Error::MissingLock)));
     assert_eq!(state(&repo), before);
     write_sources(&repo, &fixture());
     let before = state(&repo);
     assert!(matches!(
-        ActivationPlan::inspect(&repo, context()),
+        inspect(&repo, context()),
         Err(Error::MissingInventory)
     ));
     assert_eq!(state(&repo), before);
@@ -381,7 +408,7 @@ fn stale_or_unrelated_inventory_never_supplies_extra_exports() {
         seed(repo.path(), &tools);
         let before = state(repo.path());
         assert!(matches!(
-            ActivationPlan::inspect(repo.path(), context()),
+            inspect(repo.path(), context()),
             Err(Error::StaleInventory)
         ));
         assert_eq!(state(repo.path()), before);
@@ -394,22 +421,21 @@ fn every_export_and_adjacent_resource_is_checked() {
         let repo = installed();
         let bin = Store::inspect(repo.path()).unwrap().unwrap().bin;
         match name {
-            "resource" => {
-                fs::write(bin.join("../tools/pnpm/resources/template.json"), "damaged").unwrap()
-            }
+            "resource" => crate::source_policy::test_support::damage(
+                &bin.join("../tools/pnpm/resources/template.json"),
+                "damaged",
+            ),
             "extra" => {
                 symlink("../tools/node/bin/node", bin.join("undeclared")).unwrap();
             }
             _ => fs::remove_file(bin.join(name)).unwrap(),
         }
         let before = state(repo.path());
-        assert!(
-            matches!(
-                ActivationPlan::inspect(repo.path(), context()),
-                Err(Error::DamagedInventory(_))
-            ),
-            "{name}"
-        );
+        let result = match name {
+            "resource" => verify_with(repo.path(), context(), Ecosystems::default()),
+            _ => inspect(repo.path(), context()),
+        };
+        assert!(matches!(result, Err(Error::DamagedInventory(_))), "{name}");
         assert_eq!(state(repo.path()), before);
     }
 }
@@ -435,7 +461,7 @@ fn unsafe_managed_paths_and_escaped_exports_fail_closed() {
         }
         let before = state(repo.path());
         assert!(matches!(
-            ActivationPlan::inspect(repo.path(), context()),
+            inspect(repo.path(), context()),
             Err(Error::DamagedInventory(_))
         ));
         assert_eq!(state(repo.path()), before);
@@ -449,7 +475,7 @@ fn native_provenance_and_capture_changes_are_rejected() {
     fs::write(repo.path().join(".nvmrc"), "24.x").unwrap();
     let before = state(repo.path());
     assert!(matches!(
-        ActivationPlan::inspect(repo.path(), context()),
+        inspect(repo.path(), context()),
         Err(Error::DeclarationDrift)
     ));
     assert!(matches!(
@@ -481,7 +507,7 @@ fn authored_integrity_is_part_of_the_installed_node_binding() {
             serde_json::to_value(&captured.declarations()["pnpm"]).unwrap();
         fs::write(repo.path().join("turbo.lock"), value.to_string()).unwrap();
         assert!(matches!(
-            ActivationPlan::inspect(repo.path(), context()),
+            inspect(repo.path(), context()),
             Err(Error::StaleInventory)
         ));
         let authored = crate::package_manager::CorepackIntegrity {
@@ -489,7 +515,7 @@ fn authored_integrity_is_part_of_the_installed_node_binding() {
             digest: "aa".repeat(64),
         };
         seed(repo.path(), &desired(&value, Some(&authored)));
-        assert!(ActivationPlan::inspect(repo.path(), context()).is_ok());
+        assert!(inspect(repo.path(), context()).is_ok());
     }
 }
 
@@ -520,10 +546,7 @@ fn authored_integrity_errors_precede_inventory_reads_without_mutation() {
         fs::write(repo.path().join("turbo.lock"), value.to_string()).unwrap();
         let before = state(repo.path());
         assert!(
-            matches!(
-                ActivationPlan::inspect(repo.path(), context()),
-                Err(Error::InvalidLock)
-            ),
+            matches!(inspect(repo.path(), context()), Err(Error::InvalidLock)),
             "{manifest}"
         );
         assert_eq!(state(repo.path()), before);
@@ -557,16 +580,16 @@ fn unsupported_adapters_platforms_and_invalid_lock_metadata_are_distinct() {
     )
     .unwrap();
     assert!(matches!(
-        ActivationPlan::inspect(repo.path(), windows_arm64),
+        inspect(repo.path(), windows_arm64),
         Err(Error::UnsupportedPlatform)
     ));
     // musl hosts never activate managed artifacts or clone-local generations.
     assert!(matches!(
-        ActivationPlan::inspect(repo.path(), musl("1.2.5")),
+        inspect(repo.path(), musl("1.2.5")),
         Err(Error::MuslHost)
     ));
     assert!(matches!(
-        ActivationPlan::inspect_clone_local(repo.path(), musl("1.2.5")),
+        inspect_clone_local(repo.path(), musl("1.2.5")),
         Err(Error::MuslHost)
     ));
     for change in 0..4 {
@@ -589,7 +612,7 @@ fn unsupported_adapters_platforms_and_invalid_lock_metadata_are_distinct() {
             }
         }
         fs::write(repo.path().join("turbo.lock"), value.to_string()).unwrap();
-        let result = ActivationPlan::inspect(repo.path(), context());
+        let result = inspect(repo.path(), context());
         if change == 3 {
             assert!(matches!(result, Err(Error::InvalidLock)));
         } else if change < 2 {
@@ -639,7 +662,7 @@ fn locked_node_semantics_are_checked_before_inventory() {
         let before = state(repo.path());
         assert!(
             matches!(
-                ActivationPlan::inspect(repo.path(), context()),
+                inspect(repo.path(), context()),
                 Err(Error::DeclarationDrift)
             ),
             "{file}: {contents}"
@@ -656,7 +679,7 @@ fn node_only_selection_uses_the_same_readiness_and_snapshot_contract() {
     write_sources(repo.path(), &value);
     fs::write(repo.path().join("package.json"), "{}").unwrap();
     seed(repo.path(), &desired(&value, None));
-    let plan = ActivationPlan::inspect(repo.path(), context()).unwrap();
+    let plan = inspect(repo.path(), context()).unwrap();
     assert_eq!(plan.snapshot().tools().len(), 1);
     assert_eq!(plan.tools().len(), 1);
     value["tools"]["node"]["options"]["bundled-npm"] = json!(["12.0.0"]);
@@ -664,7 +687,7 @@ fn node_only_selection_uses_the_same_readiness_and_snapshot_contract() {
     fs::write(repo.path().join("turbo.lock"), value.to_string()).unwrap();
     let before = state(repo.path());
     assert!(matches!(
-        ActivationPlan::inspect(repo.path(), context()),
+        inspect(repo.path(), context()),
         Err(Error::StaleInventory)
     ));
     assert_eq!(state(repo.path()), before);
@@ -744,7 +767,7 @@ fn python_installed(mut value: Value) -> (tempfile::TempDir, Value) {
 fn uv_and_python_export_bins_and_pin_uv_to_the_locked_interpreter() {
     let (repo, _) = python_installed(with_python(fixture(), true));
     let before = state(repo.path());
-    let plan = ActivationPlan::inspect_with(repo.path(), context(), PYTHON).unwrap();
+    let plan = inspect_with(repo.path(), context(), PYTHON).unwrap();
     let ids: Vec<_> = plan.tools().iter().map(|tool| tool.id.as_str()).collect();
     assert_eq!(ids, ["node", "pnpm", "python", "uv"]);
     assert_eq!(plan.snapshot().tools().len(), 4);
@@ -776,7 +799,7 @@ fn uv_and_python_export_bins_and_pin_uv_to_the_locked_interpreter() {
 #[test]
 fn python_only_uv_mirrors_its_launchers_without_selecting_an_interpreter() {
     let (repo, _) = python_installed(with_python(json!({"schemaVersion":0,"tools":{}}), false));
-    let plan = ActivationPlan::inspect_with(repo.path(), context(), PYTHON).unwrap();
+    let plan = inspect_with(repo.path(), context(), PYTHON).unwrap();
     assert_eq!(plan.tools().len(), 1);
     assert_eq!(
         plan.runtime_env(),
@@ -822,9 +845,9 @@ fn uv_and_python_fail_closed_when_disabled_drifted_stale_or_damaged() {
         }
         let before = state(repo.path());
         let result = if change == 0 {
-            ActivationPlan::inspect(repo.path(), context())
+            inspect(repo.path(), context())
         } else {
-            ActivationPlan::inspect_with(repo.path(), context(), PYTHON)
+            inspect_with(repo.path(), context(), PYTHON)
         };
         assert!(
             matches!(
@@ -854,7 +877,7 @@ fn yarn_and_bun_contribute_exports_through_the_node_and_pnpm_plan_shape() {
         seed(repo.path(), &tools);
         fs::remove_file(repo.path().join(".turbo/tools/transaction.lock")).unwrap();
         let before = state(repo.path());
-        let plan = ActivationPlan::inspect(repo.path(), context()).unwrap();
+        let plan = inspect(repo.path(), context()).unwrap();
         assert_eq!(plan.tools(), tools, "{request}");
         assert_eq!(plan.snapshot().tools().len(), 2);
         // Same representation as Node/pnpm: one managed bin, no runtime values.
@@ -875,7 +898,7 @@ fn yarn_and_bun_contribute_exports_through_the_node_and_pnpm_plan_shape() {
 #[test]
 fn rust_and_python_cohort_preserves_both_private_runtime_environments() {
     let (repo, value) = python_installed(with_python(fixture(), true));
-    let python_env = ActivationPlan::inspect_with(repo.path(), context(), PYTHON)
+    let python_env = inspect_with(repo.path(), context(), PYTHON)
         .unwrap()
         .runtime_env()
         .clone();
@@ -897,7 +920,7 @@ fn rust_and_python_cohort_preserves_both_private_runtime_environments() {
     tools.sort_by(|a, b| a.id.cmp(&b.id));
     seed(repo.path(), &tools);
     let before = state(repo.path());
-    let plan = ActivationPlan::inspect_with(
+    let plan = inspect_with(
         repo.path(),
         context(),
         Ecosystems {
@@ -962,10 +985,10 @@ fn rust_selection_adds_toolchain_exports_and_private_runtime_env() {
     let before = state(repo.path());
     // Without the Cargo flag the Rust selections are drift, never ignored.
     assert!(matches!(
-        ActivationPlan::inspect(repo.path(), context()),
+        inspect(repo.path(), context()),
         Err(Error::DeclarationDrift)
     ));
-    let plan = ActivationPlan::inspect_with(repo.path(), context(), RUST).unwrap();
+    let plan = inspect_with(repo.path(), context(), RUST).unwrap();
     assert_eq!(plan.tools(), desired(&value, None));
     let ids: Vec<_> = plan.snapshot().tools().keys().collect();
     assert_eq!(ids, ["node", "pnpm", "rust", "rustup"]);
@@ -999,25 +1022,25 @@ fn rust_only_plans_bind_the_toolchain_file_tree_and_cargo_home() {
     let repo = tempfile::tempdir().unwrap();
     let value = with_rust(repo.path(), json!({"schemaVersion":0,"tools":{}}));
     seed(repo.path(), &desired(&value, None));
-    let plan = ActivationPlan::inspect_with(repo.path(), context(), RUST).unwrap();
+    let plan = inspect_with(repo.path(), context(), RUST).unwrap();
     let ids: Vec<_> = plan.tools().iter().map(|tool| tool.id.as_str()).collect();
     assert_eq!(ids, ["rust", "rustup"]);
 
     // An existing private home is used; a redirected or non-directory one is not.
     let home = repo.path().join(".turbo/cargo-home");
     fs::create_dir(&home).unwrap();
-    assert!(ActivationPlan::inspect_with(repo.path(), context(), RUST).is_ok());
+    assert!(inspect_with(repo.path(), context(), RUST).is_ok());
     fs::remove_dir(&home).unwrap();
     let outside = tempfile::tempdir().unwrap();
     symlink(outside.path(), &home).unwrap();
     assert!(matches!(
-        ActivationPlan::inspect_with(repo.path(), context(), RUST),
+        inspect_with(repo.path(), context(), RUST),
         Err(Error::UnsafeCargoHome(_))
     ));
     fs::remove_file(&home).unwrap();
     fs::write(&home, "").unwrap();
     assert!(matches!(
-        ActivationPlan::inspect_with(repo.path(), context(), RUST),
+        inspect_with(repo.path(), context(), RUST),
         Err(Error::UnsafeCargoHome(_))
     ));
     fs::remove_file(&home).unwrap();
@@ -1031,15 +1054,15 @@ fn rust_only_plans_bind_the_toolchain_file_tree_and_cargo_home() {
         fs::write(&file, edit).unwrap();
         let before = state(repo.path());
         assert!(matches!(
-            ActivationPlan::inspect_with(repo.path(), context(), RUST),
+            inspect_with(repo.path(), context(), RUST),
             Err(Error::DeclarationDrift)
         ));
         assert_eq!(state(repo.path()), before);
     }
     fs::write(&file, TOOLCHAIN).unwrap();
-    fs::write(plan.path_prepend().join("rustdoc"), "damaged").unwrap();
+    crate::source_policy::test_support::damage(&plan.path_prepend().join("rustdoc"), "damaged");
     assert!(matches!(
-        ActivationPlan::inspect_with(repo.path(), context(), RUST),
+        verify_with(repo.path(), context(), RUST),
         Err(Error::DamagedInventory(_))
     ));
 }
@@ -1071,7 +1094,7 @@ fn switched_or_missing_manager_installations_never_activate() {
             }
         };
         let before = state(repo.path());
-        let result = ActivationPlan::inspect(repo.path(), context());
+        let result = inspect(repo.path(), context());
         assert_eq!(
             result.err().map(|e| std::mem::discriminant(&e)),
             Some(std::mem::discriminant(&expected)),
@@ -1093,7 +1116,7 @@ fn modern_yarn_bundle_pin_is_part_of_the_installed_binding() {
     fs::write(repo.path().join("turbo.lock"), value.to_string()).unwrap();
     seed(repo.path(), &desired(&value, None));
     assert!(matches!(
-        ActivationPlan::inspect(repo.path(), context()),
+        inspect(repo.path(), context()),
         Err(Error::StaleInventory)
     ));
     let authored = crate::package_manager::CorepackIntegrity {
@@ -1101,7 +1124,7 @@ fn modern_yarn_bundle_pin_is_part_of_the_installed_binding() {
         digest,
     };
     seed(repo.path(), &desired(&value, Some(&authored)));
-    assert!(ActivationPlan::inspect(repo.path(), context()).is_ok());
+    assert!(inspect(repo.path(), context()).is_ok());
 }
 
 /// A lock selecting `id` alone, with no Node declaration in the sources.
@@ -1120,7 +1143,7 @@ fn bun_only_selection_activates_without_managed_node() {
     let tools = desired(&value, None);
     seed(repo.path(), &tools);
     let before = state(repo.path());
-    let plan = ActivationPlan::inspect(repo.path(), context()).unwrap();
+    let plan = inspect(repo.path(), context()).unwrap();
     assert_eq!(plan.tools(), tools);
     assert_eq!(plan.snapshot().tools().len(), 1);
     assert!(plan.runtime_env().is_empty());
@@ -1134,7 +1157,7 @@ fn bun_only_selection_activates_without_managed_node() {
     // A later Node declaration is drift until setup locks it.
     fs::write(repo.path().join(".nvmrc"), "24.0.0\n").unwrap();
     assert!(matches!(
-        ActivationPlan::inspect(repo.path(), context()),
+        inspect(repo.path(), context()),
         Err(Error::DeclarationDrift)
     ));
 }
@@ -1153,10 +1176,7 @@ fn node_based_managers_never_activate_without_managed_node() {
         }
         let before = state(repo.path());
         assert!(
-            matches!(
-                ActivationPlan::inspect(repo.path(), context()),
-                Err(Error::InvalidLock)
-            ),
+            matches!(inspect(repo.path(), context()), Err(Error::InvalidLock)),
             "{id} {version}"
         );
         assert_eq!(state(repo.path()), before);
@@ -1214,7 +1234,7 @@ fn go_selection_contributes_its_bin_and_locked_runtime_env() {
         let (repo, value) = go_installed(js);
         fs::remove_file(repo.path().join(".turbo/tools/transaction.lock")).unwrap();
         let before = state(repo.path());
-        let plan = ActivationPlan::inspect_with(repo.path(), context(), GO).unwrap();
+        let plan = inspect_with(repo.path(), context(), GO).unwrap();
         assert_eq!(plan.tools(), go_desired(&value));
         assert_eq!(plan.snapshot().tools().len(), if js { 3 } else { 1 });
         let goroot = plan.path_prepend().parent().unwrap().join("tools/go");
@@ -1233,11 +1253,11 @@ fn go_selection_contributes_its_bin_and_locked_runtime_env() {
     }
     // GOROOT follows a compatible relocation; the selected identity does not.
     let (repo, _) = go_installed(false);
-    let before = ActivationPlan::inspect_with(repo.path(), context(), GO).unwrap();
+    let before = inspect_with(repo.path(), context(), GO).unwrap();
     let relocated = tempfile::tempdir().unwrap();
     let target = relocated.path().join("moved");
     fs::rename(repo.path(), &target).unwrap();
-    let after = ActivationPlan::inspect_with(&target, context(), GO).unwrap();
+    let after = inspect_with(&target, context(), GO).unwrap();
     let goroot = Path::new(&after.runtime_env()["GOROOT"]);
     assert!(goroot.starts_with(target.canonicalize().unwrap()));
     assert_eq!(
@@ -1260,7 +1280,7 @@ fn go_drift_disabled_flag_and_stale_or_damaged_trees_fail_closed() {
         let before = state(repo.path());
         assert!(
             matches!(
-                ActivationPlan::inspect_with(repo.path(), context(), GO),
+                inspect_with(repo.path(), context(), GO),
                 Err(Error::DeclarationDrift)
             ),
             "{go_work}"
@@ -1271,18 +1291,21 @@ fn go_drift_disabled_flag_and_stale_or_damaged_trees_fail_closed() {
         let (repo, value) = go_installed(true);
         let bin = Store::inspect(repo.path()).unwrap().unwrap().bin;
         if damage {
-            fs::write(bin.join("../tools/go/resources/template.json"), "damaged").unwrap();
+            crate::source_policy::test_support::damage(
+                &bin.join("../tools/go/resources/template.json"),
+                "damaged",
+            );
         } else {
             // Without experimentalGoWorkspaces go.work is unread, so the
             // locked Go selection is drift, as in setup.
             assert!(matches!(
-                ActivationPlan::inspect(repo.path(), context()),
+                inspect(repo.path(), context()),
                 Err(Error::DeclarationDrift)
             ));
             seed(repo.path(), &desired(&value, None));
         }
         let before = state(repo.path());
-        let result = ActivationPlan::inspect_with(repo.path(), context(), GO);
+        let result = verify_with(repo.path(), context(), GO);
         if damage {
             assert!(matches!(result, Err(Error::DamagedInventory(_))));
         } else {
@@ -1314,12 +1337,12 @@ fn clone_local(record: Option<&[u8]>) -> tempfile::TempDir {
 fn clone_local_selection_plans_like_its_lock_under_a_distinct_identity() {
     let repo = clone_local(None);
     let before = state(repo.path());
-    let plan = ActivationPlan::inspect_clone_local(repo.path(), context()).unwrap();
+    let plan = inspect_clone_local(repo.path(), context()).unwrap();
     assert_eq!(plan.tools(), desired(&fixture(), None));
     let identity: Value = serde_json::from_slice(plan.snapshot().canonical_identity()).unwrap();
     assert_eq!(identity["resolution"], "clone-local");
     assert!(matches!(
-        ActivationPlan::inspect(repo.path(), context()),
+        inspect(repo.path(), context()),
         Err(Error::MissingLock)
     ));
     assert_eq!(state(repo.path()), before);
@@ -1331,7 +1354,7 @@ fn clone_local_selection_plans_like_its_lock_under_a_distinct_identity() {
         lock.canonical_bytes().unwrap(),
     )
     .unwrap();
-    let locked = ActivationPlan::inspect(repo.path(), context()).unwrap();
+    let locked = inspect(repo.path(), context()).unwrap();
     assert_eq!(locked.tools(), plan.tools());
     assert_eq!(locked.path_prepend(), plan.path_prepend());
     assert_ne!(
@@ -1339,7 +1362,7 @@ fn clone_local_selection_plans_like_its_lock_under_a_distinct_identity() {
         plan.snapshot().fingerprint()
     );
     assert!(matches!(
-        ActivationPlan::inspect_clone_local(repo.path(), context()),
+        inspect_clone_local(repo.path(), context()),
         Err(Error::Sources(StorageError::Conflict))
     ));
 }
@@ -1349,26 +1372,26 @@ fn clone_local_drift_missing_recordless_and_invalid_selections_fail_closed() {
     let repo = clone_local(None);
     fs::write(repo.path().join(".nvmrc"), "24.1.0\n").unwrap();
     assert!(matches!(
-        ActivationPlan::inspect_clone_local(repo.path(), context()),
+        inspect_clone_local(repo.path(), context()),
         Err(Error::DeclarationDrift)
     ));
     let repo = clone_local(Some(br#"{"schemaVersion":0,"tools":{}}"#.as_slice()));
     assert!(matches!(
-        ActivationPlan::inspect_clone_local(repo.path(), context()),
+        inspect_clone_local(repo.path(), context()),
         Err(Error::InvalidSelection)
     ));
     // A lock-only generation left after deleting turbo.lock selects nothing.
     let repo = installed();
     fs::remove_file(repo.path().join("turbo.lock")).unwrap();
     assert!(matches!(
-        ActivationPlan::inspect_clone_local(repo.path(), context()),
+        inspect_clone_local(repo.path(), context()),
         Err(Error::StaleInventory)
     ));
     let repo = tempfile::tempdir().unwrap();
     write_sources(repo.path(), &fixture());
     fs::remove_file(repo.path().join("turbo.lock")).unwrap();
     assert!(matches!(
-        ActivationPlan::inspect_clone_local(repo.path(), context()),
+        inspect_clone_local(repo.path(), context()),
         Err(Error::MissingInventory)
     ));
     assert!(!repo.path().join(".turbo").exists());

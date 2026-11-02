@@ -767,10 +767,9 @@ mod tests {
     }
 
     fn filtered_environment() -> EnvironmentVariableMap {
-        EnvironmentVariableMap::from(HashMap::from([
-            ("ALLOWED_VAR".to_owned(), "allowed".to_owned()),
-            ("PATH".to_owned(), std::env::var("PATH").unwrap()),
-        ]))
+        let mut environment = path_only(&std::env::var("PATH").unwrap());
+        environment.insert("ALLOWED_VAR".to_owned(), "allowed".to_owned());
+        environment
     }
 
     async fn package_graph(

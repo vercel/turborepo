@@ -42,7 +42,7 @@ fn plan_and_check_are_read_only_and_check_rehashes_adjacent_resources() {
     let tool = current.tools.iter().find(|t| t.id == "fixture").unwrap();
     let data = current.tool_tree(tool).unwrap().join("share/data.txt");
     drop(store);
-    fs::write(&data, "tampered").unwrap();
+    turborepo_setup::test_support::damage(&data, "tampered");
     let error = f.check(CHECK).unwrap_err();
     assert!(
         matches!(
@@ -51,11 +51,14 @@ fn plan_and_check_are_read_only_and_check_rehashes_adjacent_resources() {
         ),
         "{error}"
     );
-    assert!(plan(&f).contains("fixture 1.2.3: repair (damaged installation)"));
     assert_eq!(u.hits(), 2);
-    // Frozen setup repairs it from the unchanged lock.
     let locked = lock(&f);
     assert_eq!(f.run(&u, FROZEN).unwrap(), 0);
+    assert!(f.check(CHECK).is_err());
+    assert_eq!(
+        f.run(&u, &["--frozen", "--tools-only", "--force"]).unwrap(),
+        0
+    );
     assert_eq!(f.check(CHECK).unwrap(), 0);
     assert_eq!(lock(&f), locked);
     f.no_execution();

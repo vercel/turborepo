@@ -12,9 +12,18 @@ mod force;
 mod inherited_child;
 mod inherited_lock;
 mod paths_permissions;
+mod read_only;
 mod record;
 mod recovery;
-mod stamps;
+mod shallow;
+
+fn damage(path: &Path) {
+    let path = fs::canonicalize(path).unwrap();
+    let permissions = fs::metadata(&path).unwrap().permissions();
+    fs::remove_file(&path).unwrap();
+    fs::write(&path, b"damaged").unwrap();
+    fs::set_permissions(path, permissions).unwrap();
+}
 
 fn tool(id: &str) -> Tool {
     Tool {
@@ -86,9 +95,10 @@ fn inspect_does_not_initialize_or_lock_storage() {
     fs::remove_file(repo.path().join(".turbo/tools/transaction.lock")).unwrap();
     assert!(Store::inspect(repo.path()).unwrap().is_some());
     assert!(!repo.path().join(".turbo/tools/transaction.lock").exists());
-    fs::write(current.bin.join("../tools/node/resource"), "damage").unwrap();
+    damage(&current.bin.join("../tools/node/resource"));
+    assert!(Store::inspect(repo.path()).unwrap().is_some());
     assert!(matches!(
-        Store::inspect(repo.path()),
+        Store::inspect_with(repo.path(), Verification::Full),
         Err(Error::DamagedContents)
     ));
     assert_eq!(
@@ -98,10 +108,12 @@ fn inspect_does_not_initialize_or_lock_storage() {
     // Content damage must not hide structural corruption elsewhere.
     fs::remove_file(current.bin.join("node")).unwrap();
     symlink(repo.path(), current.bin.join("node")).unwrap();
-    assert!(matches!(
-        Store::inspect(repo.path()),
-        Err(Error::UnsafePath)
-    ));
+    for verification in [Verification::Full, Verification::Shallow] {
+        assert!(matches!(
+            Store::inspect_with(repo.path(), verification),
+            Err(Error::UnsafePath)
+        ));
+    }
 }
 
 #[test]
@@ -214,9 +226,18 @@ fn exact_identity_and_damage_require_reinstallation() {
         assert_eq!(calls, 1);
     }
     let bin = store.current().unwrap().unwrap().bin;
-    fs::write(bin.join("node"), b"tampered").unwrap();
-    assert!(store.current().is_err());
-    assert_eq!(store.reconcile(&[a], populate).unwrap(), Outcome::Replaced);
+    damage(&bin.join("node"));
+    assert!(Store::inspect_with(repo.path(), Verification::Full).is_err());
+    assert_eq!(
+        store.reconcile(&[a.clone()], populate).unwrap(),
+        Outcome::Unchanged
+    );
+    assert_eq!(
+        store
+            .force_reconcile_checked(&[a], populate, || Ok(()))
+            .unwrap(),
+        Outcome::Replaced
+    );
     assert_eq!(
         fs::read(store.current().unwrap().unwrap().bin.join("node")).unwrap(),
         b"2.0.0"
