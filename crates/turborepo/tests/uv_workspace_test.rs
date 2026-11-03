@@ -20,8 +20,7 @@ fn setup_uv_monorepo(dir: &Path) {
 }
 
 fn setup_uv_pure_workspace(dir: &Path) {
-    setup::copy_fixture("uv_pure_workspace", dir).unwrap();
-    setup::setup_git(dir).unwrap();
+    setup_uv_fixture(dir, "uv_pure_workspace");
     assert!(
         !dir.join("package.json").exists(),
         "the pure uv fixture must have no package.json"
@@ -29,8 +28,20 @@ fn setup_uv_pure_workspace(dir: &Path) {
 }
 
 fn setup_uv_native_tools(dir: &Path) {
-    setup::copy_fixture("uv_native_tools", dir).unwrap();
+    setup_uv_fixture(dir, "uv_native_tools");
+}
+
+fn setup_uv_fixture(dir: &Path, fixture: &str) {
+    setup::copy_fixture(fixture, dir).unwrap();
     setup::setup_git(dir).unwrap();
+}
+
+fn run_uv(dir: &Path, args: &[&str]) -> std::process::Output {
+    std::process::Command::new("uv")
+        .args(args)
+        .current_dir(dir)
+        .output()
+        .expect("failed to execute uv")
 }
 
 fn run_turbo(dir: &Path, args: &[&str]) -> std::process::Output {
@@ -643,11 +654,7 @@ fn test_uv_lock_change_only_affects_dependency_closure() {
         "packages/py-app/pyproject.toml",
         "\n[dependency-groups]\ndev = [\"ruff>=0.12.0,<=0.12.1\"]\n",
     );
-    let lock = std::process::Command::new("uv")
-        .args(["lock", "--upgrade-package", "ruff==0.12.0"])
-        .current_dir(tempdir.path())
-        .output()
-        .expect("uv lock runs");
+    let lock = run_uv(tempdir.path(), &["lock", "--upgrade-package", "ruff==0.12.0"]);
     assert_command_success(&lock, "initial uv lock");
     let add = std::process::Command::new("git")
         .args(["add", "."])
@@ -665,11 +672,7 @@ fn test_uv_lock_change_only_affects_dependency_closure() {
     let before = dry_run_tasks(tempdir.path(), &["run", "build", "--filter=py-app"]);
 
     // Keep the manifest unchanged so only lockfile analysis can select py-app.
-    let lock = std::process::Command::new("uv")
-        .args(["lock", "--upgrade-package", "ruff==0.12.1"])
-        .current_dir(tempdir.path())
-        .output()
-        .expect("uv lock runs");
+    let lock = run_uv(tempdir.path(), &["lock", "--upgrade-package", "ruff==0.12.1"]);
     assert_command_success(&lock, "updated uv lock");
     let diff = std::process::Command::new("git")
         .args(["diff", "--name-only", "HEAD"])
