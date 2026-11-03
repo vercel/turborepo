@@ -113,6 +113,98 @@ fn uv_dependency_graph_fixture() -> Option<tempfile::TempDir> {
     Some(fixture)
 }
 
+fn assert_root_project_dependency_rejected(dir: &Path) {
+    let output = run_turbo(dir, &["build", "--filter=child-plugin", "--dry-run=json"]);
+    assert!(
+        !output.status.success(),
+        "unsupported root dependency must fail"
+    );
+    assert_ne!(output.status.code(), Some(101), "discovery must not panic");
+    // Error rendering can wrap the message with diagnostic gutters.
+    let diagnostic = common::combined_output(&output)
+        .split_whitespace()
+        .filter(|word| *word != "|")
+        .collect::<Vec<_>>()
+        .join(" ");
+    for expected in [
+        "child-plugin",
+        "core-lib",
+        "Dependencies on the root project are not supported by Turborepo",
+        "into a workspace member directory",
+    ] {
+        assert!(diagnostic.contains(expected), "{diagnostic}");
+    }
+}
+
+#[test]
+fn test_uv_resolved_root_project_dependency_is_rejected() {
+    if !uv_available() {
+        return;
+    }
+    let fixture = tempfile::tempdir().unwrap();
+    setup_uv_fixture(fixture.path(), "uv_root_dependency");
+    assert_command_success(
+        &run_uv(
+            fixture.path(),
+            &["workspace", "metadata", "--frozen", "--offline"],
+        ),
+        "uv accepts the root library and its Hatch-based plugin",
+    );
+    // The dependency exists only in resolved metadata. Falling back to the
+    // manifest would silently discard it and make this command succeed.
+    assert_root_project_dependency_rejected(fixture.path());
+}
+
+#[test]
+fn test_uv_fallback_root_project_dependency_is_rejected() {
+    for source in [
+        "",
+        "{ workspace = true }",
+        "{ path = '../..', editable = true }",
+        "[{ workspace = true, marker = \"sys_platform == 'linux'\" }, { index = 'pypi' }]",
+    ] {
+        let fixture = tempfile::tempdir().unwrap();
+        setup_uv_fixture(fixture.path(), "uv_root_dependency");
+        fs::write(fixture.path().join("uv.lock"), "invalid lockfile").unwrap();
+        fs::write(
+            fixture.path().join("packages/child-plugin/pyproject.toml"),
+            format!(
+                "[project]\nname = 'child-plugin'\nversion = '0.1.0'\ndependencies = \
+                 ['core-lib']\n{}",
+                if source.is_empty() {
+                    String::new()
+                } else {
+                    format!("[tool.uv.sources]\ncore-lib = {source}\n")
+                }
+            ),
+        )
+        .unwrap();
+        assert_root_project_dependency_rejected(fixture.path());
+    }
+}
+
+#[test]
+fn test_uv_fallback_allows_external_override_of_root_project_name() {
+    for source in [
+        "{ index = 'pypi' }",
+        "{ git = 'https://example.com/core-lib.git' }",
+    ] {
+        let fixture = tempfile::tempdir().unwrap();
+        setup_uv_fixture(fixture.path(), "uv_root_dependency");
+        fs::write(fixture.path().join("uv.lock"), "invalid lockfile").unwrap();
+        fs::write(
+            fixture.path().join("packages/child-plugin/pyproject.toml"),
+            format!(
+                "[project]\nname = 'child-plugin'\nversion = '0.1.0'\ndependencies = \
+                 ['core-lib']\n[tool.uv.sources]\ncore-lib = {source}\n"
+            ),
+        )
+        .unwrap();
+        let tasks = dry_run_tasks(fixture.path(), &["check", "--filter=child-plugin"]);
+        assert_eq!(task_ids(&tasks), ["child-plugin#check"]);
+    }
+}
+
 #[test]
 fn test_uv_resolved_direct_dependencies() {
     let Some(fixture) = uv_dependency_graph_fixture() else {

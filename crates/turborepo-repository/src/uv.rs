@@ -151,6 +151,15 @@ pub enum Error {
         dependency: String,
         path: String,
     },
+    #[error(
+        "{manifest} depends on the root Python project {root_project:?}. Dependencies on the root \
+         project are not supported by Turborepo. Move {root_project:?} into a workspace member \
+         directory."
+    )]
+    UnsupportedRootProjectDependency {
+        manifest: String,
+        root_project: String,
+    },
     #[error(transparent)]
     Lockfile(#[from] turborepo_lockfiles::UvLockError),
     #[error("uv workspace member manifest has no parent directory: {0}")]
@@ -983,8 +992,10 @@ fn discover_workspace_from_manifests(
 /// dependency of each member and of the root project is checked against its
 /// effective source: the declaring manifest's own `[tool.uv.sources]` entry,
 /// else the root's, with paths resolved relative to the manifest that declares
-/// the source. Paths resolving to a member directory (or to the root project)
-/// are allowed, as are `workspace`, `git`, `url`, and `index` sources.
+/// the source. Paths resolving to a member directory are allowed, as are
+/// `workspace`, `git`, `url`, and `index` sources. Member dependencies
+/// targeting the root Python project are rejected because it has no package
+/// graph node.
 fn reject_unsupported_local_sources(
     repo_root: &AbsoluteSystemPath,
     workspace: &DiscoveredWorkspace,
@@ -1036,6 +1047,21 @@ fn reject_unsupported_local_sources(
                 let base = declared_in
                     .parent()
                     .ok_or_else(|| Error::InvalidMemberManifestPath(declared_in.to_string()))?;
+                if let Some(root_project) = &workspace.root_project_name
+                    && manifest_path != root_manifest_path
+                    && source_targets_root_project(
+                        source,
+                        &dependency,
+                        root_project,
+                        base,
+                        repo_root,
+                    )
+                {
+                    return Err(Error::UnsupportedRootProjectDependency {
+                        manifest: manifest_path.to_string(),
+                        root_project: root_project.clone(),
+                    });
+                }
                 if let Some(path) = non_member_path_source(source, base, &member_dirs) {
                     return Err(Error::UnsupportedLocalPathSource {
                         manifest: declared_in.to_string(),
@@ -1062,6 +1088,29 @@ fn reject_unsupported_local_sources(
         }
     }
     Ok(())
+}
+
+fn source_targets_root_project(
+    source: &toml::Value,
+    dependency: &str,
+    root_project: &str,
+    base: &AbsoluteSystemPath,
+    repo_root: &AbsoluteSystemPath,
+) -> bool {
+    if let Some(sources) = source.as_array() {
+        return sources.iter().any(|source| {
+            source_targets_root_project(source, dependency, root_project, base, repo_root)
+        });
+    }
+    (source.get("workspace").and_then(toml::Value::as_bool) == Some(true)
+        && dependency == root_project)
+        || source
+            .get("path")
+            .and_then(toml::Value::as_str)
+            .is_some_and(|path| {
+                AbsoluteSystemPathBuf::from_unknown(base, path).as_std_path()
+                    == repo_root.as_std_path()
+            })
 }
 
 /// The first `path` in a `[tool.uv.sources]` entry (or list of
@@ -1139,11 +1188,21 @@ fn discover_workspace_from_metadata(
 
     let root_tools = root_manifest.tool_declarations(DeclarationOwner::Root);
     let pytest = root_tools.execution(PythonTool::Pytest);
-    let packages = connect_packages(
-        parsed,
-        metadata_internal_dependencies(metadata),
-        &root_tools,
-    );
+    let internal_dependencies = metadata_internal_dependencies(metadata);
+    if let Some(root_project) = &root_project_name {
+        for (name, manifest_path, _) in &parsed {
+            if internal_dependencies
+                .get(name)
+                .is_some_and(|edges| edges.iter().any(|(target, _)| target == root_project))
+            {
+                return Err(Error::UnsupportedRootProjectDependency {
+                    manifest: manifest_path.to_string(),
+                    root_project: root_project.clone(),
+                });
+            }
+        }
+    }
+    let packages = connect_packages(parsed, internal_dependencies, &root_tools);
     let quality_plan = QualityPlan::homogeneous(
         &packages
             .iter()
@@ -3273,6 +3332,11 @@ impl RepositoryContributor for UvContributor {
                 Ok((metadata, workspace, lockfile)) => {
                     (Some(metadata), workspace, Ok(lockfile), None)
                 }
+                Err(error @ Error::UnsupportedRootProjectDependency { .. }) => {
+                    // Successful uv resolution exposed an unsupported layout;
+                    // manifest fallback would discard that dependency.
+                    return Err(toolchain::Error::Failed(Box::new(error)));
+                }
                 Err(error) => {
                     let can_prune_without_metadata = matches!(&error, Error::MetadataSpawn(source) if source.kind() == io::ErrorKind::NotFound);
                     let message = error.to_string();
@@ -3980,6 +4044,56 @@ mod test {
                 Relationship::internal("transitive", DependencyKind::Production),
             ]
         );
+    }
+
+    #[test_case::test_case("dependencies", "core"; "production")]
+    #[test_case::test_case("dependencies", "core[feature]"; "requested extra")]
+    #[test_case::test_case("optional_dependencies", "app[feature]"; "optional")]
+    #[test_case::test_case("dependency_groups", "app:dev"; "development")]
+    fn resolved_root_project_dependencies_are_rejected(edges: &str, target: &str) {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(tmp.path()).unwrap();
+        root.join_component(PYPROJECT_TOML)
+            .create_with_contents(
+                "[project]\nname = 'core-lib'\nversion = '0.1.0'\n[tool.turbo]\nname = \
+                 'acme'\n[tool.uv.workspace]\nmembers = ['packages/*']\n",
+            )
+            .unwrap();
+        let app = root.join_components(&["packages", "child-plugin"]);
+        app.create_dir_all().unwrap();
+        let manifest = app.join_component(PYPROJECT_TOML);
+        manifest
+            .create_with_contents(
+                "[project]\nname = 'child-plugin'\nversion = '0.1.0'\ndynamic = ['dependencies', \
+                 'optional-dependencies']\n",
+            )
+            .unwrap();
+        let mut metadata = serde_json::json!({
+            "members": [
+                {"id": "core", "name": "core-lib", "path": root.as_str()},
+                {"id": "app", "name": "child-plugin", "path": app.as_str()}
+            ],
+            "resolution": {
+                "core": {"kind": "package"},
+                "app": {"kind": "package"},
+                "core[feature]": {
+                    "kind": {"extra": "feature"}, "dependencies": [{"id": "core"}]
+                },
+                "app[feature]": {
+                    "kind": {"extra": "feature"},
+                    "dependencies": [{"id": "app"}, {"id": "core"}]
+                },
+                "app:dev": {
+                    "kind": {"group": "dev"}, "dependencies": [{"id": "core"}]
+                }
+            }
+        });
+        metadata["resolution"]["app"][edges] = serde_json::json!([{"id": target}]);
+        let metadata = serde_json::from_value(metadata).unwrap();
+        let error = discover_workspace_from_metadata(&root, &metadata).unwrap_err();
+        assert!(matches!(error, Error::UnsupportedRootProjectDependency {
+                manifest: path, root_project
+            } if path == manifest.as_str() && root_project == "core-lib"));
     }
 
     #[test]
