@@ -490,6 +490,9 @@ fn end_event(kind: Kind) -> Event<'static> {
 /// Split `key: rest` or `key:` (end of line), returning the key's scalar
 /// event and the remainder after the colon.
 fn split_key(content: &str) -> FResult<(Event<'_>, &str)> {
+    if content.is_empty() {
+        return Err(Unsupported::here());
+    }
     match content.as_bytes()[0] {
         b'\'' => {
             let (event, rest) = single_quoted(content)?;
@@ -539,6 +542,9 @@ enum FlowContext {
 /// Scalar occupying the remainder of a line (or a flow member): plain,
 /// single-quoted, or double-quoted.
 fn inline_scalar(value: &str, ctx: FlowContext) -> FResult<Event<'_>> {
+    if value.is_empty() {
+        return Err(Unsupported::here());
+    }
     match value.as_bytes()[0] {
         b'\'' => {
             let (event, rest) = single_quoted(value)?;

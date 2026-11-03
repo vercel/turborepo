@@ -1800,6 +1800,21 @@ snapshots:
     }
 
     #[test]
+    fn test_scanner_empty_inline_scalars_fall_back() {
+        // `- `, `? `, and a bare `: ` explicit-value line each present an
+        // empty string to `inline_scalar`/`split_key`; the scanner must
+        // decline these shapes instead of indexing past the empty input.
+        assert_falls_back(
+            "lockfileVersion: '9.0'\nimporters:\n  .: {}\nneverBuiltDependencies:\n  - \n  - \
+             esbuild\n",
+        );
+        assert_falls_back("lockfileVersion: '9.0'\nimporters:\n  .: {}\noverrides:\n  ? \n  : x\n");
+        assert_falls_back(
+            "lockfileVersion: '9.0'\nimporters:\n  .: {}\noverrides:\n  ? orphan\n  : \n",
+        );
+    }
+
+    #[test]
     fn test_repo_own_multi_document_lockfile_uses_serde() {
         let manifest_dir = env!("CARGO_MANIFEST_DIR");
         let lockfile_path = std::path::Path::new(manifest_dir)
