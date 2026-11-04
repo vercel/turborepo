@@ -22,8 +22,14 @@ fn run_overrides(
 ) -> Result<(turborepo_run::EnvironmentVariableMap, PathBuf), String> {
     use crate::commands::managed::{ManagedTools, context};
     let root = owned.root();
-    let tools = ManagedTools::inspect(root, &root.join("turbo.json"), true, owned.home(), context)?
-        .ok_or("unmanaged")?;
+    let tools = ManagedTools::inspect(
+        root,
+        &root.join("turbo.json"),
+        true,
+        Some(owned.home()),
+        context,
+    )?
+    .ok_or("unmanaged")?;
     let env = tools.revalidate()?;
     let bin = std::env::split_paths(&env["PATH"]).next().unwrap();
     Ok((env, bin))
@@ -138,24 +144,18 @@ impl Fixture {
         words.extend(flags.iter().map(std::ffi::OsString::from));
         Args::parse_args(words).unwrap()
     }
-    fn transports(
-        &self,
-        origin: &str,
-        cache: Option<turborepo_setup::artifact_cache::ArtifactCache>,
-    ) -> provision::Transports {
+    fn transports(&self, origin: &str) -> provision::Transports {
         provision::Transports {
-            trust_base: Some(self.owned.home().to_owned()),
+            tool_store: Some(self.owned.home().to_owned()),
             registry:
                 turborepo_setup::registry_resolution::RegistryTransport::loopback_http_for_tests(
                     origin,
                 )
                 .unwrap(),
             node: turborepo_setup::node_provision::NodeTransport::loopback_http_for_tests(origin)
-                .unwrap()
-                .with_cache(cache.clone()),
+                .unwrap(),
             pnpm: turborepo_setup::pnpm_provision::PnpmTransport::loopback_http_for_tests(origin)
-                .unwrap()
-                .with_cache(cache),
+                .unwrap(),
             uv: turborepo_setup::uv_resolution::UvTransport::loopback_http_for_tests(origin)
                 .unwrap(),
             rustup: turborepo_setup::rustup_provision::RustupTransport::loopback_http_for_tests(
@@ -179,28 +179,25 @@ impl Fixture {
         }
     }
     fn run(&self, upstream: &LoopbackServer, flags: &[&str]) -> Result<i32, Error> {
-        self.run_with(upstream.origin(), None, flags)
+        self.run_with(upstream.origin(), self.owned.home(), flags)
     }
+    /// Setup against `origin`, installing into the tool store at `store`,
+    /// which another fixture's repository may share.
     fn run_with(
         &self,
         origin: &str,
-        cache: Option<&std::path::Path>,
+        store: &std::path::Path,
         flags: &[&str],
     ) -> Result<i32, Error> {
         let args = self.args(flags);
-        let cache = cache.and_then(turborepo_setup::artifact_cache::ArtifactCache::new);
         crate::cli::dispatch_setup(&args, |args, setup_args| {
-            run_with_policy(
-                args,
-                setup_args,
-                Some(self.transports(origin, cache.clone())),
-                self.git.clone(),
-                || {
-                    Ok(self
-                        .owned
-                        .policy_at(&self.owned.root().join("apps/web/src"))?)
-                },
-            )
+            let mut transports = self.transports(origin);
+            transports.tool_store = Some(store.to_owned());
+            run_with_policy(args, setup_args, Some(transports), self.git.clone(), || {
+                Ok(self
+                    .owned
+                    .policy_at(&self.owned.root().join("apps/web/src"))?)
+            })
         })
         .unwrap()
     }
@@ -238,13 +235,70 @@ impl Fixture {
     fn sources(&self) -> Result<Snapshot, StorageError> {
         Snapshot::capture_with(self.owned.root(), Ecosystems::default())
     }
+    /// The repository's record: setup rewrites it only when what it binds
+    /// changes.
     fn manifest(&self) -> Option<Vec<u8>> {
-        fs::read(self.owned.root().join(".turbo/tools/manifest.json")).ok()
+        Installed::open(&self.owned).record()
     }
     fn no_execution(&self) {
         for path in ["node_modules", "task-ran", "hook-ran", "probe-ran"] {
             assert!(!self.owned.root().join(path).exists());
         }
+    }
+}
+/// The installation setup recorded for a fixture root in its tool store.
+struct Installed {
+    root: PathBuf,
+    store: turborepo_tool_install::UserStore,
+}
+/// The environment the record names: its tools, bin and tree roots.
+struct Current {
+    tools: Vec<turborepo_tool_install::Tool>,
+    bin: PathBuf,
+    /// The repository's stable link to `bin`, which `.turbo/bin` names.
+    stable_bin: PathBuf,
+    trees: std::collections::BTreeMap<String, PathBuf>,
+    /// A `--no-lock` clone's recorded selection.
+    record: Option<SelectionBytes>,
+}
+struct SelectionBytes(Vec<u8>);
+impl SelectionBytes {
+    fn bytes(&self) -> &[u8] {
+        &self.0
+    }
+}
+impl Current {
+    fn tree(&self, id: &str) -> &std::path::Path {
+        &self.trees[id]
+    }
+    /// How a Unix launcher names `path` in `id`'s tree.
+    fn launched(&self, id: &str, path: &str) -> String {
+        let key = self.tree(id).parent().unwrap().file_name().unwrap();
+        format!("\"$store\"'/trees/{}/root/{path}'", key.to_str().unwrap())
+    }
+}
+impl Installed {
+    fn open(owned: &OwnedSetupFixture) -> Self {
+        let root = owned.root().canonicalize().unwrap();
+        let store = trust::user_store(Some(owned.home()), &root).unwrap();
+        Self { root, store }
+    }
+    fn trust(&self) -> trust::TrustStore {
+        trust::TrustStore::new(&self.store, &self.root).unwrap()
+    }
+    fn record(&self) -> Option<Vec<u8>> {
+        fs::read(self.trust().path()).ok()
+    }
+    fn current(&self) -> Result<Option<Current>, turborepo_tool_install::Error> {
+        let installed = super::recorded_installation_for_tests(&self.root, self.store.root())
+            .map_err(|e| turborepo_tool_install::Error::Io(std::io::Error::other(e)))?;
+        Ok(installed.map(|installed| Current {
+            tools: installed.tools,
+            bin: installed.bin,
+            stable_bin: installed.stable_bin,
+            trees: installed.trees,
+            record: installed.selection.map(SelectionBytes),
+        }))
     }
 }
 struct Upstream(LoopbackServer);
@@ -274,14 +328,30 @@ impl Upstream {
         )
     }
 }
-#[path = "cache_tests.rs"]
-mod cache;
+/// [`cleanup::collect`] that waits for a round that runs. A round is skipped
+/// while anything holds the store's lock, and in this test process that
+/// includes a child another test spawned while a test held a lock: the child
+/// keeps the lock until its exec completes.
+fn collect_round(
+    store: &turborepo_tool_install::UserStore,
+    now: std::time::SystemTime,
+) -> Vec<String> {
+    for _ in 0..500 {
+        if let Some(lines) = cleanup::try_collect(store, now).unwrap() {
+            return lines;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
+    panic!("the tool store stayed locked for 5 seconds");
+}
 #[path = "check_tests.rs"]
 mod checks;
 #[path = "cleanup_tests.rs"]
 mod cleanups;
 #[path = "plan_tests.rs"]
 mod plans;
+#[path = "shared_store_tests.rs"]
+mod shared_store;
 
 const FROZEN: &[&str] = &["--frozen", "--tools-only"];
 #[path = "additional_tools_tests.rs"]
@@ -404,15 +474,15 @@ fn frozen_node_pnpm_command_repeat_is_noop_and_preserves_complete_resources() {
     assert_eq!(f.run(&u, FROZEN).unwrap(), 0);
     assert_eq!(u.hits(), 3);
     let manifest = f.manifest().unwrap();
-    let store = turborepo_tool_install::Store::open(f.owned.root()).unwrap();
+    let store = Installed::open(&f.owned);
     let current = store.current().unwrap().unwrap();
     assert_eq!(current.tools.len(), 2);
     assert_eq!(
-        fs::read(current.bin.join("../tools/node/resource")).unwrap(),
+        fs::read(current.tree("node").join("resource")).unwrap(),
         b"node resource"
     );
     assert_eq!(
-        fs::read(current.bin.join("../tools/pnpm/dist/resource")).unwrap(),
+        fs::read(current.tree("pnpm").join("dist/resource")).unwrap(),
         b"pnpm resource"
     );
     drop(store);
@@ -527,7 +597,7 @@ fn unsupported_modes_and_policy_fail_before_traffic_or_storage() {
                 }
                 _ if flags.contains(&"--offline") && !flags.contains(&"--no-lock") => {
                     assert!(
-                        matches!(&result, Err(Error::Offline(_))),
+                        matches!(&result, Err(Error::OfflineMissing(_))),
                         "{flags:?}: {result:?}"
                     );
                 }
@@ -602,7 +672,7 @@ fn readonly_modes_accept_late_ambient_npmrc_drift_without_traffic_or_mutation() 
                 run_with_policy(
                     args,
                     setup,
-                    Some(f.transports(u.origin(), None)),
+                    Some(f.transports(u.origin())),
                     f.git.clone(),
                     || {
                         calls.set(calls.get() + 1);
@@ -683,6 +753,22 @@ fn late_failures_preserve_previous_inventory_and_never_publish_partial_node() {
             .unwrap();
         artifacts.values_mut().next().unwrap()["distribution"]["sha256"] =
             json!(format!("{:x}", Sha256::digest(&f.node)));
+        // pnpm's tree does not depend on Node, so change it too: the late
+        // failures below happen while its new artifact downloads.
+        f.pnpm = archive(
+            "package",
+            &[
+                (
+                    "package.json",
+                    r#"{"name":"pnpm","version":"10.0.0","bin":{"pnpm":"bin/pnpm.cjs","pnpx":"bin/pnpx.cjs"}}"#,
+                ),
+                ("bin/pnpm.cjs", "throw new Error('must not run');"),
+                ("bin/pnpx.cjs", "throw new Error('must not run');"),
+                ("dist/resource", "new pnpm resource"),
+            ],
+        );
+        f.lock["tools"]["pnpm"]["installation"]["artifacts"]["any"]["package"]["sha256"] =
+            json!(format!("{:x}", Sha256::digest(&f.pnpm)));
         f.save();
         let drift = match case {
             1 => Some((f.owned.root().join(".nvmrc"), "26.0.0".into())),
@@ -708,7 +794,7 @@ fn late_failures_preserve_previous_inventory_and_never_publish_partial_node() {
         assert!(f.run(&u, FROZEN).is_err(), "case {case}");
         assert_eq!(u.hits(), 3);
         assert_eq!(f.manifest().unwrap(), selected);
-        let store = turborepo_tool_install::Store::open(f.owned.root()).unwrap();
+        let store = Installed::open(&f.owned);
         assert_eq!(store.current().unwrap().unwrap().tools.len(), 2);
         f.no_execution();
     }
@@ -717,15 +803,9 @@ fn late_failures_preserve_previous_inventory_and_never_publish_partial_node() {
     assert!(f.run(&u, FROZEN).is_err());
     assert_eq!(u.hits(), 3);
     assert!(f.manifest().is_none());
-    assert!(
-        !fs::read_dir(f.owned.root().join(".turbo/tools"))
-            .unwrap()
-            .any(|e| e
-                .unwrap()
-                .file_name()
-                .to_string_lossy()
-                .starts_with("generation-"))
-    );
+    // Verification failed before publication: no tree, partial or whole.
+    let trees = fs::read_dir(f.owned.home().join("trees"));
+    assert_eq!(trees.map_or(0, |trees| trees.count()), 0);
 }
 
 #[test]
@@ -738,15 +818,17 @@ fn telemetry_report_counts_artifact_bytes_and_reuse() {
     let run = |flags: &[&str]| {
         let mut report = telemetry::Report::default();
         let result = crate::cli::dispatch_setup(&f.args(flags), |args, setup_args| {
-            let transports = f.transports(u.origin(), None);
+            let transports = f.transports(u.origin());
             run_reporting(
                 args,
                 setup_args,
                 Some(transports),
                 f.git.clone(),
                 &mut report,
+                &output::Console::capture(output::Mode::Plain).0,
                 || Ok(f.owned.policy_at(&f.owned.root().join("apps/web/src"))?),
             )
+            .map(|completed| completed.exit_code())
         })
         .unwrap();
         (result.map_err(|error| telemetry::failure(&error)), report)

@@ -49,11 +49,14 @@ setInterval(() => {}, 1000);
 fs.writeFileSync('pids.json', JSON.stringify([process.pid, child.pid]));
 "#;
 
-/// Setup's launcher shape under `dir`: `bin\pnpm.cmd` forwards to a tool
-/// launcher that runs the installer script with a copy of the host node.exe.
+/// Setup's launcher shape under `dir`: `bin\pnpm.cmd` runs the installer
+/// script in pnpm's tree with a copy of the host node.exe in node's tree.
 fn launcher(dir: &Path) -> PathBuf {
-    let tool = dir.join(r"tools\pnpm\managed-node-fixture");
-    for path in [&tool, &dir.join(r"tools\node"), &dir.join("bin")] {
+    for path in [
+        &dir.join(r"tools\pnpm"),
+        &dir.join(r"tools\node"),
+        &dir.join("bin"),
+    ] {
         fs::create_dir_all(path).unwrap();
     }
     let (host, node) = (
@@ -64,10 +67,8 @@ fn launcher(dir: &Path) -> PathBuf {
         .or_else(|_| fs::copy(&host, &node).map(drop))
         .unwrap();
     fs::write(dir.join(r"tools\pnpm\installer.cjs"), INSTALLER).unwrap();
-    let run = "@\"%~dp0..\\..\\node\\node.exe\" \"%~dp0..\\installer.cjs\" %*\r\n";
-    fs::write(tool.join("pnpm.cmd"), run).unwrap();
-    let forward = "@\"%~dp0..\\tools\\pnpm\\managed-node-fixture\\pnpm.cmd\" %*\r\n";
-    fs::write(dir.join(r"bin\pnpm.cmd"), forward).unwrap();
+    let run = "@\"%~dp0..\\tools\\node\\node.exe\" \"%~dp0..\\tools\\pnpm\\installer.cjs\" %*\r\n";
+    fs::write(dir.join(r"bin\pnpm.cmd"), run).unwrap();
     dir.join(r"bin\pnpm.cmd")
 }
 

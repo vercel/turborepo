@@ -270,7 +270,7 @@ fn dispatch(
 ) -> Result<i32, Error> {
     let args = f.args(flags);
     crate::cli::dispatch_setup(&args, |args, setup_args| run_with_policy(args, setup_args, Some(provision::Transports {
-        trust_base: Some(f.owned.home().to_owned()),
+        tool_store: Some(f.owned.home().to_owned()),
         node: turborepo_setup::node_provision::NodeTransport::loopback_http_for_tests(u.origin()).unwrap(),
         pnpm: turborepo_setup::pnpm_provision::PnpmTransport::loopback_http_for_tests(u.origin()).unwrap(),
         registry: turborepo_setup::registry_resolution::RegistryTransport::loopback_http_for_tests(u.origin()).unwrap(),
@@ -320,7 +320,7 @@ fn local_create_repeat_targeted_update_removal_and_frozen_drift() {
     let node = LoopbackServer::new(routes(&f, "24.1.0", "10.1.0"), |_| {}).unwrap();
     let prior_manager = selected(&f).tools()["pnpm"].clone();
     assert_eq!(f.run(&node, LOCAL).unwrap(), 0);
-    assert_eq!(node.hits(), 5); // Two Node metadata reads; frozen generation also re-stages pnpm.
+    assert_eq!(node.hits(), 3); // Two Node metadata reads; pnpm's tree is reused beside any Node.
     assert_eq!(selected(&f).tools()["pnpm"], prior_manager);
     fs::write(f.owned.root().join(".node-version"), "24.1.x").unwrap();
     f.run(&node, LOCAL).unwrap();
@@ -330,12 +330,12 @@ fn local_create_repeat_targeted_update_removal_and_frozen_drift() {
     f.run(&empty, LOCAL).unwrap();
     assert_eq!(selected(&f).tools().len(), 1);
     assert_eq!(empty.hits(), 0);
-    let store = turborepo_tool_install::Store::open(f.owned.root()).unwrap();
+    let store = Installed::open(&f.owned);
     let current = store.current().unwrap().unwrap();
     assert_eq!(current.tools.len(), 1);
     assert!(!current.bin.join("pnpm").exists());
     assert_eq!(
-        fs::read(current.bin.join("../tools/node/resource")).unwrap(),
+        fs::read(current.tree("node").join("resource")).unwrap(),
         b"complete Node resource"
     );
     untouched(&f);
@@ -359,7 +359,7 @@ fn plain_setup_locks_and_provisions_exactly_like_tools_only() {
         }
         assert_eq!(empty.hits(), 0);
         assert_eq!(f.manifest().unwrap(), manifest);
-        let store = turborepo_tool_install::Store::open(f.owned.root()).unwrap();
+        let store = Installed::open(&f.owned);
         let tools = store.current().unwrap().unwrap().tools;
         outcomes.push((fs::read(f.owned.root().join("turbo.lock")).unwrap(), tools));
         untouched(&f);
@@ -594,7 +594,7 @@ fn published_lock_does_not_hide_late_source_or_foreign_candidate_and_tools_are_a
         .unwrap();
         assert!(f.run(&u, LOCAL).is_err());
         assert_eq!(f.manifest().unwrap(), manifest);
-        let store = turborepo_tool_install::Store::open(f.owned.root()).unwrap();
+        let store = Installed::open(&f.owned);
         assert_eq!(store.current().unwrap().unwrap().tools.len(), 2);
         untouched(&f);
     }

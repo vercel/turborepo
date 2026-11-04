@@ -6,6 +6,8 @@
 ))]
 #![allow(clippy::unwrap_used)]
 
+mod common;
+
 use std::{
     fs, io,
     net::TcpListener,
@@ -177,8 +179,9 @@ fn pruned_docker_output_without_git_provisions_and_checks() {
     assert_eq!(code, 0, "{text}");
     let root = out.join("full");
 
-    // Seed the locked generation through the real Store so frozen setup reuses
-    // it without downloads; the CLI library fixtures cover actual downloads.
+    // Install and record the locked tools in the user's store so frozen setup
+    // reuses them without downloads; the CLI library fixtures cover actual
+    // downloads and record publication.
     let lock = Lock::parse(lock.as_bytes()).unwrap();
     let node = NodePlan::from_lock(&lock, platform).unwrap();
     let declaration = Snapshot::capture(&root)
@@ -187,9 +190,9 @@ fn pruned_docker_output_without_git_provisions_and_checks() {
         .unwrap()
         .unwrap();
     let pnpm = PnpmPlan::from_declaration(&lock, platform, &node, &declaration).unwrap();
-    let tools = [node.inventory_tool().clone(), pnpm.inventory_tool().clone()];
+    let tools = vec![node.inventory_tool().clone(), pnpm.inventory_tool().clone()];
     let stage = |tool: &turborepo_tool_install::Tool, destination: &Path| {
-        for relative in tool.executables.values() {
+        for relative in tool.tree_files() {
             let file = destination.join(relative);
             fs::create_dir_all(file.parent().unwrap())?;
             fs::write(&file, "#!/bin/sh\nexit 99\n")?;
@@ -197,52 +200,17 @@ fn pruned_docker_output_without_git_provisions_and_checks() {
         }
         Ok::<_, turborepo_tool_install::Error>(())
     };
-    let mut store = turborepo_tool_install::Store::open(&root).unwrap();
-    store.reconcile(&tools, stage).unwrap();
-    // Inventory alone is not authority. Seed the same private, external
-    // receipt that verified setup publishes, without weakening its guards.
     let home = tempfile::tempdir().unwrap();
-    let records = home.path().join(if cfg!(target_os = "macos") {
-        "Library/Application Support/turborepo/setup-roots"
-    } else {
-        "data/turborepo/setup-roots"
-    });
-    fs::create_dir_all(&records).unwrap();
-    fs::set_permissions(&records, fs::Permissions::from_mode(0o700)).unwrap();
-    let canonical_root = root.canonicalize().unwrap();
-    assert!(!records.starts_with(&canonical_root));
-    use std::os::unix::fs::MetadataExt;
-
-    use sha2::{Digest, Sha256};
-    let hash = |bytes: &[u8]| format!("{:x}", Sha256::digest(bytes));
-    let identity = fs::metadata(&canonical_root).unwrap();
-    let current = store.current().unwrap().unwrap();
-    let record = serde_json::json!({
-        "schema": 1,
-        "lock_sha256": hash(&fs::read(root.join("turbo.lock")).unwrap()),
-        "installation": {
-            "root": canonical_root,
-            "device": identity.dev(),
-            "inode": identity.ino(),
-            "manifest_sha256": hash(&fs::read(root.join(".turbo/tools/manifest.json")).unwrap()),
-            "bin": current.bin,
-            "tools": current.tools,
-        },
-    });
-    let receipt = records.join(format!(
-        "{}.json",
-        hash(canonical_root.as_os_str().as_encoded_bytes())
-    ));
-    fs::write(&receipt, serde_json::to_vec(&record).unwrap()).unwrap();
-    fs::set_permissions(&receipt, fs::Permissions::from_mode(0o600)).unwrap();
-    drop(store);
+    let store = common::setup::user_tool_store(home.path(), Some(&home.path().join("data")));
+    let installed = common::setup::install_tools(&root, &store, tools, None, stage);
+    assert!(!installed.bin.starts_with(root.canonicalize().unwrap()));
 
     // Docker images often lack Git too; neither run needs it here.
     let frozen = ["setup", "--frozen", "--tools-only"];
     let (code, text) = turbo_with_home(&root, &frozen, Path::new(""), home.path());
     assert_eq!(code, 0, "{text}");
     assert!(
-        text.contains("node24.0.0:reused") && text.contains("pnpm10.0.0:reused"),
+        text.contains("node24.0.0reused") && text.contains("pnpm10.0.0reused"),
         "{text}"
     );
     let (code, text) = turbo_with_home(
@@ -278,7 +246,7 @@ fn pruned_docker_output_without_git_provisions_and_checks() {
     let (code, text) = turbo_with_home(&root, &frozen, bin.path(), home.path());
     assert_eq!(code, 0, "{text}");
     assert!(
-        text.contains("node24.0.0:reused") && text.contains("pnpm10.0.0:reused"),
+        text.contains("node24.0.0reused") && text.contains("pnpm10.0.0reused"),
         "{text}"
     );
 }

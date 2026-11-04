@@ -9,6 +9,7 @@ use sha2::{Digest, Sha224, Sha256, Sha512};
 use super::*;
 use crate::{
     package_manager::discover_package_manager, source_policy::test_support::LoopbackServer,
+    test_store::TestStore,
 };
 
 const TARGET: Platform = Platform::MacosArm64;
@@ -142,7 +143,7 @@ async fn locks_and_invokes_the_exact_bundle(line: &Line) {
     let request = format!("yarn@{}", line.version);
     let (node, yarn) = plan(&lock(resolved, line.version, &request), &request).unwrap();
     let repo = tempfile::tempdir().unwrap();
-    let mut store = Store::open(repo.path()).unwrap();
+    let store = TestStore::open(repo.path());
     let desired = desired(&node, &yarn);
     let prepared = yarn
         .prepare_if_needed(&store, &desired, &transport)
@@ -158,7 +159,7 @@ async fn locks_and_invokes_the_exact_bundle(line: &Line) {
             }
         })
         .unwrap();
-    let bin = store.current().unwrap().unwrap().bin;
+    let bin = store.bin();
     for name in ["yarn", "yarnpkg"] {
         let output = Command::new(bin.join(name))
             .args(["install", "--frozen-lockfile"])
@@ -210,7 +211,7 @@ async fn modern_pins_cover_the_bundle_not_the_registry_archive() {
         )
     };
     let repo = tempfile::tempdir().unwrap();
-    let store = Store::open(repo.path()).unwrap();
+    let store = TestStore::open(repo.path());
     for (digest, matches) in [(sha256(&bundle), true), (sha256(&bytes), false)] {
         // The lock cannot prove bundle pins; verified bundle bytes decide.
         let (value, request) = pinned(digest);
@@ -252,7 +253,7 @@ async fn classic_pins_cover_the_registry_archive() {
         )
     };
     let repo = tempfile::tempdir().unwrap();
-    let store = Store::open(repo.path()).unwrap();
+    let store = TestStore::open(repo.path());
     let (value, request) = pinned(format!("sha256.{}", sha256(&bytes)));
     let (node, yarn) = plan(&value, &request).unwrap();
     let prepared = yarn

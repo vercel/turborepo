@@ -9,7 +9,7 @@ use std::{collections::BTreeMap, io, path::Path, time::Duration};
 use semver::Version;
 use turborepo_archive::{ExtractedArtifact, Layout};
 use turborepo_download::{ApprovedOrigin, DownloadClient, ExpectedSha256, Limits};
-use turborepo_tool_install::{Store, Tool};
+use turborepo_tool_install::{Export, SetupSession, Staging, Tool};
 
 use crate::{
     lock::{Artifact, Format, Installation, Lock, Platform},
@@ -19,6 +19,8 @@ use crate::{
 };
 
 const RELEASES: &str = "https://github.com";
+/// Bump when this adapter stages different bytes for the same staging inputs.
+const STAGING_REVISION: u32 = 1;
 // GitHub answers release downloads with a redirect to its asset CDN.
 const ASSETS: [&str; 2] = [
     "https://release-assets.githubusercontent.com",
@@ -262,7 +264,16 @@ impl BunPlan {
                 version: bun.version.clone(),
                 platform: spelling.into(),
                 artifact_sha256: artifact.sha256.clone(),
-                executables: artifact.executables.clone(),
+                executables: Export::files(&artifact.executables),
+                vars: Default::default(),
+                staging: Staging::new(
+                    "bun",
+                    STAGING_REVISION,
+                    &crate::staging::Archive {
+                        format: expected.format,
+                        root: expected.root_prefix.as_deref().ok_or(Error::InvalidLock)?,
+                    },
+                )?,
             },
             artifact: expected,
         })
@@ -274,7 +285,7 @@ impl BunPlan {
 
     pub async fn prepare_if_needed(
         &self,
-        store: &Store,
+        store: &SetupSession<'_>,
         desired: &[Tool],
         transport: &BunTransport,
     ) -> Result<Option<PreparedBun>, Error> {
@@ -282,11 +293,11 @@ impl BunPlan {
             .await
     }
 
-    /// Reuse only a healthy selected generation; otherwise download, verify
+    /// Reuse only a sealed tree in the tool store; otherwise download, verify
     /// the locked SHA-256, and extract. Never publishes or executes Bun.
     pub async fn prepare(
         &self,
-        store: &Store,
+        store: &SetupSession<'_>,
         desired: &[Tool],
         transport: &BunTransport,
         preparation: crate::Preparation,
@@ -322,7 +333,7 @@ impl BunPlan {
                     .root_prefix
                     .as_deref()
                     .ok_or(Error::InvalidLock)?,
-                required_files: &[&self.tool.executables["bun"]],
+                required_files: &[&self.artifact.executables["bun"]],
             },
         )?;
         Ok(Some(PreparedBun {
@@ -344,7 +355,8 @@ impl PreparedBun {
         self.downloaded_bytes
     }
 
-    /// Callback for Store::reconcile: copy the verified release tree as-is.
+    /// Staging callback for `SetupSession::ensure`: copy the verified release
+    /// tree as-is.
     pub fn stage(
         &self,
         tool: &Tool,

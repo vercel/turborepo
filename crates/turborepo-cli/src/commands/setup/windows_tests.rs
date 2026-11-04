@@ -227,7 +227,7 @@ impl Fixture {
                     node: turborepo_setup::node_provision::NodeTransport::loopback_http_for_tests(origin).unwrap(),
                     pnpm: turborepo_setup::pnpm_provision::PnpmTransport::loopback_http_for_tests(origin).unwrap(),
                     registry: turborepo_setup::registry_resolution::RegistryTransport::loopback_http_for_tests(origin).unwrap(),
-                    trust_base: Some(self.owned.home().to_owned()),
+                    tool_store: Some(self.owned.home().to_owned()),
                     rustup: turborepo_setup::rustup_provision::RustupTransport::loopback_http_for_tests(origin).unwrap(),
                     uv: turborepo_setup::uv_resolution::UvTransport::loopback_http_for_tests(origin).unwrap(),
                     python: turborepo_setup::python_resolution::PythonTransport::loopback_http_for_tests(origin).unwrap(),
@@ -241,22 +241,28 @@ impl Fixture {
         })
         .unwrap()
     }
-    fn tools(&self) -> PathBuf {
-        self.owned.root().join(".turbo/tools")
+    fn trust(&self) -> trust::TrustStore {
+        let root = self.owned.root().canonicalize().unwrap();
+        let store = trust::user_store(Some(self.owned.home()), &root).unwrap();
+        trust::TrustStore::new(&store, &root).unwrap()
     }
+    /// The repository's record: setup rewrites it only when what it binds
+    /// changes.
     fn manifest(&self) -> Vec<u8> {
-        fs::read(self.tools().join("manifest.json")).unwrap()
+        fs::read(self.trust().path()).unwrap()
     }
-    fn plan(&self) -> turborepo_setup::activation::ActivationPlan {
-        use turborepo_setup::execution_identity::{ExecutionContext, Libc};
-        let context = ExecutionContext::new(
-            turborepo_platform::Platform::current(),
-            Libc::None,
-            "host-readiness".into(),
-            ["unprobed".into()].into(),
-        )
-        .unwrap();
-        turborepo_setup::activation::ActivationPlan::inspect(self.owned.root(), context).unwrap()
+    /// The recorded environment's tools, bin and tree roots.
+    fn installed(&self) -> RecordedInstallation {
+        recorded_installation_for_tests(self.owned.root(), self.owned.home())
+            .unwrap()
+            .unwrap()
+    }
+    /// The recorded environment as run, exec and the shell hook render it.
+    fn activation(&self) -> turborepo_tool_install::Activation {
+        let trust = self.trust();
+        let env = trust.recorded_env().unwrap().unwrap();
+        let root = self.owned.root().canonicalize().unwrap();
+        trust.store().activate(&root, &env).unwrap()
     }
     fn no_execution(&self) {
         for path in ["node_modules", "hook-ran", "apps/web/src/hook-ran"] {
@@ -296,34 +302,38 @@ fn frozen_setup_installs_pathext_exports_that_activate_and_repeat_reuses() {
         u.requests(),
         [NODE_ZIP, "/pnpm/10.0.0", "/pnpm/-/pnpm-10.0.0.tgz"]
     );
-    let plan = f.plan();
-    let bin = plan.path_prepend().to_path_buf();
+    let activation = f.activation();
+    let bin = activation.bin().to_path_buf();
     let mut names: Vec<_> = fs::read_dir(&bin)
         .unwrap()
         .map(|e| e.unwrap().file_name().into_string().unwrap())
         .collect();
     names.sort();
     assert_eq!(names, ["node.exe", "pnpm.cmd", "pnpx.cmd"]);
-    let tools = bin.join("../tools");
-    assert!(same_file::is_same_file(bin.join("node.exe"), tools.join("node/node.exe")).unwrap());
+    // `.exe` exports are hard links into the store's trees, on its volume.
+    let installed = f.installed();
+    let (node, pnpm) = (&installed.trees["node"], &installed.trees["pnpm"]);
+    assert!(same_file::is_same_file(bin.join("node.exe"), node.join("node.exe")).unwrap());
+    assert_eq!(fs::read(node.join("resource")).unwrap(), b"node resource");
     assert_eq!(
-        fs::read(tools.join("node/resource")).unwrap(),
-        b"node resource"
-    );
-    assert_eq!(
-        fs::read(tools.join("pnpm/dist/resource")).unwrap(),
+        fs::read(pnpm.join("dist/resource")).unwrap(),
         b"pnpm resource"
     );
-    let launcher = &plan.tools()[1].executables["pnpm"];
-    assert!(launcher.starts_with("managed-node-") && launcher.ends_with("/pnpm.cmd"));
+    // `.cmd` forwarders name the trees by absolute, non-verbatim paths.
+    let forwarder = fs::read_to_string(bin.join("pnpm.cmd")).unwrap();
     assert_eq!(
-        fs::read_to_string(tools.join("pnpm").join(launcher)).unwrap(),
-        "@\"%~dp0..\\..\\node\\node.exe\" \"%~dp0..\\bin\\pnpm.cjs\" %*\r\n"
+        forwarder,
+        format!(
+            "@\"{}\\node.exe\" \"{}\\bin\\pnpm.cjs\" %*\r\n",
+            node.display(),
+            pnpm.display()
+        )
     );
+    assert!(!forwarder.contains(r"\\?\"), "{forwarder}");
 
     // Activation prepends the ordinary (non-verbatim) bin spelling, and
     // PATHEXT reaches the managed node.exe through both launcher layers.
-    let path = plan.path(Some(system32().as_os_str())).unwrap();
+    let path = activation.path(Some(system32().as_os_str())).unwrap();
     let first = std::env::split_paths(&path).next().unwrap();
     assert_eq!(first, bin);
     assert!(!first.to_string_lossy().starts_with(r"\\?\"));
@@ -372,15 +382,16 @@ fn interrupted_promotion_leftovers_and_damage_recover_through_setup() {
     let u = f.upstream();
     assert_eq!(f.run(&u, FROZEN).unwrap(), 0);
     let manifest = f.manifest();
-    // An interrupted transaction can leave an unselected staged generation, an
-    // unpersisted manifest temporary and a staged lock write behind.
-    fs::create_dir_all(f.tools().join("generation-interrupted/tools/node")).unwrap();
-    fs::write(
-        f.tools().join("generation-interrupted/tools/node/node.exe"),
-        "partial",
-    )
-    .unwrap();
-    fs::write(f.tools().join(".tmpInterrupted"), "{\"schema\":1").unwrap();
+    // An interrupted setup can leave private tree and environment staging in
+    // the store and a staged lock write behind.
+    let tmp = f.trust().store().root().join("tmp");
+    for (dir, file) in [
+        ("tree-interrupted/root", "node.exe"),
+        ("env-interrupted/bin", "pnpm.cmd"),
+    ] {
+        fs::create_dir_all(tmp.join(dir)).unwrap();
+        fs::write(tmp.join(dir).join(file), "partial").unwrap();
+    }
     fs::write(
         f.owned.root().join(".turbo/setup-lock/staged"),
         "partial lock",
@@ -392,15 +403,16 @@ fn interrupted_promotion_leftovers_and_damage_recover_through_setup() {
     assert_eq!(f.manifest(), manifest);
     assert!(!f.owned.root().join(".turbo/setup-lock/staged").exists());
 
-    // A damaged selected export is repaired by a complete new generation.
-    let bin = f.plan().path_prepend().to_path_buf();
+    // A damaged export is rebuilt from the sealed trees: no download, and the
+    // record still names the same environment.
+    let bin = f.activation().bin().to_path_buf();
     fs::remove_file(bin.join("pnpm.cmd")).unwrap();
     assert!(f.run(&u, CHECK).is_err());
     assert_eq!(f.run(&u, FROZEN).unwrap(), 0);
-    assert_eq!(u.hits(), 6);
-    assert_ne!(f.manifest(), manifest);
+    assert_eq!(u.hits(), 3);
+    assert_eq!(f.manifest(), manifest);
     assert_eq!(f.run(&u, CHECK).unwrap(), 0);
-    let path = f.plan().path(None).unwrap();
+    let path = f.activation().path(None).unwrap();
     assert_eq!(exit_code(&path, "pnpm /d /c exit 3"), Some(3));
     f.no_execution();
 }

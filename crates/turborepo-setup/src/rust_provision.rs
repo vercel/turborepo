@@ -18,8 +18,11 @@ use std::{
     process::Stdio,
 };
 
+use serde::Serialize;
 use sha2::{Digest, Sha256};
-use turborepo_tool_install::{Store, Tool};
+use turborepo_tool_install::{
+    Export, Launch, ManagedVar, SetupSession, Staging, Tool, TreeRef, VarValue,
+};
 
 use crate::{
     lock::{self, AlternateFormat, Artifact, Format, Installation, Lock, Platform},
@@ -34,6 +37,19 @@ const DIST: &str = "https://static.rust-lang.org/dist/";
 /// The Windows proxy binary, relative to the tree that serves as RUSTUP_HOME.
 const PROXY: &str = "proxy/rustup.exe";
 const MAX_PROXY_BYTES: u64 = 64 * 1024 * 1024;
+/// Bump when this adapter stages different bytes for the same staging inputs.
+const STAGING_REVISION: u32 = 1;
+
+/// What the private rustup installs and this adapter moves into the tree:
+/// the toolchain for `host` with `options` (profile, components, targets),
+/// and on Windows the proxy copied from the installer with `proxy_sha256`.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct Staged<'a> {
+    host: &'a str,
+    options: &'a BTreeMap<String, Vec<String>>,
+    proxy_sha256: Option<&'a str>,
+}
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
@@ -186,25 +202,49 @@ impl RustPlan {
         } else {
             None
         };
-        let proxied = proxy_sha256.is_some();
-        let export = |path: &str| {
-            if proxied {
-                PROXY.to_owned()
-            } else {
-                format!("{toolchain}/{path}")
-            }
+        // Proxies select the toolchain from these and must never auto-install
+        // into the tree. Unix launchers set them for every invocation; Windows
+        // proxies rely on activation.
+        let mut vars = BTreeMap::from([
+            (
+                ManagedVar::RustupHome,
+                VarValue::Tree(TreeRef::new("rust", "")),
+            ),
+            (
+                ManagedVar::RustupToolchain,
+                VarValue::Word(format!("{}-{host}", rust.version)),
+            ),
+            (ManagedVar::CargoHome, VarValue::RepoCargoHome),
+        ]);
+        let export = |path: &str| match &proxy_sha256 {
+            Some(_) => Export::File(PROXY.to_owned()),
+            None => Export::Launch(Launch {
+                program: TreeRef::new("rust", format!("{toolchain}/{path}")),
+                args: Vec::new(),
+            }),
         };
+        let executables = (parts.values())
+            .flat_map(|artifact| &artifact.executables)
+            .map(|(name, path)| (name.clone(), export(path)))
+            .collect();
+        if proxy_sha256.is_some() {
+            vars.insert(ManagedVar::RustupAutoInstall, VarValue::Word("0".into()));
+        }
+        let staging = Staged {
+            host,
+            options: &rust.options,
+            proxy_sha256: proxy_sha256.as_deref(),
+        };
+        let staging = Staging::new("rust", STAGING_REVISION, &staging)?;
         Ok(Self {
             tool: Tool {
                 id: "rust".into(),
                 version: rust.version.clone(),
                 platform: spelling.into(),
                 artifact_sha256: hex::encode(Sha256::digest(digest)),
-                executables: parts
-                    .values()
-                    .flat_map(|artifact| &artifact.executables)
-                    .map(|(name, path)| (name.clone(), export(path)))
-                    .collect(),
+                executables,
+                vars,
+                staging,
             },
             host,
             profile,
@@ -230,7 +270,7 @@ impl RustPlan {
     /// Hold the Store guard through publication.
     pub fn prepare(
         &self,
-        store: &Store,
+        store: &SetupSession<'_>,
         desired: &[Tool],
         rustup: &Path,
         transport: &RustupTransport,
@@ -247,10 +287,9 @@ impl RustPlan {
         {
             return Ok(None);
         }
-        // Split components: `/` is not a separator under a `\\?\` root.
-        let scratch = tempfile::Builder::new()
-            .prefix(".rust-")
-            .tempdir_in(store.repository_root()?.join(".turbo").join("tools"))?;
+        // Staging renames the toolchain into place, so the homes live on the
+        // store's filesystem.
+        let scratch = store.scratch("rust-")?;
         let homes = PrivateHomes::create(scratch.path())?;
         let mut command = homes.command(rustup, transport);
         command
@@ -392,8 +431,8 @@ pub struct PreparedRust {
 }
 
 impl PreparedRust {
-    /// Callback for Store::reconcile: move the verified home into the empty
-    /// staged tree, which becomes this generation's RUSTUP_HOME.
+    /// Staging callback for `SetupSession::ensure`: move the verified home into
+    /// the empty staged tree, which becomes the toolchain's RUSTUP_HOME.
     pub fn stage(
         &self,
         tool: &Tool,

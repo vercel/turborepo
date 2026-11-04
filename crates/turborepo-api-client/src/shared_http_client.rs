@@ -15,10 +15,10 @@ use crate::{APIClient, Error};
 #[derive(Clone)]
 pub struct SharedHttpClient {
     /// Instant client with bundled Mozilla CAs only (~0ms to build).
-    fast_client: Arc<OnceLock<reqwest::Client>>,
+    fast_client: Arc<OnceLock<crate::HttpClient>>,
     /// Full client with system Keychain CAs (~200ms on macOS).
     /// Built in the background; preferred once ready.
-    native_client: Arc<OnceLock<reqwest::Client>>,
+    native_client: Arc<OnceLock<crate::HttpClient>>,
     warming: Arc<AtomicBool>,
 }
 
@@ -90,7 +90,7 @@ impl SharedHttpClient {
         });
     }
 
-    pub async fn get_or_init(&self) -> Result<reqwest::Client, Error> {
+    pub async fn get_or_init(&self) -> Result<crate::HttpClient, Error> {
         // Prefer the full client (includes system CAs for corporate proxies)
         if let Some(client) = self.native_client.get() {
             return Ok(client.clone());

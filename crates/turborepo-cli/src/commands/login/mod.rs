@@ -64,7 +64,7 @@ async fn sso_login(base: &mut CommandBase, sso_team: &str, force: bool) -> Resul
     let api_url_source = base.opts.api_client_opts.api_url_source;
     let sso_login_callback_port = base.opts.api_client_opts.sso_login_callback_port;
     let options = LoginOptions {
-        existing_token: base.opts.api_client_opts.token.as_ref().map(|t| t.expose()),
+        existing_token: base.opts.api_client_opts.token.as_ref(),
         sso_team: Some(sso_team),
         force,
         login_url_source,
@@ -88,7 +88,7 @@ async fn login_no_sso(base: &mut CommandBase, force: bool) -> Result<(), Error> 
     let login_url_config = base.opts.api_client_opts.login_url.to_string();
     let login_url_source = base.opts.api_client_opts.login_url_source;
     let api_url_source = base.opts.api_client_opts.api_url_source;
-    let existing_token = base.opts.api_client_opts.token.as_ref().map(|t| t.expose());
+    let existing_token = base.opts.api_client_opts.token.as_ref();
     let linked_team_id = base.opts.api_client_opts.team_id.as_deref();
     let linked_team_slug = base.opts.api_client_opts.team_slug.as_deref();
 
@@ -135,8 +135,6 @@ impl<'a> Drop for LoginTelemetry<'a> {
     }
 }
 
-/// Writes a token to disk. Device-flow OAuth tokens go into Turbo's auth.json
-/// so older Turbos never treat them as legacy API tokens.
 fn write_token(
     base: &CommandBase,
     token: Token,
@@ -149,8 +147,16 @@ fn write_token(
         return Err(crate::config::Error::NoGlobalConfigPath.into());
     };
     let turbo_auth_path = config_dir.join_components(&[TURBO_TOKEN_DIR, TURBO_AUTH_FILE]);
+    write_token_to_paths(&global_config_path, &turbo_auth_path, token, token_set)
+}
+
+fn write_token_to_paths(
+    global_config_path: &turbopath::AbsoluteSystemPath,
+    turbo_auth_path: &turbopath::AbsoluteSystemPath,
+    token: Token,
+    token_set: Option<&TokenSet>,
+) -> Result<(), Error> {
     let token = token.into_inner().clone();
-    let token_str = token.expose().to_string();
     let auth_tokens = match token_set {
         Some(ts) => {
             let now_secs = std::time::SystemTime::now()
@@ -172,14 +178,17 @@ fn write_token(
         },
     };
 
-    if token_str.starts_with("vca_") {
-        auth_tokens.write_to_config_file(&turbo_auth_path)?;
-        AuthTokens::clear_from_config_file(&global_config_path)?;
+    if auth_tokens
+        .token
+        .as_ref()
+        .is_some_and(|token| token.is_saved_vercel())
+    {
+        auth_tokens.write_to_config_file(turbo_auth_path)?;
         return Ok(());
     }
 
-    auth_tokens.write_to_config_file(&global_config_path)?;
-    AuthTokens::clear_from_config_file(&turbo_auth_path)?;
+    auth_tokens.write_to_config_file(global_config_path)?;
+    AuthTokens::clear_from_config_file(turbo_auth_path)?;
 
     Ok(())
 }
@@ -206,6 +215,84 @@ mod tests {
     }
 
     #[test]
+    fn login_persistence_uses_completed_flow_origin_not_token_prefix() {
+        use turborepo_types::Credential;
+        for secret in ["synthetic-legacy-sentinel", "vca_synthetic-oauth-sentinel"] {
+            for vercel_flow in [false, true] {
+                let tmp = tempdir().unwrap();
+                let root = AbsoluteSystemPathBuf::try_from(tmp.path()).unwrap();
+                let config_path = root.join_component("config.json");
+                let auth_path = root.join_component("auth.json");
+                config_path.create_with_contents(r#"{"apiUrl":"https://custom.example","token":"existing-custom","unrelated":true}"#).unwrap();
+                let credential = if vercel_flow {
+                    Credential::saved_vercel(secret.into())
+                } else {
+                    Credential::generic(secret.into())
+                };
+                write_token_to_paths(&config_path, &auth_path, Token::New(credential), None)
+                    .unwrap();
+                let target = if vercel_flow {
+                    &auth_path
+                } else {
+                    &config_path
+                };
+                let other = if vercel_flow {
+                    &config_path
+                } else {
+                    &auth_path
+                };
+                assert_eq!(
+                    Token::from_file(target).unwrap().into_inner().expose(),
+                    secret
+                );
+                if vercel_flow {
+                    assert_eq!(
+                        Token::from_file(other).unwrap().into_inner().expose(),
+                        "existing-custom"
+                    );
+                } else {
+                    assert!(matches!(
+                        Token::from_file(other),
+                        Err(turborepo_auth::Error::TokenNotFound)
+                    ));
+                }
+                let global: serde_json::Value =
+                    serde_json::from_str(&config_path.read_to_string().unwrap()).unwrap();
+                assert_eq!(global["unrelated"], true);
+                assert_eq!(global["apiUrl"], "https://custom.example");
+                let persisted: serde_json::Value =
+                    serde_json::from_str(&target.read_to_string().unwrap()).unwrap();
+                assert!(persisted.get("issuer").is_none());
+                let inputs = crate::config::ConfigurationFileInputs {
+                    global_config_path: config_path.clone(),
+                    global_auth_path: auth_path.clone(),
+                    legacy_auth_path: None,
+                };
+                let config = TurborepoConfigBuilder::new(&root)
+                    .build_with_inputs(Default::default(), inputs.clone())
+                    .unwrap();
+                assert_eq!(config.api_url(), "https://custom.example");
+                assert_eq!(config.token(), Some(secret));
+                assert_eq!(config.credential().unwrap().is_saved_vercel(), vercel_flow);
+                assert_eq!(
+                    turborepo_api_client::validate_credential_destination(
+                        config.credential().unwrap(),
+                        &config.api_url().parse().unwrap()
+                    )
+                    .is_ok(),
+                    !vercel_flow
+                );
+                let vercel = TurborepoConfigBuilder::new(&root)
+                    .with_api_url(Some(crate::config::DEFAULT_API_URL.into()))
+                    .build_with_inputs(Default::default(), inputs)
+                    .unwrap();
+                assert_eq!(vercel.token(), Some(secret));
+                assert_eq!(vercel.credential().unwrap().is_saved_vercel(), vercel_flow);
+            }
+        }
+    }
+
+    #[test]
     fn write_token_clears_stale_turbo_auth_for_manual_tokens() {
         let _lock = ENV_LOCK.lock().expect("env lock poisoned");
         let repo_root = tempdir().expect("failed to create repo tempdir");
@@ -226,7 +313,9 @@ mod tests {
 
         let turbo_auth_path = config_root.join_components(&[TURBO_TOKEN_DIR, TURBO_AUTH_FILE]);
         AuthTokens {
-            token: Some(SecretString::new("vca_stale_token".to_owned())),
+            token: Some(turborepo_types::Credential::saved_vercel(
+                "vca_stale_token".into(),
+            )),
             refresh_token: Some(SecretString::new("stale_refresh_token".to_owned())),
             expires_at: Some(4_102_444_800),
         }

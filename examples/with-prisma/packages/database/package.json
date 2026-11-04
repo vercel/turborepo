@@ -6,6 +6,7 @@
   },
   "scripts": {
     "build": "tsup src/client.ts --format esm",
+    "check-types": "tsc --noEmit",
     "db:migrate:deploy": "prisma db migrate",
     "db:migrate:dev": "prisma db update",
     "db:push": "prisma db update",
@@ -13,22 +14,20 @@
     "dev": "tsup src/client.ts --format esm --watch",
     "format": "prisma contract format",
     "generate": "prisma contract emit",
-    "lint": "eslint --config .eslintrc.js . --max-warnings 0",
-    "prebuild": "pnpm run generate",
-    "predev": "pnpm run generate"
+    "lint": "eslint . --max-warnings 0"
   },
   "dependencies": {
-    "@prisma/orm-postgres": "8.0.0-rc.11",
-    "dotenv": "18.0.0"
+    "@prisma/orm-postgres": "8.0.0-rc.18",
+    "dotenv": "18.0.8"
   },
   "devDependencies": {
     "@repo/eslint-config": "workspace:*",
     "@repo/typescript-config": "workspace:*",
-    "eslint": "10.10.0",
-    "prisma": "8.0.0-rc.15",
+    "eslint": "10.13.0",
+    "prisma": "8.0.0-rc.24",
     "rimraf": "6.1.3",
-    "tsup": "8.5.1",
-    "tsx": "4.23.13",
+    "tsup": "9.0.0",
+    "tsx": "4.23.15",
     "typescript": "7.0.2"
   }
 }

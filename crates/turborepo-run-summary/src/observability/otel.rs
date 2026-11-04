@@ -36,11 +36,23 @@ impl RunObserver for OtelObserver {
 /// Returns `None` if observability is disabled or misconfigured.
 pub(crate) fn try_init_otel(
     options: &ExperimentalOtelOptions,
-    token: Option<&str>,
+    token: Option<&turborepo_types::Credential>,
 ) -> Option<Handle> {
-    let config = config_from_options(options, token)?;
+    let generic_token = token
+        .filter(|token| !token.is_saved_vercel())
+        .map(|token| token.expose());
+    let config = config_from_options(options, generic_token)?;
+    let protected = token.filter(|token| token.is_saved_vercel());
+    let protected = protected
+        .filter(|_| {
+            !config
+                .headers
+                .keys()
+                .any(|key| key.eq_ignore_ascii_case("authorization"))
+        })
+        .cloned();
 
-    match turborepo_otel::Handle::try_new(config) {
+    match turborepo_otel::Handle::try_new_with_credential(config, protected) {
         Ok(handle) => Some(Handle {
             inner: Arc::new(OtelObserver { handle }),
         }),

@@ -2,7 +2,7 @@
 //! Enable `test-support` only on a dev-dependency. No process environment is
 //! read or mutated, and the synthetic Node path must never be executed.
 
-use std::path::Component;
+use std::path::{Component, Path};
 
 mod loopback;
 pub use loopback::LoopbackServer;
@@ -19,6 +19,16 @@ fn put(out: &mut Vec<u8>, fields: &[(u64, usize)]) {
         out.extend(&value.to_le_bytes()[..width]);
     }
 }
+/// Replace a published tool file's bytes, keeping its mode.
+#[allow(clippy::expect_used)]
+pub fn damage(path: &Path, bytes: impl AsRef<[u8]>) {
+    let path = std::fs::canonicalize(path).expect("resolve damaged file");
+    let permissions = std::fs::metadata(&path).expect("stat").permissions();
+    std::fs::remove_file(&path).expect("unlink");
+    std::fs::write(&path, bytes).expect("write");
+    std::fs::set_permissions(path, permissions).expect("restore mode");
+}
+
 /// One stored Unix-executable entry, like vendor release zips such as Bun.
 pub fn stored_zip(path: &str, data: &[u8]) -> Vec<u8> {
     stored_zip_entries(&[(path, data)])

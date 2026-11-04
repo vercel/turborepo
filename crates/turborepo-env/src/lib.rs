@@ -390,7 +390,7 @@ impl EnvironmentVariableMap {
         {
             // Normalize only the leading include/exclude marker. Leave all other
             // escaping and wildcard syntax to the existing regex implementation.
-            let literal_patterns = || {
+            let simple_patterns = || {
                 wildcard_patterns.iter().map(|pattern| {
                     let pattern = pattern.as_ref();
                     if let Some(rest) = pattern.strip_prefix('!') {
@@ -402,18 +402,35 @@ impl EnvironmentVariableMap {
                     }
                 })
             };
-            if literal_patterns().all(|(_, pattern)| !pattern.contains(['*', '\\'])) {
+            // A single trailing star covers common framework prefixes such as
+            // NEXT_PUBLIC_*. More complex patterns still use the regex matcher.
+            if simple_patterns().all(|(_, pattern)| {
+                !pattern
+                    .strip_suffix('*')
+                    .unwrap_or(pattern)
+                    .contains(['*', '\\'])
+            }) {
                 let mut output = WildcardMaps {
                     inclusions: EnvironmentVariableMap::default(),
                     exclusions: EnvironmentVariableMap::default(),
                 };
-                for (excluded, pattern) in literal_patterns() {
-                    if let Some((name, value)) = self.get_key_value(pattern) {
-                        let map = if excluded {
-                            &mut output.exclusions
-                        } else {
-                            &mut output.inclusions
-                        };
+                for (excluded, pattern) in simple_patterns() {
+                    let map = if excluded {
+                        &mut output.exclusions
+                    } else {
+                        &mut output.inclusions
+                    };
+                    if let Some(prefix) = pattern.strip_suffix('*') {
+                        for (name, value) in &self.0 {
+                            if name
+                                .strip_prefix(prefix)
+                                .is_some_and(|suffix| !suffix.contains('\n'))
+                            {
+                                // Match regex `.*`: Unicode and CR, but not LF.
+                                map.insert(name.clone(), value.clone());
+                            }
+                        }
+                    } else if let Some((name, value)) = self.get_key_value(pattern) {
                         map.insert(name.clone(), value.clone());
                     }
                 }
@@ -900,10 +917,15 @@ mod tests {
     #[test_case(&["\\!BANG", "!!BANG"] ; "literal bang and exclusion")]
     #[test_case(&["ProgramFiles(x86)", "A.B+$^[]{}?", "é東京", "A\nB", "A\rB"] ; "literal regex syntax and unicode")]
     #[test_case(&["SHELL", "DOCKER_HOST"] ; "windows unicode folding")]
-    #[test_case(&["FOO*", "!FOOD", "BAR"] ; "wildcard fallback")]
-    #[test_case(&["*", "!FOO*"] ; "all wildcard fallback")]
+    #[test_case(&["FOO*", "!FOOD", "BAR"] ; "prefix and literal")]
+    #[test_case(&["*", "!FOO*"] ; "empty prefix and prefix exclusion")]
     #[test_case(&["FOO\\*", "\\\\*", "A\\B", "\\!BANG*"] ; "escape fallback")]
     #[test_case(&["F**O*", "*é*", "!A*B"] ; "arbitrary wildcard fallback")]
+    #[test_case(&["FOO*", "!FOO*"] ; "prefix exclusion wins")]
+    #[test_case(&["!FOO*"] ; "only prefix exclusion")]
+    #[test_case(&["\\!BANG*", "!!BANG_MORE*"] ; "prefix bang markers")]
+    #[test_case(&["é*", "ProgramFiles(*", "A.B+$^[]{}?*", "A\n*", "A\r*"] ; "literal prefix syntax and unicode")]
+    #[test_case(&["FOO*", "!FOO\r", "A\nB*"] ; "prefix suffix newline semantics")]
     fn test_wildcard_fast_path_matches_regex(patterns: &[&str]) {
         let env = EnvironmentVariableMap::from(
             [
@@ -924,6 +946,13 @@ mod tests {
                 "A\rB",
                 "FOO\n",
                 "FOO\r",
+                "FOOé東京",
+                "FOOa\nb",
+                "FOO\u{2028}",
+                "A\nB_suffix",
+                "A\nB_suffix\n",
+                "A\rB_suffix",
+                "é東京_more",
                 "foo",
                 "SHELL",
                 "shell",

@@ -10,6 +10,8 @@ Usage: install [--version VERSION] [--install-dir DIRECTORY] [--no-modify-path]
 
 By default, the installer uses the latest stable release and installs to
 ~/.local/bin. Set TURBO_VERSION or TURBO_INSTALL_DIR to configure this in CI.
+  --version VERSION  An exact version, "latest" (default), or "canary" for the
+                     newest canary release.
 
 The installer adds the install directory to PATH. It does not activate managed
 tools in your shell.
@@ -251,16 +253,29 @@ download() {
     --proto '=https' --proto-redir '=https' "$@"
 }
 
-if [ -z "$version" ] || [ "$version" = latest ]; then
-  metadata="$work_dir/release.json"
-  if ! download --output "$metadata" \
+github_api() {
+  download --output "$1" \
     --header 'Accept: application/vnd.github+json' \
     --header 'X-GitHub-Api-Version: 2022-11-28' \
-    'https://api.github.com/repos/vercel/turborepo/releases/latest'; then
-    fail 'could not resolve the latest stable release from GitHub'
-  fi
-  version=$(sed -nE 's/.*"tag_name"[[:space:]]*:[[:space:]]*"v?([^"]+)".*/\1/p' "$metadata" | head -n 1)
-fi
+    "https://api.github.com/repos/vercel/turborepo/$2"
+}
+
+metadata="$work_dir/release.json"
+case "$version" in
+  ''|latest)
+    github_api "$metadata" releases/latest || fail 'could not resolve the latest stable release from GitHub'
+    version=$(sed -nE 's/.*"tag_name"[[:space:]]*:[[:space:]]*"v?([^"]+)".*/\1/p' "$metadata" | head -n 1)
+    ;;
+  canary)
+    # Releases are listed newest first. Splitting on commas keeps the first
+    # match first even if GitHub returns the JSON on a single line.
+    github_api "$metadata" 'releases?per_page=30' || fail 'could not list releases from GitHub'
+    version=$(tr ',' '\n' < "$metadata" \
+      | sed -nE 's/.*"tag_name"[[:space:]]*:[[:space:]]*"v?([0-9]+\.[0-9]+\.[0-9]+-canary\.[0-9]+)".*/\1/p' \
+      | head -n 1)
+    [ -n "$version" ] || fail 'could not find a canary release on GitHub'
+    ;;
+esac
 
 case "$version" in
   v*) version=${version#v} ;;

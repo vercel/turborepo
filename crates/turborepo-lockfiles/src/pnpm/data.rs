@@ -975,11 +975,22 @@ impl PnpmLockfile {
     // Create a projection of all fields in the lockfile that could affect all
     // workspaces
     fn global_fields(&self) -> GlobalFields<'_> {
+        // Lockfile v7/v9 snapshot keys carry `(patch_hash=...)` for every
+        // patched package, and those keys are the identities compared per
+        // workspace. Adding, removing, or editing a patch therefore already
+        // changes exactly the workspaces that resolve the patched package, so
+        // the patch map does not need to invalidate every workspace.
+        let patched_dependencies = match self.version() {
+            SupportedLockfileVersion::V7AndV9 => None,
+            SupportedLockfileVersion::V5 | SupportedLockfileVersion::V6 => {
+                self.patched_dependencies.as_ref()
+            }
+        };
         GlobalFields {
             version: &self.lockfile_version,
             checksum: self.package_extensions_checksum.as_deref(),
             overrides: self.overrides.as_ref(),
-            patched_dependencies: self.patched_dependencies.as_ref(),
+            patched_dependencies,
             settings: self.settings.as_ref(),
             leading_documents: &self.leading_documents,
         }
@@ -2373,6 +2384,32 @@ snapshots:
         let curr_yaml = pnpm_v11_lockfile("11.0.0-rc.1");
 
         assert!(pnpm_global_change(prev_yaml.as_bytes(), curr_yaml.as_bytes()).unwrap());
+    }
+
+    #[test]
+    fn test_pnpm_global_change_ignores_patches_only_for_v7_and_v9() {
+        let lockfile = |version: &str, patches: &str| {
+            format!("lockfileVersion: '{version}'\n\n{patches}importers:\n  .: {{}}\n")
+        };
+        let patches = "patchedDependencies:\n  is-odd@3.0.1: abcd\n\n";
+
+        for version in ["7.0", "9.0"] {
+            assert!(
+                !pnpm_global_change(
+                    lockfile(version, "").as_bytes(),
+                    lockfile(version, patches).as_bytes(),
+                )
+                .unwrap(),
+                "{version}"
+            );
+        }
+        assert!(
+            pnpm_global_change(
+                lockfile("6.0", "").as_bytes(),
+                lockfile("6.0", patches).as_bytes(),
+            )
+            .unwrap()
+        );
     }
 
     #[test]

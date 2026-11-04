@@ -7,6 +7,8 @@ use crate::CachingStatus;
 
 #[derive(Debug, Error)]
 pub enum Error {
+    #[error("Refusing to send saved Vercel credentials outside https://vercel.com:443 or https://api.vercel.com:443. Use --token or TURBO_TOKEN for a custom cache credential; --api does not authorize saved Vercel credentials.")]
+    SavedVercelCredentialDestination,
     #[error("Error reading from disk: {0}")]
     ReadError(#[from] std::io::Error),
     #[error("Error making HTTP request: {0}")]

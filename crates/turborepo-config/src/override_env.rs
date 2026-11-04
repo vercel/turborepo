@@ -149,7 +149,7 @@ impl<'a> ResolvedConfigurationOptions for OverrideEnvVars<'a> {
     ) -> Result<ConfigurationOptions, Error> {
         let output = ConfigurationOptions {
             team_id: self.output.team_id.clone(),
-            token: self.output.token.clone(),
+            token: self.output.token.clone().map(Into::into),
             team_slug: self.output.team_slug.clone(),
             ui: self.ui(),
             ..Default::default()

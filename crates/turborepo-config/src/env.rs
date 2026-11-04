@@ -302,7 +302,7 @@ impl ResolvedConfigurationOptions for EnvVars {
             login_url_source: None,
             team_slug: self.output_map.get("team_slug").cloned(),
             team_id: self.output_map.get("team_id").cloned(),
-            token: self.output_map.get("token").cloned(),
+            token: self.output_map.get("token").cloned().map(Into::into),
             scm_base: self.output_map.get("scm_base").cloned(),
             scm_head: self.output_map.get("scm_head").cloned(),
             concurrency,
@@ -447,7 +447,7 @@ mod test {
         assert_eq!(turbo_login, config.login_url.unwrap());
         assert_eq!(turbo_team, config.team_slug.unwrap());
         assert_eq!(turbo_teamid, config.team_id.unwrap());
-        assert_eq!(turbo_token, config.token.unwrap());
+        assert_eq!(turbo_token, config.token.as_ref().unwrap().expose());
         assert_eq!(turbo_remote_cache_timeout, config.timeout.unwrap());
         assert_eq!(Some(UIMode::Tui), config.ui);
         assert_eq!(Some(true), config.allow_no_package_manager);

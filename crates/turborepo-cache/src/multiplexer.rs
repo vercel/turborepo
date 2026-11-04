@@ -459,7 +459,7 @@ mod tests {
     use tempfile::tempdir;
     use turbopath::{AbsoluteSystemPathBuf, AnchoredSystemPathBuf};
     use turborepo_api_client::{APIAuth, APIClient};
-    use turborepo_types::SecretString;
+    use turborepo_types::Credential;
     use turborepo_vercel_api_mock::start_test_server;
 
     use super::*;
@@ -509,7 +509,7 @@ mod tests {
             ),
             Some(APIAuth {
                 team_id: Some("my-team".to_string()),
-                token: SecretString::new("my-token".to_string()),
+                token: Credential::from("my-token".to_string()),
                 team_slug: None,
             }),
             None,
@@ -565,7 +565,7 @@ mod tests {
             Some(APIAuth {
                 team_id: None,
                 team_slug: None,
-                token: SecretString::new("token".into()),
+                token: Credential::from("token"),
             }),
             None,
             LazyScmState::resolved(None),
@@ -607,7 +607,7 @@ mod tests {
             Some(APIAuth {
                 team_id: None,
                 team_slug: None,
-                token: SecretString::new("token".into()),
+                token: Credential::from("token"),
             }),
             None,
             LazyScmState::resolved(None),

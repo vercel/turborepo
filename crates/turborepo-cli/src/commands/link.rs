@@ -14,7 +14,7 @@ use tracing::warn;
 use turborepo_api_client::{CacheClient, Client};
 use turborepo_gitignore::ensure_turbo_is_gitignored;
 use turborepo_json_rewrite::{RewriteError, set_path, unset_path};
-use turborepo_types::SecretString;
+use turborepo_types::Credential;
 #[cfg(not(test))]
 use turborepo_ui::CYAN;
 use turborepo_ui::{BOLD, DialoguerTheme, GREY};
@@ -83,11 +83,11 @@ fn is_auth_rejection_error(error: &turborepo_api_client::Error) -> bool {
 }
 
 async fn retry_with_recovered_token<T, F, Fut>(
-    token: &mut SecretString,
+    token: &mut Credential,
     operation: F,
 ) -> turborepo_api_client::Result<T>
 where
-    F: Fn(SecretString) -> Fut,
+    F: Fn(Credential) -> Fut,
     Fut: std::future::Future<Output = turborepo_api_client::Result<T>>,
 {
     match operation(token.clone()).await {
@@ -122,7 +122,7 @@ where
 pub(crate) async fn verify_caching_enabled<'a>(
     api_client: &(impl Client + CacheClient),
     team_id: &str,
-    token: &SecretString,
+    token: &Credential,
     selected_team: Option<SelectedTeam<'a>>,
 ) -> Result<(), Error> {
     let team_slug = selected_team.as_ref().map(|team| match team {
@@ -179,20 +179,20 @@ pub async fn link(
     let repo_root_with_tilde = base.repo_root.to_string().replacen(&*homedir, "~", 1);
     let api_client = base.api_client()?;
 
-    // Always try to get a valid token with automatic refresh if expired
-    let mut token: SecretString = match turborepo_auth::get_token_with_refresh().await {
-        Ok(Some(refreshed_token)) => refreshed_token,
-        Ok(None) | Err(_) => {
-            // Fall back to the token from config/CLI if refresh logic didn't work
-            base.opts()
-                .api_client_opts
-                .token
-                .clone()
-                .ok_or_else(|| Error::TokenNotFound {
-                    command: base.color_config.apply(BOLD.apply_to("`npx turbo login`")),
-                })?
-        }
-    };
+    let mut token =
+        base.opts()
+            .api_client_opts
+            .token
+            .clone()
+            .ok_or_else(|| Error::TokenNotFound {
+                command: base.color_config.apply(BOLD.apply_to("`npx turbo login`")),
+            })?;
+    if token.is_saved_vercel()
+        && let Ok(Some(refreshed)) = turborepo_auth::get_token_with_refresh().await
+        && refreshed.is_saved_vercel()
+    {
+        token = refreshed;
+    }
 
     println!(
         "\n{}\n\n{}\n\nFor more information, visit: {}\n",

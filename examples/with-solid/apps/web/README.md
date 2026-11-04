@@ -1,32 +1,27 @@
-# SolidStart
+# SolidStart web app
 
-Everything you need to build a Solid project, powered by [SolidStart](https://docs.solidjs.com/solid-start);
+A [SolidStart v2](https://docs.solidjs.com/solid-start/v2) application with shared `@repo/ui` components.
 
-## Creating a project
+## Setup
 
-```bash
-# create a new project in the current directory
-npm init solid@latest
+Use the Node.js and pnpm versions documented in the [example README](../../README.md). Install dependencies with `pnpm install` from the example root, not this app directory.
 
-# create a new project in my-app
-npm init solid@latest my-app
-```
+Run the following commands from the example root.
 
 ## Developing
 
-Once you've created a project and installed dependencies with `npm install` (or `pnpm install` or `yarn`), start a development server:
+```sh
+pnpm --filter web dev
 
-```bash
-npm run dev
-
-# or start the server and open the app in a new browser tab
-npm run dev -- --open
+# Open the app in a browser
+pnpm --filter web dev --open
 ```
 
 ## Building
 
-SolidStart v2 apps are built with [Vite](https://vite.dev/) and deployed with [Nitro](https://nitro.build/) presets, which optimise your project for deployment to different environments.
+```sh
+pnpm --filter web build
+pnpm --filter web start
+```
 
-By default, `npm run build` will generate a Node app that you can run with `npm start`. To use a different preset, configure the `nitro` plugin in your `vite.config.ts`.
-
-## This project was created with the [Solid CLI](https://solid-cli.netlify.app)
+SolidStart uses Vite and the Nitro Vite plugin. The default build produces a Node server at `.output/server/index.mjs`. To deploy elsewhere, configure a Nitro preset in `vite.config.ts`.

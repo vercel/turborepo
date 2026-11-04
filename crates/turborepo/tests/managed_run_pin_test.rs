@@ -97,32 +97,7 @@ impl Repo {
         let lock = Lock::parse(lock.to_string().as_bytes()).unwrap();
         let node = NodePlan::from_lock(&lock, platform).unwrap();
         let pnpm = PnpmPlan::from_lock(&lock, platform, &node, None).unwrap();
-        let tools = [node.inventory_tool().clone(), pnpm.inventory_tool().clone()];
-        turborepo_tool_install::Store::open(&root)
-            .unwrap()
-            .reconcile(&tools, |tool, tree| {
-                for relative in tool.executables.values() {
-                    let target = tree.join(relative);
-                    fs::create_dir_all(target.parent().unwrap())?;
-                    if tool.id == "node" {
-                        fs::copy(env!("CARGO_BIN_EXE_echo_args"), &target)?;
-                    } else {
-                        let script = if cfg!(windows) {
-                            "@echo managed-pnpm %*\r\n"
-                        } else {
-                            "#!/bin/sh\necho managed-pnpm \"$@\"\n"
-                        };
-                        fs::write(&target, script)?;
-                        #[cfg(unix)]
-                        {
-                            use std::os::unix::fs::PermissionsExt;
-                            fs::set_permissions(&target, fs::Permissions::from_mode(0o755))?;
-                        }
-                    }
-                }
-                Ok(())
-            })
-            .unwrap();
+        let tools = vec![node.inventory_tool().clone(), pnpm.inventory_tool().clone()];
         let home = root.parent().unwrap().join("home");
         let user_base = if cfg!(target_os = "macos") {
             home.join("Library/Application Support")
@@ -131,9 +106,27 @@ impl Repo {
         } else {
             home.join("data")
         };
-        let trust =
-            turborepo_cli::test_support::record_trust_for_tests(&root, Some(user_base.as_path()))
-                .unwrap();
+        let trust = turborepo_cli::test_support::install_tools_for_tests(
+            &root,
+            Some(&user_base.join("turborepo/tools")),
+            tools,
+            None,
+            |tool, tree| {
+                for relative in tool.tree_files() {
+                    let target = tree.join(relative);
+                    fs::create_dir_all(target.parent().unwrap())?;
+                    // The managed pnpm launcher runs managed Node, which
+                    // echoes the pnpm entry point and arguments it received.
+                    if tool.id == "node" {
+                        fs::copy(env!("CARGO_BIN_EXE_echo_args"), &target)?;
+                    } else {
+                        fs::write(&target, "// managed pnpm entry point\n")?;
+                    }
+                }
+                Ok(())
+            },
+        )
+        .unwrap();
         Self {
             _temp: temp,
             root,
@@ -232,14 +225,14 @@ fn managed_run_keeps_compatible_local_turbo_and_refuses_incompatible_pins() {
         let (code, text) = repo.turbo(&build);
         assert_eq!(code, 1, "{text}");
         assert!(text.contains("musl"), "{text}");
-        assert!(!text.contains("managed-pnpm run"), "{text}");
+        assert!(!text.contains("pnpm.cjs run"), "{text}");
         return;
     }
 
     // No repository-local turbo: the global CLI runs the selection itself.
     let (code, text) = repo.turbo(&build);
     assert_eq!(code, 0, "{text}");
-    assert!(text.contains("managed-pnpm run build"), "{text}");
+    assert!(text.contains("pnpm.cjs run build"), "{text}");
     assert!(!text.contains("Running local turbo binary"), "{text}");
 
     let lacking = format!(
@@ -265,7 +258,7 @@ fn managed_run_keeps_compatible_local_turbo_and_refuses_incompatible_pins() {
                 "{expected}: {text}"
             );
         }
-        assert!(!text.contains("managed-pnpm run"), "a task ran: {text}");
+        assert!(!text.contains("pnpm.cjs run"), "a task ran: {text}");
     }
 
     // This build copied into the repository is compatible: managed run hands
@@ -279,7 +272,7 @@ fn managed_run_keeps_compatible_local_turbo_and_refuses_incompatible_pins() {
         .find(|line| line.contains("Running local turbo binary in"));
     let package = TurboState::scoped_platform_package_dir();
     assert!(handoff.is_some_and(|line| line.contains(package)), "{text}");
-    assert!(text.contains("managed-pnpm run build"), "{text}");
+    assert!(text.contains("pnpm.cjs run build"), "{text}");
 }
 
 impl Drop for Repo {

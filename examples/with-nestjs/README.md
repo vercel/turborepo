@@ -1,14 +1,19 @@
-# Turborepo starter
+# Turborepo starter with NestJS and Next.js
 
 This is a community-maintained example. If you experience a problem, please submit a pull request with a fix. GitHub Issues will be closed.
 
 ## Using this example
 
-Run the following command:
+Use Node.js 26.12.0 or newer and pnpm 12.14.0 (the version pinned in `packageManager`). Create the example, then install dependencies and start development from its root:
 
 ```bash
 npx create-turbo@latest -e with-nestjs
+cd with-nestjs
+pnpm install
+pnpm dev
 ```
+
+If you choose a different directory name when prompted, use that directory instead. The NestJS API runs at [localhost:3000](http://localhost:3000), and the Next.js frontend runs at [localhost:3001](http://localhost:3001). Turborepo builds shared packages before starting development tasks.
 
 ## What's inside?
 
@@ -42,7 +47,7 @@ This Turborepo has some additional tools already set up for you:
 
 ### Commands
 
-This Turborepo includes useful commands for its apps and packages.
+Run these commands from the monorepo root.
 
 #### Build
 

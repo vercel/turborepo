@@ -1,108 +1,52 @@
-//! Automatic cleanup of managed storage that turbo.lock no longer selects,
-//! and disk-use reporting. Best effort: nothing here can fail setup.
-use std::{path::Path, time::Duration};
+//! Automatic cleanup of the tool store. Best effort: nothing here can fail
+//! setup.
+use std::time::{Duration, SystemTime};
 
-use turborepo_setup::{
-    artifact_cache::ArtifactCache,
-    lock::{Installation, Lock, Platform},
-};
-use turborepo_tool_install::{StorageUse, Store};
+use turborepo_tool_install::{GRACE, UserStore};
 
 const DAY: Duration = Duration::from_secs(24 * 60 * 60);
-/// `turbo run` uses the selected generation without the setup lock, so a
-/// replaced generation stays this long for runs that started before setup.
-const GRACE_DAYS: u32 = 7;
-/// Shared downloads that no setup in any clone referenced for this long are
-/// evicted, like Cargo's automatic cleanup of downloaded crates.
-const UNUSED_DAYS: u32 = 90;
 
-/// After a successful reconcile, under the Store guard.
-pub(super) fn after_provisioning(
-    store: &mut Store,
-    cache: Option<&ArtifactCache>,
-    lock: &Lock,
-    host: Platform,
-) -> Vec<String> {
-    let mut lines = match store.remove_inactive(DAY * GRACE_DAYS) {
-        Ok(usage) => report(&usage, "Removed"),
-        Err(error) => vec![warning("replaced managed tools", &error)],
-    };
-    let Some(cache) = cache else {
-        return lines;
-    };
-    // Installs reused without reading the cache still count as a use.
-    for (platform, sha256) in referenced(lock, host) {
-        cache.mark_used(platform, sha256);
-    }
-    match cache
-        .prune_unused(DAY * UNUSED_DAYS)
-        .and_then(|removed| Ok((removed, cache.disk_use()?)))
-    {
-        Ok((removed, usage)) => {
-            lines.push(format!("Shared download cache: {}.", size(usage.bytes)));
-            if removed.entries > 0 {
-                lines.push(format!(
-                    "Removed {} of shared downloads no setup used in {UNUSED_DAYS} days.",
-                    size(removed.bytes)
-                ));
-            }
+/// After setup released its own lease: collects what no repository using
+/// `store` has referenced for the grace period, and reports store-wide disk
+/// use. Skipped while another setup holds the store.
+pub(super) fn collect(store: &UserStore, now: SystemTime) -> Vec<String> {
+    match try_collect(store, now) {
+        Ok(Some(lines)) => lines,
+        Ok(None) => {
+            tracing::debug!("skipped tool store collection: another setup is running");
+            Vec::new()
         }
-        Err(error) => lines.push(warning("the shared download cache", &error)),
-    }
-    lines
-}
-
-/// Read-only report of what the next setup removes from this clone.
-pub(super) fn inspect(root: &Path) -> Vec<String> {
-    match Store::storage_use(root, DAY * GRACE_DAYS) {
-        Ok(Some(usage)) => report(&usage, "turbo setup will remove"),
-        Ok(None) => Vec::new(),
-        Err(error) => vec![format!(
-            "Warning: could not measure managed tool disk use ({error})."
-        )],
+        Err(error) => {
+            tracing::debug!("could not collect unused managed tools: {error}");
+            Vec::new()
+        }
     }
 }
 
-fn report(usage: &StorageUse, removal: &str) -> Vec<String> {
-    let mut lines = vec![format!(
-        "Managed tools use {} in this clone's .turbo/tools.",
-        size(usage.selected.bytes)
-    )];
-    if usage.removable.entries > 0 {
+/// `None` when something else held the store and this round was skipped.
+pub(super) fn try_collect(
+    store: &UserStore,
+    now: SystemTime,
+) -> Result<Option<Vec<String>>, turborepo_tool_install::Error> {
+    let Some(collected) = store.collect(now, |dir| super::trust::repo_state(store, dir))? else {
+        return Ok(None);
+    };
+    let mut lines = Vec::new();
+    if collected.removed.entries > 0 {
         lines.push(format!(
-            "{removal} {} of managed tools turbo.lock no longer selects.",
-            size(usage.removable.bytes)
+            "Removed {} of managed tools no repository selects.",
+            size(collected.removed.bytes)
         ));
     }
-    if usage.retained.entries > 0 {
+    if collected.retained.entries > 0 {
         lines.push(format!(
-            "Keeping {} of replaced managed tools for {GRACE_DAYS} days after replacement in case \
-             a running task still uses them.",
-            size(usage.retained.bytes)
+            "Keeping {} of replaced managed tools for {} days after replacement in case a running \
+             task still uses them.",
+            size(collected.retained.bytes),
+            GRACE.as_secs() / DAY.as_secs()
         ));
     }
-    lines
-}
-
-// This host's locked artifacts, keyed as the shared cache stores them.
-fn referenced(lock: &Lock, host: Platform) -> impl Iterator<Item = (Platform, &str)> {
-    lock.tools()
-        .values()
-        .filter_map(move |tool| match &tool.installation {
-            Installation::Managed { artifacts } => artifacts
-                .get_key_value(&host)
-                .or_else(|| artifacts.get_key_value(&Platform::Any)),
-            _ => None,
-        })
-        .flat_map(|(platform, parts)| {
-            parts
-                .values()
-                .map(move |artifact| (*platform, artifact.sha256.as_str()))
-        })
-}
-
-fn warning(what: &str, error: &dyn std::fmt::Display) -> String {
-    format!("Warning: could not clean up {what} ({error}). Setup is unaffected.")
+    Ok(Some(lines))
 }
 
 fn size(bytes: u64) -> String {

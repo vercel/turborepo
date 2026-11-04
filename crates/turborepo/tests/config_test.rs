@@ -133,3 +133,71 @@ fn config_rejects_malformed_root_manifest_with_cargo_enabled() {
         "expected package.json parse diagnostic, got: {combined}"
     );
 }
+
+#[test]
+fn config_does_not_offer_api_overrides_as_credential_authorization() {
+    const REPOSITORY_API: &str = "https://cache.example.test";
+    const CLI_API: &str = "https://explicit-cache.example.test";
+    const WARNING: &str = "Repository configuration selects a custom API URL";
+
+    for config_file in ["turbo.json", "turbo.jsonc", ".turbo/config.json"] {
+        let repo = tempfile::tempdir().unwrap();
+        std::fs::write(
+            repo.path().join("package.json"),
+            r#"{"name":"root","packageManager":"npm@10.5.0"}"#,
+        )
+        .unwrap();
+        std::fs::write(
+            repo.path().join("package-lock.json"),
+            r#"{"name":"root","lockfileVersion":3,"packages":{"":{"name":"root"}}}"#,
+        )
+        .unwrap();
+        let remote = serde_json::json!({"apiUrl": REPOSITORY_API});
+        let contents = if config_file.starts_with(".turbo/") {
+            std::fs::create_dir(repo.path().join(".turbo")).unwrap();
+            std::fs::write(repo.path().join("turbo.json"), r#"{"tasks":{}}"#).unwrap();
+            remote
+        } else {
+            serde_json::json!({"remoteCache": remote, "tasks": {}})
+        };
+        std::fs::write(repo.path().join(config_file), contents.to_string()).unwrap();
+
+        let config_dir = tempfile::tempdir().unwrap();
+        std::fs::create_dir(config_dir.path().join("turborepo")).unwrap();
+        std::fs::write(
+            config_dir.path().join("turborepo/auth.json"),
+            r#"{"token":"sentinel-api-token"}"#,
+        )
+        .unwrap();
+
+        for (cli_api, env_api) in [
+            (None, None),
+            (Some(REPOSITORY_API), None),
+            (Some(CLI_API), None),
+            (Some("https://vercel.com/api"), None),
+            (None, Some(CLI_API)),
+        ] {
+            // Use the normal entrypoint so shim inference runs before the
+            // command applies --api, just as it does for users.
+            let mut cmd = common::turbo_command(repo.path());
+            cmd.env("TURBO_CONFIG_DIR_PATH", config_dir.path());
+            if let Some(api) = cli_api {
+                cmd.args(["--api", api]);
+            }
+            if let Some(api) = env_api {
+                cmd.env("TURBO_API", api);
+            }
+            let output = cmd.arg("config").output().unwrap();
+            let combined = combined_output(&output);
+            let context = format!("{config_file}, CLI={cli_api:?}, env={env_api:?}: {combined}");
+            assert!(output.status.success(), "{context}");
+            assert_eq!(
+                config_json(&output)["apiUrl"],
+                cli_api.or(env_api).unwrap_or(REPOSITORY_API),
+                "{context}"
+            );
+            assert_eq!(combined.matches(WARNING).count(), 0, "{context}");
+            assert!(!combined.contains("sentinel-api-token"), "{context}");
+        }
+    }
+}

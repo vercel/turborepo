@@ -70,7 +70,7 @@ fn run(owned: &OwnedSetupFixture, upstream: &LoopbackServer, flags: &[&str]) -> 
             args,
             setup_args,
             Some(provision::Transports {
-                trust_base: Some(owned.home().to_owned()),
+                tool_store: Some(owned.home().to_owned()),
                 node: turborepo_setup::node_provision::NodeTransport::loopback_http_for_tests(origin)
                     .unwrap(),
                 pnpm: turborepo_setup::pnpm_provision::PnpmTransport::loopback_http_for_tests(origin)
@@ -115,7 +115,7 @@ fn python_only_local_setup_locks_installs_and_repeats_without_traffic() {
         json!([{"file":"pyproject.toml","field":"tool.uv.required-version",
             "request":">=0.12, <0.14"}])
     );
-    let store = turborepo_tool_install::Store::open(owned.root()).unwrap();
+    let store = Installed::open(&owned);
     let current = store.current().unwrap().unwrap();
     drop(store);
     assert_eq!(current.tools.len(), 1);
@@ -162,7 +162,7 @@ fn telemetry_counts_downloaded_uv_bytes() {
         let mut report = telemetry::Report::default();
         let code = crate::cli::dispatch_setup(&args, |args, setup_args| {
             let transports = provision::Transports {
-                trust_base: Some(owned.home().to_owned()),
+                tool_store: Some(owned.home().to_owned()),
                 node: turborepo_setup::node_provision::NodeTransport::loopback_http_for_tests(origin)
                     .unwrap(),
                 pnpm: turborepo_setup::pnpm_provision::PnpmTransport::loopback_http_for_tests(origin)
@@ -189,9 +189,10 @@ fn telemetry_counts_downloaded_uv_bytes() {
                 go: turborepo_setup::go_resolution::GoTransport::loopback_http_for_tests(origin)
                     .unwrap(),
             };
-            run_reporting(args, setup_args, Some(transports), turborepo_setup::git::FakeGit::shared(), &mut report, || {
+            run_reporting(args, setup_args, Some(transports), turborepo_setup::git::FakeGit::shared(), &mut report, &output::Console::capture(output::Mode::Plain).0, || {
                 Ok(owned.policy_at(&cwd)?)
             })
+            .map(|completed| completed.exit_code())
         })
         .unwrap()
         .unwrap();
@@ -351,10 +352,10 @@ fn python_and_uv_lock_together_and_launchers_use_only_managed_python() {
     let lock = locked(&owned).unwrap();
     assert_eq!(lock.tools().keys().collect::<Vec<_>>(), ["python", "uv"]);
     assert_eq!(lock.tools()["python"].version, "3.12.12");
-    let store = turborepo_tool_install::Store::open(owned.root()).unwrap();
+    let store = Installed::open(&owned);
     let current = store.current().unwrap().unwrap();
     drop(store);
-    let tools = fs::canonicalize(current.bin.join("../tools")).unwrap();
+    let python = fs::canonicalize(current.tree("python")).unwrap();
     let output = std::process::Command::new(current.bin.join("uv"))
         .args(["run", "app"])
         .env_clear()
@@ -362,7 +363,7 @@ fn python_and_uv_lock_together_and_launchers_use_only_managed_python() {
         .unwrap();
     assert_eq!(
         String::from_utf8(output.stdout).unwrap().trim(),
-        format!("{}|only-managed|run app", tools.join("python").display())
+        format!("{}|only-managed|run app", python.display())
     );
     assert!(current.bin.join("python3").exists());
     // Resolution lists through a verified scratch uv whose archive provisioning

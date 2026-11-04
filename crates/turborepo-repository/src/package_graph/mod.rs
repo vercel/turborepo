@@ -2401,6 +2401,134 @@ mod test {
         }
     }
 
+    fn pnpm_v9_lockfile(patch: Option<(&str, &str)>) -> String {
+        let suffix = |name: &str| match patch {
+            Some((patched, hash)) if patched == name => format!("(patch_hash={hash})"),
+            _ => String::new(),
+        };
+        let patched_dependencies = patch.map_or_else(String::new, |(name, hash)| {
+            let version = if name == "function-bind" {
+                "1.1.1"
+            } else {
+                "1.0.0"
+            };
+            format!("patchedDependencies:\n  {name}@{version}: {hash}\n\n")
+        });
+        let function_bind = suffix("function-bind");
+        let inner = suffix("inner");
+        format!(
+            r#"lockfileVersion: '9.0'
+
+settings:
+  autoInstallPeers: true
+  excludeLinksFromLockfile: false
+
+{patched_dependencies}importers:
+
+  .: {{}}
+
+  apps/a:
+    dependencies:
+      has-symbols:
+        specifier: ^1.0.3
+        version: 1.0.3
+
+  apps/b:
+    dependencies:
+      function-bind:
+        specifier: ^1.1.1
+        version: 1.1.1{function_bind}
+
+packages:
+
+  function-bind@1.1.1:
+    resolution: {{integrity: sha512-function-bind}}
+
+  has-symbols@1.0.3:
+    resolution: {{integrity: sha512-has-symbols}}
+
+  inner@1.0.0:
+    resolution: {{integrity: sha512-inner}}
+
+snapshots:
+
+  function-bind@1.1.1{function_bind}: {{}}
+
+  has-symbols@1.0.3:
+    dependencies:
+      inner: 1.0.0{inner}
+
+  inner@1.0.0{inner}: {{}}
+"#
+        )
+    }
+
+    #[test]
+    fn pnpm_v9_patched_dependencies_only_affect_consumers() {
+        // (patch, expected changed workspaces): a direct patch affects only
+        // its direct consumer, a transitive patch affects only the workspace
+        // that reaches it, and editing a patch keeps the same scope.
+        let cases = [
+            (None, Some(("function-bind", "aaaa")), vec!["b"]),
+            (None, Some(("inner", "aaaa")), vec!["a"]),
+            (Some(("function-bind", "aaaa")), None, vec!["b"]),
+            (
+                Some(("function-bind", "aaaa")),
+                Some(("function-bind", "bbbb")),
+                vec!["b"],
+            ),
+        ];
+
+        for (before, after, expected) in cases {
+            let tempdir = tempfile::tempdir().unwrap();
+            setup_lockfile_aware_fixture(tempdir.path(), "pnpm");
+            fs::write(
+                tempdir.path().join("package.json"),
+                r#"{"name": "monorepo", "packageManager": "pnpm@9.15.0"}"#,
+            )
+            .unwrap();
+            let root = AbsoluteSystemPathBuf::try_from(tempdir.path()).unwrap();
+            let root_package_json =
+                PackageJson::load(&root.join_component("package.json")).unwrap();
+
+            fs::write(
+                tempdir.path().join("pnpm-lock.yaml"),
+                pnpm_v9_lockfile(before),
+            )
+            .unwrap();
+            let previous = PackageManager::Pnpm9
+                .read_lockfile(&root, &root_package_json)
+                .unwrap();
+
+            fs::write(
+                tempdir.path().join("pnpm-lock.yaml"),
+                pnpm_v9_lockfile(after),
+            )
+            .unwrap();
+            let graph = build_lockfile_aware_graph(&root, PackageManager::Pnpm9);
+            assert!(
+                !graph.lockfile().unwrap().global_change(previous.as_ref()),
+                "{before:?} -> {after:?}: patch changes must not be global"
+            );
+            let mut changed = graph
+                .changed_packages_from_lockfile(previous.as_ref())
+                .unwrap()
+                .into_iter()
+                .map(|change| change.package.name)
+                .collect::<Vec<_>>();
+            changed.sort();
+
+            assert_eq!(
+                changed,
+                expected
+                    .into_iter()
+                    .map(PackageName::from)
+                    .collect::<Vec<_>>(),
+                "{before:?} -> {after:?}"
+            );
+        }
+    }
+
     #[tokio::test]
     async fn test_single_package_is_depends_on_root() {
         let root =

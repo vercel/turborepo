@@ -8,6 +8,12 @@ license = "MIT"
 workspace = true
 
 [dependencies]
+async-trait = "0.1.91"
+opentelemetry-http = { version = "0.31", default-features = false }
+reqwest = { workspace = true }
+turborepo-api-client = { workspace = true }
+turborepo-types = { workspace = true }
+
 opentelemetry = { version = "0.31", default-features = false, features = [
   "metrics",
 ] }
@@ -28,3 +34,7 @@ serde = { workspace = true, features = ["derive"] }
 thiserror = { workspace = true }
 tonic = { version = "0.14", default-features = false }
 tracing = { workspace = true }
+
+[dev-dependencies]
+httpmock = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }

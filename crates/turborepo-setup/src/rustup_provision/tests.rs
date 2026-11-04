@@ -5,7 +5,10 @@ use std::{ffi::OsStr, os::unix::fs::PermissionsExt, process::Command};
 use sha2::{Digest, Sha256};
 
 use super::*;
-use crate::source_policy::test_support::{LoopbackServer, OwnedSetupFixture};
+use crate::{
+    source_policy::test_support::{LoopbackServer, OwnedSetupFixture},
+    test_store::TestStore,
+};
 
 const TARGET: Platform = Platform::LinuxX64Gnu;
 // Never the real installer: it reports the multicall name and its homes.
@@ -110,7 +113,10 @@ async fn locked_plans_accept_only_the_official_binary_shape() {
     let (_, _, lock) = resolved().await;
     let plan = RustupPlan::from_lock(&lock, TARGET).unwrap();
     assert_eq!(plan.inventory_tool().platform, "linux-x64-gnu");
-    assert_eq!(plan.inventory_tool().executables["rustup"], "bin/rustup");
+    assert_eq!(
+        plan.inventory_tool().executables["rustup"],
+        "bin/rustup".into()
+    );
     assert!(matches!(
         RustupPlan::from_lock(&lock, Platform::Any),
         Err(Error::UnsupportedTarget)
@@ -159,18 +165,17 @@ async fn locked_plans_accept_only_the_official_binary_shape() {
 #[tokio::test]
 async fn verified_bootstrap_publishes_one_shim_and_failures_keep_the_prior_generation() {
     let repo = tempfile::tempdir().unwrap();
-    let manifest = repo.path().join(".turbo/tools/manifest.json");
     let (server, transport, lock) = resolved().await;
     let (_corrupt, corrupt) = serve("corrupt", official);
     let plan = RustupPlan::from_lock(&lock, TARGET).unwrap();
     let desired = vec![plan.inventory_tool().clone()];
-    let mut store = Store::open(repo.path()).unwrap();
+    let store = TestStore::open(repo.path());
     use crate::Preparation::{Fresh, IfNeeded};
     assert!(matches!(
         plan.prepare(&store, &desired, &corrupt, IfNeeded).await,
         Err(Error::Download(turborepo_download::Error::DigestMismatch))
     ));
-    assert!(!manifest.exists());
+    assert!(store.published().is_empty());
 
     let prepared = plan.prepare(&store, &desired, &transport, IfNeeded);
     let prepared = prepared.await.unwrap().unwrap();
@@ -179,16 +184,16 @@ async fn verified_bootstrap_publishes_one_shim_and_failures_keep_the_prior_gener
         .unwrap();
     let current = store.current().unwrap().unwrap();
     let shim = current.bin.join("rustup");
+    let tree = store.tree_of(plan.inventory_tool());
     assert_eq!(
-        fs::read_link(&shim).unwrap(),
-        Path::new("../tools/rustup/bin/rustup")
+        fs::canonicalize(&shim).unwrap(),
+        fs::canonicalize(tree.join("bin/rustup")).unwrap()
     );
-    let tree = current.tool_tree(plan.inventory_tool()).unwrap();
     let mode = fs::metadata(tree.join("bin/rustup"))
         .unwrap()
         .permissions()
         .mode();
-    assert_eq!(mode & 0o777, 0o755);
+    assert_eq!(mode & 0o777, 0o555);
     // Only the binary: no homes, proxies or toolchains.
     assert_eq!(fs::read_dir(&tree).unwrap().count(), 1);
     assert_eq!(fs::read_dir(tree.join("bin")).unwrap().count(), 1);
@@ -203,10 +208,10 @@ async fn verified_bootstrap_publishes_one_shim_and_failures_keep_the_prior_gener
     let reused = plan.prepare(&store, &desired, &transport, IfNeeded).await;
     assert!(reused.unwrap().is_none());
     assert_eq!(server.hits(), hits);
-    let published = fs::read(&manifest).unwrap();
+    let published = store.published();
     let fresh = plan.prepare(&store, &desired, &corrupt, Fresh).await;
     assert!(fresh.is_err());
-    assert_eq!(fs::read(&manifest).unwrap(), published);
+    assert_eq!(store.published(), published);
     assert!(store.is_current(&desired).unwrap());
 }
 
@@ -239,7 +244,7 @@ async fn one_mirror_base_serves_every_rustup_and_dist_path() {
     }
     let plan = RustupPlan::from_lock(&lock, TARGET).unwrap();
     let repo = tempfile::tempdir().unwrap();
-    let store = Store::open(repo.path()).unwrap();
+    let store = TestStore::open(repo.path());
     let desired = [plan.inventory_tool().clone()];
     let prepared = plan.prepare(&store, &desired, &transport, crate::Preparation::IfNeeded);
     assert!(prepared.await.unwrap().is_some());
@@ -268,7 +273,7 @@ async fn one_mirror_base_serves_every_rustup_and_dist_path() {
 async fn windows_and_musl_installers_are_locked_but_not_promoted() {
     let repo = tempfile::tempdir().unwrap();
     let (server, transport, lock) = resolved().await;
-    let store = Store::open(repo.path()).unwrap();
+    let store = TestStore::open(repo.path());
     let hits = server.hits();
     for platform in [
         Platform::WindowsX64,

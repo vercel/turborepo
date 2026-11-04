@@ -35,7 +35,7 @@ function currentTarget() {
 
 async function createHarness(
   root,
-  { corruptArchive = false, hookSupport = true } = {}
+  { corruptArchive = false, hookSupport = true, version = VERSION } = {}
 ) {
   const target = currentTarget();
   assert.ok(
@@ -59,7 +59,7 @@ async function createHarness(
   await writeFile(executable, binaryContents);
   await chmod(executable, 0o755);
 
-  const archiveName = `turbo-${VERSION}-${target}.tar.gz`;
+  const archiveName = `turbo-${version}-${target}.tar.gz`;
   const validArchive = join(root, archiveName);
   execFileSync("tar", ["-czf", validArchive, "-C", artifactDir, "turbo"]);
   const archiveBytes = await readFile(validArchive);
@@ -78,6 +78,22 @@ async function createHarness(
 
   const latest = join(root, "latest.json");
   await writeFile(latest, JSON.stringify({ tag_name: `v${VERSION}` }));
+  // Newest first, as GitHub lists them: a stable release can be newer than
+  // the newest canary, and older canaries follow.
+  const releases = join(root, "releases.json");
+  await writeFile(
+    releases,
+    JSON.stringify(
+      [
+        { tag_name: "v2.11.7", prerelease: false },
+        { tag_name: "v2.11.7-canary.3", prerelease: true },
+        { tag_name: "v2.11.7-canary.2", prerelease: true },
+        { tag_name: `v${VERSION}`, prerelease: false }
+      ],
+      null,
+      2
+    )
+  );
   const curlLog = join(root, "curl.log");
   const fakeCurl = join(fakeBin, "curl");
   await writeFile(
@@ -98,6 +114,7 @@ done
 printf '%s\\n' "$url" >> "$TURBO_CURL_LOG"
 case "$url" in
   */repos/vercel/turborepo/releases/latest) cp "$TURBO_LATEST_FIXTURE" "$output" ;;
+  */repos/vercel/turborepo/releases\\?per_page=30) cp "$TURBO_RELEASES_FIXTURE" "$output" ;;
   */SHA256SUMS) cp "$TURBO_CHECKSUMS_FIXTURE" "$output" ;;
   */"$TURBO_ARCHIVE_NAME") cp "$TURBO_ARCHIVE_FIXTURE" "$output" ;;
   *) echo "unexpected URL: $url" >&2; exit 22 ;;
@@ -123,6 +140,7 @@ esac
       TURBO_NO_MODIFY_PATH: "0",
       TURBO_VERSION: "",
       TURBO_LATEST_FIXTURE: latest,
+      TURBO_RELEASES_FIXTURE: releases,
       TURBO_CHECKSUMS_FIXTURE: checksums,
       TURBO_ARCHIVE_FIXTURE: servedArchive,
       TURBO_ARCHIVE_NAME: archiveName,
@@ -407,6 +425,67 @@ test("rejects unsafe version input before making a request", async (t) => {
     assert.notEqual(result.status, 0);
     assert.match(result.stderr, /invalid release version/);
     await assert.rejects(readFile(harness.curlLog));
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+const CANARY_VERSION = "2.11.7-canary.3";
+
+for (const [label, input] of [
+  ["--version canary", { args: ["--version", "canary"] }],
+  ["TURBO_VERSION=canary", { env: { TURBO_VERSION: "canary" } }]
+]) {
+  test(`${label} installs the newest canary, not a newer stable release`, async (t) => {
+    if (process.platform === "win32") {
+      t.skip("POSIX installer tests run on macOS and Linux");
+      return;
+    }
+    const root = await mkdtemp(join(tmpdir(), "turbo-install-test-"));
+    try {
+      const harness = await createHarness(root, { version: CANARY_VERSION });
+      const result = runInstaller(
+        { ...harness.env, ...input.env },
+        input.args
+      );
+      assert.equal(result.status, 0, result.stderr);
+      assert.match(
+        result.stdout,
+        new RegExp(`Installed turbo ${CANARY_VERSION.replaceAll(".", "\\.")}`)
+      );
+      assert.equal(
+        await readFile(join(harness.env.TURBO_INSTALL_DIR, "turbo"), "utf8"),
+        harness.binaryContents
+      );
+      const requests = await readFile(harness.curlLog, "utf8");
+      assert.match(requests, /\/releases\?per_page=30/);
+      assert.doesNotMatch(requests, /\/releases\/latest/);
+      assert.ok(requests.includes(`/v${CANARY_VERSION}/${harness.archiveName}`));
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+}
+
+test("--version canary fails clearly when no canary release is listed", async (t) => {
+  if (process.platform === "win32") {
+    t.skip("POSIX installer tests run on macOS and Linux");
+    return;
+  }
+  const root = await mkdtemp(join(tmpdir(), "turbo-install-test-"));
+  try {
+    const harness = await createHarness(root);
+    const stableOnly = join(root, "stable-only.json");
+    await writeFile(stableOnly, JSON.stringify([{ tag_name: `v${VERSION}` }]));
+    const result = runInstaller(
+      { ...harness.env, TURBO_RELEASES_FIXTURE: stableOnly },
+      ["--version", "canary"]
+    );
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /could not find a canary release on GitHub/);
+    await assert.rejects(
+      readFile(join(harness.env.TURBO_INSTALL_DIR, "turbo"))
+    );
   } finally {
     await rm(root, { recursive: true, force: true });
   }

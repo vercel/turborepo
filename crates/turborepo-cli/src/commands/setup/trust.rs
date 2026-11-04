@@ -1,49 +1,40 @@
-//! Setup's private producer of user-owned activation evidence. No PATH changes
-//! or execution capability. Run consumers must additionally gate managed mode,
-//! validate declarations/lock and revalidate immediately before use.
-//! Same-user hostile mutation during a transaction is outside the Store
-//! contract. Unix privacy uses owner, mode and macOS ACL checks; Windows uses
-//! owner-only DACLs read from each opened handle (see `dacl`).
+//! The repository's record in the user's tool store: the user-owned evidence
+//! that binds one repository, by directory identity and turbo.lock digest, to
+//! the environment setup installed for it. Run consumers must additionally
+//! gate managed mode, validate declarations/lock and revalidate immediately
+//! before use. Unix privacy uses owner, mode and macOS ACL checks; Windows
+//! uses owner-only DACLs read from each opened handle (see `dacl`).
 
 use std::{
     fs::{self, File},
     io::{self, Read, Write},
-    path::{Component, Path, PathBuf},
+    path::{Path, PathBuf},
 };
 
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
-use turborepo_tool_install::{Store, Tool};
+use turborepo_tool_install::{Activation, EnvKey, RepoState, UserStore};
 
 const LIMIT: u64 = 1024 * 1024;
-/// Bounds one pruning pass over the user's records.
-const MAX_RECORDS: usize = 4096;
+
+const SCHEMA: u32 = 2;
 
 #[derive(Serialize, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
-struct Installation {
+struct Record {
+    schema: u32,
     root: PathBuf,
     /// Unix device and inode, or Windows volume serial number and file index.
     device: u64,
     inode: u64,
-    manifest_sha256: String,
-    bin: PathBuf,
-    tools: Vec<Tool>,
-    /// The `--no-lock` inventory identity: digest of the sealed clone-local
-    /// selection this generation records. Absent for lock-only generations.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    selection_sha256: Option<String>,
-}
-
-#[derive(Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-struct Record {
-    schema: u32,
-    /// The turbo.lock digest. Absent only for a `--no-lock` installation in a
-    /// root without turbo.lock, which its selection digest identifies instead.
+    /// The turbo.lock digest. Absent only for a `--no-lock` clone, which its
+    /// clone-local selection identifies instead.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     lock_sha256: Option<String>,
-    installation: Installation,
+    /// `turbo setup --no-lock`'s canonical selection, in place of turbo.lock.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    selection: Option<String>,
+    env: EnvKey,
 }
 
 impl Record {
@@ -55,22 +46,61 @@ impl Record {
 }
 
 pub(crate) struct TrustStore {
+    store: UserStore,
+    /// This repository's directory in the user store.
     directory: PathBuf,
     root: PathBuf,
 }
 
 /// Setup-recorded tools for the interactive shell hook only.
 pub(crate) struct Recorded {
-    pub(crate) bin: PathBuf,
-    /// The runtime variables managed run sets for the recorded tools (Rust,
-    /// Go and uv/Python).
-    pub(crate) env: std::collections::BTreeMap<String, std::ffi::OsString>,
-    /// turbo.lock changed since setup recorded this installation, including a
+    pub(crate) activation: Activation,
+    /// turbo.lock changed since setup recorded this environment, including a
     /// lock added after `turbo setup --no-lock`.
     pub(crate) stale: bool,
-    /// Each export's relative target. On Windows its extension is the export's
-    /// PATHEXT type (`.exe` or `.cmd`).
-    pub(crate) targets: Vec<String>,
+}
+
+/// The fixture's tool store, else the user's. Unit tests must name a store:
+/// the user's is never theirs to read or write.
+pub(crate) fn user_store(
+    fixture: Option<&Path>,
+    root: &Path,
+) -> Result<UserStore, turborepo_tool_install::Error> {
+    match fixture {
+        Some(path) => UserStore::at(path, root),
+        #[cfg(test)]
+        None => Err(turborepo_tool_install::Error::NoStore),
+        #[cfg(not(test))]
+        None => UserStore::locate(root),
+    }
+}
+
+/// [`user_store`] for commands that only read it, such as `turbo run` and
+/// `turbo exec`: `None` until setup creates the store, which nothing here
+/// does.
+pub(crate) fn existing_user_store(
+    fixture: Option<&Path>,
+    root: &Path,
+) -> Result<Option<UserStore>, turborepo_tool_install::Error> {
+    match fixture {
+        Some(path) => UserStore::existing(path, root),
+        #[cfg(test)]
+        None => Err(turborepo_tool_install::Error::NoStore),
+        #[cfg(not(test))]
+        None => UserStore::existing(&UserStore::default_root()?, root),
+    }
+}
+
+/// Whether `root` has a `turbo setup --no-lock` record in the tool store
+/// (`store`, else the user's): a routing hint, never authorization.
+pub(crate) fn records_clone_local(root: &Path, store: Option<&Path>) -> io::Result<bool> {
+    let root = root.canonicalize()?;
+    let Some(store) = existing_user_store(store, &root).map_err(io::Error::other)? else {
+        return Ok(false);
+    };
+    Ok(TrustStore::new(&store, &root)?
+        .clone_local_selection()?
+        .is_some())
 }
 
 fn unsafe_state() -> io::Error {
@@ -209,54 +239,37 @@ fn private_directory(path: &Path) -> io::Result<()> {
 }
 
 impl TrustStore {
-    // The caller chooses a user location, never a repository-authored path.
-    // No writes until publication. Missing user state simply prohibits reuse.
-    pub(crate) fn new(base: &Path, root: &Path) -> io::Result<Self> {
-        if !cfg!(any(unix, windows))
-            || !base.is_absolute()
-            || base.components().any(|c| matches!(c, Component::ParentDir))
-        {
-            return Err(unsafe_state());
-        }
+    // `UserStore` located the store outside the repository. No writes until
+    // publication. Missing user state simply prohibits reuse.
+    pub(crate) fn new(store: &UserStore, root: &Path) -> io::Result<Self> {
         let root = root.canonicalize()?;
-        // Resolve an existing ancestor without accepting a symlink as a new
-        // state component. macOS's /var alias is allowed in the supplied base.
-        let mut ancestor = base;
-        let mut missing = Vec::new();
-        while !ancestor.exists() {
-            if fs::symlink_metadata(ancestor).is_ok() {
-                return Err(unsafe_state());
-            }
-            missing.push(ancestor.file_name().ok_or_else(unsafe_state)?.to_owned());
-            ancestor = ancestor.parent().ok_or_else(unsafe_state)?;
-        }
-        let mut directory = ancestor.canonicalize()?;
-        for part in missing.into_iter().rev() {
-            directory.push(part);
-        }
-        directory.push("turborepo");
-        directory.push("setup-roots");
-        if directory.starts_with(&root) || root.starts_with(&directory) {
-            return Err(unsafe_state());
-        }
-        Ok(Self { directory, root })
+        Ok(Self {
+            directory: store.repo(&root),
+            store: store.clone(),
+            root,
+        })
     }
 
     pub(crate) fn path(&self) -> PathBuf {
-        // Encoded native bytes avoid lossy collisions for non-UTF8 Unix roots.
-        self.directory.join(format!(
-            "{}.json",
-            hash(self.root.as_os_str().as_encoded_bytes())
-        ))
+        self.directory.join("record.json")
+    }
+
+    pub(crate) fn store(&self) -> &UserStore {
+        &self.store
+    }
+
+    /// The repository's private `CARGO_HOME`, beside its record.
+    pub(super) fn cargo_home(&self) -> PathBuf {
+        self.store.cargo_home(&self.root)
     }
 
     fn load(&self) -> io::Result<Option<Record>> {
         // Reject links in any existing state component before opening a record.
-        // Only the record directory setup creates must be private: on macOS its
-        // parent is turbo's shared config directory, and existing ancestors keep
-        // the modes the user's umask gave them (a 0775 `~/.local/share` under
-        // Ubuntu's 0002). Another user who can write an ancestor still cannot
-        // substitute the owned, private record directory or records below it.
+        // Only the record directory setup creates must be private: existing
+        // ancestors keep the modes the user's umask gave them (a 0775
+        // `~/.local/share` under Ubuntu's 0002). Another user who can write an
+        // ancestor still cannot substitute the owned, private record directory
+        // or records below it.
         for path in self.directory.ancestors() {
             match fs::symlink_metadata(path) {
                 Ok(metadata) => {
@@ -316,7 +329,9 @@ impl TrustStore {
         // Corrupt/old records are not authority; a fresh setup can replace them.
         // A lockless record must name the clone-local selection it trusts.
         Ok(serde_json::from_slice::<Record>(&bytes).ok().filter(|r| {
-            r.schema == 1 && (r.lock_sha256.is_some() || r.installation.selection_sha256.is_some())
+            r.schema == SCHEMA
+                && r.root == self.root
+                && (r.lock_sha256.is_some() != r.selection.is_some())
         }))
     }
 
@@ -324,195 +339,115 @@ impl TrustStore {
         self.load().map(|_| ())
     }
 
-    fn installation(&self, store: &Store) -> io::Result<Option<Installation>> {
-        if store.repository_root().map_err(io::Error::other)? != self.root {
-            return Err(unsafe_state());
-        }
-        self.inspect_installation(|| store.current().map_err(io::Error::other))
+    /// Whether the record still names this exact directory: a re-clone or
+    /// move at the same path gets a new identity.
+    fn same_directory(&self, record: &Record) -> io::Result<bool> {
+        Ok(identity(&self.root)? == (record.device, record.inode))
     }
 
-    fn inspect_installation(
-        &self,
-        inspect: impl FnOnce() -> io::Result<Option<turborepo_tool_install::Current>>,
-    ) -> io::Result<Option<Installation>> {
-        // Split components: `/` is not a separator under a `\\?\` root.
-        let path = self.root.join(".turbo").join("tools").join("manifest.json");
-        let Some(before) = read(&path, false)? else {
-            return Ok(None);
-        };
-        let Some(current) = inspect()? else {
-            return Ok(None);
-        };
-        if read(&path, false)?.as_deref() != Some(before.as_slice()) {
-            return Err(unsafe_state());
-        }
-        let (device, inode) = identity(&self.root)?;
-        Ok(Some(Installation {
-            root: self.root.clone(),
-            device,
-            inode,
-            manifest_sha256: hash(&before),
-            // Windows records the PATH spelling that activation uses, because
-            // cmd.exe cannot resolve `%~dp0..` under `\\?\`. No-op on Unix.
-            bin: dunce::simplified(&current.bin).to_path_buf(),
-            tools: current.tools,
-            selection_sha256: current.record.map(|record| hash(record.bytes())),
-        }))
+    /// The clone-local selection `turbo setup --no-lock` recorded, if this
+    /// repository has one.
+    pub(crate) fn clone_local_selection(&self) -> io::Result<Option<Vec<u8>>> {
+        Ok(self
+            .load()?
+            .and_then(|record| record.selection)
+            .map(String::into_bytes))
     }
 
-    /// Setup-only reuse of previously verified bytes. Deliberately ignores lock
-    /// drift: setup can reuse unchanged tools while repairing the lock/cohort.
-    /// This MUST NOT be used as run authorization, which also needs lock
-    /// equality.
-    pub(super) fn allows_reuse(&self, store: &Store) -> io::Result<bool> {
-        let Some(record) = self.load()? else {
-            return Ok(false);
-        };
-        // Damaged inventory is repairable, never reusable.
-        Ok(self.installation(store).ok().flatten().as_ref() == Some(&record.installation))
+    /// The environment this repository's record names, whatever turbo.lock
+    /// says now.
+    pub(super) fn recorded_env(&self) -> io::Result<Option<EnvKey>> {
+        Ok(self.load()?.map(|record| record.env))
     }
 
-    /// Lenient read-only view for the shell hook. Like allows_reuse, lock
-    /// drift does not prevent selection; it is reported so the hook can keep
-    /// the last-installed tools active with a notice. The current installation
-    /// must still equal the recorded one. MUST NOT authorize run or exec,
-    /// which stay strict. Never opens a writable Store or creates user state.
+    /// Lenient read-only view for the shell hook: lock drift does not prevent
+    /// activation; it is reported so the hook can keep the last-installed
+    /// tools active with a notice. MUST NOT authorize run or exec, which stay
+    /// strict. Reads the record and the environment's seal, never a tree.
     pub(crate) fn recorded(&self) -> io::Result<Option<Recorded>> {
         let Some(record) = self.load()? else {
             return Ok(None);
         };
-        let installation = self
-            .inspect_installation(|| Store::inspect(&self.root).map_err(io::Error::other))
-            .ok()
-            .flatten();
-        if installation.as_ref() != Some(&record.installation) {
+        if !self.same_directory(&record)? {
             return Ok(None);
         }
+        let Ok(activation) = self.store.activate(&self.root, &record.env) else {
+            return Ok(None);
+        };
         let lock = read(&self.root.join("turbo.lock"), false)?;
-        let targets = (record.installation.tools.iter())
-            .flat_map(|tool| tool.executables.values().cloned())
-            .collect();
-        let installation = &record.installation;
-        let env = turborepo_setup::activation::runtime_env(
-            &self.root,
-            &installation.bin,
-            &installation.tools,
-        )
-        .map_err(io::Error::other)?;
         Ok(Some(Recorded {
             stale: !record.resolves(lock.as_deref()),
-            env,
-            bin: record.installation.bin,
-            targets,
+            activation,
         }))
     }
 
-    /// Strict read-only consumer check, unlike setup reuse. The supplied plan
-    /// must already validate native declarations and be revalidated before use.
-    /// A committed turbo.lock authorizes only a record for its exact digest;
-    /// without one, only a `--no-lock` record for the installed clone-local
-    /// selection. Never opens a writable Store or creates missing user state.
-    pub(super) fn authorizes(
+    /// Strict read-only consumer check. The supplied plan must already
+    /// validate native declarations and be revalidated before use. A committed
+    /// turbo.lock authorizes only a record for its exact digest; without one,
+    /// only a `--no-lock` record for the planned clone-local selection. The
+    /// record must name this directory and exactly the plan's environment.
+    /// Never writes and never reads a tree.
+    pub(super) fn authorize(
         &self,
         plan: &turborepo_setup::activation::ActivationPlan,
-    ) -> io::Result<bool> {
+    ) -> Result<Option<Activation>, super::authorization::Error> {
         let Some(record) = self.load()? else {
-            return Ok(false);
+            return Ok(None);
         };
         let lock = read(&self.root.join("turbo.lock"), false)?;
-        if !record.resolves(lock.as_deref()) {
-            return Ok(false);
+        if !record.resolves(lock.as_deref())
+            || &record.env != plan.selection().key()
+            || !self.same_directory(&record)?
+        {
+            return Ok(None);
         }
-        let installation =
-            self.inspect_installation(|| Store::inspect(&self.root).map_err(io::Error::other))?;
-        Ok(installation.as_ref() == Some(&record.installation)
-            && plan.path_prepend() == record.installation.bin.as_path()
-            && record.installation.tools == plan.tools()
-            && read(&self.root.join("turbo.lock"), false)? == lock
-            && self.load()?.is_some_and(|after| {
-                after.lock_sha256 == record.lock_sha256 && after.installation == record.installation
-            }))
+        let activation = self.store.activate(&self.root, &record.env)?;
+        // Nothing changed underneath the check.
+        if read(&self.root.join("turbo.lock"), false)? != lock
+            || self.load()?.as_ref() != Some(&record)
+        {
+            return Ok(None);
+        }
+        Ok(Some(activation))
     }
 
-    /// Only call under source/writer/Store guards after the cohort was freshly
-    /// staged from verified artifacts or reused from matching external
-    /// evidence. Then prunes other roots' records that can never authorize.
-    pub(super) fn publish(&self, store: &Store) -> io::Result<()> {
-        self.record(store)?;
-        // Stale records already never authorize, so failing to remove one must
-        // not fail an otherwise successful setup.
-        if let Err(error) = self.prune() {
-            tracing::debug!("could not prune stale setup records: {error}");
-        }
-        Ok(())
+    /// Binds this repository to `env`, which setup just converged, under the
+    /// source and writer guards. `selection` is a `--no-lock` clone's
+    /// selection; with neither it nor turbo.lock, no record remains. Records
+    /// that can never authorize again are collection's to remove, after its
+    /// grace period ([`repo_state`]).
+    pub(crate) fn publish(&self, env: &EnvKey, selection: Option<&[u8]>) -> io::Result<()> {
+        self.write_record(env, selection)
     }
 
-    /// Remove other roots' records whose root is gone or is now a different
-    /// directory (deleted, moved or re-cloned). Reads stay bounded and never
-    /// follow links. Unsafe, corrupt or misfiled records are left alone.
-    fn prune(&self) -> io::Result<usize> {
-        let own = self.path();
-        let mut removed = 0;
-        let entries = match fs::read_dir(&self.directory) {
-            Ok(entries) => entries,
-            Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(0),
-            Err(error) => return Err(error),
-        };
-        for entry in entries.take(MAX_RECORDS) {
-            let path = entry?.path();
-            if path == own || path.extension().is_none_or(|extension| extension != "json") {
-                continue;
-            }
-            let Ok(Some(bytes)) = read(&path, true) else {
-                continue;
-            };
-            let Ok(record) = serde_json::from_slice::<Record>(&bytes) else {
-                continue;
-            };
-            let installation = &record.installation;
-            let name = hash(installation.root.as_os_str().as_encoded_bytes());
-            if path != self.directory.join(format!("{name}.json")) {
-                continue;
-            }
-            let stale = match identity(&installation.root) {
-                Err(error) => error.kind() == io::ErrorKind::NotFound,
-                Ok(found) => found != (installation.device, installation.inode),
-            };
-            // A concurrent setup may have just replaced this record; keep it.
-            if stale && read(&path, true)?.as_deref() == Some(bytes.as_slice()) {
-                fs::remove_file(&path)?;
-                removed += 1;
-            }
-        }
-        if removed > 0 {
-            sync_directory(&self.directory)?;
-        }
-        Ok(removed)
-    }
-
-    pub(super) fn record(&self, store: &Store) -> io::Result<()> {
+    fn write_record(&self, env: &EnvKey, selection: Option<&[u8]>) -> io::Result<()> {
         self.load()?;
-        let installation = self.installation(store)?.ok_or_else(unsafe_state)?;
-        self.write_record(installation)
-    }
-
-    fn write_record(&self, installation: Installation) -> io::Result<()> {
         let lock = read(&self.root.join("turbo.lock"), false)?;
-        // Without turbo.lock, only a generation carrying its sealed `--no-lock`
-        // selection is recorded, identified by that selection. Any other
-        // lockless setup succeeds without creating or retaining run authority.
-        // Either way, a later committed lock requires setup again.
-        if lock.is_none() && installation.selection_sha256.is_none() {
-            return match fs::remove_file(self.path()) {
-                Ok(()) => sync_directory(&self.directory),
-                Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(()),
-                Err(error) => Err(error),
-            };
-        }
+        // A committed lock is the resolution; a clone-local selection only
+        // stands in for a missing one. Without either, setup succeeds without
+        // creating or retaining run authority.
+        let selection = match (&lock, selection) {
+            (Some(_), _) => None,
+            (None, Some(selection)) => {
+                Some(String::from_utf8(selection.to_vec()).map_err(|_| unsafe_state())?)
+            }
+            (None, None) => {
+                return match fs::remove_file(self.path()) {
+                    Ok(()) => sync_directory(&self.directory),
+                    Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(()),
+                    Err(error) => Err(error),
+                };
+            }
+        };
+        let (device, inode) = identity(&self.root)?;
         let bytes = serde_json::to_vec(&Record {
-            schema: 1,
+            schema: SCHEMA,
+            root: self.root.clone(),
+            device,
+            inode,
             lock_sha256: lock.as_deref().map(hash),
-            installation,
+            selection,
+            env: env.clone(),
         })
         .map_err(io::Error::other)?;
         if bytes.len() as u64 > LIMIT {
@@ -529,7 +464,9 @@ impl TrustStore {
             missing.push(parent.to_owned());
             parent = parent.parent().ok_or_else(unsafe_state)?;
         }
-        if parent.canonicalize()? != parent {
+        // `UserStore` spells Windows roots without the verbatim `\\?\` prefix,
+        // so canonicalize the same way before comparing.
+        if dunce::canonicalize(parent)? != parent {
             return Err(unsafe_state());
         }
         for path in missing.into_iter().rev() {
@@ -549,6 +486,31 @@ impl TrustStore {
         staged.as_file().sync_all()?;
         staged.persist(self.path()).map_err(|e| e.error)?;
         sync_directory(&self.directory)
+    }
+}
+
+/// Whether the repository state `directory` keeps its environment: only a
+/// record filed under its own root, for a root that still has the recorded
+/// identity. A deleted, moved or re-cloned repository's state is dropped and
+/// collected after the grace period. Unsafe, corrupt or misfiled records are
+/// left alone and keep nothing. Never follows links.
+pub(crate) fn repo_state(store: &UserStore, directory: &Path) -> RepoState {
+    let bytes = match read(&directory.join("record.json"), true) {
+        Ok(Some(bytes)) => bytes,
+        Ok(None) => return RepoState::Dropped,
+        Err(_) => return RepoState::Unknown,
+    };
+    let Ok(record) = serde_json::from_slice::<Record>(&bytes) else {
+        return RepoState::Unknown;
+    };
+    if directory != store.repo(&record.root) {
+        return RepoState::Unknown;
+    }
+    match identity(&record.root) {
+        Err(error) if error.kind() == io::ErrorKind::NotFound => RepoState::Dropped,
+        Ok(found) if found != (record.device, record.inode) => RepoState::Dropped,
+        // An unreadable root may still exist: keep what it names.
+        _ => RepoState::Root(record.env),
     }
 }
 

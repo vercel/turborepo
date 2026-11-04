@@ -6,12 +6,12 @@ use std::{collections::BTreeMap, path::PathBuf, process::Command};
 
 use semver::Version;
 use sha2::{Digest, Sha256};
-use turborepo_tool_install::Outcome;
 
 use super::*;
 use crate::{
     lock::{Declaration, Document},
     source_policy::test_support::{LoopbackServer, stored_zip_entries},
+    test_store::{Outcome, TestStore},
 };
 
 fn system32() -> PathBuf {
@@ -62,7 +62,7 @@ fn serve(bytes: Vec<u8>) -> (LoopbackServer, UvTransport) {
     (upstream, transport)
 }
 async fn install(
-    store: &mut Store,
+    store: &TestStore,
     plan: &UvPlan,
     transport: &UvTransport,
 ) -> Result<Outcome, Error> {
@@ -94,13 +94,13 @@ async fn verified_zip_exports_uv_and_uvx_as_hard_links_and_repeats_reuse() {
     let plan =
         UvPlan::from_lock(&lock(Platform::WindowsX64, &bytes), Platform::WindowsX64).unwrap();
     let repo = tempfile::tempdir().unwrap();
-    let mut store = Store::open(repo.path()).unwrap();
+    let store = TestStore::open(repo.path());
     assert_eq!(
-        install(&mut store, &plan, &transport).await.unwrap(),
+        install(&store, &plan, &transport).await.unwrap(),
         Outcome::Replaced
     );
     let current = store.current().unwrap().unwrap();
-    let tree = current.tool_tree(plan.inventory_tool()).unwrap();
+    let tree = store.tree_of(plan.inventory_tool());
     let mut names: Vec<_> = fs::read_dir(&current.bin)
         .unwrap()
         .map(|entry| entry.unwrap().file_name().into_string().unwrap())
@@ -126,7 +126,7 @@ async fn verified_zip_exports_uv_and_uvx_as_hard_links_and_repeats_reuse() {
         .unwrap();
     assert_eq!(status.code(), Some(7));
     assert_eq!(
-        install(&mut store, &plan, &transport).await.unwrap(),
+        install(&store, &plan, &transport).await.unwrap(),
         Outcome::Unchanged
     );
     assert_eq!(upstream.hits(), 1);
@@ -141,9 +141,9 @@ async fn tampered_zips_and_unix_plans_never_publish_on_windows() {
     let plan =
         UvPlan::from_lock(&lock(Platform::WindowsX64, &zip()), Platform::WindowsX64).unwrap();
     let repo = tempfile::tempdir().unwrap();
-    let mut store = Store::open(repo.path()).unwrap();
+    let store = TestStore::open(repo.path());
     assert!(matches!(
-        install(&mut store, &plan, &transport).await,
+        install(&store, &plan, &transport).await,
         Err(Error::Download(turborepo_download::Error::DigestMismatch))
     ));
     assert_eq!(upstream.hits(), 1);
@@ -151,7 +151,7 @@ async fn tampered_zips_and_unix_plans_never_publish_on_windows() {
     let unix =
         UvPlan::from_lock(&lock(Platform::LinuxX64Gnu, b"tar"), Platform::LinuxX64Gnu).unwrap();
     assert!(matches!(
-        install(&mut store, &unix, &transport).await,
+        install(&store, &unix, &transport).await,
         Err(Error::UnsupportedTarget)
     ));
     assert_eq!(upstream.hits(), 1);

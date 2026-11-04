@@ -8,11 +8,10 @@ use semver::Version;
 use turborepo_archive::{ExtractedArtifact, Layout};
 use turborepo_download::{ApprovedOrigin, DownloadClient, ExpectedSha256};
 use turborepo_platform::OperatingSystem::Windows;
-use turborepo_tool_install::{Store, Tool};
+use turborepo_tool_install::{Export, SetupSession, Staging, Tool};
 
 use crate::{
     NodeArtifact,
-    artifact_cache::ArtifactCache,
     lock::{self, Format, Installation, Lock, Platform},
     mirror::Mirror,
 };
@@ -32,8 +31,6 @@ pub enum Error {
     InventoryMismatch,
     #[error("bundled npm package identity or entrypoints do not match the selected resolution")]
     InvalidBundledNpm,
-    #[error("offline setup has no verified cached Node artifact and never contacts upstream")]
-    Offline,
     #[error(transparent)]
     Resolution(#[from] crate::node_resolution::Error),
     #[error(transparent)]
@@ -47,22 +44,20 @@ pub enum Error {
 }
 
 const ARCHIVE_LIMIT: usize = 128 * 1024 * 1024;
+/// Bump when this adapter stages different bytes for the same staging inputs.
+const STAGING_REVISION: u32 = 1;
 
 pub struct NodeTransport {
     client: DownloadClient,
     // Mirrors and fixtures change only this `/dist` base; lock provenance
     // remains official.
     dist: String,
-    cache: Option<ArtifactCache>,
-    offline: bool,
 }
 impl NodeTransport {
     pub fn official(_policy: &crate::source_policy::ToolDownloadPolicy) -> Result<Self, Error> {
         Ok(Self {
             client: DownloadClient::new([ApprovedOrigin::https("https://nodejs.org")?])?,
             dist: "https://nodejs.org/dist".into(),
-            cache: None,
-            offline: false,
         })
     }
 
@@ -74,29 +69,7 @@ impl NodeTransport {
         Ok(Self {
             client: mirror.client()?,
             dist: mirror.base().into(),
-            cache: None,
-            offline: false,
         })
-    }
-
-    /// Reuse locked archive bytes from a caller-selected user cache. Hits are
-    /// re-verified against the lock digest; extraction stays per repository.
-    pub fn with_cache(mut self, cache: Option<ArtifactCache>) -> Self {
-        self.cache = cache;
-        self
-    }
-
-    /// Serve only verified cache hits; every request path fails before
-    /// traffic with [`Error::Offline`].
-    pub fn offline(mut self) -> Self {
-        self.offline = true;
-        self
-    }
-
-    /// The actual caller-selected cache used by this transport, for best-effort
-    /// cleanup after successful setup. Never a repository-authored setting.
-    pub fn cache(&self) -> Option<&ArtifactCache> {
-        self.cache.as_ref()
     }
 
     /// Read only bounded official metadata for a native portable selection.
@@ -110,9 +83,6 @@ impl NodeTransport {
             node_metadata::{MAX_CHECKSUM_BYTES, MAX_INDEX_BYTES, ReleaseIndex},
             node_resolution,
         };
-        if self.offline {
-            return Err(Error::Offline);
-        }
         let read = async |path: &str, limit| {
             self.client
                 .read_metadata(
@@ -146,15 +116,12 @@ impl NodeTransport {
         Ok(Self {
             client: DownloadClient::loopback_http_for_tests(origin)?,
             dist: format!("{}/dist", origin.trim_end_matches('/')),
-            cache: None,
-            offline: false,
         })
     }
 }
 
 pub struct NodePlan {
     tool: Tool,
-    platform: Platform,
     artifact: lock::Artifact,
     windows: bool,
     bundled_npm: Option<String>,
@@ -224,9 +191,17 @@ impl NodePlan {
                 version: node.version.clone(),
                 platform: spelling.into(),
                 artifact_sha256: artifact.sha256.clone(),
-                executables: artifact.executables.clone(),
+                executables: Export::files(&artifact.executables),
+                vars: Default::default(),
+                staging: Staging::new(
+                    "node",
+                    STAGING_REVISION,
+                    &crate::staging::Archive {
+                        format: artifact.format,
+                        root,
+                    },
+                )?,
             },
-            platform,
             artifact,
             windows,
             bundled_npm: node
@@ -240,16 +215,15 @@ impl NodePlan {
         &self.tool
     }
 
-    /// The caller supplies ALL desired tools and reconciles that same set,
-    /// holding this Store lock throughout preparation and reconciliation.
-    /// Reuse requires a healthy entire selected
-    /// generation with an identical Node tool, not complete desired-set
-    /// equality. Unrelated tool changes need no Node download. Only a
+    /// The caller supplies ALL desired tools and ensures that same set in the
+    /// same setup session. Reuse requires a sealed tree for this exact Node
+    /// tool, not complete desired-set equality. Unrelated tool changes need
+    /// no Node download. Only a
     /// native Windows x64 host promotes Windows trees; arm64 stays
     /// unqualified and never borrows the x64 artifact.
     pub async fn prepare_if_needed(
         &self,
-        store: &Store,
+        store: &SetupSession<'_>,
         desired: &[Tool],
         transport: &NodeTransport,
     ) -> Result<Option<PreparedNode>, Error> {
@@ -262,7 +236,7 @@ impl NodePlan {
     /// publication.
     pub async fn prepare(
         &self,
-        store: &Store,
+        store: &SetupSession<'_>,
         desired: &[Tool],
         transport: &NodeTransport,
         preparation: crate::Preparation,
@@ -283,55 +257,29 @@ impl NodePlan {
         self.download(transport).await.map(Some)
     }
 
-    /// Read-only cache preflight. Preparation re-verifies again under the
-    /// writer guard; this is never installation or authorization evidence.
-    pub fn cache_available(&self, transport: &NodeTransport) -> bool {
-        transport
-            .cache
-            .as_ref()
-            .and_then(|cache| cache.get(self.platform, &self.artifact.sha256, ARCHIVE_LIMIT))
-            .is_some()
-    }
-
     /// Download/verify/extract only, with no installation or executable
     /// probing.
     pub async fn download(&self, transport: &NodeTransport) -> Result<PreparedNode, Error> {
-        let cached = transport
-            .cache
-            .as_ref()
-            .and_then(|cache| cache.get(self.platform, &self.artifact.sha256, ARCHIVE_LIMIT));
-        let from_cache = cached.is_some();
-        let bytes = match cached {
-            Some(bytes) => bytes,
-            None if transport.offline => return Err(Error::Offline),
-            None => {
-                let url = format!(
-                    "{}{}",
-                    transport.dist,
-                    self.artifact
-                        .url
-                        .strip_prefix("https://nodejs.org/dist")
-                        .ok_or(Error::InvalidLock)?
-                );
-                let bytes = transport
-                    .client
-                    .download_verified(
-                        &url,
-                        ExpectedSha256::from_hex(&self.artifact.sha256)?,
-                        turborepo_download::Limits::new(ARCHIVE_LIMIT, Duration::from_secs(120))?,
-                    )
-                    .await?;
-                // Best effort: a cache write failure never fails verified setup.
-                if let Some(cache) = &transport.cache {
-                    let _ = cache.put(self.platform, &bytes);
-                }
-                bytes
-            }
-        };
-        let mut required = vec![self.tool.executables["node"].clone()];
+        let url = format!(
+            "{}{}",
+            transport.dist,
+            self.artifact
+                .url
+                .strip_prefix("https://nodejs.org/dist")
+                .ok_or(Error::InvalidLock)?
+        );
+        let bytes = transport
+            .client
+            .download_verified(
+                &url,
+                ExpectedSha256::from_hex(&self.artifact.sha256)?,
+                turborepo_download::Limits::new(ARCHIVE_LIMIT, Duration::from_secs(120))?,
+            )
+            .await?;
+        let mut required = vec![self.artifact.executables["node"].clone()];
         let base = if self.windows { "" } else { "lib/" };
         for name in ["npm", "npx"] {
-            if let Some(path) = self.tool.executables.get(name) {
+            if let Some(path) = self.artifact.executables.get(name) {
                 if self.windows {
                     required.push(path.clone());
                 }
@@ -359,7 +307,7 @@ impl NodePlan {
         )?;
         if !self.windows {
             for (name, cli) in [("npm", "npm-cli.js"), ("npx", "npx-cli.js")] {
-                if self.tool.executables.contains_key(name)
+                if self.artifact.executables.contains_key(name)
                     && fs::read_link(tree.root_path().join("bin").join(name))?
                         != Path::new(&format!("../lib/node_modules/npm/bin/{cli}"))
                 {
@@ -371,13 +319,7 @@ impl NodePlan {
         Ok(PreparedNode {
             tree,
             tool: self.tool.clone(),
-            // Cache hits transfer nothing.
-            downloaded_bytes: if from_cache {
-                0
-            } else {
-                bytes.as_bytes().len() as u64
-            },
-            from_cache,
+            downloaded_bytes: bytes.as_bytes().len() as u64,
         })
     }
 
@@ -431,7 +373,6 @@ pub struct PreparedNode {
     tree: ExtractedArtifact,
     tool: Tool,
     downloaded_bytes: u64,
-    from_cache: bool,
 }
 impl PreparedNode {
     /// Verified artifact bytes transferred for this preparation.
@@ -439,13 +380,9 @@ impl PreparedNode {
         self.downloaded_bytes
     }
 
-    /// Whether verified bytes came from the shared download cache.
-    pub fn from_cache(&self) -> bool {
-        self.from_cache
-    }
-
-    /// Callback for Store::reconcile. Copy the FULL verified resource tree,
-    /// preserving executable modes and safe relative links; never run hooks.
+    /// Staging callback for `SetupSession::ensure`. Copy the FULL verified
+    /// resource tree, preserving executable modes and safe relative links;
+    /// never run hooks.
     pub fn stage(
         &self,
         tool: &Tool,

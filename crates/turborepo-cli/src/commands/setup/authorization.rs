@@ -12,6 +12,7 @@ use turborepo_setup::{
     execution_identity::ExecutionContext,
     lock::{Ecosystems, Snapshot},
 };
+use turborepo_tool_install::Activation;
 
 use super::trust::TrustStore;
 
@@ -30,6 +31,8 @@ pub(crate) enum Error {
     Sources(#[from] turborepo_setup::lock::StorageError),
     #[error("cannot validate private setup user state; run turbo setup: {0}")]
     State(#[from] std::io::Error),
+    #[error(transparent)]
+    Store(#[from] turborepo_tool_install::Error),
 }
 
 impl Error {
@@ -58,11 +61,7 @@ impl Error {
                 };
                 format!("tool declarations no longer match turbo.lock; {fix}")
             }
-            Self::Plan(Plan::MissingInventory) => repair(&"managed tools are not installed"),
-            Self::Plan(Plan::StaleInventory) => repair(&"managed tools do not match turbo.lock"),
-            Self::Plan(Plan::DamagedInventory(error)) => {
-                repair(&format!("managed tools are damaged or unsafe ({error})"))
-            }
+            Self::Store(error) => repair(&format!("managed tools are not ready ({error})")),
             Self::Untrusted => repair(&"managed tools have no matching trusted setup record"),
             Self::Changed => repair(&"managed tools changed after this run selected them"),
             Self::Plan(Plan::InvalidLock) => invalid(&"its tool metadata does not apply here"),
@@ -97,13 +96,7 @@ impl Error {
             Self::Plan(Plan::DeclarationDrift) => "tool declarations no longer match this clone's \
                                                    `turbo setup --no-lock` selection"
                 .into(),
-            Self::Plan(Plan::MissingInventory) => "managed tools are not installed".into(),
-            Self::Plan(Plan::StaleInventory) => {
-                "managed tools do not match the clone-local selection".into()
-            }
-            Self::Plan(Plan::DamagedInventory(error)) => {
-                format!("managed tools are damaged or unsafe ({error})")
-            }
+            Self::Store(error) => format!("managed tools are not ready ({error})"),
             Self::Plan(Plan::InvalidSelection) => "the clone-local selection is invalid".into(),
             Self::Untrusted => "managed tools have no matching trusted setup record".into(),
             Self::Changed => "managed tools changed after this run selected them".into(),
@@ -123,14 +116,12 @@ impl Error {
     }
 }
 
-/// Unlike ActivationPlan, this selection requires external setup evidence.
-/// No public plan accessor: the intended use goes through fresh validation.
-/// The callback can copy plan data out; the type does NOT enforce that those
+/// Unlike ActivationPlan, this selection requires external setup evidence:
+/// the repository's record names exactly the planned environment. The
+/// callback can copy plan data out; the type does NOT enforce that those
 /// copies are used immediately or revalidated later. Consumers must call
 /// with_current at each actual probe/dispatch boundary. This is not a
 /// filesystem lease against same-user hostile mutation after validation.
-// Deliberately unwired until managed-run gating/handoff/hashing land together.
-#[allow(dead_code)]
 pub(crate) struct Authorization {
     root: PathBuf,
     sources: Snapshot,
@@ -141,36 +132,35 @@ pub(crate) struct Authorization {
     clone_local: bool,
 }
 
-#[allow(dead_code)]
 impl Authorization {
-    /// User-state base must come from the caller's user directory, never config
-    /// authored by the repository. Missing state fails closed without creating
-    /// it. `ecosystems` must be the ones setup captured with (root workspace
-    /// flags and tools policy), or Rust, Python and Go selections drift.
+    /// `store` names a fixture's tool store; otherwise the user's is located
+    /// from their environment, never from config the repository authors. A
+    /// missing record fails closed without creating it. `ecosystems` must be
+    /// the ones setup captured with (root workspace flags and tools
+    /// policy), or Rust, Python and Go selections drift.
     pub(crate) fn inspect(
         root: &Path,
-        user_state_base: &Path,
+        store: Option<&Path>,
         context: ExecutionContext,
         ecosystems: Ecosystems,
     ) -> Result<Self, Error> {
-        Self::authorize(root, user_state_base, context, ecosystems, false)
+        Self::authorize(root, store, context, ecosystems, false)
     }
 
-    /// `inspect` for a `turbo setup --no-lock` clone: the sealed clone-local
-    /// selection in place of turbo.lock, authorized only by a lockless record
-    /// for that selection. Node/npm/pnpm ecosystems only, like `--no-lock`
-    /// setup.
+    /// `inspect` for a `turbo setup --no-lock` clone: the clone-local
+    /// selection its record holds in place of turbo.lock. Node/npm/pnpm
+    /// ecosystems only, like `--no-lock` setup.
     pub(crate) fn inspect_clone_local(
         root: &Path,
-        user_state_base: &Path,
+        store: Option<&Path>,
         context: ExecutionContext,
     ) -> Result<Self, Error> {
-        Self::authorize(root, user_state_base, context, Ecosystems::default(), true)
+        Self::authorize(root, store, context, Ecosystems::default(), true)
     }
 
     fn authorize(
         root: &Path,
-        user_state_base: &Path,
+        store: Option<&Path>,
         context: ExecutionContext,
         ecosystems: Ecosystems,
         clone_local: bool,
@@ -180,17 +170,11 @@ impl Authorization {
         if context.musl() {
             return Err(turborepo_setup::activation::Error::MuslHost.into());
         }
-        let trust = TrustStore::new(user_state_base, &root)?;
+        let store = super::trust::existing_user_store(store, &root)?.ok_or(Error::Untrusted)?;
+        let trust = TrustStore::new(&store, &root)?;
         trust.preflight()?;
-        // Initial authorization never trusts repo-writable publication stamps.
-        let plan = if clone_local {
-            ActivationPlan::verify_clone_local_captured(&sources, context.clone())?
-        } else {
-            ActivationPlan::verify_captured(&sources, context.clone())?
-        };
-        if !trust.authorizes(&plan)? {
-            return Err(Error::Untrusted);
-        }
+        let plan = Self::plan(&sources, context.clone(), &trust, clone_local)?;
+        trust.authorize(&plan)?.ok_or(Error::Untrusted)?;
         sources.ensure_current()?;
         Ok(Self {
             root,
@@ -204,44 +188,43 @@ impl Authorization {
     }
 
     fn plan(
-        root: &Path,
+        sources: &Snapshot,
         context: ExecutionContext,
-        ecosystems: Ecosystems,
+        trust: &TrustStore,
         clone_local: bool,
     ) -> Result<ActivationPlan, Error> {
         Ok(if clone_local {
-            ActivationPlan::inspect_clone_local(root, context)?
+            let recorded = trust.clone_local_selection()?.ok_or(Error::Untrusted)?;
+            ActivationPlan::clone_local(sources, context, &recorded)?
         } else {
-            ActivationPlan::inspect_with(root, context, ecosystems)?
+            ActivationPlan::captured(sources, context)?
         })
     }
 
     /// Invoke only at the actual use boundary, not to cache PATH for later use.
-    /// Revalidate original root/source bytes, complete installation trees and
-    /// exports, exact generation, and external evidence before invoking the
-    /// callback. No resolution, network, writes, locks, probes or task
-    /// execution.
+    /// Revalidate original root/source bytes, the planned selection and the
+    /// repository's record before invoking the callback with the plan and the
+    /// environment to activate. No resolution, network, writes, locks, probes,
+    /// tree reads or task execution.
     pub(crate) fn with_current<T>(
         &self,
-        use_plan: impl FnOnce(&ActivationPlan) -> T,
+        use_plan: impl FnOnce(&ActivationPlan, &Activation) -> T,
     ) -> Result<T, Error> {
         self.sources.ensure_current()?;
+        let sources = Snapshot::capture_with(&self.root, self.ecosystems)?;
         let current = Self::plan(
-            &self.root,
+            &sources,
             self.context.clone(),
-            self.ecosystems,
+            &self.trust,
             self.clone_local,
         )?;
-        if current.path_prepend() != self.plan.path_prepend()
-            || current.tools() != self.plan.tools()
+        if current.selection() != self.plan.selection()
             || current.snapshot().canonical_identity() != self.plan.snapshot().canonical_identity()
         {
             return Err(Error::Changed);
         }
-        if !self.trust.authorizes(&current)? {
-            return Err(Error::Untrusted);
-        }
+        let activation = self.trust.authorize(&current)?.ok_or(Error::Untrusted)?;
         self.sources.ensure_current()?;
-        Ok(use_plan(&current))
+        Ok(use_plan(&current, &activation))
     }
 }

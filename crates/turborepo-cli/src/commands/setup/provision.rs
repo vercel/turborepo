@@ -1,12 +1,12 @@
-//! Local reconciliation followed by locked tool provisioning.
-//! Force reinstalls committed selections without resolution or lock writes.
-//! Offline uses only trusted healthy installs and verified cached artifacts.
+//! Local reconciliation followed by locked tool provisioning into the user's
+//! shared tool store. Force re-verifies committed selections, restaging what
+//! changed, without resolution or lock writes. Offline uses only trees already
+//! in the store and never downloads.
 //! No probes, dependency execution or activation. Declared additional tools
 //! install through the generic artifact adapter.
 use std::{fs, io, path::Path};
 
 use turborepo_setup::{
-    artifact_cache::ArtifactCache,
     artifact_provision::{ArtifactPlan, ArtifactTransport},
     bun_provision::{BunPlan, BunTransport},
     go_provision::GoPlan,
@@ -26,10 +26,13 @@ use turborepo_setup::{
     uv_resolution::UvTransport,
     yarn_provision::YarnPlan,
 };
-use turborepo_tool_install::Store;
+use turborepo_tool_install::{Reuse, Selection};
 use turborepo_turbo_json::SetupMirrors;
 
-use super::Error;
+use super::{
+    Error,
+    output::{Note, ToolOutcome, ToolReport, ToolRow},
+};
 
 pub(super) struct Transports {
     pub node: NodeTransport,
@@ -38,11 +41,10 @@ pub(super) struct Transports {
     pub uv: UvTransport,
     pub rustup: RustupTransport,
     pub python: PythonTransport,
+    /// A fixture's tool store in place of the user's.
     #[cfg(any(test, feature = "test-support"))]
-    pub trust_base: Option<std::path::PathBuf>,
+    pub tool_store: Option<std::path::PathBuf>,
     /// A mirror or fixture; otherwise built from the locked artifact origins.
-    /// Either way it uses the shared download cache, and offline setup makes
-    /// it cache-only.
     pub artifact: Option<ArtifactTransport>,
     pub go: GoTransport,
     pub bun: BunTransport,
@@ -51,17 +53,10 @@ impl Transports {
     /// Official sources, unless `TURBO_SETUP_*` variables or the root
     /// `setup.mirrors` policy select a mirror, in that order.
     pub fn official(policy: &ToolDownloadPolicy, mirrors: &SetupMirrors) -> Result<Self, Error> {
-        // Verified archive bytes are shared through the user's cache directory;
-        // extraction and activation stay in each repository's .turbo/tools.
-        let cache = dirs_next::cache_dir().and_then(|base| ArtifactCache::new(&base));
-        Self::configured(policy, &Mirrors::configured(mirrors)?, cache)
+        Self::configured(policy, &Mirrors::configured(mirrors)?)
     }
 
-    pub fn configured(
-        policy: &ToolDownloadPolicy,
-        mirrors: &Mirrors,
-        cache: Option<ArtifactCache>,
-    ) -> Result<Self, Error> {
+    pub fn configured(policy: &ToolDownloadPolicy, mirrors: &Mirrors) -> Result<Self, Error> {
         let registry = || match &mirrors.registry {
             Some(mirror) => PnpmTransport::mirrored(policy, mirror),
             None => PnpmTransport::official(policy),
@@ -92,14 +87,14 @@ impl Transports {
             None => RustupTransport::official(policy)?,
         };
         Ok(Self {
-            node: node.with_cache(cache.clone()),
-            pnpm: registry()?.with_cache(cache.clone()),
+            node,
+            pnpm: registry()?,
             registry: registry()?,
             uv,
             rustup,
             python,
             #[cfg(any(test, feature = "test-support"))]
-            trust_base: None,
+            tool_store: None,
             // Otherwise built from the locked artifact origins.
             artifact: mirrors
                 .artifact
@@ -111,33 +106,13 @@ impl Transports {
         })
     }
 
-    pub(super) fn trust_base(&self) -> Result<std::path::PathBuf, io::Error> {
+    /// The fixture's tool store, if any.
+    pub(super) fn tool_store(&self) -> Option<std::path::PathBuf> {
         #[cfg(any(test, feature = "test-support"))]
-        if let Some(base) = &self.trust_base {
-            return Ok(base.clone());
-        }
-        dirs_next::data_local_dir()
-            .ok_or_else(|| io::Error::other("cannot locate setup user state directory"))
+        return self.tool_store.clone();
+        #[cfg(not(any(test, feature = "test-support")))]
+        None
     }
-
-    // Only Node/registry adapters and additional tools enter cached offline
-    // provisioning; the additional-tool transport is made cache-only where it
-    // is built. Other adapters retain the read-only trusted-repeat path in
-    // offline::run.
-    fn offline(self) -> Self {
-        Self {
-            node: self.node.offline(),
-            pnpm: self.pnpm.offline(),
-            registry: self.registry.offline(),
-            ..self
-        }
-    }
-}
-
-/// Adapters whose locked artifacts offline setup can install from the shared
-/// download cache.
-pub(super) fn offline_cacheable(id: &str, tool: &turborepo_setup::lock::Tool) -> bool {
-    matches!(id, "node" | "pnpm" | "npm") || tool.adapter == additional::ADAPTER
 }
 
 fn supported(id: &str, tool: &turborepo_setup::lock::Tool) -> bool {
@@ -244,11 +219,7 @@ pub(super) fn revalidate(discovery: &super::root::Discovery) -> Result<(), Error
 }
 
 pub(super) fn storage(root: &Path) -> Result<(), Error> {
-    for path in [
-        root.join(".turbo"),
-        root.join(".turbo/tools"),
-        root.join(".turbo/setup-lock"),
-    ] {
+    for path in [root.join(".turbo"), root.join(".turbo/setup-lock")] {
         match fs::symlink_metadata(path) {
             Ok(m) if !m.is_dir() || m.file_type().is_symlink() => {
                 return Err(Error::Unsupported("unsafe .turbo storage path"));
@@ -275,6 +246,34 @@ pub(super) struct Plans {
     pub rust: Option<RustPlan>,
     pub artifacts: Vec<ArtifactPlan>,
     pub go: Option<GoPlan>,
+}
+
+impl Plans {
+    /// Every tool these plans install, the complete desired selection.
+    pub(super) fn tools(&self) -> Vec<turborepo_tool_install::Tool> {
+        let mut tools: Vec<_> = [
+            self.node.as_ref().map(NodePlan::inventory_tool),
+            self.pnpm.as_ref().map(PnpmPlan::inventory_tool),
+            self.npm.as_ref().map(NpmPlan::inventory_tool),
+            self.uv.as_ref().map(UvPlan::inventory_tool),
+            self.rustup.as_ref().map(RustupPlan::inventory_tool),
+            self.python.as_ref().map(PythonPlan::inventory_tool),
+            self.rust.as_ref().map(RustPlan::inventory_tool),
+            self.go.as_ref().map(GoPlan::inventory_tool),
+            self.yarn.as_ref().map(YarnPlan::inventory_tool),
+            self.bun.as_ref().map(BunPlan::inventory_tool),
+        ]
+        .into_iter()
+        .flatten()
+        .cloned()
+        .collect();
+        tools.extend(
+            self.artifacts
+                .iter()
+                .map(|plan| plan.inventory_tool().clone()),
+        );
+        tools
+    }
 }
 
 const SUPPORTED: [&str; 10] = [
@@ -433,16 +432,61 @@ pub(super) fn plans(
     })
 }
 
-/// Aggregate results for the caller's report; no paths or versions.
-/// `downloaded_bytes` covers every verified artifact setup transferred itself,
-/// across all ecosystems; rustup's own toolchain downloads are not visible.
-#[derive(Debug, Default)]
-pub(super) struct Provisioned {
-    pub downloaded_bytes: u64,
-    pub installed: usize,
-    pub reused: usize,
+/// One difference between the previous and the published `turbo.lock`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) enum LockChange {
+    Locked {
+        id: String,
+        version: String,
+    },
+    Changed {
+        id: String,
+        from: String,
+        to: String,
+    },
+    Reselected {
+        id: String,
+        version: String,
+    },
+    Removed {
+        id: String,
+        version: String,
+    },
 }
 
+pub(super) fn lock_changes(
+    previous: Option<&turborepo_setup::lock::Lock>,
+    current: &turborepo_setup::lock::Lock,
+) -> Vec<LockChange> {
+    let mut changes = Vec::new();
+    for (id, tool) in current.tools() {
+        let old = previous.and_then(|lock| lock.tools().get(id));
+        if old == Some(tool) {
+            continue;
+        }
+        let (id, version) = (id.clone(), tool.version.clone());
+        changes.push(match old {
+            Some(old) if old.version != tool.version => LockChange::Changed {
+                id,
+                from: old.version.clone(),
+                to: version,
+            },
+            Some(_) => LockChange::Reselected { id, version },
+            None => LockChange::Locked { id, version },
+        });
+    }
+    for (id, tool) in previous.into_iter().flat_map(|lock| lock.tools()) {
+        if !current.tools().contains_key(id) {
+            changes.push(LockChange::Removed {
+                id: id.clone(),
+                version: tool.version.clone(),
+            });
+        }
+    }
+    changes
+}
+
+/// The lock diff as `--plan` and refresh report it.
 pub(super) fn lock_report(
     previous: Option<&turborepo_setup::lock::Lock>,
     current: &turborepo_setup::lock::Lock,
@@ -455,24 +499,20 @@ pub(super) fn lock_report(
             "created"
         }
     )];
-    for (id, tool) in current.tools() {
-        let old = previous.and_then(|lock| lock.tools().get(id));
-        if old == Some(tool) {
-            continue;
-        }
-        lines.push(match old {
-            Some(old) if old.version != tool.version => {
-                format!("{id}: {} -> {}", old.version, tool.version)
-            }
-            Some(_) => format!("{id}: {} (selection changed)", tool.version),
-            None => format!("{id}: locked {}", tool.version),
-        });
-    }
-    for (id, tool) in previous.into_iter().flat_map(|lock| lock.tools()) {
-        if !current.tools().contains_key(id) {
-            lines.push(format!("{id}: {} -> removed from lock", tool.version));
-        }
-    }
+    lines.extend(
+        lock_changes(previous, current)
+            .into_iter()
+            .map(|change| match change {
+                LockChange::Changed { id, from, to } => format!("{id}: {from} -> {to}"),
+                LockChange::Reselected { id, version } => {
+                    format!("{id}: {version} (selection changed)")
+                }
+                LockChange::Locked { id, version } => format!("{id}: locked {version}"),
+                LockChange::Removed { id, version } => {
+                    format!("{id}: {version} -> removed from lock")
+                }
+            }),
+    );
     lines.join("\n")
 }
 
@@ -536,8 +576,9 @@ pub(super) fn run(
     request: &super::SetupRequest,
     transports: Option<Transports>,
     preflight: impl Fn() -> Result<ToolDownloadPolicy, Error>,
-) -> Result<Provisioned, Error> {
+) -> Result<ToolReport, Error> {
     let (force, offline) = (request.force, request.offline);
+    let mut notes = Vec::new();
     let resolution_mode = if request.update_lock {
         turborepo_setup::lock::reconcile::Mode::Refresh
     } else {
@@ -555,16 +596,6 @@ pub(super) fn run(
             return Err(Error::Unsupported(
                 "offline setup cannot resolve changed tool declarations; run turbo setup \
                  --tools-only without --offline",
-            ));
-        }
-        // Do not let a non-cache adapter enter a network preparation path.
-        if lock
-            .tools()
-            .iter()
-            .any(|(id, tool)| !offline_cacheable(id, tool))
-        {
-            return Err(Error::Unsupported(
-                "offline cache repair supports Node, npm, pnpm, and additional tools only",
             ));
         }
     } else if request.lock == super::LockMode::Frozen {
@@ -594,21 +625,15 @@ pub(super) fn run(
     }
     // User state is checked before the first writer or download, but after the
     // read-only lock/plan diagnostics above and below, which never need it.
-    let trust_base = transports
-        .as_ref()
-        .map(Transports::trust_base)
-        .transpose()?;
+    let tool_store = transports.as_ref().and_then(Transports::tool_store);
     let open_trust = || -> Result<super::trust::TrustStore, Error> {
         // Preserve actionable read-only source/Git diagnostics before checking
         // user state; none of these checks creates a writer or downloads tools.
         preflight()?;
         revalidate(discovery)?;
         storage(root)?;
-        let base = trust_base
-            .clone()
-            .or_else(dirs_next::data_local_dir)
-            .ok_or_else(|| io::Error::other("cannot locate setup user state directory"))?;
-        let trust = super::trust::TrustStore::new(&base, root)?;
+        let store = super::trust::user_store(tool_store.as_deref(), root)?;
+        let trust = super::trust::TrustStore::new(&store, root)?;
         trust.preflight()?;
         Ok(trust)
     };
@@ -654,7 +679,10 @@ pub(super) fn run(
         check()?;
         let published = snapshot.after_publication(&outcome.lock)?;
         if outcome.publication == Some(WriteOutcome::Written) {
-            println!("{}", lock_report(snapshot.previous_lock(), &outcome.lock));
+            notes.push(Note::Lock {
+                created: snapshot.previous_lock().is_none(),
+                changes: lock_changes(snapshot.previous_lock(), &outcome.lock),
+            });
         }
         transports = Some(sources);
         published
@@ -683,6 +711,8 @@ pub(super) fn run(
         } else {
             "frozen mode requires turbo.lock"
         }))?;
+    let plans = plans(&snapshot, lock)?;
+    let desired = plans.tools();
     let Plans {
         node,
         pnpm,
@@ -695,28 +725,11 @@ pub(super) fn run(
         go,
         yarn,
         bun,
-    } = plans(&snapshot, lock)?;
+    } = plans;
     let trust = match trust {
         Some(trust) => trust,
         None => open_trust()?,
     };
-    let mut desired: Vec<_> = [
-        node.as_ref().map(NodePlan::inventory_tool),
-        pnpm.as_ref().map(PnpmPlan::inventory_tool),
-        npm.as_ref().map(NpmPlan::inventory_tool),
-        uv.as_ref().map(UvPlan::inventory_tool),
-        rustup.as_ref().map(RustupPlan::inventory_tool),
-        python.as_ref().map(PythonPlan::inventory_tool),
-        rust.as_ref().map(RustPlan::inventory_tool),
-        go.as_ref().map(GoPlan::inventory_tool),
-        yarn.as_ref().map(YarnPlan::inventory_tool),
-        bun.as_ref().map(BunPlan::inventory_tool),
-    ]
-    .into_iter()
-    .flatten()
-    .cloned()
-    .collect();
-    desired.extend(artifacts.iter().map(|plan| plan.inventory_tool().clone()));
     // Activation rejects the same shadowing, so never install a cohort that
     // `turbo run` would refuse.
     let declared: Vec<_> = artifacts.iter().map(ArtifactPlan::inventory_tool).collect();
@@ -728,54 +741,51 @@ pub(super) fn run(
     let mut transports = transports
         .map(Ok)
         .unwrap_or_else(|| Transports::official(&policy, discovery.policy().mirrors()))?;
-    if offline {
-        transports = transports.offline();
-    }
     let artifact_transport = match transports.artifact.take() {
         Some(transport) => Some(transport),
         None if artifacts.is_empty() => None,
         None => Some(ArtifactTransport::new(&policy, &artifacts)?),
-    }
-    .map(|transport| {
-        let transport = transport.with_cache(transports.node.cache().cloned());
-        if offline {
-            transport.offline()
-        } else {
-            transport
-        }
-    });
+    };
     revalidate(discovery)?;
     storage(root)?;
     snapshot.ensure_current()?;
-    // Fixed acquisition order: writer, then Store. Both remain held through the
-    // final precondition and manifest selection, including unchanged results.
+    let selection = Selection::new(desired.clone())?;
+    // Fixed acquisition order: writer, then the store's collection lease. Both
+    // remain held through the record's publication, including no-op results.
     let guard = snapshot.guard()?;
-    storage(root)?;
-    let mut store = Store::open(root)?;
-    storage(root)?;
+    // Offline, installed trees are the only source, so each is re-hashed.
+    let reuse = if force || offline {
+        Reuse::Verified
+    } else {
+        Reuse::Sealed
+    };
+    let session = trust.store().begin_setup(root, reuse)?;
     // Locks may have waited behind another transaction: recheck before traffic.
     preflight()?;
     revalidate(discovery)?;
     snapshot.check_guard(&guard)?;
+    // Under the store lease no collection can remove a tree, so a selection
+    // that passes here reaches no download path below.
+    if offline {
+        let mut missing = Vec::new();
+        for tool in &desired {
+            if session.tree(tool)?.is_none() {
+                missing.push(tool.id.as_str());
+            }
+        }
+        if !missing.is_empty() {
+            return Err(Error::OfflineMissing(missing_artifacts(
+                lock, host, &missing,
+            )));
+        }
+    }
     let runtime = tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()?;
-    // Repo inventory can prove health, never provenance. A missing/stale user
-    // record forces the entire cohort through verified artifact preparation.
-    let recorded = trust.allows_reuse(&store)?;
-    let replace = force || !recorded;
-    let preparation = if replace {
-        turborepo_setup::Preparation::Fresh
-    } else {
-        turborepo_setup::Preparation::IfNeeded
-    };
-    // Offline misses are collected, not short-circuited, so the report names
-    // every missing artifact. Nothing is published unless all are present.
-    let mut offline_missing = Vec::new();
-    let mut reused = Vec::new();
-    // Repository health alone is never a reinstall source. Both guards are
-    // held and the complete cohort has fresh external trust evidence.
-    let reuse_installed = offline && force && recorded;
+    // The store decides reuse: a sealed tree is reused, re-hashed first under
+    // --force or --offline, and anything else is prepared from verified
+    // artifacts.
+    let preparation = turborepo_setup::Preparation::IfNeeded;
     let (
         prepared_node,
         prepared_pnpm,
@@ -795,113 +805,32 @@ pub(super) fn run(
             Ok::<_, Error>(())
         };
         let node = match &node {
-            Some(plan) => match plan
-                .prepare(&store, &desired, &transports.node, preparation)
-                .await
-            {
-                Err(turborepo_setup::node_provision::Error::Offline) if reuse_installed => {
-                    match plan
-                        .prepare(
-                            &store,
-                            &desired,
-                            &transports.node,
-                            turborepo_setup::Preparation::IfNeeded,
-                        )
-                        .await
-                    {
-                        Ok(None) => {
-                            reused.push(plan.inventory_tool().clone());
-                            None
-                        }
-                        Err(turborepo_setup::node_provision::Error::Offline) => {
-                            offline_missing.push("node");
-                            None
-                        }
-                        result => result?,
-                    }
-                }
-                Err(turborepo_setup::node_provision::Error::Offline) => {
-                    offline_missing.push("node");
-                    None
-                }
-                result => result?,
-            },
+            Some(plan) => {
+                plan.prepare(&session, &desired, &transports.node, preparation)
+                    .await?
+            }
             None => None,
         };
         recheck()?;
         let pnpm = match &pnpm {
-            Some(plan) => match plan
-                .prepare(&store, &desired, &transports.pnpm, preparation)
-                .await
-            {
-                Err(turborepo_setup::pnpm_provision::Error::Offline) if reuse_installed => {
-                    match plan
-                        .prepare(
-                            &store,
-                            &desired,
-                            &transports.pnpm,
-                            turborepo_setup::Preparation::IfNeeded,
-                        )
-                        .await
-                    {
-                        Ok(None) => {
-                            reused.push(plan.inventory_tool().clone());
-                            None
-                        }
-                        Err(turborepo_setup::pnpm_provision::Error::Offline) => {
-                            offline_missing.push("pnpm");
-                            None
-                        }
-                        result => result?,
-                    }
-                }
-                Err(turborepo_setup::pnpm_provision::Error::Offline) => {
-                    offline_missing.push("pnpm");
-                    None
-                }
-                result => result?,
-            },
+            Some(plan) => {
+                plan.prepare(&session, &desired, &transports.pnpm, preparation)
+                    .await?
+            }
             None => None,
         };
         recheck()?;
         let npm = match &npm {
-            Some(plan) => match plan
-                .prepare(&store, &desired, &transports.pnpm, preparation)
-                .await
-            {
-                Err(turborepo_setup::pnpm_provision::Error::Offline) if reuse_installed => {
-                    match plan
-                        .prepare(
-                            &store,
-                            &desired,
-                            &transports.pnpm,
-                            turborepo_setup::Preparation::IfNeeded,
-                        )
-                        .await
-                    {
-                        Ok(None) => {
-                            reused.push(plan.inventory_tool().clone());
-                            None
-                        }
-                        Err(turborepo_setup::pnpm_provision::Error::Offline) => {
-                            offline_missing.push("npm");
-                            None
-                        }
-                        result => result?,
-                    }
-                }
-                Err(turborepo_setup::pnpm_provision::Error::Offline) => {
-                    offline_missing.push("npm");
-                    None
-                }
-                result => result?,
-            },
+            Some(plan) => {
+                plan.prepare(&session, &desired, &transports.pnpm, preparation)
+                    .await?
+            }
             None => None,
         };
         recheck()?;
         let uv = match &uv {
             Some(plan) => {
-                plan.prepare(&store, &desired, &transports.uv, preparation)
+                plan.prepare(&session, &desired, &transports.uv, preparation)
                     .await?
             }
             None => None,
@@ -909,7 +838,7 @@ pub(super) fn run(
         recheck()?;
         let python = match &python {
             Some(plan) => {
-                plan.prepare(&store, &desired, &transports.python, preparation)
+                plan.prepare(&session, &desired, &transports.python, preparation)
                     .await?
             }
             None => None,
@@ -917,55 +846,25 @@ pub(super) fn run(
         recheck()?;
         let rustup = match &rustup {
             Some(plan) => {
-                plan.prepare(&store, &desired, &transports.rustup, preparation)
+                plan.prepare(&session, &desired, &transports.rustup, preparation)
                     .await?
             }
             None => None,
         };
         let mut prepared = Vec::new();
         if let Some(transport) = &artifact_transport {
-            use turborepo_setup::artifact_provision::Error::Offline;
             for plan in &artifacts {
                 recheck()?;
-                let tool = plan.inventory_tool();
-                // Same offline rules as Node: collect misses, and let a forced
-                // reinstall reuse the recorded tree when nothing is cached.
                 prepared.push(
-                    match plan.prepare(&store, &desired, transport, preparation).await {
-                        Err(Offline) if reuse_installed => {
-                            match plan
-                                .prepare(
-                                    &store,
-                                    &desired,
-                                    transport,
-                                    turborepo_setup::Preparation::IfNeeded,
-                                )
-                                .await
-                            {
-                                Ok(None) => {
-                                    reused.push(tool.clone());
-                                    None
-                                }
-                                Err(Offline) => {
-                                    offline_missing.push(tool.id.as_str());
-                                    None
-                                }
-                                result => result?,
-                            }
-                        }
-                        Err(Offline) => {
-                            offline_missing.push(tool.id.as_str());
-                            None
-                        }
-                        result => result?,
-                    },
+                    plan.prepare(&session, &desired, transport, preparation)
+                        .await?,
                 );
             }
         }
         recheck()?;
         let go = match &go {
             Some(plan) => {
-                plan.prepare(&store, &desired, &transports.go, preparation)
+                plan.prepare(&session, &desired, &transports.go, preparation)
                     .await?
             }
             None => None,
@@ -973,7 +872,7 @@ pub(super) fn run(
         recheck()?;
         let yarn = match &yarn {
             Some(plan) => {
-                plan.prepare(&store, &desired, &transports.pnpm, preparation)
+                plan.prepare(&session, &desired, &transports.pnpm, preparation)
                     .await?
             }
             None => None,
@@ -981,32 +880,22 @@ pub(super) fn run(
         recheck()?;
         let bun = match &bun {
             Some(plan) => {
-                plan.prepare(&store, &desired, &transports.bun, preparation)
+                plan.prepare(&session, &desired, &transports.bun, preparation)
                     .await?
             }
             None => None,
         };
         Ok::<_, Error>((node, pnpm, npm, uv, python, rustup, prepared, go, yarn, bun))
     })?;
-    if !offline_missing.is_empty() {
-        return Err(Error::OfflineMissing(missing_artifacts(
-            lock,
-            host,
-            &offline_missing,
-        )));
-    }
     preflight()?;
     revalidate(discovery)?;
     snapshot.check_guard(&guard)?;
     trust.preflight()?;
     let prepared_rust = match (&rust, &rustup) {
         (Some(plan), Some(rustup)) => {
-            let scratch = tempfile::Builder::new()
-                .prefix(".rustup-")
-                .tempdir_in(root.join(".turbo").join("tools"))?;
-            let rustup =
-                rustup.executable(&store, &desired, prepared_rustup.as_ref(), scratch.path())?;
-            plan.prepare(&store, &desired, &rustup, &transports.rustup, preparation)?
+            let scratch = session.scratch("rustup-")?;
+            let rustup = rustup.executable(&session, prepared_rustup.as_ref(), scratch.path())?;
+            plan.prepare(&session, &desired, &rustup, &transports.rustup, preparation)?
         }
         _ => None,
     };
@@ -1063,26 +952,19 @@ pub(super) fn run(
             _ => Err(missing()),
         }
     };
-    let before_publish = || {
+    let ensured = session.ensure(&selection, stage, |env| {
+        // The record binds this repository to the environment only once the
+        // lock, sources and policy it was planned from are still current.
         trust.preflight()?;
         storage(root).map_err(io::Error::other)?;
         preflight().map_err(io::Error::other)?;
         revalidate(discovery).map_err(io::Error::other)?;
         snapshot.check_guard(&guard).map_err(io::Error::other)?;
-        Ok(())
-    };
-    if replace {
-        store.force_reconcile_reusing_checked(&desired, &reused, stage, before_publish)?;
-    } else {
-        store.reconcile_checked(&desired, stage, before_publish)?;
-    }
-    // A published generation without this second, external publication is not
-    // trusted. On failure, rerunning setup freshly verifies it before repair.
-    before_publish()?;
-    trust.publish(&store)?;
+        Ok(trust.publish(env, None)?)
+    })?;
     // Every adapter that transfers verified bytes itself. A Rust toolchain is
     // fetched by the private rustup, so only its installer is counted.
-    let mut provisioned = Provisioned {
+    let mut report = ToolReport {
         downloaded_bytes: [
             prepared_node.as_ref().map(|p| p.downloaded_bytes()),
             prepared_pnpm.as_ref().map(|p| p.downloaded_bytes()),
@@ -1103,49 +985,22 @@ pub(super) fn run(
                 .map(|p| p.downloaded_bytes()),
         )
         .sum(),
-        ..Provisioned::default()
+        ..ToolReport::default()
     };
     for tool in &desired {
-        let (reused, source) = match additional(tool) {
-            Some((plan, prepared)) => (prepared.is_none(), format!(" ({})", plan.source())),
-            None => (
-                (tool.id == "node" && prepared_node.is_none())
-                    || (tool.id == "pnpm" && prepared_pnpm.is_none())
-                    || (tool.id == "npm" && prepared_npm.is_none())
-                    || (tool.id == "uv" && prepared_uv.is_none())
-                    || (tool.id == "rustup" && prepared_rustup.is_none())
-                    || (tool.id == "python" && prepared_python.is_none())
-                    || (tool.id == "rust" && prepared_rust.is_none())
-                    || (tool.id == "yarn" && prepared_yarn.is_none())
-                    || (tool.id == "bun" && prepared_bun.is_none())
-                    || (tool.id == "go" && prepared_go.is_none()),
-                String::new(),
-            ),
+        let reused = !ensured.installed.contains(&tool.id);
+        let source = additional(tool).map(|(plan, _)| plan.source().to_string());
+        let outcome = match (reused, force) {
+            (true, true) => ToolOutcome::Verified,
+            (true, false) => ToolOutcome::Reused,
+            (false, _) => ToolOutcome::Installed,
         };
-        if reused {
-            provisioned.reused += 1;
-        } else {
-            provisioned.installed += 1;
-        }
-        let from_cache = match tool.id.as_str() {
-            _ if additional(tool).is_some() => additional(tool)
-                .and_then(|(_, prepared)| prepared)
-                .is_some_and(|prepared| prepared.from_cache()),
-            "node" => prepared_node.as_ref().is_some_and(|node| node.from_cache()),
-            "pnpm" => prepared_pnpm.as_ref().is_some_and(|pnpm| pnpm.from_cache()),
-            "npm" => prepared_npm.as_ref().is_some_and(|npm| npm.from_cache()),
-            _ => false,
-        };
-        let status = if reused && force {
-            "reinstalled from the verified installation"
-        } else if reused {
-            "reused"
-        } else if from_cache {
-            "installed from the shared download cache"
-        } else {
-            "installed"
-        };
-        println!("{} {}: {status}{source}", tool.id, tool.version);
+        report.rows.push(ToolRow {
+            id: tool.id.clone(),
+            version: tool.version.clone(),
+            outcome,
+            source,
+        });
     }
     if let Some(npm) = lock.tools().get("npm")
         && matches!(
@@ -1153,16 +1008,16 @@ pub(super) fn run(
             turborepo_setup::lock::Installation::Bundled { .. }
         )
     {
-        println!("npm {}: provided by managed Node (bundled)", npm.version);
+        report.rows.push(ToolRow {
+            id: "npm".into(),
+            version: npm.version.clone(),
+            outcome: ToolOutcome::BundledWithNode,
+            source: None,
+        });
     }
     if offline {
-        println!("Offline: used only installed tools and verified cached artifacts.");
+        notes.push(Note::Offline);
     }
-    // Cleanup follows both generation and external trust publication, while
-    // the writer and Store guards are still held. It never fails setup.
-    for line in super::cleanup::after_provisioning(&mut store, transports.node.cache(), lock, host)
-    {
-        println!("{line}");
-    }
-    Ok(provisioned)
+    report.notes = notes;
+    Ok(report)
 }

@@ -15,9 +15,9 @@ use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
     net::TcpListener,
 };
-use turborepo_tool_install::Outcome;
 
 use super::*;
+use crate::test_store::{Outcome, TestStore};
 
 const TARGET: Platform = Platform::MacosArm64;
 const ARTIFACT: &str = "/tools/npm/installation/artifacts/any/package";
@@ -148,11 +148,8 @@ fn node_stage(_: &Tool, path: &Path) -> Result<(), turborepo_tool_install::Error
     fs::set_permissions(path.join("bin/node"), fs::Permissions::from_mode(0o755))?;
     Ok(())
 }
-fn manifest(repo: &Path) -> Vec<u8> {
-    fs::read(repo.join(".turbo/tools/manifest.json")).unwrap()
-}
 async fn install(
-    store: &mut Store,
+    store: &TestStore,
     node: &NodePlan,
     npm: &NpmPlan,
     registry: &Registry,
@@ -180,7 +177,7 @@ async fn fresh_cohort_resources_bound_launchers_reuse_and_repair() {
         .prefix("npm repo ' spaces ")
         .tempdir()
         .unwrap();
-    let mut store = Store::open(repo.path()).unwrap();
+    let store = TestStore::open(repo.path());
     let desired = [node.inventory_tool().clone(), npm.inventory_tool().clone()];
     let prepared = npm
         .prepare_if_needed(&store, &desired, &registry.transport)
@@ -198,7 +195,7 @@ async fn fresh_cohort_resources_bound_launchers_reuse_and_repair() {
         })
         .unwrap();
     let current = store.current().unwrap().unwrap();
-    let root = current.bin.parent().unwrap().join("tools/npm");
+    let root = store.tree_of(npm.inventory_tool());
     assert_eq!(
         fs::read_to_string(root.join("node_modules/resource/data.json")).unwrap(),
         "adjacent resource"
@@ -209,7 +206,7 @@ async fn fresh_cohort_resources_bound_launchers_reuse_and_repair() {
             .permissions()
             .mode()
             & 0o777,
-        0o640
+        0o440
     );
     assert_eq!(
         fs::metadata(root.join("bin/npm-cli.js"))
@@ -227,13 +224,8 @@ async fn fresh_cohort_resources_bound_launchers_reuse_and_repair() {
     fs::write(bait.path().join("node"), "#!/bin/sh\nexit 99\n").unwrap();
     fs::set_permissions(bait.path().join("node"), fs::Permissions::from_mode(0o755)).unwrap();
     for name in ["npm", "npx"] {
-        let launcher = root.join(&npm.inventory_tool().executables[name]);
-        assert_ne!(
-            fs::metadata(&launcher).unwrap().permissions().mode() & 0o100,
-            0
-        );
-        for path in [current.bin.join(name), launcher] {
-            let output = Command::new(path)
+        {
+            let output = Command::new(current.bin.join(name))
                 .args(["space arg", "literal'quote"])
                 .env("PATH", bait.path())
                 .current_dir(bait.path())
@@ -242,17 +234,17 @@ async fn fresh_cohort_resources_bound_launchers_reuse_and_repair() {
             assert_eq!(output.status.code(), Some(19));
             let stdout = String::from_utf8(output.stdout).unwrap();
             assert!(stdout.starts_with("managed-node\n<"));
-            assert!(stdout.contains(&format!("/tools/npm/bin/{name}-cli.js>")));
+            assert!(stdout.contains(&format!("{}/bin/{name}-cli.js>", root.display())));
             assert!(stdout.contains("<space arg>\n") && stdout.contains("<literal'quote>\n"));
         }
     }
     assert!(!repo.path().join("should-never-run").exists());
-    let before = manifest(repo.path());
+    let before = store.published();
     assert_eq!(
-        install(&mut store, &node, &npm, &registry).await.unwrap(),
+        install(&store, &node, &npm, &registry).await.unwrap(),
         Outcome::Unchanged
     );
-    assert_eq!(manifest(repo.path()), before);
+    assert_eq!(store.published(), before);
     assert_eq!(registry.requests.lock().unwrap().len(), 2);
     let extra = Tool {
         id: "extra".into(),
@@ -260,6 +252,8 @@ async fn fresh_cohort_resources_bound_launchers_reuse_and_repair() {
         platform: "any".into(),
         artifact_sha256: "ab".repeat(32),
         executables: std::collections::BTreeMap::from([("extra".into(), "bin/node".into())]),
+        vars: Default::default(),
+        staging: turborepo_tool_install::Staging::new("fixture", 1, &()).unwrap(),
     };
     let expanded = [desired.to_vec(), vec![extra]].concat();
     assert!(
@@ -268,32 +262,38 @@ async fn fresh_cohort_resources_bound_launchers_reuse_and_repair() {
             .unwrap()
             .is_none()
     );
-    store.reconcile(&expanded, node_stage).unwrap();
     assert_eq!(registry.requests.lock().unwrap().len(), 2);
-    for damaged in [
-        "bin/npm",
-        "tools/npm/node_modules/resource/data.json",
-        "tools/node/bin/node",
-    ] {
-        let bin = store.current().unwrap().unwrap().bin;
-        let path = bin.parent().unwrap().join(damaged);
-        if damaged == "bin/npm" {
-            fs::remove_file(&path).unwrap();
-            std::os::unix::fs::symlink("../tools/npm/bin/npm-cli.js", &path).unwrap();
-        } else {
-            fs::write(&path, "corrupt").unwrap();
-        }
-        let before = manifest(repo.path());
-        assert!(
-            npm.prepare_if_needed(&store, &desired, &registry.transport)
-                .await
-                .unwrap()
-                .is_some()
-        );
-        assert_eq!(manifest(repo.path()), before);
-        install(&mut store, &node, &npm, &registry).await.unwrap();
-        assert!(store.is_current(&desired).unwrap());
-    }
+    // Setup trusts the seals it wrote: `--check` finds damage and `--force`
+    // restages only the damaged tree.
+    store.reconcile(&desired, node_stage).unwrap();
+    crate::source_policy::test_support::damage(
+        &root.join("node_modules/resource/data.json"),
+        "corrupt",
+    );
+    assert!(store.check(&desired).is_err());
+    assert!(
+        npm.prepare_if_needed(&store, &desired, &registry.transport)
+            .await
+            .unwrap()
+            .is_none()
+    );
+    let prepared = npm
+        .prepare(
+            &store,
+            &desired,
+            &registry.transport,
+            crate::Preparation::Fresh,
+        )
+        .await
+        .unwrap()
+        .unwrap();
+    store
+        .force_reconcile(&desired, |tool, path| {
+            assert_eq!(tool, npm.inventory_tool(), "healthy Node is not restaged");
+            prepared.stage(tool, path)
+        })
+        .unwrap();
+    store.check(&desired).unwrap();
 }
 
 #[tokio::test]
@@ -333,14 +333,12 @@ async fn both_hashes_and_exact_package_layout_are_mandatory() {
         let (node, npm) = plans(&value, None);
         let registry = serve(meta, bytes).await;
         let repo = tempfile::tempdir().unwrap();
-        let mut store = Store::open(repo.path()).unwrap();
+        let store = TestStore::open(repo.path());
         store
             .reconcile(&[node.inventory_tool().clone()], node_stage)
             .unwrap();
-        let before = manifest(repo.path());
-        let error = install(&mut store, &node, &npm, &registry)
-            .await
-            .unwrap_err();
+        let before = store.published();
+        let error = install(&store, &node, &npm, &registry).await.unwrap_err();
         let kind = match error {
             Error::Download(turborepo_download::Error::DigestMismatch) => "sha256",
             Error::Download(turborepo_download::Error::Sha512DigestMismatch) => "sha512",
@@ -349,7 +347,7 @@ async fn both_hashes_and_exact_package_layout_are_mandatory() {
             _ => panic!("unexpected error: {error}"),
         };
         assert_eq!(kind, expected);
-        assert_eq!(manifest(repo.path()), before);
+        assert_eq!(store.published(), before);
     }
 }
 
@@ -360,7 +358,7 @@ async fn authored_constraints_and_node_identity_prevent_unverified_reuse() {
     let (node, npm) = plans(&value, None);
     let registry = serve(metadata(&bytes), bytes.clone()).await;
     let repo = tempfile::tempdir().unwrap();
-    let mut store = Store::open(repo.path()).unwrap();
+    let store = TestStore::open(repo.path());
     let mut wrong_node = node.inventory_tool().clone();
     wrong_node.artifact_sha256 = "22".repeat(32);
     for desired in [
@@ -374,8 +372,8 @@ async fn authored_constraints_and_node_identity_prevent_unverified_reuse() {
         ));
     }
     assert!(registry.requests.lock().unwrap().is_empty());
-    install(&mut store, &node, &npm, &registry).await.unwrap();
-    let before = manifest(repo.path());
+    install(&store, &node, &npm, &registry).await.unwrap();
+    let before = store.published();
     for (algorithm, digest) in [
         ("sha512", "00".repeat(64)),
         ("sha256", "00".repeat(32)),
@@ -385,28 +383,23 @@ async fn authored_constraints_and_node_identity_prevent_unverified_reuse() {
         let (_, pinned) = plans(&value, Some(&pin));
         assert_ne!(npm.inventory_tool(), pinned.inventory_tool());
         let registry = serve(metadata(&bytes), bytes.clone()).await;
-        assert!(
-            install(&mut store, &node, &pinned, &registry)
-                .await
-                .is_err()
-        );
+        assert!(install(&store, &node, &pinned, &registry).await.is_err());
         assert_eq!(registry.requests.lock().unwrap().len(), 1);
-        assert_eq!(manifest(repo.path()), before);
+        assert_eq!(store.published(), before);
     }
     let pin = CorepackIntegrity {
         algorithm: "sha512",
         digest: format!("{:x}", Sha512::digest(&bytes)),
     };
     let (_, pinned) = plans(&value, Some(&pin));
-    install(&mut store, &node, &pinned, &registry)
-        .await
-        .unwrap();
+    install(&store, &node, &pinned, &registry).await.unwrap();
     assert_eq!(registry.requests.lock().unwrap().len(), 4);
     let mut changed = value.clone();
     changed["tools"]["node"]["installation"]["artifacts"]["macos-arm64"]["distribution"]
         ["sha256"] = json!("22".repeat(32));
     let (_, new_npm) = plans(&changed, None);
-    assert_ne!(npm.inventory_tool(), new_npm.inventory_tool());
+    // npm's tree and identity never depend on Node; only the plan binds it.
+    assert_eq!(npm.inventory_tool(), new_npm.inventory_tool());
     assert!(matches!(
         NpmPlan::from_lock(&lock(&changed), TARGET, &node, None),
         Err(Error::NodeBinding)
@@ -445,8 +438,8 @@ async fn registry_metadata_identity_integrity_and_origin_fail_closed() {
         let registry = serve(meta, bytes.clone()).await;
         let (node, npm) = plans(&fixture(&bytes), None);
         let repo = tempfile::tempdir().unwrap();
-        let mut store = Store::open(repo.path()).unwrap();
-        assert!(install(&mut store, &node, &npm, &registry).await.is_err());
+        let store = TestStore::open(repo.path());
+        assert!(install(&store, &node, &npm, &registry).await.is_err());
         assert!(store.current().unwrap().is_none());
         assert_eq!(registry.requests.lock().unwrap().len(), 1);
     }

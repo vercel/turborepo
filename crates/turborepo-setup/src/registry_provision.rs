@@ -9,15 +9,15 @@ use std::{
 };
 
 use semver::Version;
+use serde::Serialize;
 use sha2::{Digest, Sha224, Sha256, Sha512};
 use turborepo_archive::{ExtractedArtifact, Layout};
 use turborepo_download::{
     ApprovedOrigin, DownloadClient, ExpectedSha256, ExpectedSha512, Limits, VerifiedArtifact,
 };
-use turborepo_tool_install::{Store, Tool};
+use turborepo_tool_install::{Export, Launch, LaunchArg, SetupSession, Staging, Tool, TreeRef};
 
 use crate::{
-    artifact_cache::ArtifactCache,
     lock::{self, Format, Installation, Lock, Platform},
     mirror::Mirror,
     node_discovery::UniqueJson,
@@ -39,8 +39,6 @@ pub enum Error {
     UnsupportedTarget,
     #[error("package identity or bin entries do not match the selected lock")]
     InvalidPackage,
-    #[error("offline setup has no verified cached package artifact and never contacts upstream")]
-    Offline,
     #[error(transparent)]
     Authored(#[from] crate::package_manager::Error),
     #[error(transparent)]
@@ -56,14 +54,31 @@ pub enum Error {
 }
 
 const PACKAGE_LIMIT: usize = 64 * 1024 * 1024;
+/// Bump when this adapter stages different bytes for the same staging inputs.
+const STAGING_REVISION: u32 = 1;
+/// Every registry package keeps its files under `package/`.
+const PACKAGE_ROOT: &str = "package";
+
+/// The package's `package/` entries, and for native pnpm the platform
+/// package's binary at `binary` copied beside them as `placed`.
+#[derive(Serialize)]
+struct Staged<'a> {
+    #[serde(flatten)]
+    archive: crate::staging::Archive<'a>,
+    native: Option<NativeStaged<'a>>,
+}
+
+#[derive(Serialize)]
+struct NativeStaged<'a> {
+    binary: &'a str,
+    placed: &'static str,
+}
 
 pub struct RegistryTransport {
     client: DownloadClient,
     origin: String,
     // Mirrors may serve metadata whose tarball points at the mirror itself.
     mirrored: bool,
-    cache: Option<ArtifactCache>,
-    offline: bool,
 }
 impl RegistryTransport {
     // A configured mirror uses `mirrored` instead; neither falls back to
@@ -73,8 +88,6 @@ impl RegistryTransport {
             client: DownloadClient::new([ApprovedOrigin::https(policy.registry())?])?,
             origin: policy.registry().into(),
             mirrored: false,
-            cache: None,
-            offline: false,
         })
     }
 
@@ -87,50 +100,7 @@ impl RegistryTransport {
             client: mirror.client()?,
             origin: mirror.base().into(),
             mirrored: true,
-            cache: None,
-            offline: false,
         })
-    }
-
-    /// Reuse locked package bytes during locked preparation only; resolution
-    /// always verifies registry metadata.
-    pub fn with_cache(mut self, cache: Option<ArtifactCache>) -> Self {
-        self.cache = cache;
-        self
-    }
-
-    /// Serve only verified cache hits; metadata and artifact requests fail
-    /// before traffic with [`Error::Offline`].
-    pub fn offline(mut self) -> Self {
-        self.offline = true;
-        self
-    }
-
-    // A hit is already verified against the locked SHA-256. An authored
-    // SHA-256 equals that digest (`locked_integrity`); an authored SHA-512 is
-    // verified here. Any failure falls back to the registry path, which owns
-    // the canonical error.
-    fn cached(
-        &self,
-        platform: Platform,
-        sha256: &str,
-        authored: Option<&CorepackIntegrity>,
-    ) -> Option<VerifiedArtifact> {
-        let bytes = self.cache.as_ref()?.get(platform, sha256, PACKAGE_LIMIT)?;
-        match authored {
-            None => Some(bytes),
-            Some(pin) if pin.algorithm == "sha256" => (pin.digest == sha256).then_some(bytes),
-            Some(pin) if pin.algorithm == "sha224" => {
-                (sha224_hex(&bytes) == pin.digest).then_some(bytes)
-            }
-            Some(pin) if pin.algorithm == "sha512" => VerifiedArtifact::verify_bytes_sha512(
-                bytes.into_bytes(),
-                ExpectedSha512::from_hex(&pin.digest).ok()?,
-                None,
-            )
-            .ok(),
-            Some(_) => None,
-        }
     }
 
     /// Resolve only a canonical exact npm/pnpm release, verifying registry
@@ -214,9 +184,6 @@ impl RegistryTransport {
         authored: Option<&CorepackIntegrity>,
         locked_sha256: Option<&str>,
     ) -> Result<(registry_metadata::RegistryArtifact, VerifiedArtifact), Error> {
-        if self.offline {
-            return Err(Error::Offline);
-        }
         // Validate before interpolating any request path or making traffic.
         registry_metadata::validate_selection(manager, version)?;
         let metadata = self
@@ -269,14 +236,12 @@ impl RegistryTransport {
     }
 
     /// Loopback fixtures only; canonical provenance, no env override.
-    #[cfg(any(all(test, unix), feature = "test-support"))]
+    #[cfg(any(test, feature = "test-support"))]
     pub fn loopback_http_for_tests(origin: &str) -> Result<Self, Error> {
         Ok(Self {
             client: DownloadClient::loopback_http_for_tests(origin)?,
             origin: origin.trim_end_matches('/').into(),
             mirrored: false,
-            cache: None,
-            offline: false,
         })
     }
 }
@@ -367,7 +332,7 @@ fn registry_artifact(url: String, bytes: &VerifiedArtifact, mappings: Mappings) 
         sha256: bytes.sha256_hex(),
         format: Format::TarGz,
         alternates: BTreeMap::new(),
-        root_prefix: Some("package".into()),
+        root_prefix: Some(PACKAGE_ROOT.into()),
         destination: None,
         executables: mappings
             .iter()
@@ -392,7 +357,7 @@ pub(crate) fn locked_parts<'a>(
     let canonical = |artifact: &lock::Artifact, package: &str| {
         artifact.url == format!("{REGISTRY}/{}", tarball_path(package, version))
             && artifact.format == Format::TarGz
-            && artifact.root_prefix.as_deref() == Some("package")
+            && artifact.root_prefix.as_deref() == Some(PACKAGE_ROOT)
             && artifact.destination.is_none()
             && artifact.alternates.is_empty()
     };
@@ -505,7 +470,7 @@ fn extract_package(
         turborepo_archive::Format::TarGz,
         turborepo_archive::Limits::new(256 * 1024 * 1024, 100_000, 4096, 64)?,
         Layout {
-            root: "package",
+            root: PACKAGE_ROOT,
             required_files: &required,
         },
     )?;
@@ -526,13 +491,10 @@ fn extract_package(
 pub(crate) struct RegistryPlan {
     tool: Tool,
     node: Tool,
-    // The lock key that selected this artifact (host platform or `any`).
-    platform: Platform,
     artifact: lock::Artifact,
     /// Native pnpm's platform package name, binary path and locked artifact.
     native: Option<(&'static str, lock::Artifact)>,
     authored: Option<CorepackIntegrity>,
-    launch_directory: String,
     manager: Manager,
     /// Authored pins cover modern Yarn's `bin/yarn.js`, not the archive.
     bundled: bool,
@@ -570,7 +532,6 @@ impl RegistryPlan {
         manager: Manager,
     ) -> Result<Self, Error> {
         let id = package_name(manager)?;
-        let windows = platform == Platform::WindowsX64;
         let qualified = match platform {
             Platform::MacosX64
             | Platform::MacosArm64
@@ -594,7 +555,7 @@ impl RegistryPlan {
         let Installation::Managed { artifacts } = &package.installation else {
             return Err(Error::InvalidLock);
         };
-        let (&artifact_platform, parts) = artifacts
+        let (_, parts) = artifacts
             .get_key_value(&platform)
             .or_else(|| artifacts.get_key_value(&Platform::Any))
             .ok_or(Error::InvalidLock)?;
@@ -602,28 +563,41 @@ impl RegistryPlan {
         let (artifact, native) = (artifact.clone(), native.cloned());
         ExpectedSha256::from_hex(&artifact.sha256)?;
         let node = node.inventory_tool().clone();
-        // A changed authored constraint must re-verify, even when archive SHA-256
-        // is unchanged. Hash framed identity into a bounded portable component.
-        let binding =
-            serde_json::to_vec(&(&node, authored.map(|pin| (pin.algorithm, &pin.digest))))
-                .map_err(|_| Error::InvalidLock)?;
-        let launch_directory = format!("managed-node-{:x}", Sha256::digest(binding));
-        // Windows launchers are batch files so PATHEXT resolves `pnpm`.
-        let extension = if windows { ".cmd" } else { "" };
-        let executables = native
-            .as_ref()
-            .unwrap_or(&artifact)
-            .executables
-            .keys()
-            .map(|name| {
-                (
-                    name.clone(),
-                    format!("{launch_directory}/{name}{extension}"),
-                )
-            })
-            .collect();
-        // Reuse identity binds every verified part.
-        let artifact_sha256 = match &native {
+        let Some(Export::File(node_binary)) = node.executables.get("node") else {
+            return Err(Error::NodeBinding);
+        };
+        // JavaScript entry points run on the selected Node by path. Native pnpm
+        // runs from its own tree, never a bin link, so it still finds `dist/`
+        // beside its image (`pnpx`/`pnx` as `pnpm dlx`, like pnpm's own Unix
+        // alias scripts).
+        let executables = match &native {
+            None => artifact
+                .executables
+                .iter()
+                .map(|(name, entry)| {
+                    let launch = Launch {
+                        program: TreeRef::new("node", node_binary.clone()),
+                        args: vec![LaunchArg::Tree(TreeRef::new(id, entry.clone()))],
+                    };
+                    (name.clone(), Export::Launch(launch))
+                })
+                .collect(),
+            Some(native) => native
+                .executables
+                .keys()
+                .map(|name| {
+                    let args = match name.as_str() {
+                        "pnpx" | "pnx" => vec![LaunchArg::Word("dlx".into())],
+                        _ => Vec::new(),
+                    };
+                    let program = TreeRef::new(id, NATIVE_BINARY);
+                    (name.clone(), Export::Launch(Launch { program, args }))
+                })
+                .collect(),
+        };
+        // Reuse identity binds every verified part, and a changed authored
+        // constraint must re-verify even when archive SHA-256 is unchanged.
+        let mut artifact_sha256 = match &native {
             None => artifact.sha256.clone(),
             Some(native) => {
                 ExpectedSha256::from_hex(&native.sha256)?;
@@ -631,6 +605,27 @@ impl RegistryPlan {
                 format!("{:x}", Sha256::digest(parts))
             }
         };
+        if let Some(pin) = authored {
+            let pin = serde_json::to_vec(&(&artifact_sha256, pin.algorithm, &pin.digest))
+                .map_err(|_| Error::InvalidLock)?;
+            artifact_sha256 = format!("{:x}", Sha256::digest(pin));
+        }
+        let staging = Staged {
+            archive: crate::staging::Archive {
+                format: artifact.format,
+                root: PACKAGE_ROOT,
+            },
+            native: (native.as_ref())
+                .map(|native| {
+                    let binary = native.executables.get("pnpm").ok_or(Error::InvalidLock)?;
+                    Ok::<_, Error>(NativeStaged {
+                        binary,
+                        placed: NATIVE_BINARY,
+                    })
+                })
+                .transpose()?,
+        };
+        let staging = Staging::new(id, STAGING_REVISION, &staging)?;
         let native = native
             .map(|native| native_package(platform).map(|(name, _)| (name, native)))
             .map(|native| native.ok_or(Error::UnsupportedTarget))
@@ -642,13 +637,13 @@ impl RegistryPlan {
                 platform: node.platform.clone(),
                 artifact_sha256,
                 executables,
+                vars: BTreeMap::new(),
+                staging,
             },
             node,
-            platform: artifact_platform,
             artifact,
             native,
             authored: authored.cloned(),
-            launch_directory,
             manager,
             bundled: registry_metadata::is_modern_yarn(manager, &version),
         })
@@ -658,23 +653,11 @@ impl RegistryPlan {
         &self.tool
     }
 
-    /// Read-only cache preflight; preparation verifies every part again.
-    pub fn cache_available(&self, transport: &RegistryTransport) -> bool {
-        transport
-            .cached(self.platform, &self.artifact.sha256, self.authored.as_ref())
-            .is_some()
-            && self.native.as_ref().is_none_or(|(_, native)| {
-                transport
-                    .cached(self.platform, &native.sha256, None)
-                    .is_some()
-            })
-    }
-
-    /// Prepare without executing Node, then reconcile the SAME complete desired
-    /// set with all adapter callbacks. Only healthy generations allow reuse.
+    /// Prepare without executing Node, then ensure the SAME complete desired
+    /// set with all adapter callbacks. Only sealed trees allow reuse.
     pub async fn prepare_if_needed(
         &self,
-        store: &Store,
+        store: &SetupSession<'_>,
         desired: &[Tool],
         transport: &RegistryTransport,
     ) -> Result<Option<PreparedRegistry>, Error> {
@@ -684,7 +667,7 @@ impl RegistryPlan {
 
     pub async fn prepare(
         &self,
-        store: &Store,
+        store: &SetupSession<'_>,
         desired: &[Tool],
         transport: &RegistryTransport,
         preparation: crate::Preparation,
@@ -697,35 +680,15 @@ impl RegistryPlan {
         {
             return Ok(None);
         }
-        let cached = transport.cached(
-            self.platform,
-            &self.artifact.sha256,
-            self.authored.as_ref().filter(|_| !self.bundled),
-        );
-        let mut from_cache = cached.is_some();
-        let bytes = match cached {
-            Some(bytes) => bytes,
-            None => {
-                let (_, bytes) = transport
-                    .verified_release(
-                        self.manager,
-                        &self.tool.version,
-                        self.authored.as_ref().filter(|_| !self.bundled),
-                        Some(&self.artifact.sha256),
-                    )
-                    .await?;
-                // Best effort: a cache write failure never fails verified setup.
-                if let Some(cache) = &transport.cache {
-                    let _ = cache.put(self.platform, &bytes);
-                }
-                bytes
-            }
-        };
-        let mut downloaded_bytes = if from_cache {
-            0
-        } else {
-            bytes.as_bytes().len() as u64
-        };
+        let (_, bytes) = transport
+            .verified_release(
+                self.manager,
+                &self.tool.version,
+                self.authored.as_ref().filter(|_| !self.bundled),
+                Some(&self.artifact.sha256),
+            )
+            .await?;
+        let mut downloaded_bytes = bytes.as_bytes().len() as u64;
         let (tree, native) = match &self.native {
             None => {
                 let executables = &self.artifact.executables;
@@ -737,27 +700,16 @@ impl RegistryPlan {
             Some((name, native)) => {
                 let tree = extract_wrapper(&bytes, &self.tool.version)?;
                 let binary = native.executables.get("pnpm").ok_or(Error::InvalidLock)?;
-                let cached = transport.cached(self.platform, &native.sha256, None);
-                from_cache &= cached.is_some();
-                let bytes = match cached {
-                    Some(bytes) => bytes,
-                    None => {
-                        let (_, bytes) = transport
-                            .verified_package(
-                                self.manager,
-                                name,
-                                &self.tool.version,
-                                None,
-                                Some(&native.sha256),
-                            )
-                            .await?;
-                        if let Some(cache) = &transport.cache {
-                            let _ = cache.put(self.platform, &bytes);
-                        }
-                        downloaded_bytes += bytes.as_bytes().len() as u64;
-                        bytes
-                    }
-                };
+                let (_, bytes) = transport
+                    .verified_package(
+                        self.manager,
+                        name,
+                        &self.tool.version,
+                        None,
+                        Some(&native.sha256),
+                    )
+                    .await?;
+                downloaded_bytes += bytes.as_bytes().len() as u64;
                 let native = extract_native(&bytes, name, &self.tool.version, binary)?;
                 (tree, Some((native, binary.clone())))
             }
@@ -766,17 +718,11 @@ impl RegistryPlan {
             let (sha256, sha512) = bundle_digests(&tree)?;
             crate::registry_resolution::check_pin(pin, None, &sha256, &sha512)?;
         }
-        if tree.root_path().join(&self.launch_directory).try_exists()? {
-            return Err(Error::InvalidPackage);
-        }
         Ok(Some(PreparedRegistry {
             tree,
             native,
             downloaded_bytes,
             tool: self.tool.clone(),
-            launch_directory: self.launch_directory.clone(),
-            entrypoints: self.artifact.executables.clone(),
-            from_cache,
         }))
     }
 }
@@ -787,25 +733,15 @@ pub struct PreparedRegistry {
     native: Option<(ExtractedArtifact, String)>,
     downloaded_bytes: u64,
     tool: Tool,
-    launch_directory: String,
-    entrypoints: std::collections::BTreeMap<String, String>,
-    from_cache: bool,
 }
 impl PreparedRegistry {
-    /// Whether all verified bytes came from the shared download cache.
-    pub fn from_cache(&self) -> bool {
-        self.from_cache
-    }
-
-    /// Verified package bytes transferred for this preparation; cache hits
-    /// transfer nothing.
+    /// Verified package bytes transferred for this preparation.
     pub fn downloaded_bytes(&self) -> u64 {
         self.downloaded_bytes
     }
 
-    /// Copy verified resources; launch this generation's managed Node, or the
-    /// native pnpm binary directly (`pnpx`/`pnx` as `pnpm dlx`, like pnpm's
-    /// own Unix alias scripts).
+    /// Copy the verified package, and the native pnpm binary beside it. The
+    /// Store generates the launchers into `bin`.
     pub fn stage(
         &self,
         tool: &Tool,
@@ -825,48 +761,6 @@ impl PreparedRegistry {
             let target = destination.join(NATIVE_BINARY);
             fs::copy(native.root_path().join(binary), &target)?;
             executable(&target)?;
-        }
-        // Owner-only like every other store directory, whatever the umask.
-        #[cfg_attr(not(unix), allow(unused_mut))]
-        let mut launch = fs::DirBuilder::new();
-        #[cfg(unix)]
-        std::os::unix::fs::DirBuilderExt::mode(&mut launch, 0o700);
-        launch.create(destination.join(&self.launch_directory))?;
-        for (name, path) in &self.tool.executables {
-            // The bin forwarder calls this file directly, so %~dp0 is always
-            // the launch directory. Entry points are fixed validated mappings.
-            // Native pnpm runs from the tool directory, never a bin hard link,
-            // so it still finds `dist/` beside its own image.
-            let script = if cfg!(windows) {
-                let command = match (&self.native, name.as_str()) {
-                    (None, _) => format!(
-                        "\"%~dp0..\\..\\node\\node.exe\" \"%~dp0..\\{}\"",
-                        self.entrypoints[name].replace('/', "\\")
-                    ),
-                    (Some(_), "pnpx" | "pnx") => format!("\"%~dp0..\\{NATIVE_BINARY}\" dlx"),
-                    (Some(_), _) => format!("\"%~dp0..\\{NATIVE_BINARY}\""),
-                };
-                format!("@{command} %*\r\n")
-            } else {
-                let id = &self.tool.id;
-                let command = match (&self.native, name.as_str()) {
-                    (None, _) => format!(
-                        "\"$tools/node/bin/node\" \"$tools/{id}/{}\"",
-                        self.entrypoints[name]
-                    ),
-                    (Some(_), "pnpx" | "pnx") => format!("\"$tools/{id}/{NATIVE_BINARY}\" dlx"),
-                    (Some(_), _) => format!("\"$tools/{id}/{NATIVE_BINARY}\""),
-                };
-                format!(
-                    "#!/bin/sh\ncase \"$0\" in */*) ;; *) exit 126;; esac\nhere=${{0%/*}}\ncase \
-                     \"${{here##*/}}\" in {}) tools=\"$here/../..\";; *) \
-                     tools=\"$here/../tools\";; esac\ntools=$(CDPATH= cd -- \"$tools\" && pwd -P) \
-                     || exit 126\nexec {command} \"$@\"\n",
-                    self.launch_directory
-                )
-            };
-            fs::write(destination.join(path), script)?;
-            executable(&destination.join(path))?;
         }
         Ok(())
     }
@@ -918,14 +812,10 @@ impl PnpmPlan {
         self.0.inventory_tool()
     }
 
-    pub fn cache_available(&self, transport: &RegistryTransport) -> bool {
-        self.0.cache_available(transport)
-    }
-
     /// Prepare only; reconcile the same complete desired inventory afterward.
     pub async fn prepare_if_needed(
         &self,
-        store: &Store,
+        store: &SetupSession<'_>,
         desired: &[Tool],
         transport: &RegistryTransport,
     ) -> Result<Option<PreparedRegistry>, Error> {
@@ -935,7 +825,7 @@ impl PnpmPlan {
     /// Select fresh verification without changing the locked identity.
     pub async fn prepare(
         &self,
-        store: &Store,
+        store: &SetupSession<'_>,
         desired: &[Tool],
         transport: &RegistryTransport,
         preparation: crate::Preparation,

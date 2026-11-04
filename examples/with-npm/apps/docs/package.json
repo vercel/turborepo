@@ -7,21 +7,22 @@
     "dev": "next dev --port 3001",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint . --max-warnings 0"
+    "lint": "eslint . --max-warnings 0",
+    "check-types": "next typegen && tsc --noEmit"
   },
   "dependencies": {
     "@repo/ui": "*",
-    "next": "16.3.8",
-    "react": "19.3.0",
-    "react-dom": "19.3.0"
+    "next": "16.4.2",
+    "react": "19.3.1",
+    "react-dom": "19.3.1"
   },
   "devDependencies": {
     "@repo/eslint-config": "*",
     "@repo/typescript-config": "*",
-    "@types/node": "22.20.3",
+    "@types/node": "26.6.5",
     "@types/react": "19.3.0",
     "@types/react-dom": "19.3.0",
-    "eslint": "10.10.0",
+    "eslint": "10.13.0",
     "typescript": "7.0.2"
   }
 }

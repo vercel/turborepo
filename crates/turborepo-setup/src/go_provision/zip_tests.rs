@@ -12,6 +12,7 @@ use crate::{
     Preparation,
     lock::Document,
     source_policy::test_support::{LoopbackServer, stored_zip_entries},
+    test_store::TestStore,
 };
 
 fn archive(gofmt: bool) -> Vec<u8> {
@@ -84,8 +85,8 @@ async fn windows_zips_skip_go_test_and_promote_only_on_native_x64() {
         let bytes = archive(true);
         let plan = plan(platform, &bytes);
         let executables = &plan.inventory_tool().executables;
-        assert_eq!(executables["go"], "bin/go.exe");
-        assert_eq!(executables["gofmt"], "bin/gofmt.exe");
+        assert_eq!(executables["go"], "bin/go.exe".into());
+        assert_eq!(executables["gofmt"], "bin/gofmt.exe".into());
         let server = LoopbackServer::new([(route(platform), bytes)], |_| {}).unwrap();
         let transport = GoTransport::loopback_http_for_tests(server.origin()).unwrap();
         // Every host verifies and extracts the zip without writing `go/test`.
@@ -96,7 +97,7 @@ async fn windows_zips_skip_go_test_and_promote_only_on_native_x64() {
         assert!(!tree.join("test").exists());
 
         let repo = tempfile::tempdir().unwrap();
-        let mut store = Store::open(repo.path()).unwrap();
+        let store = TestStore::open(repo.path());
         let desired = [plan.inventory_tool().clone()];
         let result = plan.prepare(&store, &desired, &transport, Preparation::IfNeeded);
         if !(cfg!(windows) && platform == Platform::WindowsX64) {
@@ -108,7 +109,7 @@ async fn windows_zips_skip_go_test_and_promote_only_on_native_x64() {
         store
             .reconcile(&desired, |tool, path| prepared.stage(tool, path))
             .unwrap();
-        let current = Store::inspect(repo.path()).unwrap().unwrap();
+        let current = store.current().unwrap().unwrap();
         let mut exports: Vec<_> = fs::read_dir(&current.bin)
             .unwrap()
             .map(|entry| entry.unwrap().file_name().into_string().unwrap())
@@ -117,7 +118,7 @@ async fn windows_zips_skip_go_test_and_promote_only_on_native_x64() {
         // PATHEXT finds `go` and `gofmt` through these `.exe` hard links.
         assert_eq!(exports, ["go.exe", "gofmt.exe"]);
         assert_eq!(fs::read(current.bin.join("go.exe")).unwrap(), b"go image");
-        let installed = current.tool_tree(plan.inventory_tool()).unwrap();
+        let installed = store.tree_of(plan.inventory_tool());
         assert!(
             installed
                 .join("pkg/tool/windows_amd64/compile.exe")

@@ -25,7 +25,11 @@ use turborepo_setup::{
 };
 use turborepo_turbo_json::{DependencyPolicy, ToolPolicy};
 
-use super::{SetupRequest, effective, root::Discovery};
+use super::{
+    SetupRequest, effective,
+    output::{Console, DependencyReport, InstallStep, StepOutcome, StepResult},
+    root::Discovery,
+};
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
@@ -170,7 +174,13 @@ impl Adapter {
     }
 
     /// `None` when the installer succeeded, else its exit status.
-    fn execute(&self, run: &Run, root: &Path, env: &Environment) -> Result<Option<i32>, Error> {
+    fn execute(
+        &self,
+        run: &Run,
+        root: &Path,
+        env: &Environment,
+        step: &mut InstallStep,
+    ) -> Result<Option<i32>, Error> {
         let mut vars = env.vars.clone();
         vars.extend(
             run.env
@@ -181,13 +191,10 @@ impl Adapter {
         match self {
             Self::Javascript { frozen, .. } => {
                 let program = env.program(frozen.program())?;
-                let status = frozen.run(
-                    &program,
-                    &run.command[1..],
-                    root,
-                    vars,
-                    super::installer::status,
-                )?;
+                let stdio = step.stdio()?;
+                let status = frozen.run(&program, &run.command[1..], root, vars, |command| {
+                    super::installer::status(stdio.apply(command))
+                })?;
                 Ok((!status.success()).then(|| crate::commands::exec::exit_code(status)))
             }
             Self::Uv => {
@@ -208,7 +215,7 @@ impl Adapter {
             Self::Cargo => {
                 let cargo = env.program("cargo")?;
                 // Activation exposes this same home to tasks as CARGO_HOME.
-                let home = cargo_prefetch::cargo_home(root)?;
+                let home = cargo_prefetch::cargo_home(&env.cargo_home)?;
                 match cargo_prefetch::prefetch(root, &cargo, &home, offline, vars) {
                     Ok(()) => Ok(None),
                     Err(cargo_prefetch::Error::Fetch(code)) => Ok(Some(code.parse().unwrap_or(1))),
@@ -316,22 +323,14 @@ impl Dependencies {
     }
 
     fn reasons(&self) -> String {
-        let reasons: BTreeSet<_> = self
-            .steps
-            .iter()
-            .filter_map(|(_, step)| match step {
-                Step::Skip(reason) => Some(reason.as_str()),
-                Step::Install(_) => None,
-            })
-            .collect();
-        if reasons.is_empty() {
-            return "no toolchain has dependencies".into();
-        }
-        reasons.into_iter().collect::<Vec<_>>().join("; ")
+        skip_reasons(self.steps.iter().filter_map(|(_, step)| match step {
+            Step::Skip(reason) => Some(reason.as_str()),
+            Step::Install(_) => None,
+        }))
     }
 
     /// `--tools-only` for a JavaScript repository, for direct plan tests.
-    #[cfg(test)]
+    #[cfg(all(test, unix))]
     pub fn tools_only() -> Self {
         Self {
             steps: vec![(ToolchainId::JAVASCRIPT, Step::Skip("--tools-only".into()))],
@@ -401,24 +400,40 @@ impl Dependencies {
     }
 
     /// After provisioning: every enabled installer in order, each with the
-    /// managed environment that setup just recorded. The first failing
-    /// installer's exit status becomes setup's, after it is reported.
-    /// Offline, every installer still runs from its cache, so one report
-    /// lists each one that could not, and nothing is reported ready.
-    /// `trust_base` overrides the user state directory for fixtures.
+    /// managed environment that setup just recorded. Online, the first
+    /// failing installer ends the run. Offline, every installer still runs
+    /// from its cache, so the report lists each one that could not.
+    /// `tool_store` names a fixture's tool store in place of the user's.
     pub fn install(
         &self,
         root: &Path,
         ecosystems: Ecosystems,
-        trust_base: Option<PathBuf>,
-    ) -> Result<i32, Error> {
+        tool_store: Option<PathBuf>,
+        console: &Console,
+    ) -> Result<DependencyReport, Error> {
+        let skipped = |id: &ToolchainId, reason: &str| StepOutcome {
+            toolchain: id.clone(),
+            result: StepResult::Skipped {
+                reason: reason.into(),
+            },
+        };
+        let mut report = DependencyReport {
+            steps: Vec::new(),
+            offline: self.offline,
+        };
         if self.skipped() {
-            println!("Dependencies skipped ({}).", self.reasons());
-            return Ok(0);
+            report.steps = self
+                .steps
+                .iter()
+                .filter_map(|(id, step)| match step {
+                    Step::Skip(reason) => Some(skipped(id, reason)),
+                    Step::Install(_) => None,
+                })
+                .collect();
+            return Ok(report);
         }
-        let trust_base = trust_base
-            .or_else(dirs_next::data_local_dir)
-            .ok_or_else(|| std::io::Error::other("cannot locate setup user state directory"))?;
+        let store =
+            super::trust::user_store(tool_store.as_deref(), root).map_err(std::io::Error::other)?;
         // The lock and installation that provisioning just published.
         let sources = Snapshot::capture_with(root, ecosystems)?;
         let lock = sources
@@ -429,56 +444,34 @@ impl Dependencies {
         if let Some(blocked) = blocked.filter(|blocked| !blocked.is_empty()) {
             return Err(Error::OfflineUnsupported(blocked.join("\n")));
         }
-        let (mut summary, mut missing) = (Vec::new(), Vec::new());
-        let offline = if self.offline { " offline" } else { "" };
         for (id, step) in &self.steps {
-            let id = id.as_str();
             let adapter = match step {
                 Step::Skip(reason) => {
-                    summary.push(format!("{id} skipped ({reason})"));
+                    report.steps.push(skipped(id, reason));
                     continue;
                 }
                 Step::Install(adapter) => adapter,
             };
-            let (run, lockfile) = (adapter.run(root, lock, self.offline)?, adapter.lockfile());
-            let command = run.display();
-            println!(
-                "Installing {id} dependencies{offline} from {lockfile} with managed tools: \
-                 {command} (dependency installation, not a Turborepo task)"
-            );
-            let env = Environment::recorded(root, &sources, &trust_base)?;
-            if let Some(code) = adapter.execute(&run, root, &env)? {
-                if self.offline {
-                    // Independent of the other installers: report them too.
-                    missing.push((
-                        code,
-                        format!("  {id}: `{command}` exited with status {code}"),
-                    ));
-                    continue;
-                }
-                eprintln!(
-                    "{id} dependency setup failed: `{command}` exited with status {code}. \
-                     {lockfile} is unchanged; fix the reported problem and rerun turbo setup."
-                );
-                return Ok(code);
+            let run = adapter.run(root, lock, self.offline)?;
+            let env = Environment::recorded(root, &sources, &store)?;
+            let mut step = console.step(id.clone(), run.command[0], run.display());
+            let exit = adapter.execute(&run, root, &env, &mut step)?;
+            report.steps.push(step.finish(exit)?);
+            if exit.is_some() && !self.offline {
+                break;
             }
-            println!("{id} dependencies: installed{offline}; {lockfile} unchanged");
-            summary.push(format!("{id} installed"));
         }
-        if let Some((code, _)) = missing.first() {
-            let lines = missing.iter().map(|(_, line)| line.as_str());
-            eprintln!(
-                "Offline dependency setup failed, so dependencies are not ready. These installers \
-                 could not finish from their local caches; the output above names what each one \
-                 is missing:\n{}\nRun turbo setup without --offline to download them, then \
-                 offline setup can reuse them. Committed lockfiles are unchanged.",
-                lines.collect::<Vec<_>>().join("\n")
-            );
-            return Ok(*code);
-        }
-        println!("Dependencies: {}.", summary.join("; "));
-        Ok(0)
+        Ok(report)
     }
+}
+
+/// Distinct skip reasons, as the dependency lines report them.
+pub(super) fn skip_reasons<'a>(reasons: impl Iterator<Item = &'a str>) -> String {
+    let reasons: BTreeSet<_> = reasons.collect();
+    if reasons.is_empty() {
+        return "no toolchain has dependencies".into();
+    }
+    reasons.into_iter().collect::<Vec<_>>().join("; ")
 }
 
 fn javascript(root: &Path, snapshot: &Snapshot) -> Result<Step, Error> {
@@ -538,23 +531,36 @@ fn go(snapshot: &Snapshot) -> Step {
 struct Environment {
     bin: PathBuf,
     vars: BTreeMap<String, OsString>,
+    cargo_home: PathBuf,
 }
 
 impl Environment {
     /// Authorized as strictly as `turbo run`: the activation plan must match
     /// the trusted setup record that provisioning just published.
-    fn recorded(root: &Path, sources: &Snapshot, trust_base: &Path) -> Result<Self, Error> {
+    fn recorded(
+        root: &Path,
+        sources: &Snapshot,
+        store: &turborepo_tool_install::UserStore,
+    ) -> Result<Self, Error> {
         let context = crate::commands::managed::context().map_err(Error::Host)?;
-        let plan = ActivationPlan::inspect_captured(sources, context)?;
-        let trust = super::trust::TrustStore::new(trust_base, root)?;
-        if !trust.authorizes(&plan)? {
-            return Err(Error::Untrusted);
-        }
-        let mut vars = plan.runtime_env().clone();
-        let path = plan.path(std::env::var_os("PATH").as_deref())?;
+        let plan = ActivationPlan::captured(sources, context)?;
+        let trust = super::trust::TrustStore::new(store, root)?;
+        let activation = match trust.authorize(&plan) {
+            Ok(Some(activation)) => activation,
+            Ok(None) => return Err(Error::Untrusted),
+            Err(error) => return Err(Error::Io(std::io::Error::other(error))),
+        };
+        let cargo_home = trust.cargo_home();
+        let mut vars = activation.vars().clone();
+        let path = activation
+            .path(std::env::var_os("PATH").as_deref())
+            .map_err(std::io::Error::other)?;
         vars.insert("PATH".into(), path);
-        let bin = plan.path_prepend().to_owned();
-        Ok(Self { bin, vars })
+        Ok(Self {
+            bin: activation.bin().to_owned(),
+            vars,
+            cargo_home,
+        })
     }
 
     /// The managed executable only, never a lookup on the caller's PATH.

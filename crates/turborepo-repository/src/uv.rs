@@ -87,6 +87,12 @@ pub enum Error {
     ManifestEdit(#[from] Box<toml_edit::TomlError>),
     #[error(transparent)]
     WorkspaceGlob(#[from] crate::workspaces::Error),
+    #[error("invalid [tool.uv.workspace] exclude pattern {pattern:?}: {source}")]
+    InvalidExclude {
+        pattern: String,
+        #[source]
+        source: glob::PatternError,
+    },
     #[error("uv workspace member at {0} has no [project].name")]
     MissingMemberName(String),
     #[error("root pyproject.toml has no [tool.uv.workspace] table")]
@@ -819,6 +825,43 @@ pub struct DiscoveredWorkspace {
     pytest: Option<ToolExecution>,
 }
 
+/// `[tool.uv.workspace] exclude`, matched the way uv matches it. Each entry is
+/// normalized like a path and tested by the `glob` crate against one member's
+/// repository-relative directory. `*` crosses `/`, and an excluded directory
+/// does not hide members nested below it.
+struct UvExclusions(Vec<glob::Pattern>);
+
+impl UvExclusions {
+    fn new(patterns: &[String]) -> Result<Self, Error> {
+        patterns
+            .iter()
+            .map(|pattern| {
+                let mut components = Vec::new();
+                for component in std::path::Path::new(pattern).components() {
+                    match component {
+                        std::path::Component::Normal(part) => {
+                            components.push(part.to_string_lossy())
+                        }
+                        std::path::Component::ParentDir => {
+                            components.pop();
+                        }
+                        _ => {}
+                    }
+                }
+                glob::Pattern::new(&components.join("/")).map_err(|source| Error::InvalidExclude {
+                    pattern: pattern.clone(),
+                    source,
+                })
+            })
+            .collect::<Result<_, _>>()
+            .map(Self)
+    }
+
+    fn excludes(&self, member_dir: &str) -> bool {
+        self.0.iter().any(|pattern| pattern.matches(member_dir))
+    }
+}
+
 /// Discover package membership and internal relationships without consulting
 /// uv.lock. Exact metadata remains authoritative when available, but this
 /// snapshot keeps graph construction usable when lockfile resolution fails.
@@ -841,13 +884,18 @@ fn discover_workspace_from_manifests(
     let Some(workspace) = root_manifest.workspace() else {
         return Ok(empty_workspace(name));
     };
-    let globs = crate::workspaces::WorkspaceGlobs::new(
-        workspace.members.clone(),
-        workspace.exclude.clone(),
-    )?;
+    let globs = crate::workspaces::WorkspaceGlobs::new(workspace.members.clone(), Vec::new())?;
+    let exclusions = UvExclusions::new(&workspace.exclude)?;
     let mut parsed = Vec::new();
     let mut seen = HashMap::<String, String>::new();
     for manifest_path in globs.get_manifests(repo_root, PYPROJECT_TOML)? {
+        let member_dir = manifest_path
+            .parent()
+            .ok_or_else(|| Error::InvalidMemberManifestPath(manifest_path.to_string()))?;
+        let member_dir = repo_root.anchor(member_dir)?.to_unix();
+        if exclusions.excludes(member_dir.as_str()) {
+            continue;
+        }
         let Some(manifest) = PyProjectManifest::load(&manifest_path)? else {
             continue;
         };
@@ -4492,6 +4540,44 @@ version = "0.1.0"
                 .iter()
                 .all(|relationship| relationship.declaration_name() == "py-lib"
                     && relationship.orders_tasks())
+        );
+    }
+
+    #[test_case::test_case("services/group", &["api", "web"] ; "excluded parent keeps children")]
+    #[test_case::test_case("./services/group", &["api", "web"] ; "dot slash prefix")]
+    #[test_case::test_case("services/group/", &["api", "web"] ; "trailing slash")]
+    #[test_case::test_case("services/g*", &["web"] ; "star matches nested member")]
+    #[test_case::test_case("services/*", &[] ; "star crosses separators")]
+    fn test_manifest_discovery_matches_uv_exclusions(exclude: &str, expected: &[&str]) {
+        let tempdir = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(tempdir.path()).unwrap();
+        root.join_component(PYPROJECT_TOML)
+            .create_with_contents(format!(
+                "[tool.turbo]\nname = \"acme\"\n\n[tool.uv.workspace]\nmembers = [\"services/*\", \
+                 \"services/group/*\"]\nexclude = [\"{exclude}\"]\n"
+            ))
+            .unwrap();
+        for (dir, name) in [
+            (&["services", "web"][..], "web"),
+            (&["services", "group", "api"], "api"),
+        ] {
+            let package_dir = root.join_components(dir);
+            package_dir.create_dir_all().unwrap();
+            package_dir
+                .join_component(PYPROJECT_TOML)
+                .create_with_contents(format!(
+                    "[project]\nname = \"{name}\"\nversion = \"0.1.0\"\n"
+                ))
+                .unwrap();
+        }
+        let workspace = discover_workspace_from_manifests(&root, false).unwrap();
+        assert_eq!(
+            workspace
+                .packages
+                .iter()
+                .map(|package| package.name.as_str())
+                .collect::<Vec<_>>(),
+            expected
         );
     }
 

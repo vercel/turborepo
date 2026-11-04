@@ -7,6 +7,7 @@ use crate::{
     Preparation::{Fresh, IfNeeded},
     rust_metadata::tests::fixture,
     rust_resolution,
+    test_store::TestStore,
 };
 
 const TARGET: Platform = Platform::LinuxX64Gnu;
@@ -86,7 +87,7 @@ fn locked_toolchains_install_through_private_rustup_and_publish_toolchain_shims(
         &fixture("1.99.0", "2026-10-01"),
         0,
     );
-    let mut store = Store::open(repo.path()).unwrap();
+    let store = TestStore::open(repo.path());
     let transport = official();
     let prepared = plan
         .prepare(&store, &desired, &binary, &transport, IfNeeded)
@@ -104,10 +105,11 @@ fn locked_toolchains_install_through_private_rustup_and_publish_toolchain_shims(
         (dist, update),
         (rustup::ORIGIN, "https://static.rust-lang.org/rustup")
     );
-    // Both homes are fresh and private beside the Store, never the caller's.
-    let tools = repo.path().canonicalize().unwrap().join(".turbo/tools");
+    // Both homes are fresh and private in the store's staging, never the
+    // caller's.
+    let staging = store.store().root().join("tmp");
     for home in [rustup_home, cargo_home] {
-        assert!(Path::new(home).starts_with(&tools), "{home}");
+        assert!(Path::new(home).starts_with(&staging), "{home}");
     }
     store
         .reconcile(&desired, |tool, path| prepared.stage(tool, path))
@@ -124,18 +126,17 @@ fn locked_toolchains_install_through_private_rustup_and_publish_toolchain_shims(
         shims,
         ["cargo", "cargo-clippy", "clippy-driver", "rustc", "rustdoc"]
     );
-    assert_eq!(
-        fs::read_link(current.bin.join("cargo")).unwrap(),
-        Path::new("../tools/rust/toolchains/1.99.0-x86_64-unknown-linux-gnu/bin/cargo")
-    );
-    let tree = current.tool_tree(plan.inventory_tool()).unwrap();
+    // The bin launcher runs the toolchain's own binary, with no inherited
+    // environment.
+    let cargo = std::process::Command::new(current.bin.join("cargo"))
+        .env_clear()
+        .output()
+        .unwrap();
+    assert_eq!(String::from_utf8(cargo.stdout).unwrap(), "cargo\n");
+    let tree = store.tree_of(plan.inventory_tool());
     assert!(tree.join("settings.toml").is_file());
     // Scratch homes are gone once the prepared toolchain is dropped.
-    let leftovers = fs::read_dir(&tools).unwrap().filter(|entry| {
-        let name = entry.as_ref().unwrap().file_name();
-        name.to_string_lossy().starts_with(".rust-")
-    });
-    assert_eq!(leftovers.count(), 0);
+    assert_eq!(fs::read_dir(&staging).unwrap().count(), 0);
 
     assert!(
         plan.prepare(&store, &desired, &binary, &transport, IfNeeded)
@@ -159,7 +160,7 @@ fn mirrored_installs_still_bind_rustups_manifest_to_the_lock() {
     let repo = tempfile::tempdir().unwrap();
     let plan = RustPlan::from_lock(&lock(locked()), TARGET).unwrap();
     let desired = vec![plan.inventory_tool().clone()];
-    let store = Store::open(repo.path()).unwrap();
+    let store = TestStore::open(repo.path());
     let owned = crate::source_policy::test_support::OwnedSetupFixture::new().unwrap();
     let mirror = crate::mirror::Mirror::loopback_for_tests("http://127.0.0.1:9/rust/").unwrap();
     let transport = RustupTransport::mirrored(&owned.policy().unwrap(), &mirror).unwrap();
@@ -182,7 +183,7 @@ fn failed_or_mismatched_installs_publish_nothing() {
     let repo = tempfile::tempdir().unwrap();
     let plan = RustPlan::from_lock(&lock(locked()), TARGET).unwrap();
     let desired = vec![plan.inventory_tool().clone()];
-    let store = Store::open(repo.path()).unwrap();
+    let store = TestStore::open(repo.path());
     let manifest = fixture("1.99.0", "2026-10-01");
     // A re-spun rustc tarball (gzip or the xz copy rustup downloads): same
     // layout, different locked digest, as a mirror's manifest could claim.
@@ -289,8 +290,15 @@ fn locked_selections_must_satisfy_declarations_and_official_shapes() {
         Err(Error::MissingTarget)
     ));
     let plan = RustPlan::from_lock(&lock(tool), Platform::MacosArm64).unwrap();
+    let rustc = turborepo_tool_install::TreeRef::new(
+        "rust",
+        "toolchains/1.99.0-aarch64-apple-darwin/bin/rustc",
+    );
     assert_eq!(
         plan.inventory_tool().executables["rustc"],
-        "toolchains/1.99.0-aarch64-apple-darwin/bin/rustc"
+        turborepo_tool_install::Export::Launch(turborepo_tool_install::Launch {
+            program: rustc,
+            args: Vec::new(),
+        })
     );
 }

@@ -185,7 +185,10 @@ fn all_six_exact_artifacts_are_consumable_without_claiming_promotion_support() -
                 );
             }
             let plan = NodePlan::from_lock(&locked, platform)?;
-            assert_eq!(plan.inventory_tool().executables, artifact.executables);
+            assert_eq!(
+                plan.inventory_tool().executables,
+                turborepo_tool_install::Export::files(&artifact.executables)
+            );
         }
         for unsupported in [
             Platform::Any,

@@ -16,16 +16,23 @@ A modern Turborepo starter for building SolidJS applications with a complete dev
 
 ## Overview
 
-This starter project leverages Turborepo to manage a monorepo structure that combines SolidStart applications with shared component libraries and configuration packages. It provides a robust setup for modern web development:
+This starter project leverages Turborepo to manage a monorepo structure that combines SolidStart applications with shared component libraries and configuration packages. It provides a robust setup for modern web development.
 
 ## Getting Started
 
-This example requires Node.js 24.21.0 or newer.
+This example requires Node.js 26.12.1 or newer and pnpm 12.15.0, as pinned in `package.json`.
 
-To bootstrap your new turborepo using this starter, simply run:
+To bootstrap your new turborepo using this starter, run:
 
 ```sh
-npx create-turbo@latest
+npx create-turbo@latest --example with-solid --package-manager pnpm
+```
+
+When working from a checkout of this example, install dependencies from its root:
+
+```sh
+cd with-solid
+pnpm install
 ```
 
 ## What's inside?
@@ -36,7 +43,7 @@ This Turborepo includes the following packages/apps:
 
 - `docs`: a [SolidStart](https://docs.solidjs.com/solid-start) app with [Vitest](https://vitest.dev/) component tests
 - `web`: a [SolidStart](https://docs.solidjs.com/solid-start) app
-- `@repo/ui`: a stub Solid component library shared by both `solid` applications
+- `@repo/ui`: a stub Solid component library shared by both Solid applications
 - `@repo/eslint-config`: shared [ESLint](https://eslint.org/) flat configurations
 - `@repo/tailwind-config`: [Tailwind](https://tailwindcss.com/) v4 configurations
 
@@ -44,53 +51,58 @@ Both applications are built with [SolidStart v2](https://docs.solidjs.com/solid-
 
 ## Build & Develop
 
+Run the following commands from the example root.
+
 ### Build
 
-To build all apps and packages, run the following command:
+To build all apps and packages:
 
-```
-cd with-solid
+```sh
 pnpm run build
 ```
 
 ### Develop
 
-To develop all apps and packages, run the following command:
+To develop all apps and packages:
 
-```
-cd with-solid
+```sh
 pnpm run dev
 ```
 
 ### Test
 
-To run the Vitest component tests, run the following command:
+To run the Vitest component tests:
 
-```
-cd with-solid
+```sh
 pnpm run test
 ```
 
-### Remote Caching
+### Lint and type-check
+
+```sh
+pnpm run lint
+pnpm run check-types
+```
+
+## Remote Caching
 
 > [!TIP]
-> Vercel Remote Cache is free for all plans. Get started today at [vercel.com](https://vercel.com/signup?/signup?utm_source=remote-cache-sdk&utm_campaign=free_remote_cache).
+> Vercel Remote Cache is free for all plans. Get started today at [vercel.com](https://vercel.com/signup?utm_source=remote-cache-sdk&utm_campaign=free_remote_cache).
 
-Turborepo can use a technique known as [Remote Caching](https://turborepo.dev/docs/core-concepts/remote-caching) to share cache artifacts across machines, enabling you to share build caches with your team and CI/CD pipelines.
+Turborepo can use [Remote Caching](https://turborepo.dev/docs/core-concepts/remote-caching) to share cache artifacts across machines, enabling you to share build caches with your team and CI/CD pipelines.
 
-By default, Turborepo will cache locally. To enable Remote Caching you will need an account with Vercel. If you don't have an account you can [create one](https://vercel.com/signup?utm_source=turborepo-examples), then enter the following commands:
+By default, Turborepo will cache locally. To enable Remote Caching you will need an account with Vercel. If you don't have an account you can [create one](https://vercel.com/signup?utm_source=turborepo-examples), then run the following command from the example root:
 
-```
-cd with-solid
-npx turbo login
+```sh
+pnpm exec turbo login
 ```
 
 This will authenticate the Turborepo CLI with your [Vercel account](https://vercel.com/docs/concepts/personal-accounts/overview).
 
-Next, you can link your Turborepo to your Remote Cache by running the following command from the root of your Turborepo:
+Next, link your Turborepo to your Remote Cache:
 
-```
-npx turbo link
+```sh
+pnpm exec turbo link
 ```
 
 ## Useful Links

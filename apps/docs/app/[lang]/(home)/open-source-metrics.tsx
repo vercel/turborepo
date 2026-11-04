@@ -128,8 +128,8 @@ export async function OpenSourceMetrics() {
             <dt
               className={
                 isFeatured
-                  ? "text-heading-32 sm:text-heading-40 lg:text-heading-64 inline-block bg-gradient-to-r from-[#FF1E56] to-[#0196FF] bg-clip-text pr-1 text-transparent"
-                  : "text-heading-32 sm:text-heading-40 lg:text-heading-64 text-gray-1000"
+                  ? "text-heading-32 sm:text-heading-40 lg:text-heading-64 tracking-[-0.02em]! inline-block bg-gradient-to-r from-[#FF1E56] to-[#0196FF] bg-clip-text pr-1 text-transparent"
+                  : "text-heading-32 sm:text-heading-40 lg:text-heading-64 tracking-[-0.02em]! text-gray-1000"
               }
             >
               {metric.value}

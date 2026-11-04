@@ -358,7 +358,7 @@ mod test {
             }
         });
 
-        let http = reqwest::Client::new();
+        let http = crate::APIClient::build_http_client(None).unwrap();
         let rate_limit = RateLimit::default();
         let first = tokio::spawn(make_rate_limited_request(
             http.get(&url),
@@ -440,7 +440,7 @@ mod test {
                 .await
                 .unwrap();
         });
-        let http = reqwest::Client::new();
+        let http = crate::APIClient::build_http_client(None).unwrap();
         let limit = RateLimit::default();
         let first = tokio::spawn(make_rate_limited_request(
             http.get(&url),
@@ -476,7 +476,7 @@ mod test {
 
     #[test]
     fn scopes_artifact_cooldowns_to_client_team_and_token() {
-        let http = reqwest::Client::new();
+        let http = crate::APIClient::build_http_client(None).unwrap();
         let client = crate::APIClient::new_with_client(
             http.clone(),
             "http://localhost",
@@ -487,8 +487,8 @@ mod test {
         );
         let other_client =
             crate::APIClient::new_with_client(http, "http://localhost", None, None, "test", false);
-        let token = turborepo_types::SecretString::new("one".to_string());
-        let other_token = turborepo_types::SecretString::new("two".to_string());
+        let token = turborepo_types::Credential::from("one".to_string());
+        let other_token = turborepo_types::Credential::from("two".to_string());
         let limit = client.artifact_rate_limit(&token, Some("team"), None);
         assert!(std::sync::Arc::ptr_eq(
             &limit.0,
@@ -537,14 +537,14 @@ mod test {
             })
             .await;
         let client = crate::APIClient::new_with_client(
-            reqwest::Client::new(),
+            crate::APIClient::build_http_client(None).unwrap(),
             mock.base_url(),
             None,
             None,
             "test",
             true,
         );
-        let token = turborepo_types::SecretString::new("token".to_string());
+        let token = turborepo_types::Credential::from("token".to_string());
         let response = client
             .fetch_artifact("hash", &token, Some("team_one"), None)
             .await

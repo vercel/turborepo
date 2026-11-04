@@ -1,20 +1,20 @@
 //! Locked installer for repository-declared additional tools: one verified
 //! download per tool, either safely extracted or placed as a single binary,
-//! then staged as a full tree into a Store generation. This is the
+//! then staged as a full tree into the tool store. This is the
 //! installer-adapter boundary for additional tools; another installation
 //! source would add its own plan type. No resolution, hooks, tool-provided
 //! scripts, privileged installers, source builds, or PATH changes.
 
 use std::{collections::BTreeSet, fs, io, path::Path, time::Duration};
 
+use serde::Serialize;
 use turborepo_archive::{ExtractedArtifact, Layout};
 use turborepo_download::{ApprovedOrigin, DownloadClient, ExpectedSha256, VerifiedArtifact};
-use turborepo_tool_install::{Store, Tool};
+use turborepo_tool_install::{Export, SetupSession, Staging, Tool};
 use url::Url;
 
 use crate::{
     Preparation,
-    artifact_cache::ArtifactCache,
     lock::{
         self, Format, Installation, Lock, Platform,
         additional::{ADAPTER, PART},
@@ -26,6 +26,8 @@ use crate::{
 const MAX_DOWNLOAD_BYTES: usize = 256 * 1024 * 1024;
 const MAX_EXTRACTED_BYTES: usize = 512 * 1024 * 1024;
 const DOWNLOAD_TIMEOUT: Duration = Duration::from_secs(300);
+/// Bump when this adapter stages different bytes for the same [`Staged`].
+const STAGING_REVISION: u32 = 1;
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
@@ -66,8 +68,6 @@ pub enum Error {
     },
     #[error("cannot prepare additional tool downloads: {0}")]
     Transport(#[source] turborepo_download::Error),
-    #[error("offline setup has no verified cached artifact and never contacts upstream")]
-    Offline,
     #[error(transparent)]
     Install(#[from] turborepo_tool_install::Error),
 }
@@ -78,8 +78,6 @@ pub struct ArtifactTransport {
     loopback: Option<String>,
     /// Serves `<base>/<host>/<path>` for each locked URL.
     mirror: Option<String>,
-    cache: Option<ArtifactCache>,
-    offline: bool,
 }
 
 impl ArtifactTransport {
@@ -124,22 +122,7 @@ impl ArtifactTransport {
             client: client.with_https_redirects(),
             loopback,
             mirror,
-            cache: None,
-            offline: false,
         }
-    }
-
-    /// Reuse verified artifact bytes from a caller-selected user cache. Hits
-    /// are re-verified against the locked digest; downloads are stored.
-    pub fn with_cache(mut self, cache: Option<ArtifactCache>) -> Self {
-        self.cache = cache;
-        self
-    }
-
-    /// Serve only verified cache hits; a miss fails before any request.
-    pub fn offline(mut self) -> Self {
-        self.offline = true;
-        self
     }
 
     /// Explicit fixture-only HTTP opt-in; literal loopback IPs only.
@@ -151,10 +134,29 @@ impl ArtifactTransport {
     }
 }
 
+/// Everything this adapter's staging reads besides the verified bytes.
+#[derive(Clone, Debug, Serialize)]
+#[serde(tag = "kind", rename_all = "kebab-case")]
+enum Staged {
+    /// The bytes, written as the one executable at `path`.
+    Binary { path: String },
+    /// The archive's entries below `root`; an empty root is its top level.
+    Archive { format: ArchiveFormat, root: String },
+}
+
+#[derive(Clone, Copy, Debug, Serialize)]
+#[serde(rename_all = "kebab-case")]
+enum ArchiveFormat {
+    Tar,
+    TarGz,
+    Zip,
+}
+
 pub struct ArtifactPlan {
     tool: Tool,
     platform: Platform,
     artifact: lock::Artifact,
+    staged: Staged,
     origin: String,
     /// `host[:port]` of the locked URL, the mirror path's first component.
     authority: String,
@@ -206,16 +208,42 @@ impl ArtifactPlan {
         {
             return Err(invalid());
         }
+        let root = || artifact.root_prefix.clone().unwrap_or_default();
+        let staged = match artifact.format {
+            Format::Binary => Staged::Binary {
+                path: artifact
+                    .executables
+                    .values()
+                    .next()
+                    .ok_or_else(invalid)?
+                    .clone(),
+            },
+            Format::Tar => Staged::Archive {
+                format: ArchiveFormat::Tar,
+                root: root(),
+            },
+            Format::TarGz => Staged::Archive {
+                format: ArchiveFormat::TarGz,
+                root: root(),
+            },
+            Format::Zip => Staged::Archive {
+                format: ArchiveFormat::Zip,
+                root: root(),
+            },
+        };
         Ok(Self {
             tool: Tool {
                 id: id.into(),
                 version: tool.version.clone(),
                 platform: spelling,
                 artifact_sha256: artifact.sha256.clone(),
-                executables: artifact.executables.clone(),
+                executables: Export::files(&artifact.executables),
+                vars: Default::default(),
+                staging: Staging::new(ADAPTER, STAGING_REVISION, &staged)?,
             },
             platform,
             artifact: artifact.clone(),
+            staged,
             origin: url.origin().ascii_serialization(),
             authority: match url.port() {
                 Some(port) => format!("{}:{port}", url.host_str().ok_or_else(invalid)?),
@@ -235,12 +263,12 @@ impl ArtifactPlan {
         &self.artifact.url
     }
 
-    /// The caller supplies ALL desired tools and reconciles that same set,
-    /// holding this Store lock through preparation and reconciliation. A
+    /// The caller supplies ALL desired tools and ensures that same set
+    /// in the same setup session. A
     /// healthy identical tool is reused unless `preparation` is fresh.
     pub async fn prepare(
         &self,
-        store: &Store,
+        store: &SetupSession<'_>,
         desired: &[Tool],
         transport: &ArtifactTransport,
         preparation: Preparation,
@@ -267,58 +295,40 @@ impl ArtifactPlan {
         self.download(transport).await.map(Some)
     }
 
-    /// Whether the shared cache holds verified bytes for this artifact.
-    pub fn cache_available(&self, cache: Option<&ArtifactCache>) -> bool {
-        cache
-            .and_then(|cache| cache.get(self.platform, &self.artifact.sha256, MAX_DOWNLOAD_BYTES))
-            .is_some()
-    }
-
-    /// Download (or read from the shared cache), verify, and unpack into
-    /// private staging. Declared executables must be regular files inside the
-    /// archive root.
+    /// Download, verify, and unpack into private staging. Declared executables
+    /// must be regular files inside the archive root.
     pub async fn download(&self, transport: &ArtifactTransport) -> Result<PreparedArtifact, Error> {
-        let cached = transport
-            .cache
-            .as_ref()
-            .and_then(|cache| cache.get(self.platform, &self.artifact.sha256, MAX_DOWNLOAD_BYTES));
-        let from_cache = cached.is_some();
-        let bytes = match cached {
-            Some(bytes) => bytes,
-            None if transport.offline => return Err(Error::Offline),
-            None => {
-                let bytes = self.fetch(transport).await?;
-                // Best effort: a cache write failure never fails verified setup.
-                if let Some(cache) = &transport.cache {
-                    let _ = cache.put(self.platform, &bytes);
-                }
-                bytes
-            }
-        };
-        let downloaded_bytes = if from_cache {
-            0
-        } else {
-            bytes.as_bytes().len() as u64
-        };
+        let bytes = self.fetch(transport).await?;
+        let downloaded_bytes = bytes.as_bytes().len() as u64;
         let prepared = |payload| PreparedArtifact {
             payload,
             tool: self.tool.clone(),
-            from_cache,
             downloaded_bytes,
         };
-        let format = match self.artifact.format {
-            Format::Binary => return Ok(prepared(Payload::Binary(bytes))),
-            Format::Tar => turborepo_archive::Format::Tar,
-            Format::TarGz => turborepo_archive::Format::TarGz,
-            Format::Zip => turborepo_archive::Format::Zip,
+        let (format, root) = match &self.staged {
+            Staged::Binary { path } => {
+                return Ok(prepared(Payload::Binary {
+                    bytes,
+                    path: path.clone(),
+                }));
+            }
+            Staged::Archive { format, root } => (*format, root.as_str()),
+        };
+        let format = match format {
+            ArchiveFormat::Tar => turborepo_archive::Format::Tar,
+            ArchiveFormat::TarGz => turborepo_archive::Format::TarGz,
+            ArchiveFormat::Zip => turborepo_archive::Format::Zip,
         };
         let unpack = |source| Error::Archive {
             tool: self.tool.id.clone(),
             source,
         };
-        let required: Vec<_> = self.tool.executables.values().map(String::as_str).collect();
-        // Without a `rootPrefix`, entries sit at the archive's top level.
-        let root = self.artifact.root_prefix.as_deref().unwrap_or_default();
+        let required: Vec<_> = self
+            .artifact
+            .executables
+            .values()
+            .map(String::as_str)
+            .collect();
         let limits = turborepo_archive::Limits::new(MAX_EXTRACTED_BYTES, 100_000, 4096, 64)
             .map_err(unpack)?;
         let layout = Layout {
@@ -391,29 +401,27 @@ fn fold(name: &str, windows: bool) -> String {
 
 enum Payload {
     Archive(ExtractedArtifact),
-    Binary(VerifiedArtifact),
+    Binary {
+        bytes: VerifiedArtifact,
+        path: String,
+    },
 }
 
 pub struct PreparedArtifact {
     payload: Payload,
     tool: Tool,
-    from_cache: bool,
     downloaded_bytes: u64,
 }
 
 impl PreparedArtifact {
-    /// Whether verified bytes came from the shared download cache.
-    pub fn from_cache(&self) -> bool {
-        self.from_cache
-    }
-
-    /// Bytes fetched over the network; zero for a cache hit.
+    /// Bytes fetched over the network.
     pub fn downloaded_bytes(&self) -> u64 {
         self.downloaded_bytes
     }
 
-    /// Callback for Store::reconcile. Copies the FULL verified tree, keeping
-    /// adjacent resources, executable modes, and safe relative links.
+    /// Staging callback for `SetupSession::ensure`. Copies the FULL verified
+    /// tree, keeping adjacent resources, executable modes, and safe
+    /// relative links.
     pub fn stage(
         &self,
         tool: &Tool,
@@ -427,15 +435,10 @@ impl PreparedArtifact {
         }
         match &self.payload {
             Payload::Archive(tree) => copy_tree(&tree.root_path(), destination)?,
-            Payload::Binary(bytes) => {
-                let relative = tool
-                    .executables
-                    .values()
-                    .next()
-                    .ok_or(turborepo_tool_install::Error::InvalidInventory)?;
+            Payload::Binary { bytes, path } => {
                 // Lock paths use `/`; never join them unsplit onto a Windows
                 // verbatim destination.
-                let path: std::path::PathBuf = relative.split('/').collect();
+                let path: std::path::PathBuf = path.split('/').collect();
                 write_executable(&destination.join(path), bytes.as_bytes())?;
             }
         }

@@ -31,6 +31,7 @@ mod lock_diagnostics;
 mod msvc;
 mod no_lock;
 mod offline;
+mod output;
 mod plan;
 mod provision;
 mod root;
@@ -85,8 +86,9 @@ pub enum Error {
     #[diagnostic(transparent)]
     LockDiagnostics(#[from] lock_diagnostics::Error),
     #[error(
-        "offline setup is missing verified cached artifacts; nothing was installed:\n{0}\nRun \
-         turbo setup --tools-only without --offline to download and verify them."
+        "offline setup needs tools that are missing or changed in the tool store; nothing was \
+         installed:\n{0}\nRun turbo setup --tools-only without --offline to download and verify \
+         them."
     )]
     OfflineMissing(String),
     #[error("--no-lock needs a Node declaration in the repository root")]
@@ -114,8 +116,6 @@ pub enum Error {
     Mirror(#[from] turborepo_setup::mirror::Error),
     #[error(transparent)]
     Activation(#[from] turborepo_setup::activation::Error),
-    #[error(transparent)]
-    Offline(#[from] offline::Error),
     #[error(transparent)]
     Storage(#[from] turborepo_setup::lock::StorageError),
     #[error(transparent)]
@@ -235,8 +235,13 @@ pub fn run_with_telemetry(
     color_config: ColorConfig,
 ) -> Result<i32, Error> {
     let started = Instant::now();
+    let console = output::Console::new(output::Style {
+        mode: output::Mode::current(turborepo_ci::is_ci()),
+        color: color_config,
+    });
     let mut report = telemetry::Report::default();
-    let result = run_observed(args, setup_args, Arc::new(GitCli), &mut report);
+    let result = run_observed(args, setup_args, Arc::new(GitCli), &mut report, &console)
+        .and_then(|completed| Ok(console.final_line(&completed, started.elapsed())?));
     telemetry::record(&report, &result, started.elapsed(), color_config);
     result
 }
@@ -244,7 +249,15 @@ pub fn run_with_telemetry(
 /// Production setup without telemetry, so tests never initialize it.
 #[cfg(test)]
 pub fn run(args: &Args, setup_args: &SetupArgs, git: Arc<dyn Git>) -> Result<i32, Error> {
-    run_observed(args, setup_args, git, &mut telemetry::Report::default())
+    let (console, _) = output::Console::capture(output::Mode::Plain);
+    run_observed(
+        args,
+        setup_args,
+        git,
+        &mut telemetry::Report::default(),
+        &console,
+    )
+    .map(|completed| completed.exit_code())
 }
 
 fn run_observed(
@@ -252,14 +265,15 @@ fn run_observed(
     setup_args: &SetupArgs,
     git: Arc<dyn Git>,
     report: &mut telemetry::Report,
-) -> Result<i32, Error> {
+    console: &output::Console,
+) -> Result<output::Completed, Error> {
     #[cfg(windows)]
     exit_on_relayed_ctrl_c()?;
     let invocation = match args.cwd.as_deref() {
         Some(cwd) => turbopath::AbsoluteSystemPathBuf::from_cwd(cwd)?,
         None => turbopath::AbsoluteSystemPathBuf::cwd()?,
     };
-    run_reporting(args, setup_args, None, git, report, || {
+    run_reporting(args, setup_args, None, git, report, console, || {
         Ok(ToolDownloadPolicy::inspect(invocation.as_std_path())?)
     })
 }
@@ -300,14 +314,17 @@ fn run_with_policy(
     git: Arc<dyn Git>,
     preflight: impl Fn() -> Result<ToolDownloadPolicy, Error>,
 ) -> Result<i32, Error> {
+    let (console, _) = output::Console::capture(output::Mode::Plain);
     run_reporting(
         args,
         setup_args,
         transports,
         git,
         &mut telemetry::Report::default(),
+        &console,
         preflight,
     )
+    .map(|completed| completed.exit_code())
 }
 
 fn run_reporting(
@@ -316,8 +333,9 @@ fn run_reporting(
     transports: Option<provision::Transports>,
     git: Arc<dyn Git>,
     report: &mut telemetry::Report,
+    console: &output::Console,
     preflight: impl Fn() -> Result<ToolDownloadPolicy, Error>,
-) -> Result<i32, Error> {
+) -> Result<output::Completed, Error> {
     // Discovery reads files/Git metadata: no language-tool probes, environment
     // config pipeline, graph, package manager detection, or local CLI handoff.
     let discovery = root::Discovery::capture(args, git)?;
@@ -408,7 +426,7 @@ fn run_reporting(
                 ));
             }
             println!("Nothing to prepare: every toolchain is skipped.");
-            return Ok(0);
+            return Ok(output::Completed::Reported(0));
         }
         if snapshot
             .declarations()
@@ -430,12 +448,18 @@ fn run_reporting(
     // Decided before any download, so a missing ecosystem lockfile fails first.
     let dependencies = dependencies::Dependencies::select(&discovery, &plan, &snapshot, &request)?;
     let ecosystems = snapshot.ecosystems();
-    let trust_base = transports
+    let tool_store = transports
         .as_ref()
-        .map(provision::Transports::trust_base)
-        .transpose()?;
+        .and_then(provision::Transports::tool_store);
     if request.mode == Mode::Check {
-        return check::run(&discovery, snapshot, &dependencies, preflight);
+        return check::run(
+            &discovery,
+            snapshot,
+            &dependencies,
+            tool_store.as_deref(),
+            preflight,
+        )
+        .map(output::Completed::Reported);
     }
     if request.mode == Mode::Plan {
         println!(
@@ -449,24 +473,44 @@ fn run_reporting(
                 preflight
             )?
         );
-        return Ok(0);
+        return Ok(output::Completed::Reported(0));
     }
-    // Offline setup reuses the trusted installation or verified cached bytes;
-    // enabled dependencies then install offline from the native caches.
+    // Offline setup reuses the trusted installation or trees already in the
+    // tool store; enabled dependencies then install offline from the native
+    // caches.
     // Clone-local --no-lock runs only when every dependency is skipped
     // (`validate`).
-    let provisioned = if request.offline {
+    let declared = snapshot.declarations();
+    // `rustup toolchain install` still writes to the terminal, which a spinner
+    // would draw over.
+    let preparing = (!declared.contains_key("rust")).then(|| {
+        let ids: Vec<_> = declared.keys().map(String::as_str).collect();
+        console.spinner(&format!("Preparing {}", ids.join(", ")))
+    });
+    let mut tools = if request.offline {
         offline::run(&discovery, snapshot, &request, transports, preflight)
     } else if request.lock == LockMode::NoLock {
         no_lock::run(&discovery, snapshot, transports, preflight)
     } else {
         provision::run(&discovery, snapshot, &request, transports, preflight)
     }?;
-    report.downloaded_bytes = provisioned.downloaded_bytes;
-    report.tools_installed = provisioned.installed;
-    report.tools_reused = provisioned.reused;
     let root = discovery.snapshot_root()?.as_std_path();
-    Ok(dependencies.install(root, ecosystems, trust_base)?)
+    // Each path above released its store lease on return.
+    if let Ok(store) = trust::user_store(tool_store.as_deref(), root) {
+        tools.notes.extend(
+            cleanup::collect(&store, std::time::SystemTime::now())
+                .into_iter()
+                .map(output::Note::Cleanup),
+        );
+    }
+    drop(preparing);
+    report.downloaded_bytes = tools.downloaded_bytes;
+    report.tools_installed = tools.installed();
+    report.tools_reused = tools.reused();
+    console.tools(&tools)?;
+    let deps = dependencies.install(root, ecosystems, tool_store, console)?;
+    console.skips(&deps)?;
+    Ok(output::Completed::Provisioned(deps))
 }
 
 /// Whether setup provisions for this host. On Windows only a confirmed x64
@@ -476,37 +520,108 @@ pub(crate) fn platform_supported() -> bool {
     provision::platform().is_ok()
 }
 
-/// Records `root`'s current installation as trusted under `user_base`, or the
-/// real user state directory, exactly as setup publishes it, so binary tests
-/// can drive the shell hook. Returns the record's path. Fixture injection only.
-#[cfg(feature = "test-support")]
-pub fn record_trust_for_tests(
+/// The installation a repository's record names in a tool store, as fixtures
+/// inspect it.
+#[cfg(any(test, feature = "test-support"))]
+#[cfg_attr(not(feature = "test-support"), allow(dead_code))]
+pub struct RecordedInstallation {
+    /// The record's bytes.
+    pub record: Vec<u8>,
+    /// A `--no-lock` clone's recorded selection.
+    pub selection: Option<Vec<u8>>,
+    pub tools: Vec<turborepo_tool_install::Tool>,
+    /// The environment's `bin`.
+    pub bin: std::path::PathBuf,
+    /// `<store>/repos/<repo>/bin`, the link `.turbo/bin` names.
+    pub stable_bin: std::path::PathBuf,
+    /// Each sealed tree's root, by tool id.
+    pub trees: std::collections::BTreeMap<String, std::path::PathBuf>,
+}
+
+#[cfg(any(test, feature = "test-support"))]
+#[cfg_attr(not(feature = "test-support"), allow(dead_code))]
+impl RecordedInstallation {
+    pub fn tree(&self, id: &str) -> &std::path::Path {
+        &self.trees[id]
+    }
+}
+
+/// What `root`'s record in `tool_store` names, if it names a usable
+/// environment. Reads only; fixture inspection only.
+#[cfg(any(test, feature = "test-support"))]
+pub fn recorded_installation_for_tests(
     root: &std::path::Path,
-    user_base: Option<&std::path::Path>,
-) -> Result<std::path::PathBuf, String> {
-    let base = match user_base {
-        Some(base) => base.to_owned(),
-        None => dirs_next::data_local_dir().ok_or("cannot locate the user state directory")?,
+    tool_store: &std::path::Path,
+) -> Result<Option<RecordedInstallation>, String> {
+    let error = |e: &dyn std::fmt::Display| e.to_string();
+    let root = root.canonicalize().map_err(|e| error(&e))?;
+    let store = trust::user_store(Some(tool_store), &root).map_err(|e| error(&e))?;
+    let trust = trust::TrustStore::new(&store, &root).map_err(|e| error(&e))?;
+    let Some(env) = trust.recorded_env().map_err(|e| error(&e))? else {
+        return Ok(None);
     };
-    let store = turborepo_tool_install::Store::open(root).map_err(|e| e.to_string())?;
-    let trust = trust::TrustStore::new(&base, root).map_err(|e| e.to_string())?;
-    trust.record(&store).map_err(|e| e.to_string())?;
+    let activation = store.activate(&root, &env).map_err(|e| error(&e))?;
+    let seal =
+        std::fs::read(activation.bin().with_file_name("seal.json")).map_err(|e| error(&e))?;
+    let seal: serde_json::Value = serde_json::from_slice(&seal).map_err(|e| error(&e))?;
+    let tools: Vec<turborepo_tool_install::Tool> =
+        serde_json::from_value(seal["tools"].clone()).map_err(|e| error(&e))?;
+    let mut trees = std::collections::BTreeMap::new();
+    for tool in &tools {
+        if let Some(tree) = store.sealed_tree(tool).map_err(|e| error(&e))? {
+            trees.insert(tool.id.clone(), tree);
+        }
+    }
+    Ok(Some(RecordedInstallation {
+        record: std::fs::read(trust.path()).map_err(|e| error(&e))?,
+        selection: trust.clone_local_selection().map_err(|e| error(&e))?,
+        tools,
+        bin: activation.bin().to_owned(),
+        stable_bin: activation.stable_bin().to_owned(),
+        trees,
+    }))
+}
+
+/// Installs `tools` into `tool_store`, or the user's located tool store, and
+/// records them for `root` exactly as setup publishes them, so binary tests
+/// can drive managed activation without downloads. `selection` is what a
+/// `--no-lock` clone records without turbo.lock. `stage` writes one tool's
+/// tree. Returns the record's path. Fixture injection only.
+#[cfg(feature = "test-support")]
+pub fn install_tools_for_tests(
+    root: &std::path::Path,
+    tool_store: Option<&std::path::Path>,
+    tools: Vec<turborepo_tool_install::Tool>,
+    selection: Option<&[u8]>,
+    stage: impl FnMut(
+        &turborepo_tool_install::Tool,
+        &std::path::Path,
+    ) -> Result<(), turborepo_tool_install::Error>,
+) -> Result<std::path::PathBuf, String> {
+    let root = root.canonicalize().map_err(|e| e.to_string())?;
+    let user_store = trust::user_store(tool_store, &root).map_err(|e| e.to_string())?;
+    let trust = trust::TrustStore::new(&user_store, &root).map_err(|e| e.to_string())?;
+    let tools = turborepo_tool_install::Selection::new(tools).map_err(|e| e.to_string())?;
+    user_store
+        .begin_setup(&root, turborepo_tool_install::Reuse::Sealed)
+        .and_then(|session| session.ensure(&tools, stage, |env| Ok(trust.publish(env, selection)?)))
+        .map_err(|e| e.to_string())?;
     Ok(trust.path())
 }
 
 /// `turbo setup --frozen --tools-only` against loopback fixture artifacts,
-/// publishing trust evidence under `user_base`, so binary tests can exercise
+/// publishing trust evidence in `tool_store`, so binary tests can exercise
 /// real managed activation. Fixture injection only, like `run_with_policy`.
 #[cfg(feature = "test-support")]
 pub fn frozen_tools_for_tests(
     invocation: &std::path::Path,
-    user_base: &std::path::Path,
+    tool_store: &std::path::Path,
     origin: &str,
     policy: impl Fn() -> Result<ToolDownloadPolicy, turborepo_setup::source_policy::Error>,
 ) -> Result<i32, String> {
     setup_for_tests(
         invocation,
-        user_base,
+        tool_store,
         origin,
         &["--frozen", "--tools-only"],
         policy,
@@ -518,7 +633,7 @@ pub fn frozen_tools_for_tests(
 #[cfg(feature = "test-support")]
 pub fn setup_for_tests(
     invocation: &std::path::Path,
-    user_base: &std::path::Path,
+    tool_store: &std::path::Path,
     origin: &str,
     flags: &[&str],
     policy: impl Fn() -> Result<ToolDownloadPolicy, turborepo_setup::source_policy::Error>,
@@ -539,7 +654,7 @@ pub fn setup_for_tests(
         unreachable!("the words select setup");
     };
     let transports = provision::Transports {
-        trust_base: Some(user_base.to_owned()),
+        tool_store: Some(tool_store.to_owned()),
         registry: RegistryTransport::loopback_http_for_tests(origin).map_err(|e| e.to_string())?,
         node: NodeTransport::loopback_http_for_tests(origin).map_err(|e| e.to_string())?,
         pnpm: PnpmTransport::loopback_http_for_tests(origin).map_err(|e| e.to_string())?,
@@ -558,14 +673,20 @@ pub fn setup_for_tests(
             .map_err(|e| e.to_string())?,
     };
     // Like run_with_policy, never telemetry. Binary tests run real Git.
+    let console = output::Console::new(output::Style {
+        mode: output::Mode::current(turborepo_ci::is_ci()),
+        color: ColorConfig::new(true),
+    });
     run_reporting(
         &args,
         setup_args,
         Some(transports),
         Arc::new(GitCli),
         &mut telemetry::Report::default(),
+        &console,
         || Ok(policy()?),
     )
+    .map(|completed| completed.exit_code())
     .map_err(|e| e.to_string())
 }
 
@@ -594,7 +715,7 @@ fn validate(request: &SetupRequest, tools_only: bool) -> Result<(), Error> {
     {
         return Err(Error::NotImplemented);
     }
-    // Offline reinstalls only verified local bytes; resolution needs the network.
+    // Offline installs only from the tool store; resolution needs the network.
     if request.offline && request.update_lock {
         return Err(Error::Unsupported(
             "--offline cannot resolve --update-lock; run turbo setup --tools-only --no-frozen \

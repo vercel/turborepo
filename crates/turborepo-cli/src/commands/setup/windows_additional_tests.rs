@@ -36,7 +36,7 @@ fn declare(f: &Fixture, artifact: Option<&[u8]>) {
 }
 
 fn exports(f: &Fixture) -> Vec<String> {
-    let bin = f.plan().path_prepend().to_path_buf();
+    let bin = f.activation().bin().to_path_buf();
     let mut names: Vec<_> = fs::read_dir(bin)
         .unwrap()
         .map(|e| e.unwrap().file_name().into_string().unwrap())
@@ -65,7 +65,7 @@ fn additional_tools_export_and_find_resources_then_repeat_offline_and_remove() {
             "pnpx.cmd"
         ]
     );
-    let path = f.plan().path(Some(system32().as_os_str())).unwrap();
+    let path = f.activation().path(Some(system32().as_os_str())).unwrap();
     // The `.cmd` forwarder runs the real launcher, so `%~dp0` is its tree.
     assert_eq!(exit_code(&path, "fixture"), Some(5));
     // PATHEXT lookup is case-insensitive and reaches the `.exe` hard link.
@@ -101,7 +101,7 @@ fn a_running_managed_executable_never_blocks_rollback_or_upgrade() {
     assert_eq!(f.run(&u, LOCAL).unwrap(), 0);
     // The selected executable stays open in a running process. A builtin
     // `pause` on a held stdin pipe blocks without a child process to leak.
-    let bin = f.plan().path_prepend().to_path_buf();
+    let bin = f.activation().bin().to_path_buf();
     let mut running = Command::new(bin.join("fixture-exe.exe"))
         .args(["/d", "/c", "pause"])
         .stdin(std::process::Stdio::piped())
@@ -117,15 +117,15 @@ fn a_running_managed_executable_never_blocks_rollback_or_upgrade() {
     assert!(f.run(&u, LOCAL).is_err());
     assert_eq!(f.manifest(), manifest);
     // turbo.lock already names the new digest, so run and exec would ask for
-    // setup, but the selected generation still runs intact.
+    // setup, but the selected environment still runs intact.
     let previous = std::env::join_paths([bin.clone(), system32()]).unwrap();
     assert_eq!(exit_code(&previous, "fixture"), Some(5));
 
-    // A verified upgrade publishes a new generation beside the locked one.
+    // A verified upgrade publishes a new environment beside the locked one.
     let v = f.upstream_with([(TOOL_ZIP.into(), second)]);
     assert_eq!(f.run(&v, LOCAL).unwrap(), 0);
     assert_ne!(f.manifest(), manifest);
-    let path = f.plan().path(Some(system32().as_os_str())).unwrap();
+    let path = f.activation().path(Some(system32().as_os_str())).unwrap();
     assert_eq!(exit_code(&path, "fixture"), Some(1));
     assert!(running.try_wait().unwrap().is_none());
     running.kill().unwrap();

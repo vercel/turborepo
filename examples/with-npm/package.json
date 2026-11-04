@@ -9,14 +9,21 @@
     "build": "turbo run build",
     "dev": "turbo run dev",
     "lint": "turbo run lint",
+    "check-types": "turbo run check-types",
     "format": "prettier --write \"**/*.{ts,tsx,md}\""
   },
   "devDependencies": {
-    "prettier": "3.9.7",
-    "turbo": "2.10.13"
+    "prettier": "3.9.10",
+    "turbo": "2.11.9"
   },
-  "packageManager": "npm@12.0.2",
+  "packageManager": "npm@12.2.0",
+  "devEngines": {
+    "packageManager": {
+      "name": "npm",
+      "version": "12.2.0"
+    }
+  },
   "engines": {
-    "node": ">=24"
+    "node": ">=26.12.0"
   }
 }

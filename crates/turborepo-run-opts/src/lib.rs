@@ -194,9 +194,9 @@ impl Opts {
         let team_id = config.team_id();
         let team_slug = config.team_slug();
 
-        let api_auth = config.token().map(|token| APIAuth {
+        let api_auth = config.credential().map(|token| APIAuth {
             team_id: team_id.map(|s| s.to_string()),
-            token: token.into(),
+            token: token.clone(),
             team_slug: team_slug.map(|s| s.to_string()),
         });
 
@@ -619,7 +619,7 @@ impl<'a> From<OptsInputs<'a>> for APIClientOpts {
         let timeout = inputs.config.timeout();
         let upload_timeout = inputs.config.upload_timeout();
         let preflight = inputs.config.preflight();
-        let token = inputs.config.token().map(|s| s.into());
+        let token = inputs.config.credential().cloned();
         let team_id = inputs.config.team_id().map(|s| s.to_string());
         let team_slug = inputs.config.team_slug().map(|s| s.to_string());
         let login_url = inputs.config.login_url().to_string();
@@ -832,6 +832,31 @@ mod test {
         continue_on_error: ContinueMode,
         dry_run: Option<DryRunMode>,
         affected: Option<(String, String)>,
+    }
+
+    #[test]
+    fn resolved_api_options_preserve_credential_restriction() {
+        use turborepo_types::Credential;
+        let tempdir = TempDir::new().unwrap();
+        let repo_root = AbsoluteSystemPathBuf::try_from(tempdir.path()).unwrap();
+        for credential in [
+            Credential::generic("sentinel".into()),
+            Credential::saved_vercel("sentinel".into()),
+        ] {
+            let config = ConfigurationOptions {
+                token: Some(credential.clone()),
+                api_url: Some("https://custom.example".into()),
+                ..Default::default()
+            };
+            let opts = Opts::new(
+                &repo_root,
+                &RunSelector::default(),
+                &ExecutionSelector::default(),
+                config,
+            )
+            .unwrap();
+            assert_eq!(opts.api_client_opts.token.as_ref(), Some(&credential));
+        }
     }
 
     #[test]
@@ -1077,7 +1102,7 @@ mod test {
             remote_cache_read_only: test_opts.remote_cache_read_only,
             cache: test_opts.cache.map(str::parse).transpose()?,
             // Set token and team to simulate a logged in/linked user.
-            token: Some("token".to_string()),
+            token: Some("token".into()),
             team_slug: Some("team".to_string()),
             ..Default::default()
         };
@@ -1138,7 +1163,7 @@ mod test {
                 .with_override_config(ConfigurationOptions {
                     force: Some(true),
                     // Set token and team to simulate a logged in/linked user.
-                    token: Some("token".to_string()),
+                    token: Some("token".into()),
                     team_slug: Some("team".to_string()),
                     ..Default::default()
                 })
