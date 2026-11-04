@@ -245,6 +245,9 @@ impl<'a> ScopeChangeDetector<'a> {
         self.scm
             .changed_files(self.turbo_root, Some(to_ref), None, true, false, false)
             .is_ok_and(|result| result.is_ok_and(|files| files.is_empty()))
+            && self.pkg_graph.dependency_configuration_matches(|file| {
+                self.scm.previous_content(Some(to_ref), file).ok()
+            })
     }
 
     fn lockfile_changes_at(

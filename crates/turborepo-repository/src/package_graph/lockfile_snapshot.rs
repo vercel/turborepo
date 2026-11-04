@@ -41,6 +41,42 @@ fn configuration_matches(path: &str, historical: Option<&[u8]>, local: Option<&[
 }
 
 impl PackageGraph {
+    /// Whether the dependency-resolution configuration on disk matches the
+    /// configuration returned by `read`. Ignored files are invisible to git
+    /// status, so a clean checkout does not imply this.
+    pub fn dependency_configuration_matches(
+        &self,
+        read: impl Fn(&AbsoluteSystemPath) -> Option<Vec<u8>>,
+    ) -> bool {
+        let Some(pm) = self.package_manager() else {
+            return false;
+        };
+        let pnpm = matches!(
+            pm.lockfile_manager(),
+            crate::package_manager::PackageManager::Pnpm
+                | crate::package_manager::PackageManager::Pnpm6
+                | crate::package_manager::PackageManager::Pnpm9
+        );
+        let configuration: HashSet<_> = [
+            pnpm.then_some(".npmrc"),
+            pnpm.then_some("pnpm-workspace.yaml"),
+            matches!(pm, crate::package_manager::PackageManager::Berry).then_some(".yarnrc.yml"),
+            pm.workspace_configuration_path(),
+        ]
+        .into_iter()
+        .flatten()
+        .collect();
+        configuration.into_iter().all(|relative| {
+            let absolute = self.repo_root().join_component(relative);
+            let local = match std::fs::read(&absolute) {
+                Ok(bytes) => Some(bytes),
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => None,
+                Err(_) => return false,
+            };
+            configuration_matches(relative, read(&absolute).as_deref(), local.as_deref())
+        })
+    }
+
     /// Resolve a ref-to-ref comparison independently of the checkout's lockfile
     /// and dependency declarations. The execution graph itself remains
     /// unchanged.
@@ -61,31 +97,8 @@ impl PackageGraph {
 
         // The existing splitter reads package-manager configuration from disk.
         // Reuse it only if that configuration is identical at the requested ref.
-        let pnpm = matches!(
-            pm.lockfile_manager(),
-            crate::package_manager::PackageManager::Pnpm
-                | crate::package_manager::PackageManager::Pnpm6
-                | crate::package_manager::PackageManager::Pnpm9
-        );
-        let configuration: HashSet<_> = [
-            pnpm.then_some(".npmrc"),
-            pnpm.then_some("pnpm-workspace.yaml"),
-            matches!(pm, crate::package_manager::PackageManager::Berry).then_some(".yarnrc.yml"),
-            pm.workspace_configuration_path(),
-        ]
-        .into_iter()
-        .flatten()
-        .collect();
-        for relative in configuration {
-            let absolute = self.repo_root().join_component(relative);
-            let local = match std::fs::read(&absolute) {
-                Ok(bytes) => Some(bytes),
-                Err(error) if error.kind() == std::io::ErrorKind::NotFound => None,
-                Err(_) => return Err(unavailable()),
-            };
-            if !configuration_matches(relative, read(&absolute).as_deref(), local.as_deref()) {
-                return Err(unavailable());
-            }
+        if !self.dependency_configuration_matches(&read) {
+            return Err(unavailable());
         }
 
         let mut manifests = HashMap::new();

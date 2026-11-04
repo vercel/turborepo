@@ -161,6 +161,18 @@ fn explicit_head_lockfile_comparison_is_independent_of_checkout() {
     assert_eq!(query_names(root, &base, Some(&head)), ["//", "a", "app"]);
     fs::remove_file(root.join(".npmrc")).unwrap();
 
+    // A clean head checkout with an ignored resolution setting must not take
+    // the fast path, which would parse with configuration head never had.
+    fs::write(root.join("pnpm-lock.yaml"), lockfile("1.1.0", false)).unwrap();
+    fs::write(root.join(".git").join("info").join("exclude"), ".npmrc\n").unwrap();
+    fs::write(root.join(".npmrc"), "link-workspace-packages=true\n").unwrap();
+    assert_eq!(
+        query_names(root, &base, Some(&head)),
+        ["//", "a", "app", "b"]
+    );
+    fs::remove_file(root.join(".npmrc")).unwrap();
+    assert_eq!(query_names(root, &base, Some(&head)), ["//", "a", "app"]);
+
     fs::write(root.join("pnpm-lock.yaml"), lockfile("1.1.0", false)).unwrap();
     git(root, &["checkout", "--quiet", "--detach", &later]);
     let dirty = lockfile("2.0.0", true)
