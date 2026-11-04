@@ -16,7 +16,7 @@ use std::{
 use turborepo_repository::toolchain::ToolchainId;
 use turborepo_ui::{BOLD_GREEN, BOLD_RED, ColorConfig, GREY};
 
-use super::provision::LockChange;
+use super::provision::{LockAction, LockChange};
 
 /// How a dependency installer's output is shown.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -407,7 +407,11 @@ impl Console {
     pub fn spinner(&self, message: &str) -> Spinner {
         Spinner(self.spinner.then(|| {
             let spinner = turborepo_ui::start_spinner(message);
-            Box::new(move || spinner.finish_and_clear()) as Box<dyn FnOnce()>
+            let messages = spinner.clone();
+            ActiveSpinner {
+                clear: Box::new(move || spinner.finish_and_clear()),
+                set_message: Box::new(move |message| messages.set_message(message.to_owned())),
+            }
         }))
     }
 
@@ -432,13 +436,42 @@ impl Console {
 }
 
 /// Clears its spinner when dropped or cleared.
-pub(super) struct Spinner(Option<Box<dyn FnOnce()>>);
+pub(super) struct Spinner(Option<ActiveSpinner>);
+
+struct ActiveSpinner {
+    clear: Box<dyn FnOnce()>,
+    set_message: Box<dyn Fn(&str)>,
+}
 
 impl Spinner {
-    fn clear(&mut self) {
-        if let Some(clear) = self.0.take() {
-            clear();
+    pub(super) fn set_message(&self, message: &str) {
+        if let Some(active) = &self.0 {
+            (active.set_message)(message);
         }
+    }
+
+    fn clear(&mut self) {
+        if let Some(active) = self.0.take() {
+            (active.clear)();
+        }
+    }
+}
+
+/// The spinner message while turbo.lock is resolved and written.
+pub(super) fn lock_message<'a>(
+    action: LockAction,
+    tools: impl IntoIterator<Item = &'a str>,
+) -> String {
+    let verb = match action {
+        LockAction::Create => "Creating",
+        LockAction::Update => "Updating",
+    };
+    let tools: Vec<_> = tools.into_iter().collect();
+    match tools.as_slice() {
+        [] => format!("{verb} turbo.lock"),
+        [one] => format!("{verb} turbo.lock for {one}"),
+        [first, second] => format!("{verb} turbo.lock for {first} and {second}"),
+        [rest @ .., last] => format!("{verb} turbo.lock for {}, and {last}", rest.join(", ")),
     }
 }
 

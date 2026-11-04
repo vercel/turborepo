@@ -570,12 +570,19 @@ pub(super) fn resolve(
         .map_err(|e| turborepo_setup::lock::reconcile::Error::Resolution(e.to_string()))
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum LockAction {
+    Create,
+    Update,
+}
+
 pub(super) fn run(
     discovery: &super::root::Discovery,
     snapshot: Snapshot,
     request: &super::SetupRequest,
     transports: Option<Transports>,
     preflight: impl Fn() -> Result<ToolDownloadPolicy, Error>,
+    lock_status: &dyn Fn(Option<&str>),
 ) -> Result<ToolReport, Error> {
     let (force, offline) = (request.force, request.offline);
     let mut notes = Vec::new();
@@ -607,7 +614,9 @@ pub(super) fn run(
     // Ordinary setup validates matching pins before its no-op writer. Explicit
     // refresh may repair invalid native selections within this supported cohort;
     // the candidate callback still gates EVERY new selection before any writer.
-    if write && let Some(lock) = snapshot.previous_lock() {
+    let lock_action = if !write {
+        None
+    } else if let Some(lock) = snapshot.previous_lock() {
         if resolution_mode == turborepo_setup::lock::reconcile::Mode::Refresh
             && lock.tools().iter().any(|(id, tool)| !supported(id, tool))
         {
@@ -616,13 +625,17 @@ pub(super) fn run(
                  tools are supported",
             ));
         }
-        if resolution_mode == turborepo_setup::lock::reconcile::Mode::Local
+        let matching = resolution_mode == turborepo_setup::lock::reconcile::Mode::Local
             && lock.matches_native(snapshot.declarations())?
-            && snapshot.matches_additional(lock)
-        {
+            && snapshot.matches_additional(lock);
+        if matching {
             plans(&snapshot, lock)?;
         }
-    }
+        // A matching lock makes the writer a no-op, so it gets no message.
+        (!matching).then_some(LockAction::Update)
+    } else {
+        Some(LockAction::Create)
+    };
     // User state is checked before the first writer or download, but after the
     // read-only lock/plan diagnostics above and below, which never need it.
     let tool_store = transports.as_ref().and_then(Transports::tool_store);
@@ -659,6 +672,10 @@ pub(super) fn run(
         let runtime = tokio::runtime::Builder::new_current_thread()
             .enable_all()
             .build()?;
+        if let Some(action) = lock_action {
+            let tools = snapshot.declarations().keys().map(String::as_str);
+            lock_status(Some(&super::output::lock_message(action, tools)));
+        }
         let outcome = reconcile::reconcile_checked(
             &snapshot,
             resolution_mode,
@@ -674,6 +691,7 @@ pub(super) fn run(
             },
             || check().map_err(io::Error::other),
         )?;
+        lock_status(None);
         // Preserve the original root/sources; accepting a freshly captured lock
         // here would hide a competing candidate or concurrent declaration edit.
         check()?;

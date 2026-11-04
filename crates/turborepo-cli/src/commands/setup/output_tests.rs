@@ -342,3 +342,24 @@ mod child {
         assert_eq!(captured.err(), "sh │ before\n");
     }
 }
+
+#[test]
+fn lock_message_lists_tools_in_plain_english() {
+    let message = |action, tools: &[&str]| lock_message(action, tools.iter().copied());
+    assert_eq!(
+        message(LockAction::Create, &["node"]),
+        "Creating turbo.lock for node"
+    );
+    assert_eq!(
+        message(LockAction::Create, &["node", "pnpm"]),
+        "Creating turbo.lock for node and pnpm"
+    );
+    assert_eq!(
+        message(LockAction::Update, &["node", "pnpm", "uv"]),
+        "Updating turbo.lock for node, pnpm, and uv"
+    );
+    assert_eq!(
+        message(LockAction::Update, &["go", "node", "pnpm", "uv"]),
+        "Updating turbo.lock for go, node, pnpm, and uv"
+    );
+}
