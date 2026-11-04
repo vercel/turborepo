@@ -222,9 +222,11 @@ impl Repo {
         }
     }
 
-    /// A frozen setup holding this repository's writer lock while its first
-    /// download waits on a proxy that accepts and never answers.
-    pub(super) fn stalled_writer(&self) -> (Child, TcpStream) {
+    /// A frozen setup holding this repository's writer lock while its
+    /// downloads wait on a proxy that accepts and never answers. Setup
+    /// downloads concurrently, so the listener stays open until the caller
+    /// drops it: closing it would reset the connections still queued on it.
+    pub(super) fn stalled_writer(&self) -> (Child, (TcpListener, TcpStream)) {
         let stalled = TcpListener::bind("127.0.0.1:0").unwrap();
         stalled.set_nonblocking(true).unwrap();
         let log = self.tmp.join("stalled.log");
@@ -238,7 +240,7 @@ impl Repo {
         let deadline = Instant::now() + Duration::from_secs(60);
         loop {
             match stalled.accept() {
-                Ok((socket, _)) => return (child, socket),
+                Ok((socket, _)) => return (child, (stalled, socket)),
                 Err(e) if e.kind() == io::ErrorKind::WouldBlock => {}
                 Err(e) => panic!("{e}"),
             }
