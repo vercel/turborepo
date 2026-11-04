@@ -11,7 +11,8 @@
     "check-links": "cd content && node --experimental-strip-types ../../../docs/link-checker/src/validate-docs-links.ts",
     "dev": "next dev",
     "postinstall": "fumadocs-mdx",
-    "start": "next start"
+    "start": "next start",
+    "test:shadcn-guide": "node --test tests/shadcn-guide.test.mjs"
   },
   "dependencies": {
     "@icons-pack/react-simple-icons": "^13.8.0",
