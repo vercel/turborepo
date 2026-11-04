@@ -12,7 +12,7 @@ use turborepo_repository::{
         AllPackageChangeReason, ChangeMapper, DefaultPackageChangeMapper, Error,
         GlobalDepsPackageChangeMapper, LockfileContents, PackageChanges, PackageInclusionReason,
     },
-    package_graph::{PackageGraph, PackageName},
+    package_graph::{ExternalDependencyChange, PackageGraph, PackageName},
 };
 use turborepo_scm::{Error as ScmError, SCM, git::InvalidRange};
 
@@ -219,66 +219,71 @@ impl<'a> ScopeChangeDetector<'a> {
             debug!("lockfile changed but was outside the repository");
             return LockfileContents::UnknownChange;
         };
-        if let Some(to_ref) = to_ref {
-            let Ok(current) = self.scm.previous_content(Some(to_ref), &lockfile_path) else {
-                return LockfileContents::UnknownChange;
-            };
-            // Native resolvers can reuse the execution graph only when the
-            // checkout is identical to the requested snapshot.
-            let javascript = self
-                .pkg_graph
-                .package_manager()
-                .is_some_and(|pm| pm.lockfile_name() == path.as_str());
-            if !javascript
-                && self
-                    .scm
-                    .changed_files(self.turbo_root, Some(to_ref), None, true, false, false)
-                    .is_ok_and(|result| result.is_ok_and(|files| files.is_empty()))
-            {
-                return LockfileContents::Changed {
-                    path,
-                    previous_contents: content,
-                };
-            }
-            let mut changes = match self.pkg_graph.changed_packages_from_lockfile_snapshots(
+        // The package graph is built from the working tree. When that tree is
+        // the head snapshot, comparing against it is exact and avoids reading
+        // every manifest from git.
+        if let Some(to_ref) = to_ref.filter(|to_ref| !self.checkout_matches(to_ref)) {
+            return match self.lockfile_changes_at(
+                to_ref,
                 &path,
+                &lockfile_path,
                 &content,
-                &current,
-                |file| self.scm.previous_content(Some(to_ref), file).ok(),
+                include_uncommitted,
             ) {
-                Ok(changes) => changes,
-                Err(error) => {
-                    debug!(%error, "unable to resolve the head lockfile snapshot");
-                    return LockfileContents::UnknownChange;
-                }
+                Some(changes) => LockfileContents::Resolved(changes),
+                None => LockfileContents::UnknownChange,
             };
-            if include_uncommitted {
-                // File selection unions base..head with local changes relative
-                // to the checkout. Compare those lockfile changes separately,
-                // so later committed dependencies do not leak into base..head.
-                let Ok(checkout) = self.scm.previous_content(Some("HEAD"), &lockfile_path) else {
-                    return LockfileContents::UnknownChange;
-                };
-                let Ok(working) = std::fs::read(&lockfile_path) else {
-                    return LockfileContents::UnknownChange;
-                };
-                if checkout != working {
-                    let Ok(local_changes) = self
-                        .pkg_graph
-                        .changed_packages_from_lockfile_contents(&path, &checkout)
-                    else {
-                        return LockfileContents::UnknownChange;
-                    };
-                    changes.extend(local_changes);
-                }
-            }
-            return LockfileContents::Resolved(changes);
         }
         debug!("lockfile changed, have the previous content");
         LockfileContents::Changed {
             path,
             previous_contents: content,
         }
+    }
+
+    fn checkout_matches(&self, to_ref: &str) -> bool {
+        self.scm
+            .changed_files(self.turbo_root, Some(to_ref), None, true, false, false)
+            .is_ok_and(|result| result.is_ok_and(|files| files.is_empty()))
+    }
+
+    fn lockfile_changes_at(
+        &self,
+        to_ref: &str,
+        path: &AnchoredSystemPathBuf,
+        lockfile_path: &AbsoluteSystemPath,
+        previous: &[u8],
+        include_uncommitted: bool,
+    ) -> Option<Vec<ExternalDependencyChange>> {
+        let current = self
+            .scm
+            .previous_content(Some(to_ref), lockfile_path)
+            .ok()?;
+        let mut changes = self
+            .pkg_graph
+            .changed_packages_from_lockfile_snapshots(path, previous, &current, |file| {
+                self.scm.previous_content(Some(to_ref), file).ok()
+            })
+            .inspect_err(|error| debug!(%error, "unable to resolve the head lockfile snapshot"))
+            .ok()?;
+        if include_uncommitted {
+            // File selection unions base..head with local changes relative to
+            // the checkout. Compare those lockfile changes separately, so later
+            // committed dependencies do not leak into base..head.
+            let checkout = self
+                .scm
+                .previous_content(Some("HEAD"), lockfile_path)
+                .ok()?;
+            let working = std::fs::read(lockfile_path).ok()?;
+            if checkout != working {
+                changes.extend(
+                    self.pkg_graph
+                        .changed_packages_from_lockfile_contents(path, &checkout)
+                        .ok()?,
+                );
+            }
+        }
+        Some(changes)
     }
 }
 
