@@ -36,7 +36,7 @@
 //! }
 //! ```
 
-use std::{error::Error as StdError, time::Duration};
+use std::{error::Error as StdError, sync::OnceLock, time::Duration};
 
 use reqwest::{
     Client, ClientBuilder,
@@ -282,7 +282,8 @@ const MAX_REDIRECTS: usize = 3;
 /// Reusable HTTP transport. Intentionally no `Debug` that could expose URLs.
 #[derive(Clone)]
 pub struct DownloadClient {
-    client: Client,
+    /// `None` uses the process's default client, built at the first request.
+    client: Option<Client>,
     origins: Vec<ApprovedOrigin>,
     redirects: Redirects,
 }
@@ -293,6 +294,47 @@ enum Redirects {
     Approved(Vec<ApprovedOrigin>),
     /// Verified downloads only, to any HTTPS origin.
     Https,
+}
+
+/// Redirects, retries, and automatic decoding are always overridden.
+fn build(builder: ClientBuilder) -> Result<Client, Error> {
+    turborepo_tls::ensure_crypto_provider();
+    builder
+        .redirect(Policy::none())
+        .retry(reqwest::retry::never())
+        .referer(false)
+        .danger_accept_invalid_certs(false)
+        .danger_accept_invalid_hostnames(false)
+        .no_gzip()
+        .no_brotli()
+        .no_deflate()
+        .no_zstd()
+        .build()
+        .map_err(|_| Error::ClientBuild)
+}
+
+/// Loading native roots reads the OS trust store (~80 ms on macOS), so the
+/// process builds this once and only when something is actually downloaded.
+fn default_client() -> Result<&'static Client, Error> {
+    static DEFAULT: OnceLock<Option<Client>> = OnceLock::new();
+    DEFAULT
+        .get_or_init(|| {
+            // Match Remote Cache's native -> bundled trust fallback, without an
+            // API-client dependency or overriding reqwest's proxy discovery.
+            let with_native = |native| {
+                build(
+                    Client::builder()
+                        .use_rustls_tls()
+                        .tls_built_in_native_certs(native)
+                        .tls_built_in_webpki_certs(true),
+                )
+            };
+            // reqwest can reject PEM-valid but DER-invalid native roots even
+            // with webpki enabled; keep verified bundled trust instead.
+            with_native(true).or_else(|_| with_native(false)).ok()
+        })
+        .as_ref()
+        .ok_or(Error::ClientBuild)
 }
 
 impl DownloadClient {
@@ -312,25 +354,11 @@ impl DownloadClient {
     }
 
     pub fn new(origins: impl IntoIterator<Item = ApprovedOrigin>) -> Result<Self, Error> {
-        // Match Remote Cache's native -> bundled trust fallback, without an
-        // API-client dependency or overriding reqwest's proxy discovery.
-        let origins: Vec<_> = origins.into_iter().collect();
-        let build = |native| {
-            Self::with_http_builder(
-                Client::builder()
-                    .use_rustls_tls()
-                    .tls_built_in_native_certs(native)
-                    .tls_built_in_webpki_certs(true),
-                origins.iter().cloned(),
-            )
-        };
-        match build(true) {
-            // reqwest can reject PEM-valid but DER-invalid native roots even
-            // with webpki enabled. Retry only default construction: keep verified
-            // bundled trust, origin approvals, and all download safety policies.
-            Err(Error::ClientBuild) => build(false),
-            result => result,
-        }
+        Ok(Self {
+            client: None,
+            origins: origins.into_iter().collect(),
+            redirects: Redirects::Approved(Vec::new()),
+        })
     }
 
     /// Inject trusted HTTP configuration, rather than an already-built client
@@ -345,21 +373,8 @@ impl DownloadClient {
         builder: ClientBuilder,
         origins: impl IntoIterator<Item = ApprovedOrigin>,
     ) -> Result<Self, Error> {
-        turborepo_tls::ensure_crypto_provider();
-        let client = builder
-            .redirect(Policy::none())
-            .retry(reqwest::retry::never())
-            .referer(false)
-            .danger_accept_invalid_certs(false)
-            .danger_accept_invalid_hostnames(false)
-            .no_gzip()
-            .no_brotli()
-            .no_deflate()
-            .no_zstd()
-            .build()
-            .map_err(|_| Error::ClientBuild)?;
         Ok(Self {
-            client,
+            client: Some(build(builder)?),
             origins: origins.into_iter().collect(),
             redirects: Redirects::Approved(Vec::new()),
         })
@@ -445,9 +460,12 @@ impl DownloadClient {
             .ok_or(Error::InvalidLimits)?;
         tokio::time::timeout_at(deadline, async {
             let (mut url, mut hops) = (url, 0);
+            let client = match &self.client {
+                Some(client) => client,
+                None => default_client()?,
+            };
             let mut response = loop {
-                let response = self
-                    .client
+                let response = client
                     .get(url.clone())
                     .header(ACCEPT_ENCODING, "identity")
                     .timeout(limits.timeout)

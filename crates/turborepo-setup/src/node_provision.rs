@@ -380,7 +380,7 @@ impl PreparedNode {
         self.downloaded_bytes
     }
 
-    /// Staging callback for `SetupSession::ensure`. Copy the FULL verified
+    /// Staging callback for `SetupSession::ensure`. Move the FULL verified
     /// resource tree, preserving executable modes and safe relative links;
     /// never run hooks.
     pub fn stage(
@@ -397,7 +397,7 @@ impl PreparedNode {
         {
             return Err(turborepo_tool_install::Error::InvalidInventory);
         }
-        copy_tree(&self.tree.root_path(), destination)?;
+        move_tree(&self.tree.root_path(), destination)?;
         Ok(())
     }
 }
@@ -410,7 +410,23 @@ pub(crate) fn promotable(tool: &Tool) -> bool {
     }
 }
 
-pub(crate) fn copy_tree(source: &Path, destination: &Path) -> io::Result<()> {
+pub(crate) fn move_tree(source: &Path, destination: &Path) -> io::Result<()> {
+    // Renamed files keep the temp directory's ACL, while copies inherit the
+    // store's protected DACL that its ownership checks rely on.
+    if cfg!(windows) {
+        return copy_tree(source, destination);
+    }
+    // Renaming the whole root over the empty destination leaves nothing to
+    // stage twice, so a second stage fails instead of publishing an empty tree.
+    match fs::rename(source, destination) {
+        // The system temp directory and the store can be on different
+        // filesystems.
+        Err(e) if e.kind() == io::ErrorKind::CrossesDevices => copy_tree(source, destination),
+        result => result,
+    }
+}
+
+fn copy_tree(source: &Path, destination: &Path) -> io::Result<()> {
     for entry in fs::read_dir(source)? {
         let entry = entry?;
         let path = entry.path();

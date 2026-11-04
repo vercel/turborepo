@@ -21,7 +21,7 @@ use crate::{
     lock::{self, Format, Installation, Lock, Platform},
     mirror::Mirror,
     node_discovery::UniqueJson,
-    node_provision::{NodePlan, copy_tree},
+    node_provision::{NodePlan, move_tree},
     package_manager::{CorepackIntegrity, Manager},
     registry_metadata::{self, MAX_METADATA_BYTES, PUBLIC_NPM_REGISTRY as REGISTRY, tarball_path},
 };
@@ -740,8 +740,8 @@ impl PreparedRegistry {
         self.downloaded_bytes
     }
 
-    /// Copy the verified package, and the native pnpm binary beside it. The
-    /// Store generates the launchers into `bin`.
+    /// Move the verified package, and copy the native pnpm binary beside it.
+    /// The Store generates the launchers into `bin`.
     pub fn stage(
         &self,
         tool: &Tool,
@@ -756,7 +756,7 @@ impl PreparedRegistry {
         {
             return Err(turborepo_tool_install::Error::InvalidInventory);
         }
-        copy_tree(&self.tree.root_path(), destination)?;
+        move_tree(&self.tree.root_path(), destination)?;
         if let Some((native, binary)) = &self.native {
             let target = destination.join(NATIVE_BINARY);
             fs::copy(native.root_path().join(binary), &target)?;

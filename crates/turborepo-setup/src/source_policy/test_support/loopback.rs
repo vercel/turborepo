@@ -3,7 +3,7 @@
 #![allow(clippy::unwrap_used)] // Failures in this explicit fixture seam fail the test.
 use std::{
     collections::BTreeMap,
-    io::{BufRead, BufReader, Read, Write},
+    io::{BufRead, BufReader, ErrorKind, Read, Write},
     net::{TcpListener, TcpStream},
     sync::{
         Arc, Mutex,
@@ -72,12 +72,24 @@ impl LoopbackServer {
                 socket
                     .set_write_timeout(Some(Duration::from_secs(5)))
                     .unwrap();
+                // Setup cancels sibling downloads when one fails, so a client
+                // may hang up before sending or while reading its response.
+                let hung_up = |e: &std::io::Error| {
+                    matches!(
+                        e.kind(),
+                        ErrorKind::BrokenPipe
+                            | ErrorKind::ConnectionReset
+                            | ErrorKind::ConnectionAborted
+                    )
+                };
                 let mut request = String::new();
-                BufReader::new(&socket)
-                    .take(8192)
-                    .read_line(&mut request)
-                    .unwrap();
-                let path = request.split_whitespace().nth(1).unwrap();
+                match BufReader::new(&socket).take(8192).read_line(&mut request) {
+                    Err(e) if hung_up(&e) => continue,
+                    result => result.unwrap(),
+                };
+                let Some(path) = request.split_whitespace().nth(1) else {
+                    continue;
+                };
                 log.lock().unwrap().push(path.to_owned());
                 before_response(path);
                 let (status, body) = routes
@@ -85,13 +97,15 @@ impl LoopbackServer {
                     .map_or(("404 Not Found", &b"unexpected fixture request"[..]), |b| {
                         ("200 OK", b.as_slice())
                     });
-                write!(
+                let written = write!(
                     socket,
                     "HTTP/1.1 {status}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
                     body.len()
                 )
-                .unwrap();
-                socket.write_all(body).unwrap();
+                .and_then(|()| socket.write_all(body));
+                if let Err(e) = written {
+                    assert!(hung_up(&e), "{e}");
+                }
             }
         });
         Ok(Self {

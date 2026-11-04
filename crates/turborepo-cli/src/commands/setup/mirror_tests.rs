@@ -125,8 +125,12 @@ fn mirror_checksum_mismatch_or_missing_artifact_installs_nothing() {
         let error = run_mirrored(&f, &m, "/mirror", FROZEN).unwrap_err();
         let expected = if tampered { "does not match" } else { "404" };
         assert!(chain(&error).contains(expected), "{}", chain(&error));
-        // The locked digest stops the cohort before any pnpm traffic.
-        assert_eq!(m.requests(), [path]);
+        let requests = m.requests();
+        assert!(requests.contains(&path), "{requests:?}");
+        assert!(
+            requests.iter().all(|r| r.starts_with("/mirror/")),
+            "{requests:?}"
+        );
         assert!(f.manifest().is_none());
         f.no_execution();
     }

@@ -26,7 +26,7 @@ use turborepo_tool_install::{SetupSession, Staging, Tool};
 
 use crate::{
     lock::{self, Installation, Lock, Platform},
-    node_provision::copy_tree,
+    node_provision::move_tree,
     python_resolution::{PythonTransport, is_official},
     uv::{ORIGIN, exact_release},
 };
@@ -261,7 +261,7 @@ impl PreparedPython {
         self.downloaded_bytes
     }
 
-    /// Staging callback for `SetupSession::ensure`: copy the FULL verified
+    /// Staging callback for `SetupSession::ensure`: move the FULL verified
     /// interpreter tree into uv's key directory, preserving relative links
     /// and modes. Windows adds the batch launchers that the Store's
     /// forwarders run.
@@ -281,7 +281,7 @@ impl PreparedPython {
         }
         let installation = destination.join(&self.key);
         fs::create_dir(&installation)?;
-        copy_tree(&self.tree.root_path(), &installation)?;
+        move_tree(&self.tree.root_path(), &installation)?;
         self.compile_bytecode(&installation)?;
         if let Some(launch) = &self.launch_directory {
             let launchers = destination.join(launch);
