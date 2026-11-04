@@ -7,19 +7,23 @@ const DEFAULT_USERS = [
   },
 ];
 
-try {
-  await Promise.all(
-    DEFAULT_USERS.map((user) =>
-      db.orm.public.User.upsert({
-        create: user,
-        update: user,
-        conflictOn: { email: user.email },
-      }),
-    ),
-  );
-} catch (error) {
-  console.error(error);
-  process.exitCode = 1;
-} finally {
-  await db.close();
+async function main() {
+  try {
+    await Promise.all(
+      DEFAULT_USERS.map((user) =>
+        db.orm.public.User.upsert({
+          create: user,
+          update: user,
+          conflictOn: { email: user.email },
+        }),
+      ),
+    );
+  } catch (error) {
+    console.error(error);
+    process.exitCode = 1;
+  } finally {
+    await db.close();
+  }
 }
+
+main();
