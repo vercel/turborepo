@@ -2,7 +2,7 @@
   "extends": ["//"],
   "tasks": {
     "merge-blob-reports": {
-      "dependsOn": ["build"],
+      "dependsOn": ["build", "docs#test", "web#test", "@repo/math#test"],
       "inputs": [
         "$TURBO_DEFAULT$",
         "$TURBO_ROOT$/apps/*/coverage/blob/**",

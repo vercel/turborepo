@@ -4,7 +4,7 @@ This is a community-maintained example. If you experience a problem, please subm
 
 ## Using this example
 
-This example is based on the `basic` example (`npx create-turbo@latest`) to demonstrate how to use Vitest and get the most out of Turborepo's caching.
+This example is based on the `basic` example (`pnpm dlx create-turbo@latest`) to demonstrate how to use Vitest and get the most out of Turborepo's caching.
 
 This example demonstrates two approaches to Vitest configuration:
 
@@ -14,7 +14,12 @@ This example demonstrates two approaches to Vitest configuration:
 
 ## Getting Started
 
-First, install dependencies and build the shared configuration package:
+### Prerequisites
+
+- Node.js >=26.13.0
+- pnpm 12.16.1
+
+From this example's root directory, install dependencies and build the shared configuration package:
 
 ```bash
 pnpm install
@@ -55,19 +60,18 @@ The `merge-blob-reports` task stages the package blobs into `packages/vitest-con
 
 Turborepo can use a technique known as [Remote Caching](https://turborepo.dev/docs/core-concepts/remote-caching) to share cache artifacts across machines, enabling you to share build caches with your team and CI/CD pipelines.
 
-By default, Turborepo will cache locally. To enable Remote Caching you will need an account with Vercel. If you don't have an account you can [create one](https://vercel.com/signup?utm_source=turborepo-examples), then enter the following commands:
+By default, Turborepo will cache locally. To enable Remote Caching you will need an account with Vercel. If you don't have an account you can [create one](https://vercel.com/signup?utm_source=turborepo-examples), then run the following command from this example's root directory:
 
-```
-cd my-turborepo
-npx turbo login
+```bash
+pnpm exec turbo login
 ```
 
 This will authenticate the Turborepo CLI with your [Vercel account](https://vercel.com/docs/concepts/personal-accounts/overview).
 
 Next, you can link your Turborepo to your Remote Cache by running the following command from the root of your Turborepo:
 
-```
-npx turbo link
+```bash
+pnpm exec turbo link
 ```
 
 ## Useful Links
