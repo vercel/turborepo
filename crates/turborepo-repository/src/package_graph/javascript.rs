@@ -320,7 +320,7 @@ fn hash_file_inputs(
     Ok((package_files, hashes))
 }
 
-fn lockfile_identity_resolution(
+pub(super) fn lockfile_identity_resolution(
     knowledge: &RepositoryKnowledge,
     lockfile: &dyn Lockfile,
     dependencies: HashMap<String, BTreeMap<String, String>>,
@@ -785,7 +785,7 @@ impl PackageGraph {
             .external_resolution
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner());
-        let changes = compare_resolution_data(
+        self.compare_lockfile_resolutions(
             resolution_data(
                 current_resolution
                     .generation
@@ -794,10 +794,17 @@ impl PackageGraph {
             )?,
             &previous_resolution,
             current_lockfile.global_change(previous_lockfile),
-            ROOT_PKG_NAME,
         )
-        .map_err(|_| ChangedPackagesError::ResolutionUnavailable)?;
+    }
 
+    pub(super) fn compare_lockfile_resolutions(
+        &self,
+        current: &ExternalResolutionData,
+        previous: &ExternalResolutionData,
+        global_change: bool,
+    ) -> Result<Vec<ExternalDependencyChange>, ChangedPackagesError> {
+        let changes = compare_resolution_data(current, previous, global_change, ROOT_PKG_NAME)
+            .map_err(|_| ChangedPackagesError::ResolutionUnavailable)?;
         let all_changes = || {
             self.package_task_contexts()
                 .map(|context| ExternalDependencyChange {

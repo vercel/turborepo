@@ -34,6 +34,7 @@ pub mod builder;
 mod dep_splitter;
 mod javascript;
 pub mod lockfile_closure;
+mod lockfile_snapshot;
 mod projections;
 
 pub use builder::{Error, LazyPackageGraph, LazyPlan, PackageGraphBuilder};
