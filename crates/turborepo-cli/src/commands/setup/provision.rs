@@ -798,94 +798,104 @@ pub(super) fn run(
         prepared_yarn,
         prepared_bun,
     ) = runtime.block_on(async {
-        let recheck = || {
-            preflight()?;
-            revalidate(discovery)?;
-            snapshot.check_guard(&guard)?;
-            Ok::<_, Error>(())
-        };
-        let node = match &node {
-            Some(plan) => {
-                plan.prepare(&session, &desired, &transports.node, preparation)
-                    .await?
-            }
-            None => None,
-        };
-        recheck()?;
-        let pnpm = match &pnpm {
-            Some(plan) => {
-                plan.prepare(&session, &desired, &transports.pnpm, preparation)
-                    .await?
-            }
-            None => None,
-        };
-        recheck()?;
-        let npm = match &npm {
-            Some(plan) => {
-                plan.prepare(&session, &desired, &transports.pnpm, preparation)
-                    .await?
-            }
-            None => None,
-        };
-        recheck()?;
-        let uv = match &uv {
-            Some(plan) => {
-                plan.prepare(&session, &desired, &transports.uv, preparation)
-                    .await?
-            }
-            None => None,
-        };
-        recheck()?;
-        let python = match &python {
-            Some(plan) => {
-                plan.prepare(&session, &desired, &transports.python, preparation)
-                    .await?
-            }
-            None => None,
-        };
-        recheck()?;
-        let rustup = match &rustup {
-            Some(plan) => {
-                plan.prepare(&session, &desired, &transports.rustup, preparation)
-                    .await?
-            }
-            None => None,
-        };
-        let mut prepared = Vec::new();
-        if let Some(transport) = &artifact_transport {
-            for plan in &artifacts {
-                recheck()?;
-                prepared.push(
-                    plan.prepare(&session, &desired, transport, preparation)
-                        .await?,
-                );
-            }
-        }
-        recheck()?;
-        let go = match &go {
-            Some(plan) => {
-                plan.prepare(&session, &desired, &transports.go, preparation)
-                    .await?
-            }
-            None => None,
-        };
-        recheck()?;
-        let yarn = match &yarn {
-            Some(plan) => {
-                plan.prepare(&session, &desired, &transports.pnpm, preparation)
-                    .await?
-            }
-            None => None,
-        };
-        recheck()?;
-        let bun = match &bun {
-            Some(plan) => {
-                plan.prepare(&session, &desired, &transports.bun, preparation)
-                    .await?
-            }
-            None => None,
-        };
-        Ok::<_, Error>((node, pnpm, npm, uv, python, rustup, prepared, go, yarn, bun))
+        tokio::try_join!(
+            async {
+                match &node {
+                    Some(plan) => Ok::<_, Error>(
+                        plan.prepare(&session, &desired, &transports.node, preparation)
+                            .await?,
+                    ),
+                    None => Ok(None),
+                }
+            },
+            async {
+                match &pnpm {
+                    Some(plan) => Ok::<_, Error>(
+                        plan.prepare(&session, &desired, &transports.pnpm, preparation)
+                            .await?,
+                    ),
+                    None => Ok(None),
+                }
+            },
+            async {
+                match &npm {
+                    Some(plan) => Ok::<_, Error>(
+                        plan.prepare(&session, &desired, &transports.pnpm, preparation)
+                            .await?,
+                    ),
+                    None => Ok(None),
+                }
+            },
+            async {
+                match &uv {
+                    Some(plan) => Ok::<_, Error>(
+                        plan.prepare(&session, &desired, &transports.uv, preparation)
+                            .await?,
+                    ),
+                    None => Ok(None),
+                }
+            },
+            async {
+                match &python {
+                    Some(plan) => Ok::<_, Error>(
+                        plan.prepare(&session, &desired, &transports.python, preparation)
+                            .await?,
+                    ),
+                    None => Ok(None),
+                }
+            },
+            async {
+                match &rustup {
+                    Some(plan) => Ok::<_, Error>(
+                        plan.prepare(&session, &desired, &transports.rustup, preparation)
+                            .await?,
+                    ),
+                    None => Ok(None),
+                }
+            },
+            async {
+                match &artifact_transport {
+                    Some(transport) => {
+                        let (session, desired) = (&session, &desired);
+                        futures::future::try_join_all(artifacts.iter().map(|plan| async move {
+                            Ok::<_, Error>(
+                                plan.prepare(session, desired, transport, preparation)
+                                    .await?,
+                            )
+                        }))
+                        .await
+                    }
+                    None => Ok(Vec::new()),
+                }
+            },
+            async {
+                match &go {
+                    Some(plan) => Ok::<_, Error>(
+                        plan.prepare(&session, &desired, &transports.go, preparation)
+                            .await?,
+                    ),
+                    None => Ok(None),
+                }
+            },
+            async {
+                match &yarn {
+                    Some(plan) => Ok::<_, Error>(
+                        plan.prepare(&session, &desired, &transports.pnpm, preparation)
+                            .await?,
+                    ),
+                    None => Ok(None),
+                }
+            },
+            async {
+                match &bun {
+                    Some(plan) => Ok::<_, Error>(
+                        plan.prepare(&session, &desired, &transports.bun, preparation)
+                            .await?,
+                    ),
+                    None => Ok(None),
+                }
+            },
+        )
     })?;
     preflight()?;
     revalidate(discovery)?;

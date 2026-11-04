@@ -231,7 +231,7 @@ impl PreparedGo {
         self.downloaded_bytes
     }
 
-    /// Callback for Store reconciliation: copy the verified tree, preserving
+    /// Callback for Store reconciliation: move the verified tree, preserving
     /// executable modes; never run hooks.
     pub fn stage(
         &self,
@@ -244,7 +244,7 @@ impl PreparedGo {
         {
             return Err(turborepo_tool_install::Error::InvalidInventory);
         }
-        crate::node_provision::copy_tree(&self.tree.root_path(), destination)?;
+        crate::node_provision::move_tree(&self.tree.root_path(), destination)?;
         Ok(())
     }
 }

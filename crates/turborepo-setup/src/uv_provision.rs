@@ -19,7 +19,7 @@ use turborepo_tool_install::{
 
 use crate::{
     lock::{self, Installation, Lock, Platform},
-    node_provision::copy_tree,
+    node_provision::move_tree,
     uv::{self, UvArtifact},
     uv_resolution::UvTransport,
 };
@@ -304,7 +304,7 @@ pub struct PreparedUv {
 }
 
 impl PreparedUv {
-    /// Staging callback for `SetupSession::ensure`: copy the FULL verified
+    /// Staging callback for `SetupSession::ensure`: move the FULL verified
     /// tree.
     pub fn stage(
         &self,
@@ -320,7 +320,7 @@ impl PreparedUv {
         {
             return Err(turborepo_tool_install::Error::InvalidInventory);
         }
-        Ok(copy_tree(&self.tree.root_path(), destination)?)
+        Ok(move_tree(&self.tree.root_path(), destination)?)
     }
 }
 

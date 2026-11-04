@@ -14,7 +14,7 @@ use turborepo_tool_install::{Export, SetupSession, Staging, Tool};
 use crate::{
     lock::{Artifact, Format, Installation, Lock, Platform},
     node_metadata::{Checksums, MAX_CHECKSUM_BYTES},
-    node_provision::copy_tree,
+    node_provision::move_tree,
     package_manager::{Declaration, Manager},
 };
 
@@ -355,7 +355,7 @@ impl PreparedBun {
         self.downloaded_bytes
     }
 
-    /// Staging callback for `SetupSession::ensure`: copy the verified release
+    /// Staging callback for `SetupSession::ensure`: move the verified release
     /// tree as-is.
     pub fn stage(
         &self,
@@ -370,7 +370,7 @@ impl PreparedBun {
         {
             return Err(turborepo_tool_install::Error::InvalidInventory);
         }
-        copy_tree(&self.tree.root_path(), destination)?;
+        move_tree(&self.tree.root_path(), destination)?;
         Ok(())
     }
 }

@@ -145,7 +145,16 @@ fn force_late_failures_keep_the_previous_record() {
         }
         let u = Upstream::new(&corrupted, case == 1, drift);
         assert!(corrupted.run(&u, FORCE).is_err(), "case {case}");
-        assert_eq!(u.hits(), if case == 0 { 1 } else { 3 });
+        // Downloads run concurrently, so a corrupt Node may race pnpm's two fetches.
+        let hits = u.hits();
+        assert!(
+            if case == 0 {
+                (1..=3).contains(&hits)
+            } else {
+                hits == 3
+            },
+            "case {case}: {hits}"
+        );
         assert_eq!(corrupted.manifest().unwrap(), before);
         let retained = Installed::open(&corrupted.owned)
             .current()

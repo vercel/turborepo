@@ -20,7 +20,7 @@ use crate::{
         additional::{ADAPTER, PART},
     },
     mirror::Mirror,
-    node_provision::copy_tree,
+    node_provision::move_tree,
 };
 
 const MAX_DOWNLOAD_BYTES: usize = 256 * 1024 * 1024;
@@ -419,7 +419,7 @@ impl PreparedArtifact {
         self.downloaded_bytes
     }
 
-    /// Staging callback for `SetupSession::ensure`. Copies the FULL verified
+    /// Staging callback for `SetupSession::ensure`. Moves the FULL verified
     /// tree, keeping adjacent resources, executable modes, and safe
     /// relative links.
     pub fn stage(
@@ -434,7 +434,7 @@ impl PreparedArtifact {
             return Err(turborepo_tool_install::Error::InvalidInventory);
         }
         match &self.payload {
-            Payload::Archive(tree) => copy_tree(&tree.root_path(), destination)?,
+            Payload::Archive(tree) => move_tree(&tree.root_path(), destination)?,
             Payload::Binary { bytes, path } => {
                 // Lock paths use `/`; never join them unsplit onto a Windows
                 // verbatim destination.

@@ -550,6 +550,26 @@ fn sync_directory(path: &Path) -> Result<(), Error> {
     Ok(())
 }
 
+fn sync_entry(path: &Path, is_dir: bool) -> Result<(), Error> {
+    #[cfg(target_vendor = "apple")]
+    {
+        let _ = is_dir;
+        rustix::fs::fsync(File::open(path)?).map_err(io::Error::from)?;
+    }
+    #[cfg(not(target_vendor = "apple"))]
+    if is_dir {
+        sync_directory(path)?;
+    } else {
+        // FlushFileBuffers requires write access on Windows.
+        OpenOptions::new()
+            .read(true)
+            .write(cfg!(windows))
+            .open(path)?
+            .sync_all()?;
+    }
+    Ok(())
+}
+
 fn sync_tree(root: &Path) -> Result<(), Error> {
     let mut dirs = vec![root.to_path_buf()];
     walk(root, &mut |path| {
@@ -557,18 +577,16 @@ fn sync_tree(root: &Path) -> Result<(), Error> {
         if m.is_dir() {
             dirs.push(path.to_path_buf());
         } else if m.is_file() {
-            // FlushFileBuffers requires write access on Windows.
-            OpenOptions::new()
-                .read(true)
-                .write(cfg!(windows))
-                .open(path)?
-                .sync_all()?;
+            sync_entry(path, false)?;
         }
         Ok(())
     })?;
     for dir in dirs.into_iter().rev() {
-        sync_directory(&dir)?;
+        sync_entry(&dir, true)?;
     }
+    // Each F_FULLFSYNC flushes the whole drive cache, so one here covers the tree.
+    #[cfg(target_vendor = "apple")]
+    rustix::fs::fcntl_fullfsync(File::open(root)?).map_err(io::Error::from)?;
     Ok(())
 }
 

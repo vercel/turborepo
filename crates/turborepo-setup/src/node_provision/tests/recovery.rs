@@ -208,6 +208,22 @@ async fn a_missing_tree_restages_and_failed_staging_never_publishes_partial_stat
     );
     assert!(ready.store.tree(&desired[0]).unwrap().is_none());
     assert_nothing_staged(&ready.store);
+    // Staging moved the extracted tree, so the spent preparation cannot stage
+    // an empty one.
+    assert!(
+        ready
+            .store
+            .reconcile(&desired, |tool, path| prepared.stage(tool, path))
+            .is_err()
+    );
+    assert!(ready.store.tree(&desired[0]).unwrap().is_none());
+    assert_nothing_staged(&ready.store);
+    let prepared = ready
+        .plan
+        .prepare_if_needed(&ready.store, &desired, &ready.transport)
+        .await
+        .unwrap()
+        .expect("a missing tree requires Node bytes");
     assert_eq!(
         ready
             .store
@@ -216,7 +232,7 @@ async fn a_missing_tree_restages_and_failed_staging_never_publishes_partial_stat
         Outcome::Replaced
     );
     assert_scoped_resource(&ready.store);
-    assert_eq!(ready.upstream.requests.load(Ordering::SeqCst), 2);
+    assert_eq!(ready.upstream.requests.load(Ordering::SeqCst), 3);
     assert_eq!(
         install(&ready.store, &ready.plan, &unavailable_transport())
             .await
