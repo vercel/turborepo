@@ -11,14 +11,16 @@ related:
 
 [shadcn/ui](https://ui.shadcn.com/docs/monorepo) is an open-source set of beautifully designed components made with Tailwind CSS that you can copy and paste into your apps.
 
-To get started with shadcn/ui in a new monorepo, run:
+The shadcn/ui CLI understands the structure of a monorepo. Run it from the root of your repository and point the `-c` flag at the workspace that will use the components. The CLI installs the components, their dependencies, and their registry dependencies in the right place.
+
+To initialize shadcn/ui in a workspace, run:
 
 <PackageManagerTabs>
 
 <Tab value="pnpm">
 
 ```bash title="Terminal"
-pnpm dlx shadcn@canary init
+pnpm dlx shadcn@latest init -c apps/web
 ```
 
 </Tab>
@@ -26,7 +28,7 @@ pnpm dlx shadcn@canary init
 <Tab value="yarn">
 
 ```bash title="Terminal"
-npx shadcn@canary init
+npx shadcn@latest init -c apps/web
 ```
 
 </Tab>
@@ -34,7 +36,7 @@ npx shadcn@canary init
 <Tab value="npm">
 
 ```bash title="Terminal"
-npx shadcn@canary init
+npx shadcn@latest init -c apps/web
 ```
 
 </Tab>
@@ -42,7 +44,7 @@ npx shadcn@canary init
 <Tab value="bun">
 
 ```bash title="Terminal"
-bunx shadcn@canary init
+bunx shadcn@latest init -c apps/web
 ```
 
 </Tab>
@@ -50,7 +52,7 @@ bunx shadcn@canary init
 <Tab value="nub">
 
 ```bash title="Terminal"
-nubx shadcn@canary init
+nubx shadcn@latest init -c apps/web
 ```
 
 </Tab>
@@ -58,14 +60,18 @@ nubx shadcn@canary init
 <Tab value="aube">
 
 ```bash title="Terminal"
-aubx shadcn@canary init
+aubx shadcn@latest init -c apps/web
 ```
+
+<Callout type="info">
+The shadcn/ui CLI doesn't detect aube as a package manager yet, so it falls back to `npm install` for dependencies. In workspaces that use `catalog:` specifiers, that fallback fails with `EUNSUPPORTEDPROTOCOL`. Run `eval "$(aube activate zsh)"` (or `bash`) first so npm resolves dependencies through aube. This applies to `add` as well. The upstream fix is tracked in [shadcn-ui/ui#12587](https://github.com/shadcn-ui/ui/issues/12587).
+</Callout>
 
 </Tab>
 
 </PackageManagerTabs>
 
-When prompted, select the option for monorepos.
+Replace `apps/web` with the workspace that should use the components. You can also run the command from inside that workspace and leave off the `-c` flag.
 
 To add a component, run:
 
@@ -74,7 +80,7 @@ To add a component, run:
 <Tab value="pnpm">
 
 ```bash title="Terminal"
-pnpm dlx shadcn@canary add [COMPONENT]
+pnpm dlx shadcn@latest add [COMPONENT] -c apps/web
 ```
 
 </Tab>
@@ -82,7 +88,7 @@ pnpm dlx shadcn@canary add [COMPONENT]
 <Tab value="yarn">
 
 ```bash title="Terminal"
-npx shadcn@canary add [COMPONENT]
+npx shadcn@latest add [COMPONENT] -c apps/web
 ```
 
 </Tab>
@@ -90,7 +96,7 @@ npx shadcn@canary add [COMPONENT]
 <Tab value="npm">
 
 ```bash title="Terminal"
-npx shadcn@canary add [COMPONENT]
+npx shadcn@latest add [COMPONENT] -c apps/web
 ```
 
 </Tab>
@@ -98,7 +104,7 @@ npx shadcn@canary add [COMPONENT]
 <Tab value="bun">
 
 ```bash title="Terminal"
-bunx shadcn@canary add [COMPONENT]
+bunx shadcn@latest add [COMPONENT] -c apps/web
 ```
 
 </Tab>
@@ -106,7 +112,7 @@ bunx shadcn@canary add [COMPONENT]
 <Tab value="nub">
 
 ```bash title="Terminal"
-nubx shadcn@canary add [COMPONENT]
+nubx shadcn@latest add [COMPONENT] -c apps/web
 ```
 
 </Tab>
@@ -114,7 +120,7 @@ nubx shadcn@canary add [COMPONENT]
 <Tab value="aube">
 
 ```bash title="Terminal"
-aubx shadcn@canary add [COMPONENT]
+aubx shadcn@latest add [COMPONENT] -c apps/web
 ```
 
 </Tab>
@@ -123,4 +129,6 @@ aubx shadcn@canary add [COMPONENT]
 
 ## More information
 
-To learn more about using shadcn/ui in Turborepo, [visit the docs for shadcn/ui](https://ui.shadcn.com/docs/monorepo).
+To learn more about using shadcn/ui in a monorepo, [visit the docs for shadcn/ui](https://ui.shadcn.com/docs/monorepo).
+
+To scaffold a new monorepo with shadcn/ui already configured, run `shadcn@latest init --monorepo` and select a template.
