@@ -63,10 +63,6 @@ nubx shadcn@latest init -c apps/web
 aubx shadcn@latest init -c apps/web
 ```
 
-<Callout type="info">
-The shadcn/ui CLI doesn't detect aube as a package manager yet, so it falls back to `npm install` for dependencies. In workspaces that use `catalog:` specifiers, that fallback fails with `EUNSUPPORTEDPROTOCOL`. Run `eval "$(aube activate zsh)"` (or `bash`) first so npm resolves dependencies through aube. This applies to `add` as well. The upstream fix is tracked in [shadcn-ui/ui#12587](https://github.com/shadcn-ui/ui/issues/12587).
-</Callout>
-
 </Tab>
 
 </PackageManagerTabs>
