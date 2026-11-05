@@ -1,6 +1,9 @@
 const STACK_SIZE: usize = 8 * 1024 * 1024;
 
 fn main() {
+    // Without this, Cargo reruns the script when any file in the package
+    // changes, including tests, and relinks the turbo binary.
+    println!("cargo:rerun-if-changed=build.rs");
     // The CLI has historically needed over 1MB of stack space on MSVC.
     // TODO: Test the current parser's stack usage on Windows/MSVC and remove
     // this override if it fits within the default 1MB stack.
