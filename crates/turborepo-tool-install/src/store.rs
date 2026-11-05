@@ -3,8 +3,6 @@
 //! lockless activation run, exec and the shell hook render from it.
 //!
 //! ```text
-//! <store>/gc.lock                      shared by setups (collection takes it exclusively)
-//! <store>/gc-state.json                when collection first saw each entry unused
 //! <store>/tmp/                         private staging on the store's filesystem
 //! <store>/trees/<tree>/{seal.json, root/}   immutable, verified once at install
 //! <store>/envs/<env>/{seal.json, bin/}      immutable, shared by equal selections
@@ -17,7 +15,7 @@ use std::{
     collections::{BTreeMap, BTreeSet},
     ffi::{OsStr, OsString},
     fmt,
-    fs::{self, File, OpenOptions},
+    fs::{self, OpenOptions},
     io,
     path::{Path, PathBuf},
 };
@@ -103,10 +101,6 @@ impl Selection {
         self.trees.get(id).map(String::as_str)
     }
 
-    pub(crate) fn tree_keys(&self) -> impl Iterator<Item = &str> {
-        self.trees.values().map(String::as_str)
-    }
-
     pub fn tools(&self) -> &[Tool] {
         &self.tools
     }
@@ -170,43 +164,6 @@ struct EnvSeal {
     tools: Vec<Tool>,
 }
 
-/// A shared hold on `gc.lock`: while it lives, nothing collects trees or
-/// environments. Publishing into the store requires one, so code that skips
-/// the lease does not compile.
-struct SharedLease {
-    _lock: File,
-}
-
-impl SharedLease {
-    fn acquire(store: &Path) -> Result<Self, Error> {
-        let lock = lock_file(store, true)?;
-        lock.lock_shared()?;
-        Ok(Self { _lock: lock })
-    }
-}
-
-/// `<store>/gc.lock`, unlocked.
-pub(crate) fn lock_file(store: &Path, create: bool) -> Result<File, Error> {
-    let path = store.join("gc.lock");
-    match fs::symlink_metadata(&path) {
-        Ok(m) if !m.is_file() || m.file_type().is_symlink() => return Err(Error::UnsafePath),
-        _ => {}
-    }
-    let mut options = OpenOptions::new();
-    options
-        .read(true)
-        .write(true)
-        .create(create)
-        .truncate(false);
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::OpenOptionsExt;
-        options.mode(0o600);
-    }
-    // Never unlink the lock file: every process must lock the same inode.
-    Ok(options.open(path)?)
-}
-
 /// How setup decides a sealed tree or environment is reusable.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Reuse {
@@ -225,10 +182,8 @@ pub struct Ensured {
     pub installed: BTreeSet<String>,
 }
 
-/// One setup of one repository, holding the shared collection lease.
 pub struct SetupSession<'s> {
     store: &'s UserStore,
-    lease: SharedLease,
     repo: PathBuf,
     reuse: Reuse,
     // Verified reuse hashes each tree once per session.
@@ -300,18 +255,14 @@ impl UserStore {
         self.root.join("envs").join(key.as_str())
     }
 
-    /// Takes the shared collection lease and creates the store skeleton.
-    /// Abandoned staging is collection's to remove: only it can prove that no
-    /// setup is still using it.
+    /// Creates the store skeleton.
     pub fn begin_setup(&self, repo: &Path, reuse: Reuse) -> Result<SetupSession<'_>, Error> {
         let repo = fs::canonicalize(repo)?;
         for dir in ["tmp", "trees", "envs", "repos"] {
             directory(&self.root.join(dir))?;
         }
-        let lease = SharedLease::acquire(&self.root)?;
         Ok(SetupSession {
             store: self,
-            lease,
             repo,
             reuse,
             verified: RefCell::default(),
@@ -598,8 +549,8 @@ impl SetupSession<'_> {
     /// `record` with the environment's key so the caller can bind the
     /// repository to it, then points the repository's stable links at it and
     /// removes the repository's pre-store `.turbo/tools`. Running it again
-    /// stages and builds nothing. A crash at any point leaves complete
-    /// entries or private staging that a later setup removes.
+    /// stages and builds nothing. A crash at any point leaves only complete
+    /// entries and private staging in `tmp`.
     pub fn ensure(
         &self,
         selection: &Selection,
@@ -652,14 +603,9 @@ impl SetupSession<'_> {
             &staged.path().join("seal.json"),
             &serde_json::to_vec(&seal)?,
         )?;
-        publish(
-            &self.lease,
-            staged,
-            &target,
-            &self.store.tmp(),
-            replace,
-            || Ok(self.store.tree_seal(&id)?.is_some()),
-        )?;
+        publish(staged, &target, &self.store.tmp(), replace, || {
+            Ok(self.store.tree_seal(&id)?.is_some())
+        })?;
         self.verified.borrow_mut().insert(id.key, true);
         Ok(())
     }
@@ -688,17 +634,10 @@ impl SetupSession<'_> {
             &staged.path().join("seal.json"),
             &serde_json::to_vec(&seal)?,
         )?;
-        publish(
-            &self.lease,
-            staged,
-            target,
-            &self.store.tmp(),
-            replace,
-            || {
-                Ok(self.store.env_seal(target, selection.key())?.is_some()
-                    && self.store.env_bin_matches(selection, &target.join("bin"))?)
-            },
-        )
+        publish(staged, target, &self.store.tmp(), replace, || {
+            Ok(self.store.env_seal(target, selection.key())?.is_some()
+                && self.store.env_bin_matches(selection, &target.join("bin"))?)
+        })
     }
 
     /// `<store>/repos/<repo>/bin` names the environment, and `.turbo/bin` in
@@ -764,7 +703,6 @@ pub(crate) fn replace_link(link: &Path, target: &Path, directory: &Path) -> Resu
 /// judged unusable. A target that appears meanwhile is another setup winning
 /// a race; `published` accepts it when it is valid.
 fn publish(
-    _lease: &SharedLease,
     staged: tempfile::TempDir,
     target: &Path,
     tmp: &Path,

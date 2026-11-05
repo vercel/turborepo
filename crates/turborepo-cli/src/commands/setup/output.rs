@@ -132,7 +132,6 @@ pub(super) enum Note {
     Offline,
     TrustedRepeat,
     NoLock,
-    Cleanup(String),
 }
 
 /// What dependency setup did, one entry per eligible toolchain in step order.
@@ -245,7 +244,6 @@ fn render_note(note: &Note) -> String {
                          establish cross-machine reproducibility or frozen readiness.\nturbo run \
                          uses these tools in this clone only."
             .into(),
-        Note::Cleanup(line) => line.clone(),
     }
 }
 

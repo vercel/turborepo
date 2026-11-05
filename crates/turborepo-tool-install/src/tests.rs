@@ -8,7 +8,6 @@ use std::{
 
 use super::*;
 
-mod gc;
 mod publish;
 mod user_store;
 

@@ -128,7 +128,6 @@ pub(super) fn run(
         return Ok(report(rows));
     }
     // Name every tool the store lacks before taking a lock or writing.
-    // Provisioning re-hashes the rest under the store lease.
     let lock = sources
         .previous_lock()
         .ok_or(SetupError::Unsupported("offline setup requires turbo.lock"))?;

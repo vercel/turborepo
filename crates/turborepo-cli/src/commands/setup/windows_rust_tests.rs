@@ -300,7 +300,7 @@ fn frozen_rust_setup_runs_the_verified_rustup_and_activates_its_proxies() {
         lock
     );
     // The tool store is the only user state; no ~/.rustup or ~/.cargo.
-    let store = ["envs", "gc.lock", "repos", "tmp", "trees"];
+    let store = ["envs", "repos", "tmp", "trees"];
     let home: Vec<_> = fs::read_dir(repo.owned.home())
         .unwrap()
         .map(|entry| entry.unwrap().file_name())

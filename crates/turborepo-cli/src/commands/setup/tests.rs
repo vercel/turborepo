@@ -328,26 +328,8 @@ impl Upstream {
         )
     }
 }
-/// [`cleanup::collect`] that waits for a round that runs. A round is skipped
-/// while anything holds the store's lock, and in this test process that
-/// includes a child another test spawned while a test held a lock: the child
-/// keeps the lock until its exec completes.
-fn collect_round(
-    store: &turborepo_tool_install::UserStore,
-    now: std::time::SystemTime,
-) -> Vec<String> {
-    for _ in 0..500 {
-        if let Some(lines) = cleanup::try_collect(store, now).unwrap() {
-            return lines;
-        }
-        std::thread::sleep(std::time::Duration::from_millis(10));
-    }
-    panic!("the tool store stayed locked for 5 seconds");
-}
 #[path = "check_tests.rs"]
 mod checks;
-#[path = "cleanup_tests.rs"]
-mod cleanups;
 #[path = "plan_tests.rs"]
 mod plans;
 #[path = "shared_store_tests.rs"]

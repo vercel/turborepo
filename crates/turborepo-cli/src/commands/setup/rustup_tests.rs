@@ -246,7 +246,7 @@ fn locked_rust_setup_is_private_atomic_repeatable_and_reinstallable() {
         .map(|entry| entry.unwrap().file_name())
         .collect();
     home_entries.sort();
-    assert_eq!(home_entries, ["envs", "gc.lock", "repos", "tmp", "trees"]);
+    assert_eq!(home_entries, ["envs", "repos", "tmp", "trees"]);
     let repos: Vec<_> = fs::read_dir(repo.owned.home().join("repos"))
         .unwrap()
         .map(|entry| entry.unwrap().path())
