@@ -122,11 +122,7 @@ impl NativeArtifacts {
 }
 
 fn user_base(f: &Fixture) -> PathBuf {
-    if cfg!(target_os = "macos") {
-        f.owned.home().join("Library/Application Support")
-    } else {
-        f.owned.home().join("data")
-    }
+    f.owned.home().join("data")
 }
 fn record(f: &Fixture) -> PathBuf {
     fs::read_dir(user_base(f).join("turborepo/tools/repos"))

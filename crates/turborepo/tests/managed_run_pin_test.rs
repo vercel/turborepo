@@ -99,9 +99,7 @@ impl Repo {
         let pnpm = PnpmPlan::from_lock(&lock, platform, &node, None).unwrap();
         let tools = vec![node.inventory_tool().clone(), pnpm.inventory_tool().clone()];
         let home = root.parent().unwrap().join("home");
-        let user_base = if cfg!(target_os = "macos") {
-            home.join("Library/Application Support")
-        } else if cfg!(windows) {
+        let user_base = if cfg!(windows) {
             home.join("AppData/Local")
         } else {
             home.join("data")

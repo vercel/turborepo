@@ -615,11 +615,7 @@ fn setup_records_the_repository_in_the_user_tool_store() {
     j.turbo(&j.root, TOOLS_ONLY, &[]).succeeds();
     let root = j.root.canonicalize().unwrap();
     let name = format!("{:x}", Sha256::digest(root.as_os_str().as_encoded_bytes()));
-    let data = if cfg!(target_os = "macos") {
-        j.home.join("Library/Application Support")
-    } else {
-        j.home.join(".local/share")
-    };
+    let data = j.home.join(".local/share");
     let record = |store: &Path| store.join("repos").join(&name).join("record.json");
     let default = data.join("turborepo/tools");
     let value: serde_json::Value =

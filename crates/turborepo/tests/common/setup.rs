@@ -559,11 +559,7 @@ fn normalize_lockfile_on_windows(_dir: &Path, _filename: &str) {
 /// locates it through the shell, not `HOME`; tests there set
 /// `TURBO_TOOL_STORE` instead.
 pub fn user_tool_store(home: &Path, xdg_data_home: Option<&Path>) -> PathBuf {
-    let data = if cfg!(target_os = "macos") {
-        home.join("Library/Application Support")
-    } else {
-        xdg_data_home.map_or_else(|| home.join(".local/share"), Path::to_owned)
-    };
+    let data = xdg_data_home.map_or_else(|| home.join(".local/share"), Path::to_owned);
     data.join("turborepo").join("tools")
 }
 

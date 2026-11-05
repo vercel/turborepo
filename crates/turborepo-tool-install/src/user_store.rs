@@ -25,8 +25,8 @@ pub struct UserStore {
 }
 
 impl UserStore {
-    /// `$TURBO_TOOL_STORE`, else `<data_local_dir>/turborepo/tools`, checked
-    /// and created like [`UserStore::at`]. An empty variable counts as unset.
+    /// `$TURBO_TOOL_STORE`, else `<data dir>/turborepo/tools`, checked and
+    /// created like [`UserStore::at`]. An empty variable counts as unset.
     pub fn locate(repo: &Path) -> Result<Self, Error> {
         Self::at(&Self::default_root()?, repo)
     }
@@ -36,7 +36,7 @@ impl UserStore {
         Ok(
             match std::env::var_os(TOOL_STORE_VAR).filter(|path| !path.is_empty()) {
                 Some(path) => PathBuf::from(path),
-                None => dirs_next::data_local_dir()
+                None => data_dir()
                     .ok_or(Error::NoStore)?
                     .join("turborepo")
                     .join("tools"),
@@ -131,6 +131,22 @@ impl UserStore {
     /// use.
     pub fn cargo_home(&self, canonical_root: &Path) -> PathBuf {
         self.repo(canonical_root).join("cargo-home")
+    }
+}
+
+/// The user's data directory for installed tools. macOS uses the XDG layout
+/// like Linux, as mise and other tool managers do, not `~/Library/Application
+/// Support`: its space breaks unquoted scripts and shebangs naming a managed
+/// interpreter. Windows uses `%LOCALAPPDATA%`.
+fn data_dir() -> Option<PathBuf> {
+    if cfg!(target_os = "macos") {
+        // The XDG spec ignores a relative `XDG_DATA_HOME`, as `dirs_next` does.
+        std::env::var_os("XDG_DATA_HOME")
+            .map(PathBuf::from)
+            .filter(|path| path.is_absolute())
+            .or_else(|| dirs_next::home_dir().map(|home| home.join(".local/share")))
+    } else {
+        dirs_next::data_local_dir()
     }
 }
 

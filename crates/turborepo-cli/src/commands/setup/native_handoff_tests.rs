@@ -165,11 +165,7 @@ fn current_native_self_local_and_copied_local_startup_preserve_root_config() {
     fs::write(root.join("turbo.json"), r#"{"futureFlags":{"experimentalSetup":false},"agentGuidance":false,"noUpdateNotifier":true,"tasks":{"refuse":{}}}"#).unwrap();
     fs::write(root.join("turbo.jsonc"), config("probe")).unwrap();
     fs::write(root.join("apps/web/report.cjs"), r#"const fs=require('fs'),cp=require('child_process'); const p=cp.spawnSync('pnpm',['--version'],{encoding:'utf8'}); if(p.status!==0) throw Error(p.stderr); fs.writeFileSync('result.json',JSON.stringify({version:process.versions.node,v8:process.versions.v8,proof:require('crypto').createHash('sha256').update('current-native').digest('hex'),exe:process.execPath,manager:process.env.npm_execpath,pnpm:p.stdout.trim(),secret:process.env.HANDOFF_SECRET||null,declared:process.env.HANDOFF_DECLARED,hash:process.env.TURBO_HASH,args:process.argv.slice(2)}));"#).unwrap();
-    let user_base = if cfg!(target_os = "macos") {
-        f.owned.home().join("Library/Application Support")
-    } else {
-        f.owned.home().join("data")
-    };
+    let user_base = f.owned.home().join("data");
     let upstream = Upstream::new(&f, false, None);
     let selected_config = root.join("turbo.jsonc");
     let args = f.args(&[
