@@ -316,18 +316,11 @@ A second clone, worktree, or repository that selects tools already in the store 
 
 In the repository, `turbo setup` writes `.turbo/bin`, a link to the stable `bin` link in `repos/`, for [editors and scripts](#using-managed-tools-outside-of-tasks). On Windows, `turbo setup` skips these links when your user can't create symbolic links.
 
-### Cleanup
+### Free disk space
 
-At the end of each run, `turbo setup` deletes tools that no repository using the store has selected for 7 days. Tools of a repository that was deleted, moved, or recloned count as unselected. `turbo setup` reports what it removed and what it keeps:
+`turbo setup` never deletes tools from the store. A tool stays after every repository stops selecting it, so the store grows as you update tools.
 
-```txt title="Terminal"
-Removed 182.4 MB of managed tools no repository selects.
-Keeping 218.9 MB of replaced managed tools for 7 days after replacement in case a running task still uses them.
-```
-
-The 7 days protect processes that started before a repository switched to new tools. A process that keeps running for longer than that can lose its tools. While another `turbo setup` is using the store, cleanup skips that run.
-
-To remove everything yourself, delete the tool store directory. Every repository then needs `turbo setup` again.
+To free the space, delete the tool store directory while no task or `turbo setup` is using it. Every repository then needs `turbo setup` again.
 
 ## Upgrading from the experimental release
 

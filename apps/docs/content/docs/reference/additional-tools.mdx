@@ -210,16 +210,16 @@ A declaration is already exact, so `turbo setup` copies it into `turbo.lock` wit
 
 Any edit to a declaration, including a new digest, URL, layout, or platform under the same version, counts as a changed declaration.
 
-| Situation                 | Local `turbo setup`                                                                                                                   | Frozen or CI `turbo setup` |
-| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- | -------------------------- |
-| No `turbo.lock`           | Creates it                                                                                                                            | Fails                      |
-| Nothing changed           | Reuses the installation without downloading                                                                                           | Same                       |
-| A declaration changed     | Rewrites only that tool's entry, prints the change, installs                                                                          | Fails and names the tool   |
-| A declaration was removed | Removes the entry. [Cleanup](/docs/core-concepts/managed-toolchains#cleanup) later deletes the tool if no other repository selects it | Fails and names the tool   |
-| `--update-lock`           | Leaves additional tools unchanged                                                                                                     | Requires `--no-frozen`     |
-| `--force`                 | Re-hashes the installed artifacts and reinstalls any that changed                                                                     | Same                       |
-| `--check`                 | Re-hashes every installed file, including resources, and changes nothing                                                              | Same                       |
-| `--plan`                  | Reports each tool's declaration, source, digest, and action, and changes nothing                                                      | Same                       |
+| Situation                 | Local `turbo setup`                                                                                           | Frozen or CI `turbo setup` |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------- | -------------------------- |
+| No `turbo.lock`           | Creates it                                                                                                    | Fails                      |
+| Nothing changed           | Reuses the installation without downloading                                                                   | Same                       |
+| A declaration changed     | Rewrites only that tool's entry, prints the change, installs                                                  | Fails and names the tool   |
+| A declaration was removed | Removes the entry. The tool stays in the [tool store](/docs/core-concepts/managed-toolchains#free-disk-space) | Fails and names the tool   |
+| `--update-lock`           | Leaves additional tools unchanged                                                                             | Requires `--no-frozen`     |
+| `--force`                 | Re-hashes the installed artifacts and reinstalls any that changed                                             | Same                       |
+| `--check`                 | Re-hashes every installed file, including resources, and changes nothing                                      | Same                       |
+| `--plan`                  | Reports each tool's declaration, source, digest, and action, and changes nothing                              | Same                       |
 
 ```txt title="Terminal"
 acme     1.4.2  installed (https://downloads.example.com/acme/1.4.2/acme-1.4.2-linux-x64.tar.gz)

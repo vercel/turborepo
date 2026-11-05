@@ -321,7 +321,7 @@ When your root `turbo.json` sets `tools` or `dependencies` in its [setup policy]
 
 With `--check`, each tool prints `ready` instead when the installation matches `turbo.lock`.
 
-[Additional tools](/docs/reference/additional-tools) also print the source they came from. Next, `turbo setup` reports changes to `turbo.lock`, the unused tools that [cleanup](/docs/core-concepts/managed-toolchains#cleanup) removed from the tool store, and the replaced tools it keeps for 7 days. Then it runs each toolchain's dependency install and prints one line per command with its duration. Last, it prints `✓ Ready in <time>`, or the command that failed and its exit code.
+[Additional tools](/docs/reference/additional-tools) also print the source they came from. Next, `turbo setup` reports changes to `turbo.lock`. Then it runs each toolchain's dependency install and prints one line per command with its duration. Last, it prints `✓ Ready in <time>`, or the command that failed and its exit code.
 
 ## Network
 
