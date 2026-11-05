@@ -19,11 +19,7 @@ use turborepo_tool_install::{Tool, UserStore};
 const BASE_PATH: &str = "/usr/bin:/bin:/usr/bin";
 
 fn user_state(home: &Path) -> PathBuf {
-    if cfg!(target_os = "macos") {
-        home.join("Library/Application Support")
-    } else {
-        home.join("data")
-    }
+    home.join("data")
 }
 
 /// The tool store `turbo` locates under `home`.

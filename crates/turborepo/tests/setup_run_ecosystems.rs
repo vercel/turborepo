@@ -120,11 +120,7 @@ impl Journey {
 
     /// Where setup records trust and run reads it: the user data directory.
     fn user_base(&self) -> PathBuf {
-        if cfg!(target_os = "macos") {
-            self.owned.home().join("Library/Application Support")
-        } else {
-            self.owned.home().join("data")
-        }
+        self.owned.home().join("data")
     }
 
     /// `turbo setup <flags>` from `dir`, against the loopback upstream only.

@@ -1362,8 +1362,8 @@ pub enum Command {
     ///
     /// Setup installs tools into one tool store per user: $TURBO_TOOL_STORE if
     /// set, else turborepo/tools in the local data directory. That directory
-    /// is $XDG_DATA_HOME or ~/.local/share on Linux, ~/Library/Application
-    /// Support on macOS, and %LOCALAPPDATA% on Windows. Setup installs a tool
+    /// is $XDG_DATA_HOME or ~/.local/share on Linux and macOS, and
+    /// %LOCALAPPDATA% on Windows. Setup installs a tool
     /// once, however many repositories select it in turbo.lock. The store also
     /// holds each repository's setup record.
     ///

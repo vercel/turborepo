@@ -1643,11 +1643,7 @@ fn plain_setup_provisions_tools_and_reports_dependencies_skipped() {
     // binary's plain/frozen/check reporting without traffic or probes.
     let home = tempfile::tempdir().unwrap();
     fs::set_permissions(home.path(), fs::Permissions::from_mode(0o700)).unwrap();
-    let user_data = home.path().join(if cfg!(target_os = "macos") {
-        "Library/Application Support"
-    } else {
-        ".local/share"
-    });
+    let user_data = home.path().join(".local/share");
     let store = common::setup::user_tool_store(home.path(), Some(&user_data));
     let installed = common::setup::install_tools(
         root,

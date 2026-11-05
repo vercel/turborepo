@@ -98,11 +98,7 @@ impl Repo {
         fs::write(root.join("turbo.lock"), lock.to_string()).unwrap();
         let upstream = LoopbackServer::node_pnpm(node_path, node, pnpm, false, |_| {}).unwrap();
         let invocation = root.join("apps/web/src");
-        let user_base = if cfg!(target_os = "macos") {
-            owned.home().join("Library/Application Support")
-        } else {
-            owned.home().join("data")
-        };
+        let user_base = owned.home().join("data");
         let code = turborepo_cli::test_support::frozen_tools_for_tests(
             &invocation,
             &user_base.join("turborepo/tools"),
