@@ -11,7 +11,7 @@ related:
   - /docs/reference/hook
 ---
 
-`setup.additionalTools` in the root `turbo.json` declares command-line tools that `turbo setup` has no built-in support for, such as `protoc` or an internal company CLI. For each tool, you pin an exact version and, for each platform, the URL and SHA-256 digest of a downloadable binary or archive. `turbo setup` records the declaration in `turbo.lock`, downloads and verifies the artifact, and installs it into your [tool store](/docs/core-concepts/managed-toolchains#where-tools-are-stored) next to the other managed toolchains. `turbo run`, `turbo exec`, and the shell hook then put its executables on `PATH`. `turbo setup` never runs scripts from the tool or the repository.
+`setup.additionalTools` in the root `turbo.json` declares command-line tools that `turbo setup` has no built-in support for, such as `protoc` or an internal company CLI. For each tool, you pin an exact version and, for each platform, the URL and SHA-256 digest of a downloadable binary or archive. `turbo setup` records the declaration in `turbo.lock`, downloads and verifies the artifact, and installs it into your [tool store](/docs/core-concepts/managed-toolchains#where-tools-are-stored) next to the other managed toolchains. `turbo run`, `turbo exec`, and the shell hook then put its executables on `PATH`. Installing the tool runs no scripts from the tool or the repository.
 
 ## Declaring a tool
 
@@ -81,14 +81,10 @@ turbo setup
 ```
 
 ```txt title="Terminal"
-javascript: tools managed (inferred); dependencies locked (inferred)
-turbo.lock created. Commit turbo.lock to share the exact managed tool selections.
-acme: locked 1.4.2
-node: locked 24.21.0
-pnpm: locked 10.18.0
-node 24.21.0: installed
-pnpm 10.18.0: installed
-acme 1.4.2: installed (https://downloads.example.com/acme/1.4.2/acme-1.4.2-linux-x64.tar.gz)
+node   24.21.0  installed
+pnpm   10.18.0  installed
+acme     1.4.2  installed (https://downloads.example.com/acme/1.4.2/acme-1.4.2-linux-x64.tar.gz)
+turbo.lock created, commit it to share these versions
 ...
 ```
 
@@ -226,8 +222,8 @@ Any edit to a declaration, including a new digest, URL, layout, or platform unde
 | `--plan`                  | Reports each tool's declaration, source, digest, and action, and changes nothing                                                      | Same                       |
 
 ```txt title="Terminal"
-turbo.lock updated. Commit turbo.lock to share the exact managed tool selections.
-acme: 1.4.2 (selection changed)
+acme     1.4.2  installed (https://downloads.example.com/acme/1.4.2/acme-1.4.2-linux-x64.tar.gz)
+turbo.lock updated (acme 1.4.2 reselected), commit it to share these versions
 ```
 
 ### Downloads and installation
@@ -243,9 +239,9 @@ In local mode, `turbo setup` updates `turbo.lock` before it downloads. If the ne
 
 ### Mirrors and offline setup
 
-Installed artifacts are kept in the [tool store](/docs/core-concepts/managed-toolchains#where-tools-are-stored) with the built-in tools, keyed by name, version, platform, and SHA-256, so another repository that locks the same artifact reuses it without downloading.
+Installed artifacts are kept in the [tool store](/docs/core-concepts/managed-toolchains#where-tools-are-stored) with the built-in tools, keyed by name, version, platform, SHA-256, and layout, so another repository that locks the same artifact reuses it without downloading.
 
-- **Offline.** `turbo setup --offline` uses only artifacts already in the tool store, without network access. `turbo setup --offline --force` re-hashes them first. If any artifact is missing or changed, it lists every one with its URL and digest and installs nothing.
+- **Offline.** `turbo setup --offline` uses only tools already in the tool store, without network access, and re-hashes every installed file. If any tool is missing from the store, it lists each missing artifact with its URL and digest and installs nothing.
 - **Mirror.** Set `TURBO_SETUP_ARTIFACT_MIRROR` to an HTTPS URL, and `turbo setup` downloads each locked URL from `<mirror>/<host>/<path>` instead, the layout `wget -x` writes. For example, with `TURBO_SETUP_ARTIFACT_MIRROR=https://mirror.example.com/tools`, the URL above is fetched from `https://mirror.example.com/tools/downloads.example.com/acme/1.4.2/acme-1.4.2-linux-x64.tar.gz`. The mirror can't contain credentials, a query, or a fragment, and `turbo.lock` keeps the declared URLs.
 
 ## Using the tool
@@ -256,7 +252,7 @@ After `turbo setup`, every declared executable is in the same managed `bin` dire
 - **[`turbo exec`](/docs/reference/exec)** runs a command with the same `PATH`, for scripts and CI steps outside the task graph.
 - **[The shell hook](/docs/reference/hook)** adds it to your interactive shell.
 
-The exported executables point into the full installed tree, so a tool that finds resources relative to its own executable keeps working. Neither `turbo run` nor `turbo exec` downloads anything. If a tool is missing, damaged, or out of date with `turbo.lock`, they fail and tell you to run `turbo setup`, rather than using a tool with the same name from your `PATH`.
+The exported executables point into the full installed tree, so a tool that finds resources relative to its own executable keeps working. Neither `turbo run` nor `turbo exec` downloads anything. If a tool is missing or out of date with `turbo.lock`, or its entries in the managed `bin` directory changed, they fail and tell you to run `turbo setup`, rather than using a tool with the same name from your `PATH`.
 
 ### Task hashes
 
@@ -276,7 +272,7 @@ A SHA-256 digest pins the exact bytes that `turbo setup` installs. It doesn't ma
 
 Additional tools cover downloadable binaries and archives that run where they're unpacked. `turbo setup` doesn't:
 
-- Run install scripts or commands from the tool or the repository.
+- Run install scripts or commands from the tool.
 - Install system libraries or system packages.
 - Run privileged installers, such as `.pkg` or `.msi` packages, or anything that needs `sudo`.
 - Start services or daemons.
@@ -318,8 +314,8 @@ If a tool is already a dependency of your repository, such as an npm package in 
 | `cannot download additional tool "<id>": artifact SHA-256 does not match`        | The bytes at the URL changed or the digest is wrong. Verify the artifact and fix `sha256`.                                     |
 | `cannot unpack additional tool "<id>": archive contains an unsafe or nonportable path` | The archive has `./`, absolute, or `..` entries. See [Limitations](#limitations).                                        |
 | `download redirect is not to an approved HTTPS origin, or exceeds the hop limit` | The URL redirects to HTTP, to a URL with credentials, or more than three times. Use a URL that serves the artifact over HTTPS. |
-| `invalid inventory, tool identity or executable collision`                       | Check that every executable path exists in the archive and has its executable permission set.                                  |
+| `invalid tool selection, tool identity or executable collision`                  | Check that every executable path exists in the archive and has its executable permission set.                                  |
 | `additional tool "<id>" exports "<name>", which "<tool>" also exports`           | Rename the executable under `setup.additionalTools.<id>.artifacts`.                                                            |
-| `managed installation is damaged or unsafe; run turbo setup`                     | A file in the installed tree changed. Run `turbo setup` to reinstall it.                                                       |
+| `managed <id> <version> changed since turbo setup installed it`                  | A file in the installed tree changed. Run `turbo setup --force` to reinstall it.                                               |
 | `a native Node declaration is required`                                          | Add a Node.js declaration, such as `.nvmrc`, at the repository root.                                                           |
 | `TURBO_SETUP_ARTIFACT_MIRROR must be an absolute HTTPS URL`                      | Use an `https://` mirror without credentials, a query, or a fragment.                                                          |

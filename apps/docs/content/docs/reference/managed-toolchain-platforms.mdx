@@ -29,7 +29,7 @@ A platform is qualified when the complete journey passes there with a release bu
 | macOS, Intel (x64)           | [Pending](#pending-qualification)              | Yes                                 | Yes                                 | bash, zsh, fish  |
 | Linux arm64, glibc           | [Pending](#pending-qualification)              | Yes                                 | Yes                                 | bash, zsh, fish  |
 | Windows x64                  | [Partly qualified](#windows)                   | Yes                                 | Yes                                 | PowerShell       |
-| Linux with musl, like Alpine | [`verify-system` only](#musl-linux), pending   | `verify-system` only                | `verify-system` only                | Nothing to activate |
+| Linux with musl, like Alpine | [Not supported](#musl-linux)                   | No                                  | No                                  | No               |
 | Windows arm64                | [Not supported](#windows-arm64)                | No                                  | No                                  | No               |
 
 Rust, Python, and Go follow the same table, and need their [workspace Future Flags](/docs/reference/setup#rust). [Additional tools](/docs/reference/additional-tools#platforms) install wherever the repository declares an artifact for the platform.
@@ -57,18 +57,14 @@ On Linux x64, the complete journey passes with a release build of `turbo`. Linux
 Official Node.js releases don't include musl builds, so managed tools aren't available on musl-based distributions such as Alpine Linux:
 
 ```txt title="Terminal"
-managed tools are not supported on musl Linux hosts such as Alpine; install the repository's tools in the image and use verify-system for them
+managed tools are not supported on musl Linux hosts such as Alpine
 ```
 
-On these hosts, install Node.js and pnpm yourself, in containers from an exactly pinned image tag, and set the JavaScript toolchain to [`verify-system`](/docs/reference/setup-policy#verify-system). `turbo setup` then records and checks the installed Node.js and pnpm versions instead of downloading them, and `turbo run` and `turbo exec` use them from `PATH`. The shell hook has nothing to activate.
-
-Task hashes include the C library family and version, so caches are never shared between glibc and musl hosts, or between musl releases.
-
-`verify-system` on musl hosts is implemented. Its qualification is pending.
+On these hosts, install your tools yourself, for example in an exactly pinned container image, or use a supported macOS, glibc Linux, or Windows x64 host for managed tools.
 
 ## Windows
 
-On Windows x64, the Node.js and pnpm journey passes with a release build of `turbo`: standalone install, `turbo setup`, `turbo run`, `turbo exec`, and repair of a damaged installation. Dependency installs, Yarn, Bun, Rust, uv and Python, Go, additional tools, and the PowerShell hook are implemented for Windows x64. Their qualification on Windows is pending.
+On Windows x64, the Node.js and pnpm journey passes with a release build of `turbo`: standalone install, `turbo setup`, `turbo run`, `turbo exec`, and repair of a broken installation with `turbo setup`. Dependency installs, Yarn, Bun, Rust, uv and Python, Go, additional tools, and the PowerShell hook are implemented for Windows x64. Their qualification on Windows is pending.
 
 What's different on Windows:
 
@@ -78,7 +74,7 @@ What's different on Windows:
 - **Rust builds** need the MSVC linker. If it's missing, `turbo setup` still succeeds and recommends installing Visual Studio Build Tools with the "Desktop development with C++" workload.
 - **Python.** The first `turbo setup` precompiles the standard library, so it takes longer than later runs.
 - **Tool store paths can't contain `%`, `!`, or `"`.** `cmd.exe` would expand them in a managed tool's path, so `turbo setup` can't create `.cmd` programs in such a [tool store](/docs/core-concepts/managed-toolchains#where-tools-are-stored). Set `TURBO_TOOL_STORE` to a path without them.
-- **Links need permission to create symbolic links.** Without it, `turbo setup` skips `.turbo/bin` and the stable `bin` link in the tool store, and `turbo exec --print-env=bin` prints a path that doesn't exist. `turbo run`, `turbo exec`, the hook, and the other [`--print-env`](/docs/reference/exec#--print-env) formats work without the links.
+- **Links need permission to create symbolic links.** Without it, `turbo setup` skips `.turbo/bin` and the stable `bin` link in the tool store, and `turbo exec --print-env=bin` prints the directory of the current tools, which changes when `turbo setup` changes the tools. `turbo run`, `turbo exec`, the hook, and the other [`--print-env`](/docs/reference/exec#--print-env) formats work without the links.
 
 ### Windows arm64
 
@@ -95,7 +91,7 @@ Use `turbo` in WSL instead.
 In a managed repository, the global `turbo` hands off to a [repository-local `turbo`](/docs/core-concepts/managed-toolchains#repository-local-turbo) when that version supports the repository's `turbo.lock` schema and tools, and is built for the same platform. Handing off works on:
 
 - macOS, Apple silicon and Intel.
-- Linux x64 and arm64, with glibc. On musl hosts, such as Alpine, it works for repositories whose tools all use [`verify-system`](#musl-linux).
+- Linux x64 and arm64, with glibc.
 - Windows x64.
 
 The check compares the lock schema, the platform, and the supported tools, never version numbers. If the local `turbo` was installed for another architecture, for example with x64 Node.js under emulation on Apple silicon, the command fails before running anything. Reinstall dependencies with a Node.js for the machine's native architecture. See [A repository-local `turbo` can't run managed tasks](/docs/reference/setup#a-repository-local-turbo-cant-run-managed-tasks).
@@ -107,4 +103,3 @@ These claims are pending. This page changes as each one passes the complete jour
 - **macOS, Intel (x64).**
 - **Linux arm64, glibc.**
 - **Windows x64:** Dependency installs, Yarn, Bun, Rust, uv and Python, Go, additional tools, and the PowerShell hook.
-- **musl Linux:** `verify-system` with `turbo run` and `turbo exec`, in CI on a musl host.

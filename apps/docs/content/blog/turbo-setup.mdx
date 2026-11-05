@@ -42,15 +42,12 @@ It downloads those versions into a tool store in your user data directory, verif
 
 ```txt title="Terminal"
 javascript: tools managed (inferred); dependencies locked (inferred)
-turbo.lock created. Commit turbo.lock to share the exact managed tool selections.
-node: locked 24.21.0
-pnpm: locked 10.18.0
-node 24.21.0: installed
-pnpm 10.18.0: installed
-Installing javascript dependencies from pnpm-lock.yaml with managed pnpm 10.18.0: pnpm install --frozen-lockfile (dependency installation, not a Turborepo task)
-pnpm 10.18.0: native pnpm policy; project scripts run; dependency scripts run only for allowed packages
-...
-Dependencies: javascript installed. No Turborepo tasks run.
+node   24.21.0  installed
+pnpm   10.18.0  installed
+turbo.lock created, commit it to share these versions
+
+✓ pnpm install --frozen-lockfile  8.4s
+✓ Ready in 21.3s
 ```
 
 `turbo setup` never changes your global toolchain, your shell profile, or your system. Dependencies install from your lockfile without changing it, and lifecycle scripts follow your package manager's own rules for which packages may run them. To see what `turbo setup` would do without doing it, run `turbo setup --plan`.
@@ -112,7 +109,7 @@ Repositories often depend on command-line tools that no language toolchain provi
 
 ## Platforms
 
-Managed toolchains are qualified on macOS with Apple silicon and on Linux x64 with glibc. On Windows x64, Node.js and pnpm are qualified, and the rest is implemented and pending qualification, as are Intel Macs and Linux arm64. Alpine and other musl-based distributions can verify the tools installed in their images with [`verify-system`](/docs/reference/setup-policy#verify-system). See [Managed toolchain platforms](/docs/reference/managed-toolchain-platforms) for the details.
+Managed toolchains are qualified on macOS with Apple silicon and on Linux x64 with glibc. On Windows x64, Node.js and pnpm are qualified, and the rest is implemented and pending qualification, as are Intel Macs and Linux arm64. Alpine and other musl-based distributions aren't supported. See [Managed toolchain platforms](/docs/reference/managed-toolchain-platforms) for the details.
 
 Rust, Python, and Go setup is available in repositories that enable Turborepo's experimental support for those languages.
 

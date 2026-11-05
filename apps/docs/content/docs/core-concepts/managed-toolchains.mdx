@@ -95,17 +95,12 @@ The first run creates `turbo.lock`, installs the tools, and then installs your d
 
 ```txt title="Terminal"
 javascript: tools managed (inferred); dependencies locked (inferred)
-turbo.lock created. Commit turbo.lock to share the exact managed tool selections.
-node: locked 24.21.0
-pnpm: locked 10.18.0
-node 24.21.0: installed
-pnpm 10.18.0: installed
-Installing javascript dependencies from pnpm-lock.yaml with managed pnpm 10.18.0: pnpm install --frozen-lockfile (dependency installation, not a Turborepo task)
-pnpm 10.18.0: native pnpm policy; project scripts run; dependency scripts run only for allowed packages
-Permitted lifecycle scripts run package code that can start other commands. turbo setup runs no Turborepo tasks.
-...
-javascript dependencies: installed; pnpm-lock.yaml unchanged
-Dependencies: javascript installed. No Turborepo tasks run.
+node   24.21.0  installed
+pnpm   10.18.0  installed
+turbo.lock created, commit it to share these versions
+
+✓ pnpm install --frozen-lockfile  8.4s
+✓ Ready in 21.3s
 ```
 
 The first line is the effective [setup policy](/docs/reference/setup-policy#output) for each toolchain. The tools go into your [tool store](#where-tools-are-stored), outside the repository, so another repository that selects the same versions reuses them without downloading.
@@ -205,8 +200,7 @@ Don't edit `turbo.lock` by hand. Change your declarations and run `turbo setup` 
 When `turbo setup` updates the lock, it prints each change:
 
 ```txt title="Terminal"
-turbo.lock updated. Commit turbo.lock to share the exact managed tool selections.
-node: 24.21.0 -> 22.23.3
+turbo.lock updated (node 24.21.0 → 22.23.3), commit it to share these versions
 ```
 
 To keep `turbo.lock` current when Renovate or Dependabot change a declaration, see [Updating turbo.lock with dependency bots](/docs/guides/updating-turbo-lock).
@@ -248,7 +242,7 @@ As a result, changing a locked tool invalidates task caches, and [Remote Cache](
 
 ### Repository-local `turbo`
 
-When you run the global `turbo` in a repository that installs `turbo` as a dependency, it [hands off to the local version](/docs/getting-started/installation#repository-installation). In a managed repository, it first validates the managed tools, then asks the local `turbo` what it supports. The local `turbo` must support the repository's `turbo.lock` schema, be built for the same platform as the global `turbo`, and support every kind of tool the repository uses, such as `pnpm`, `rust`, or `verify-system`. `turbo` compares these capabilities, never version numbers.
+When you run the global `turbo` in a repository that installs `turbo` as a dependency, it [hands off to the local version](/docs/getting-started/installation#repository-installation). In a managed repository, it first validates the managed tools, then asks the local `turbo` what it supports. The local `turbo` must support the repository's `turbo.lock` schema, be built for the same platform as the global `turbo`, and support every kind of tool the repository uses, such as `pnpm` or `rust`. `turbo` compares these capabilities, never version numbers.
 
 If the local `turbo` falls short, the command fails before anything runs and names what's missing:
 
@@ -351,7 +345,7 @@ Remove it from your root `turbo.json` or `turbo.jsonc`. A root `turbo.lock` is a
 
 - **Experimental languages.** Rust, Python, and Go setup need `experimentalCargoWorkspaces`, `experimentalPythonWorkspaces`, and `experimentalGoWorkspaces`, like the rest of Turborepo's support for those languages. See [Supported declarations](/docs/reference/setup#supported-declarations).
 - **Exact package manager versions.** npm, pnpm, Yarn, and Bun must be pinned to an exact version. Node.js, Rust, Python, uv, and Go can use ranges and channels.
-- **Platforms.** See [Managed toolchain platforms](/docs/reference/managed-toolchain-platforms) for what's supported on each operating system, including musl-based Linux distributions, such as Alpine, which can only use [`verify-system`](/docs/reference/setup-policy#verify-system).
+- **Platforms.** See [Managed toolchain platforms](/docs/reference/managed-toolchain-platforms) for what's supported on each operating system. Managed toolchains don't support musl-based Linux distributions, such as Alpine.
 - **Repository-local `turbo`.** A `turbo` installed in `node_modules` must support the repository's managed tools, or the global `turbo` refuses to hand off to it. See [Repository-local `turbo`](#repository-local-turbo).
 - **`turbo prune` and `turbo get-mfe-port`.** With Cargo, Python, or Go workspaces enabled, these commands build the package graph with the `cargo`, `uv`, and `go` on your `PATH`, not the managed tools. Run them where those tools are installed, or with [`turbo exec`](/docs/reference/exec), such as `turbo exec -- turbo prune web`.
 - **One `turbo setup` per Docker `RUN` instruction.** Each `RUN` instruction that uses the managed tools must run `turbo setup` first. See [Docker](/docs/guides/tools/docker#managed-toolchains).

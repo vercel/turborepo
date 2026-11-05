@@ -52,7 +52,7 @@ The `sh`, `fish`, `pwsh`, and `json` formats print `PATH` and every variable tha
 eval "$(turbo exec --print-env=sh)"
 ```
 
-The `bin` format prints a path that stays the same when `turbo setup` changes the tools. [`.turbo/bin`](/docs/core-concepts/managed-toolchains#where-tools-are-stored) in the repository is a link to the same directory, so an editor setting can name a path inside the repository, such as `.turbo/bin/node`.
+The `bin` format prints a path that stays the same when `turbo setup` changes the tools. [`.turbo/bin`](/docs/core-concepts/managed-toolchains#where-tools-are-stored) in the repository is a link to the same directory, so an editor setting can name a path inside the repository, such as `.turbo/bin/node`. On Windows, `turbo setup` skips these links when you can't create symbolic links. `bin` then prints the directory of the current tools, which changes when `turbo setup` changes the tools.
 
 On macOS and Linux, the programs in that directory set the variables they need, such as `GOROOT` or `UV_PYTHON`, so they work without the rest of the managed environment. The exception is `CARGO_HOME`, which only `turbo run`, `turbo exec`, and the shell hook set. On Windows, the programs in that directory set no variables. Use the `pwsh` or `json` format to get them.
 
@@ -62,7 +62,6 @@ On macOS and Linux, the programs in that directory set the variables they need, 
 - **Never installs.** `turbo exec` never installs or downloads tools and never changes `turbo.lock`. If the repository has no `turbo.lock`, or its managed tools are missing or out of date, it fails before running anything and tells you to run `turbo setup`. It never falls back to tools on your `PATH`.
 - **Clone-local tools.** After [`turbo setup --no-lock`](/docs/reference/setup#--no-lock), `turbo exec` uses the tools it installed for this clone.
 - **No lock, no tool files.** `turbo exec` reads only the records and `bin` entries that `turbo setup` wrote in the [tool store](/docs/core-concepts/managed-toolchains#where-tools-are-stored). It never reads the installed tools' files and never waits for a running `turbo setup`.
-- **[`verify-system`](/docs/reference/setup-policy#verify-system) tools.** `turbo exec` checks them on `PATH` against `turbo.lock` and runs the command with your `PATH` unchanged.
 
 ```txt title="Terminal"
   x `turbo exec` requires managed setup, but the repository root has no

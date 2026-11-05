@@ -47,7 +47,7 @@ Renovate can run `turbo setup` after it updates a declaration, using [`postUpgra
 
 Install the [standalone `turbo` binary](/docs/getting-started/installation#global-installation) in the environment that runs Renovate, so that `turbo` is on its `PATH`. The global binary runs `turbo setup` itself, so Renovate doesn't need to install your dependencies first.
 
-The environment must also meet the [requirements for `turbo setup`](/docs/reference/setup#requirements), including having [no npm configuration](/docs/reference/setup#npm-configuration-is-rejected) that could redirect downloads.
+The environment must also meet the [requirements for `turbo setup`](/docs/reference/setup#requirements).
 
 </Step>
 <Step>
@@ -114,12 +114,12 @@ Replace `pnpm` with your package manager. If you use Rust, Python, or Go, add ru
 When Renovate updates a declaration, it runs `turbo setup` in its checkout. `turbo setup` re-resolves only the changed tool and installs the toolchain, and Renovate commits the updated `turbo.lock` with the declaration change:
 
 ```txt title="Terminal"
-javascript: tools managed (inferred); dependencies skipped (--tools-only)
-turbo.lock updated. Commit turbo.lock to share the exact managed tool selections.
-pnpm: 10.18.0 -> 10.18.1
-node 24.21.0: reused
-pnpm 10.18.1: installed
-...
+node   24.21.0  reused
+pnpm   10.18.1  installed
+turbo.lock updated (pnpm 10.18.0 → 10.18.1), commit it to share these versions
+
+Dependencies skipped (--tools-only).
+✓ Ready in 3.2s
 ```
 
 When a branch groups several updates, later runs find `turbo.lock` already current and leave it unchanged.
@@ -148,8 +148,8 @@ git push
 Outside of CI, `turbo setup` uses local mode, so it updates `turbo.lock` and prints each change:
 
 ```txt title="Terminal"
-javascript: tools managed (inferred); dependencies skipped (--tools-only)
-turbo.lock updated. Commit turbo.lock to share the exact managed tool selections.
-pnpm: 10.18.0 -> 10.18.1
+node   24.21.0  reused
+pnpm   10.18.1  installed
+turbo.lock updated (pnpm 10.18.0 → 10.18.1), commit it to share these versions
 ...
 ```
