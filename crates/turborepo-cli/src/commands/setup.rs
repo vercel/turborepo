@@ -483,16 +483,30 @@ fn run_reporting(
     let declared = snapshot.declarations();
     // `rustup toolchain install` still writes to the terminal, which a spinner
     // would draw over.
-    let preparing = (!declared.contains_key("rust")).then(|| {
-        let ids: Vec<_> = declared.keys().map(String::as_str).collect();
-        console.spinner(&format!("Preparing {}", ids.join(", ")))
-    });
+    let ids: Vec<_> = declared.keys().map(String::as_str).collect();
+    let preparing_message = format!("Preparing {}", ids.join(", "));
+    let preparing = (!declared.contains_key("rust")).then(|| console.spinner(&preparing_message));
+    // Lock resolution only makes HTTP requests and runs before rustup, so it
+    // gets its own spinner when the preparing spinner is off.
+    let lock_spinner = std::cell::RefCell::new(None);
+    let lock_status = |message: Option<&str>| match (&preparing, message) {
+        (Some(spinner), message) => spinner.set_message(message.unwrap_or(&preparing_message)),
+        (None, Some(message)) => *lock_spinner.borrow_mut() = Some(console.spinner(message)),
+        (None, None) => drop(lock_spinner.borrow_mut().take()),
+    };
     let mut tools = if request.offline {
         offline::run(&discovery, snapshot, &request, transports, preflight)
     } else if request.lock == LockMode::NoLock {
         no_lock::run(&discovery, snapshot, transports, preflight)
     } else {
-        provision::run(&discovery, snapshot, &request, transports, preflight)
+        provision::run(
+            &discovery,
+            snapshot,
+            &request,
+            transports,
+            preflight,
+            &lock_status,
+        )
     }?;
     let root = discovery.snapshot_root()?.as_std_path();
     // Each path above released its store lease on return.

@@ -151,5 +151,5 @@ pub(super) fn run(
             &missing,
         )));
     }
-    provision::run(discovery, sources, request, transports, preflight)
+    provision::run(discovery, sources, request, transports, preflight, &|_| {})
 }
