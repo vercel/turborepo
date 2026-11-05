@@ -15,6 +15,7 @@ use nix::sys::signal::Signal;
 use super::{
     diagnostic_contains,
     recovery::{CHECK, OFFLINE, Repo, text},
+    reports_tools,
 };
 
 fn spawn(repo: &Repo, count: usize, monitor: &TcpListener) -> Vec<Child> {
@@ -30,13 +31,23 @@ fn spawn(repo: &Repo, count: usize, monitor: &TcpListener) -> Vec<Child> {
         .collect()
 }
 
-/// Every process exits with `code` and prints `expected`.
-fn finish(children: Vec<Child>, code: i32, expected: &str) {
-    for child in children {
-        let output = child.wait_with_output().unwrap();
-        let text = text(&output);
-        assert_eq!(output.status.code(), Some(code), "{text}");
-        assert!(diagnostic_contains(&text, expected), "{expected}: {text}");
+/// Every process exits with `code`; returns what each printed.
+fn finish(children: Vec<Child>, code: i32) -> Vec<String> {
+    children
+        .into_iter()
+        .map(|child| {
+            let output = child.wait_with_output().unwrap();
+            let text = text(&output);
+            assert_eq!(output.status.code(), Some(code), "{text}");
+            text
+        })
+        .collect()
+}
+
+/// Every process exits 0 and reports `tool` reused.
+fn finish_reused(children: Vec<Child>, tool: &str) {
+    for text in finish(children, 0) {
+        assert!(reports_tools(&text, "Reused", &[tool]), "{tool}: {text}");
     }
 }
 
@@ -82,13 +93,16 @@ fn concurrent_offline_writers_in_one_repository_record_one_installation_or_nothi
     let repo = Repo::new();
     let monitor = monitor();
     // An empty store fails every racer the same way and publishes nothing.
-    finish(spawn(&repo, 4, &monitor), 1, &repo.missing_node());
+    let missing = repo.missing_node();
+    for text in finish(spawn(&repo, 4, &monitor), 1) {
+        assert!(diagnostic_contains(&text, &missing), "{missing}: {text}");
+    }
     assert_eq!(repo.inventory(), None);
     repo.assert_committed();
     // Writers serialize on the repository lock and record one environment.
     repo.seed_store(&["node", "pnpm"]);
     let before = published(&repo);
-    finish(spawn(&repo, 4, &monitor), 0, "pnpm 10.0.0 reused");
+    finish_reused(spawn(&repo, 4, &monitor), "pnpm 10.0.0");
     assert_eq!(published(&repo), before);
     assert_ready(&repo);
     assert_idle(&monitor);
@@ -106,7 +120,7 @@ fn cancelled_writer_releases_waiters_while_another_repository_shares_the_store()
     let monitor = monitor();
     let mut waiting = spawn(&first, 3, &monitor);
     // The other repository is not blocked and records the same trees.
-    finish(spawn(&second, 2, &monitor), 0, "pnpm 10.0.0 reused");
+    finish_reused(spawn(&second, 2, &monitor), "pnpm 10.0.0");
     assert!(
         waiting
             .iter_mut()
@@ -121,7 +135,7 @@ fn cancelled_writer_releases_waiters_while_another_repository_shares_the_store()
     drop(held);
     // The trees are already in the shared store, so these setups only
     // record and link them.
-    finish(waiting, 0, "pnpm 10.0.0 reused");
+    finish_reused(waiting, "pnpm 10.0.0");
     for repo in [&first, &second] {
         assert_eq!(published(repo), (2, 1));
         assert_ready(repo);

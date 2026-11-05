@@ -1,0 +1,12 @@
+---
+source: crates/turborepo-cli/src/commands/setup/output_tests.rs
+expression: "render_tools(&tools(), style(false), None)"
+---
+✓ Upgraded    node 20.1.0 → 22.11.0 (npm 10.9.0)
+✓ Downgraded  python 3.13.0 → 3.12.1
+✓ Changed     rust 1.90.0 → stable
+✓ Installed   pnpm 9.15.0, acme-lint 1.2.3
+✓ Verified    uv 0.5.0
+✓ Reused      go 1.23.0
+✓ Removed     yarn 1.22.0
+Offline: used only tools already in the tool store.

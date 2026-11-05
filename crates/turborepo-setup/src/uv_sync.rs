@@ -13,7 +13,7 @@ use std::{
     ffi::OsString,
     fs, io,
     path::Path,
-    process::{Command, Stdio},
+    process::{Command, ExitStatus, Stdio},
 };
 
 #[derive(Debug, thiserror::Error)]
@@ -51,7 +51,17 @@ impl UvSync<'_> {
         args
     }
 
+    /// Runs uv with the caller's stdout and stderr.
     pub fn run(&self) -> Result<(), Error> {
+        self.run_with(Command::status)
+    }
+
+    /// Runs uv through `status`, which spawns the configured command and
+    /// waits, so the caller can route its output.
+    pub fn run_with(
+        &self,
+        status: impl FnOnce(&mut Command) -> io::Result<ExitStatus>,
+    ) -> Result<(), Error> {
         let root = self.root.canonicalize()?;
         let lock = root.join("uv.lock");
         let before = match fs::read(&lock) {
@@ -61,15 +71,15 @@ impl UvSync<'_> {
             }
             Err(error) => return Err(error.into()),
         };
-        // Inherit the caller's environment and output so native index
-        // credentials, settings and uv's own diagnostics keep applying; the
-        // launcher owns interpreter selection.
-        let status = Command::new(self.uv)
-            .current_dir(&root)
-            .args(self.args())
-            .envs(self.env)
-            .stdin(Stdio::null())
-            .status();
+        // Inherit the caller's environment so native index credentials and
+        // settings keep applying; the launcher owns interpreter selection.
+        let status = status(
+            Command::new(self.uv)
+                .current_dir(&root)
+                .args(self.args())
+                .envs(self.env)
+                .stdin(Stdio::null()),
+        );
         let changed = fs::read(&lock).ok().as_deref() != Some(&before[..]);
         if changed {
             fs::write(&lock, &before)?;

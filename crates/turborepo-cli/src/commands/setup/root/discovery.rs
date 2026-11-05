@@ -106,6 +106,14 @@ fn config_scope(
 /// writer guard AND Store lock through promotion. Byte drift remains Snapshot's
 /// job. Arbitrary editors are not serialized; this is not an atomic editor
 /// transaction.
+/// turbo.lock as Git sees it, when it differs from the last commit.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(in crate::commands::setup) enum UncommittedLock {
+    /// No commit has it yet.
+    New,
+    Modified,
+}
+
 pub(in crate::commands::setup) struct Discovery {
     cwd: AbsoluteSystemPathBuf,
     explicit_cwd: bool,
@@ -178,6 +186,23 @@ impl Discovery {
 
     pub fn source_eligibility(&self) -> SourceEligibility {
         self.eligibility
+    }
+
+    /// What Git reports for root turbo.lock, when it is not committed as is.
+    /// Only feeds a reminder, so a missing Git or a non-repository answers
+    /// `None`.
+    pub fn uncommitted_lock(&self) -> Option<UncommittedLock> {
+        let reply = self
+            .git
+            .status(self.root_path().as_std_path(), "turbo.lock")
+            .ok()
+            .filter(|reply| reply.success())?;
+        // Porcelain v1: two status letters, then the path. `??` is untracked
+        // and `A` is staged but never committed.
+        match reply.stdout.get(..2)? {
+            b"??" | [b'A', _] => Some(UncommittedLock::New),
+            _ => Some(UncommittedLock::Modified),
+        }
     }
 
     /// Reject unsupported custom configuration BEFORE Snapshot/storage/network.

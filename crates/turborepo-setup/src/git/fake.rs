@@ -22,6 +22,7 @@ pub enum Failure {
 
 struct State {
     toplevels: BTreeMap<PathBuf, PathBuf>,
+    changed: BTreeMap<PathBuf, String>,
     failure: Option<Failure>,
     queries: usize,
 }
@@ -49,6 +50,7 @@ impl FakeGit {
         Self {
             state: Mutex::new(State {
                 toplevels: BTreeMap::new(),
+                changed: BTreeMap::new(),
                 failure: None,
                 queries: 0,
             }),
@@ -71,6 +73,12 @@ impl FakeGit {
     /// path is reported as given, so a symlink keeps its spelling.
     pub fn set_toplevel(&self, dir: &Path, toplevel: &Path) {
         self.state().toplevels.insert(key(dir), toplevel.to_owned());
+    }
+
+    /// Report `path` with porcelain status letters `code`, such as `??` or
+    /// ` M`, in `status`. Paths start clean.
+    pub fn set_status(&self, path: &Path, code: &str) {
+        self.state().changed.insert(key(path), code.to_owned());
     }
 
     /// Fail every later query, or stop failing with `None`.
@@ -129,6 +137,18 @@ impl Git for FakeGit {
         Ok(Reply {
             code: Some(0),
             stdout: format!("{}\n", toplevel.display()).into_bytes(),
+            stderr: Vec::new(),
+        })
+    }
+
+    fn status(&self, dir: &Path, path: &str) -> io::Result<Reply> {
+        if let Some(reply) = self.begin()? {
+            return Ok(reply);
+        }
+        let code = self.state().changed.get(&key(&dir.join(path))).cloned();
+        Ok(Reply {
+            code: Some(0),
+            stdout: code.map_or_else(Vec::new, |code| format!("{code} {path}\n").into_bytes()),
             stderr: Vec::new(),
         })
     }

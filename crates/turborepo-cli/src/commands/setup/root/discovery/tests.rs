@@ -515,3 +515,29 @@ fn effective_worktree_comes_from_the_injected_git() {
     let error = d.revalidate().err().unwrap().to_string();
     assert!(error.contains("not found on PATH"), "{error}");
 }
+
+#[test]
+fn uncommitted_lock_reads_git_status_for_the_root_lock_and_tolerates_failure() {
+    use turborepo_setup::git::Failure;
+
+    use super::UncommittedLock;
+    let f = Fixture::new();
+    let d = f.discovery();
+    assert_eq!(d.uncommitted_lock(), None);
+    let lock = f.root.join_component("turbo.lock");
+    for (code, expected) in [
+        ("??", UncommittedLock::New),
+        ("A ", UncommittedLock::New),
+        ("AM", UncommittedLock::New),
+        (" M", UncommittedLock::Modified),
+        ("M ", UncommittedLock::Modified),
+    ] {
+        f.git.set_status(lock.as_std_path(), code);
+        assert_eq!(d.uncommitted_lock(), Some(expected), "{code}");
+    }
+    f.git
+        .fail(Some(Failure::Fatal("fatal: not a git repository".into())));
+    assert_eq!(d.uncommitted_lock(), None);
+    f.git.fail(Some(Failure::Spawn));
+    assert_eq!(d.uncommitted_lock(), None);
+}

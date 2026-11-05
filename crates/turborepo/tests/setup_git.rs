@@ -209,10 +209,7 @@ fn pruned_docker_output_without_git_provisions_and_checks() {
     let frozen = ["setup", "--frozen", "--tools-only"];
     let (code, text) = turbo_with_home(&root, &frozen, Path::new(""), home.path());
     assert_eq!(code, 0, "{text}");
-    assert!(
-        text.contains("node24.0.0reused") && text.contains("pnpm10.0.0reused"),
-        "{text}"
-    );
+    assert!(text.contains("✓Reusednode24.0.0,pnpm10.0.0"), "{text}");
     let (code, text) = turbo_with_home(
         &root,
         &["setup", "--check", "--tools-only"],
@@ -245,8 +242,5 @@ fn pruned_docker_output_without_git_provisions_and_checks() {
     assert!(!root.join(".gitignore").exists());
     let (code, text) = turbo_with_home(&root, &frozen, bin.path(), home.path());
     assert_eq!(code, 0, "{text}");
-    assert!(
-        text.contains("node24.0.0reused") && text.contains("pnpm10.0.0reused"),
-        "{text}"
-    );
+    assert!(text.contains("✓Reusednode24.0.0,pnpm10.0.0"), "{text}");
 }

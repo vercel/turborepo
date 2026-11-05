@@ -275,6 +275,28 @@ fn diagnostic_contains(text: &str, expected: &str) -> bool {
         .contains(&expected.replace(' ', ""))
 }
 
+/// Whether setup's tool section lists every `id version` in `tools` on its
+/// `label` line, such as `✓ Reused  node 24.0.0 (npm 10.9.0), pnpm 10.0.0`.
+/// Whitespace-insensitive, since some helpers collapse output to one line.
+fn reports_tools(text: &str, label: &str, tools: &[&str]) -> bool {
+    let text = text.split_whitespace().collect::<Vec<_>>().join(" ");
+    text.split("✓ ").any(|line| {
+        let Some(items) = line
+            .strip_prefix(label)
+            .and_then(|items| items.strip_prefix(' '))
+        else {
+            return false;
+        };
+        // The last item runs on into whatever follows the line.
+        let items: Vec<_> = items.split(", ").collect();
+        tools.iter().all(|tool| {
+            items
+                .iter()
+                .any(|item| *item == *tool || item.starts_with(&format!("{tool} ")))
+        })
+    })
+}
+
 #[test]
 #[cfg(all(
     any(target_arch = "x86_64", target_arch = "aarch64"),
@@ -1714,9 +1736,23 @@ fn plain_setup_provisions_tools_and_reports_dependencies_skipped() {
     // Plain --check checks the same tools and never claims dependency readiness.
     let policy = r#"{"futureFlags":{"experimentalSetup":true},"setup":{"javascript":{"dependencies":"skip"}}}"#;
     write(root, "turbo.json", policy);
-    for (mode, outcome, skipped) in [
-        ("--frozen", " reused", "turbo.json setup policy"),
-        ("--check", ": ready", "turbo.json setup policy"),
+    // Whitespace runs collapse to one space below.
+    for (mode, expected) in [
+        (
+            "--frozen",
+            &[
+                "✓ Reused node 24.0.0, pnpm 10.0.0",
+                "– Skipped dependencies turbo.json setup policy",
+            ][..],
+        ),
+        (
+            "--check",
+            &[
+                "node 24.0.0: ready",
+                "pnpm 10.0.0: ready",
+                "Dependencies skipped (turbo.json setup policy)",
+            ],
+        ),
     ] {
         let output = Command::new(env!("CARGO_BIN_EXE_turbo"))
             .env_clear()
@@ -1743,15 +1779,9 @@ fn plain_setup_provisions_tools_and_reports_dependencies_skipped() {
         .join(" ");
         let code = output.status.code().unwrap();
         assert_eq!(code, 0, "{text}");
-        assert!(
-            text.contains(&format!("node 24.0.0{outcome}"))
-                && text.contains(&format!("pnpm 10.0.0{outcome}")),
-            "{text}"
-        );
-        assert!(
-            text.contains(&format!("Dependencies skipped ({skipped})")),
-            "{text}"
-        );
+        for expected in expected {
+            assert!(text.contains(expected), "{expected}: {text}");
+        }
         assert!(!root.join("probe-ran").exists() && !root.join("node_modules").exists());
     }
 }

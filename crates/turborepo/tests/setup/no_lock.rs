@@ -130,14 +130,13 @@ fn production_no_lock_ci_healthy_repeat_has_positive_pins_record_and_no_traffic(
                 "production positive required, not a policy bypass: {text}"
             );
             assert!(
-                super::diagnostic_contains(&text, "node 24.0.0 reused")
-                    && super::diagnostic_contains(&text, "pnpm 10.0.0 reused"),
+                super::reports_tools(&text, "Reused", &["node 24.0.0", "pnpm 10.0.0"]),
                 "{text}"
             );
             assert!(
                 text.contains("No turbo.lock written")
                     && text.contains("cross-machine")
-                    && text.contains("Dependencies skipped")
+                    && text.contains("Skipped dependencies")
                     && !text.contains("No tasks run")
                     && text.contains("turbo run uses these tools in this clone only")
             );

@@ -1,10 +1,8 @@
 ---
 source: crates/turborepo-cli/src/commands/setup/output_tests.rs
-assertion_line: 123
-expression: "render_tools(&report, style(false))"
+expression: "render_tools(&report, style(false), None)"
 ---
-node   24.0.0  reused
-turbo.lock created, commit it to share these versions
+✓ Reused  node 24.0.0
 Offline: used only tools already in the tool store.
 Tools: no resolution, downloads, writes, or probes.
 No turbo.lock written (--no-lock). Clone-local selections do not establish cross-machine reproducibility or frozen readiness.

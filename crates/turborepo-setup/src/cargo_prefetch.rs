@@ -86,6 +86,19 @@ pub fn prefetch(
     offline: bool,
     env: &BTreeMap<String, OsString>,
 ) -> Result<(), Error> {
+    prefetch_to(root, cargo, cargo_home, offline, env, &mut io::stderr())
+}
+
+/// [`prefetch`], with Cargo's diagnostics written to `diagnostics` once it
+/// exits, so the caller decides whether to show them.
+pub fn prefetch_to(
+    root: &Path,
+    cargo: &Path,
+    cargo_home: &Path,
+    offline: bool,
+    env: &BTreeMap<String, OsString>,
+    diagnostics_out: &mut dyn Write,
+) -> Result<(), Error> {
     let before = read_lock(root)?.ok_or(Error::MissingLock)?;
     let mut command = Command::new(cargo);
     command
@@ -108,7 +121,7 @@ pub fn prefetch(
         io::copy(&mut stderr, &mut io::sink())?;
     }
     let status = child.wait()?;
-    io::stderr().write_all(&diagnostics)?;
+    diagnostics_out.write_all(&diagnostics)?;
     if read_lock(root)?.as_ref() != Some(&before) {
         return Err(Error::LockChanged);
     }

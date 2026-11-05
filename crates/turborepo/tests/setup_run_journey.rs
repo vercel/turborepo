@@ -551,7 +551,7 @@ fn global_setup_then_plain_run_repeat_repair_and_drift() {
     let first = j.turbo(&j.web, TOOLS_ONLY, &[]);
     first.succeeds();
     assert!(
-        contains(&first.text, "turbo.lock created, commit it"),
+        contains(&first.text, "Created turbo.lock. Commit it"),
         "{}",
         first.text
     );
@@ -562,9 +562,16 @@ fn global_setup_then_plain_run_repeat_repair_and_drift() {
         j.build(cwd, "loose", "24.0.0", &[]);
     }
 
-    // Repeat setup is a no-op without network.
+    // Repeat setup is a no-op without network, and until turbo.lock is
+    // committed it still says the lock was created.
     let manifest = j.record();
-    j.turbo(&j.root, TOOLS_ONLY, &[]).succeeds().offline();
+    let repeat = j.turbo(&j.root, TOOLS_ONLY, &[]);
+    repeat.succeeds().offline();
+    assert!(
+        contains(&repeat.text, "Created turbo.lock. Commit it"),
+        "{}",
+        repeat.text
+    );
     assert_eq!(j.read("turbo.lock"), lock);
     assert_eq!(j.record(), manifest);
 

@@ -62,6 +62,51 @@ fn separate_git_dir_reports_the_worktree_toplevel() {
 }
 
 #[test]
+fn status_reports_porcelain_letters_until_the_path_is_committed() {
+    let root = tempfile::tempdir().unwrap();
+    let dir = root.path();
+    let lock = dir.join("turbo.lock");
+    git(dir, &["init", "--quiet"]);
+    let fake = FakeGit::new();
+    // Both sides give the same two status letters, or nothing.
+    let agree = |code: Option<&str>| {
+        if let Some(code) = code {
+            fake.set_status(&lock, code);
+        }
+        for git in [&GitCli as &dyn Git, &fake] {
+            let stdout = git.status(dir, "turbo.lock").unwrap().stdout;
+            assert_eq!(stdout.get(..2), code.map(str::as_bytes), "{code:?}");
+        }
+    };
+    agree(None);
+    fs::write(&lock, "a").unwrap();
+    agree(Some("??"));
+    git(dir, &["add", "turbo.lock"]);
+    agree(Some("A "));
+    git(
+        dir,
+        &[
+            "-c",
+            "user.name=t",
+            "-c",
+            "user.email=t@t",
+            "-c",
+            "commit.gpgsign=false",
+            "commit",
+            "--quiet",
+            "-m",
+            "lock",
+        ],
+    );
+    let committed = FakeGit::new();
+    for git in [&GitCli as &dyn Git, &committed] {
+        assert!(git.status(dir, "turbo.lock").unwrap().stdout.is_empty());
+    }
+    fs::write(&lock, "b").unwrap();
+    agree(Some(" M"));
+}
+
+#[test]
 fn missing_git_executable_is_explained() {
     let error = git_spawn_error(io::ErrorKind::NotFound.into());
     assert_eq!(error.kind(), io::ErrorKind::NotFound);

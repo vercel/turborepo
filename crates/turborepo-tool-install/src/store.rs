@@ -339,6 +339,12 @@ impl UserStore {
         })
     }
 
+    /// The selection environment `env` was sealed with, for reports. `None`
+    /// when the environment is gone. Reads only the seal.
+    pub fn sealed_selection(&self, env: &EnvKey) -> Result<Option<Selection>, Error> {
+        self.env_seal(&self.env_dir(env), env)
+    }
+
     /// The root of the tree plain setup would reuse for `tool`, for reports
     /// that never install.
     pub fn sealed_tree(&self, tool: &Tool) -> Result<Option<PathBuf>, Error> {

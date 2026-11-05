@@ -199,13 +199,14 @@ impl Adapter {
             }
             Self::Uv => {
                 let uv = env.program("uv")?;
+                let stdio = step.stdio()?;
                 match (UvSync {
                     uv: &uv,
                     root,
                     offline,
                     env: vars,
                 })
-                .run()
+                .run_with(|command| super::installer::status(stdio.apply(command)))
                 {
                     Ok(()) => Ok(None),
                     Err(uv_sync::Error::Failed(code)) => Ok(Some(code)),
@@ -216,7 +217,18 @@ impl Adapter {
                 let cargo = env.program("cargo")?;
                 // Activation exposes this same home to tasks as CARGO_HOME.
                 let home = cargo_prefetch::cargo_home(&env.cargo_home)?;
-                match cargo_prefetch::prefetch(root, &cargo, &home, offline, vars) {
+                step.spin();
+                let mut diagnostics = Vec::new();
+                let fetched = cargo_prefetch::prefetch_to(
+                    root,
+                    &cargo,
+                    &home,
+                    offline,
+                    vars,
+                    &mut diagnostics,
+                );
+                step.output(&diagnostics);
+                match fetched {
                     Ok(()) => Ok(None),
                     Err(cargo_prefetch::Error::Fetch(code)) => Ok(Some(code.parse().unwrap_or(1))),
                     Err(error) => Err(error.into()),
@@ -230,6 +242,7 @@ impl Adapter {
                     offline,
                     env: vars,
                 };
+                step.spin();
                 match prefetch.run() {
                     Ok(()) => Ok(None),
                     // go's output is captured; show its diagnostic tail.
@@ -237,7 +250,7 @@ impl Adapter {
                         error @ (go_prefetch::Error::Failed { code, .. }
                         | go_prefetch::Error::Offline { code, .. }),
                     ) => {
-                        eprintln!("{error}");
+                        step.output(format!("{error}\n").as_bytes());
                         Ok(Some(code))
                     }
                     Err(error) => Err(error.into()),

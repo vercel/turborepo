@@ -5,7 +5,8 @@
 
 use std::{
     cell::RefCell,
-    collections::VecDeque,
+    cmp::Ordering,
+    collections::{BTreeMap, VecDeque},
     fmt::Write as _,
     io::{self, IsTerminal, Read, Write},
     process::{Command, Stdio},
@@ -14,9 +15,9 @@ use std::{
 };
 
 use turborepo_repository::toolchain::ToolchainId;
-use turborepo_ui::{BOLD_GREEN, BOLD_RED, ColorConfig, GREY};
+use turborepo_ui::{BOLD_GREEN, BOLD_RED, ColorConfig, GREY, YELLOW};
 
-use super::provision::{LockAction, LockChange};
+use super::provision::LockAction;
 
 /// How a dependency installer's output is shown.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -58,7 +59,13 @@ impl Style {
 #[derive(Debug, Default)]
 pub(super) struct ToolReport {
     pub rows: Vec<ToolRow>,
+    /// The version of each tool this clone used before this run, by id: from
+    /// setup's record, else the turbo.lock this run replaced. Empty when
+    /// unknown, so nothing reads as changed or removed.
+    pub previous: BTreeMap<String, String>,
     pub notes: Vec<Note>,
+    /// Set when this run wrote turbo.lock.
+    pub lock_written: Option<LockReminder>,
     pub downloaded_bytes: u64,
 }
 
@@ -92,8 +99,6 @@ pub(super) struct ToolRow {
     pub id: String,
     pub version: String,
     pub outcome: ToolOutcome,
-    /// An additional tool's source, shown after the outcome.
-    pub source: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -110,25 +115,59 @@ pub(super) enum ToolOutcome {
     BundledWithNode,
 }
 
-impl ToolOutcome {
+/// One line of the tool section, in display order. A version change outranks
+/// how the new version arrived.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+enum Change {
+    Upgraded,
+    Downgraded,
+    /// The versions do not compare, such as Rust's `stable` and `nightly`.
+    Changed,
+    Installed,
+    Verified,
+    Reused,
+    Removed,
+}
+
+impl Change {
     fn label(self) -> &'static str {
         match self {
-            Self::Installed => "installed",
-            Self::Reused => "reused",
-            Self::Verified => "re-verified",
-            Self::ReusedTrusted => "reused (offline)",
-            Self::Reverified => "re-verified (offline)",
-            Self::BundledWithNode => "bundled with node",
+            Self::Upgraded => "Upgraded",
+            Self::Downgraded => "Downgraded",
+            Self::Changed => "Changed",
+            Self::Installed => "Installed",
+            Self::Verified => "Verified",
+            Self::Reused => "Reused",
+            Self::Removed => "Removed",
+        }
+    }
+
+    fn between(from: &str, to: &str) -> Self {
+        fn parts(version: &str) -> Option<Vec<u64>> {
+            let version = version.strip_prefix('v').unwrap_or(version);
+            version.split('.').map(|part| part.parse().ok()).collect()
+        }
+        match parts(from).zip(parts(to)).map(|(from, to)| from.cmp(&to)) {
+            Some(Ordering::Less) => Self::Upgraded,
+            Some(Ordering::Greater) => Self::Downgraded,
+            _ => Self::Changed,
         }
     }
 }
 
+/// Why turbo.lock needs a commit: this run wrote it, or Git still reports it
+/// new or modified. Printed after the final line, so it is the last thing
+/// people read.
+#[derive(Debug, PartialEq, Eq)]
+pub(super) enum LockReminder {
+    /// No committed turbo.lock exists yet.
+    Created,
+    /// The committed turbo.lock has changes.
+    Updated,
+}
+
 #[derive(Debug)]
 pub(super) enum Note {
-    Lock {
-        created: bool,
-        changes: Vec<LockChange>,
-    },
     Offline,
     TrustedRepeat,
     NoLock,
@@ -180,36 +219,109 @@ pub(super) enum StepResult {
 pub(super) enum Completed {
     /// `--plan`, `--check` and "nothing to prepare" printed their own output.
     Reported(i32),
-    Provisioned(DependencyReport),
+    Provisioned {
+        deps: DependencyReport,
+        lock: Option<LockReminder>,
+    },
 }
 
 impl Completed {
     pub fn exit_code(&self) -> i32 {
         match self {
             Self::Reported(code) => *code,
-            Self::Provisioned(deps) => deps.exit_code(),
+            Self::Provisioned { deps, .. } => deps.exit_code(),
         }
     }
 }
 
-/// Rows aligned on id and version, then notes, then a blank line.
-pub(super) fn render_tools(report: &ToolReport, style: Style) -> String {
-    let id_width = report.rows.iter().map(|row| row.id.len()).max();
-    let version_width = report.rows.iter().map(|row| row.version.len()).max();
-    let (id_width, version_width) = (id_width.unwrap_or(0), version_width.unwrap_or(0));
-    let mut text = String::new();
+/// Each line's tools as `id version` items, grouped by what happened to them.
+/// Bundled npm rides along with node, since it changes only with node.
+fn tool_lines(report: &ToolReport) -> BTreeMap<Change, Vec<String>> {
+    let has_node = report.rows.iter().any(|row| row.id == "node");
+    let bundled = report
+        .rows
+        .iter()
+        .find(|row| row.outcome == ToolOutcome::BundledWithNode);
+    let mut lines: BTreeMap<Change, Vec<String>> = BTreeMap::new();
     for row in &report.rows {
-        let _ = write!(
-            text,
-            "{:<id_width$}   {:>version_width$}  {}",
-            row.id,
-            row.version,
-            row.outcome.label()
-        );
-        if let Some(source) = &row.source {
-            let _ = write!(text, " {}", style.paint(&GREY, &format!("({source})")));
+        if row.outcome == ToolOutcome::BundledWithNode && has_node {
+            continue;
         }
-        text.push('\n');
+        let (change, mut item) = match report.previous.get(&row.id) {
+            Some(from) if *from != row.version => (
+                Change::between(from, &row.version),
+                format!("{} {from} → {}", row.id, row.version),
+            ),
+            _ => (
+                match row.outcome {
+                    ToolOutcome::Installed => Change::Installed,
+                    ToolOutcome::Verified | ToolOutcome::Reverified => Change::Verified,
+                    ToolOutcome::Reused
+                    | ToolOutcome::ReusedTrusted
+                    | ToolOutcome::BundledWithNode => Change::Reused,
+                },
+                format!("{} {}", row.id, row.version),
+            ),
+        };
+        if let Some(npm) = bundled.filter(|_| row.id == "node") {
+            let _ = write!(item, " (npm {})", npm.version);
+        }
+        lines.entry(change).or_default().push(item);
+    }
+    for (id, version) in &report.previous {
+        if !report.rows.iter().any(|row| row.id == *id) {
+            lines
+                .entry(Change::Removed)
+                .or_default()
+                .push(format!("{id} {version}"));
+        }
+    }
+    lines
+}
+
+/// Comma-separated items, wrapped to `width` with each continuation line
+/// indented to `indent`, the column the first item starts at.
+fn wrap(items: &[String], indent: usize, width: Option<usize>) -> String {
+    let mut text = String::new();
+    let mut column = indent;
+    for (index, item) in items.iter().enumerate() {
+        let piece = if index + 1 == items.len() {
+            item.clone()
+        } else {
+            format!("{item},")
+        };
+        let length = piece.chars().count();
+        if index > 0 {
+            if width.is_some_and(|width| column + 1 + length > width) {
+                text.push('\n');
+                text.push_str(&" ".repeat(indent));
+                column = indent;
+            } else {
+                text.push(' ');
+                column += 1;
+            }
+        }
+        text.push_str(&piece);
+        column += length;
+    }
+    text
+}
+
+/// One `✓ Label  tools` line per outcome, then notes, then a blank line.
+/// `width` is the terminal's, when stdout is one.
+pub(super) fn render_tools(report: &ToolReport, style: Style, width: Option<usize>) -> String {
+    let lines = tool_lines(report);
+    let label_width = lines.keys().map(|change| change.label().len()).max();
+    let label_width = label_width.unwrap_or(0);
+    let check = style.paint(&BOLD_GREEN, "✓");
+    let mut text = String::new();
+    for (change, items) in &lines {
+        let _ = writeln!(
+            text,
+            "{check} {:<label_width$}  {}",
+            change.label(),
+            wrap(items, 2 + label_width + 2, width)
+        );
     }
     for note in &report.notes {
         for line in render_note(note).lines() {
@@ -222,22 +334,21 @@ pub(super) fn render_tools(report: &ToolReport, style: Style) -> String {
     text
 }
 
+/// The one line that asks for action: a yellow `!` and unstyled text. The tool
+/// section already lists what changed.
+pub(super) fn render_lock_reminder(lock: &LockReminder, style: Style) -> String {
+    let what = match lock {
+        LockReminder::Created => "Created turbo.lock.",
+        LockReminder::Updated => "Updated turbo.lock.",
+    };
+    format!(
+        "{} {what} Commit it to stabilize tooling versions for the repository.\n",
+        style.paint(&YELLOW, "!")
+    )
+}
+
 fn render_note(note: &Note) -> String {
-    const COMMIT: &str = "commit it to share these versions";
     match note {
-        Note::Lock { created: true, .. } => format!("turbo.lock created, {COMMIT}"),
-        Note::Lock { changes, .. } => {
-            let changes = changes
-                .iter()
-                .map(|change| match change {
-                    LockChange::Locked { id, version } => format!("{id} {version} added"),
-                    LockChange::Changed { id, from, to } => format!("{id} {from} → {to}"),
-                    LockChange::Reselected { id, version } => format!("{id} {version} reselected"),
-                    LockChange::Removed { id, .. } => format!("{id} removed"),
-                })
-                .collect::<Vec<_>>();
-            format!("turbo.lock updated ({}), {COMMIT}", changes.join(", "))
-        }
         Note::Offline => "Offline: used only tools already in the tool store.".into(),
         Note::TrustedRepeat => "Tools: no resolution, downloads, writes, or probes.".into(),
         Note::NoLock => "No turbo.lock written (--no-lock). Clone-local selections do not \
@@ -262,13 +373,16 @@ pub(super) fn render_step(outcome: &StepOutcome, style: Style) -> String {
             command, elapsed, ..
         } => (style.paint(&BOLD_RED, "✗"), command, elapsed),
     };
-    let elapsed = style.paint(&GREY, &seconds(*elapsed));
-    format!("{mark} {command}  {elapsed}\n")
+    format!(
+        "{mark} {command}  {}\n",
+        style.paint(&GREY, &seconds(*elapsed))
+    )
 }
 
-/// Every step skipped: one line, worded as before. Otherwise one line per
-/// skipped toolchain.
+/// `– Skipped …` with the reason as grey detail: one line when every step
+/// skipped, else one per skipped toolchain.
 pub(super) fn render_skips(report: &DependencyReport, style: Style) -> String {
+    let dash = style.paint(&GREY, "–");
     let skips = report.steps.iter().filter_map(|step| match &step.result {
         StepResult::Skipped { reason } => Some((&step.toolchain, reason.as_str())),
         _ => None,
@@ -279,12 +393,18 @@ pub(super) fn render_skips(report: &DependencyReport, style: Style) -> String {
         .all(|step| matches!(step.result, StepResult::Skipped { .. }))
     {
         let reasons = super::dependencies::skip_reasons(skips.map(|(_, reason)| reason));
-        return format!("Dependencies skipped ({reasons}).\n");
+        return format!(
+            "{dash} Skipped dependencies  {}\n",
+            style.paint(&GREY, &reasons)
+        );
     }
     skips
         .map(|(id, reason)| {
-            let line = format!("{} dependencies skipped ({reason})", id.as_str());
-            format!("{}\n", style.paint(&GREY, &line))
+            format!(
+                "{dash} Skipped {} dependencies  {}\n",
+                id.as_str(),
+                style.paint(&GREY, reason)
+            )
         })
         .collect()
 }
@@ -345,6 +465,8 @@ impl Write for Shared {
 pub(super) struct Console {
     style: Style,
     spinner: bool,
+    /// stdout's terminal width, for wrapping the tool section.
+    width: Option<usize>,
     out: RefCell<Box<dyn Write>>,
     err: SharedWriter,
 }
@@ -354,6 +476,9 @@ impl Console {
         Self {
             style,
             spinner: style.mode == Mode::Interactive,
+            width: console::Term::stdout()
+                .size_checked()
+                .map(|(_, columns)| usize::from(columns)),
             out: RefCell::new(Box::new(io::stdout())),
             err: Arc::new(Mutex::new(Box::new(io::stderr()))),
         }
@@ -372,6 +497,7 @@ impl Console {
                 color: ColorConfig::new(true),
             },
             spinner: false,
+            width: None,
             out: RefCell::new(Box::new(Buffer(captured.out.clone()))),
             err: Arc::new(Mutex::new(Box::new(Buffer(captured.err.clone())))),
         };
@@ -385,19 +511,31 @@ impl Console {
     }
 
     pub fn tools(&self, report: &ToolReport) -> io::Result<()> {
-        self.out(&render_tools(report, self.style))
+        self.out(&render_tools(report, self.style, self.width))
     }
 
     pub fn skips(&self, report: &DependencyReport) -> io::Result<()> {
         self.out(&render_skips(report, self.style))
     }
 
-    /// Prints the final line of a provisioning run and returns its exit code.
+    /// Prints the final line of a provisioning run, set apart by blank lines,
+    /// and returns its exit code.
     pub fn final_line(&self, completed: &Completed, elapsed: Duration) -> io::Result<i32> {
-        if let Completed::Provisioned(deps) = completed {
-            self.out(&render_final(deps, elapsed, self.style))?;
+        if let Completed::Provisioned { deps, lock } = completed {
+            self.out(&format!("\n{}", render_final(deps, elapsed, self.style)))?;
+            if let Some(lock) = lock {
+                self.out(&format!("\n{}", render_lock_reminder(lock, self.style)))?;
+            }
         }
         Ok(completed.exit_code())
+    }
+
+    /// For error paths that skip the final line: turbo.lock still needs a
+    /// commit.
+    pub fn lock_reminder(&self, lock: Option<&LockReminder>) -> io::Result<()> {
+        lock.map_or(Ok(()), |lock| {
+            self.out(&render_lock_reminder(lock, self.style))
+        })
     }
 
     /// A spinner on stderr until the returned guard drops; none outside
@@ -428,6 +566,7 @@ impl Console {
             command,
             started: Instant::now(),
             pump: None,
+            captured: None,
             spinner: Spinner(None),
         }
     }
@@ -568,10 +707,32 @@ pub(super) struct InstallStep<'a> {
     command: String,
     started: Instant,
     pump: Option<Pump>,
+    /// Output a runner captured itself, handed over through `output`.
+    captured: Option<Sink>,
     spinner: Spinner,
 }
 
 impl InstallStep<'_> {
+    fn sink(&self) -> Sink {
+        match self.console.style.mode {
+            Mode::Interactive => Sink::Buffer(VecDeque::with_capacity(0)),
+            Mode::Plain => Sink::Stream(self.prefixer()),
+        }
+    }
+
+    /// A spinner for a runner that captures its child's output itself.
+    pub fn spin(&mut self) {
+        self.spinner = self.console.spinner(&self.command);
+    }
+
+    /// Output a runner captured itself, shown as piped output is: streamed
+    /// in Plain, replayed only on failure in Interactive.
+    pub fn output(&mut self, bytes: &[u8]) {
+        let mut sink = self.sink();
+        sink.write(bytes);
+        self.captured = Some(sink);
+    }
+
     /// Pipes the child's output into this step. Call once, right before
     /// spawning; the write ends then live only in the `Command`, so EOF
     /// arrives once the child and the `Command` are gone.
@@ -581,11 +742,7 @@ impl InstallStep<'_> {
             stdout: writer.try_clone()?.into(),
             stderr: writer.into(),
         };
-        let sink = match self.console.style.mode {
-            Mode::Interactive => Sink::Buffer(VecDeque::with_capacity(0)),
-            Mode::Plain => Sink::Stream(self.prefixer()),
-        };
-        let sink = Arc::new(Mutex::new(Some(sink)));
+        let sink = Arc::new(Mutex::new(Some(self.sink())));
         let (progress, received) = mpsc::channel();
         let pumped = sink.clone();
         std::thread::spawn(move || {
@@ -650,7 +807,7 @@ impl InstallStep<'_> {
             pump.sink.lock().unwrap_or_else(|e| e.into_inner()).take()
         });
         self.spinner.clear();
-        sink
+        sink.or_else(|| self.captured.take())
     }
 
     fn replay(&self, sink: Option<Sink>) -> io::Result<()> {

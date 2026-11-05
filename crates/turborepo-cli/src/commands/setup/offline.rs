@@ -84,7 +84,6 @@ fn inspect(
                     } else {
                         ToolOutcome::ReusedTrusted
                     },
-                    source: None,
                 })
                 .collect::<Vec<_>>(),
         )
@@ -107,7 +106,7 @@ fn report(rows: Vec<ToolRow>) -> ToolReport {
     ToolReport {
         rows,
         notes: vec![Note::TrustedRepeat],
-        downloaded_bytes: 0,
+        ..ToolReport::default()
     }
 }
 
