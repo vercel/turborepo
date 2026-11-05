@@ -513,9 +513,26 @@ fn run_reporting(
     report.tools_installed = tools.installed();
     report.tools_reused = tools.reused();
     console.tools(&tools)?;
-    let deps = dependencies.install(root, ecosystems, tool_store, console)?;
+    // Until turbo.lock is committed, every run repeats what the run that wrote
+    // it said. --no-lock ignores turbo.lock, so it never asks for a commit.
+    let lock = tools.lock_written.or_else(|| {
+        if request.lock == LockMode::NoLock {
+            return None;
+        }
+        Some(match discovery.uncommitted_lock()? {
+            root::UncommittedLock::New => output::LockReminder::Created,
+            root::UncommittedLock::Modified => output::LockReminder::Updated,
+        })
+    });
+    let deps = match dependencies.install(root, ecosystems, tool_store, console) {
+        Ok(deps) => deps,
+        Err(error) => {
+            console.lock_reminder(lock.as_ref())?;
+            return Err(error.into());
+        }
+    };
     console.skips(&deps)?;
-    Ok(output::Completed::Provisioned(deps))
+    Ok(output::Completed::Provisioned { deps, lock })
 }
 
 /// Whether setup provisions for this host. On Windows only a confirmed x64

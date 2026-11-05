@@ -6,6 +6,7 @@
 //! uses owner-only DACLs read from each opened handle (see `dacl`).
 
 use std::{
+    collections::BTreeMap,
     fs::{self, File},
     io::{self, Read, Write},
     path::{Path, PathBuf},
@@ -358,6 +359,24 @@ impl TrustStore {
     /// says now.
     pub(super) fn recorded_env(&self) -> io::Result<Option<EnvKey>> {
         Ok(self.load()?.map(|record| record.env))
+    }
+
+    /// Each tool's version in the environment this clone last set up, by id,
+    /// so a report can say what a run changed. Only a report reads this, so an
+    /// unreadable record or a missing environment answers `None`.
+    pub(super) fn recorded_versions(&self) -> Option<BTreeMap<String, String>> {
+        let record = self.load().ok()??;
+        if !self.same_directory(&record).ok()? {
+            return None;
+        }
+        let selection = self.store.sealed_selection(&record.env).ok()??;
+        Some(
+            selection
+                .tools()
+                .iter()
+                .map(|tool| (tool.id.clone(), tool.version.clone()))
+                .collect(),
+        )
     }
 
     /// Lenient read-only view for the shell hook: lock drift does not prevent

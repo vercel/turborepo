@@ -22,6 +22,9 @@ impl Reply {
 pub trait Git: Send + Sync {
     /// `git rev-parse --show-toplevel`, run in `dir`.
     fn toplevel(&self, dir: &Path) -> io::Result<Reply>;
+    /// `git status --porcelain --untracked-files=all -- <path>`, run in `dir`.
+    /// Empty stdout means `path` is committed or ignored.
+    fn status(&self, dir: &Path, path: &str) -> io::Result<Reply>;
 }
 
 /// Setup shells out to Git to find the worktree root. Explain a missing
@@ -63,6 +66,13 @@ impl GitCli {
 impl Git for GitCli {
     fn toplevel(&self, dir: &Path) -> io::Result<Reply> {
         Self::run(dir, &["rev-parse", "--show-toplevel"])
+    }
+
+    fn status(&self, dir: &Path, path: &str) -> io::Result<Reply> {
+        Self::run(
+            dir,
+            &["status", "--porcelain", "--untracked-files=all", "--", path],
+        )
     }
 }
 

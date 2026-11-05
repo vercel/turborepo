@@ -31,7 +31,7 @@ use turborepo_turbo_json::SetupMirrors;
 
 use super::{
     Error,
-    output::{Note, ToolOutcome, ToolReport, ToolRow},
+    output::{LockReminder, Note, ToolOutcome, ToolReport, ToolRow},
 };
 
 pub(super) struct Transports {
@@ -593,7 +593,10 @@ pub(super) fn run(
     lock_status: &dyn Fn(Option<&str>),
 ) -> Result<ToolReport, Error> {
     let (force, offline) = (request.force, request.offline);
-    let mut notes = Vec::new();
+    let mut lock_written = None;
+    // The turbo.lock this run replaced: what changed, when setup has no record
+    // of this clone.
+    let mut replaced: Option<std::collections::BTreeMap<String, String>> = None;
     let resolution_mode = if request.update_lock {
         turborepo_setup::lock::reconcile::Mode::Refresh
     } else {
@@ -705,11 +708,17 @@ pub(super) fn run(
         check()?;
         let published = snapshot.after_publication(&outcome.lock)?;
         if outcome.publication == Some(WriteOutcome::Written) {
-            notes.push(Note::Lock {
-                created: snapshot.previous_lock().is_none(),
-                changes: lock_changes(snapshot.previous_lock(), &outcome.lock),
+            lock_written = Some(match snapshot.previous_lock() {
+                None => LockReminder::Created,
+                Some(_) => LockReminder::Updated,
             });
         }
+        replaced = snapshot.previous_lock().map(|lock| {
+            lock.tools()
+                .iter()
+                .map(|(id, tool)| (id.clone(), tool.version.clone()))
+                .collect()
+        });
         transports = Some(sources);
         published
     } else {
@@ -756,6 +765,8 @@ pub(super) fn run(
         Some(trust) => trust,
         None => open_trust()?,
     };
+    // Read before `ensure` publishes this run's record over it.
+    let previous = trust.recorded_versions().or(replaced).unwrap_or_default();
     // Activation rejects the same shadowing, so never install a cohort that
     // `turbo run` would refuse.
     let declared: Vec<_> = artifacts.iter().map(ArtifactPlan::inventory_tool).collect();
@@ -1021,7 +1032,6 @@ pub(super) fn run(
     };
     for tool in &desired {
         let reused = !ensured.installed.contains(&tool.id);
-        let source = additional(tool).map(|(plan, _)| plan.source().to_string());
         let outcome = match (reused, force) {
             (true, true) => ToolOutcome::Verified,
             (true, false) => ToolOutcome::Reused,
@@ -1031,7 +1041,6 @@ pub(super) fn run(
             id: tool.id.clone(),
             version: tool.version.clone(),
             outcome,
-            source,
         });
     }
     if let Some(npm) = lock.tools().get("npm")
@@ -1044,12 +1053,12 @@ pub(super) fn run(
             id: "npm".into(),
             version: npm.version.clone(),
             outcome: ToolOutcome::BundledWithNode,
-            source: None,
         });
     }
     if offline {
-        notes.push(Note::Offline);
+        report.notes.push(Note::Offline);
     }
-    report.notes = notes;
+    report.previous = previous;
+    report.lock_written = lock_written;
     Ok(report)
 }

@@ -11,7 +11,7 @@ use turborepo_repository::{
 use turborepo_turbo_json::{FutureFlags, RawTurboJson, SetupPolicy};
 
 mod discovery;
-pub(super) use discovery::Discovery;
+pub(super) use discovery::{Discovery, UncommittedLock};
 
 #[derive(Debug, Error, Diagnostic)]
 pub enum Error {

@@ -58,6 +58,32 @@ fn fresh_setup_records_exact_private_external_evidence_and_repeat_is_noop() {
 }
 
 #[test]
+fn recorded_versions_are_the_installed_lock_versions_until_the_record_goes() {
+    let f = Fixture::new();
+    assert_eq!(trust(&f).recorded_versions(), None);
+    let u = Upstream::new(&f, false, None);
+    assert_eq!(f.run(&u, FROZEN).unwrap(), 0);
+    let lock: Value =
+        serde_json::from_slice(&fs::read(f.owned.root().join("turbo.lock")).unwrap()).unwrap();
+    let locked: std::collections::BTreeMap<String, String> = lock["tools"]
+        .as_object()
+        .unwrap()
+        .iter()
+        .map(|(id, tool)| (id.clone(), tool["version"].as_str().unwrap().to_owned()))
+        .collect();
+    let recorded = trust(&f).recorded_versions().unwrap();
+    assert!(!recorded.is_empty());
+    for (id, version) in &recorded {
+        assert_eq!(locked.get(id), Some(version), "{id}");
+    }
+    // A record for another directory identity says nothing about this one.
+    let (path, mut value) = record(&f);
+    value["inode"] = Value::from(0);
+    fs::write(&path, serde_json::to_vec(&value).unwrap()).unwrap();
+    assert_eq!(trust(&f).recorded_versions(), None);
+}
+
+#[test]
 fn pre_store_repository_tools_are_never_read_and_setup_removes_them() {
     let f = Fixture::new();
     let old = f.owned.root().join(".turbo/tools/generation-old");

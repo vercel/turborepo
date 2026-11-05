@@ -172,6 +172,8 @@ pub(super) fn run(
     if let Some(staged) = &staged {
         staged.check(&snapshot)?;
     }
+    // Read before `ensure` publishes this run's record over it.
+    let previous_versions = trust.recorded_versions().unwrap_or_default();
     // Still under the writer guard: the record names the environment, and
     // without turbo.lock, holds the clone-local selection.
     let ensured = session.ensure(&Selection::new(desired.clone())?, stage_tool, |env| {
@@ -179,6 +181,7 @@ pub(super) fn run(
         Ok(trust.publish(env, Some(recorded))?)
     })?;
     let mut report = ToolReport {
+        previous: previous_versions,
         downloaded_bytes: prepared_node
             .as_ref()
             .map_or(0, |node| node.downloaded_bytes())
@@ -197,7 +200,6 @@ pub(super) fn run(
             } else {
                 ToolOutcome::Installed
             },
-            source: None,
         });
     }
     if let Some(npm) = bundled_npm {
@@ -205,7 +207,6 @@ pub(super) fn run(
             id: "npm".into(),
             version: npm,
             outcome: ToolOutcome::BundledWithNode,
-            source: None,
         });
     }
     report.notes.push(Note::NoLock);

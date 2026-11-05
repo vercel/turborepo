@@ -17,7 +17,7 @@ use std::{
 use nix::sys::signal::Signal;
 use sha2::{Digest, Sha256};
 
-use super::{ENABLED, diagnostic_contains};
+use super::{ENABLED, diagnostic_contains, reports_tools};
 
 pub(super) const OFFLINE: &[&str] = &["setup", "--tools-only", "--offline"];
 pub(super) const CHECK: &[&str] = &["setup", "--check", "--tools-only"];
@@ -395,17 +395,21 @@ fn offline_setup_in_another_clone_reuses_the_store_and_names_what_it_lacks() {
     assert_eq!(repo.inventory(), None);
     repo.assert_committed();
     repo.seed_store(&["node", "pnpm"]);
-    repo.expect(
+    let text = repo.expect(
         OFFLINE,
         0,
-        &[
-            "node 24.0.0 reused",
-            "pnpm 10.0.0 reused",
-            "Offline: used only tools already in the tool store.",
-        ],
+        &["Offline: used only tools already in the tool store."],
+    );
+    assert!(
+        reports_tools(&text, "Reused", &["node 24.0.0", "pnpm 10.0.0"]),
+        "{text}"
     );
     let first = repo.inventory().unwrap();
-    repo.expect(OFFLINE, 0, &["node 24.0.0 reused", "pnpm 10.0.0 reused"]);
+    let text = repo.expect(OFFLINE, 0, &[]);
+    assert!(
+        reports_tools(&text, "Reused", &["node 24.0.0", "pnpm 10.0.0"]),
+        "{text}"
+    );
     assert_eq!(repo.inventory().unwrap(), first);
     repo.expect(CHECK, 0, &["node 24.0.0: ready", "pnpm 10.0.0: ready"]);
     repo.assert_committed();
@@ -423,7 +427,8 @@ fn offline_setup_in_another_clone_reuses_the_store_and_names_what_it_lacks() {
         &["is not installed in the tool store; run turbo setup"],
     );
     repo.seed_store(&["node", "pnpm"]);
-    repo.expect(OFFLINE, 0, &["node 24.0.0 reused"]);
+    let text = repo.expect(OFFLINE, 0, &[]);
+    assert!(reports_tools(&text, "Reused", &["node 24.0.0"]), "{text}");
     assert_ne!(repo.inventory().unwrap(), first);
     repo.expect(CHECK, 0, &["node 24.0.0: ready", "pnpm 10.0.0: ready"]);
     repo.assert_committed();
@@ -482,10 +487,10 @@ fn killed_additional_tool_download_publishes_nothing_and_recovers_from_the_store
     // Another clone installs the tool, which completes the cohort here
     // without traffic.
     repo.seed_store(&["node", "pnpm", "fixture"]);
-    repo.expect(
-        OFFLINE_FORCE,
-        0,
-        &["fixture 1.2.3 re-verified", "node 24.0.0 re-verified"],
+    let text = repo.expect(OFFLINE_FORCE, 0, &[]);
+    assert!(
+        reports_tools(&text, "Verified", &["fixture 1.2.3", "node 24.0.0"]),
+        "{text}"
     );
     repo.expect(CHECK, 0, &["fixture 1.2.3: ready", "node 24.0.0: ready"]);
     repo.assert_committed();
