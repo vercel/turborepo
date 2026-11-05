@@ -175,6 +175,9 @@ fn propose(
     let runtime = tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()?;
+    // Read for reuse below, and so Python resolution can list downloads with
+    // an installed uv.
+    let store = super::trust::user_store(tool_store.as_deref(), root)?;
     let mode = match request.lock {
         LockMode::Frozen => reconcile::Mode::Frozen,
         _ if request.update_lock => reconcile::Mode::Refresh,
@@ -186,7 +189,7 @@ fn propose(
         request.offline,
         |resolution| {
             // Setup's own resolver, so the proposal is the candidate it would write.
-            provision::resolve(&runtime, resolution, &upstream)
+            provision::resolve(&runtime, resolution, &upstream, &store)
         },
         |candidate| {
             provision::plans(&sources, candidate)
@@ -197,7 +200,6 @@ fn propose(
     )?;
     let desired = provision::plans(&sources, &outcome.lock)?.tools();
     // Same per-tool reuse as setup's preparation: a sealed tree in the store.
-    let store = super::trust::user_store(tool_store.as_deref(), root)?;
     let tools = outcome
         .lock
         .tools()

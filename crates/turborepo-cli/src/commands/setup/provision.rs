@@ -548,6 +548,7 @@ pub(super) fn resolve(
     runtime: &tokio::runtime::Runtime,
     request: turborepo_setup::lock::reconcile::Resolution<'_>,
     sources: &Transports,
+    store: &turborepo_tool_install::UserStore,
 ) -> Result<turborepo_setup::lock::Lock, turborepo_setup::lock::reconcile::Error> {
     runtime
         .block_on(
@@ -562,6 +563,7 @@ pub(super) fn resolve(
                     platform: platform().map_err(|e| {
                         turborepo_setup::lock::reconcile::Error::Resolution(e.to_string())
                     })?,
+                    store: Some(store),
                 },
                 &sources.rustup,
                 &sources.bun,
@@ -682,7 +684,7 @@ pub(super) fn run(
             false,
             |request| {
                 check().map_err(|e| reconcile::Error::Resolution(e.to_string()))?;
-                resolve(&runtime, request, &sources)
+                resolve(&runtime, request, &sources, trust.store())
             },
             |candidate| {
                 plans(&snapshot, candidate)

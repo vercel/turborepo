@@ -170,6 +170,16 @@ impl UvPlan {
         &self.tool
     }
 
+    /// This exact uv's binary in a sealed tree of `store`, for offline queries
+    /// during resolution. `None` when it is not installed.
+    pub fn installed_binary(
+        &self,
+        store: &turborepo_tool_install::UserStore,
+    ) -> Option<std::path::PathBuf> {
+        let root = store.sealed_tree(&self.tool).ok()??;
+        Some(root.join(self.artifact.executables.get("uv")?))
+    }
+
     /// The caller supplies ALL desired tools and ensures that same set
     /// in the same setup session.
     pub async fn prepare_if_needed(

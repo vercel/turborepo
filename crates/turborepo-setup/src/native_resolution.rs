@@ -48,12 +48,13 @@ pub struct Transports<'a> {
     pub go: &'a GoTransport,
     /// Host target used only to run the locked uv's offline listing.
     pub platform: Platform,
+    /// The tool store, so listing Python downloads runs an installed uv
+    /// instead of downloading one.
+    pub store: Option<&'a turborepo_tool_install::UserStore>,
 }
 
 pub async fn resolve(request: Resolution<'_>, sources: Transports<'_>) -> Result<Lock, Error> {
-    let go = sources.go;
-    let tools = resolve_tools(&request, sources, None).await?;
-    candidate(&request, tools, go).await
+    resolve_all(&request, &sources, None, None).await
 }
 
 /// Compose the Rust cohort with JavaScript, uv and CPython resolution while
@@ -63,10 +64,7 @@ pub async fn resolve_with_rust(
     sources: Transports<'_>,
     rustup: &crate::rustup_provision::RustupTransport,
 ) -> Result<Lock, Error> {
-    let go = sources.go;
-    let mut tools = resolve_tools(&request, sources, None).await?;
-    tools.extend(crate::rust_resolution::resolve_request(&request, rustup).await?);
-    candidate(&request, tools, go).await
+    resolve_all(&request, &sources, Some(rustup), None).await
 }
 
 /// Compose authorized Bun downloads with all native cohorts without changing
@@ -77,34 +75,68 @@ pub async fn resolve_with_rust_and_bun(
     rustup: &crate::rustup_provision::RustupTransport,
     bun: &BunTransport,
 ) -> Result<Lock, Error> {
-    let go = sources.go;
-    let mut tools = resolve_tools(&request, sources, Some(bun)).await?;
-    tools.extend(crate::rust_resolution::resolve_request(&request, rustup).await?);
-    candidate(&request, tools, go).await
+    resolve_all(&request, &sources, Some(rustup), Some(bun)).await
 }
 
-async fn resolve_tools(
+/// Each ecosystem's metadata comes from its own origins and no ecosystem
+/// reads another's result, except Python, which lists downloads with the
+/// selected uv. So they resolve concurrently, and resolution takes as long as
+/// the slowest one instead of all of them in turn.
+async fn resolve_all(
     request: &Resolution<'_>,
-    sources: Transports<'_>,
+    sources: &Transports<'_>,
+    rustup: Option<&crate::rustup_provision::RustupTransport>,
     bun: Option<&BunTransport>,
-) -> Result<BTreeMap<String, lock::Tool>, Error> {
-    let node = sources.node;
-    let registry = sources.registry;
-    let snapshot = request.snapshot();
-    let declared = snapshot.declarations();
+) -> Result<Lock, Error> {
     if request.offline() && request.version_ids().contains("go") {
         return Err(Error::Unsupported(
             "offline resolution metadata is not cached",
         ));
     }
-    let mut tools = if ["node", "npm", "pnpm", "yarn", "bun"]
-        .iter()
-        .any(|id| declared.contains_key(*id))
-    {
-        js_resolution::resolve_tools_with_bun(request, node, registry, bun).await?
-    } else {
-        BTreeMap::new()
+    let snapshot = request.snapshot();
+    let declared = snapshot.declarations();
+    let javascript = async {
+        if ["node", "npm", "pnpm", "yarn", "bun"]
+            .iter()
+            .any(|id| declared.contains_key(*id))
+        {
+            Ok::<_, Error>(
+                js_resolution::resolve_tools_with_bun(request, sources.node, sources.registry, bun)
+                    .await?,
+            )
+        } else {
+            Ok(BTreeMap::new())
+        }
     };
+    let rust = async {
+        match rustup {
+            Some(rustup) => {
+                Ok::<_, Error>(crate::rust_resolution::resolve_request(request, rustup).await?)
+            }
+            None => Ok(BTreeMap::new()),
+        }
+    };
+    let go = async {
+        Ok::<_, Error>(
+            go_resolution::select(snapshot, request.version_ids().contains("go"), sources.go)
+                .await?,
+        )
+    };
+    let (mut tools, python, rust, go) =
+        futures::try_join!(javascript, uv_and_python(request, sources), rust, go)?;
+    tools.extend(python);
+    tools.extend(rust);
+    tools.extend(go.map(|go| ("go".to_owned(), go)));
+    candidate(request, tools)
+}
+
+/// Root uv, then CPython, which lists its downloads with that uv.
+async fn uv_and_python(
+    request: &Resolution<'_>,
+    sources: &Transports<'_>,
+) -> Result<BTreeMap<String, lock::Tool>, Error> {
+    let snapshot = request.snapshot();
+    let mut tools = BTreeMap::new();
     if let Some(requirement) = snapshot.uv_requirement()? {
         let tool = if request.version_ids().contains("uv") {
             if request.offline() {
@@ -137,12 +169,21 @@ async fn resolve_tools(
                 schema_version: lock::SCHEMA_VERSION,
                 tools: BTreeMap::from([("uv".into(), uv.clone())]),
             })?;
-            // Verified scratch copy, dropped after listing; never activated.
-            // Its archive is retained so provisioning does not download it again.
-            let prepared = UvPlan::from_lock(&uv, sources.platform)?
-                .download_retained(sources.uv)
-                .await?;
-            let listing = python_resolution::list(&prepared.binary())?;
+            let plan = UvPlan::from_lock(&uv, sources.platform)?;
+            let installed = sources
+                .store
+                .and_then(|store| plan.installed_binary(store))
+                .and_then(|uv| python_resolution::list(&uv).ok());
+            let listing = match installed {
+                Some(listing) => listing,
+                None => {
+                    // Verified scratch copy, dropped after listing; never
+                    // activated. Its archive is retained so provisioning does
+                    // not download it again.
+                    let prepared = plan.download_retained(sources.uv).await?;
+                    python_resolution::list(&prepared.binary())?
+                }
+            };
             sources.python.resolve(&requirement, &listing).await?
         } else {
             let previous = snapshot
@@ -157,23 +198,12 @@ async fn resolve_tools(
     Ok(tools)
 }
 
-async fn candidate(
-    request: &Resolution<'_>,
-    tools: BTreeMap<String, lock::Tool>,
-    go: &GoTransport,
-) -> Result<Lock, Error> {
+fn candidate(request: &Resolution<'_>, tools: BTreeMap<String, lock::Tool>) -> Result<Lock, Error> {
     let snapshot = request.snapshot();
     let candidate = Lock::new(Document {
         schema_version: lock::SCHEMA_VERSION,
         tools,
     })?;
-    let candidate = go_resolution::complete(
-        snapshot,
-        request.version_ids().contains("go"),
-        candidate,
-        go,
-    )
-    .await?;
     if !candidate.matches_native(snapshot.declarations())? {
         return Err(Error::Unsupported(
             "candidate differs from captured provenance",
