@@ -4,6 +4,10 @@ const PLAN: &[&str] = &["--plan", "--tools-only"];
 
 impl Fixture {
     fn plan_report(&self, force: bool) -> Result<String, Error> {
+        self.raw_plan(force).map(|report| trees(&report))
+    }
+
+    fn raw_plan(&self, force: bool) -> Result<String, Error> {
         let discovery = root::Discovery::capture(&self.args(PLAN), self.git.clone())?;
         let sources = self.sources()?;
         plan::inspect(&discovery, sources, force, self.owned.home(), || {
@@ -14,12 +18,17 @@ impl Fixture {
     }
 
     fn expected_plan(&self, action: &str) -> String {
+        let (node, pnpm) = match action {
+            "reuse" => (
+                "\n    Installed: <tree>/bin/node",
+                "\n    Installed: <tree>",
+            ),
+            _ => ("", ""),
+        };
         format!(
-            "Locked tools-only plan (turbo.lock unchanged):\n\
-             node 24.0.0: {action}\n  Declaration: .nvmrc (24.0.0)\n  Source: https://nodejs.org{}\n  SHA-256: {:x}\n\
-             pnpm 10.0.0: {action}\n  Declaration: package.json#/packageManager (pnpm@10.0.0)\n  Source: https://registry.npmjs.org/pnpm/-/pnpm-10.0.0.tgz\n  SHA-256: {:x}\n\
-             Dependencies skipped (--tools-only); dependency readiness was not checked.\n\
-             Tracked changes: none. No downloads or probes run.",
+            "Using versions in turbo.lock:\n\nToolchains\n\
+             \x20 node 24.0.0: {action}{node}\n    Declaration: .nvmrc (24.0.0)\n    Source: https://nodejs.org{}\n    SHA-256: {:x}\n\n\
+             \x20 pnpm 10.0.0: {action}{pnpm}\n    Declaration: package.json#/packageManager (pnpm@10.0.0)\n    Source: https://registry.npmjs.org/pnpm/-/pnpm-10.0.0.tgz\n    SHA-256: {:x}",
             self.node_path,
             Sha256::digest(&self.node),
             Sha256::digest(&self.pnpm),
@@ -60,7 +69,7 @@ fn locked_plans_report_missing_reuse_and_force_in_every_readonly_mode() {
                 &u,
                 &flags,
                 if installed {
-                    "reuse (healthy installation)"
+                    "reuse"
                 } else {
                     "install (missing installation)"
                 },
@@ -70,6 +79,13 @@ fn locked_plans_report_missing_reuse_and_force_in_every_readonly_mode() {
         }
         assert_eq!(f.owned.root().join(".turbo").exists(), installed);
     }
+    let report = f.raw_plan(false).unwrap();
+    let current = Installed::open(&f.owned).current().unwrap().unwrap();
+    let node = current.tree("node").join("bin/node");
+    assert!(
+        report.contains(&format!("\n    Installed: {}\n", node.display())),
+        "{report}"
+    );
     assert_eq!(u.hits(), 3);
     let sources = f.sources().unwrap();
     let writer = sources.guard().unwrap();
@@ -82,10 +98,7 @@ fn locked_plans_report_missing_reuse_and_force_in_every_readonly_mode() {
         drop(store);
         drop(writer);
         pending.join().unwrap();
-        assert_eq!(
-            result.unwrap().unwrap(),
-            f.expected_plan("reuse (healthy installation)")
-        );
+        assert_eq!(result.unwrap().unwrap(), f.expected_plan("reuse"));
     });
     assert_eq!(u.hits(), 3);
 }
@@ -102,10 +115,8 @@ fn node_only_plan_ignores_disabled_ecosystems_without_probing_or_creating_storag
     let before = snapshot(f.owned.root().parent().unwrap());
     assert_eq!(f.run(&u, PLAN).unwrap(), 0);
     assert_eq!(f.plan_report(false).unwrap(), format!(
-        "Locked tools-only plan (turbo.lock unchanged):\n\
-         node 24.0.0: install (missing installation)\n  Declaration: .nvmrc (24.0.0)\n  Source: https://nodejs.org{}\n  SHA-256: {:x}\n\
-         Dependencies skipped (--tools-only); dependency readiness was not checked.\n\
-         Tracked changes: none. No downloads or probes run.",
+        "Using versions in turbo.lock:\n\nToolchains\n\
+         \x20 node 24.0.0: install (missing installation)\n    Declaration: .nvmrc (24.0.0)\n    Source: https://nodejs.org{}\n    SHA-256: {:x}",
         f.node_path, Sha256::digest(&f.node),
     ));
     assert_eq!(snapshot(f.owned.root().parent().unwrap()), before);
@@ -162,7 +173,7 @@ fn damaged_plans_never_change_any_owned_bytes() {
                 _ if force => "re-verify (--force)",
                 2 | 3 => "repair (damaged installation)",
                 4 => "repair (installation does not match turbo.lock)",
-                _ => "reuse (healthy installation)",
+                _ => "reuse",
             };
             let report = f.plan_report(force).unwrap();
             assert!(report.contains(action), "case {case}: {report}");
@@ -180,10 +191,7 @@ fn damaged_plans_never_change_any_owned_bytes() {
             // Only the damaged tree is fetched again: Node's archive, or
             // pnpm's exact metadata and tarball.
             assert_eq!(u.hits(), if case == 0 { 4 } else { 5 });
-            assert_eq!(
-                f.plan_report(false).unwrap(),
-                f.expected_plan("reuse (healthy installation)")
-            );
+            assert_eq!(f.plan_report(false).unwrap(), f.expected_plan("reuse"));
         }
         f.no_execution();
     }
@@ -286,17 +294,6 @@ fn loopback(f: &Fixture, u: &LoopbackServer) -> provision::Transports {
     }
 }
 
-fn footer(change: Option<&str>) -> String {
-    format!(
-        "Dependencies skipped (--tools-only); dependency readiness was not checked.\nTracked \
-         changes: {}. Resolution read upstream metadata and verified archives; nothing was \
-         installed, and no probes run.",
-        change.map_or("none".into(), |change| format!(
-            "turbo.lock would be {change}; nothing was written"
-        ))
-    )
-}
-
 impl Fixture {
     /// The real parser, request normalization and plan dispatch, captured.
     fn proposed(&self, upstream: &LoopbackServer, flags: &[&str]) -> Result<String, Error> {
@@ -333,7 +330,7 @@ impl Fixture {
             Ok(0)
         })
         .unwrap()?;
-        Ok(report.unwrap())
+        Ok(trees(&report.unwrap()))
     }
 
     /// Byte-for-byte unchanged files around the repository and no execution.
@@ -349,8 +346,27 @@ impl Fixture {
     fn locked_tools(&self) -> String {
         let report = self.plan_report(false).unwrap();
         let lines: Vec<_> = report.lines().collect();
-        lines[1..lines.len() - 2].join("\n")
+        lines[1..].join("\n")
     }
+}
+
+fn not_reused(tools: &str, tool: Option<&str>, action: &str) -> String {
+    let mut lines = Vec::new();
+    let mut dropping = false;
+    for line in tools.lines() {
+        if dropping && line.trim_start().starts_with("Installed: ") {
+            continue;
+        }
+        dropping = false;
+        match line.strip_suffix(": reuse") {
+            Some(name) if tool.is_none_or(|tool| tool == name.trim_start()) => {
+                lines.push(format!("{name}: {action}"));
+                dropping = true;
+            }
+            _ => lines.push(line.to_owned()),
+        }
+    }
+    lines.join("\n")
 }
 
 #[test]
@@ -364,15 +380,13 @@ fn proposed_creation_drift_and_refresh_match_what_setup_then_writes() {
     assert!(!f.owned.root().join(".turbo").exists());
     assert_eq!(f.run(&u, SETUP).unwrap(), 0);
     let missing = "install (missing installation)";
-    let tools = f
-        .locked_tools()
-        .replace("reuse (healthy installation)", missing);
+    let tools = not_reused(&f.locked_tools(), None, missing);
     assert_eq!(
         created,
         format!(
-            "Proposed tools-only plan (turbo.lock would be created):\n{tools}\nProposed \
-             turbo.lock changes:\n  node: locked 24.0.0\n  pnpm: locked 10.0.0\n{}",
-            footer(Some("created"))
+            "No turbo.lock yet. Setup would create one with these \
+             versions:\n{tools}\n\nturbo.lock changes\n  node: locked 24.0.0\n  pnpm: locked \
+             10.0.0",
         )
     );
 
@@ -390,16 +404,12 @@ fn proposed_creation_drift_and_refresh_match_what_setup_then_writes() {
     assert_eq!(update.hits(), 2);
     assert_eq!(f.run(&update, SETUP).unwrap(), 0);
     let stale = "install (not in current installation)";
-    let pnpm = "pnpm 10.1.0: reuse (healthy installation)";
-    let tools = f
-        .locked_tools()
-        .replace(pnpm, &format!("pnpm 10.1.0: {stale}"));
+    let tools = not_reused(&f.locked_tools(), Some("pnpm 10.1.0"), stale);
     assert_eq!(
         drifted,
         format!(
-            "Proposed tools-only plan (turbo.lock would be updated):\n{tools}\nProposed \
-             turbo.lock changes:\n  pnpm: 10.0.0 -> 10.1.0\n{}",
-            footer(Some("updated"))
+            "Setup would update turbo.lock to these versions:\n{tools}\n\nturbo.lock changes\n  \
+             pnpm: 10.0.0 -> 10.1.0",
         )
     );
 
@@ -414,26 +424,18 @@ fn proposed_creation_drift_and_refresh_match_what_setup_then_writes() {
     write.push("--update-lock");
     assert_eq!(f.run(&newer, &write).unwrap(), 0);
     // Only Node is installed; pnpm's tree is reused beside any Node.
-    let tools = f.locked_tools().replace(
-        "node 24.1.0: reuse (healthy installation)",
-        &format!("node 24.1.0: {stale}"),
-    );
+    let tools = not_reused(&f.locked_tools(), Some("node 24.1.0"), stale);
     assert_eq!(
         refreshed,
         format!(
-            "Proposed tools-only plan (turbo.lock would be updated):\n{tools}\nProposed \
-             turbo.lock changes:\n  node: 24.0.0 -> 24.1.0\n{}",
-            footer(Some("updated"))
+            "Setup would update turbo.lock to these versions:\n{tools}\n\nturbo.lock changes\n  \
+             node: 24.0.0 -> 24.1.0",
         )
     );
     let unchanged = f.readonly(|| f.proposed(&newer, &refresh).unwrap());
     assert_eq!(
         unchanged,
-        format!(
-            "Proposed tools-only plan (turbo.lock unchanged):\n{}\n{}",
-            f.locked_tools(),
-            footer(None)
-        )
+        format!("turbo.lock is already up to date:\n{}", f.locked_tools())
     );
 }
 
@@ -458,18 +460,19 @@ fn proposed_first_lock_resolves_rust_alongside_node_and_pnpm() {
     };
     let report = f.readonly(|| f.proposed_in(&u, PROPOSE, rust).unwrap());
     assert!(
-        report.starts_with("Proposed tools-only plan (turbo.lock would be created):\n"),
+        report.starts_with("No turbo.lock yet. Setup would create one with these versions:\n"),
         "{report}"
     );
     for tool in ["node 24.0.0", "pnpm 10.0.0", "rust 1.99.0", "rustup 1.29.1"] {
         assert!(
-            report.contains(&format!("\n{tool}: install (missing installation)\n")),
+            report.contains(&format!("\n  {tool}: install (missing installation)\n")),
             "{tool}: {report}"
         );
     }
+    let lines: Vec<_> = report.lines().collect();
     for change in ["rust: locked 1.99.0", "rustup: locked 1.29.1"] {
         assert!(
-            report.contains(&format!("\n  {change}\n")),
+            lines.contains(&format!("  {change}").as_str()),
             "{change}: {report}"
         );
     }
@@ -535,4 +538,38 @@ fn plan_rejects_drift_of_original_discovery_sources_and_policy_before_reporting(
         assert_eq!(u.hits(), 0);
         f.no_execution();
     }
+}
+
+#[test]
+fn describe_pairs_dev_engines_and_labels_multi_part_artifacts() {
+    let part =
+        |url: &str, sha: &str| json!({"url":url,"sha256":sha,"format":"tar-gz","executables":{}});
+    let tool: turborepo_setup::lock::Tool = serde_json::from_value(json!({
+        "adapter":"pnpm","version":"12.6.0",
+        "declarations":[
+            {"file":"package.json","field":"/devEngines/packageManager/name","request":"pnpm"},
+            {"file":"package.json","field":"/devEngines/packageManager/version","request":"12.6.0"},
+            {"file":"package.json","field":"/devEngines/packageManager/onFail","request":"download"},
+        ],
+        "installation":{"kind":"managed","artifacts":{
+            "macos-arm64":{"native":part("https://n.example/exe.tgz","aa"),"package":part("https://n.example/pnpm.tgz","bb")},
+            "linux-x64-gnu":{"distribution":part("https://n.example/one.tgz","cc")},
+        }},
+    }))
+    .unwrap();
+    let render = |platform| plan::describe("pnpm", &tool, &platform, "reuse", None).join("\n");
+    assert_eq!(
+        render(turborepo_setup::lock::Platform::MacosArm64),
+        "pnpm 12.6.0: reuse\n\
+         \x20 Declaration: package.json#/devEngines/packageManager (pnpm@12.6.0)\n\
+         \x20 Declaration: package.json#/devEngines/packageManager/onFail (download)\n\
+         \x20 Source (native): https://n.example/exe.tgz\n\
+         \x20 SHA-256 (native): aa\n\
+         \x20 Source (package): https://n.example/pnpm.tgz\n\
+         \x20 SHA-256 (package): bb"
+    );
+    assert!(
+        render(turborepo_setup::lock::Platform::LinuxX64Gnu)
+            .ends_with("\n  Source: https://n.example/one.tgz\n  SHA-256: cc")
+    );
 }

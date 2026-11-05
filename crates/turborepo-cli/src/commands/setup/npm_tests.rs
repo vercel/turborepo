@@ -253,24 +253,18 @@ fn npm_proposed_refresh_reuses_independent_npm_when_resolutions_are_unchanged() 
         .unwrap();
     assert_eq!(
         report.lines().next().unwrap(),
-        "Proposed tools-only plan (turbo.lock unchanged):"
+        "turbo.lock is already up to date:"
     );
     for tool in ["node 24.0.0", "npm 11.0.0"] {
         assert!(
             report
                 .lines()
-                .any(|line| line == format!("{tool}: reuse (healthy installation)")),
+                .any(|line| line == format!("  {tool}: reuse")),
             "{report}"
         );
     }
-    assert!(!report.contains("Proposed turbo.lock changes:"), "{report}");
-    assert!(
-        report.ends_with(
-            "Tracked changes: none. Resolution read upstream metadata and verified archives; \
-             nothing was installed, and no probes run."
-        ),
-        "{report}"
-    );
+    assert!(!report.contains("turbo.lock changes"), "{report}");
+    assert!(!report.contains("Dependencies"), "{report}");
     assert_eq!(u.hits(), 4); // Node index/checksums and npm metadata/archive, not Node's archive.
     assert!(!u.requests().contains(&n.f.node_path));
     assert_eq!(checks::snapshot(n.f.owned.root().parent().unwrap()), before);
@@ -292,24 +286,25 @@ fn npm_proposed_refresh_reuses_bundled_npm_when_resolutions_are_unchanged() {
         .unwrap();
     assert_eq!(
         report.lines().next().unwrap(),
-        "Proposed tools-only plan (turbo.lock unchanged):"
+        "turbo.lock is already up to date:"
     );
     for tool in ["node 24.0.0", "npm 11.6.1"] {
         assert!(
             report
                 .lines()
-                .any(|line| line == format!("{tool}: reuse (healthy installation)")),
+                .any(|line| line == format!("  {tool}: reuse")),
             "{report}"
         );
     }
-    assert!(!report.contains("Proposed turbo.lock changes:"), "{report}");
-    assert!(
-        report.ends_with(
-            "Tracked changes: none. Resolution read upstream metadata and verified archives; \
-             nothing was installed, and no probes run."
-        ),
-        "{report}"
-    );
+    let report = trees(&report);
+    for line in [
+        "node 24.0.0: reuse\n    Installed: <tree>/bin/node",
+        "npm 11.6.1: reuse\n    Installed: <tree>/bin/npm",
+    ] {
+        assert!(report.contains(line), "{report}");
+    }
+    assert!(!report.contains("turbo.lock changes"), "{report}");
+    assert!(!report.contains("Dependencies"), "{report}");
     assert_eq!(u.hits(), 2);
     assert_eq!(
         u.requests(),
@@ -333,19 +328,18 @@ fn npm_bundled_proposed_first_lock_reports_missing_tools_without_installing() {
         .unwrap();
     assert_eq!(
         report.lines().next().unwrap(),
-        "Proposed tools-only plan (turbo.lock would be created):"
+        "No turbo.lock yet. Setup would create one with these versions:"
     );
     for tool in ["node 24.0.0", "npm 11.6.1"] {
         assert!(
             report
                 .lines()
-                .any(|line| line == format!("{tool}: install (missing installation)")),
+                .any(|line| line == format!("  {tool}: install (missing installation)")),
             "{report}"
         );
     }
     assert!(
-        report
-            .contains("Proposed turbo.lock changes:\n  node: locked 24.0.0\n  npm: locked 11.6.1"),
+        report.contains("turbo.lock changes\n  node: locked 24.0.0\n  npm: locked 11.6.1"),
         "{report}"
     );
     assert_eq!(u.hits(), 2); // Only Node index and checksums; npm belongs to Node.
@@ -868,8 +862,7 @@ fn offline_npm_dependencies_install_from_the_npm_cache_without_traffic() {
     let plan = n.f.dependencies(&["--plan", "--offline"]).plan(root, &lock);
     assert_eq!(
         plan.unwrap()[0],
-        "javascript dependencies: npm ci --offline --no-update-notifier from package-lock.json \
-         with managed tools (package-lock.json stays unchanged)"
+        "javascript: npm ci --offline --no-update-notifier"
     );
     n.no_tasks();
 }
@@ -880,10 +873,7 @@ fn npm_plans_and_checks_report_the_install_without_running_it() {
     let (root, lock) = (n.f.owned.root(), n.lock());
     assert_eq!(
         n.f.dependencies(&["--plan"]).plan(root, &lock).unwrap(),
-        [
-            "javascript dependencies: npm ci from package-lock.json with managed tools \
-             (package-lock.json stays unchanged)",
-        ]
+        ["javascript: npm ci"]
     );
     let check = n.f.dependencies(&["--check"]).check(root, &lock).unwrap();
     assert_eq!(
@@ -897,7 +887,7 @@ fn npm_plans_and_checks_report_the_install_without_running_it() {
         n.f.dependencies(&["--plan", "--tools-only"])
             .plan(root, &lock)
             .unwrap(),
-        ["Dependencies skipped (--tools-only); dependency readiness was not checked."]
+        Vec::<String>::new()
     );
     // Plans and checks run end to end without running npm.
     let u = n.upstream();
