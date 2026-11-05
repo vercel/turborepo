@@ -97,28 +97,47 @@ fn inspect_with(
     let plan = ActivationPlan::captured(&sources, context)?;
     let store = super::trust::user_store(tool_store, root)?;
     let recorded = super::trust::TrustStore::new(&store, root)?.recorded_env()?;
-    // What run and exec would check: the environment's shims and seals.
-    let (action, healthy) = match recorded {
-        None => ("install (missing installation)", false),
-        Some(env) if &env != plan.selection().key() => {
-            ("repair (installation does not match turbo.lock)", false)
-        }
+    enum Env {
+        Missing,
+        Mismatched,
+        Damaged,
+        Healthy,
+    }
+    let env = match recorded {
+        None => Env::Missing,
+        Some(env) if &env != plan.selection().key() => Env::Mismatched,
         Some(env) => match store.activate(root, &env) {
-            Ok(_) => ("reuse", true),
+            Ok(_) => Env::Healthy,
             Err(
                 turborepo_tool_install::Error::NotInstalled(_)
                 | turborepo_tool_install::Error::Damaged(_),
-            ) => ("repair (damaged installation)", false),
+            ) => Env::Damaged,
             Err(error) => return Err(error.into()),
         },
     };
-    let action = if force { "re-verify (--force)" } else { action };
     let mut lines = vec!["Using versions in turbo.lock:".to_owned()];
+    let tools = lock
+        .tools()
+        .iter()
+        .map(|(id, tool)| {
+            let path = match env {
+                Env::Healthy | Env::Damaged if !force => installed(&store, &inventory, id, tool)?,
+                _ => None,
+            };
+            Ok((id, tool, path))
+        })
+        .collect::<Result<Vec<_>, Error>>()?;
+    let trees_damaged =
+        matches!(env, Env::Damaged) && tools.iter().any(|(.., path)| path.is_none());
     let mut toolchains = Vec::new();
-    for (id, tool) in lock.tools() {
-        let path = match healthy && !force {
-            true => installed(&store, &inventory, id, tool)?,
-            false => None,
+    for (id, tool, path) in tools {
+        let (action, path) = match (&env, path) {
+            _ if force => ("re-verify (--force)", None),
+            (Env::Missing, _) => ("install (missing installation)", None),
+            (Env::Mismatched, _) => ("repair (installation does not match turbo.lock)", None),
+            (Env::Damaged, Some(path)) if trees_damaged => ("reuse", Some(path)),
+            (Env::Damaged, _) => ("repair (damaged installation)", None),
+            (Env::Healthy, path) => ("reuse", path),
         };
         toolchains.push(describe(id, tool, &platform, action, path.as_deref()));
     }
