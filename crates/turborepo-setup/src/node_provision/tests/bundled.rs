@@ -153,7 +153,7 @@ async fn bundled_native_resolution_publication_execution_and_one_owner_generatio
             .unwrap()
             .get_mut("distribution")
             .unwrap()
-            .sha256 = "a".repeat(64);
+            .sha256 = Some("a".repeat(64));
         assert_ne!(
             snapshot.fingerprint(),
             execution(&Lock::new(changed).unwrap(), &["node", "npm"])

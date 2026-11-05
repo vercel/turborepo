@@ -138,9 +138,15 @@ pub(super) fn missing_artifacts(
             .get(&platform)
             .or_else(|| artifacts.get(&Platform::Any));
         for (part, artifact) in parts.into_iter().flatten() {
+            let Some(digest) = artifact.digest() else {
+                continue;
+            };
             lines.push(format!(
-                "  {id} {} [{part}]: {} (SHA-256 {})",
-                tool.version, artifact.url, artifact.sha256
+                "  {id} {} [{part}]: {} ({} {})",
+                tool.version,
+                artifact.url,
+                digest.algorithm(),
+                digest.hex()
             ));
         }
     }
@@ -548,6 +554,7 @@ pub(super) fn resolve(
     runtime: &tokio::runtime::Runtime,
     request: turborepo_setup::lock::reconcile::Resolution<'_>,
     sources: &Transports,
+    store: &turborepo_tool_install::UserStore,
 ) -> Result<turborepo_setup::lock::Lock, turborepo_setup::lock::reconcile::Error> {
     runtime
         .block_on(
@@ -562,6 +569,7 @@ pub(super) fn resolve(
                     platform: platform().map_err(|e| {
                         turborepo_setup::lock::reconcile::Error::Resolution(e.to_string())
                     })?,
+                    store: Some(store),
                 },
                 &sources.rustup,
                 &sources.bun,
@@ -682,7 +690,7 @@ pub(super) fn run(
             false,
             |request| {
                 check().map_err(|e| reconcile::Error::Resolution(e.to_string()))?;
-                resolve(&runtime, request, &sources)
+                resolve(&runtime, request, &sources, trust.store())
             },
             |candidate| {
                 plans(&snapshot, candidate)

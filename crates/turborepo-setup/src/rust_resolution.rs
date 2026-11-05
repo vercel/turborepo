@@ -177,7 +177,8 @@ pub fn resolve(toolchain: &Toolchain, manifest: &[u8]) -> Result<Tool, Error> {
             };
             let artifact = Artifact {
                 url: tarball.url.into(),
-                sha256: tarball.sha256.into(),
+                sha256: Some(tarball.sha256.into()),
+                sha512: None,
                 format: Format::TarGz,
                 alternates: BTreeMap::from([(
                     AlternateFormat::TarXz,

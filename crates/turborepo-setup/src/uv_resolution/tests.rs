@@ -80,7 +80,7 @@ fn ranges_select_the_highest_release_and_bind_every_published_target() {
         mac.url,
         "https://releases.astral.sh/github/uv/releases/download/0.13.0/uv-aarch64-apple-darwin.tar.gz"
     );
-    assert_eq!(mac.sha256, digest("aarch64-apple-darwin"));
+    assert_eq!(mac.sha256, Some(digest("aarch64-apple-darwin")));
 }
 
 #[test]

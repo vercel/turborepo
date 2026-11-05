@@ -111,10 +111,11 @@ impl UvPlan {
             _ => return Err(Error::InvalidLock),
         };
         let official = UvArtifact::for_platform(&version, platform).ok_or(Error::InvalidLock)?;
-        if artifact != official.lock_artifact(artifact.sha256.clone()) {
+        let sha256 = artifact.sha256_or(Error::InvalidLock)?;
+        if artifact != official.lock_artifact(sha256.to_owned()) {
             return Err(Error::InvalidLock);
         }
-        ExpectedSha256::from_hex(&artifact.sha256)?;
+        ExpectedSha256::from_hex(sha256)?;
         let executables = if windows {
             // `uv.exe` and `uvx.exe` at the zip's top level.
             Export::files(&artifact.executables)
@@ -149,7 +150,7 @@ impl UvPlan {
                 id: "uv".into(),
                 version: locked.version.clone(),
                 platform: spelling,
-                artifact_sha256: artifact.sha256.clone(),
+                artifact_sha256: artifact.sha256_or(Error::InvalidLock)?.to_owned(),
                 executables,
                 vars: interpreter_vars(python),
                 staging: Staging::new(
@@ -168,6 +169,16 @@ impl UvPlan {
 
     pub fn inventory_tool(&self) -> &Tool {
         &self.tool
+    }
+
+    /// This exact uv's binary in a sealed tree of `store`, for offline queries
+    /// during resolution. `None` when it is not installed.
+    pub fn installed_binary(
+        &self,
+        store: &turborepo_tool_install::UserStore,
+    ) -> Option<std::path::PathBuf> {
+        let root = store.sealed_tree(&self.tool).ok()??;
+        Some(root.join(self.artifact.executables.get("uv")?))
     }
 
     /// The caller supplies ALL desired tools and ensures that same set
@@ -224,7 +235,8 @@ impl UvPlan {
     }
 
     async fn fetch(&self, transport: &UvTransport) -> Result<VerifiedArtifact, Error> {
-        let expected = || ExpectedSha256::from_hex(&self.artifact.sha256);
+        let sha256 = self.artifact.sha256_or(Error::InvalidLock)?;
+        let expected = || ExpectedSha256::from_hex(sha256);
         let retained = transport.retained.lock().ok().and_then(|mut r| r.take());
         // Bytes kept for another selection fail verification and are dropped.
         if let Some(bytes) = retained

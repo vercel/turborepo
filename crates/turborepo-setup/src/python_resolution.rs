@@ -78,7 +78,8 @@ pub(crate) fn official_artifact(
     official_path(path).then_some(())?;
     Some(Artifact {
         url: format!("{ORIGIN}{RELEASES}{path}"),
-        sha256,
+        sha256: Some(sha256),
+        sha512: None,
         format: Format::TarGz,
         alternates: BTreeMap::new(),
         root_prefix: Some("python".into()),
@@ -112,7 +113,8 @@ pub(crate) fn is_official(version: &Version, platform: Platform, artifact: &Arti
     artifact
         .url
         .strip_prefix(&format!("{ORIGIN}{RELEASES}"))
-        .and_then(|path| official_artifact(version, platform, path, artifact.sha256.clone()))
+        .zip(artifact.sha256.clone())
+        .and_then(|(path, sha256)| official_artifact(version, platform, path, sha256))
         .is_some_and(|official| &official == artifact)
 }
 

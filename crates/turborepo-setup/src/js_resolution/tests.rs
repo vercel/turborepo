@@ -239,7 +239,10 @@ fn exact_range_alias_portable_cohort_and_all_native_integrities() {
             let artifact = &artifacts[&platform]["distribution"];
             assert_eq!(
                 artifact.sha256,
-                format!("{:x}", Sha256::digest(node_bytes(platform, expected)))
+                Some(format!(
+                    "{:x}",
+                    Sha256::digest(node_bytes(platform, expected))
+                ))
             );
             assert!(artifact.url.starts_with("https://nodejs.org/dist/"));
             assert_eq!(artifact.executables.len(), 3);
@@ -249,7 +252,10 @@ fn exact_range_alias_portable_cohort_and_all_native_integrities() {
             panic!()
         };
         assert_eq!(artifacts.len(), 1);
-        assert_eq!(artifacts[&Platform::Any]["package"].sha256, sha256);
+        assert_eq!(
+            artifacts[&Platform::Any]["package"].sha256.as_deref(),
+            Some(&*sha256)
+        );
         assert_eq!(artifacts[&Platform::Any]["package"].executables.len(), 2);
         let snapshot = Snapshot::capture_with(p, Ecosystems::default()).unwrap();
         assert!(result.lock.matches_native(snapshot.declarations()).unwrap());

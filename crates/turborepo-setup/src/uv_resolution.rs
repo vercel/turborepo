@@ -119,7 +119,8 @@ pub fn validate(tool: &Tool, requirement: &UvRequirement) -> Result<(), Error> {
         match parts.get("distribution") {
             Some(artifact)
                 if parts.len() == 1
-                    && *artifact == official.lock_artifact(artifact.sha256.clone()) => {}
+                    && (artifact.sha256.clone())
+                        .is_some_and(|sha256| *artifact == official.lock_artifact(sha256)) => {}
             _ => return Err(invalid().into()),
         }
     }

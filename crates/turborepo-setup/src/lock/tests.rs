@@ -339,3 +339,105 @@ fn current_builtin_versions_are_exact_and_constructor_is_not_a_bypass() {
     document.tools.values_mut().next().unwrap().declarations[0].file = "../outside".into();
     assert!(Lock::new(document).is_err());
 }
+
+#[test]
+fn only_native_pnpm_parts_pin_sha512_instead_of_sha256() {
+    let pnpm = |native: Value, package: Value| {
+        let mut value = fixture();
+        value["tools"]["pnpm"] = json!({"adapter":"pnpm", "version":"12.0.0", "declarations":[
+            {"file":"package.json", "field":"/packageManager", "request":"pnpm@12.0.0"}],
+            "installation":{"kind":"managed", "artifacts":{"macos-arm64":{
+                "native":native, "package":package}}}});
+        value
+    };
+    let sha512 = |mut artifact: Value| {
+        artifact.as_object_mut().unwrap().remove("sha256");
+        artifact["sha512"] = json!("b".repeat(128));
+        artifact
+    };
+    let mut package = artifact("pnpm");
+    package["executables"] = json!({});
+    let native = sha512(artifact("pnpm"));
+    let lock = parse(&pnpm(native.clone(), package.clone())).unwrap();
+    let Installation::Managed { artifacts } = &lock.tools()["pnpm"].installation else {
+        panic!()
+    };
+    let parts = &artifacts[&Platform::MacosArm64];
+    assert_eq!(
+        parts["native"].digest(),
+        Some(ArtifactDigest::Sha512(&"b".repeat(128)))
+    );
+    assert_eq!(parts["native"].sha256_or(()), Err(()));
+    // The wire form keeps the field name and omits the absent digest.
+    let wire = serde_json::to_value(lock.document()).unwrap();
+    assert_eq!(
+        wire["tools"]["pnpm"],
+        pnpm(native.clone(), package.clone())["tools"]["pnpm"]
+    );
+    // Old SHA-256 native parts stay valid.
+    parse(&pnpm(artifact("pnpm"), package.clone())).unwrap();
+
+    let mut both = native.clone();
+    both["sha256"] = json!("a".repeat(64));
+    let mut neither = native.clone();
+    neither.as_object_mut().unwrap().remove("sha512");
+    let mut upper = native.clone();
+    upper["sha512"] = json!("B".repeat(128));
+    let mut short = native.clone();
+    short["sha512"] = json!("b".repeat(64));
+    for (native, package, error) in [
+        (
+            both,
+            package.clone(),
+            "artifact requires exactly one SHA-256 or SHA-512 digest",
+        ),
+        (
+            neither,
+            package.clone(),
+            "artifact requires exactly one SHA-256 or SHA-512 digest",
+        ),
+        (
+            upper,
+            package.clone(),
+            "artifact requires a lowercase SHA-512 digest",
+        ),
+        (
+            short,
+            package.clone(),
+            "artifact requires a lowercase SHA-512 digest",
+        ),
+        // pnpm's wrapper package keeps its SHA-256.
+        (
+            native.clone(),
+            sha512(package.clone()),
+            "only native pnpm parts may pin SHA-512",
+        ),
+    ] {
+        assert_eq!(parse(&pnpm(native, package)), Err(Error::Invalid(error)));
+    }
+    // No other adapter can drop its SHA-256, even for a part named `native`.
+    for (adapter, version) in [
+        ("node", "12.0.0"),
+        ("npm", "12.0.0"),
+        ("yarn", "12.0.0"),
+        ("bun", "12.0.0"),
+        ("uv", "12.0.0"),
+        ("python", "12.0.0"),
+        ("go", "1.22.3"),
+        ("rust", "1.99.0"),
+        ("artifact", "12.0.0"),
+    ] {
+        let mut value = pnpm(native.clone(), package.clone());
+        value["tools"]["pnpm"]["adapter"] = json!(adapter);
+        value["tools"]["pnpm"]["version"] = json!(version);
+        assert_eq!(
+            parse(&value),
+            Err(Error::Invalid("only native pnpm parts may pin SHA-512")),
+            "{adapter}"
+        );
+    }
+    reject(|value| {
+        let distribution = &mut value["tools"]["fixture"]["installation"]["artifacts"]["any"];
+        distribution["distribution"] = sha512(distribution["distribution"].clone());
+    });
+}

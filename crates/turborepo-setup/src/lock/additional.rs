@@ -27,7 +27,8 @@ pub(super) fn project(file: &str, bytes: &[u8]) -> Option<BTreeMap<String, Tool>
         let artifacts = tool.artifacts.iter().map(|(platform, artifact)| {
             let artifact = Artifact {
                 url: artifact.url.as_inner().clone(),
-                sha256: artifact.sha256.as_inner().clone(),
+                sha256: Some(artifact.sha256.as_inner().clone()),
+                sha512: None,
                 format: match *artifact.format.as_inner() {
                     ArtifactFormat::Binary => Format::Binary,
                     ArtifactFormat::Tar => Format::Tar,

@@ -416,6 +416,9 @@ fn python_and_uv_lock_together_and_launchers_use_only_managed_python() {
     let lock = locked(&owned).unwrap();
     assert_eq!(lock.tools()["python"].version, "3.13.1");
     assert_eq!(uv_version(&owned), "0.13.0");
+    // Resolving Python again lists through the installed uv instead of
+    // downloading its archive.
+    assert_eq!(fetched(&archive), 1);
 }
 
 const UV_LOCK: &[u8] = b"version = 1\n";

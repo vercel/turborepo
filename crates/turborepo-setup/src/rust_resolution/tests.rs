@@ -373,6 +373,7 @@ mod lock_updates {
                             )
                             .unwrap(),
                             platform,
+                            store: None,
                         },
                         &rustup,
                     ))

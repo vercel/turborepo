@@ -40,7 +40,8 @@ fn lock(rustup: &[u8], manifest: &str, with_rustup: bool) -> Lock {
     let artifacts = [Platform::WindowsX64, Platform::WindowsArm64].map(|platform| {
         let part = Artifact {
             url: rustup::installer_url(&version, platform).unwrap(),
-            sha256: format!("{:x}", Sha256::digest(rustup)),
+            sha256: Some(format!("{:x}", Sha256::digest(rustup))),
+            sha512: None,
             format: Format::Binary,
             root_prefix: None,
             destination: None,

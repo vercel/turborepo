@@ -151,7 +151,7 @@ async fn exact_npm_pnpm_portable_identity_authored_pins_and_no_root_mutation() {
             assert_eq!(selected.version().to_string(), "10.0.0");
             assert_eq!(
                 selected.artifact().sha256,
-                format!("{:x}", Sha256::digest(&bytes))
+                Some(format!("{:x}", Sha256::digest(&bytes)))
             );
             assert_eq!(
                 selected.integrity().digest,
@@ -296,7 +296,7 @@ async fn mandatory_real_bytes_and_authored_mismatch_including_late_native_altern
     .unwrap()
     .unwrap();
     let late = declaration
-        .locked_integrity(selected.version(), &selected.artifact().sha256)
+        .locked_integrity(selected.version(), selected.pinned_sha256())
         .unwrap();
     selected.verify_authored(late.as_ref()).unwrap();
     for (algorithm, length) in [
@@ -404,7 +404,7 @@ async fn pnpm_11_locks_its_published_module_bins() {
 }
 
 #[tokio::test]
-async fn native_pnpm_locks_every_node_platform_binary_beside_the_pinned_wrapper() {
+async fn native_pnpm_locks_each_platform_registry_sha512_from_metadata_alone() {
     use crate::{
         lock::Platform,
         node_resolution::PLATFORMS,
@@ -423,15 +423,29 @@ async fn native_pnpm_locks_every_node_platform_binary_beside_the_pinned_wrapper(
         .await
         .unwrap();
     selected.verify_authored(Some(&pin)).unwrap();
+    // The wrapper's metadata and bytes, then only each platform's metadata.
+    let requests = server.requests();
+    assert_eq!(requests.len(), 2 + PLATFORMS.len(), "{requests:?}");
+    assert!(
+        requests
+            .iter()
+            .all(|path| !(path.starts_with("/@pnpm/") && path.ends_with(".tgz"))),
+        "{requests:?}"
+    );
     let artifacts = selected.into_artifacts();
     assert!(artifacts.keys().eq(PLATFORMS.iter()));
     for (platform, bytes) in &natives {
         let parts = &artifacts[platform];
         let (package, native) = locked_parts(Manager::Pnpm, fx::VERSION, *platform, parts).unwrap();
-        assert_eq!(package.sha256, format!("{:x}", Sha256::digest(&wrapper)));
+        assert_eq!(
+            package.sha256,
+            Some(format!("{:x}", Sha256::digest(&wrapper)))
+        );
+        assert_eq!(package.sha512, None);
         assert!(package.executables.is_empty());
         let native = native.unwrap();
-        assert_eq!(native.sha256, format!("{:x}", Sha256::digest(bytes)));
+        assert_eq!(native.sha256, None);
+        assert_eq!(native.sha512, Some(format!("{:x}", Sha512::digest(bytes))));
         let windows = matches!(platform, Platform::WindowsX64 | Platform::WindowsArm64);
         let binary = if windows { "pnpm.exe" } else { "pnpm" };
         assert!(native.executables.values().all(|path| path == binary));
@@ -442,8 +456,8 @@ async fn native_pnpm_locks_every_node_platform_binary_beside_the_pinned_wrapper(
                 .eq(["pn", "pnpm", "pnpx", "pnx"].iter())
         );
     }
-    // Another release's platform package, one without its binary, or a wrapper
-    // that ships its own binary never locks.
+    // Platform packages are checked by the host that provisions them, so
+    // another release's package or one without its binary still locks here.
     let mut other = natives.clone();
     let package = r#"{"name":"@pnpm/exe.linux-x64","version":"12.0.0"}"#;
     other[2].1 = fx::tgz(&[
@@ -452,25 +466,27 @@ async fn native_pnpm_locks_every_node_platform_binary_beside_the_pinned_wrapper(
     ]);
     let mut missing = natives.clone();
     missing[0].1 = fx::native(natives[0].0, false);
-    // Either host's Corepack location would shadow the verified binary.
-    let shadow = fx::wrapper(&[("pnpm-native", fx::BINARY, 0o755)]);
-    let shadow_exe = fx::wrapper(&[("pnpm-native.exe", fx::BINARY, 0o755)]);
-    for (wrapper, natives, layout) in [
-        (&wrapper, &other, false),
-        (&wrapper, &missing, true),
-        (&shadow, &natives, false),
-        (&shadow_exe, &natives, false),
-    ] {
-        let server = LoopbackServer::new(fx::routes(wrapper, natives), |_| {}).unwrap();
+    for natives in [&other, &missing] {
+        let server = LoopbackServer::new(fx::routes(&wrapper, natives), |_| {}).unwrap();
         let transport = RegistryTransport::loopback_http_for_tests(server.origin()).unwrap();
-        match transport
+        transport
             .resolve_exact(Manager::Pnpm, fx::VERSION, None)
             .await
-        {
-            Err(Error::Archive(turborepo_archive::Error::LayoutMismatch)) => assert!(layout),
-            Err(Error::InvalidPackage) => assert!(!layout),
-            other => panic!("unexpected resolution: {other:?}"),
-        }
+            .unwrap();
+    }
+    // Either host's Corepack location in the wrapper would shadow the
+    // verified binary.
+    let shadow = fx::wrapper(&[("pnpm-native", fx::BINARY, 0o755)]);
+    let shadow_exe = fx::wrapper(&[("pnpm-native.exe", fx::BINARY, 0o755)]);
+    for wrapper in [&shadow, &shadow_exe] {
+        let server = LoopbackServer::new(fx::routes(wrapper, &natives), |_| {}).unwrap();
+        let transport = RegistryTransport::loopback_http_for_tests(server.origin()).unwrap();
+        assert!(matches!(
+            transport
+                .resolve_exact(Manager::Pnpm, fx::VERSION, None)
+                .await,
+            Err(Error::InvalidPackage)
+        ));
     }
 }
 

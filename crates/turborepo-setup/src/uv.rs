@@ -91,7 +91,8 @@ impl UvArtifact {
         };
         Artifact {
             url: self.url(),
-            sha256,
+            sha256: Some(sha256),
+            sha512: None,
             format,
             alternates: BTreeMap::new(),
             root_prefix,

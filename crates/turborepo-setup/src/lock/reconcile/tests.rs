@@ -46,7 +46,8 @@ fn selection(snapshot: &Snapshot, version: &str) -> Lock {
                                     "distribution".into(),
                                     Artifact {
                                         url: format!("https://example.test/{id}-{version}.tgz"),
-                                        sha256: "a".repeat(64),
+                                        sha256: Some("a".repeat(64)),
+                                        sha512: None,
                                         format: Format::TarGz,
                                         alternates: BTreeMap::new(),
                                         root_prefix: Some("package".into()),
@@ -377,7 +378,7 @@ fn bundled_node_to_pinned_npm_requires_complete_noncolliding_cohort_without_new_
                     .next()
                     .unwrap();
                 match change {
-                    "digest" => artifact.sha256 = "b".repeat(64),
+                    "digest" => artifact.sha256 = Some("b".repeat(64)),
                     "url" => artifact.url = "https://other.test/node.tgz".into(),
                     "format" => artifact.format = Format::Zip,
                     "layout" => artifact.root_prefix = Some("other".into()),

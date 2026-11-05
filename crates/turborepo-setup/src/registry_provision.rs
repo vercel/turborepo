@@ -18,7 +18,7 @@ use turborepo_download::{
 use turborepo_tool_install::{Export, Launch, LaunchArg, SetupSession, Staging, Tool, TreeRef};
 
 use crate::{
-    lock::{self, Format, Installation, Lock, Platform},
+    lock::{self, ArtifactDigest, Format, Installation, Lock, Platform},
     mirror::Mirror,
     node_discovery::UniqueJson,
     node_provision::{NodePlan, move_tree},
@@ -105,8 +105,10 @@ impl RegistryTransport {
 
     /// Resolve only a canonical exact npm/pnpm release, verifying registry
     /// SHA-512 and optional authored integrity against bytes before
-    /// deriving lock SHA-256. Private bounded scratch is dropped before
-    /// return; no repository path or I/O.
+    /// deriving lock SHA-256. Native pnpm platform packages lock their
+    /// registry SHA-512 from metadata alone; provisioning verifies their
+    /// bytes. Private bounded scratch is dropped before return; no
+    /// repository path or I/O.
     pub async fn resolve_exact(
         &self,
         manager: Manager,
@@ -125,24 +127,30 @@ impl RegistryTransport {
             .await?;
         let mut bundle = None;
         let mut natives = BTreeMap::new();
+        let sha256 = bytes.sha256_hex();
         let package = if native_release(manager, &version) {
             drop(extract_wrapper(&bytes, exact_version)?);
             // Every platform Node locks, so a new host never mutates the lock.
-            for platform in crate::node_resolution::PLATFORMS {
-                let (name, binary) = native_package(platform).ok_or(Error::UnsupportedTarget)?;
-                let (native, native_bytes) = self
-                    .verified_package(manager, name, exact_version, None, None)
+            // Only metadata: each platform package is ~25 MB, and the host
+            // that provisions it verifies and extracts its binary.
+            let version = &version;
+            let platforms = crate::node_resolution::PLATFORMS.map(|platform| async move {
+                let (name, _) = native_package(platform).ok_or(Error::UnsupportedTarget)?;
+                let native = self
+                    .package_metadata(manager, name, exact_version, None)
                     .await?;
-                drop(extract_native(&native_bytes, name, exact_version, binary)?);
-                let mappings = standard_mappings(manager, &version, platform)?;
-                let artifact = registry_artifact(native.tarball, &native_bytes, mappings);
-                natives.insert(platform, artifact);
-            }
-            registry_artifact(release.tarball.clone(), &bytes, &[])
+                let mappings = standard_mappings(manager, version, platform)?;
+                let sha512 = Some(native.integrity.digest);
+                let artifact = registry_artifact(native.tarball, None, sha512, mappings);
+                Ok::<_, Error>((platform, artifact))
+            });
+            natives.extend(futures::future::try_join_all(platforms).await?);
+            registry_artifact(release.tarball.clone(), Some(sha256.clone()), None, &[])
         } else {
             let artifact = registry_artifact(
                 release.tarball.clone(),
-                &bytes,
+                Some(sha256.clone()),
+                None,
                 standard_mappings(manager, &version, Platform::Any)?,
             );
             let tree =
@@ -158,7 +166,7 @@ impl RegistryTransport {
             release,
             package,
             natives,
-            sha224_hex(&bytes),
+            (sha224_hex(&bytes), sha256),
             bundle,
         ))
     }
@@ -175,15 +183,15 @@ impl RegistryTransport {
             .await
     }
 
-    /// `name` is adapter-owned, never authored.
-    async fn verified_package(
+    /// Exact release metadata, never artifact bytes. `name` is
+    /// adapter-owned, never authored.
+    async fn package_metadata(
         &self,
         manager: Manager,
         name: &str,
         version: &str,
         authored: Option<&CorepackIntegrity>,
-        locked_sha256: Option<&str>,
-    ) -> Result<(registry_metadata::RegistryArtifact, VerifiedArtifact), Error> {
+    ) -> Result<registry_metadata::RegistryArtifact, Error> {
         // Validate before interpolating any request path or making traffic.
         registry_metadata::validate_selection(manager, version)?;
         let metadata = self
@@ -193,14 +201,28 @@ impl RegistryTransport {
                 Limits::new(MAX_METADATA_BYTES, Duration::from_secs(30))?,
             )
             .await?;
-        let release = registry_metadata::parse_package_from(
+        Ok(registry_metadata::parse_package_from(
             &metadata,
             manager,
             name,
             version,
             authored,
             self.mirrored.then_some(self.origin.as_str()),
-        )?;
+        )?)
+    }
+
+    /// `name` is adapter-owned, never authored.
+    async fn verified_package(
+        &self,
+        manager: Manager,
+        name: &str,
+        version: &str,
+        authored: Option<&CorepackIntegrity>,
+        locked_sha256: Option<&str>,
+    ) -> Result<(registry_metadata::RegistryArtifact, VerifiedArtifact), Error> {
+        let release = self
+            .package_metadata(manager, name, version, authored)
+            .await?;
         let additional = release
             .byte_pin
             .as_ref()
@@ -233,6 +255,25 @@ impl RegistryTransport {
             return Err(turborepo_download::Error::DigestMismatch.into());
         }
         Ok((release, bytes))
+    }
+
+    /// A native pnpm platform package pinned by its locked registry SHA-512.
+    /// The lock is the pin, so no metadata request precedes the download.
+    async fn locked_native(
+        &self,
+        name: &str,
+        version: &str,
+        sha512: &str,
+    ) -> Result<VerifiedArtifact, Error> {
+        Ok(self
+            .client
+            .download_verified_sha512(
+                &format!("{}/{}", self.origin, tarball_path(name, version)),
+                ExpectedSha512::from_hex(sha512)?,
+                None,
+                Limits::new(PACKAGE_LIMIT, Duration::from_secs(120))?,
+            )
+            .await?)
     }
 
     /// Loopback fixtures only; canonical provenance, no env override.
@@ -326,10 +367,16 @@ fn standard_mappings(
     }
 }
 
-fn registry_artifact(url: String, bytes: &VerifiedArtifact, mappings: Mappings) -> lock::Artifact {
+fn registry_artifact(
+    url: String,
+    sha256: Option<String>,
+    sha512: Option<String>,
+    mappings: Mappings,
+) -> lock::Artifact {
     lock::Artifact {
         url,
-        sha256: bytes.sha256_hex(),
+        sha256,
+        sha512,
         format: Format::TarGz,
         alternates: BTreeMap::new(),
         root_prefix: Some(PACKAGE_ROOT.into()),
@@ -561,7 +608,8 @@ impl RegistryPlan {
             .ok_or(Error::InvalidLock)?;
         let (artifact, native) = locked_parts(manager, &package.version, platform, parts)?;
         let (artifact, native) = (artifact.clone(), native.cloned());
-        ExpectedSha256::from_hex(&artifact.sha256)?;
+        let package_sha256 = artifact.sha256_or(Error::InvalidLock)?;
+        ExpectedSha256::from_hex(package_sha256)?;
         let node = node.inventory_tool().clone();
         let Some(Export::File(node_binary)) = node.executables.get("node") else {
             return Err(Error::NodeBinding);
@@ -597,11 +645,20 @@ impl RegistryPlan {
         };
         // Reuse identity binds every verified part, and a changed authored
         // constraint must re-verify even when archive SHA-256 is unchanged.
+        // Each native digest form has its own prefix, so they never collide.
         let mut artifact_sha256 = match &native {
-            None => artifact.sha256.clone(),
+            None => package_sha256.to_owned(),
             Some(native) => {
-                ExpectedSha256::from_hex(&native.sha256)?;
-                let parts = format!("pnpm-native\0{}\0{}", artifact.sha256, native.sha256);
+                let parts = match native.digest().ok_or(Error::InvalidLock)? {
+                    ArtifactDigest::Sha256(native) => {
+                        ExpectedSha256::from_hex(native)?;
+                        format!("pnpm-native\0{package_sha256}\0{native}")
+                    }
+                    ArtifactDigest::Sha512(native) => {
+                        ExpectedSha512::from_hex(native)?;
+                        format!("pnpm-native-sha512\0{package_sha256}\0{native}")
+                    }
+                };
                 format!("{:x}", Sha256::digest(parts))
             }
         };
@@ -685,7 +742,7 @@ impl RegistryPlan {
                 self.manager,
                 &self.tool.version,
                 self.authored.as_ref().filter(|_| !self.bundled),
-                Some(&self.artifact.sha256),
+                Some(self.artifact.sha256_or(Error::InvalidLock)?),
             )
             .await?;
         let mut downloaded_bytes = bytes.as_bytes().len() as u64;
@@ -700,15 +757,21 @@ impl RegistryPlan {
             Some((name, native)) => {
                 let tree = extract_wrapper(&bytes, &self.tool.version)?;
                 let binary = native.executables.get("pnpm").ok_or(Error::InvalidLock)?;
-                let (_, bytes) = transport
-                    .verified_package(
-                        self.manager,
-                        name,
-                        &self.tool.version,
-                        None,
-                        Some(&native.sha256),
-                    )
-                    .await?;
+                // Locks written before SHA-512 native parts keep their SHA-256.
+                let bytes = match native.digest().ok_or(Error::InvalidLock)? {
+                    ArtifactDigest::Sha256(sha256) => {
+                        let version = &self.tool.version;
+                        transport
+                            .verified_package(self.manager, name, version, None, Some(sha256))
+                            .await?
+                            .1
+                    }
+                    ArtifactDigest::Sha512(sha512) => {
+                        transport
+                            .locked_native(name, &self.tool.version, sha512)
+                            .await?
+                    }
+                };
                 downloaded_bytes += bytes.as_bytes().len() as u64;
                 let native = extract_native(&bytes, name, &self.tool.version, binary)?;
                 (tree, Some((native, binary.clone())))
@@ -795,7 +858,8 @@ impl PnpmPlan {
         let version = semver::Version::parse(&plan.inventory_tool().version)
             .map_err(|_| Error::InvalidLock)?;
         // Authored pins describe the `pnpm` package Corepack would download.
-        let authored = declaration.locked_integrity(&version, &plan.0.artifact.sha256)?;
+        let package_sha256 = plan.0.artifact.sha256_or(Error::InvalidLock)?;
+        let authored = declaration.locked_integrity(&version, package_sha256)?;
         Self::from_lock(lock, platform, node, authored.as_ref())
     }
 

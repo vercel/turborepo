@@ -190,7 +190,7 @@ impl NodePlan {
                 id: "node".into(),
                 version: node.version.clone(),
                 platform: spelling.into(),
-                artifact_sha256: artifact.sha256.clone(),
+                artifact_sha256: artifact.sha256_or(Error::InvalidLock)?.to_owned(),
                 executables: Export::files(&artifact.executables),
                 vars: Default::default(),
                 staging: Staging::new(
@@ -272,7 +272,7 @@ impl NodePlan {
             .client
             .download_verified(
                 &url,
-                ExpectedSha256::from_hex(&self.artifact.sha256)?,
+                ExpectedSha256::from_hex(self.artifact.sha256_or(Error::InvalidLock)?)?,
                 turborepo_download::Limits::new(ARCHIVE_LIMIT, Duration::from_secs(120))?,
             )
             .await?;

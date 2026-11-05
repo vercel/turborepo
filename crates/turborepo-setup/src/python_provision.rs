@@ -123,7 +123,7 @@ impl PythonPlan {
         if !is_official(&version, platform, &artifact) {
             return Err(Error::InvalidLock);
         }
-        ExpectedSha256::from_hex(&artifact.sha256)?;
+        ExpectedSha256::from_hex(artifact.sha256_or(Error::InvalidLock)?)?;
         let key = artifact.destination.clone().ok_or(Error::InvalidLock)?;
         let spelling = serde_json::to_value(platform)
             .ok()
@@ -165,7 +165,7 @@ impl PythonPlan {
                 id: "python".into(),
                 version: locked.version.clone(),
                 platform: spelling,
-                artifact_sha256: artifact.sha256.clone(),
+                artifact_sha256: artifact.sha256_or(Error::InvalidLock)?.to_owned(),
                 executables,
                 // Activation only: Python's own exports need none of them.
                 vars: crate::uv_provision::interpreter_vars(Some(key.clone())),
@@ -217,7 +217,7 @@ impl PythonPlan {
             .client
             .download_verified(
                 &format!("{}{path}", transport.origin),
-                ExpectedSha256::from_hex(&self.artifact.sha256)?,
+                ExpectedSha256::from_hex(self.artifact.sha256_or(Error::InvalidLock)?)?,
                 turborepo_download::Limits::new(256 * 1024 * 1024, Duration::from_secs(300))?,
             )
             .await?;

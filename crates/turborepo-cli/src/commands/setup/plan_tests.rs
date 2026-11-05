@@ -569,8 +569,7 @@ fn plan_rejects_drift_of_original_discovery_sources_and_policy_before_reporting(
 
 #[test]
 fn describe_pairs_dev_engines_and_labels_multi_part_artifacts() {
-    let part =
-        |url: &str, sha: &str| json!({"url":url,"sha256":sha,"format":"tar-gz","executables":{}});
+    let part = |url: &str, algorithm: &str, digest: &str| json!({"url":url,algorithm:digest,"format":"tar-gz","executables":{}});
     let tool: turborepo_setup::lock::Tool = serde_json::from_value(json!({
         "adapter":"pnpm","version":"12.6.0",
         "declarations":[
@@ -579,8 +578,8 @@ fn describe_pairs_dev_engines_and_labels_multi_part_artifacts() {
             {"file":"package.json","field":"/devEngines/packageManager/onFail","request":"download"},
         ],
         "installation":{"kind":"managed","artifacts":{
-            "macos-arm64":{"native":part("https://n.example/exe.tgz","aa"),"package":part("https://n.example/pnpm.tgz","bb")},
-            "linux-x64-gnu":{"distribution":part("https://n.example/one.tgz","cc")},
+            "macos-arm64":{"native":part("https://n.example/exe.tgz","sha512","aa"),"package":part("https://n.example/pnpm.tgz","sha256","bb")},
+            "linux-x64-gnu":{"distribution":part("https://n.example/one.tgz","sha256","cc")},
         }},
     }))
     .unwrap();
@@ -591,7 +590,7 @@ fn describe_pairs_dev_engines_and_labels_multi_part_artifacts() {
          \x20 Declaration: package.json#/devEngines/packageManager (pnpm@12.6.0)\n\
          \x20 Declaration: package.json#/devEngines/packageManager/onFail (download)\n\
          \x20 Source (native): https://n.example/exe.tgz\n\
-         \x20 SHA-256 (native): aa\n\
+         \x20 SHA-512 (native): aa\n\
          \x20 Source (package): https://n.example/pnpm.tgz\n\
          \x20 SHA-256 (package): bb"
     );
