@@ -53,7 +53,8 @@ fn document(platform: Platform, bytes: &[u8]) -> Document {
     let (name, format) = go_resolution::archive(version, platform).unwrap();
     let artifact = lock::Artifact {
         url: format!("https://dl.google.com/go/{name}"),
-        sha256: format!("{:x}", Sha256::digest(bytes)),
+        sha256: Some(format!("{:x}", Sha256::digest(bytes))),
+        sha512: None,
         format,
         alternates: BTreeMap::new(),
         root_prefix: Some("go".into()),

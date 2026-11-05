@@ -131,7 +131,8 @@ pub fn resolve(
                 "distribution".into(),
                 Artifact {
                     url: official.url(),
-                    sha256: metadata.sha256().into(),
+                    sha256: Some(metadata.sha256().into()),
+                    sha512: None,
                     format: if windows { Format::Zip } else { Format::TarGz },
                     alternates: BTreeMap::new(),
                     root_prefix: Some(prefix.into()),

@@ -234,7 +234,7 @@ fn exact_versions_and_every_authored_integrity_constraint_are_enforced() {
     let artifacts = artifacts(&mut wire, "pnpm");
     let mut foreign = artifacts.remove(&Platform::Any).unwrap();
     artifacts.insert(Platform::MacosArm64, foreign.clone());
-    foreign.values_mut().next().unwrap().sha256 = "c".repeat(64);
+    foreign.values_mut().next().unwrap().sha256 = Some("c".repeat(64));
     artifacts.insert(Platform::WindowsX64, foreign);
     reject(Lock::new(wire).unwrap());
 }

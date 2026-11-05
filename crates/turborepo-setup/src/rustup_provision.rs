@@ -137,7 +137,8 @@ impl RustupTransport {
                     PART.into(),
                     Artifact {
                         url,
-                        sha256,
+                        sha256: Some(sha256),
+                        sha512: None,
                         format: Format::Binary,
                         alternates: BTreeMap::new(),
                         root_prefix: None,
@@ -206,7 +207,7 @@ impl RustupPlan {
                 id: "rustup".into(),
                 version: version.to_string(),
                 platform: spelling.into(),
-                artifact_sha256: artifact.sha256.clone(),
+                artifact_sha256: artifact.sha256_or(Error::InvalidLock)?.to_owned(),
                 // The one binary, written at its executable path.
                 staging: Staging::new("rustup", STAGING_REVISION, &executables)?,
                 executables: Export::files(&executables),
@@ -249,7 +250,7 @@ impl RustupPlan {
             .client
             .download_verified(
                 &format!("{}{path}", transport.origin),
-                ExpectedSha256::from_hex(&self.artifact.sha256)?,
+                ExpectedSha256::from_hex(self.artifact.sha256_or(Error::InvalidLock)?)?,
                 Limits::new(MAX_INSTALLER_BYTES, Duration::from_secs(120))?,
             )
             .await?;

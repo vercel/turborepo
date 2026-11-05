@@ -75,7 +75,7 @@ fn ordinary_float_preserves_but_refresh_selects_newer_and_repeat_is_noop() {
     };
     assert_eq!(
         artifacts[&turborepo_setup::lock::Platform::Any]["package"].sha256,
-        expected
+        Some(expected)
     );
     assert_eq!(
         provision::lock_report(Some(&old), &new),

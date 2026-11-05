@@ -79,7 +79,7 @@ async fn releases_lock_every_published_supported_target_and_nothing_else() {
             let artifact = &parts["distribution"];
             assert_eq!(
                 artifact,
-                &official(*platform, VERSION, &artifact.sha256).unwrap()
+                &official(*platform, VERSION, artifact.sha256.as_deref().unwrap()).unwrap()
             );
             (
                 serde_json::to_value(platform).unwrap(),
@@ -99,7 +99,7 @@ async fn releases_lock_every_published_supported_target_and_nothing_else() {
     .into();
     assert_eq!(selected, expected);
     let windows = &artifacts[&Platform::WindowsX64]["distribution"];
-    assert_eq!(windows.sha256, sha256(b"windows-x64-baseline"));
+    assert_eq!(windows.sha256, Some(sha256(b"windows-x64-baseline")));
     assert_eq!(windows.executables["bunx"], "bun.exe");
     // The locked shape is a valid portable lock entry, executables included.
     lock(&installation, "bun@1.2.23");

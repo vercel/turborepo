@@ -203,7 +203,8 @@ pub fn resolve(requirements: &GoRequirements, index: &[u8]) -> Result<Tool, Erro
                 "distribution".to_owned(),
                 Artifact {
                     url: format!("{ARTIFACT_ORIGIN}/go/{name}"),
-                    sha256: sha256.clone(),
+                    sha256: Some(sha256.clone()),
+                    sha512: None,
                     format,
                     alternates: BTreeMap::new(),
                     root_prefix: Some("go".into()),

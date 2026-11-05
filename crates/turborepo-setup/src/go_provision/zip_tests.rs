@@ -49,7 +49,8 @@ fn plan(platform: Platform, bytes: &[u8]) -> GoPlan {
     let (name, format) = go_resolution::archive(version, platform).unwrap();
     let artifact = lock::Artifact {
         url: format!("https://dl.google.com/go/{name}"),
-        sha256: format!("{:x}", Sha256::digest(bytes)),
+        sha256: Some(format!("{:x}", Sha256::digest(bytes))),
+        sha512: None,
         format,
         root_prefix: Some("go".into()),
         destination: None,

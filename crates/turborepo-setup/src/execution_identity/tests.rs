@@ -449,3 +449,37 @@ fn clone_local_identity_marks_its_resolution_and_keeps_artifact_binding() {
         ExecutionSnapshot::select_clone_local(&lock(&changed), context(), &selected).unwrap();
     assert_ne!(other.fingerprint(), local.fingerprint());
 }
+
+#[test]
+fn sha512_native_pnpm_parts_contribute_their_digest() {
+    let mut value = fixture();
+    let part = |digest: Value| {
+        let mut part = json!({"url":"https://downloads.example.test/exe.tgz", "format":"tar-gz",
+            "rootPrefix":"package", "executables":{"pnpm":"pnpm"}});
+        part.as_object_mut()
+            .unwrap()
+            .extend(digest.as_object().unwrap().clone());
+        part
+    };
+    let mut package =
+        value["tools"]["pnpm"]["installation"]["artifacts"]["any"]["distribution"].clone();
+    package["executables"] = json!({});
+    let sha512 = |digest: &str| {
+        let parts = json!({"native":part(json!({"sha512":digest.repeat(128)})), "package":package});
+        json!({"linux-x64-gnu":parts})
+    };
+    value["tools"]["pnpm"]["version"] = json!("12.0.0");
+    value["tools"]["pnpm"]["installation"]["artifacts"] = sha512("f");
+    let selected = snapshot(&value, context());
+    let identity: Value = serde_json::from_slice(selected.canonical_identity()).unwrap();
+    let parts = &identity["tools"]["pnpm"]["installation"]["parts"];
+    assert_eq!(parts["native"]["sha512"], json!("f".repeat(128)));
+    assert!(parts["native"].get("sha256").is_none());
+    assert_eq!(parts["package"]["sha256"], json!("e".repeat(64)));
+    assert!(parts["package"].get("sha512").is_none());
+    value["tools"]["pnpm"]["installation"]["artifacts"] = sha512("0");
+    assert_ne!(
+        snapshot(&value, context()).fingerprint(),
+        selected.fingerprint()
+    );
+}

@@ -211,7 +211,10 @@ async fn transport_binds_published_checksums_and_uv_keys() {
              2B{TAG}-aarch64-apple-darwin-install_only_stripped.tar.gz"
         )
     );
-    assert_eq!(mac.sha256, format!("{:064x}", "aarch64-apple-darwin".len()));
+    assert_eq!(
+        mac.sha256,
+        Some(format!("{:064x}", "aarch64-apple-darwin".len()))
+    );
     assert_eq!(
         mac.destination.as_deref(),
         Some("cpython-3.12.12-macos-aarch64-none")

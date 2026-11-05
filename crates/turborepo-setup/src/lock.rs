@@ -160,7 +160,12 @@ pub enum AlternateFormat {
 pub struct Artifact {
     /// Transport only, deliberately excluded from task-cache identity.
     pub url: String,
-    pub sha256: String,
+    /// Exactly one digest pins the bytes. Only native pnpm parts use the
+    /// registry's SHA-512, so resolving them reads metadata, not bytes.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sha256: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sha512: Option<String>,
     pub format: Format,
     /// The same payload in other archive formats that a delegated installer
     /// may fetch instead (rustup prefers `.tar.xz`), pinned like the primary.
@@ -177,6 +182,42 @@ pub struct Artifact {
     /// A binary has exactly one payload path. Components may expose no
     /// binaries.
     pub executables: BTreeMap<String, String>,
+}
+
+impl Artifact {
+    /// The SHA-256 pin, or `error` when the artifact has none.
+    pub fn sha256_or<E>(&self, error: E) -> Result<&str, E> {
+        self.sha256.as_deref().ok_or(error)
+    }
+
+    /// The single pinned digest, or `None` when there is not exactly one.
+    pub fn digest(&self) -> Option<ArtifactDigest<'_>> {
+        match (&self.sha256, &self.sha512) {
+            (Some(sha256), None) => Some(ArtifactDigest::Sha256(sha256)),
+            (None, Some(sha512)) => Some(ArtifactDigest::Sha512(sha512)),
+            _ => None,
+        }
+    }
+}
+
+/// Lowercase hex digest of an artifact's bytes.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ArtifactDigest<'a> {
+    Sha256(&'a str),
+    Sha512(&'a str),
+}
+impl<'a> ArtifactDigest<'a> {
+    pub fn algorithm(self) -> &'static str {
+        match self {
+            Self::Sha256(_) => "SHA-256",
+            Self::Sha512(_) => "SHA-512",
+        }
+    }
+    pub fn hex(self) -> &'a str {
+        match self {
+            Self::Sha256(hex) | Self::Sha512(hex) => hex,
+        }
+    }
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
@@ -292,6 +333,11 @@ impl Lock {
                             return Err(Error::Invalid("invalid artifact part name"));
                         }
                         validate_artifact(artifact)?;
+                        // Every other part keeps the SHA-256 its adapter verifies.
+                        if artifact.sha512.is_some() && (tool.adapter != "pnpm" || part != "native")
+                        {
+                            return Err(Error::Invalid("only native pnpm parts may pin SHA-512"));
+                        }
                         executable_count += artifact.executables.len();
                     }
                     if executable_count == 0 || executable_count > MAX_EXECUTABLES {
@@ -386,7 +432,7 @@ fn declarations(values: &[Declaration]) -> Result<(), Error> {
     }
     Ok(())
 }
-fn validate_source(source: &str, sha256: &str) -> Result<(), Error> {
+fn validate_source(source: &str) -> Result<(), Error> {
     // Never echo source metadata in diagnostics. Query parameters can carry
     // secrets.
     let authority = source
@@ -409,24 +455,44 @@ fn validate_source(source: &str, sha256: &str) -> Result<(), Error> {
             "artifact URL must be credential-free HTTPS without query or fragment",
         ));
     }
-    if sha256.len() != 64
-        || !sha256
-            .bytes()
-            .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
-    {
+    Ok(())
+}
+fn validate_sha256(digest: &str) -> Result<(), Error> {
+    if !lowercase_hex(digest, 64) {
         return Err(Error::Invalid(
             "artifact requires a lowercase SHA-256 digest",
         ));
     }
     Ok(())
 }
+fn lowercase_hex(digest: &str, length: usize) -> bool {
+    digest.len() == length
+        && digest
+            .bytes()
+            .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
+}
 fn validate_artifact(value: &Artifact) -> Result<(), Error> {
-    validate_source(&value.url, &value.sha256)?;
+    validate_source(&value.url)?;
+    match value.digest() {
+        Some(ArtifactDigest::Sha256(digest)) => validate_sha256(digest)?,
+        Some(ArtifactDigest::Sha512(digest)) if lowercase_hex(digest, 128) => {}
+        Some(ArtifactDigest::Sha512(_)) => {
+            return Err(Error::Invalid(
+                "artifact requires a lowercase SHA-512 digest",
+            ));
+        }
+        None => {
+            return Err(Error::Invalid(
+                "artifact requires exactly one SHA-256 or SHA-512 digest",
+            ));
+        }
+    }
     if value.format == Format::Binary && !value.alternates.is_empty() {
         return Err(Error::Invalid("binary payloads have no alternate formats"));
     }
     for alternate in value.alternates.values() {
-        validate_source(&alternate.url, &alternate.sha256)?;
+        validate_source(&alternate.url)?;
+        validate_sha256(&alternate.sha256)?;
     }
     if value
         .root_prefix

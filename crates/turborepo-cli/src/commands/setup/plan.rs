@@ -344,7 +344,9 @@ pub(super) fn describe(
                 String::new()
             };
             lines.push(format!("  Source{label}: {}", artifact.url));
-            lines.push(format!("  SHA-256{label}: {}", artifact.sha256));
+            if let Some(digest) = artifact.digest() {
+                lines.push(format!("  {}{label}: {}", digest.algorithm(), digest.hex()));
+            }
         }
     }
     lines

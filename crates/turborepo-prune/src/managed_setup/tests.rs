@@ -217,7 +217,8 @@ async fn native_and_additional_provenance_is_copied_without_adapter_allowlists()
                     "main".into(),
                     lock::Artifact {
                         url: "https://example.com/tool.tar.gz".into(),
-                        sha256: "a".repeat(64),
+                        sha256: Some("a".repeat(64)),
+                        sha512: None,
                         format: lock::Format::TarGz,
                         alternates: BTreeMap::new(),
                         root_prefix: Some("tool".into()),

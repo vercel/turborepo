@@ -122,7 +122,7 @@ pub(crate) fn validate_registry(tool: &Tool, declaration: &Declaration) -> Resul
         if crate::registry_metadata::is_modern_yarn(declaration.manager, &version) {
             declaration.preflight_integrity(&version)?;
         } else {
-            declaration.locked_integrity(&version, &package.sha256)?;
+            declaration.locked_integrity(&version, package.sha256_or(invalid())?)?;
         }
     }
     Ok(())

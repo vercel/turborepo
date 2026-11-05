@@ -123,7 +123,7 @@ impl GoPlan {
                 id: "go".into(),
                 version: go.version.clone(),
                 platform: spelling.into(),
-                artifact_sha256: artifact.sha256.clone(),
+                artifact_sha256: artifact.sha256_or(Error::InvalidLock)?.to_owned(),
                 executables,
                 vars,
                 staging: Staging::new(
@@ -183,7 +183,7 @@ impl GoPlan {
             .client
             .download_verified(
                 &format!("{}{path}", transport.artifacts),
-                ExpectedSha256::from_hex(&self.artifact.sha256)?,
+                ExpectedSha256::from_hex(self.artifact.sha256_or(Error::InvalidLock)?)?,
                 turborepo_download::Limits::new(256 * 1024 * 1024, Duration::from_secs(300))?,
             )
             .await?;

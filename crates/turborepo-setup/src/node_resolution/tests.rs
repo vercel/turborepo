@@ -157,7 +157,7 @@ fn all_six_exact_artifacts_are_consumable_without_claiming_promotion_support() -
             let official = NodeArtifact::for_platform(&Version::new(24, 1, 0), target)?;
             let artifact = &artifacts[&platform]["distribution"];
             assert_eq!(artifact.url, official.url());
-            assert_eq!(artifact.sha256, "a".repeat(64));
+            assert_eq!(artifact.sha256, Some("a".repeat(64)));
             assert_eq!(
                 artifact.format,
                 if windows { Format::Zip } else { Format::TarGz }

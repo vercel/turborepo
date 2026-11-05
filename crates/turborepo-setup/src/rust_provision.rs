@@ -367,7 +367,8 @@ impl RustPlan {
                 .get(&AlternateFormat::TarXz)
                 .ok_or(Error::Mismatch)?;
             if tarball.zst
-                || (tarball.url, tarball.sha256) != (&*artifact.url, &*artifact.sha256)
+                || (tarball.url, Some(tarball.sha256))
+                    != (&*artifact.url, artifact.sha256.as_deref())
                 || (tarball.xz_url, tarball.xz_sha256) != (&*xz.url, &*xz.sha256)
             {
                 return Err(Error::Mismatch);

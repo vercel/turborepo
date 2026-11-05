@@ -102,7 +102,8 @@ fn official(platform: Platform, version: &str, sha256: &str) -> Result<Artifact,
     Ok(Artifact {
         alternates: BTreeMap::new(),
         url: format!("{RELEASES}{}/bun-{target}.zip", release(version)?),
-        sha256: sha256.into(),
+        sha256: Some(sha256.into()),
+        sha512: None,
         format: Format::Zip,
         root_prefix: Some(format!("bun-{target}")),
         destination: None,
@@ -124,7 +125,11 @@ pub(crate) fn validate(tool: &crate::lock::Tool, declaration: &Declaration) -> R
     }
     for (platform, parts) in artifacts {
         let artifact = parts.get("distribution").ok_or(Error::InvalidLock)?;
-        let expected = official(*platform, &tool.version, &artifact.sha256);
+        let expected = official(
+            *platform,
+            &tool.version,
+            artifact.sha256_or(Error::InvalidLock)?,
+        );
         if parts.len() != 1 || expected.ok().as_ref() != Some(artifact) {
             return Err(Error::InvalidLock);
         }
@@ -251,19 +256,19 @@ impl BunPlan {
         };
         let parts = artifacts.get(&platform).ok_or(Error::MissingTarget)?;
         let artifact = parts.get("distribution").ok_or(Error::InvalidLock)?;
-        let expected =
-            official(platform, &bun.version, &artifact.sha256).map_err(|_| Error::InvalidLock)?;
+        let sha256 = artifact.sha256_or(Error::InvalidLock)?;
+        let expected = official(platform, &bun.version, sha256).map_err(|_| Error::InvalidLock)?;
         if parts.len() != 1 || artifact != &expected {
             return Err(Error::InvalidLock);
         }
-        ExpectedSha256::from_hex(&artifact.sha256)?;
+        ExpectedSha256::from_hex(artifact.sha256_or(Error::InvalidLock)?)?;
         let (_, spelling) = crate::node::lock_target(platform).ok_or(Error::UnsupportedTarget)?;
         Ok(Self {
             tool: Tool {
                 id: "bun".into(),
                 version: bun.version.clone(),
                 platform: spelling.into(),
-                artifact_sha256: artifact.sha256.clone(),
+                artifact_sha256: artifact.sha256_or(Error::InvalidLock)?.to_owned(),
                 executables: Export::files(&artifact.executables),
                 vars: Default::default(),
                 staging: Staging::new(
@@ -319,7 +324,7 @@ impl BunPlan {
             .client
             .download_verified(
                 &format!("{}{path}", transport.origin),
-                ExpectedSha256::from_hex(&self.artifact.sha256)?,
+                ExpectedSha256::from_hex(self.artifact.sha256_or(Error::InvalidLock)?)?,
                 Limits::new(128 * 1024 * 1024, Duration::from_secs(300))?,
             )
             .await?;

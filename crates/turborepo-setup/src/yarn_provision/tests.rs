@@ -199,7 +199,7 @@ async fn modern_pins_cover_the_bundle_not_the_registry_archive() {
     assert!(matches!(resolve(&bad).await, Err(Error::Metadata(_))));
     let resolved = resolve(&good).await.unwrap();
     assert_eq!(resolved.pinned_sha256(), sha256(&bundle));
-    assert_eq!(resolved.artifact().sha256, sha256(&bytes));
+    assert_eq!(resolved.artifact().sha256, Some(sha256(&bytes)));
     resolved.verify_authored(Some(&good)).unwrap();
     assert!(resolved.verify_authored(Some(&bad)).is_err());
 

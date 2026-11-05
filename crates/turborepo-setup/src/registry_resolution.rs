@@ -24,6 +24,8 @@ pub struct ResolvedRegistry {
     integrity: CorepackIntegrity,
     /// SHA-224 of the verified archive bytes, for older Corepack pins.
     sha224: String,
+    /// SHA-256 of the verified archive bytes, which `artifact` also locks.
+    sha256: String,
     natives: BTreeMap<Platform, Artifact>,
     /// Modern Yarn `bin/yarn.js` SHA-256/SHA-512, which Corepack pins instead
     /// of the registry tarball.
@@ -34,7 +36,7 @@ impl ResolvedRegistry {
         release: RegistryArtifact,
         artifact: Artifact,
         natives: BTreeMap<Platform, Artifact>,
-        sha224: String,
+        (sha224, sha256): (String, String),
         bundle: Option<(String, String)>,
     ) -> Self {
         Self {
@@ -43,6 +45,7 @@ impl ResolvedRegistry {
             artifact,
             integrity: release.integrity,
             sha224,
+            sha256,
             natives,
             bundle,
         }
@@ -68,7 +71,7 @@ impl ResolvedRegistry {
     pub fn pinned_sha256(&self) -> &str {
         self.bundle
             .as_ref()
-            .map_or(&self.artifact.sha256, |(sha256, _)| sha256)
+            .map_or(&self.sha256, |(sha256, _)| sha256)
     }
     /// Check a native pin selected AFTER byte-derived SHA-256 is available via
     /// Declaration::locked_integrity. No refetch, metadata-only proof or OR
@@ -82,7 +85,7 @@ impl ResolvedRegistry {
             None => check_pin(
                 pin,
                 Some(&self.sha224),
-                &self.artifact.sha256,
+                &self.sha256,
                 &self.integrity.digest,
             ),
         }
@@ -91,7 +94,8 @@ impl ResolvedRegistry {
         self.artifact
     }
     /// Portable lock artifacts: the package for any platform, or, for native
-    /// pnpm, each platform's verified binary package beside the same package.
+    /// pnpm, each platform's SHA-512-pinned binary package beside the same
+    /// package.
     pub fn into_artifacts(self) -> BTreeMap<Platform, BTreeMap<String, Artifact>> {
         if self.natives.is_empty() {
             return BTreeMap::from([(

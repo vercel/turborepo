@@ -236,7 +236,7 @@ impl ArtifactPlan {
                 id: id.into(),
                 version: tool.version.clone(),
                 platform: spelling,
-                artifact_sha256: artifact.sha256.clone(),
+                artifact_sha256: artifact.sha256_or(invalid())?.to_owned(),
                 executables: Export::files(&artifact.executables),
                 vars: Default::default(),
                 staging: Staging::new(ADAPTER, STAGING_REVISION, &staged)?,
@@ -349,7 +349,8 @@ impl ArtifactPlan {
             tool: self.tool.id.clone(),
             source,
         };
-        let digest = ExpectedSha256::from_hex(&self.artifact.sha256).map_err(download)?;
+        let sha256 = (self.artifact).sha256_or(Error::InvalidLock(self.tool.id.clone()))?;
+        let digest = ExpectedSha256::from_hex(sha256).map_err(download)?;
         let limits = turborepo_download::Limits::new(MAX_DOWNLOAD_BYTES, DOWNLOAD_TIMEOUT)
             .map_err(download)?;
         transport

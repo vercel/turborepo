@@ -75,7 +75,8 @@ fn locks_one_release_with_official_per_platform_archives() {
         artifacts(&tool)[&Platform::LinuxArm64Gnu]["distribution"],
         Artifact {
             url: "https://dl.google.com/go/go1.22.12.linux-arm64.tar.gz".into(),
-            sha256: SHA.into(),
+            sha256: Some(SHA.into()),
+            sha512: None,
             format: Format::TarGz,
             alternates: BTreeMap::new(),
             root_prefix: Some("go".into()),

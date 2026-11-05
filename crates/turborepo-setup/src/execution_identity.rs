@@ -127,7 +127,11 @@ pub struct SelectedTool {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SelectedArtifact {
-    pub sha256: String,
+    /// Skipped when absent, so SHA-256 artifacts keep their identity bytes.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sha256: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sha512: Option<String>,
     pub format: Format,
     pub root_prefix: Option<String>,
     pub destination: Option<String>,
@@ -138,6 +142,7 @@ impl From<&Artifact> for SelectedArtifact {
     fn from(artifact: &Artifact) -> Self {
         Self {
             sha256: artifact.sha256.clone(),
+            sha512: artifact.sha512.clone(),
             format: artifact.format,
             root_prefix: artifact.root_prefix.clone(),
             destination: artifact.destination.clone(),

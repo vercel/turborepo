@@ -127,7 +127,10 @@ fn first_selection_bundled_independent_and_authored_bytes_repeat_without_traffic
             };
             assert_eq!(artifacts.len(), 1);
             let artifact = &artifacts[&Platform::Any]["package"];
-            assert_eq!(artifact.sha256, format!("{:x}", Sha256::digest(&bytes)));
+            assert_eq!(
+                artifact.sha256,
+                Some(format!("{:x}", Sha256::digest(&bytes)))
+            );
             assert_eq!(
                 artifact.executables,
                 BTreeMap::from([
@@ -371,7 +374,7 @@ fn preserved_native_node_and_authored_npm_integrity_fail_before_either_transport
         .unwrap()
         .get_mut("package")
         .unwrap()
-        .sha256 = "b".repeat(64);
+        .sha256 = Some("b".repeat(64));
     save(repo.path(), &Lock::new(document).unwrap());
     fs::write(repo.path().join(".nvmrc"), "^24.0.0").unwrap();
     rejected(

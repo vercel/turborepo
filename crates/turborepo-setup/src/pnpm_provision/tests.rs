@@ -695,6 +695,45 @@ async fn pnpm_11_module_entry_points_and_aliases_run_on_managed_node() {
     }
 }
 
+/// The pnpm 12 lock resolution writes for the native fixture routes.
+async fn native_lock(transport: &PnpmTransport, wrapper: &[u8]) -> Value {
+    use crate::registry_provision::native_fixture as fx;
+    let selected = transport
+        .resolve_exact(Manager::Pnpm, fx::VERSION, None)
+        .await
+        .unwrap();
+    let mut value = fixture(wrapper);
+    value["tools"]["pnpm"]["version"] = json!(fx::VERSION);
+    value["tools"]["pnpm"]["installation"]["artifacts"] =
+        serde_json::to_value(selected.into_artifacts()).unwrap();
+    value
+}
+
+/// Prepare `pnpm` into a fresh store seeded with `node`.
+async fn prepare_native(
+    node: &NodePlan,
+    pnpm: &PnpmPlan,
+    transport: &PnpmTransport,
+) -> (tempfile::TempDir, TestStore, Result<(), Error>) {
+    let repo = tempfile::tempdir().unwrap();
+    let store = seeded(repo.path(), node);
+    let desired = [node.inventory_tool().clone(), pnpm.inventory_tool().clone()];
+    let prepared = match pnpm.prepare_if_needed(&store, &desired, transport).await {
+        Ok(prepared) => prepared.unwrap(),
+        Err(error) => return (repo, store, Err(error)),
+    };
+    store
+        .reconcile(&desired, |tool, path| {
+            if tool == node.inventory_tool() {
+                node_stage(tool, path)
+            } else {
+                prepared.stage(tool, path)
+            }
+        })
+        .unwrap();
+    (repo, store, Ok(()))
+}
+
 #[tokio::test]
 async fn native_pnpm_runs_the_verified_platform_binary_beside_its_wrapper() {
     use crate::{
@@ -703,22 +742,26 @@ async fn native_pnpm_runs_the_verified_platform_binary_beside_its_wrapper() {
     let (wrapper, natives) = (fx::wrapper(&[]), fx::natives());
     let server = LoopbackServer::new(fx::routes(&wrapper, &natives), |_| {}).unwrap();
     let transport = PnpmTransport::loopback_http_for_tests(server.origin()).unwrap();
-    let selected = transport
-        .resolve_exact(Manager::Pnpm, fx::VERSION, None)
-        .await
-        .unwrap();
-    let mut value = fixture(&wrapper);
-    value["tools"]["pnpm"]["version"] = json!(fx::VERSION);
-    value["tools"]["pnpm"]["installation"]["artifacts"] =
-        serde_json::to_value(selected.into_artifacts()).unwrap();
+    let value = native_lock(&transport, &wrapper).await;
     let (node, pnpm) = plans(&value);
     let lock = Lock::parse(&serde_json::to_vec(&value).unwrap()).unwrap();
-    // Authored pins describe the wrapper, never the platform package.
+    // The native part locks the registry SHA-512 of this host's package.
     let parts = value["tools"]["pnpm"]["installation"]["artifacts"]["macos-arm64"].clone();
+    let host = &natives.iter().find(|(p, _)| *p == TARGET).unwrap().1;
+    let native_sha512 = format!("{:x}", Sha512::digest(host));
+    assert_eq!(parts["native"]["sha512"], json!(native_sha512));
+    assert!(parts["native"].get("sha256").is_none());
     let wrapper_sha256 = format!("{:x}", Sha256::digest(&wrapper));
+    let identity = format!("pnpm-native-sha512\0{wrapper_sha256}\0{native_sha512}");
+    assert_eq!(
+        pnpm.inventory_tool().artifact_sha256,
+        format!("{:x}", Sha256::digest(identity))
+    );
+    // Authored pins describe the wrapper, never the platform package.
+    let native_sha256 = format!("{:x}", Sha256::digest(host));
     for (digest, valid) in [
         (wrapper_sha256.as_str(), true),
-        (parts["native"]["sha256"].as_str().unwrap(), false),
+        (native_sha256.as_str(), false),
     ] {
         let manager = discover_package_manager(
             &json!({"packageManager":format!("pnpm@{}+sha256.{digest}", fx::VERSION)}),
@@ -730,23 +773,23 @@ async fn native_pnpm_runs_the_verified_platform_binary_beside_its_wrapper() {
             valid
         );
     }
-    let repo = tempfile::tempdir().unwrap();
-    let store = seeded(repo.path(), &node);
+    let hits = server.hits();
+    let (_repo, store, prepared) = prepare_native(&node, &pnpm, &transport).await;
+    prepared.unwrap();
+    // The wrapper's metadata and bytes, then only this host's locked package.
+    let native_path = format!(
+        "/@pnpm/exe.darwin-arm64/-/exe.darwin-arm64-{}.tgz",
+        fx::VERSION
+    );
+    assert_eq!(
+        server.requests()[hits..],
+        [
+            format!("/pnpm/{}", fx::VERSION),
+            format!("/pnpm/-/pnpm-{}.tgz", fx::VERSION),
+            native_path,
+        ]
+    );
     let desired = [node.inventory_tool().clone(), pnpm.inventory_tool().clone()];
-    let prepared = pnpm
-        .prepare_if_needed(&store, &desired, &transport)
-        .await
-        .unwrap()
-        .unwrap();
-    store
-        .reconcile(&desired, |tool, path| {
-            if tool == node.inventory_tool() {
-                node_stage(tool, path)
-            } else {
-                prepared.stage(tool, path)
-            }
-        })
-        .unwrap();
     let current = store.current().unwrap().unwrap();
     for (name, dlx) in [
         ("pn", ""),
@@ -779,25 +822,42 @@ async fn native_pnpm_runs_the_verified_platform_binary_beside_its_wrapper() {
             .is_none()
     );
     assert_eq!(server.hits(), hits);
-    // Each part is verified against its own locked SHA-256 before staging, and
-    // only qualified hosts provision.
+    // The native part is verified against its locked SHA-512 before staging:
+    // a different locked digest or different served bytes both fail.
     let mut tampered = value.clone();
-    tampered["tools"]["pnpm"]["installation"]["artifacts"]["macos-arm64"]["native"]["sha256"] =
-        json!("00".repeat(32));
+    tampered["tools"]["pnpm"]["installation"]["artifacts"]["macos-arm64"]["native"]["sha512"] =
+        json!("00".repeat(64));
     let (_, tampered) = plans(&tampered);
-    let repo = tempfile::tempdir().unwrap();
-    let store = seeded(repo.path(), &node);
-    let desired = [
-        node.inventory_tool().clone(),
-        tampered.inventory_tool().clone(),
-    ];
-    let result = tampered
-        .prepare_if_needed(&store, &desired, &transport)
-        .await;
+    let (_repo, _, result) = prepare_native(&node, &tampered, &transport).await;
     assert!(matches!(
         result,
-        Err(Error::Download(DownloadError::DigestMismatch))
+        Err(Error::Download(DownloadError::Sha512DigestMismatch))
     ));
+    let mut served = natives.clone();
+    let index = served.iter().position(|(p, _)| *p == TARGET).unwrap();
+    served[index].1 = fx::tgz(&[
+        (
+            "package.json",
+            r#"{"name":"@pnpm/exe.darwin-arm64","version":"12.11.2"}"#,
+            0o644,
+        ),
+        ("pnpm", "#!/bin/sh\nexit 0\n", 0o755),
+    ]);
+    let other = LoopbackServer::new(fx::routes(&wrapper, &served), |_| {}).unwrap();
+    let other_transport = PnpmTransport::loopback_http_for_tests(other.origin()).unwrap();
+    let (_repo, _, result) = prepare_native(&node, &pnpm, &other_transport).await;
+    assert!(matches!(
+        result,
+        Err(Error::Download(DownloadError::Sha512DigestMismatch))
+    ));
+    // Only native pnpm parts may pin SHA-512.
+    let mut package = value.clone();
+    let wrapper_sha512 = format!("{:x}", Sha512::digest(&wrapper));
+    let part = &mut package["tools"]["pnpm"]["installation"]["artifacts"]["macos-arm64"]["package"];
+    part.as_object_mut().unwrap().remove("sha256");
+    part["sha512"] = json!(wrapper_sha512);
+    assert!(Lock::parse(&serde_json::to_vec(&package).unwrap()).is_err());
+    // Only qualified hosts provision.
     for platform in [Platform::WindowsX64, Platform::LinuxX64Musl] {
         assert!(matches!(
             PnpmPlan::from_lock(&lock, platform, &node, None),
@@ -833,4 +893,58 @@ async fn native_pnpm_runs_the_verified_platform_binary_beside_its_wrapper() {
             "{part}.{field}"
         );
     }
+}
+
+/// Locks written before native parts pinned SHA-512 keep their SHA-256 parts,
+/// tree identity and metadata-checked download.
+#[tokio::test]
+async fn native_pnpm_locks_with_sha256_parts_still_provision() {
+    use crate::registry_provision::native_fixture as fx;
+    let (wrapper, natives) = (fx::wrapper(&[]), fx::natives());
+    let server = LoopbackServer::new(fx::routes(&wrapper, &natives), |_| {}).unwrap();
+    let transport = PnpmTransport::loopback_http_for_tests(server.origin()).unwrap();
+    let mut value = native_lock(&transport, &wrapper).await;
+    let artifacts = &mut value["tools"]["pnpm"]["installation"]["artifacts"];
+    for (platform, bytes) in &natives {
+        let platform = serde_json::to_value(platform).unwrap();
+        let native = &mut artifacts[platform.as_str().unwrap()]["native"];
+        native.as_object_mut().unwrap().remove("sha512");
+        native["sha256"] = json!(format!("{:x}", Sha256::digest(bytes)));
+    }
+    let (node, pnpm) = plans(&value);
+    let host = &natives.iter().find(|(p, _)| *p == TARGET).unwrap().1;
+    let identity = format!(
+        "pnpm-native\0{:x}\0{:x}",
+        Sha256::digest(&wrapper),
+        Sha256::digest(host)
+    );
+    assert_eq!(
+        pnpm.inventory_tool().artifact_sha256,
+        format!("{:x}", Sha256::digest(identity))
+    );
+    let hits = server.hits();
+    let (_repo, store, prepared) = prepare_native(&node, &pnpm, &transport).await;
+    prepared.unwrap();
+    assert!(
+        server.requests()[hits..].contains(&format!("/@pnpm/exe.darwin-arm64/{}", fx::VERSION))
+    );
+    let current = store.current().unwrap().unwrap();
+    let output = Command::new(current.bin.join("pnpm"))
+        .arg("--version")
+        .env("PATH", "/nonexistent")
+        .output()
+        .unwrap();
+    assert_eq!(
+        String::from_utf8(output.stdout).unwrap(),
+        "native:pnpm-native\n<--version>\n"
+    );
+    let mut tampered = value.clone();
+    tampered["tools"]["pnpm"]["installation"]["artifacts"]["macos-arm64"]["native"]["sha256"] =
+        json!("00".repeat(32));
+    let (_, tampered) = plans(&tampered);
+    let (_repo, _, result) = prepare_native(&node, &tampered, &transport).await;
+    assert!(matches!(
+        result,
+        Err(Error::Download(DownloadError::DigestMismatch))
+    ));
 }

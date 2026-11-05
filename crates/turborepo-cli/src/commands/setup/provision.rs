@@ -138,9 +138,15 @@ pub(super) fn missing_artifacts(
             .get(&platform)
             .or_else(|| artifacts.get(&Platform::Any));
         for (part, artifact) in parts.into_iter().flatten() {
+            let Some(digest) = artifact.digest() else {
+                continue;
+            };
             lines.push(format!(
-                "  {id} {} [{part}]: {} (SHA-256 {})",
-                tool.version, artifact.url, artifact.sha256
+                "  {id} {} [{part}]: {} ({} {})",
+                tool.version,
+                artifact.url,
+                digest.algorithm(),
+                digest.hex()
             ));
         }
     }
