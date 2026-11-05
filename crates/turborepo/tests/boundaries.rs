@@ -46,20 +46,23 @@ fn root_inspection_and_printing_scripts_are_not_recursive() -> Result<(), anyhow
         .parent()
         .ok_or_else(|| anyhow::anyhow!("Turbo binary has no parent directory"))?;
     let path = common::setup::prepend_to_path(bin_dir);
-    let version_output = format!("version: {}", turborepo_cli::get_version());
+    // Each check spawns turbo -> npm -> turbo, which is slow on Windows. Run
+    // them as one parallel invocation; the bound only catches real hangs.
+    let timeout = std::time::Duration::from_secs(if cfg!(windows) { 120 } else { 60 });
+    let version = turborepo_cli::get_version();
     let mut checks = vec![
         ("boundaries", "no issues found"),
-        ("echo-turbo", "echo-turbo: turbo"),
+        ("echo-turbo", "turbo"),
         ("query", "\"demo\""),
         ("ls", "\"demo\""),
         ("info", "Package manager: npm"),
         ("bin", env!("CARGO_BIN_EXE_turbo")),
         ("help", "Usage: turbo"),
         ("short-help", "Usage: turbo"),
-        ("version", version_output.as_str()),
+        ("version", version),
     ];
     if !cfg!(windows) {
-        checks.push(("printf-turbo", "printf-turbo: turbo"));
+        checks.push(("printf-turbo", "turbo"));
     }
     let tasks: std::collections::BTreeMap<_, _> = checks
         .iter()
@@ -74,18 +77,29 @@ fn root_inspection_and_printing_scripts_are_not_recursive() -> Result<(), anyhow
         root.join("turbo.json"),
         serde_json::to_vec(&serde_json::json!({"tasks": tasks}))?,
     )?;
+    let output = common::turbo_command(root)
+        .env("PATH", &path)
+        .arg("run")
+        .args(checks.iter().map(|(task, _)| *task))
+        .args(["--filter=//", "--skip-infer", "--continue"])
+        .timeout(timeout)
+        .output()?;
+    let combined = common::combined_output(&output);
+    assert!(
+        output.status.success(),
+        "exited with {:?}: {combined}",
+        output.status
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
     for (task, expected) in checks {
-        let output = common::turbo_command(root)
-            .env("PATH", &path)
-            .args(["run", task, "--filter=//", "--skip-infer"])
-            .timeout(std::time::Duration::from_secs(20))
-            .output()?;
-        let combined = common::combined_output(&output);
-        assert!(output.status.success(), "{task}: {combined}");
-        assert!(
-            String::from_utf8_lossy(&output.stdout).contains(expected),
-            "{combined}"
-        );
+        // Skip npm's `> script` echo lines so only the script's output counts.
+        let prefix = format!("//:{task}: ");
+        let ran = stdout
+            .lines()
+            .filter_map(|line| line.strip_prefix(&prefix))
+            .filter(|line| !line.starts_with("> "))
+            .any(|line| line.contains(expected));
+        assert!(ran, "{task} did not print {expected:?}: {combined}");
     }
     // The child would only produce a dry run if accidentally dispatched, so a
     // broken guard cannot start an unbounded recursive process tree in CI.
@@ -93,10 +107,14 @@ fn root_inspection_and_printing_scripts_are_not_recursive() -> Result<(), anyhow
         let output = common::turbo_command(root)
             .env("PATH", &path)
             .args(["run", task, "--filter=//", "--skip-infer"])
-            .timeout(std::time::Duration::from_secs(20))
+            .timeout(timeout)
             .output()?;
         let combined = common::combined_output(&output);
-        assert!(!output.status.success(), "{task}: {combined}");
+        assert!(
+            !output.status.success(),
+            "{task} exited with {:?}: {combined}",
+            output.status
+        );
         assert!(
             combined.contains("recursive_turbo_invocations"),
             "{combined}"
