@@ -104,9 +104,8 @@ fn healthy_offline_repeat_uses_trusted_bytes_without_writes_locks_traffic_or_pro
         )
         .unwrap();
         fs::write(f.owned.root().join("pnpm-lock.yaml"), "dependency sentinel").unwrap();
-        // Prove repeat doesn't recreate even an absent producer lock file.
-        fs::remove_file(f.owned.home().join("gc.lock")).unwrap();
         let empty = LoopbackServer::new([], |_| {}).unwrap();
+        let before = snapshot(f.owned.root().parent().unwrap());
         // Plain --offline also installs locked dependencies, which this
         // fixture's pnpm cannot run; dependency offline installs have their
         // own tests.
@@ -117,7 +116,7 @@ fn healthy_offline_repeat_uses_trusted_bytes_without_writes_locks_traffic_or_pro
         ] {
             assert_eq!(attempt(&f, &empty, flags).unwrap(), 0);
         }
-        assert!(!f.owned.home().join("gc.lock").exists());
+        assert_eq!(snapshot(f.owned.root().parent().unwrap()), before);
         for file in ["package-lock.json", "pnpm-lock.yaml"] {
             assert_eq!(
                 fs::read(f.owned.root().join(file)).unwrap(),

@@ -1375,9 +1375,6 @@ pub enum Command {
     /// In CI, cache the directory that TURBO_TOOL_STORE names, keyed on
     /// turbo.lock. Setup trusts the tools in a restored store. 'turbo setup
     /// --check' re-hashes them.
-    ///
-    /// After each run, setup deletes tools that no repository using the store
-    /// has selected for 7 days.
     Setup {
         #[usage(flatten)]
         setup_args: SetupArgs,

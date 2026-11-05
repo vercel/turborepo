@@ -1,5 +1,3 @@
-use std::time::SystemTime;
-
 use super::*;
 
 /// Sets up `tools` for `repo`, staging each tree with `stage`. Also returns
@@ -137,7 +135,7 @@ const CRASH_REPO: &str = "TURBO_TOOL_INSTALL_TEST_CRASH_REPO";
 const CRASH_CODE: i32 = 86;
 
 /// The child process of
-/// `a_setup_killed_before_publishing_leaves_only_staging_for_collection`.
+/// `a_setup_killed_before_publishing_leaves_only_staging`.
 #[test]
 #[ignore = "runs only as that test's child process"]
 fn setup_exits_abruptly_while_staging() {
@@ -155,7 +153,7 @@ fn setup_exits_abruptly_while_staging() {
 }
 
 #[test]
-fn a_setup_killed_before_publishing_leaves_only_staging_for_collection() {
+fn a_setup_killed_before_publishing_leaves_only_staging() {
     let f = fixture();
     let repo = repo();
     let status = Command::new(std::env::current_exe().unwrap())
@@ -182,11 +180,9 @@ fn a_setup_killed_before_publishing_leaves_only_staging_for_collection() {
     assert_eq!(staged.get(), 1);
     assert_eq!(count(&f.store, "trees"), 1);
     assert_eq!(count(&f.store, "envs"), 1);
+    assert_eq!(count(&f.store, "tmp"), 1);
     f.store.check(&Selection::new(tools).unwrap()).unwrap();
 
-    let collected = super::gc::collect(&f.store, &[(repo.path(), &ensured.env)], SystemTime::now());
-    assert_eq!(collected.removed.entries, 0);
-    assert_eq!(count(&f.store, "tmp"), 0);
     let root = fs::canonicalize(repo.path()).unwrap();
     let bin = f
         .store

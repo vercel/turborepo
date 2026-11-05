@@ -18,13 +18,11 @@ use std::{
 
 #[cfg(windows)]
 pub mod dacl;
-mod gc;
 mod repo_turbo;
 mod selection;
 mod store;
 mod user_store;
 
-pub use gc::{Collected, GRACE, RepoState, Usage};
 pub use selection::{Export, Launch, LaunchArg, ManagedVar, TreeRef, VarValue};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};

@@ -20,7 +20,6 @@ use crate::cli::{Args, SetupArgs};
 mod acl;
 pub(crate) mod authorization;
 mod check;
-mod cleanup;
 #[cfg(windows)]
 mod dacl;
 mod dependencies;
@@ -494,7 +493,7 @@ fn run_reporting(
         (None, Some(message)) => *lock_spinner.borrow_mut() = Some(console.spinner(message)),
         (None, None) => drop(lock_spinner.borrow_mut().take()),
     };
-    let mut tools = if request.offline {
+    let tools = if request.offline {
         offline::run(&discovery, snapshot, &request, transports, preflight)
     } else if request.lock == LockMode::NoLock {
         no_lock::run(&discovery, snapshot, transports, preflight)
@@ -509,14 +508,6 @@ fn run_reporting(
         )
     }?;
     let root = discovery.snapshot_root()?.as_std_path();
-    // Each path above released its store lease on return.
-    if let Ok(store) = trust::user_store(tool_store.as_deref(), root) {
-        tools.notes.extend(
-            cleanup::collect(&store, std::time::SystemTime::now())
-                .into_iter()
-                .map(output::Note::Cleanup),
-        );
-    }
     drop(preparing);
     report.downloaded_bytes = tools.downloaded_bytes;
     report.tools_installed = tools.installed();

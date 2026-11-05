@@ -69,6 +69,7 @@ fn local_setup_locks_installs_reuses_and_removes_additional_tools() {
         fs::read(current.tree("fixture").join("share/data.txt")).unwrap(),
         b"fixture resource"
     );
+    let fixture_tree = current.tree("fixture");
     drop(store);
 
     // Frozen repeats reuse the installation and leave tracked files alone.
@@ -79,10 +80,15 @@ fn local_setup_locks_installs_reuses_and_removes_additional_tools() {
     assert_eq!(fs::read(f.owned.root().join("turbo.lock")).unwrap(), lock);
     assert_eq!(f.manifest().unwrap(), manifest);
 
-    // Removing the declaration removes its lock entry and installation.
+    // Removing the declaration drops the tool from the lock and the
+    // environment. Setup never deletes its tree from the store.
     declare(&f, json!({}));
     assert_eq!(f.run(&u, LOCAL).unwrap(), 0);
     assert_eq!(installed(&f), ["node"]);
+    assert_eq!(
+        fs::read(fixture_tree.join("share/data.txt")).unwrap(),
+        b"fixture resource"
+    );
     let lock: Value =
         serde_json::from_slice(&fs::read(f.owned.root().join("turbo.lock")).unwrap()).unwrap();
     assert!(lock["tools"].get("fixture").is_none());

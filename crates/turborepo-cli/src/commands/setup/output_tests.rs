@@ -32,23 +32,20 @@ fn tools() -> ToolReport {
                 ..row("acme-lint", "1.2.3", ToolOutcome::Reused)
             },
         ],
-        notes: vec![
-            Note::Lock {
-                created: false,
-                changes: vec![
-                    LockChange::Changed {
-                        id: "node".into(),
-                        from: "20.1.0".into(),
-                        to: "22.11.0".into(),
-                    },
-                    LockChange::Removed {
-                        id: "yarn".into(),
-                        version: "1.22.0".into(),
-                    },
-                ],
-            },
-            Note::Cleanup("Removed 12.0 MB of managed tools.".into()),
-        ],
+        notes: vec![Note::Lock {
+            created: false,
+            changes: vec![
+                LockChange::Changed {
+                    id: "node".into(),
+                    from: "20.1.0".into(),
+                    to: "22.11.0".into(),
+                },
+                LockChange::Removed {
+                    id: "yarn".into(),
+                    version: "1.22.0".into(),
+                },
+            ],
+        }],
         downloaded_bytes: 0,
     }
 }

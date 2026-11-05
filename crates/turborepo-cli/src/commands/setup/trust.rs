@@ -13,7 +13,7 @@ use std::{
 
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
-use turborepo_tool_install::{Activation, EnvKey, RepoState, UserStore};
+use turborepo_tool_install::{Activation, EnvKey, UserStore};
 
 const LIMIT: u64 = 1024 * 1024;
 
@@ -413,9 +413,7 @@ impl TrustStore {
 
     /// Binds this repository to `env`, which setup just converged, under the
     /// source and writer guards. `selection` is a `--no-lock` clone's
-    /// selection; with neither it nor turbo.lock, no record remains. Records
-    /// that can never authorize again are collection's to remove, after its
-    /// grace period ([`repo_state`]).
+    /// selection; with neither it nor turbo.lock, no record remains.
     pub(crate) fn publish(&self, env: &EnvKey, selection: Option<&[u8]>) -> io::Result<()> {
         self.write_record(env, selection)
     }
@@ -486,31 +484,6 @@ impl TrustStore {
         staged.as_file().sync_all()?;
         staged.persist(self.path()).map_err(|e| e.error)?;
         sync_directory(&self.directory)
-    }
-}
-
-/// Whether the repository state `directory` keeps its environment: only a
-/// record filed under its own root, for a root that still has the recorded
-/// identity. A deleted, moved or re-cloned repository's state is dropped and
-/// collected after the grace period. Unsafe, corrupt or misfiled records are
-/// left alone and keep nothing. Never follows links.
-pub(crate) fn repo_state(store: &UserStore, directory: &Path) -> RepoState {
-    let bytes = match read(&directory.join("record.json"), true) {
-        Ok(Some(bytes)) => bytes,
-        Ok(None) => return RepoState::Dropped,
-        Err(_) => return RepoState::Unknown,
-    };
-    let Ok(record) = serde_json::from_slice::<Record>(&bytes) else {
-        return RepoState::Unknown;
-    };
-    if directory != store.repo(&record.root) {
-        return RepoState::Unknown;
-    }
-    match identity(&record.root) {
-        Err(error) if error.kind() == io::ErrorKind::NotFound => RepoState::Dropped,
-        Ok(found) if found != (record.device, record.inode) => RepoState::Dropped,
-        // An unreadable root may still exist: keep what it names.
-        _ => RepoState::Root(record.env),
     }
 }
 

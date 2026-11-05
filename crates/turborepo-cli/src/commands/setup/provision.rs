@@ -768,8 +768,6 @@ pub(super) fn run(
     storage(root)?;
     snapshot.ensure_current()?;
     let selection = Selection::new(desired.clone())?;
-    // Fixed acquisition order: writer, then the store's collection lease. Both
-    // remain held through the record's publication, including no-op results.
     let guard = snapshot.guard()?;
     // Offline, installed trees are the only source, so each is re-hashed.
     let reuse = if force || offline {
@@ -782,8 +780,6 @@ pub(super) fn run(
     preflight()?;
     revalidate(discovery)?;
     snapshot.check_guard(&guard)?;
-    // Under the store lease no collection can remove a tree, so a selection
-    // that passes here reaches no download path below.
     if offline {
         let mut missing = Vec::new();
         for tool in &desired {
