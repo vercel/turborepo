@@ -131,13 +131,7 @@ fn locked_bun_dependencies_install_frozen_and_repeat_safely() {
     let lock = fs::read(root.join("turbo.lock")).unwrap();
     let lock = turborepo_setup::lock::Lock::parse(&lock).unwrap();
     let plan = f.dependencies(&["--plan"]).plan(root, &lock).unwrap();
-    assert_eq!(
-        plan,
-        [
-            "javascript dependencies: bun install --frozen-lockfile from bun.lock with managed \
-             tools (bun.lock stays unchanged)"
-        ]
-    );
+    assert_eq!(plan, ["javascript: bun install --frozen-lockfile"]);
     assert!(!root.join("task-ran").exists() && !root.join("hook-ran").exists());
 }
 
@@ -164,8 +158,8 @@ fn bun_without_an_offline_mode_is_refused_before_offline_setup_changes_anything(
     assert_eq!(
         plan.plan(root, &lock.unwrap()).unwrap(),
         [
-            "javascript dependencies: cannot install offline: Bun 1.2.23 has no offline install \
-             mode (`bun install --offline` needs Bun 1.4.1 or newer)"
+            "javascript: cannot install offline: Bun 1.2.23 has no offline install mode (`bun \
+             install --offline` needs Bun 1.4.1 or newer)",
         ]
     );
     assert_eq!(f.run(&u, &["--offline", "--tools-only"]).unwrap(), 0);

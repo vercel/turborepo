@@ -246,6 +246,29 @@ impl Fixture {
         }
     }
 }
+fn trees(report: &str) -> String {
+    let lines: Vec<_> = report
+        .lines()
+        .map(|line| {
+            let indent = &line[..line.len() - line.trim_start().len()];
+            let Some(path) = line.trim_start().strip_prefix("Installed: ") else {
+                return line.to_owned();
+            };
+            let path = path.replace('\\', "/");
+            let (_, tree) = path
+                .split_once("/trees/")
+                .unwrap_or_else(|| panic!("{line}"));
+            let (key, rest) = tree.split_once("/root").unwrap_or_else(|| panic!("{line}"));
+            assert!(
+                key.len() == 64 && key.chars().all(|c| c.is_ascii_hexdigit()),
+                "{line}"
+            );
+            format!("{indent}Installed: <tree>{rest}")
+        })
+        .collect();
+    lines.join("\n")
+}
+
 /// The installation setup recorded for a fixture root in its tool store.
 struct Installed {
     root: PathBuf,

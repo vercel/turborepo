@@ -22,6 +22,8 @@ pub(crate) fn ecosystems(flags: &FutureFlags, policy: &SetupPolicy) -> Ecosystem
     }
 }
 
+pub(super) const TOOLS_ONLY: &str = "--tools-only";
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum Source {
     Cli(&'static str),
@@ -55,7 +57,7 @@ impl Toolchain {
                 (tools, Source::Policy)
             });
         let dependencies = if tools_only {
-            (DependencyPolicy::Skip, Source::Cli("--tools-only"))
+            (DependencyPolicy::Skip, Source::Cli(TOOLS_ONLY))
         } else {
             configured
                 .dependencies

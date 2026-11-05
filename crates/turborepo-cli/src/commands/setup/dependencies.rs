@@ -333,25 +333,30 @@ impl Dependencies {
     #[cfg(all(test, unix))]
     pub fn tools_only() -> Self {
         Self {
-            steps: vec![(ToolchainId::JAVASCRIPT, Step::Skip("--tools-only".into()))],
+            steps: vec![(
+                ToolchainId::JAVASCRIPT,
+                Step::Skip(effective::TOOLS_ONLY.into()),
+            )],
             offline: false,
         }
     }
 
-    /// `--plan` lines for the locked or proposed tool versions.
     pub fn plan(&self, root: &Path, lock: &Lock) -> Result<Vec<String>, Error> {
         if self.skipped() {
-            return Ok(vec![format!(
-                "Dependencies skipped ({}); dependency readiness was not checked.",
-                self.reasons()
-            )]);
+            let requested = self.steps.iter().all(
+                |(_, step)| matches!(step, Step::Skip(reason) if reason == effective::TOOLS_ONLY),
+            );
+            return Ok(match requested {
+                true => Vec::new(),
+                false => vec![format!("skipped ({})", self.reasons())],
+            });
         }
-        self.describe(root, lock, |run, lockfile| {
-            format!(
-                "{} from {lockfile} with managed tools ({lockfile} stays unchanged)",
-                run.display()
-            )
-        })
+        let steps = self.describe(root, lock, |run, _| run.display())?;
+        let width = steps.iter().map(|(id, _)| id.len() + 1).max().unwrap_or(0);
+        Ok(steps
+            .into_iter()
+            .map(|(id, text)| format!("{:width$} {text}", format!("{id}:")))
+            .collect())
     }
 
     /// `--check` lines. The initial adapters keep no readiness evidence, so
@@ -363,40 +368,41 @@ impl Dependencies {
                 self.reasons()
             )]);
         }
-        self.describe(root, lock, |run, lockfile| {
+        let steps = self.describe(root, lock, |run, lockfile| {
             format!(
                 "not checked; turbo setup reruns {} from {lockfile}, because dependency readiness \
                  is not tracked",
                 run.display()
             )
-        })
+        })?;
+        Ok(steps
+            .into_iter()
+            .map(|(id, text)| format!("{id} dependencies: {text}"))
+            .collect())
     }
 
-    fn describe(
-        &self,
+    fn describe<'a>(
+        &'a self,
         root: &Path,
         lock: &Lock,
         action: impl Fn(&Run, &str) -> String,
-    ) -> Result<Vec<String>, Error> {
-        let mut lines = Vec::new();
+    ) -> Result<Vec<(&'a str, String)>, Error> {
+        let mut steps = Vec::new();
         for (id, step) in &self.steps {
             let id = id.as_str();
-            match step {
-                Step::Skip(reason) => lines.push(format!("{id} dependencies: skipped ({reason})")),
+            let text = match step {
+                Step::Skip(reason) => format!("skipped ({reason})"),
                 Step::Install(adapter) => {
                     let run = adapter.run(root, lock, self.offline)?;
-                    if let Some(reason) = &run.blocked {
-                        lines.push(format!(
-                            "{id} dependencies: cannot install offline: {reason}"
-                        ));
-                        continue;
+                    match &run.blocked {
+                        Some(reason) => format!("cannot install offline: {reason}"),
+                        None => action(&run, adapter.lockfile()),
                     }
-                    let action = action(&run, adapter.lockfile());
-                    lines.push(format!("{id} dependencies: {action}"));
                 }
-            }
+            };
+            steps.push((id, text));
         }
-        Ok(lines)
+        Ok(steps)
     }
 
     /// After provisioning: every enabled installer in order, each with the

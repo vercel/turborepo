@@ -26,9 +26,9 @@ fn plan_and_check_are_read_only_and_check_rehashes_adjacent_resources() {
     let before = snapshot(f.owned.root().parent().unwrap());
     let report = plan(&f);
     for line in [
-        "fixture 1.2.3: reuse (healthy installation)",
-        "  Declaration: turbo.json#/setup/additionalTools/fixture (1.2.3)",
-        "  Source: https://downloads.example.test/fixture-1.2.3.tar.gz",
+        "  fixture 1.2.3: reuse",
+        "    Declaration: turbo.json#/setup/additionalTools/fixture (1.2.3)",
+        "    Source: https://downloads.example.test/fixture-1.2.3.tar.gz",
     ] {
         assert!(report.lines().any(|l| l == line), "{line}\n{report}");
     }

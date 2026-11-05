@@ -1394,18 +1394,30 @@ fn standalone_check_and_locked_plan_report_only_node_pnpm_and_reject_damage() {
                     let action = if force {
                         "re-verify (--force)"
                     } else if installed {
-                        "reuse (healthy installation)"
+                        "reuse"
                     } else {
                         "install (missing installation)"
+                    };
+                    let (node_path, pnpm_path) = if installed && !force {
+                        let store =
+                            turborepo_tool_install::UserStore::at(&tool_store(root), root).unwrap();
+                        let tree = |tool| store.sealed_tree(tool).unwrap().unwrap();
+                        (
+                            format!(
+                                "\n    Installed: {}",
+                                tree(&tools[0]).join(executable).display()
+                            ),
+                            format!("\n    Installed: {}", tree(&tools[1]).display()),
+                        )
+                    } else {
+                        Default::default()
                     };
                     assert_eq!(code, 0, "{stderr}");
                     assert_eq!(stderr, "");
                     assert_eq!(stdout, format!(
-                        "Locked tools-only plan (turbo.lock unchanged):\n\
-                         node 24.0.0: {action}\n  Declaration: .nvmrc (24.0.0)\n  Source: https://nodejs.org/dist/v24.0.0/{prefix}.{extension}\n  SHA-256: {}\n\
-                         pnpm 10.0.0: {action}\n  Declaration: package.json#/packageManager (pnpm@10.0.0)\n  Source: https://registry.npmjs.org/pnpm/-/pnpm-10.0.0.tgz\n  SHA-256: {}\n\
-                         Dependencies skipped (--tools-only); dependency readiness was not checked.\n\
-                         Tracked changes: none. No downloads or probes run.\n",
+                        "Using versions in turbo.lock:\n\nToolchains\n\
+                         \x20 node 24.0.0: {action}{node_path}\n    Declaration: .nvmrc (24.0.0)\n    Source: https://nodejs.org/dist/v24.0.0/{prefix}.{extension}\n    SHA-256: {}\n\n\
+                         \x20 pnpm 10.0.0: {action}{pnpm_path}\n    Declaration: package.json#/packageManager (pnpm@10.0.0)\n    Source: https://registry.npmjs.org/pnpm/-/pnpm-10.0.0.tgz\n    SHA-256: {}\n",
                         "0".repeat(64), "1".repeat(64),
                     ));
                     assert_eq!(root.join(".turbo").exists(), installed);
@@ -1584,7 +1596,7 @@ fn standalone_check_and_locked_plan_report_only_node_pnpm_and_reject_damage() {
             let action = match (force, unsealed) {
                 (true, _) => "re-verify (--force)",
                 (false, true) => "repair (damaged installation)",
-                (false, false) => "reuse (healthy installation)",
+                (false, false) => ": reuse\n    Installed: ",
             };
             assert!(stdout.contains(action), "{stdout}");
         }

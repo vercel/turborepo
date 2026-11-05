@@ -1,12 +1,16 @@
 //! Read-only plans: locked reports, plus proposed first-lock, drift and refresh
 //! resolutions. Never a writer, repair, download or execution permission.
-use std::{cell::Cell, io};
+use std::{
+    io,
+    path::{Path, PathBuf},
+};
 
 use turborepo_setup::{
     activation::ActivationPlan,
-    lock::{Installation, Platform, Snapshot, Tool, reconcile},
+    lock::{Declaration, Installation, Platform, Snapshot, Tool, reconcile},
     source_policy::ToolDownloadPolicy,
 };
+use turborepo_tool_install::{Export, UserStore};
 
 use super::{
     Error, LockMode, SetupRequest, check, dependencies::Dependencies, provision, root::Discovery,
@@ -52,15 +56,6 @@ pub(super) fn report(
     )
 }
 
-/// The plan's heading names a tools-only plan only when it is one.
-fn kind(dependencies: &Dependencies) -> &'static str {
-    if dependencies.skipped() {
-        "tools-only plan"
-    } else {
-        "plan"
-    }
-}
-
 /// A tools-only locked plan, for direct tests.
 #[cfg(all(test, unix))]
 pub(super) fn inspect(
@@ -96,38 +91,40 @@ fn inspect_with(
         "--plan --force reports reinstalls of locked selections and requires turbo.lock",
     ))?;
     // Share frozen provisioning's native request, artifact and integrity gates.
-    provision::plans(&sources, lock)?;
+    let inventory = provision::plans(&sources, lock)?.tools();
     provision::storage(discovery.snapshot_root()?.as_std_path())?;
     let root = discovery.snapshot_root()?.as_std_path();
     let plan = ActivationPlan::captured(&sources, context)?;
     let store = super::trust::user_store(tool_store, root)?;
     let recorded = super::trust::TrustStore::new(&store, root)?.recorded_env()?;
     // What run and exec would check: the environment's shims and seals.
-    let action = match recorded {
-        None => "install (missing installation)",
+    let (action, healthy) = match recorded {
+        None => ("install (missing installation)", false),
         Some(env) if &env != plan.selection().key() => {
-            "repair (installation does not match turbo.lock)"
+            ("repair (installation does not match turbo.lock)", false)
         }
         Some(env) => match store.activate(root, &env) {
-            Ok(_) => "reuse (healthy installation)",
+            Ok(_) => ("reuse", true),
             Err(
                 turborepo_tool_install::Error::NotInstalled(_)
                 | turborepo_tool_install::Error::Damaged(_),
-            ) => "repair (damaged installation)",
+            ) => ("repair (damaged installation)", false),
             Err(error) => return Err(error.into()),
         },
     };
     let action = if force { "re-verify (--force)" } else { action };
-    let mut lines = vec![format!(
-        "Locked {} (turbo.lock unchanged):",
-        kind(dependencies)
-    )];
+    let mut lines = vec!["Using versions in turbo.lock:".to_owned()];
+    let mut toolchains = Vec::new();
     for (id, tool) in lock.tools() {
-        describe(&mut lines, id, tool, &platform, action);
+        let path = match healthy && !force {
+            true => installed(&store, &inventory, id, tool)?,
+            false => None,
+        };
+        toolchains.push(describe(id, tool, &platform, action, path.as_deref()));
     }
-    lines.extend(dependencies.plan(root, lock)?);
+    heading(&mut lines, "Toolchains", toolchains);
+    heading(&mut lines, "Dependencies", [dependencies.plan(root, lock)?]);
     recheck(discovery, &sources, &preflight)?;
-    lines.push("Tracked changes: none. No downloads or probes run.".into());
     Ok(lines.join("\n"))
 }
 
@@ -164,13 +161,11 @@ fn propose(
         _ if request.update_lock => reconcile::Mode::Refresh,
         _ => reconcile::Mode::Local,
     };
-    let resolved = Cell::new(false);
     let outcome = reconcile::propose(
         &sources,
         mode,
         request.offline,
         |resolution| {
-            resolved.set(true);
             // Setup's own resolver, so the proposal is the candidate it would write.
             provision::resolve(&runtime, resolution, &upstream)
         },
@@ -181,123 +176,157 @@ fn propose(
         },
         || check().map_err(io::Error::other),
     )?;
-    let provision::Plans {
-        node,
-        pnpm,
-        npm,
-        uv,
-        python,
-        rustup,
-        rust,
-        artifacts,
-        go,
-        yarn,
-        bun,
-    } = provision::plans(&sources, &outcome.lock)?;
-    let mut desired: Vec<_> = node
-        .as_ref()
-        .map(|plan| plan.inventory_tool().clone())
-        .into_iter()
-        .collect();
-    desired.extend(pnpm.as_ref().map(|plan| plan.inventory_tool().clone()));
-    desired.extend(npm.as_ref().map(|plan| plan.inventory_tool().clone()));
-    desired.extend(uv.as_ref().map(|plan| plan.inventory_tool().clone()));
-    desired.extend(python.as_ref().map(|plan| plan.inventory_tool().clone()));
-    desired.extend(rustup.as_ref().map(|plan| plan.inventory_tool().clone()));
-    desired.extend(rust.as_ref().map(|plan| plan.inventory_tool().clone()));
-    desired.extend(artifacts.iter().map(|plan| plan.inventory_tool().clone()));
-    desired.extend(go.as_ref().map(|plan| plan.inventory_tool().clone()));
-    desired.extend(yarn.as_ref().map(|plan| plan.inventory_tool().clone()));
-    desired.extend(bun.as_ref().map(|plan| plan.inventory_tool().clone()));
+    let desired = provision::plans(&sources, &outcome.lock)?.tools();
     // Same per-tool reuse as setup's preparation: a sealed tree in the store.
     let store = super::trust::user_store(tool_store.as_deref(), root)?;
-    let installed = desired
+    let tools = outcome
+        .lock
+        .tools()
         .iter()
-        .filter_map(|tool| {
-            store
-                .sealed_tree(tool)
-                .map(|tree| tree.map(|_| tool))
-                .transpose()
-        })
-        .collect::<Result<Vec<_>, _>>()?;
+        .map(|(id, tool)| Ok((id, tool, installed(&store, &desired, id, tool)?)))
+        .collect::<Result<Vec<_>, Error>>()?;
+    let none_installed = tools.iter().all(|(.., path)| path.is_none());
     let previous = sources.previous_lock();
     let change = match previous {
         None => Some("created"),
         Some(previous) if previous != &outcome.lock => Some("updated"),
         Some(_) => None,
     };
-    let kind = kind(dependencies);
-    let mut lines = vec![match change {
-        Some(change) => format!("Proposed {kind} (turbo.lock would be {change}):"),
-        None => format!("Proposed {kind} (turbo.lock unchanged):"),
-    }];
-    for (id, tool) in outcome.lock.tools() {
-        let inventory_id = match &tool.installation {
-            Installation::Bundled { owner } => owner,
-            _ => id,
+    let mut lines = vec![
+        match change {
+            Some("created") => "No turbo.lock yet. Setup would create one with these versions:",
+            Some(_) => "Setup would update turbo.lock to these versions:",
+            None => "turbo.lock is already up to date:",
+        }
+        .to_owned(),
+    ];
+    let toolchains = tools.iter().map(|(id, tool, path)| {
+        let action = match path {
+            Some(_) => "reuse",
+            None if none_installed => "install (missing installation)",
+            None => "install (not in current installation)",
         };
-        let inventory = desired
-            .iter()
-            .find(|inventory| &inventory.id == inventory_id);
-        let action = if inventory.is_some_and(|inventory| installed.contains(&inventory)) {
-            "reuse (healthy installation)"
-        } else if installed.is_empty() {
-            "install (missing installation)"
-        } else {
-            "install (not in current installation)"
-        };
-        describe(&mut lines, id, tool, &platform, action);
-    }
+        describe(id, tool, &platform, action, path.as_deref())
+    });
+    heading(&mut lines, "Toolchains", toolchains);
     if change.is_some() {
         // Exactly the diff setup prints after writing, minus its commit header.
-        lines.push("Proposed turbo.lock changes:".into());
         let diff = provision::lock_report(previous, &outcome.lock);
-        lines.extend(diff.lines().skip(1).map(|line| format!("  {line}")));
+        let diff = diff.lines().skip(1).map(str::to_owned).collect();
+        heading(&mut lines, "turbo.lock changes", [diff]);
     }
-    lines.extend(dependencies.plan(root, &outcome.lock)?);
+    heading(
+        &mut lines,
+        "Dependencies",
+        [dependencies.plan(root, &outcome.lock)?],
+    );
     recheck(discovery, &sources, &preflight)?;
-    lines.push(format!(
-        "Tracked changes: {}. {}",
-        match change {
-            Some(change) => format!("turbo.lock would be {change}; nothing was written"),
-            None => "none".into(),
-        },
-        if resolved.get() {
-            // Package-manager resolution verifies archive bytes to lock them.
-            "Resolution read upstream metadata and verified archives; nothing was installed, and \
-             no probes run."
-        } else {
-            "No downloads or probes run."
-        }
-    ));
     Ok(lines.join("\n"))
 }
 
-fn describe(lines: &mut Vec<String>, id: &str, tool: &Tool, platform: &Platform, action: &str) {
-    lines.push(format!("{id} {}: {action}", tool.version));
-    for declaration in &tool.declarations {
+fn installed(
+    store: &UserStore,
+    inventory: &[turborepo_tool_install::Tool],
+    id: &str,
+    tool: &Tool,
+) -> Result<Option<PathBuf>, Error> {
+    let owner = match &tool.installation {
+        Installation::Bundled { owner } => owner,
+        _ => id,
+    };
+    let Some(owner) = inventory.iter().find(|inventory| inventory.id == owner) else {
+        return Ok(None);
+    };
+    let Some(root) = store.sealed_tree(owner)? else {
+        return Ok(None);
+    };
+    let path = match owner.executables.get(id) {
+        Some(Export::File(path)) => path,
+        Some(Export::Launch(launch)) if launch.program.tool == owner.id => &launch.program.path,
+        _ => return Ok(Some(root)),
+    };
+    Ok(Some(
+        path.split('/').fold(root, |path, part| path.join(part)),
+    ))
+}
+
+fn heading(lines: &mut Vec<String>, title: &str, blocks: impl IntoIterator<Item = Vec<String>>) {
+    let mut blocks = blocks
+        .into_iter()
+        .filter(|block| !block.is_empty())
+        .peekable();
+    if blocks.peek().is_none() {
+        return;
+    }
+    lines.push(String::new());
+    lines.push(title.to_owned());
+    for (i, block) in blocks.enumerate() {
+        if i > 0 {
+            lines.push(String::new());
+        }
+        lines.extend(block.into_iter().map(|line| format!("  {line}")));
+    }
+}
+
+/// devEngines splits one request across `…/name` and `…/version`.
+fn name_and_version<'a>(
+    declaration: &'a Declaration,
+    next: Option<&Declaration>,
+) -> Option<(&'a str, String)> {
+    let parent = declaration.field.as_deref()?.strip_suffix("/name")?;
+    let next = next.filter(|next| next.file == declaration.file)?;
+    (next.field.as_deref()?.strip_suffix("/version") == Some(parent)).then(|| {
+        let name = declaration.request.as_deref().unwrap_or_default();
+        let version = next.request.as_deref().unwrap_or_default();
+        (parent, format!("{name}@{version}"))
+    })
+}
+
+pub(super) fn describe(
+    id: &str,
+    tool: &Tool,
+    platform: &Platform,
+    action: &str,
+    installed: Option<&Path>,
+) -> Vec<String> {
+    let mut lines = vec![format!("{id} {}: {action}", tool.version)];
+    if let Some(path) = installed {
+        lines.push(format!("  Installed: {}", path.display()));
+    }
+    let mut declarations = tool.declarations.iter().peekable();
+    while let Some(declaration) = declarations.next() {
+        let (field, request) = match name_and_version(declaration, declarations.peek().copied()) {
+            Some((parent, request)) => {
+                declarations.next();
+                (Some(parent), request)
+            }
+            None => (
+                declaration.field.as_deref(),
+                declaration.request.clone().unwrap_or_default(),
+            ),
+        };
         lines.push(format!(
-            "  Declaration: {}{} ({})",
+            "  Declaration: {}{} ({request})",
             declaration.file,
-            declaration
-                .field
-                .as_ref()
-                .map(|field| format!("#{field}"))
-                .unwrap_or_default(),
-            declaration.request.as_deref().unwrap_or_default(),
+            field.map(|field| format!("#{field}")).unwrap_or_default(),
         ));
     }
     if let Installation::Managed { artifacts } = &tool.installation {
-        for artifact in artifacts
+        let parts = artifacts
             .get(platform)
-            .or_else(|| artifacts.get(&Platform::Any))
-            .into_iter()
-            .flat_map(|parts| parts.values())
-        {
-            lines.push(format!("  Source: {}", artifact.url));
-            lines.push(format!("  SHA-256: {}", artifact.sha256));
+            .or_else(|| artifacts.get(&Platform::Any));
+        let labeled = parts.is_some_and(|parts| parts.len() > 1);
+        for (part, artifact) in parts.into_iter().flatten() {
+            let label = if labeled {
+                format!(" ({part})")
+            } else {
+                String::new()
+            };
+            lines.push(format!("  Source{label}: {}", artifact.url));
+            lines.push(format!("  SHA-256{label}: {}", artifact.sha256));
         }
     }
+    lines
 }
 
 fn revalidate(discovery: &Discovery) -> Result<(), Error> {

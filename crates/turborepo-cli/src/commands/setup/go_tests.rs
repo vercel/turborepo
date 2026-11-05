@@ -187,6 +187,15 @@ fn go_plan_proposes_the_same_selection_without_publication_or_installation() {
     assert!(!root.join("turbo.lock").exists() && !root.join(".turbo").exists());
     assert_eq!(f.run(&upstream, LOCAL).unwrap(), 0);
     assert_eq!(go_version(&f), "1.22.12");
+    let report = proposed(&f, &upstream, &["--plan", "--tools-only", "--no-frozen"]).unwrap();
+    let go = current(&f).tree("go").join("bin/go");
+    assert!(
+        report.contains(&format!(
+            "go 1.22.12: reuse\n    Installed: {}\n",
+            go.display()
+        )),
+        "{report}"
+    );
     untouched(&f);
 }
 
