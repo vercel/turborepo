@@ -277,6 +277,32 @@ fn trees_are_read_only_and_check_finds_a_modified_file() {
 }
 
 #[test]
+fn a_missing_exported_executable_fails_activation_and_plain_setup_restages_it() {
+    let f = fixture();
+    let repo = repo();
+    let tools = vec![tool("node"), tool("pnpm")];
+    ensure(&f.store, repo.path(), &tools, &Cell::new(0));
+    let selection = Selection::new(tools.clone()).unwrap();
+    let root = fs::canonicalize(repo.path()).unwrap();
+    let bin = f.store.sealed_tree(&tools[0]).unwrap().unwrap().join("bin");
+    fs::set_permissions(&bin, fs::Permissions::from_mode(0o755)).unwrap();
+    fs::remove_file(bin.join("tool")).unwrap();
+
+    assert!(matches!(
+        f.store.activate(&root, selection.key()),
+        Err(Error::Damaged(tool)) if tool == "node 1.2.3"
+    ));
+    assert!(f.store.sealed_tree(&tools[0]).unwrap().is_none());
+    assert!(f.store.sealed_tree(&tools[1]).unwrap().is_some());
+
+    let staged = Cell::new(0);
+    ensure(&f.store, repo.path(), &tools, &staged);
+    assert_eq!(staged.get(), 1);
+    f.store.activate(&root, selection.key()).unwrap();
+    f.store.check(&selection).unwrap();
+}
+
+#[test]
 fn forced_setup_restages_a_tree_with_a_dangling_link() {
     let f = fixture();
     let repo = repo();

@@ -167,8 +167,6 @@ fn damaged_plans_never_change_any_owned_bytes() {
                 flags.push("--force");
             }
             assert_eq!(f.run(&u, &flags).unwrap(), 0);
-            // Like run and exec, a plan reads shims and seals, never tree
-            // contents: damage inside a tree is for --check to find.
             let action = match case {
                 _ if force => "re-verify (--force)",
                 2 | 3 => "repair (damaged installation)",
@@ -195,6 +193,35 @@ fn damaged_plans_never_change_any_owned_bytes() {
         }
         f.no_execution();
     }
+}
+
+#[test]
+fn a_missing_exported_file_is_repaired_by_plain_setup_and_named_by_the_plan() {
+    use std::os::unix::fs::PermissionsExt;
+    let f = Fixture::new();
+    let u = Upstream::new(&f, false, None);
+    f.install(&u);
+    let current = Installed::open(&f.owned).current().unwrap().unwrap();
+    let cjs = current.tree("pnpm").join("bin/pnpm.cjs");
+    fs::set_permissions(cjs.parent().unwrap(), fs::Permissions::from_mode(0o755)).unwrap();
+    fs::remove_file(&cjs).unwrap();
+
+    let report = f.plan_report(false).unwrap();
+    assert!(
+        report.contains("  node 24.0.0: reuse\n    Installed: <tree>/bin/node\n"),
+        "{report}"
+    );
+    assert!(
+        report.contains("  pnpm 10.0.0: repair (damaged installation)\n    Declaration:"),
+        "{report}"
+    );
+
+    let hits = u.hits();
+    assert_eq!(f.run(&u, &["--tools-only", "--frozen"]).unwrap(), 0);
+    assert_eq!(u.hits(), hits + 2);
+    assert!(cjs.is_file());
+    assert_eq!(f.plan_report(false).unwrap(), f.expected_plan("reuse"));
+    f.no_execution();
 }
 
 #[test]

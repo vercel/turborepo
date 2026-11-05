@@ -164,6 +164,13 @@ struct EnvSeal {
     tools: Vec<Tool>,
 }
 
+enum TreeState {
+    Missing,
+    Damaged,
+    /// The sealed `tree_sha256`.
+    Usable(String),
+}
+
 /// How setup decides a sealed tree or environment is reusable.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Reuse {
@@ -284,8 +291,11 @@ impl UserStore {
             return Err(Error::Damaged(format!("environment {env}")));
         }
         for tool in selection.tools() {
-            if self.tree_seal(&TreeId::of(tool)?)?.is_none() {
-                return Err(Error::NotInstalled(format!("{} {}", tool.id, tool.version)));
+            let label = || format!("{} {}", tool.id, tool.version);
+            match self.tree_state(tool)?.1 {
+                TreeState::Missing => return Err(Error::NotInstalled(label())),
+                TreeState::Damaged => return Err(Error::Damaged(label())),
+                TreeState::Usable(_) => {}
             }
         }
         let mut vars = BTreeMap::new();
@@ -329,11 +339,34 @@ impl UserStore {
         })
     }
 
-    /// The root of the sealed tree setup would reuse for `tool`, from its
-    /// seal alone, for reports that never install.
+    /// The root of the tree plain setup would reuse for `tool`, for reports
+    /// that never install.
     pub fn sealed_tree(&self, tool: &Tool) -> Result<Option<PathBuf>, Error> {
+        let (id, state) = self.tree_state(tool)?;
+        Ok(matches!(state, TreeState::Usable(_)).then(|| self.tree_root(&id.key)))
+    }
+
+    /// What activation and plain setup can tell about `tool`'s tree without
+    /// re-hashing it: its seal, and one lookup per file its exports run or
+    /// pass from that tree.
+    fn tree_state(&self, tool: &Tool) -> Result<(TreeId, TreeState), Error> {
         let id = TreeId::of(tool)?;
-        Ok(self.tree_seal(&id)?.map(|_| self.tree_root(&id.key)))
+        let Some(seal) = self.tree_seal(&id)? else {
+            return Ok((id, TreeState::Missing));
+        };
+        let root = self.tree_root(&id.key);
+        let own_files_exist = tool.executables.values().all(|export| {
+            export
+                .tree_files(&tool.id)
+                .into_iter()
+                .filter(|(owner, ..)| *owner == tool.id)
+                .all(|(_, path, _)| root.join(relative_path(path)).is_file())
+        });
+        let state = match own_files_exist {
+            true => TreeState::Usable(seal.tree_sha256),
+            false => TreeState::Damaged,
+        };
+        Ok((id, state))
     }
 
     /// `turbo setup --check`: re-hash every tree `selection` uses against
@@ -503,8 +536,7 @@ impl SetupSession<'_> {
     /// The installed tree setup reuses for `tool`, for adapters that read
     /// installed resources. `None` means setup must stage it.
     pub fn tree(&self, tool: &Tool) -> Result<Option<PathBuf>, Error> {
-        let id = TreeId::of(tool)?;
-        let Some(seal) = self.store.tree_seal(&id)? else {
+        let (id, TreeState::Usable(sealed_hash)) = self.store.tree_state(tool)? else {
             return Ok(None);
         };
         let root = self.store.tree_root(&id.key);
@@ -513,7 +545,7 @@ impl SetupSession<'_> {
             let healthy = match self.verified.borrow().get(&key) {
                 Some(healthy) => *healthy,
                 None => match tree_hash(&root) {
-                    Ok(hash) => hash == seal.tree_sha256,
+                    Ok(hash) => hash == sealed_hash,
                     Err(Error::UnsafePath) => false,
                     Err(e) => return Err(e),
                 },
