@@ -236,7 +236,7 @@ impl SCM {
             &inclusions,
             &exclusions,
             globwalk::WalkType::Files,
-            globwalk::Settings::default().follow_links_within_base(),
+            globwalk::Settings::default().follow_links(),
         )?;
         if files.is_empty() {
             return Ok(GitHashes::new());
@@ -439,7 +439,7 @@ impl GitRepo {
                 &linked_directories,
                 &exclusions,
                 globwalk::WalkType::Files,
-                globwalk::Settings::default().follow_links_within_base(),
+                globwalk::Settings::default().follow_links(),
             )? {
                 to_hash.push(self.root.anchor(&file)?.to_unix());
             }
@@ -638,7 +638,7 @@ impl GitRepo {
             &inclusions,
             &exclusions,
             globwalk::WalkType::Files,
-            globwalk::Settings::default().follow_links_within_base(),
+            globwalk::Settings::default().follow_links(),
         )?;
         let exact_exclusions = if include_configs {
             Vec::new()
@@ -781,7 +781,7 @@ impl GitRepo {
                     &glob_inclusions,
                     &glob_exclusions,
                     globwalk::WalkType::Files,
-                    globwalk::Settings::default().follow_links_within_base(),
+                    globwalk::Settings::default().follow_links(),
                 )?;
 
                 let mut to_hash = Vec::new();
