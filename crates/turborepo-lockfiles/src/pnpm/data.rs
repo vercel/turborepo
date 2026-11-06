@@ -989,7 +989,6 @@ impl PnpmLockfile {
         GlobalFields {
             version: &self.lockfile_version,
             checksum: self.package_extensions_checksum.as_deref(),
-            overrides: self.overrides.as_ref(),
             patched_dependencies,
             settings: self.settings.as_ref(),
             leading_documents: &self.leading_documents,
@@ -1152,7 +1151,6 @@ impl<V: Serialize> Serialize for MapEntries<'_, V> {
 struct GlobalFields<'a> {
     version: &'a LockfileVersion,
     checksum: Option<&'a str>,
-    overrides: Option<&'a BTreeMap<String, String>>,
     patched_dependencies: Option<&'a BTreeMap<String, PatchFile>>,
     settings: Option<&'a LockfileSettings>,
     leading_documents: &'a [serde_yaml_ng::Value],
@@ -2410,6 +2408,25 @@ snapshots:
             )
             .unwrap()
         );
+    }
+
+    #[test]
+    fn test_pnpm_global_change_ignores_overrides() {
+        let lockfile = |version: &str, overrides: &str| {
+            format!("lockfileVersion: '{version}'\n\n{overrides}importers:\n  .: {{}}\n")
+        };
+        let overrides = "overrides:\n  a>is-odd: 3.0.1\n  is-even: 1.0.0\n\n";
+
+        for version in ["5.4", "6.0", "7.0", "9.0"] {
+            assert!(
+                !pnpm_global_change(
+                    lockfile(version, "").as_bytes(),
+                    lockfile(version, overrides).as_bytes(),
+                )
+                .unwrap(),
+                "{version}"
+            );
+        }
     }
 
     #[test]
