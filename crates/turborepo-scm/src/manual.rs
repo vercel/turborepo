@@ -142,6 +142,30 @@ pub(crate) fn get_package_file_hashes_without_git<S: AsRef<str>>(
     )
 }
 
+/// Whether an `ignore` walk keeps `entry`: like globwalk's bounded link mode,
+/// directory symlinks inside `node_modules` are not followed. Links that leave
+/// the repository are still read, and hashing rejects their contents.
+fn follows_entry(boundary: &globwalk::LinkBoundary, entry: &ignore::DirEntry) -> bool {
+    !(entry.depth() > 0
+        && entry.path_is_symlink()
+        && entry
+            .file_type()
+            .is_some_and(|file_type| file_type.is_dir())
+        && boundary.classify(entry.path()) == globwalk::LinkTarget::PackageManaged)
+}
+
+/// A followed directory symlink that loops back to an ancestor is skipped,
+/// like globwalk's bounded link mode does.
+fn is_link_cycle(error: &ignore::Error) -> bool {
+    match error {
+        ignore::Error::Loop { .. } => true,
+        ignore::Error::WithPath { err, .. }
+        | ignore::Error::WithDepth { err, .. }
+        | ignore::Error::WithLineNumber { err, .. } => is_link_cycle(err),
+        _ => false,
+    }
+}
+
 pub(crate) fn get_input_file_hashes_without_git<S: AsRef<str>>(
     turbo_root: &AbsoluteSystemPath,
     package_path: &AnchoredSystemPath,
@@ -213,7 +237,7 @@ pub(crate) fn get_input_file_hashes_without_git<S: AsRef<str>>(
             &external_inclusions,
             &external_exclusions,
             globwalk::WalkType::Files,
-            globwalk::Settings::default().follow_links(),
+            globwalk::Settings::default().follow_links_within_base(),
         )?;
         for file_path in &files {
             if !exact_exclusions.is_empty() {
@@ -259,9 +283,17 @@ pub(crate) fn get_input_file_hashes_without_git<S: AsRef<str>>(
         Some(any(excludes)?)
     };
 
-    if !has_local_inclusions {
-        let git_metadata_path = git_metadata_path.clone();
-        walker_builder.filter_entry(move |entry| entry.path() != git_metadata_path.as_std_path());
+    // Don't follow package-managed directory symlinks, see `follows_entry`.
+    let link_boundary = globwalk::LinkBoundary::new(turbo_root.as_std_path());
+    {
+        let link_boundary = link_boundary.clone();
+        let git_metadata_path = (!has_local_inclusions).then(|| git_metadata_path.clone());
+        walker_builder.filter_entry(move |entry| {
+            git_metadata_path
+                .as_ref()
+                .is_none_or(|git| entry.path() != git.as_std_path())
+                && follows_entry(&link_boundary, entry)
+        });
     }
 
     let walker = (!has_inclusions).then(|| {
@@ -276,7 +308,11 @@ pub(crate) fn get_input_file_hashes_without_git<S: AsRef<str>>(
     });
 
     for dirent in walker.into_iter().flatten() {
-        let dirent = dirent?;
+        let dirent = match dirent {
+            Ok(dirent) => dirent,
+            Err(error) if is_link_cycle(&error) => continue,
+            Err(error) => return Err(error.into()),
+        };
         let metadata = match dirent.metadata() {
             Ok(metadata) => metadata,
             Err(error)
@@ -326,7 +362,9 @@ pub(crate) fn get_input_file_hashes_without_git<S: AsRef<str>>(
     // If we're including default files, we need to walk again, but this time with
     // git_ignore enabled
     if include_default_files {
-        walker_builder.filter_entry(move |entry| entry.path() != git_metadata_path.as_std_path());
+        walker_builder.filter_entry(move |entry| {
+            entry.path() != git_metadata_path.as_std_path() && follows_entry(&link_boundary, entry)
+        });
         let walker = walker_builder
             .follow_links(true)
             .git_ignore(true)
@@ -335,7 +373,11 @@ pub(crate) fn get_input_file_hashes_without_git<S: AsRef<str>>(
             .build();
 
         for dirent in walker {
-            let dirent = dirent?;
+            let dirent = match dirent {
+                Ok(dirent) => dirent,
+                Err(error) if is_link_cycle(&error) => continue,
+                Err(error) => return Err(error.into()),
+            };
             let metadata = match dirent.metadata() {
                 Ok(metadata) => metadata,
                 Err(error)

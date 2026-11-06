@@ -57,6 +57,8 @@ pub enum WalkError {
     InternalError { glob: String, error: String },
     #[error("IO Error: {0}")]
     IO(#[from] std::io::Error),
+    #[error("directory symlink {} resolves outside {}", .link.display(), .base.display())]
+    LinkOutsideBase { link: PathBuf, base: PathBuf },
 }
 
 fn join_unix_like_paths(a: &str, b: &str) -> String {
@@ -352,10 +354,25 @@ pub struct Settings {
     /// setting if you are globbing in an individual package at not at the
     /// workspace root.
     ignore_nested_packages: bool,
-    /// Follow symbolic links when walking directories. When enabled, symlinked
-    /// directories are traversed into (their targets are read). Cycles are
-    /// detected and handled gracefully by the underlying walkdir layer.
-    follow_links: bool,
+    links: LinkMode,
+}
+
+/// How a walk treats directory symlinks below its walk roots. Walk roots
+/// themselves, and symlinks in the literal part of a pattern, are always
+/// resolved by the OS.
+#[derive(Debug, Default, Copy, Clone, PartialEq, Eq)]
+enum LinkMode {
+    /// Symlinks are yielded as files and never descended into.
+    #[default]
+    ReadFile,
+    /// Every directory symlink is descended into. Cycles are detected and
+    /// handled by the underlying walkdir layer.
+    Follow,
+    /// Directory symlinks are descended into when they resolve inside the
+    /// walk's base path; see [`LinkBoundary`]. Package-managed and
+    /// cycle-forming directory links are dropped, without being yielded, and
+    /// a directory link that leaves the base fails the walk.
+    FollowWithinBase,
 }
 
 impl Settings {
@@ -364,9 +381,154 @@ impl Settings {
         self
     }
 
+    /// Follow symbolic links when walking directories: symlinked directories
+    /// are traversed into, wherever they point.
     pub fn follow_links(mut self) -> Self {
-        self.follow_links = true;
+        self.links = LinkMode::Follow;
         self
+    }
+
+    /// Follow symbolic links to directories that resolve inside the walk's
+    /// base path, except links inside `node_modules`, and fail on directory
+    /// links that leave it (see [`LinkBoundary`]). Walk roots are always
+    /// read. Unlike [`Settings::follow_links`], this keeps the fast walkers.
+    pub fn follow_links_within_base(mut self) -> Self {
+        self.links = LinkMode::FollowWithinBase;
+        self
+    }
+
+    fn reads_link_targets(self) -> bool {
+        self.links != LinkMode::ReadFile
+    }
+}
+
+/// Decides which directory symlinks found below a walk root
+/// [`Settings::follow_links_within_base`] descends into.
+///
+/// A directory link is followed when its target resolves inside the base.
+/// Links whose logical path has a `node_modules` component below the base are
+/// never followed: package managers own them, and they point at dependencies,
+/// whose changes the lockfile and package graph already capture. They also
+/// form cycles and diamonds, so following them can walk the whole dependency
+/// graph many times over, or a global store outside the repository. Any other
+/// directory link that leaves the base is an error, found before reading it.
+#[derive(Debug, Clone)]
+pub struct LinkBoundary {
+    base: PathBuf,
+    real_base: PathBuf,
+}
+
+/// What a directory walk finds at a symlink, see [`LinkBoundary::classify`].
+#[derive(Debug, PartialEq, Eq)]
+pub enum LinkTarget {
+    /// The link doesn't resolve to a directory.
+    NotDirectory,
+    /// A directory link inside `node_modules`, which is not followed.
+    PackageManaged,
+    /// A directory link to this real path inside the base.
+    Inside(PathBuf),
+    /// A directory link that leaves the base.
+    Outside,
+}
+
+impl LinkBoundary {
+    pub fn new(base: &Path) -> Self {
+        Self {
+            base: base.to_path_buf(),
+            // A base that can't be resolved contains nothing to follow into.
+            real_base: std::fs::canonicalize(base).unwrap_or_else(|_| base.to_path_buf()),
+        }
+    }
+
+    pub fn classify(&self, link: &Path) -> LinkTarget {
+        if !std::fs::metadata(link).is_ok_and(|meta| meta.is_dir()) {
+            return LinkTarget::NotDirectory;
+        }
+        if link.strip_prefix(&self.base).is_ok_and(|relative| {
+            relative
+                .components()
+                .any(|component| component.as_os_str() == "node_modules")
+        }) {
+            return LinkTarget::PackageManaged;
+        }
+        match std::fs::canonicalize(link) {
+            Ok(target) if target.starts_with(&self.real_base) => LinkTarget::Inside(target),
+            Ok(_) => LinkTarget::Outside,
+            // The link vanished or became unreadable since the stat above.
+            Err(_) => LinkTarget::NotDirectory,
+        }
+    }
+
+    fn outside(&self, link: PathBuf) -> WalkError {
+        WalkError::LinkOutsideBase {
+            link,
+            base: self.base.clone(),
+        }
+    }
+
+    /// How a manual walker handles the symlink at `link`, reached through
+    /// the directory symlinks in `chain`.
+    fn step(&self, chain: &LinkChain, link: &Path) -> Result<LinkStep, WalkError> {
+        Ok(match self.classify(link) {
+            LinkTarget::NotDirectory => LinkStep::Read,
+            LinkTarget::PackageManaged => LinkStep::Skip,
+            LinkTarget::Inside(target) if chain.enters_ancestor(link, &target) => LinkStep::Skip,
+            LinkTarget::Inside(target) => LinkStep::Descend(chain.push(link, target)),
+            LinkTarget::Outside => return Err(self.outside(link.to_path_buf())),
+        })
+    }
+}
+
+enum LinkStep {
+    /// Not a directory link: handle it like any other symlink entry.
+    Read,
+    /// A package-managed or cycle-forming directory link: drop it.
+    Skip,
+    /// A directory link to descend into with the extended chain.
+    Descend(LinkChain),
+}
+
+/// The directories a manual walker descended through to reach a directory, as
+/// `(logical path, real path)` pairs: the walk root, then each followed
+/// symlink. Mirrors walkdir's loop check, which the wax walker uses.
+#[derive(Debug, Clone, Default)]
+struct LinkChain(Vec<(PathBuf, PathBuf)>);
+
+impl LinkChain {
+    fn rooted(root: &Path) -> Self {
+        Self(
+            std::fs::canonicalize(root)
+                .map(|real| vec![(root.to_path_buf(), real)])
+                .unwrap_or_default(),
+        )
+    }
+
+    /// Whether `target` is the real path of a directory the walk is already
+    /// inside, so following `link` would loop.
+    fn enters_ancestor(&self, link: &Path, target: &Path) -> bool {
+        let Some(parent) = link.parent() else {
+            return false;
+        };
+        self.0.iter().enumerate().any(|(i, (logical, real))| {
+            // Directories in this segment run from `logical` down to the
+            // parent of the next followed link (or of `link`).
+            let end = self
+                .0
+                .get(i + 1)
+                .and_then(|(next, _)| next.parent())
+                .unwrap_or(parent);
+            let Ok(below) = target.strip_prefix(real) else {
+                return false;
+            };
+            end.strip_prefix(logical)
+                .is_ok_and(|inside| inside.starts_with(below))
+        })
+    }
+
+    fn push(&self, link: &Path, target: PathBuf) -> Self {
+        let mut chain = self.clone();
+        chain.0.push((link.to_path_buf(), target));
+        chain
     }
 }
 
@@ -713,6 +875,8 @@ struct CompiledGlobs {
     plain_exclusions: Vec<PlainExclusion>,
     ex_patterns: Vec<Glob<'static>>,
     ex_filter: FilterAny,
+    /// Set for [`Settings::follow_links_within_base`].
+    link_boundary: Option<LinkBoundary>,
 }
 
 /// An exclusion pattern classified from its raw string as a literal path or
@@ -1097,7 +1261,11 @@ fn compile_globs<S: AsRef<str>>(
     settings: Settings,
 ) -> Result<CompiledGlobs, WalkError> {
     let (base_path_new, include_paths, exclude_paths) =
-        preprocess_paths_and_globs(base_path, include, exclude, settings.follow_links)?;
+        preprocess_paths_and_globs(base_path, include, exclude, settings.reads_link_targets())?;
+    let link_boundary = match settings.links {
+        LinkMode::FollowWithinBase => Some(LinkBoundary::new(base_path.as_std_path())),
+        LinkMode::ReadFile | LinkMode::Follow => None,
+    };
 
     // Plain-segment exclusions always compile and are matched exactly by
     // path comparison (see `PlainExclusion::matches`), so skip wax for them.
@@ -1149,17 +1317,18 @@ fn compile_globs<S: AsRef<str>>(
             SimplePattern::Literal(path) => literal_paths.push(path),
             SimplePattern::Shallow(prefix, suffix) => shallow_wildcards.push((prefix, suffix)),
             // The manual RecursiveAll walker implements wax's default
-            // no-follow link behavior only. When a caller asks to follow
-            // symlinks, send the pattern through wax, which handles
-            // ReadTarget semantics including symlink-cycle detection.
-            SimplePattern::RecursiveAll(prefix) if !settings.follow_links => {
+            // no-follow link behavior and the bounded follow mode. When a
+            // caller asks to follow every symlink, send the pattern through
+            // wax, which handles ReadTarget semantics including symlink-cycle
+            // detection.
+            SimplePattern::RecursiveAll(prefix) if settings.links != LinkMode::Follow => {
                 recursive_all.push(prefix)
             }
             SimplePattern::RecursiveAll(_) => complex_paths.push(path),
-            // The tree walker implements wax's default walk behavior only;
-            // other settings keep the wax walk.
+            // The tree walker implements wax's default walk behavior and the
+            // bounded follow mode only; other settings keep the wax walk.
             SimplePattern::RecursiveChildren(prefix)
-                if !settings.follow_links && !settings.ignore_nested_packages =>
+                if settings.links != LinkMode::Follow && !settings.ignore_nested_packages =>
             {
                 recursive_children.push((prefix, path))
             }
@@ -1184,6 +1353,7 @@ fn compile_globs<S: AsRef<str>>(
         plain_exclusions,
         ex_patterns,
         ex_filter,
+        link_boundary,
     })
 }
 
@@ -1298,7 +1468,8 @@ fn walk_compiled_globs(
     // `<prefix>/**/<tail>` globs are read by the parallel tree walker when
     // it reproduces wax's walk exactly (default walk behavior, and no
     // symlinked ancestor that would move wax's walk root).
-    let tree_walks_supported = !settings.follow_links && !settings.ignore_nested_packages;
+    let tree_walks_supported =
+        settings.links != LinkMode::Follow && !settings.ignore_nested_packages;
     let mut tree_walks: Vec<(&Path, TreeMatcher<'_>)> = Vec::new();
     // `<prefix>/**/*` patterns that cannot use the tree walker are compiled
     // here, on demand, for the wax walk.
@@ -1403,6 +1574,7 @@ fn walk_compiled_globs(
                 plain_exclusions,
                 glob,
                 settings,
+                compiled.link_boundary.as_ref(),
             )
         })
         .collect::<Result<HashSet<_>, _>>()?;
@@ -1426,9 +1598,8 @@ fn walk_compiled_globs(
             walk_recursive_all(
                 prefix,
                 walk_type,
-                &compiled.base_path,
+                compiled,
                 &relevant_exclusions,
-                &compiled.ex_patterns,
                 settings,
                 &mut found,
             )?;
@@ -1452,6 +1623,7 @@ fn walk_compiled_globs(
                     .cloned()
                     .collect(),
                 ex_filter: &compiled.ex_filter,
+                link_boundary: compiled.link_boundary.as_ref(),
             }
             .walk()
         })
@@ -1473,7 +1645,9 @@ fn walk_compiled_globs(
 /// - symlinks are yielded as files and never followed (wax's default
 ///   `LinkBehavior::ReadFile`), except at the walk root, which walkdir follows
 ///   by default — patterns compiled with [`Settings::follow_links`] never reach
-///   this function, `compile_globs` routes them through wax instead;
+///   this function, `compile_globs` routes them through wax instead. With a
+///   `link_boundary` ([`Settings::follow_links_within_base`]), directory
+///   symlinks are descended into or dropped as [`LinkBoundary::step`] decides;
 /// - exclusions are matched per entry against the absolute slash path;
 /// - with `ignore_nested_packages`, any non-base directory containing a
 ///   `package.json` is discarded along with its subtree;
@@ -1482,12 +1656,14 @@ fn walk_compiled_globs(
 fn walk_recursive_all(
     prefix: &Path,
     walk_type: WalkType,
-    walk_base: &Path,
+    compiled: &CompiledGlobs,
     plain_exclusions: &[PlainExclusion],
-    ex_patterns: &[Glob<'static>],
     settings: Settings,
     results: &mut Vec<AbsoluteSystemPathBuf>,
 ) -> Result<(), WalkError> {
+    let walk_base = compiled.base_path.as_path();
+    let ex_patterns = compiled.ex_patterns.as_slice();
+    let link_boundary = compiled.link_boundary.as_ref();
     let excluded = |path: &Path| -> bool {
         if excluded_by_plain(plain_exclusions, path) {
             return true;
@@ -1538,8 +1714,12 @@ fn walk_recursive_all(
     }
     yield_entry(prefix, false, false)?;
 
-    let mut stack = vec![prefix.to_path_buf()];
-    while let Some(dir) = stack.pop() {
+    let root_chain = match link_boundary {
+        Some(_) => LinkChain::rooted(prefix),
+        None => LinkChain::default(),
+    };
+    let mut stack = vec![(prefix.to_path_buf(), std::rc::Rc::new(root_chain))];
+    while let Some((dir, chain)) = stack.pop() {
         let entries = match std::fs::read_dir(&dir) {
             Ok(entries) => entries,
             Err(e) if ignorable_io_error(&e) => continue,
@@ -1559,12 +1739,26 @@ fn walk_recursive_all(
                 Err(e) if ignorable_io_error(&e) => continue,
                 Err(e) => return Err(e.into()),
             };
-            if file_type.is_dir() {
+            let mut child_chain = None;
+            if file_type.is_symlink()
+                && let Some(boundary) = link_boundary
+            {
+                if excluded(&path) {
+                    continue;
+                }
+                match boundary.step(&chain, &path)? {
+                    LinkStep::Read => {}
+                    LinkStep::Skip => continue,
+                    LinkStep::Descend(chain) => child_chain = Some(std::rc::Rc::new(chain)),
+                }
+            }
+            if file_type.is_dir() || child_chain.is_some() {
                 if excluded(&path) || prune_nested_package(&path) {
                     continue;
                 }
                 yield_entry(&path, false, false)?;
-                stack.push(path);
+                let chain = child_chain.unwrap_or_else(|| chain.clone());
+                stack.push((path, chain));
             } else {
                 yield_entry(&path, file_type.is_file(), file_type.is_symlink())?;
             }
@@ -1640,6 +1834,9 @@ struct TreeWalk<'a> {
     walk_type: WalkType,
     plain_exclusions: Vec<PlainExclusion>,
     ex_filter: &'a FilterAny,
+    /// Set for [`Settings::follow_links_within_base`]: directory symlinks
+    /// are descended into or dropped as [`LinkBoundary::step`] decides.
+    link_boundary: Option<&'a LinkBoundary>,
 }
 
 impl TreeWalk<'_> {
@@ -1673,12 +1870,20 @@ impl TreeWalk<'_> {
             }
         }
         if root_meta.is_dir() {
-            found.extend(self.walk_dir(self.root)?);
+            let chain = match self.link_boundary {
+                Some(_) => LinkChain::rooted(self.root),
+                None => LinkChain::default(),
+            };
+            found.extend(self.walk_dir(self.root, &chain)?);
         }
         Ok(found)
     }
 
-    fn walk_dir(&self, dir: &Path) -> Result<Vec<AbsoluteSystemPathBuf>, WalkError> {
+    fn walk_dir(
+        &self,
+        dir: &Path,
+        chain: &LinkChain,
+    ) -> Result<Vec<AbsoluteSystemPathBuf>, WalkError> {
         let mut found = Vec::new();
         let entries = match std::fs::read_dir(dir) {
             Ok(entries) => entries,
@@ -1700,22 +1905,38 @@ impl TreeWalk<'_> {
                 Err(e) => return Err(e.into()),
             };
             let path = entry.path();
-            match self.residue(&path) {
-                Some(EntryResidue::Tree) => continue,
-                Some(EntryResidue::File) => {}
-                None => {
-                    if self.wanted(&path, file_type.is_file() || file_type.is_symlink()) {
-                        found.push(AbsoluteSystemPathBuf::try_from(path.as_path())?);
-                    }
+            let residue = self.residue(&path);
+            if matches!(residue, Some(EntryResidue::Tree)) {
+                continue;
+            }
+            let mut child_chain = None;
+            if file_type.is_symlink()
+                && let Some(boundary) = self.link_boundary
+            {
+                match boundary.step(chain, &path)? {
+                    LinkStep::Read => {}
+                    LinkStep::Skip => continue,
+                    LinkStep::Descend(chain) => child_chain = Some(chain),
                 }
             }
-            if file_type.is_dir() {
-                subdirs.push(path);
+            let is_dir = file_type.is_dir() || child_chain.is_some();
+            if residue.is_none()
+                && self.wanted(
+                    &path,
+                    !is_dir && (file_type.is_file() || file_type.is_symlink()),
+                )
+            {
+                found.push(AbsoluteSystemPathBuf::try_from(path.as_path())?);
+            }
+            if is_dir {
+                subdirs.push((path, child_chain));
             }
         }
         let nested: Vec<Result<Vec<AbsoluteSystemPathBuf>, WalkError>> = subdirs
             .par_iter()
-            .map(|subdir| self.walk_dir(subdir))
+            .map(|(subdir, child_chain)| {
+                self.walk_dir(subdir, child_chain.as_ref().unwrap_or(chain))
+            })
             .collect();
         for subtree in nested {
             found.extend(subtree?);
@@ -1741,8 +1962,9 @@ fn walk_glob(
     plain_exclusions: &[PlainExclusion],
     glob: &Glob<'static>,
     settings: Settings,
+    link_boundary: Option<&LinkBoundary>,
 ) -> Vec<Result<AbsoluteSystemPathBuf, WalkError>> {
-    let behavior = if settings.follow_links {
+    let behavior = if settings.reads_link_targets() {
         WalkBehavior {
             link: LinkBehavior::ReadTarget,
             ..Default::default()
@@ -1753,8 +1975,12 @@ fn walk_glob(
     let iter = glob
         .walk_with_behavior(base_path_new, behavior)
         .not_any(ex_filter);
+    // In the bounded mode, walkdir's loop check stops cycles; the looping
+    // link is dropped like a package-managed one.
+    let skip_link_cycles = link_boundary.is_some();
+    let outside_link = std::cell::RefCell::new(None);
 
-    if settings.ignore_nested_packages || !plain_exclusions.is_empty() {
+    if settings.ignore_nested_packages || !plain_exclusions.is_empty() || link_boundary.is_some() {
         iter.filter_entry(|entry| {
             let path = entry.path();
             // Pruning a matching directory discards exactly the entries
@@ -1764,6 +1990,23 @@ fn walk_glob(
             // twin.
             if excluded_by_plain(plain_exclusions, path) {
                 return Some(EntryResidue::Tree);
+            }
+            // The walk root itself is always read, like in the other modes.
+            if let Some(boundary) = link_boundary
+                && entry.depth() > 0
+                && entry.file_type().is_dir()
+                && path.is_symlink()
+            {
+                match boundary.classify(path) {
+                    LinkTarget::Inside(_) | LinkTarget::NotDirectory => {}
+                    LinkTarget::PackageManaged => return Some(EntryResidue::Tree),
+                    LinkTarget::Outside => {
+                        outside_link
+                            .borrow_mut()
+                            .get_or_insert_with(|| path.to_path_buf());
+                        return Some(EntryResidue::Tree);
+                    }
+                }
             }
             if settings.ignore_nested_packages
                 && path.is_dir()
@@ -1775,10 +2018,14 @@ fn walk_glob(
 
             None
         })
-        .filter_map(|entry| visit_file(walk_type, entry))
+        .filter_map(|entry| visit_file(walk_type, entry, skip_link_cycles))
+        .chain(std::iter::from_fn(|| {
+            let link = outside_link.borrow_mut().take()?;
+            link_boundary.map(|boundary| Err(boundary.outside(link)))
+        }))
         .collect::<Vec<_>>()
     } else {
-        iter.filter_map(|entry| visit_file(walk_type, entry))
+        iter.filter_map(|entry| visit_file(walk_type, entry, skip_link_cycles))
             .collect::<Vec<_>>()
     }
 }
@@ -1786,6 +2033,7 @@ fn walk_glob(
 fn visit_file(
     walk_type: WalkType,
     entry: Result<wax::walk::GlobEntry, wax::walk::WalkError>,
+    skip_link_cycles: bool,
 ) -> Option<Result<AbsoluteSystemPathBuf, WalkError>> {
     match entry {
         Ok(entry)
@@ -1796,6 +2044,7 @@ fn visit_file(
             None
         }
         Ok(entry) => Some(AbsoluteSystemPathBuf::try_from(entry.path()).map_err(|e| e.into())),
+        Err(e) if skip_link_cycles && e.is_link_cycle() => None,
         Err(e) => {
             let io_err = std::io::Error::from(e);
             match io_err.kind() {
@@ -4363,9 +4612,25 @@ mod tree_walk_test {
         exclude: &[&str],
         walk_type: WalkType,
     ) -> HashSet<AbsoluteSystemPathBuf> {
-        let (base, includes, excludes) =
-            preprocess_paths_and_globs(root, &validated(include), &validated(exclude), false)
-                .unwrap();
+        wax_walk_with(root, include, exclude, walk_type, Settings::default())
+    }
+
+    pub(super) fn wax_walk_with(
+        root: &AbsoluteSystemPath,
+        include: &[&str],
+        exclude: &[&str],
+        walk_type: WalkType,
+        settings: Settings,
+    ) -> HashSet<AbsoluteSystemPathBuf> {
+        let (base, includes, excludes) = preprocess_paths_and_globs(
+            root,
+            &validated(include),
+            &validated(exclude),
+            settings.reads_link_targets(),
+        )
+        .unwrap();
+        let link_boundary = (settings.links == LinkMode::FollowWithinBase)
+            .then(|| LinkBoundary::new(root.as_std_path()));
         let ex_patterns: Vec<Glob<'static>> = excludes
             .into_iter()
             .map(glob_with_contextual_error)
@@ -4381,7 +4646,8 @@ mod tree_walk_test {
                     ex_filter.clone(),
                     &[],
                     &glob_with_contextual_error(pattern).unwrap(),
-                    Settings::default(),
+                    settings,
+                    link_boundary.as_ref(),
                 )
             })
             .collect::<Result<HashSet<_>, _>>()
@@ -4454,6 +4720,205 @@ mod tree_walk_test {
             let actual = globwalk(&root, &validated(include), &[], WalkType::Files).unwrap();
             let expected = wax_walk(&root, include, &[], WalkType::Files);
             assert_eq!(actual, expected, "{include:?}");
+        }
+    }
+}
+
+#[cfg(test)]
+#[cfg(unix)]
+mod bounded_link_test {
+    use std::{collections::HashSet, os::unix::fs::symlink};
+
+    use super::*;
+
+    struct Fixture {
+        _repo: tempfile::TempDir,
+        _outside: tempfile::TempDir,
+        root: AbsoluteSystemPathBuf,
+    }
+
+    /// A repository whose package links into the repository, into
+    /// `node_modules` (a workspace dependency and a global store outside the
+    /// repository), and back into itself.
+    fn fixture() -> Fixture {
+        let repo = tempfile::tempdir().unwrap();
+        let outside = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(repo.path())
+            .unwrap()
+            .to_realpath()
+            .unwrap();
+        let write = |base: &Path, file: &str| {
+            let path = base.join(file);
+            std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+            std::fs::write(path, "x").unwrap();
+        };
+        for file in [
+            "pkg/package.json",
+            "pkg/src/index.txt",
+            "pkg/src/a/in-a.txt",
+            "pkg/src/b/in-b.txt",
+            "shared/dir/shared.txt",
+            "other/package.json",
+            "other/src/other.txt",
+        ] {
+            write(root.as_std_path(), file);
+        }
+        // A deep dependency tree in a store outside the repository, which
+        // links back to itself the way pnpm's virtual store does.
+        let mut deep = PathBuf::from("store/dep");
+        for depth in 0..20 {
+            deep.push(format!("level-{depth}"));
+            write(outside.path(), &deep.join("index.txt").to_string_lossy());
+        }
+        std::fs::create_dir_all(outside.path().join("store/dep/node_modules")).unwrap();
+        symlink(
+            "../../dep",
+            outside.path().join("store/dep/node_modules/dep"),
+        )
+        .unwrap();
+
+        let pkg = root.as_std_path().join("pkg");
+        std::fs::create_dir_all(pkg.join("node_modules/@scope")).unwrap();
+        symlink(
+            outside.path().join("store/dep"),
+            pkg.join("node_modules/dep"),
+        )
+        .unwrap();
+        symlink("../../../other", pkg.join("node_modules/@scope/other")).unwrap();
+        symlink("../../shared/dir", pkg.join("src/linked")).unwrap();
+        symlink(".", pkg.join("src/self")).unwrap();
+        symlink("../b", pkg.join("src/a/to-b")).unwrap();
+        symlink("../a", pkg.join("src/b/to-a")).unwrap();
+        Fixture {
+            _repo: repo,
+            _outside: outside,
+            root,
+        }
+    }
+
+    fn walk(
+        root: &AbsoluteSystemPath,
+        include: &[&str],
+        exclude: &[&str],
+    ) -> Result<HashSet<String>, WalkError> {
+        let validated = |globs: &[&str]| {
+            globs
+                .iter()
+                .map(|glob| ValidatedGlob::from_str(glob).unwrap())
+                .collect::<Vec<_>>()
+        };
+        let found = globwalk_with_settings(
+            root,
+            &validated(include),
+            &validated(exclude),
+            WalkType::Files,
+            Settings::default().follow_links_within_base(),
+        )?;
+        Ok(found
+            .into_iter()
+            .map(|path| root.anchor(&path).unwrap().to_unix().to_string())
+            .collect())
+    }
+
+    fn expected(files: &[&str]) -> HashSet<String> {
+        files.iter().map(|file| file.to_string()).collect()
+    }
+
+    /// The files under `pkg/src` reachable without entering `node_modules`
+    /// or looping.
+    const SOURCE_FILES: &[&str] = &[
+        "pkg/src/index.txt",
+        "pkg/src/a/in-a.txt",
+        "pkg/src/a/to-b/in-b.txt",
+        "pkg/src/b/in-b.txt",
+        "pkg/src/b/to-a/in-a.txt",
+        "pkg/src/linked/shared.txt",
+    ];
+
+    #[test]
+    fn follows_links_inside_the_base_but_not_node_modules_or_cycles() {
+        let fixture = fixture();
+        let root = &fixture.root;
+        let mut package_files = SOURCE_FILES.to_vec();
+        package_files.push("pkg/package.json");
+        // Each shape takes a different walker: the manual recursive walker,
+        // the tree walker for `**/*`, the tree walker with a glob, and wax.
+        for (include, files) in [
+            ("pkg/**", package_files.as_slice()),
+            ("pkg/**/*", package_files.as_slice()),
+            ("pkg/**/*.txt", SOURCE_FILES),
+            ("pkg/{src,node_modules}/**/*.txt", SOURCE_FILES),
+            ("pkg/src", SOURCE_FILES),
+        ] {
+            assert_eq!(
+                walk(root, &[include], &[]).unwrap(),
+                expected(files),
+                "{include}"
+            );
+        }
+    }
+
+    #[test]
+    fn manual_walkers_match_the_wax_walk() {
+        let fixture = fixture();
+        let root = &fixture.root;
+        let settings = Settings::default().follow_links_within_base();
+        for include in ["pkg/**", "pkg/**/*", "pkg/**/*.txt", "pkg/src/**"] {
+            let wax = super::tree_walk_test::wax_walk_with(
+                root,
+                &[include],
+                &[],
+                WalkType::Files,
+                settings,
+            );
+            let actual = walk(root, &[include], &[]).unwrap();
+            let wax: HashSet<String> = wax
+                .into_iter()
+                .map(|path| root.anchor(&path).unwrap().to_unix().to_string())
+                .collect();
+            assert_eq!(actual, wax, "{include}");
+        }
+    }
+
+    #[test]
+    fn explicitly_named_node_modules_links_are_read() {
+        let fixture = fixture();
+        let found = walk(
+            &fixture.root,
+            &["pkg/node_modules/@scope/other/src/**"],
+            &[],
+        )
+        .unwrap();
+        assert_eq!(
+            found,
+            expected(&["pkg/node_modules/@scope/other/src/other.txt"])
+        );
+    }
+
+    #[test]
+    fn directory_link_leaving_the_base_fails_unless_excluded() {
+        let fixture = fixture();
+        let root = &fixture.root;
+        let outside = fixture._outside.path().join("store/dep");
+        symlink(&outside, root.as_std_path().join("pkg/src/escape")).unwrap();
+        for include in [
+            "pkg/src/**",
+            "pkg/src/**/*",
+            "pkg/src/**/*.txt",
+            "pkg/{src,x}/**",
+        ] {
+            assert!(
+                matches!(
+                    walk(root, &[include], &[]),
+                    Err(WalkError::LinkOutsideBase { link, .. }) if link.ends_with("pkg/src/escape")
+                ),
+                "{include}"
+            );
+            assert_eq!(
+                walk(root, &[include], &["pkg/src/escape"]).unwrap(),
+                expected(SOURCE_FILES),
+                "{include}"
+            );
         }
     }
 }
