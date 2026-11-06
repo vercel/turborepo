@@ -1632,3 +1632,56 @@ fn test_task_level_affected_root_lockfile_change_selects_all_tasks() {
         }
     }
 }
+
+#[test]
+fn test_task_level_affected_reads_lockfile_at_merge_base_of_diverged_base() {
+    for future_flag in ["affectedUsingTaskInputs", "filterUsingTasks"] {
+        let tempdir = tempfile::tempdir().unwrap();
+        let dir = tempdir.path();
+        setup_lockfile_scoping(dir, future_flag);
+        git(dir, &["branch", "-M", "main"]);
+
+        // The feature branch bumps `b`'s function-bind resolution...
+        git(dir, &["checkout", "-b", "feature", "--quiet"]);
+        common::apply_lockfile_patch(dir, "pnpm-lock.yaml", "pnpm-lock.patch");
+        commit_all(dir, "bump b's function-bind on feature");
+
+        // ...and the base branch later lands the same bump independently, so
+        // its tip lockfile equals the feature lockfile while the merge base
+        // still has the old resolution.
+        git(dir, &["checkout", "main", "--quiet"]);
+        common::apply_lockfile_patch(dir, "pnpm-lock.yaml", "pnpm-lock.patch");
+        commit_all(dir, "bump b's function-bind on main");
+        git(dir, &["checkout", "feature", "--quiet"]);
+
+        let mut args = vec!["run"];
+        args.extend(LOCKFILE_SCOPING_TASKS);
+        args.extend(["--affected", "--dry=json"]);
+        let tasks = task_ids_from_dry_run(&run_turbo_with_env(
+            dir,
+            &args,
+            &[("TURBO_SCM_BASE", "main")],
+        ));
+        let expected: std::collections::BTreeSet<String> =
+            ["a#build", "b#build", "b#lint"].map(String::from).into();
+        assert_eq!(
+            tasks, expected,
+            "{future_flag} --affected: the lockfile must be compared at the merge base the \
+             changed files were diffed against, not at the base branch tip"
+        );
+
+        if future_flag == "filterUsingTasks" {
+            let mut args = vec!["run"];
+            args.extend(LOCKFILE_SCOPING_TASKS);
+            args.extend(["--filter=[main...HEAD]", "--dry=json"]);
+            let tasks = task_ids_from_dry_run(&run_turbo(dir, &args));
+            let expected: std::collections::BTreeSet<String> =
+                ["b#build", "b#lint"].map(String::from).into();
+            assert_eq!(
+                tasks, expected,
+                "{future_flag} --filter=[main...HEAD]: the lockfile must be compared at the merge \
+                 base"
+            );
+        }
+    }
+}

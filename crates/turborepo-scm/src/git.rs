@@ -185,11 +185,36 @@ impl SCM {
         from_commit: Option<&str>,
         file_path: &AbsoluteSystemPath,
     ) -> Result<Vec<u8>, Error> {
+        self.previous_content_at(&RangeBase::new(from_commit, None, false), file_path)
+    }
+
+    /// Returns the content of `file_path` at the base of the range that
+    /// [`Self::changed_files`] compares for the same arguments: the merge base
+    /// of `from_commit` and `to_commit` (`HEAD` when absent) when `merge_base`
+    /// is set, and `from_commit` otherwise.
+    pub fn previous_content_in_range(
+        &self,
+        from_commit: Option<&str>,
+        to_commit: Option<&str>,
+        merge_base: bool,
+        file_path: &AbsoluteSystemPath,
+    ) -> Result<Vec<u8>, Error> {
+        self.previous_content_at(
+            &RangeBase::new(from_commit, to_commit, merge_base),
+            file_path,
+        )
+    }
+
+    fn previous_content_at(
+        &self,
+        base: &RangeBase,
+        file_path: &AbsoluteSystemPath,
+    ) -> Result<Vec<u8>, Error> {
         match self {
             Self::Git(git) => git
                 .change_prefetch
-                .take_previous_content(from_commit, file_path)
-                .unwrap_or_else(|| git.previous_content(from_commit, file_path)),
+                .take_previous_content(base, file_path)
+                .unwrap_or_else(|| git.previous_content_at(base, file_path)),
             Self::Manual(_) => Err(Error::GitRequired(file_path.to_owned())),
         }
     }
@@ -239,6 +264,7 @@ impl SCM {
                 .spawn(move || {
                     let key = thread_key;
                     let from_commit = key.from_commit.as_deref();
+                    let base = key.range_base();
                     let mut previous = Vec::new();
                     let fetch_previous =
                         |files: &HashSet<AnchoredSystemPathBuf>,
@@ -253,7 +279,7 @@ impl SCM {
                                 if files.contains(&anchored) {
                                     previous.push((
                                         candidate.clone(),
-                                        worker.previous_content(from_commit, candidate),
+                                        worker.previous_content_at(&base, candidate),
                                     ));
                                 }
                             }
@@ -299,6 +325,36 @@ struct ChangedFilesKey {
     merge_base: bool,
 }
 
+impl ChangedFilesKey {
+    fn range_base(&self) -> RangeBase {
+        RangeBase::new(
+            self.from_commit.as_deref(),
+            self.to_commit.as_deref(),
+            self.merge_base,
+        )
+    }
+}
+
+/// The revision a range's previous file contents are read from: `from_commit`,
+/// or its merge base with `to_commit` (`HEAD` when absent).
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct RangeBase {
+    from_commit: Option<String>,
+    /// Only meaningful for merge-base ranges; `None` otherwise.
+    to_commit: Option<String>,
+    merge_base: bool,
+}
+
+impl RangeBase {
+    fn new(from_commit: Option<&str>, to_commit: Option<&str>, merge_base: bool) -> Self {
+        Self {
+            from_commit: from_commit.map(str::to_owned),
+            to_commit: to_commit.filter(|_| merge_base).map(str::to_owned),
+            merge_base,
+        }
+    }
+}
+
 /// A prefetched base-revision file: its path and `git show` result.
 type PrefetchedContent = (AbsoluteSystemPathBuf, Result<Vec<u8>, Error>);
 
@@ -307,11 +363,7 @@ struct PrefetchedChanges {
     previous: Vec<PrefetchedContent>,
 }
 
-type PreviousContentEntry = (
-    Option<String>,
-    AbsoluteSystemPathBuf,
-    Result<Vec<u8>, Error>,
-);
+type PreviousContentEntry = (RangeBase, AbsoluteSystemPathBuf, Result<Vec<u8>, Error>);
 
 /// Pending and completed prefetched change-detection results.
 #[derive(Default)]
@@ -358,14 +410,14 @@ impl ChangePrefetch {
             .extend(
                 previous
                     .into_iter()
-                    .map(|(path, content)| (key.from_commit.clone(), path, content)),
+                    .map(|(path, content)| (key.range_base(), path, content)),
             );
         Some(files)
     }
 
     fn take_previous_content(
         &self,
-        from_commit: Option<&str>,
+        base: &RangeBase,
         file_path: &AbsoluteSystemPath,
     ) -> Option<Result<Vec<u8>, Error>> {
         let mut previous = self
@@ -374,7 +426,7 @@ impl ChangePrefetch {
             .unwrap_or_else(|poisoned| poisoned.into_inner());
         let index = previous
             .iter()
-            .position(|(from, path, _)| from.as_deref() == from_commit && &**path == file_path)?;
+            .position(|(entry, path, _)| entry == base && &**path == file_path)?;
         Some(previous.swap_remove(index).2)
     }
 }
@@ -951,16 +1003,35 @@ impl GitRepo {
         Ok(anchored_to_turbo_root_file_path)
     }
 
-    fn previous_content(
+    fn previous_content_at(
         &self,
-        from_commit: Option<&str>,
+        base: &RangeBase,
         file_path: &AbsoluteSystemPath,
     ) -> Result<Vec<u8>, Error> {
         let anchored_file_path = self.root.anchor(file_path)?;
-        let valid_from = self.resolve_base(from_commit, CIEnv::new())?;
-        let arg = format!("{}:{}", valid_from, anchored_file_path.to_unix());
+        let revision = self.resolve_range_base(base)?;
+        let arg = format!("{}:{}", revision, anchored_file_path.to_unix());
 
         self.execute_git_command(&["show", "--end-of-options", &arg], "")
+    }
+
+    /// Resolves the revision `diff-tree` compares against for this range.
+    fn resolve_range_base(&self, base: &RangeBase) -> Result<String, Error> {
+        let valid_from = self.resolve_base(base.from_commit.as_deref(), CIEnv::new())?;
+        if !base.merge_base {
+            return Ok(valid_from);
+        }
+        let to_commit = base.to_commit.as_deref().unwrap_or("HEAD");
+        Self::validate_git_ref(to_commit)?;
+        let output = self.execute_git_command(
+            &["merge-base", "--end-of-options", &valid_from, to_commit],
+            "",
+        )?;
+        let merge_base = String::from_utf8_lossy(&output).trim().to_string();
+        if merge_base.is_empty() {
+            return Err(Error::UnableToResolveRef);
+        }
+        Ok(merge_base)
     }
 }
 
@@ -1518,6 +1589,43 @@ mod tests {
     }
 
     #[test]
+    fn previous_content_in_range_reads_at_merge_base() -> Result<(), Error> {
+        let (repo_root, repo_path) = setup_repository(Some("main"))?;
+        let root = AbsoluteSystemPathBuf::try_from(repo_root.path())?;
+        let lockfile = root.join_component("yarn.lock");
+
+        fs::write(repo_root.path().join("yarn.lock"), "branch point")?;
+        let branch_point = commit_file(&repo_path, Path::new("yarn.lock"), None);
+        run_git(&repo_path, &["checkout", "-b", "feature"]);
+        fs::write(repo_root.path().join("yarn.lock"), "feature")?;
+        commit_file(&repo_path, Path::new("yarn.lock"), None);
+        run_git(&repo_path, &["checkout", "main"]);
+        fs::write(repo_root.path().join("yarn.lock"), "main tip")?;
+        commit_file(&repo_path, Path::new("yarn.lock"), None);
+        run_git(&repo_path, &["checkout", "feature"]);
+
+        let scm = SCM::new(&root);
+        assert_eq!(scm.previous_content(Some("main"), &lockfile)?, b"main tip");
+        assert_eq!(
+            scm.previous_content_in_range(Some("main"), None, false, &lockfile)?,
+            b"main tip"
+        );
+        assert_eq!(
+            scm.previous_content_in_range(Some("main"), None, true, &lockfile)?,
+            b"branch point"
+        );
+        assert_eq!(
+            scm.previous_content_in_range(Some("main"), Some("HEAD"), true, &lockfile)?,
+            b"branch point"
+        );
+        assert_eq!(
+            scm.previous_content_in_range(Some(&branch_point), Some("main"), true, &lockfile)?,
+            b"branch point"
+        );
+        Ok(())
+    }
+
+    #[test]
     fn prefetched_changes_match_direct_queries_and_are_consumed_once() -> Result<(), Error> {
         let (repo_root, repo_path) = setup_repository(Some("main"))?;
         fs::write(repo_root.path().join("yarn.lock"), "old")?;
@@ -1578,8 +1686,18 @@ mod tests {
             git.change_prefetch.previous_content.lock().unwrap().len(),
             1
         );
+        // Content prefetched for a merge-base range is served only to the
+        // same range, not to a plain read at the base tip.
         assert_eq!(
             clone.previous_content(Some(&base), &lockfile)?,
+            direct_previous
+        );
+        assert_eq!(
+            git.change_prefetch.previous_content.lock().unwrap().len(),
+            1
+        );
+        assert_eq!(
+            clone.previous_content_in_range(Some(&base), None, true, &lockfile)?,
             direct_previous
         );
         assert!(

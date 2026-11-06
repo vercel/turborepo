@@ -527,14 +527,7 @@ fn lockfile_contents(
     git_range: &GitRange,
     changes: &turborepo_types::TaskInputChanges,
 ) -> LockfileContents {
-    scm.lockfile_contents(
-        repo_root,
-        pkg_dep_graph,
-        git_range.from_ref.as_deref(),
-        git_range.to_ref.as_deref(),
-        git_range.include_uncommitted,
-        &changes.files,
-    )
+    scm.lockfile_contents(repo_root, pkg_dep_graph, git_range, &changes.files)
 }
 
 /// Expands a task set to include all `with` siblings, transitively.

@@ -16,7 +16,7 @@ use turborepo_repository::{
 };
 use turborepo_scm::{Error as ScmError, SCM, git::InvalidRange};
 
-use crate::ResolutionError;
+use crate::{ResolutionError, target_selector::GitRange};
 
 /// Expands an all-packages change to the root Turbo task namespace and every
 /// authoritative non-root execution scope.
@@ -64,9 +64,11 @@ pub trait ChangedFilesDetector {
         merge_base: bool,
     ) -> Result<Result<turborepo_types::TaskInputChanges, InvalidRange>, ScmError>;
 
-    /// Describes how the lockfile changed between `from_ref` and `to_ref`,
-    /// using the same snapshot comparison as package-level affected
-    /// detection. `changed_files` must be the change set for that range.
+    /// Describes how the lockfile changed over `range`, using the same
+    /// snapshot comparison as package-level affected detection. `range` and
+    /// `changed_files` must be the change-set query and its result, so that
+    /// with `merge_base` the previous lockfile is read at the same merge base
+    /// the changed files were diffed against.
     ///
     /// Detectors without lockfile history report an unknown change, which
     /// callers treat as affecting every package.
@@ -74,9 +76,7 @@ pub trait ChangedFilesDetector {
         &self,
         _turbo_root: &AbsoluteSystemPath,
         _pkg_graph: &PackageGraph,
-        _from_ref: Option<&str>,
-        _to_ref: Option<&str>,
-        _include_uncommitted: bool,
+        _range: &GitRange,
         _changed_files: &HashSet<AnchoredSystemPathBuf>,
     ) -> LockfileContents {
         LockfileContents::UnknownChange
@@ -146,9 +146,7 @@ impl ChangedFilesDetector for SCM {
         &self,
         turbo_root: &AbsoluteSystemPath,
         pkg_graph: &PackageGraph,
-        from_ref: Option<&str>,
-        to_ref: Option<&str>,
-        include_uncommitted: bool,
+        range: &GitRange,
         changed_files: &HashSet<AnchoredSystemPathBuf>,
     ) -> LockfileContents {
         LockfileChangeReader {
@@ -156,7 +154,13 @@ impl ChangedFilesDetector for SCM {
             scm: self,
             pkg_graph,
         }
-        .lockfile_contents(from_ref, to_ref, include_uncommitted, changed_files)
+        .lockfile_contents(
+            range.from_ref.as_deref(),
+            range.to_ref.as_deref(),
+            range.include_uncommitted,
+            range.merge_base,
+            changed_files,
+        )
     }
 }
 
@@ -221,6 +225,7 @@ impl<'a> ScopeChangeDetector<'a> {
         from_ref: Option<&str>,
         to_ref: Option<&str>,
         include_uncommitted: bool,
+        merge_base: bool,
         changed_files: &HashSet<AnchoredSystemPathBuf>,
     ) -> LockfileContents {
         LockfileChangeReader {
@@ -228,7 +233,13 @@ impl<'a> ScopeChangeDetector<'a> {
             scm: self.scm,
             pkg_graph: self.pkg_graph,
         }
-        .lockfile_contents(from_ref, to_ref, include_uncommitted, changed_files)
+        .lockfile_contents(
+            from_ref,
+            to_ref,
+            include_uncommitted,
+            merge_base,
+            changed_files,
+        )
     }
 }
 
@@ -253,6 +264,7 @@ impl LockfileChangeReader<'_> {
         from_ref: Option<&str>,
         to_ref: Option<&str>,
         include_uncommitted: bool,
+        merge_base: bool,
         changed_files: &HashSet<AnchoredSystemPathBuf>,
     ) -> LockfileContents {
         let resolution_paths = self.pkg_graph.change_knowledge().resolution_paths();
@@ -274,7 +286,13 @@ impl LockfileChangeReader<'_> {
             return LockfileContents::Unchanged;
         };
 
-        let Ok(content) = self.scm.previous_content(from_ref, &lockfile_path) else {
+        // Read the base lockfile at the same revision the changed files were
+        // diffed against; with a diverged base branch that is the merge base,
+        // not the branch tip.
+        let Ok(content) =
+            self.scm
+                .previous_content_in_range(from_ref, to_ref, merge_base, &lockfile_path)
+        else {
             debug!("lockfile did change but could not get previous content");
             return LockfileContents::UnknownChange;
         };
@@ -395,8 +413,13 @@ impl<'a> GitChangeDetector for ScopeChangeDetector<'a> {
             Err(err) => return Err(err.into()),
         };
 
-        let lockfile_contents =
-            self.get_lockfile_contents(from_ref, to_ref, include_uncommitted, &changed_files);
+        let lockfile_contents = self.get_lockfile_contents(
+            from_ref,
+            to_ref,
+            include_uncommitted,
+            merge_base,
+            &changed_files,
+        );
 
         debug!(
             "changed files: {:?}",
