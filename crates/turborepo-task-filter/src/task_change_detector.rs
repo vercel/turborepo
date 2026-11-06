@@ -4,15 +4,20 @@
 //!
 //! The core matching logic lives in `turborepo_engine::affected` and is
 //! shared with `turbo query { affectedTasks }`. This module adds the
-//! global-change fast path (root config files, lockfile, global deps, root
-//! internal dependencies) before delegating to the shared function.
+//! global-change fast path (root config files, global deps, root internal
+//! dependencies) before delegating to the shared function, and seeds the tasks
+//! of packages whose lockfile resolution changed.
 
 use std::collections::HashSet;
 
 use turbopath::{AbsoluteSystemPath, AnchoredSystemPathBuf};
 use turborepo_repository::{
-    change_mapper::is_default_global_file, global_deps::GlobalDepsMatcher,
-    package_graph::PackageGraph,
+    change_mapper::{
+        ChangeMapper, DefaultPackageChangeMapper, LockfileContents, PackageChanges,
+        is_default_global_file,
+    },
+    global_deps::GlobalDepsMatcher,
+    package_graph::{PackageGraph, PackageName},
 };
 use turborepo_task_id::TaskId;
 
@@ -84,9 +89,16 @@ pub fn filter_existing_changed_files(
 ///
 /// # Global changes
 ///
-/// If any changed file is a global dependency (root config files, lockfile,
+/// If any changed file is a global dependency (root config files,
 /// user-configured `globalDependencies`, or a package the root package
 /// depends on), all tasks are returned.
+///
+/// # Lockfile changes
+///
+/// A package manager lockfile change selects the tasks of the packages whose
+/// resolved dependencies changed, as package-level affected detection does.
+/// When the change cannot be resolved (watch mode, missing history, parse
+/// failures) every task is selected.
 ///
 /// # Error handling
 ///
@@ -115,18 +127,31 @@ pub fn affected_task_ids(
         files: changed_files.clone(),
         tracked,
     };
-    affected_task_ids_with_managed_setup(engine, pkg_dep_graph, &changes, global_deps, false)
+    // Watch batches have no base snapshot to compare the lockfile against.
+    affected_task_ids_with_managed_setup(
+        engine,
+        pkg_dep_graph,
+        &changes,
+        global_deps,
+        false,
+        || LockfileContents::UnknownChange,
+    )
 }
 
 /// Like `affected_task_ids`, with committed managed toolchain resolution
 /// treated as a default global file, independently of task inputs and
 /// configured globs.
+///
+/// `lockfile_contents` describes the lockfile change for the compared range,
+/// typically from `ChangedFilesDetector::lockfile_contents`. It is only
+/// invoked when the package manager lockfile is among the changed files.
 pub fn affected_task_ids_with_managed_setup(
     engine: &Engine,
     pkg_dep_graph: &PackageGraph,
     changed_files: &turborepo_types::TaskInputChanges,
     global_deps: &[String],
     managed_setup: bool,
+    lockfile_contents: impl FnOnce() -> LockfileContents,
 ) -> HashSet<TaskId<'static>> {
     if is_global_change(
         &changed_files.files,
@@ -137,12 +162,76 @@ pub fn affected_task_ids_with_managed_setup(
         return engine.task_ids().cloned().collect();
     }
 
-    match turborepo_engine::match_tasks_against_changed_files(engine, pkg_dep_graph, changed_files)
-    {
-        Ok(matched) => matched.into_keys().collect(),
+    let mut affected: HashSet<TaskId<'static>> =
+        match turborepo_engine::match_tasks_against_changed_files(
+            engine,
+            pkg_dep_graph,
+            changed_files,
+        ) {
+            Ok(matched) => matched.into_keys().collect(),
+            Err(error) => {
+                tracing::warn!(%error, "unable to project task affectedness; selecting all tasks");
+                return engine.task_ids().cloned().collect();
+            }
+        };
+
+    if package_manager_lockfile_changed(&changed_files.files, pkg_dep_graph) {
+        match lockfile_changed_packages(pkg_dep_graph, lockfile_contents()) {
+            Some(packages) => affected.extend(engine.task_ids_for_packages(&packages)),
+            None => return engine.task_ids().cloned().collect(),
+        }
+    }
+
+    affected
+}
+
+fn package_manager_lockfile_changed(
+    changed_files: &HashSet<AnchoredSystemPathBuf>,
+    pkg_dep_graph: &PackageGraph,
+) -> bool {
+    pkg_dep_graph
+        .package_manager()
+        .map(|pm| pm.lockfile_name())
+        .is_some_and(|lockfile| changed_files.iter().any(|file| file.as_str() == lockfile))
+}
+
+/// Resolves the packages invalidated by a lockfile change with the
+/// package-level change mapper, so lockfile scoping (resolution comparison,
+/// root dependency changes invalidating every package, relationship
+/// projections) matches `ScopeChangeDetector` exactly. Changed files are
+/// deliberately not passed: they are matched against task inputs instead.
+///
+/// Returns `None` when every package must be treated as changed.
+fn lockfile_changed_packages(
+    pkg_dep_graph: &PackageGraph,
+    lockfile_contents: LockfileContents,
+) -> Option<HashSet<PackageName>> {
+    // The caller already knows the lockfile changed, so a reader that saw no
+    // change is not evidence that nothing was affected.
+    let lockfile_contents = match lockfile_contents {
+        LockfileContents::Unchanged => LockfileContents::UnknownChange,
+        contents => contents,
+    };
+    let mapper = ChangeMapper::new(
+        pkg_dep_graph,
+        Vec::new(),
+        DefaultPackageChangeMapper::new(pkg_dep_graph),
+    );
+    match mapper.changed_packages(HashSet::new(), lockfile_contents) {
+        Ok(PackageChanges::Some(packages)) => {
+            tracing::debug!(
+                packages = packages.len(),
+                "lockfile change scoped to packages"
+            );
+            Some(packages.into_keys().map(|package| package.name).collect())
+        }
+        Ok(PackageChanges::All(reason)) => {
+            tracing::debug!(?reason, "lockfile change affects all tasks");
+            None
+        }
         Err(error) => {
-            tracing::warn!(%error, "unable to project task affectedness; selecting all tasks");
-            engine.task_ids().cloned().collect()
+            tracing::warn!(%error, "unable to scope lockfile change; selecting all tasks");
+            None
         }
     }
 }
@@ -151,8 +240,7 @@ pub fn affected_task_ids_with_managed_setup(
 /// tasks should be considered affected regardless of their individual inputs.
 ///
 /// Global changes include:
-/// - Root config files: `package.json`, `turbo.json`, `turbo.jsonc`
-/// - The package manager's lockfile
+/// - Root config files: `turbo.json`, `turbo.jsonc`
 /// - Files matching user-configured `globalDependencies` globs
 /// - Files inside a package the root package depends on, directly or
 ///   transitively. Those files feed `hashOfInternalDependencies`, which is part
@@ -165,7 +253,6 @@ fn is_global_change(
     pkg_dep_graph: &PackageGraph,
     managed_setup: bool,
 ) -> bool {
-    let lockfile_name = pkg_dep_graph.package_manager().map(|pm| pm.lockfile_name());
     let global_deps_matcher = GlobalDepsMatcher::new_ignoring_invalid(
         global_deps.iter().map(String::as_str),
         |glob, error| {
@@ -185,10 +272,6 @@ fn is_global_change(
         let file_str = file.as_str();
 
         if is_default_global_file(file_str, managed_setup) {
-            return true;
-        }
-
-        if Some(file_str) == lockfile_name {
             return true;
         }
 
@@ -331,6 +414,7 @@ mod tests {
                 &turborepo_types::TaskInputChanges::from_tracked(changed(&["turbo.lock"])),
                 &global_deps,
                 managed_setup,
+                || unreachable!("turbo.lock is not the package manager lockfile"),
             );
             assert_eq!(affected.len(), if managed_setup { 2 } else { 0 });
             assert!(
@@ -342,6 +426,7 @@ mod tests {
                     ])),
                     &global_deps,
                     managed_setup,
+                    || unreachable!("turbo.lock is not the package manager lockfile"),
                 )
                 .iter()
                 .all(|task| task.package() != "b")
@@ -388,6 +473,138 @@ mod tests {
         assert!(result.contains(&a_build));
     }
 
+    fn lockfile_changed_for(package: &str) -> LockfileContents {
+        LockfileContents::Resolved(vec![
+            turborepo_repository::package_graph::ExternalDependencyChange {
+                package: turborepo_repository::package_graph::WorkspacePackage {
+                    name: PackageName::from(package),
+                    path: AnchoredSystemPathBuf::from_raw(format!("packages/{package}")).unwrap(),
+                },
+                added: Vec::new(),
+                removed: Vec::new(),
+            },
+        ])
+    }
+
+    #[tokio::test]
+    async fn resolved_lockfile_change_selects_only_changed_package_tasks() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPath::from_std_path(tmp.path()).unwrap();
+        let pkg_graph = make_pkg_graph(root, &["lib-a", "lib-b"]).await;
+
+        let a_build = TaskId::new("lib-a", "build");
+        let b_build = TaskId::new("lib-b", "build");
+        let b_test = TaskId::new("lib-b", "test");
+        let engine = make_engine(
+            &[
+                (a_build.clone(), default_def()),
+                (b_build.clone(), default_def()),
+                (b_test.clone(), default_def()),
+            ],
+            &[],
+        );
+
+        let result = affected_task_ids_with_managed_setup(
+            &engine,
+            &pkg_graph,
+            &turborepo_types::TaskInputChanges::from_tracked(changed(&["package-lock.json"])),
+            &[],
+            false,
+            || lockfile_changed_for("lib-b"),
+        );
+        assert_eq!(result, HashSet::from([b_build, b_test]));
+    }
+
+    #[tokio::test]
+    async fn resolved_lockfile_change_unions_with_input_matches() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPath::from_std_path(tmp.path()).unwrap();
+        let pkg_graph = make_pkg_graph(root, &["lib-a", "lib-b", "lib-c"]).await;
+
+        let a_build = TaskId::new("lib-a", "build");
+        let b_build = TaskId::new("lib-b", "build");
+        let c_build = TaskId::new("lib-c", "build");
+        let engine = make_engine(
+            &[
+                (a_build.clone(), default_def()),
+                (b_build.clone(), default_def()),
+                (c_build.clone(), default_def()),
+            ],
+            &[],
+        );
+
+        let result = affected_task_ids_with_managed_setup(
+            &engine,
+            &pkg_graph,
+            &turborepo_types::TaskInputChanges::from_tracked(changed(&[
+                "package-lock.json",
+                "packages/lib-a/src/index.ts",
+            ])),
+            &[],
+            false,
+            || lockfile_changed_for("lib-b"),
+        );
+        assert_eq!(result, HashSet::from([a_build, b_build]));
+    }
+
+    #[tokio::test]
+    async fn unresolvable_lockfile_change_returns_all() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPath::from_std_path(tmp.path()).unwrap();
+        let pkg_graph = make_pkg_graph(root, &["lib-a", "lib-b"]).await;
+
+        let engine = make_engine(
+            &[
+                (TaskId::new("lib-a", "build"), default_def()),
+                (TaskId::new("lib-b", "build"), default_def()),
+            ],
+            &[],
+        );
+
+        let lockfile =
+            || turborepo_types::TaskInputChanges::from_tracked(changed(&["package-lock.json"]));
+        // Previous lockfile content that cannot be parsed, a change without
+        // history, and a reader that missed the change all fall back to
+        // selecting every task.
+        let cases: [fn() -> LockfileContents; 3] = [
+            || LockfileContents::Changed {
+                path: AnchoredSystemPathBuf::from_raw("package-lock.json").unwrap(),
+                previous_contents: b"not a lockfile".to_vec(),
+            },
+            || LockfileContents::UnknownChange,
+            || LockfileContents::Unchanged,
+        ];
+        for contents in cases {
+            let result = affected_task_ids_with_managed_setup(
+                &engine,
+                &pkg_graph,
+                &lockfile(),
+                &[],
+                false,
+                contents,
+            );
+            assert_eq!(result.len(), 2, "{result:?}");
+        }
+    }
+
+    #[tokio::test]
+    async fn lockfile_contents_are_not_read_without_lockfile_change() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPath::from_std_path(tmp.path()).unwrap();
+        let pkg_graph = make_pkg_graph(root, &["lib-a"]).await;
+        let engine = make_engine(&[(TaskId::new("lib-a", "build"), default_def())], &[]);
+
+        let result = affected_task_ids_with_managed_setup(
+            &engine,
+            &pkg_graph,
+            &turborepo_types::TaskInputChanges::from_tracked(changed(&["README.md"])),
+            &[],
+            false,
+            || unreachable!("lockfile did not change"),
+        );
+        assert!(result.is_empty(), "{result:?}");
+    }
+
     #[tokio::test]
     async fn lockfile_change_returns_all() {
         let tmp = tempfile::tempdir().unwrap();
@@ -397,7 +614,8 @@ mod tests {
         let a_build = TaskId::new("lib-a", "build");
         let engine = make_engine(&[(a_build.clone(), default_def())], &[]);
 
-        // MockDiscovery returns PackageManager::Npm → lockfile is package-lock.json
+        // MockDiscovery returns PackageManager::Npm → lockfile is package-lock.json.
+        // Watch mode has no base snapshot, so the change cannot be scoped.
         let result = affected_task_ids(&engine, &pkg_graph, &changed(&["package-lock.json"]), &[]);
         assert_eq!(result.len(), 1);
         assert!(result.contains(&a_build));
