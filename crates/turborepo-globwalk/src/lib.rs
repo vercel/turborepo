@@ -359,7 +359,7 @@ pub struct Settings {
 
 /// How a walk treats directory symlinks below its walk roots. Walk roots
 /// themselves, and symlinks in the literal part of a pattern, are always
-/// resolved by the OS.
+/// read.
 #[derive(Debug, Default, Copy, Clone, PartialEq, Eq)]
 enum LinkMode {
     /// Symlinks are yielded as files and never descended into.
@@ -390,8 +390,9 @@ impl Settings {
 
     /// Follow symbolic links to directories that resolve inside the walk's
     /// base path, except links inside `node_modules`, and fail on directory
-    /// links that leave it (see [`LinkBoundary`]). Walk roots are always
-    /// read. Unlike [`Settings::follow_links`], this keeps the fast walkers.
+    /// links that leave it (see [`LinkBoundary`]). Walk roots, and links a
+    /// pattern names literally, are always read. Unlike
+    /// [`Settings::follow_links`], this keeps the fast walkers.
     pub fn follow_links_within_base(mut self) -> Self {
         self.links = LinkMode::FollowWithinBase;
         self
@@ -405,13 +406,15 @@ impl Settings {
 /// Decides which directory symlinks found below a walk root
 /// [`Settings::follow_links_within_base`] descends into.
 ///
-/// A directory link is followed when its target resolves inside the base.
-/// Links whose logical path has a `node_modules` component below the base are
-/// never followed: package managers own them, and they point at dependencies,
-/// whose changes the lockfile and package graph already capture. They also
-/// form cycles and diamonds, so following them can walk the whole dependency
-/// graph many times over, or a global store outside the repository. Any other
-/// directory link that leaves the base is an error, found before reading it.
+/// This applies to links a walk reaches through `*` or `**`; links a pattern
+/// names literally are read like walk roots. A directory link is followed
+/// when its target resolves inside the base. Links whose logical path has a
+/// `node_modules` component below the base are not followed: package managers
+/// own them, and they point at dependencies, whose changes the lockfile and
+/// package graph already capture. They also form cycles and diamonds, so
+/// following them can walk the whole dependency graph many times over, or a
+/// global store outside the repository. Any other directory link that leaves
+/// the base is an error, found before reading it.
 #[derive(Debug, Clone)]
 pub struct LinkBoundary {
     base: PathBuf,
@@ -1954,6 +1957,45 @@ fn ignorable_walk_error(e: &std::io::Error) -> bool {
     )
 }
 
+/// Whether the absolute `pattern` names `path` literally: every pattern
+/// component up to `path`'s depth matches within a single path component (no
+/// `**`, alternation, repetition or group), and the one at `path`'s own depth
+/// is a literal equal to its file name. A link the pattern names is read like
+/// a walk root in [`Settings::follow_links_within_base`]; a link the walk
+/// only reaches through `*` or `**` is subject to [`LinkBoundary`].
+fn pattern_names_path(pattern: &str, path: &Path) -> bool {
+    /// The unescaped text of `segment` when it matches only itself, or `None`
+    /// when it has wildcards. `Err` when it may span path components.
+    fn literal(segment: &str) -> Result<Option<String>, ()> {
+        let mut literal = String::with_capacity(segment.len());
+        let mut wildcard = false;
+        let mut chars = segment.chars();
+        while let Some(c) = chars.next() {
+            match c {
+                '\\' => literal.push(chars.next().ok_or(())?),
+                '{' | '<' | '(' => return Err(()),
+                '*' if chars.as_str().starts_with('*') => return Err(()),
+                '*' | '?' | '[' => wildcard = true,
+                c => literal.push(c),
+            }
+        }
+        Ok((!wildcard).then_some(literal))
+    }
+
+    let path = path.to_slash_lossy();
+    let path_segments: Vec<&str> = path.split('/').filter(|s| !s.is_empty()).collect();
+    let mut pattern_segments = pattern.split('/').filter(|s| !s.is_empty());
+    for (depth, path_segment) in path_segments.iter().enumerate() {
+        let Some(Ok(segment)) = pattern_segments.next().map(literal) else {
+            return false;
+        };
+        if depth + 1 == path_segments.len() {
+            return segment.as_deref() == Some(*path_segment);
+        }
+    }
+    false
+}
+
 #[tracing::instrument(skip_all)]
 fn walk_glob(
     walk_type: WalkType,
@@ -1979,6 +2021,7 @@ fn walk_glob(
     // link is dropped like a package-managed one.
     let skip_link_cycles = link_boundary.is_some();
     let outside_link = std::cell::RefCell::new(None);
+    let pattern = glob.to_string();
 
     if settings.ignore_nested_packages || !plain_exclusions.is_empty() || link_boundary.is_some() {
         iter.filter_entry(|entry| {
@@ -1991,11 +2034,14 @@ fn walk_glob(
             if excluded_by_plain(plain_exclusions, path) {
                 return Some(EntryResidue::Tree);
             }
-            // The walk root itself is always read, like in the other modes.
+            // The walk root itself is always read, like in the other modes, and
+            // so is a link the pattern names literally: wax starts its walk
+            // above a symlink in the pattern's literal prefix.
             if let Some(boundary) = link_boundary
                 && entry.depth() > 0
                 && entry.file_type().is_dir()
                 && path.is_symlink()
+                && !pattern_names_path(&pattern, path)
             {
                 match boundary.classify(path) {
                     LinkTarget::Inside(_) | LinkTarget::NotDirectory => {}
@@ -4883,16 +4929,52 @@ mod bounded_link_test {
     #[test]
     fn explicitly_named_node_modules_links_are_read() {
         let fixture = fixture();
-        let found = walk(
-            &fixture.root,
-            &["pkg/node_modules/@scope/other/src/**"],
-            &[],
-        )
-        .unwrap();
-        assert_eq!(
-            found,
-            expected(&["pkg/node_modules/@scope/other/src/other.txt"])
-        );
+        let root = &fixture.root;
+        let other = expected(&["pkg/node_modules/@scope/other/src/other.txt"]);
+        // Patterns whose literal components name the link: the recursive
+        // walker starts at it, and wax, which every other shape here falls
+        // back to, starts above it.
+        for include in [
+            "pkg/node_modules/@scope/other/src/**",
+            "pkg/node_modules/@scope/other/src/**/*.txt",
+            "pkg/node_modules/@scope/other/src/*.txt",
+            "pkg/node_modules/@scope/other/{src,lib}/**",
+            "pkg/*/@scope/other/src/*.txt",
+        ] {
+            assert_eq!(walk(root, &[include], &[]).unwrap(), other, "{include}");
+        }
+        // Links matched only by a wildcard stay unread.
+        for include in [
+            "pkg/node_modules/@scope/*/src/*.txt",
+            "pkg/node_modules/**/*.txt",
+            "pkg/node_modules/@scope/{other,x}/src/*.txt",
+        ] {
+            assert!(walk(root, &[include], &[]).unwrap().is_empty(), "{include}");
+        }
+    }
+
+    #[test]
+    fn pattern_names_path_only_for_literal_components() {
+        let path = Path::new("/repo/node_modules/@scope/dep");
+        for pattern in [
+            "/repo/node_modules/@scope/dep/src/**/*.txt",
+            "/repo/node_modules/@scope/dep",
+            "/repo/*/@scope/dep/{a,b}/**",
+            "/repo/node_\\modules/@scope/dep/**",
+        ] {
+            assert!(pattern_names_path(pattern, path), "{pattern}");
+        }
+        for pattern in [
+            "/repo/node_modules/@scope/*/src/**",
+            "/repo/node_modules/@scope/d?p/src/**",
+            "/repo/node_modules/**/dep/src/**",
+            "/repo/**/node_modules/@scope/dep",
+            "/repo/node_modules/{@scope,x}/dep/**",
+            "/repo/node_modules/@scope",
+            "/repo/node_modules/@scope/other/**",
+        ] {
+            assert!(!pattern_names_path(pattern, path), "{pattern}");
+        }
     }
 
     #[test]

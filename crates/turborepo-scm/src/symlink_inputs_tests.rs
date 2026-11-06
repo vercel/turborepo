@@ -417,16 +417,35 @@ fn input_globs_do_not_follow_package_manager_links() {
         }
     }
 
-    // Naming a dependency explicitly still reads it.
-    for backend in 0..3 {
+    // Naming a dependency explicitly still reads it, and edits to it change
+    // the hash.
+    let selected = RelativeUnixPathBuf::new("node_modules/@scope/b/src/b.txt").unwrap();
+    let explicit = [
+        "node_modules/@scope/b/src/b.txt",
+        "node_modules/@scope/b/src/**/*.txt",
+        "node_modules/@scope/b/src/*.txt",
+        "node_modules/@scope/b/src/**",
+    ];
+    let read = |input: &str, backend: usize| {
+        let result = hashes(&root, &[input], backend)
+            .unwrap_or_else(|error| panic!("backend {backend}, input {input}: {error}"));
         assert!(
-            hashes(&root, &["node_modules/@scope/b/src/b.txt"], backend)
-                .unwrap()
-                .contains_key(
-                    &RelativeUnixPathBuf::new("node_modules/@scope/b/src/b.txt").unwrap()
-                ),
-            "backend {backend}"
+            result.contains_key(&selected),
+            "backend {backend}, input {input}: {result:?}"
         );
+        result[&selected]
+    };
+    let before: Vec<_> = (0..3)
+        .flat_map(|backend| explicit.map(|input| read(input, backend)))
+        .collect();
+    at("packages/b/src/b.txt")
+        .create_with_contents("changed")
+        .unwrap();
+    let after: Vec<_> = (0..3)
+        .flat_map(|backend| explicit.map(|input| read(input, backend)))
+        .collect();
+    for (before, after) in before.iter().zip(&after) {
+        assert_ne!(before, after);
     }
 }
 
