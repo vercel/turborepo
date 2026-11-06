@@ -352,10 +352,15 @@ pub struct Settings {
     /// setting if you are globbing in an individual package at not at the
     /// workspace root.
     ignore_nested_packages: bool,
-    /// Follow symbolic links when walking directories. When enabled, symlinked
-    /// directories are traversed into (their targets are read). Cycles are
-    /// detected and handled gracefully by the underlying walkdir layer.
-    follow_links: bool,
+    links: LinkMode,
+}
+
+#[derive(Debug, Default, Copy, Clone, PartialEq, Eq)]
+enum LinkMode {
+    #[default]
+    NoFollow,
+    Follow,
+    FollowWithinBase,
 }
 
 impl Settings {
@@ -365,8 +370,20 @@ impl Settings {
     }
 
     pub fn follow_links(mut self) -> Self {
-        self.follow_links = true;
+        self.links = LinkMode::Follow;
         self
+    }
+
+    /// Follow a directory link only when it resolves inside the base path and
+    /// outside Git metadata, and only the first time the walk reaches its
+    /// target. Other directory links are yielded as entries.
+    pub fn follow_links_within_base(mut self) -> Self {
+        self.links = LinkMode::FollowWithinBase;
+        self
+    }
+
+    fn follows_links(&self) -> bool {
+        self.links != LinkMode::NoFollow
     }
 }
 
@@ -686,6 +703,7 @@ where
 
 struct CompiledGlobs {
     base_path: PathBuf,
+    link_bound: Option<PathBuf>,
     include_patterns: Vec<Glob<'static>>,
     /// For each entry of `include_patterns`, the literal directory prefix
     /// when the pattern has the `<literal-prefix>/**/<tail>` shape (see
@@ -1097,7 +1115,7 @@ fn compile_globs<S: AsRef<str>>(
     settings: Settings,
 ) -> Result<CompiledGlobs, WalkError> {
     let (base_path_new, include_paths, exclude_paths) =
-        preprocess_paths_and_globs(base_path, include, exclude, settings.follow_links)?;
+        preprocess_paths_and_globs(base_path, include, exclude, settings.follows_links())?;
 
     // Plain-segment exclusions always compile and are matched exactly by
     // path comparison (see `PlainExclusion::matches`), so skip wax for them.
@@ -1152,14 +1170,14 @@ fn compile_globs<S: AsRef<str>>(
             // no-follow link behavior only. When a caller asks to follow
             // symlinks, send the pattern through wax, which handles
             // ReadTarget semantics including symlink-cycle detection.
-            SimplePattern::RecursiveAll(prefix) if !settings.follow_links => {
+            SimplePattern::RecursiveAll(prefix) if !settings.follows_links() => {
                 recursive_all.push(prefix)
             }
             SimplePattern::RecursiveAll(_) => complex_paths.push(path),
             // The tree walker implements wax's default walk behavior only;
             // other settings keep the wax walk.
             SimplePattern::RecursiveChildren(prefix)
-                if !settings.follow_links && !settings.ignore_nested_packages =>
+                if !settings.follows_links() && !settings.ignore_nested_packages =>
             {
                 recursive_children.push((prefix, path))
             }
@@ -1173,8 +1191,13 @@ fn compile_globs<S: AsRef<str>>(
 
     deduplicate_recursive_all_prefixes(&mut recursive_all);
 
+    let link_bound = (settings.links == LinkMode::FollowWithinBase).then(|| {
+        std::fs::canonicalize(base_path).unwrap_or_else(|_| base_path.as_std_path().to_owned())
+    });
+
     Ok(CompiledGlobs {
         base_path: base_path_new,
+        link_bound,
         include_patterns,
         include_tree_prefixes,
         recursive_children,
@@ -1298,7 +1321,7 @@ fn walk_compiled_globs(
     // `<prefix>/**/<tail>` globs are read by the parallel tree walker when
     // it reproduces wax's walk exactly (default walk behavior, and no
     // symlinked ancestor that would move wax's walk root).
-    let tree_walks_supported = !settings.follow_links && !settings.ignore_nested_packages;
+    let tree_walks_supported = !settings.follows_links() && !settings.ignore_nested_packages;
     let mut tree_walks: Vec<(&Path, TreeMatcher<'_>)> = Vec::new();
     // `<prefix>/**/*` patterns that cannot use the tree walker are compiled
     // here, on demand, for the wax walk.
@@ -1403,6 +1426,7 @@ fn walk_compiled_globs(
                 plain_exclusions,
                 glob,
                 settings,
+                compiled.link_bound.as_deref(),
             )
         })
         .collect::<Result<HashSet<_>, _>>()?;
@@ -1741,8 +1765,9 @@ fn walk_glob(
     plain_exclusions: &[PlainExclusion],
     glob: &Glob<'static>,
     settings: Settings,
+    link_bound: Option<&Path>,
 ) -> Vec<Result<AbsoluteSystemPathBuf, WalkError>> {
-    let behavior = if settings.follow_links {
+    let behavior = if settings.follows_links() {
         WalkBehavior {
             link: LinkBehavior::ReadTarget,
             ..Default::default()
@@ -1753,8 +1778,24 @@ fn walk_glob(
     let iter = glob
         .walk_with_behavior(base_path_new, behavior)
         .not_any(ex_filter);
+    let mut gate = link_bound.map(LinkGate::new);
+    let record_link_cycles = gate.is_some();
+    let mut unfollowed = Vec::new();
+    // walkdir reports a link back to a directory the walk is inside as an
+    // error.
+    let visit_or_record_cycle =
+        |entry: Result<wax::walk::GlobEntry, wax::walk::WalkError>| match entry {
+            Err(error) if record_link_cycles && error.is_link_cycle() => error
+                .path()
+                .filter(|path| glob.is_match(*path))
+                .map(|path| AbsoluteSystemPathBuf::try_from(path).map_err(Into::into)),
+            entry => visit_file(walk_type, entry),
+        };
 
-    if settings.ignore_nested_packages || !plain_exclusions.is_empty() {
+    let filtered =
+        settings.ignore_nested_packages || !plain_exclusions.is_empty() || gate.is_some();
+
+    let mut results = if filtered {
         iter.filter_entry(|entry| {
             let path = entry.path();
             // Pruning a matching directory discards exactly the entries
@@ -1772,14 +1813,58 @@ fn walk_glob(
             {
                 return Some(EntryResidue::Tree);
             }
+            if let Some(gate) = gate.as_mut()
+                && entry.depth() > 0
+                && entry.file_type().is_dir()
+                && path.is_symlink()
+                && !gate.enter(path)
+            {
+                if glob.is_match(path) {
+                    unfollowed.push(path.to_path_buf());
+                }
+                return Some(EntryResidue::Tree);
+            }
 
             None
         })
-        .filter_map(|entry| visit_file(walk_type, entry))
+        .filter_map(visit_or_record_cycle)
         .collect::<Vec<_>>()
     } else {
-        iter.filter_map(|entry| visit_file(walk_type, entry))
-            .collect::<Vec<_>>()
+        iter.filter_map(visit_or_record_cycle).collect::<Vec<_>>()
+    };
+    results.extend(
+        unfollowed
+            .into_iter()
+            .map(|path| AbsoluteSystemPathBuf::try_from(path.as_path()).map_err(Into::into)),
+    );
+    results
+}
+
+struct LinkGate {
+    root: PathBuf,
+    entered: HashSet<PathBuf>,
+}
+
+impl LinkGate {
+    fn new(root: &Path) -> Self {
+        Self {
+            root: root.to_owned(),
+            entered: HashSet::new(),
+        }
+    }
+
+    fn enter(&mut self, link: &Path) -> bool {
+        std::fs::canonicalize(link).is_ok_and(|target| {
+            let inside = target.strip_prefix(&self.root).is_ok_and(|relative| {
+                !relative.components().any(|component| {
+                    component
+                        .as_os_str()
+                        .to_str()
+                        .is_some_and(turbopath::is_git_metadata_component)
+                })
+            });
+            inside && self.entered.insert(target)
+        })
     }
 }
 
@@ -4382,6 +4467,7 @@ mod tree_walk_test {
                     &[],
                     &glob_with_contextual_error(pattern).unwrap(),
                     Settings::default(),
+                    None,
                 )
             })
             .collect::<Result<HashSet<_>, _>>()
