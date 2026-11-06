@@ -1,0 +1,79 @@
+version = 1
+revision = 5
+requires-python = ">=3.9"
+
+[manifest]
+members = [
+    "dynamic-app",
+    "extras-app",
+    "feature-lib",
+    "leaf-lib",
+    "py-lib",
+    "unrelated",
+]
+
+[[package]]
+name = "dynamic-app"
+version = "0.1.0"
+source = { editable = "packages/dynamic-app" }
+dependencies = [
+    { name = "py-lib", extra = ["feature"] },
+]
+
+[package.optional-dependencies]
+feature = [
+    { name = "feature-lib" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "feature-lib", marker = "extra == 'feature'", editable = "packages/feature-lib" },
+    { name = "py-lib", extras = ["feature"], editable = "packages/py-lib" },
+]
+provides-extras = ["feature"]
+
+[[package]]
+name = "extras-app"
+version = "0.1.0"
+source = { editable = "packages/extras-app" }
+dependencies = [
+    { name = "py-lib", extra = ["feature"] },
+]
+
+[package.metadata]
+requires-dist = [{ name = "py-lib", extras = ["feature"], editable = "packages/py-lib" }]
+
+[[package]]
+name = "feature-lib"
+version = "0.1.0"
+source = { editable = "packages/feature-lib" }
+
+[[package]]
+name = "leaf-lib"
+version = "0.1.0"
+source = { editable = "packages/leaf-lib" }
+
+[[package]]
+name = "py-lib"
+version = "0.1.0"
+source = { editable = "packages/py-lib" }
+dependencies = [
+    { name = "leaf-lib" },
+]
+
+[package.optional-dependencies]
+feature = [
+    { name = "feature-lib" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "feature-lib", marker = "extra == 'feature'", editable = "packages/feature-lib" },
+    { name = "leaf-lib", editable = "packages/leaf-lib" },
+]
+provides-extras = ["feature"]
+
+[[package]]
+name = "unrelated"
+version = "0.1.0"
+source = { editable = "packages/unrelated" }
