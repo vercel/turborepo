@@ -986,12 +986,6 @@ impl PnpmLockfile {
                 self.patched_dependencies.as_ref()
             }
         };
-        // `overrides` is left out on purpose. pnpm applies overrides at
-        // resolution time and writes the result into importer specifiers,
-        // versions, and package keys, which are compared per workspace. An
-        // override (including a scoped `parent>dep` selector) therefore
-        // already changes exactly the workspaces whose resolved dependencies
-        // it alters.
         GlobalFields {
             version: &self.lockfile_version,
             checksum: self.package_extensions_checksum.as_deref(),
