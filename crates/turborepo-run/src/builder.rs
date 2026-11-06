@@ -2511,6 +2511,18 @@ impl RunBuilder {
                     &changed_files,
                     &root_turbo_json.global_deps,
                     managed_setup,
+                    || {
+                        // Same range and working-tree policy as
+                        // `changed_files_for_affected_range`.
+                        change_detector.lockfile_contents(
+                            &self.repo_root,
+                            pkg_dep_graph,
+                            from_ref.as_deref(),
+                            to_ref.as_deref(),
+                            true,
+                            &changed_files.files,
+                        )
+                    },
                 );
                 tracing::info!(
                     total_tasks,

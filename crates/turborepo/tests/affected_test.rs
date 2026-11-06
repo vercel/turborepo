@@ -1481,3 +1481,154 @@ fn test_affected_with_filter_ls() {
         "my-app should be listed: {stdout}"
     );
 }
+
+// ── task-level affected detection scopes lockfile changes ──
+
+const LOCKFILE_SCOPING_TASKS: [&str; 2] = ["build", "lint"];
+
+/// pnpm lockfile-aware fixture where `b`'s `function-bind` resolution can be
+/// bumped (`pnpm-lock.patch`) independently of the root's `turbo` resolution
+/// (`turbo-bump.patch`). `a#build` depends on `b#build`, so it is a task-level
+/// dependent of `b`, while `a#lint` is unrelated to `b`.
+fn setup_lockfile_scoping(dir: &Path, future_flag: &str) {
+    common::setup_lockfile_test(dir, "pnpm");
+    fs::write(
+        dir.join("turbo.json"),
+        serde_json::to_string_pretty(&serde_json::json!({
+            "futureFlags": { future_flag: true },
+            "tasks": {
+                "build": { "outputs": [], "inputs": ["package.json"] },
+                "lint": { "inputs": ["package.json"] },
+                "a#build": {
+                    "dependsOn": ["b#build"],
+                    "outputs": [],
+                    "inputs": ["package.json"]
+                }
+            }
+        }))
+        .unwrap(),
+    )
+    .unwrap();
+    for package in ["a", "b"] {
+        let path = dir.join("apps").join(package).join("package.json");
+        let mut manifest: serde_json::Value =
+            serde_json::from_str(&fs::read_to_string(&path).unwrap()).unwrap();
+        manifest["scripts"]["lint"] = serde_json::Value::from("echo linting");
+        fs::write(&path, serde_json::to_string_pretty(&manifest).unwrap()).unwrap();
+    }
+    commit_all(dir, "configure task-level affected detection");
+}
+
+fn commit_all(dir: &Path, message: &str) {
+    git(dir, &["add", "."]);
+    git(
+        dir,
+        &[
+            "-c",
+            "commit.gpgsign=false",
+            "commit",
+            "-m",
+            message,
+            "--quiet",
+        ],
+    );
+}
+
+fn task_ids_from_dry_run(output: &std::process::Output) -> std::collections::BTreeSet<String> {
+    assert!(
+        output.status.success(),
+        "dry run failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    json["tasks"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|task| task["taskId"].as_str().unwrap().to_string())
+        .collect()
+}
+
+/// Tasks selected for the last commit by `run --affected` and, with
+/// `filterUsingTasks`, by an explicit `--filter=[HEAD~1]` git range.
+fn lockfile_scoping_selections(
+    dir: &Path,
+    future_flag: &str,
+) -> Vec<(&'static str, std::collections::BTreeSet<String>)> {
+    let mut affected_args = vec!["run"];
+    affected_args.extend(LOCKFILE_SCOPING_TASKS);
+    affected_args.extend(["--affected", "--dry=json"]);
+    let mut selections = vec![(
+        "--affected",
+        task_ids_from_dry_run(&run_turbo_with_env(
+            dir,
+            &affected_args,
+            &[("TURBO_SCM_BASE", "HEAD~1"), ("TURBO_SCM_HEAD", "HEAD")],
+        )),
+    )];
+    if future_flag == "filterUsingTasks" {
+        let mut filter_args = vec!["run"];
+        filter_args.extend(LOCKFILE_SCOPING_TASKS);
+        filter_args.extend(["--filter=[HEAD~1]", "--dry=json"]);
+        selections.push((
+            "--filter=[HEAD~1]",
+            task_ids_from_dry_run(&run_turbo(dir, &filter_args)),
+        ));
+    }
+    selections
+}
+
+#[test]
+fn test_task_level_affected_scopes_lockfile_change_to_resolved_packages() {
+    for future_flag in ["affectedUsingTaskInputs", "filterUsingTasks"] {
+        let tempdir = tempfile::tempdir().unwrap();
+        let dir = tempdir.path();
+        setup_lockfile_scoping(dir, future_flag);
+
+        // Only `b`'s function-bind resolution changes.
+        common::apply_lockfile_patch(dir, "pnpm-lock.yaml", "pnpm-lock.patch");
+        commit_all(dir, "bump b's function-bind");
+
+        for (selector, tasks) in lockfile_scoping_selections(dir, future_flag) {
+            // `--affected` adds dependents of affected tasks; a bare git-range
+            // filter selects only the directly affected tasks.
+            let expected: &[&str] = match selector {
+                "--affected" => &["a#build", "b#build", "b#lint"],
+                _ => &["b#build", "b#lint"],
+            };
+            let expected: std::collections::BTreeSet<String> =
+                expected.iter().copied().map(String::from).collect();
+            assert_eq!(
+                tasks, expected,
+                "{future_flag} {selector}: a lockfile change resolved to `b` should select only \
+                 `b`'s tasks (and their dependents for --affected)"
+            );
+        }
+    }
+}
+
+#[test]
+fn test_task_level_affected_root_lockfile_change_selects_all_tasks() {
+    for future_flag in ["affectedUsingTaskInputs", "filterUsingTasks"] {
+        let tempdir = tempfile::tempdir().unwrap();
+        let dir = tempdir.path();
+        setup_lockfile_scoping(dir, future_flag);
+
+        // The root's `turbo` resolution changes, which invalidates every
+        // package.
+        common::apply_lockfile_patch(dir, "pnpm-lock.yaml", "turbo-bump.patch");
+        commit_all(dir, "bump root turbo");
+
+        let expected: std::collections::BTreeSet<String> =
+            ["a#build", "a#lint", "b#build", "b#lint"]
+                .map(String::from)
+                .into();
+        for (selector, tasks) in lockfile_scoping_selections(dir, future_flag) {
+            assert_eq!(
+                tasks, expected,
+                "{future_flag} {selector}: a root dependency lockfile change should select every \
+                 task"
+            );
+        }
+    }
+}
