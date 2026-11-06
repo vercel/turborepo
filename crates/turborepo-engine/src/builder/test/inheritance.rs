@@ -1,4 +1,43 @@
+use test_case::test_case;
+
 use super::*;
+
+#[test_case("^build", json!({"extends": false}), true; "excluded_topological_dependency")]
+#[test_case("lib#build", json!({"extends": false}), true; "excluded_explicit_dependency")]
+#[test_case("^build", json!({"extends": false, "cache": false}), false; "fresh_dependency_definition")]
+#[test_case("^build", json!({}), false; "inherited_dependency_definition")]
+fn test_dependency_task_exclusion(dependency: &str, definition: serde_json::Value, excluded: bool) {
+    let repo = TempDir::new().unwrap();
+    let repo_root = AbsoluteSystemPathBuf::try_from(repo.path().to_path_buf()).unwrap();
+    let package_graph = mock_package_graph(
+        &repo_root,
+        package_jsons! { repo_root, "app" => ["lib"], "lib" => [] },
+    );
+    let loader = TestTurboJsonLoader::new(HashMap::from([
+        (
+            PackageName::Root,
+            turbo_json(json!({"tasks": {"build": {}, "app#build": {"dependsOn": [dependency]}}})),
+        ),
+        (
+            PackageName::from("lib"),
+            turbo_json(json!({"extends": ["//"], "tasks": {"build": definition}})),
+        ),
+    ]));
+    let engine = EngineBuilder::new(&repo_root, &package_graph, &loader, false)
+        .with_tasks(Some(Spanned::new(TaskName::from("build"))))
+        .with_workspaces(vec![PackageName::from("app")])
+        .build()
+        .unwrap();
+
+    assert_eq!(
+        task_definition(&engine, "lib#build").command,
+        excluded.then_some(turborepo_types::TaskCommandOverride::OptOut),
+    );
+    assert!(
+        all_dependencies(&engine)[&TaskId::try_from("app#build").unwrap()]
+            .contains(&TaskNode::Task(TaskId::try_from("lib#build").unwrap()))
+    );
+}
 
 #[test]
 fn test_task_tags_inheritance() {
