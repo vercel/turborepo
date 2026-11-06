@@ -604,8 +604,9 @@ pub fn parse_turbo_json<T: Deserializable + WithMetadata>(
     text: &str,
     file_path: &str,
 ) -> Result<T, BiomeParseError> {
+    let clean_text = text.strip_prefix('\u{feff}').unwrap_or(text);
     let (deserialized, errors) = turborepo_errors::json::deserialize_from_json_str::<T>(
-        text,
+        clean_text,
         JsonParserOptions::default()
             .with_allow_comments()
             .with_allow_trailing_commas(),
@@ -616,7 +617,7 @@ pub fn parse_turbo_json<T: Deserializable + WithMetadata>(
         let diagnostics = errors
             .into_iter()
             .map(|d| {
-                d.with_file_source_code(text)
+                d.with_file_source_code(clean_text)
                     .with_file_path(file_path)
                     .as_ref()
                     .into()
@@ -627,7 +628,7 @@ pub fn parse_turbo_json<T: Deserializable + WithMetadata>(
     }
 
     let mut turbo_json = deserialized.ok_or_else(BiomeParseError::empty)?;
-    turbo_json.add_text(Arc::from(text));
+    turbo_json.add_text(Arc::from(clean_text));
     turbo_json.add_path(Arc::from(file_path));
 
     Ok(turbo_json)
@@ -639,6 +640,19 @@ mod tests {
     use test_case::test_case;
 
     use super::*;
+
+    #[test]
+    fn test_parse_utf8_bom() {
+        let json_with_bom = "\u{feff}{\"tasks\":{\"build\":{}}}";
+        let root = RawRootTurboJson::parse(json_with_bom, "turbo.json")
+            .expect("should parse turbo.json with UTF-8 BOM");
+        assert!(root.tasks.is_some());
+
+        let pkg_with_bom = "\u{feff}{\"extends\":[\"//\"]}";
+        let pkg = RawPackageTurboJson::parse(pkg_with_bom, "packages/web/turbo.json")
+            .expect("should parse package turbo.json with UTF-8 BOM");
+        assert!(pkg.extends.is_some());
+    }
 
     #[test]
     fn test_task_tags_parse_with_metadata() {
