@@ -1,11 +1,11 @@
 const eslint = require("@eslint/js");
-const prettierModule = require("eslint-config-prettier/flat");
-const turboModule = require("eslint-config-turbo/flat");
+const { defineConfig, globalIgnores } = require("eslint/config");
+const prettier = require("eslint-config-prettier/flat");
+const { default: turbo } = require("eslint-config-turbo/flat");
 
-const prettier = prettierModule.default ?? prettierModule;
-const turbo = turboModule.default ?? turboModule;
-
-module.exports = [
+module.exports = defineConfig([
+  // Oxlint checks TypeScript sources without depending on the TypeScript JS API.
+  globalIgnores(["**/*.ts", "**/*.tsx", "dist/**", ".next/**"]),
   eslint.configs.recommended,
   {
     languageOptions: {
@@ -15,9 +15,6 @@ module.exports = [
       },
     },
   },
-  ...(Array.isArray(turbo) ? turbo : [turbo]),
-  ...(Array.isArray(prettier) ? prettier : [prettier]),
-  {
-    ignores: ["**/*.ts", "**/*.tsx", "dist/**", "node_modules/**"],
-  },
-];
+  turbo,
+  prettier,
+]);
