@@ -1,14 +1,18 @@
-# Turborepo starter
+# Turborepo starter with Yarn Classic
 
 This is a community-maintained example. If you experience a problem, please submit a pull request with a fix. GitHub Issues will be closed.
 
 ## Using this example
 
-Run the following command:
+Use Node.js 26.13.0 or newer and Yarn Classic 1.22.22 (the version pinned in `packageManager`).
 
 ```sh
-npx create-turbo@latest -e with-yarn
+npx create-turbo@latest my-turborepo -e with-yarn --package-manager yarn
+cd my-turborepo
+yarn install
 ```
+
+If Yarn is not installed, install the pinned version with `npm install --global yarn@1.22.22`. This example intentionally uses Yarn Classic rather than Yarn Berry.
 
 ## What's inside?
 
@@ -16,8 +20,8 @@ This Turborepo includes the following packages/apps:
 
 ### Apps and Packages
 
-- `docs`: a [Next.js](https://nextjs.org/) app
-- `web`: another [Next.js](https://nextjs.org/) app
+- `docs`: a [Next.js](https://nextjs.org/) app on port 3001
+- `web`: another [Next.js](https://nextjs.org/) app on port 3000
 - `@repo/ui`: a stub React component library shared by both `web` and `docs` applications
 - `@repo/eslint-config`: shared flat ESLint configurations for Next.js and React packages
 - `@repo/typescript-config`: `tsconfig.json`s used throughout the monorepo
@@ -34,21 +38,30 @@ This Turborepo has some additional tools already set up for you:
 
 ### Build
 
-To build all apps and packages, run the following command:
+From the repository root, build all apps and packages:
 
 ```sh
-cd my-turborepo
 yarn build
 ```
 
 ### Develop
 
-To develop all apps and packages, run the following command:
+From the repository root, start both development servers:
 
 ```sh
-cd my-turborepo
 yarn dev
 ```
+
+### Lint and type-check
+
+Lint source files and check TypeScript separately from the repository root:
+
+```sh
+yarn lint
+yarn check-types
+```
+
+The apps generate Next.js route types before type-checking, so no prior build is required.
 
 ### Remote Caching
 
@@ -57,16 +70,15 @@ yarn dev
 
 Turborepo can use a technique known as [Remote Caching](https://turborepo.dev/docs/core-concepts/remote-caching) to share cache artifacts across machines, enabling you to share build caches with your team and CI/CD pipelines.
 
-By default, Turborepo will cache locally. To enable Remote Caching you will need an account with Vercel. If you don't have an account you can [create one](https://vercel.com/signup?utm_source=turborepo-examples), then enter the following commands:
+By default, Turborepo will cache locally. To enable Remote Caching you will need an account with Vercel. If you don't have an account you can [create one](https://vercel.com/signup?utm_source=turborepo-examples), then run the following from the repository root:
 
 ```sh
-cd my-turborepo
 yarn turbo login
 ```
 
 This will authenticate the Turborepo CLI with your [Vercel account](https://vercel.com/docs/concepts/personal-accounts/overview).
 
-Next, you can link your Turborepo to your Remote Cache by running the following command from the root of your Turborepo:
+Next, link your Turborepo to your Remote Cache:
 
 ```sh
 yarn turbo link
