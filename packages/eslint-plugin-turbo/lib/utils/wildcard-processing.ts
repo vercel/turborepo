@@ -12,7 +12,7 @@ const wildcard = "*";
 const wildcardEscape = "\\";
 const regexWildcardSegment = ".*";
 
-function wildcardToRegexPattern(pattern: string): string {
+export function wildcardToRegexPattern(pattern: string): string {
   const regexString: Array<string> = [];
 
   let previousIndex = 0;
