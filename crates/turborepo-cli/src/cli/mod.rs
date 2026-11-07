@@ -667,7 +667,7 @@ async fn run_main(
             let Some(ref query_server) = query_server else {
                 return Err(error::Error::QueryNotAvailable);
             };
-            let event = CommandEventBuilder::new("info").with_parent(&root_telemetry);
+            let event = CommandEventBuilder::new("ls").with_parent(&root_telemetry);
 
             event.track_call();
             let output = *output;
