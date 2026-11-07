@@ -50,6 +50,7 @@ import washingtonpostWhite from "../../public/images/logos/white/washingtonpost.
 import watershedWhite from "../../public/images/logos/white/watershed.svg";
 import wayfairWhite from "../../public/images/logos/white/wayfair.svg";
 import woocommerceWhite from "../../public/images/logos/white/woocommerce.svg";
+import wordfullyWhite from "../../public/images/logos/white/wordfully.svg";
 import xataWhite from "../../public/images/logos/white/xata.svg";
 import xiaomiWhite from "../../public/images/logos/white/xiaomi.svg";
 
@@ -102,6 +103,7 @@ import washingtonpostColor from "../../public/images/logos/color/washingtonpost.
 import watershedColor from "../../public/images/logos/color/watershed.svg";
 import wayfairColor from "../../public/images/logos/color/wayfair.svg";
 import woocommerceColor from "../../public/images/logos/color/woocommerce.svg";
+import wordfullyColor from "../../public/images/logos/color/wordfully.svg";
 import xataColor from "../../public/images/logos/color/xata.svg";
 import xiaomiColor from "../../public/images/logos/color/xiaomi.svg";
 
@@ -570,5 +572,15 @@ export const users: Array<TurboUser> = [
     imageColor: makeswiftColor,
     infoLink: "https://www.makeswift.com/",
     pinned: true
+  },
+  {
+    caption: "Wordfully",
+    imageWhite: wordfullyWhite,
+    imageColor: wordfullyColor,
+    infoLink: "https://wordfully.ai/",
+    style: {
+      width: 150,
+      height: 47
+    }
   }
 ];
