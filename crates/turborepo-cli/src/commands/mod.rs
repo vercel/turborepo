@@ -36,6 +36,17 @@ pub(crate) mod setup;
 pub(crate) mod telemetry;
 pub(crate) mod unlink;
 
+/// Treats a closed stdout (e.g. `turbo ls | head -1` or `turbo info | head -3`)
+/// as a quiet success instead of an error, like other Unix tools do.
+pub(crate) fn ignore_broken_pipe(result: Result<(), cli::Error>) -> Result<(), cli::Error> {
+    match result {
+        Err(cli::Error::QueryOutput(error)) if error.kind() == std::io::ErrorKind::BrokenPipe => {
+            Ok(())
+        }
+        other => other,
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct CommandBase {
     pub repo_root: AbsoluteSystemPathBuf,

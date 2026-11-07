@@ -21,7 +21,11 @@ use turborepo_signals::{SignalHandler, listeners::get_signal};
 use turborepo_telemetry::events::command::CommandEventBuilder;
 use turborepo_ui::{BOLD, BOLD_GREEN, ColorConfig, GREY, color, cwrite, cwriteln};
 
-use crate::{cli, cli::OutputFormat, commands::CommandBase};
+use crate::{
+    cli,
+    cli::OutputFormat,
+    commands::{CommandBase, ignore_broken_pipe},
+};
 
 #[derive(Debug, Error, Diagnostic)]
 pub enum Error {
@@ -355,15 +359,6 @@ fn parse_package_detail(
         dependencies,
         dependents,
     })
-}
-
-/// Treats a closed stdout (e.g. `turbo ls | head -1`) as a quiet success
-/// instead of an error, like other Unix tools do.
-fn ignore_broken_pipe(result: Result<(), cli::Error>) -> Result<(), cli::Error> {
-    match result {
-        Err(cli::Error::QueryOutput(error)) if error.kind() == io::ErrorKind::BrokenPipe => Ok(()),
-        other => other,
-    }
 }
 
 fn print_repo_details(
