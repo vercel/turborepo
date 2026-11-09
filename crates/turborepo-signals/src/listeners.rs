@@ -99,22 +99,114 @@ pub fn get_signal() -> Result<impl Stream<Item = Option<Signal>>, Error> {
     let sigint = unix::signal(unix::SignalKind::interrupt())?;
     let sigterm = unix::signal(unix::SignalKind::terminate())?;
     let sighup = unix::signal(unix::SignalKind::hangup())?;
+    let from_npm_wrapper = std::env::var_os("__TURBO_NPM_WRAPPER").is_some();
 
     Ok(stream::unfold(
-        (sigint, sigterm, sighup),
-        |(mut sigint, mut sigterm, mut sighup)| async move {
-            let signal = tokio::select! {
-                res = sigint.recv() => {
-                    res.map(|_| Signal::Interrupt)
-                }
-                res = sighup.recv() => {
-                    res.map(|_| Signal::Interrupt)
-                }
-                res = sigterm.recv() => {
-                    res.map(|_| Signal::Terminate)
+        (sigint, sigterm, sighup, Delivered::default()),
+        move |(mut sigint, mut sigterm, mut sighup, mut delivered)| async move {
+            let signal = loop {
+                let received = tokio::select! {
+                    res = sigint.recv() => res.map(|_| UnixSignal::Interrupt),
+                    res = sighup.recv() => res.map(|_| UnixSignal::Hangup),
+                    res = sigterm.recv() => res.map(|_| UnixSignal::Terminate),
+                };
+                let Some(kind) = received else {
+                    break None;
+                };
+                if retain_for_shutdown(from_npm_wrapper, kind, &mut delivered) {
+                    break Some(match kind {
+                        UnixSignal::Terminate => Signal::Terminate,
+                        UnixSignal::Interrupt | UnixSignal::Hangup => Signal::Interrupt,
+                    });
                 }
             };
-            Some((signal, (sigint, sigterm, sighup)))
+            Some((signal, (sigint, sigterm, sighup, delivered)))
         },
     ))
+}
+
+#[cfg(not(windows))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum UnixSignal {
+    Interrupt,
+    Terminate,
+    Hangup,
+}
+
+#[cfg(not(windows))]
+#[derive(Debug, Default)]
+struct Delivered {
+    terminate: bool,
+    hangup: bool,
+}
+
+/// Under the npm wrapper, a SIGTERM or SIGHUP sent to the process group
+/// reaches turbo directly and again through the wrapper's forward. Keep only
+/// the first of each kind so one stop request is not counted as two. Every
+/// SIGINT is kept, since the Unix wrapper does not forward it.
+#[cfg(not(windows))]
+fn retain_for_shutdown(
+    from_npm_wrapper: bool,
+    signal: UnixSignal,
+    delivered: &mut Delivered,
+) -> bool {
+    if !from_npm_wrapper {
+        return true;
+    }
+    match signal {
+        UnixSignal::Interrupt => true,
+        UnixSignal::Terminate => !std::mem::replace(&mut delivered.terminate, true),
+        UnixSignal::Hangup => !std::mem::replace(&mut delivered.hangup, true),
+    }
+}
+
+#[cfg(not(windows))]
+#[cfg(test)]
+mod unix_tests {
+    use super::{Delivered, UnixSignal, retain_for_shutdown};
+
+    #[test]
+    fn wrapper_signal_dedupe_keeps_first_term_and_hup_and_every_interrupt() {
+        let mut delivered = Delivered::default();
+        assert!(retain_for_shutdown(
+            true,
+            UnixSignal::Terminate,
+            &mut delivered
+        ));
+        assert!(retain_for_shutdown(
+            true,
+            UnixSignal::Hangup,
+            &mut delivered
+        ));
+        assert!(retain_for_shutdown(
+            true,
+            UnixSignal::Interrupt,
+            &mut delivered
+        ));
+        assert!(!retain_for_shutdown(
+            true,
+            UnixSignal::Terminate,
+            &mut delivered
+        ));
+        assert!(!retain_for_shutdown(
+            true,
+            UnixSignal::Hangup,
+            &mut delivered
+        ));
+        assert!(retain_for_shutdown(
+            true,
+            UnixSignal::Interrupt,
+            &mut delivered
+        ));
+
+        let mut delivered = Delivered::default();
+        for signal in [
+            UnixSignal::Terminate,
+            UnixSignal::Hangup,
+            UnixSignal::Interrupt,
+        ] {
+            assert!(retain_for_shutdown(false, signal, &mut delivered));
+            assert!(retain_for_shutdown(false, signal, &mut delivered));
+        }
+    }
 }
