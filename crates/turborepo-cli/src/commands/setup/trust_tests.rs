@@ -212,6 +212,24 @@ fn moved_and_same_path_recloned_roots_cannot_reuse_records() {
 }
 
 #[test]
+fn snapshot_restore_onto_another_device_keeps_the_recorded_tools() {
+    let f = Fixture::new();
+    let u = Upstream::new(&f, false, None);
+    f.run(&u, FROZEN).unwrap();
+    let installed = trust(&f).recorded().unwrap().unwrap();
+    let (path, mut value) = record(&f);
+    // A block-level snapshot restored onto another device keeps this path and
+    // inode but gets a new device id.
+    value["device"] = Value::from(value["device"].as_u64().unwrap() + 1);
+    fs::write(&path, value.to_string()).unwrap();
+    let recorded = trust(&f).recorded().unwrap().unwrap();
+    assert!(recorded.activation.bin() == installed.activation.bin());
+    assert!(!recorded.stale);
+    assert!(trust(&f).recorded_versions().is_some());
+    f.no_execution();
+}
+
+#[test]
 fn unsafe_external_state_fails_before_traffic_without_following_links() {
     for case in 0..6 {
         let f = Fixture::new();
