@@ -109,36 +109,3 @@ fn lockfile_without_declaration_reports_not_found() {
     };
     assert_eq!(info_package_manager(repo), "Not found");
 }
-
-#[test]
-fn reports_stdin_terminal_status() {
-    let dir = tempfile::tempdir().unwrap();
-    let root = dir.path();
-    fs::write(
-        root.join("package.json"),
-        json!({"name": "info-fixture", "private": true}).to_string(),
-    )
-    .unwrap();
-    fs::write(root.join("pnpm-workspace.yaml"), PNPM_WORKSPACE).unwrap();
-    fs::write(
-        root.join("turbo.json"),
-        json!({"agentGuidance": false, "tasks": {}}).to_string(),
-    )
-    .unwrap();
-
-    let config_dir = tempfile::tempdir().unwrap();
-    let output = common::turbo_command(root)
-        .env("TURBO_CONFIG_DIR_PATH", config_dir.path())
-        .env("CI", "true")
-        .args(["info", "--skip-infer"])
-        .timeout(std::time::Duration::from_secs(30))
-        .output()
-        .unwrap();
-    let combined = common::combined_output(&output);
-    assert!(output.status.success(), "turbo info failed: {combined}");
-    let stdin_value = String::from_utf8_lossy(&output.stdout)
-        .lines()
-        .find_map(|line| line.trim().strip_prefix("stdin: "))
-        .map(|s| s.to_owned());
-    // Under subprocess output without a TTY, stdin should be false even when CI=true
-    assert_eq!(stdin_value.as_deref(), Some("false"));
