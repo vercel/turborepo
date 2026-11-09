@@ -555,9 +555,18 @@ pub(crate) fn hash_file_as_git_blob(
     path: &AbsoluteSystemPath,
     attr: TextAttr,
 ) -> Result<Option<OidHash>, std::io::Error> {
+    let is_link = std::fs::symlink_metadata(path)?.is_symlink();
+    let link_blob = || {
+        let target = std::fs::read_link(path)?;
+        hash_bytes_as_blob(target.as_os_str().as_encoded_bytes()).map(Some)
+    };
     // Avoid opening sockets, FIFOs, devices, and directories. Metadata from the
     // opened handle below remains authoritative if the path changes afterward.
-    if !std::fs::metadata(path)?.is_file() {
+    let metadata = std::fs::metadata(path)?;
+    if is_link && metadata.is_dir() {
+        return link_blob();
+    }
+    if !metadata.is_file() {
         return Ok(None);
     }
 
@@ -573,20 +582,13 @@ pub(crate) fn hash_file_as_git_blob(
         .clean()
         .map_err(std::io::Error::other)?;
     if target != authored {
-        let relative = real_root.anchor(&target).map_err(|_| {
-            std::io::Error::new(
-                std::io::ErrorKind::PermissionDenied,
-                "input symlink leaves repository",
-            )
-        })?;
-        if relative
-            .components()
-            .any(|part| turbopath::is_git_metadata_component(part.as_str()))
-        {
-            return Err(std::io::Error::new(
-                std::io::ErrorKind::PermissionDenied,
-                "input symlink enters Git metadata",
-            ));
+        let inside = real_root.anchor(&target).is_ok_and(|relative| {
+            !relative
+                .components()
+                .any(|part| turbopath::is_git_metadata_component(part.as_str()))
+        });
+        if !inside {
+            return if is_link { link_blob() } else { Ok(None) };
         }
     }
     let mut file = std::fs::File::open(path)?;

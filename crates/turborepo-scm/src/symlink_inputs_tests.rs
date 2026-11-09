@@ -230,7 +230,7 @@ fn symlink_contents_invalidate_inputs() {
 }
 
 #[test]
-fn symlink_inputs_reject_external_and_git_metadata_targets() {
+fn symlink_inputs_hash_external_and_git_metadata_targets_as_link_text() {
     let (_tmp, root) = test_utils::tmp_dir();
     let (_outside_tmp, outside) = test_utils::tmp_dir();
     test_utils::init_repo(&root);
@@ -246,26 +246,37 @@ fn symlink_inputs_reject_external_and_git_metadata_targets() {
         .create_with_contents("outside")
         .unwrap();
     let link = root.join_components(&["packages", "a", "src", "link"]);
+    let link_key = RelativeUnixPathBuf::new("src/link").unwrap();
     for target in [
         outside.join_component("file.txt"),
-        outside,
+        outside.clone(),
         root.join_components(&[".git", "config"]),
         root.join_component(".git"),
     ] {
         std::os::unix::fs::symlink(&target, &link).unwrap();
+        let link_text = crate::crlf::hash_bytes_as_blob(target.as_str().as_bytes()).unwrap();
         for committed in [false, true] {
             if committed {
                 test_utils::commit_all(&root);
             }
             for mode in 0..3 {
-                assert!(
-                    hashes(&root, &["src/link"], mode).is_err(),
-                    "backend {mode} accepted {target}, committed {committed}"
-                );
-                assert!(
-                    hashes(&root, &[], mode).is_err(),
-                    "default backend {mode} accepted {target}, committed {committed}"
-                );
+                for inputs in [&["src/link"][..], &[], &["src/**"]] {
+                    let result = hashes(&root, inputs, mode).unwrap_or_else(|error| {
+                        panic!("backend {mode} failed on {target} for {inputs:?}: {error}")
+                    });
+                    assert!(
+                        result
+                            .keys()
+                            .all(|key| !key.as_str().starts_with("src/link/")),
+                        "backend {mode} hashed contents behind {target} for {inputs:?}"
+                    );
+                }
+                let wildcard = hashes(&root, &["src/**"], mode).unwrap();
+                assert_eq!(wildcard.get(&link_key), Some(&link_text), "backend {mode}");
+                if mode < 2 {
+                    let defaults = hashes(&root, &[], mode).unwrap();
+                    assert_eq!(defaults.get(&link_key), Some(&link_text), "backend {mode}");
+                }
                 let excluded = hashes(&root, &["src/**", "!src/link"], mode).unwrap();
                 assert_eq!(excluded.len(), 1);
                 assert!(
@@ -274,6 +285,54 @@ fn symlink_inputs_reject_external_and_git_metadata_targets() {
             }
         }
         std::fs::remove_file(&link).unwrap();
+    }
+}
+
+#[test]
+fn linked_directories_are_read_once_per_input_walk() {
+    let (_tmp, root) = test_utils::tmp_dir();
+    test_utils::init_repo(&root);
+    let at = |path: &str| root.join_unix_path(RelativeUnixPathBuf::new(path).unwrap());
+    at(".gitignore")
+        .create_with_contents("node_modules\n")
+        .unwrap();
+    for package in ["a", "b", "c", "d"] {
+        at(&format!("packages/{package}/node_modules"))
+            .create_dir_all()
+            .unwrap();
+        at(&format!("packages/{package}/index.js"))
+            .create_with_contents(package)
+            .unwrap();
+    }
+    for (from, to) in [("a", "b"), ("a", "c"), ("b", "d"), ("c", "d"), ("d", "a")] {
+        std::os::unix::fs::symlink(
+            format!("../../{to}"),
+            at(&format!("packages/{from}/node_modules/{to}")),
+        )
+        .unwrap();
+    }
+    test_utils::commit_all(&root);
+    let blob = |bytes: &str| crate::crlf::hash_bytes_as_blob(bytes.as_bytes()).unwrap();
+    let expected: GitHashes = [
+        ("index.js", blob("a")),
+        ("node_modules/b/index.js", blob("b")),
+        ("node_modules/b/node_modules/d/index.js", blob("d")),
+        (
+            "node_modules/b/node_modules/d/node_modules/a",
+            blob("../../a"),
+        ),
+        ("node_modules/c/index.js", blob("c")),
+        ("node_modules/c/node_modules/d", blob("../../d")),
+    ]
+    .into_iter()
+    .map(|(path, hash)| (RelativeUnixPathBuf::new(path).unwrap(), hash))
+    .collect();
+    for mode in 0..3 {
+        assert_eq!(
+            hashes(&root, &["**"], mode).unwrap(),
+            expected,
+            "backend {mode}"
+        );
     }
 }
 
