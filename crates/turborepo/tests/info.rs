@@ -142,4 +142,3 @@ fn reports_stdin_terminal_status() {
         .map(|s| s.to_owned());
     // Under subprocess output without a TTY, stdin should be false even when CI=true
     assert_eq!(stdin_value.as_deref(), Some("false"));
-}
