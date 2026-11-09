@@ -168,15 +168,43 @@ mod unix_tests {
     #[test]
     fn wrapper_signal_dedupe_keeps_first_term_and_hup_and_every_interrupt() {
         let mut delivered = Delivered::default();
-        assert!(retain_for_shutdown(true, UnixSignal::Terminate, &mut delivered));
-        assert!(retain_for_shutdown(true, UnixSignal::Hangup, &mut delivered));
-        assert!(retain_for_shutdown(true, UnixSignal::Interrupt, &mut delivered));
-        assert!(!retain_for_shutdown(true, UnixSignal::Terminate, &mut delivered));
-        assert!(!retain_for_shutdown(true, UnixSignal::Hangup, &mut delivered));
-        assert!(retain_for_shutdown(true, UnixSignal::Interrupt, &mut delivered));
+        assert!(retain_for_shutdown(
+            true,
+            UnixSignal::Terminate,
+            &mut delivered
+        ));
+        assert!(retain_for_shutdown(
+            true,
+            UnixSignal::Hangup,
+            &mut delivered
+        ));
+        assert!(retain_for_shutdown(
+            true,
+            UnixSignal::Interrupt,
+            &mut delivered
+        ));
+        assert!(!retain_for_shutdown(
+            true,
+            UnixSignal::Terminate,
+            &mut delivered
+        ));
+        assert!(!retain_for_shutdown(
+            true,
+            UnixSignal::Hangup,
+            &mut delivered
+        ));
+        assert!(retain_for_shutdown(
+            true,
+            UnixSignal::Interrupt,
+            &mut delivered
+        ));
 
         let mut delivered = Delivered::default();
-        for signal in [UnixSignal::Terminate, UnixSignal::Hangup, UnixSignal::Interrupt] {
+        for signal in [
+            UnixSignal::Terminate,
+            UnixSignal::Hangup,
+            UnixSignal::Interrupt,
+        ] {
             assert!(retain_for_shutdown(false, signal, &mut delivered));
             assert!(retain_for_shutdown(false, signal, &mut delivered));
         }
