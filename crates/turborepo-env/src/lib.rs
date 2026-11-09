@@ -46,6 +46,7 @@ pub const BUILTIN_PASS_THROUGH_ENV: &[&str] = &[
     "DISPLAY",
     "TMP",
     "TEMP",
+    "TMPDIR",
     // Windows
     "WINDIR",
     "ProgramFiles",
@@ -873,6 +874,31 @@ mod tests {
                 "values differ for key {key}"
             );
         }
+    }
+
+    #[test]
+    fn test_builtin_pass_through_preserves_temp_directory_variables() {
+        let env = EnvironmentVariableMap::from(
+            [
+                ("TMP", "/tmp/tmp"),
+                ("TEMP", "/tmp/temp"),
+                ("TMPDIR", "/tmp/custom"),
+                ("REPRO_UNLISTED", "must-not-pass"),
+            ]
+            .into_iter()
+            .map(|(key, value)| (key.to_owned(), value.to_owned()))
+            .collect::<HashMap<_, _>>(),
+        );
+
+        let actual = env.builtin_pass_through_env().unwrap();
+
+        assert_eq!(actual.get("TMP").map(String::as_str), Some("/tmp/tmp"));
+        assert_eq!(actual.get("TEMP").map(String::as_str), Some("/tmp/temp"));
+        assert_eq!(
+            actual.get("TMPDIR").map(String::as_str),
+            Some("/tmp/custom")
+        );
+        assert!(!actual.contains_key("REPRO_UNLISTED"));
     }
 
     #[test]
