@@ -139,6 +139,7 @@ impl FromStr for TargetSelector {
                 return if let Some(relative_path) = is_selector_by_location(selector) {
                     Ok(TargetSelector {
                         exclude,
+                        exclude_self,
                         include_dependencies,
                         include_dependents,
                         parent_dir: Some(relative_path?),
@@ -402,6 +403,8 @@ mod test {
     #[test_case("../foo", TargetSelector { raw: "../foo".to_string(), parent_dir: Some(AnchoredSystemPathBuf::try_from(if cfg!(windows) { "..\\foo" } else { "../foo" }).unwrap()), ..Default::default() }; "dot dot slash foo")]
     #[test_case("./foo", TargetSelector { raw: "./foo".to_string(), parent_dir: Some(AnchoredSystemPathBuf::try_from("foo").unwrap()), ..Default::default() }; "dot slash foo")]
     #[test_case("./foo/*", TargetSelector { raw: "./foo/*".to_string(), parent_dir: Some(AnchoredSystemPathBuf::try_from(if cfg!(windows) { "foo\\*" } else { "foo/*" }).unwrap()), ..Default::default() }; "dot slash foo star")]
+    #[test_case("...^./foo", TargetSelector { raw: "...^./foo".to_string(), parent_dir: Some(AnchoredSystemPathBuf::try_from("foo").unwrap()), include_dependents: true, exclude_self: true, ..Default::default() }; "dot dot dot caret dot slash foo")]
+    #[test_case("./foo^...", TargetSelector { raw: "./foo^...".to_string(), parent_dir: Some(AnchoredSystemPathBuf::try_from("foo").unwrap()), include_dependencies: true, exclude_self: true, ..Default::default() }; "dot slash foo caret dot dot dot")]
     #[test_case("...{./foo}", TargetSelector { raw: "...{./foo}".to_string(), parent_dir: Some(AnchoredSystemPathBuf::try_from("foo").unwrap()), include_dependents: true, ..Default::default() }; "dot dot dot curly bracket foo")]
     #[test_case(".", TargetSelector { raw: ".".to_string(), parent_dir: Some(AnchoredSystemPathBuf::try_from(".").unwrap()), ..Default::default() }; "parent dir dot")]
     #[test_case("..", TargetSelector { raw: "..".to_string(), parent_dir: Some(AnchoredSystemPathBuf::try_from("..").unwrap()), ..Default::default() }; "parent dir dot dot")]
