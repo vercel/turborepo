@@ -1,6 +1,8 @@
 use globwalk::{PackageInput, ValidatedGlob};
 use tracing::{debug, warn};
-use turbopath::{AbsoluteSystemPath, AnchoredSystemPath, AnchoredSystemPathBuf, PathError};
+use turbopath::{
+    AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPath, AnchoredSystemPathBuf, PathError,
+};
 use turborepo_telemetry::events::task::{FileHashMethod, PackageTaskEventBuilder};
 
 use crate::{
@@ -597,6 +599,34 @@ impl GitRepo {
         Ok(())
     }
 
+    /// Hash input files outside the git root (e.g. `$TURBO_ROOT$/../file`).
+    /// Git can't address them, so read them from disk and key them relative
+    /// to the package, the same way manual hashing does, instead of failing
+    /// the whole package over to manual hashing.
+    fn hash_files_outside_root(
+        &self,
+        turbo_root: &AbsoluteSystemPath,
+        full_pkg_path: &AbsoluteSystemPath,
+        files: &[AbsoluteSystemPathBuf],
+        hashes: &mut GitHashes,
+    ) -> Result<(), Error> {
+        for file in files {
+            let attr_path =
+                AnchoredSystemPathBuf::relative_path_between(&self.root, file).to_unix();
+            if let Some(hash) = crate::manual::hash_discovered_file(
+                turbo_root,
+                file,
+                attr_path.as_str(),
+                self.git_attrs(),
+            )? {
+                let package_relative =
+                    AnchoredSystemPathBuf::relative_path_between(full_pkg_path, file).to_unix();
+                hashes.insert(package_relative, hash);
+            }
+        }
+        Ok(())
+    }
+
     #[tracing::instrument(skip(self, turbo_root, inputs, repo_index))]
     fn get_package_file_hashes_from_inputs<S: AsRef<str>>(
         &self,
@@ -646,6 +676,7 @@ impl GitRepo {
             exact_input_exclusions(package_unix_path, inputs)?
         };
         let mut candidate_paths = Vec::with_capacity(files.len());
+        let mut outside_root = Vec::new();
         for entry in &files {
             if !exact_exclusions.is_empty() {
                 let repo_relative =
@@ -657,7 +688,11 @@ impl GitRepo {
                     continue;
                 }
             }
-            candidate_paths.push(self.root.anchor(entry)?.to_unix());
+            match self.root.anchor(entry) {
+                Ok(git_relative) => candidate_paths.push(git_relative.to_unix()),
+                Err(PathError::NotParent(..)) => outside_root.push(entry.clone()),
+                Err(err) => return Err(err.into()),
+            }
         }
         let mut hashes = GitHashes::with_capacity(files.len());
         self.extend_hashes_from_candidates(
@@ -668,6 +703,7 @@ impl GitRepo {
             candidate_paths,
             &mut hashes,
         )?;
+        self.hash_files_outside_root(turbo_root, &full_pkg_path, &outside_root, &mut hashes)?;
         Ok(hashes)
     }
 
@@ -713,6 +749,7 @@ impl GitRepo {
 
             let mut glob_inclusions = Vec::new();
             let mut literal_to_hash = Vec::new();
+            let mut outside_root = Vec::new();
 
             // Exclusions apply to the filesystem walk as well as to the
             // in-memory filter below, so walked files outside the index are
@@ -740,7 +777,14 @@ impl GitRepo {
                             );
                         }
                         Ok(_) => {
-                            let git_relative = self.root.anchor(&resolved)?.to_unix();
+                            let git_relative = match self.root.anchor(&resolved) {
+                                Ok(git_relative) => git_relative.to_unix(),
+                                Err(PathError::NotParent(..)) => {
+                                    outside_root.push(resolved);
+                                    continue;
+                                }
+                                Err(err) => return Err(err.into()),
+                            };
                             let pkg_relative = turbopath::RelativeUnixPath::strip_prefix(
                                 &git_relative,
                                 &pkg_prefix,
@@ -785,8 +829,15 @@ impl GitRepo {
                 )?;
 
                 let mut to_hash = Vec::new();
-                for entry in &files {
-                    let git_relative = self.root.anchor(entry)?.to_unix();
+                for entry in files {
+                    let git_relative = match self.root.anchor(&entry) {
+                        Ok(git_relative) => git_relative.to_unix(),
+                        Err(PathError::NotParent(..)) => {
+                            outside_root.push(entry);
+                            continue;
+                        }
+                        Err(err) => return Err(err.into()),
+                    };
                     let pkg_relative =
                         turbopath::RelativeUnixPath::strip_prefix(&git_relative, &pkg_prefix)
                             .ok()
@@ -810,6 +861,8 @@ impl GitRepo {
                     )?;
                 }
             }
+
+            self.hash_files_outside_root(turbo_root, &full_pkg_path, &outside_root, &mut hashes)?;
         }
 
         // Apply excludes via in-memory matching — no filesystem walk needed since
@@ -1633,6 +1686,97 @@ mod tests {
         ]);
 
         assert_eq!(hashes, expected);
+        Ok(())
+    }
+
+    // Regression test for https://github.com/vercel/turborepo/issues/14975
+    //
+    // An input outside the git root (e.g. `$TURBO_ROOT$/../outside.txt`) made
+    // git hashing fail with "is not parent of", so the whole package fell back
+    // to manual hashing, which walks gitignored directories like `dist/`.
+    #[test]
+    fn test_inputs_outside_git_root() -> Result<(), Error> {
+        let (_tmp, parent) = tmp_dir();
+        parent
+            .join_component("outside.txt")
+            .create_with_contents("outside bytes")?;
+
+        // parent/
+        //   outside.txt
+        //   repo/
+        //     .gitignore    (dist/)
+        //     packages/app/
+        //       package.json
+        //       src/a.js
+        //       dist/out.js (ignored)
+        let repo_root = parent.join_component("repo");
+        let pkg_dir = repo_root.join_components(&["packages", "app"]);
+        pkg_dir.join_component("src").create_dir_all()?;
+        repo_root
+            .join_component(".gitignore")
+            .create_with_contents("dist/\n")?;
+        pkg_dir
+            .join_component("package.json")
+            .create_with_contents("{}")?;
+        pkg_dir
+            .join_components(&["src", "a.js"])
+            .create_with_contents("a")?;
+        setup_repository(&repo_root);
+        commit_all(&repo_root);
+        pkg_dir.join_component("dist").create_dir_all()?;
+        pkg_dir
+            .join_components(&["dist", "out.js"])
+            .create_with_contents("built")?;
+
+        let scm = crate::SCM::new_with_git_root(&repo_root, repo_root.clone());
+        let crate::SCM::Git(git) = &scm else {
+            panic!("expected git SCM");
+        };
+        let package_path = AnchoredSystemPathBuf::from_raw("packages/app")?;
+        let outside = RelativeUnixPathBuf::new("../../../outside.txt").unwrap();
+
+        let cases: &[(&[&str], bool)] = &[
+            (&["../../../outside.txt"], true),
+            (&["../../../outside*.txt"], true),
+            (&["src/**", "../../../outside.txt"], false),
+            (&["src/**", "../../../outside*.txt"], false),
+        ];
+        for (inputs, include_default_files) in cases {
+            let git_hashes = git.get_package_file_hashes(
+                &repo_root,
+                &package_path,
+                inputs,
+                *include_default_files,
+                None,
+            )?;
+            assert!(
+                git_hashes.contains_key(&outside),
+                "{inputs:?}: outside input should be hashed, got keys: {:?}",
+                git_hashes.keys().collect::<Vec<_>>()
+            );
+            assert!(
+                git_hashes.contains_key(&RelativeUnixPathBuf::new("src/a.js").unwrap()),
+                "{inputs:?}: package files should be hashed"
+            );
+            assert!(
+                !git_hashes
+                    .keys()
+                    .any(|key| key.as_str().starts_with("dist/")),
+                "{inputs:?}: gitignored files should not be hashed"
+            );
+
+            // Git hashing must produce the same keys and hashes as the manual
+            // fallback it replaces, so existing cache entries stay valid.
+            let manual_hashes = get_package_file_hashes_without_git(
+                &repo_root,
+                &package_path,
+                inputs,
+                *include_default_files,
+                Some(&git.root),
+                git.git_attrs(),
+            )?;
+            assert_eq!(git_hashes, manual_hashes, "{inputs:?}");
+        }
         Ok(())
     }
 

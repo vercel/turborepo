@@ -77,7 +77,7 @@ fn hash_file_with_attrs(
     crate::crlf::manual_hash_file_maybe_normalized(path, text_attr)
 }
 
-fn hash_discovered_file(
+pub(crate) fn hash_discovered_file(
     root: &AbsoluteSystemPath,
     path: &AbsoluteSystemPath,
     attr_path: &str,
