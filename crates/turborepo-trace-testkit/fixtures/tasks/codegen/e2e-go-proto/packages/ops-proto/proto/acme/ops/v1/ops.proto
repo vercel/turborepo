@@ -1,0 +1,7 @@
+syntax = "proto3";
+
+package acme.ops.v1;
+
+message GetBlobRequest {
+  string id = 1;
+}

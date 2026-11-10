@@ -1,0 +1,14 @@
+{
+  "name": "turbo-scope",
+  "private": true,
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "cache-tsbuildinfo-files": "echo \"Dummy script so Turborepo has a target for caching tsbuildinfo files.\"",
+    "stamp": "echo built > stamp.txt"
+  },
+  "devDependencies": {
+    "turbo": "2.0.0"
+  }
+}

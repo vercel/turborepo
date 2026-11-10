@@ -1,0 +1,9 @@
+# Build context filter for apps/web/Dockerfile (context: repo root).
+.git
+node_modules
+**/node_modules
+**/dist
+**/*.md
+!apps/web/README.md
+docs
+apps/*/test

@@ -1,0 +1,12 @@
+vite build
+vite build --outDir out
+vite preview
+tsup
+tsup src/index.ts --dts -d lib
+esbuild src/main.ts --bundle --outfile=dist/main.js --tsconfig=tsconfig.json
+esbuild 'src/*.ts' --outdir=dist
+esbuild
+rollup -c
+rollup -i src/index.ts -o dist/bundle.js
+webpack
+webpack --config webpack.fn.config.js

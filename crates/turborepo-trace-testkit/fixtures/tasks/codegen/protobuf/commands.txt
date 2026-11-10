@@ -1,0 +1,19 @@
+buf generate
+buf generate --template buf.gen.yaml -o out
+cd v1 && buf generate
+buf lint
+buf build -o image.binpb
+buf format -w
+buf generate buf.build/acme/petapis
+cd work && buf build
+buf dep update
+protoc -I proto --go_out=gen/go --go_opt=paths=source_relative --go-grpc_out=gen/go proto/acme/v1/user.proto
+protoc --proto_path=proto --python_out=. --pyi_out=. proto/acme/v1/user.proto
+protoc -Iproto --plugin=protoc-gen-ts_proto=./node_modules/.bin/protoc-gen-ts_proto --ts_proto_out=src/gen proto/acme/v1/*.proto
+protoc -I proto --custom_out=proto proto/acme/v1/user.proto
+protoc -I proto --descriptor_set_out=desc.binpb --include_imports proto/acme/v1/user.proto
+cd work && protoc -I a -I b b/b.proto --cpp_out=gen
+python -m grpc_tools.protoc -I proto --python_out=py --grpc_python_out=py proto/acme/v1/user.proto
+npx grpc_tools_node_protoc --js_out=import_style=commonjs,binary:js --grpc_out=grpc_js:js -I proto proto/acme/v1/user.proto
+protoc @args.txt
+protoc-gen-go < req.bin

@@ -1,0 +1,8 @@
+package: api
+output: api.gen.go
+generate:
+  models: true
+  chi-server: true
+output-options:
+  user-templates:
+    client.tmpl: ./templates/client.tmpl

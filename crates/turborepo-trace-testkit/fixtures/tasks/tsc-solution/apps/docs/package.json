@@ -1,0 +1,12 @@
+{
+  "name": "docs",
+  "private": true,
+  "scripts": {
+    "typegen": "echo typegen",
+    "type-check": "pnpm typegen && tsc -b",
+    "test": "jest"
+  },
+  "dependencies": {
+    "@acme/ui": "workspace:*"
+  }
+}

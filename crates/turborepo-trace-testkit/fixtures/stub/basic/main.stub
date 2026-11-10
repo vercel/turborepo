@@ -1,0 +1,14 @@
+# Entry point for the stub end-to-end fixture.
+dep "./lib/util.stub"          # .stub extension is optional
+dep "./lib"                     # directory -> lib/index.stub
+asset "./data/config.txt"
+asset "./data/space\u0020file.txt"
+asset "./locales/" + ?lang + ".json"
+dep ?computed
+dep "./missing.stub"
+optional dep "./also-missing"
+type dep "./types.stub"         # excluded unless --include-types
+build dep "./build-only.stub"
+dep "pkg"                       # stub_modules/pkg/index.stub + stub.json manifest
+dir "./assets"
+asset "./data/CONFIG.TXT"       # case mismatch: works on macOS, breaks on Linux

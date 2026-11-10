@@ -1,0 +1,9 @@
+[project]
+name = "app"
+version = "0.1.0"
+
+[tool.datamodel-codegen]
+input = "schemas/user.json"
+input-file-type = "jsonschema"
+output = "app/models.py"
+custom-template-dir = "templates"

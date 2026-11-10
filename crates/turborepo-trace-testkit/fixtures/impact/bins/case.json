@@ -1,0 +1,65 @@
+{
+  "description": "package binaries (§19): `packages/app` and `packages/web` generate src/generated/client.js with the internal bin `gen-client` of the workspace package `tools/gen` (`gen-client < schema.json > …` and `pnpm exec gen-client < schema.json > …`; resolved through the bin field, no `.bin` link). The bin requires lib/render.js and reads templates/header.txt next to it. Generated files are gitignored; the oracle never runs generators, so the tests affected through them are declared with expect_affected.",
+  "mutations": [
+    {
+      "name": "bin-source",
+      "description": "edit the bin entry itself",
+      "ops": [
+        { "op": "append", "path": "tools/gen/bin/gen-client.js", "text": "\n// edited\n" }
+      ],
+      "expect_affected": ["packages/app/test/client.test.js", "packages/web/test/client.test.js"]
+    },
+    {
+      "name": "bin-lib",
+      "description": "edit a module the bin requires",
+      "ops": [
+        { "op": "replace", "path": "tools/gen/lib/render.js", "find": "' + JSON", "with": "' /* v2 */ + JSON" }
+      ],
+      "expect_affected": ["packages/app/test/client.test.js", "packages/web/test/client.test.js"]
+    },
+    {
+      "name": "bin-template",
+      "description": "edit the template the bin reads with fs.readFileSync(path.join(__dirname, …))",
+      "ops": [
+        { "op": "replace", "path": "tools/gen/templates/header.txt", "find": "generated", "with": "GENERATED" }
+      ],
+      "expect_affected": ["packages/app/test/client.test.js", "packages/web/test/client.test.js"]
+    },
+    {
+      "name": "schema",
+      "description": "edit the schema file redirected into the bin",
+      "ops": [
+        { "op": "replace", "path": "packages/app/schema.json", "find": "[\"users\"]", "with": "[\"users\", \"posts\"]" }
+      ],
+      "expect_affected": ["packages/app/test/client.test.js"]
+    },
+    {
+      "name": "bin-unused-module",
+      "description": "control: edit a module of the bin package that the bin does not require",
+      "ops": [
+        { "op": "append", "path": "tools/gen/lib/unused.js", "text": "\n// edited\n" }
+      ]
+    },
+    {
+      "name": "bin-unused-template",
+      "description": "control: edit a file next to the template that the bin does not read",
+      "ops": [
+        { "op": "append", "path": "tools/gen/templates/legacy.txt", "text": "// edited\n" }
+      ]
+    },
+    {
+      "name": "bin-readme",
+      "description": "control: edit the bin package's README",
+      "ops": [
+        { "op": "append", "path": "tools/gen/README.md", "text": "\nMore docs.\n" }
+      ]
+    },
+    {
+      "name": "edit-other",
+      "description": "control: edit an unrelated package",
+      "ops": [
+        { "op": "append", "path": "packages/other/src/index.js", "text": "\n// edited\n" }
+      ]
+    }
+  ]
+}

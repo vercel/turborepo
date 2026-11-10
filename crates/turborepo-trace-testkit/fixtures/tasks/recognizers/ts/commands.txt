@@ -1,0 +1,6 @@
+tsc -p tsconfig.build.json
+tsc --noEmit
+npx tsc --build
+pnpm exec tsc -p . --outDir build
+tsc src/index.ts
+NODE_OPTIONS='--max-old-space-size=8192' tsc --noEmit

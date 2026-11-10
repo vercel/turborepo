@@ -1,0 +1,14 @@
+name: Install
+description: Node and dependencies
+inputs:
+  node-version:
+    description: Node version (default from .nvmrc)
+    default: ''
+runs:
+  using: composite
+  steps:
+    - uses: ./.github/actions/setup-node
+      with:
+        node-version: ${{ inputs.node-version }}
+    - run: pnpm install --frozen-lockfile
+      shell: bash

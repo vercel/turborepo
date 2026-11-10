@@ -1,0 +1,17 @@
+{
+  "tasks": {
+    "build": {
+      "dependsOn": ["^build"],
+      "outputs": ["dist/**"]
+    },
+    "typegen": {},
+    "type-check": {
+      "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/tsconfig.json"],
+      "dependsOn": ["typegen", "^build", "^type-check"],
+      "outputs": ["node_modules/.cache/tsbuildinfo.json", "dist"]
+    },
+    "test": {
+      "dependsOn": ["^build"]
+    }
+  }
+}

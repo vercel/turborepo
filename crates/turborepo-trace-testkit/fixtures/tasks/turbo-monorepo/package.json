@@ -1,0 +1,12 @@
+{
+  "name": "turbo-monorepo",
+  "private": true,
+  "workspaces": ["apps/*", "packages/*"],
+  "scripts": {
+    "build": "turbo run build",
+    "test": "turbo run test --filter=./packages/*",
+    "format": "prettier --write .",
+    "prepare": "husky"
+  },
+  "devDependencies": { "turbo": "2.0.0", "prettier": "3.0.0" }
+}

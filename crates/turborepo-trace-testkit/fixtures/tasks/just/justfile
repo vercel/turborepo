@@ -1,0 +1,48 @@
+set dotenv-load
+set export
+
+out := "dist"
+src := justfile_directory() / "src"
+version := `git describe --tags`
+
+import 'tasks/common.just'
+mod docs
+
+alias b := build
+
+default: build
+
+# Build everything.
+build: gen
+    tsc -p tsconfig.json --outDir {{out}}
+    cp assets/logo.png {{out}}/logo.png
+
+gen:
+    @node scripts/gen.js > {{src}}/generated.ts
+
+release tag: build
+    echo releasing {{tag}} {{version}}
+    ./scripts/publish.sh {{tag}}
+
+[working-directory('web')]
+web:
+    -npx vite build
+
+[no-cd]
+here:
+    cat README.md
+
+py-report:
+    #!/usr/bin/env python3
+    import json
+    print(open("data/report.json").read())
+
+perl-thing:
+    #!/usr/bin/perl
+    print "hi\n";
+
+shell-script:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    cd scripts
+    node gen.js

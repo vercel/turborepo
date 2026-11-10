@@ -1,0 +1,9 @@
+{
+  "name": "@fx/ops",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "generate:go": "pnpm --filter @fx/ops-proto generate:go",
+    "runtest": "pnpm generate:go && go -C app test ./..."
+  }
+}

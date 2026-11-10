@@ -1,0 +1,610 @@
+---
+source: crates/turborepo-trace-testkit/tests/snapshots.rs
+expression: json
+---
+{
+  "version": 1,
+  "base": "<fixture>",
+  "entries": [
+    {
+      "path": "main.stub",
+      "files": [
+        "assets/b.txt",
+        "assets/img/logo.png",
+        "build-data.txt",
+        "build-only.stub",
+        "data/config.txt",
+        "data/space file.txt",
+        "lib/index-data.txt",
+        "lib/index.stub",
+        "lib/util.stub",
+        "locales/de.json",
+        "locales/en.json",
+        "locales/extra/fr.json",
+        "main.stub",
+        "shared.txt",
+        "stub_modules/pkg/index.stub",
+        "stub_modules/pkg/inner-data.txt",
+        "stub_modules/pkg/inner.stub",
+        "stub_modules/pkg/stub.json"
+      ]
+    }
+  ],
+  "files": [
+    {
+      "path": "assets/b.txt",
+      "reasons": [
+        "asset"
+      ],
+      "parents": [
+        "main.stub"
+      ],
+      "parsed": false
+    },
+    {
+      "path": "assets/img/logo.png",
+      "reasons": [
+        "asset"
+      ],
+      "parents": [
+        "main.stub"
+      ],
+      "parsed": false
+    },
+    {
+      "path": "build-data.txt",
+      "reasons": [
+        "asset"
+      ],
+      "parents": [
+        "build-only.stub"
+      ],
+      "parsed": false
+    },
+    {
+      "path": "build-only.stub",
+      "reasons": [
+        "dependency"
+      ],
+      "parents": [
+        "main.stub"
+      ],
+      "parsed": true,
+      "lang": "stub"
+    },
+    {
+      "path": "data/config.txt",
+      "reasons": [
+        "asset"
+      ],
+      "parents": [
+        "main.stub"
+      ],
+      "parsed": false
+    },
+    {
+      "path": "data/space file.txt",
+      "reasons": [
+        "asset"
+      ],
+      "parents": [
+        "main.stub"
+      ],
+      "parsed": false
+    },
+    {
+      "path": "lib/index-data.txt",
+      "reasons": [
+        "asset"
+      ],
+      "parents": [
+        "lib/index.stub"
+      ],
+      "parsed": false
+    },
+    {
+      "path": "lib/index.stub",
+      "reasons": [
+        "dependency"
+      ],
+      "parents": [
+        "main.stub"
+      ],
+      "parsed": true,
+      "lang": "stub"
+    },
+    {
+      "path": "lib/util.stub",
+      "reasons": [
+        "dependency"
+      ],
+      "parents": [
+        "main.stub"
+      ],
+      "parsed": true,
+      "lang": "stub"
+    },
+    {
+      "path": "locales/de.json",
+      "reasons": [
+        "asset"
+      ],
+      "parents": [
+        "main.stub"
+      ],
+      "parsed": false
+    },
+    {
+      "path": "locales/en.json",
+      "reasons": [
+        "asset"
+      ],
+      "parents": [
+        "main.stub"
+      ],
+      "parsed": false
+    },
+    {
+      "path": "locales/extra/fr.json",
+      "reasons": [
+        "asset"
+      ],
+      "parents": [
+        "main.stub"
+      ],
+      "parsed": false
+    },
+    {
+      "path": "main.stub",
+      "reasons": [
+        "initial",
+        "dependency"
+      ],
+      "parents": [
+        "lib/index.stub"
+      ],
+      "parsed": true,
+      "lang": "stub"
+    },
+    {
+      "path": "shared.txt",
+      "reasons": [
+        "dependency"
+      ],
+      "parents": [
+        "lib/util.stub"
+      ],
+      "parsed": false
+    },
+    {
+      "path": "stub_modules/pkg/index.stub",
+      "reasons": [
+        "dependency"
+      ],
+      "parents": [
+        "main.stub"
+      ],
+      "parsed": true,
+      "lang": "stub"
+    },
+    {
+      "path": "stub_modules/pkg/inner-data.txt",
+      "reasons": [
+        "asset"
+      ],
+      "parents": [
+        "stub_modules/pkg/inner.stub"
+      ],
+      "parsed": false
+    },
+    {
+      "path": "stub_modules/pkg/inner.stub",
+      "reasons": [
+        "dependency"
+      ],
+      "parents": [
+        "stub_modules/pkg/index.stub"
+      ],
+      "parsed": true,
+      "lang": "stub"
+    },
+    {
+      "path": "stub_modules/pkg/stub.json",
+      "reasons": [
+        "manifest"
+      ],
+      "parents": [
+        "main.stub"
+      ],
+      "parsed": false
+    }
+  ],
+  "edges": [
+    {
+      "from": "build-only.stub",
+      "kind": "fs_read",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "./build-data.txt",
+      "span": [
+        6,
+        24
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "build-data.txt"
+      }
+    },
+    {
+      "from": "lib/index.stub",
+      "kind": "fs_read",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "./index-data.txt",
+      "span": [
+        6,
+        24
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "lib/index-data.txt"
+      }
+    },
+    {
+      "from": "lib/index.stub",
+      "kind": "import",
+      "phase": "runtime",
+      "flags": [
+        "lazy"
+      ],
+      "spec": "../main.stub",
+      "span": [
+        34,
+        48
+      ],
+      "line": 2,
+      "target": {
+        "type": "file",
+        "path": "main.stub"
+      }
+    },
+    {
+      "from": "lib/util.stub",
+      "kind": "import",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "../shared.txt",
+      "span": [
+        4,
+        19
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "shared.txt"
+      }
+    },
+    {
+      "from": "main.stub",
+      "kind": "import",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "./lib/util.stub",
+      "span": [
+        51,
+        68
+      ],
+      "line": 2,
+      "target": {
+        "type": "file",
+        "path": "lib/util.stub"
+      }
+    },
+    {
+      "from": "main.stub",
+      "kind": "import",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "./lib",
+      "span": [
+        112,
+        119
+      ],
+      "line": 3,
+      "target": {
+        "type": "file",
+        "path": "lib/index.stub"
+      }
+    },
+    {
+      "from": "main.stub",
+      "kind": "fs_read",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "./data/config.txt",
+      "span": [
+        176,
+        195
+      ],
+      "line": 4,
+      "target": {
+        "type": "file",
+        "path": "data/config.txt"
+      }
+    },
+    {
+      "from": "main.stub",
+      "kind": "fs_read",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "./data/space file.txt",
+      "span": [
+        202,
+        230
+      ],
+      "line": 5,
+      "target": {
+        "type": "file",
+        "path": "data/space file.txt"
+      }
+    },
+    {
+      "from": "main.stub",
+      "kind": "fs_read",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "./locales/*.json",
+      "span": [
+        237,
+        267
+      ],
+      "line": 6,
+      "target": {
+        "type": "glob",
+        "pattern": "locales/*.json",
+        "matches": [
+          "locales/de.json",
+          "locales/en.json",
+          "locales/extra/fr.json"
+        ],
+        "truncated": false
+      },
+      "uncertainty": "partial_specifier"
+    },
+    {
+      "from": "main.stub",
+      "kind": "import",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "<unknown>",
+      "span": [
+        272,
+        281
+      ],
+      "line": 7,
+      "target": {
+        "type": "unresolved"
+      },
+      "uncertainty": "computed_specifier"
+    },
+    {
+      "from": "main.stub",
+      "kind": "import",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "./missing.stub",
+      "span": [
+        286,
+        302
+      ],
+      "line": 8,
+      "target": {
+        "type": "unresolved"
+      },
+      "uncertainty": "unresolved_specifier"
+    },
+    {
+      "from": "main.stub",
+      "kind": "import",
+      "phase": "runtime",
+      "flags": [
+        "optional"
+      ],
+      "spec": "./also-missing",
+      "span": [
+        316,
+        332
+      ],
+      "line": 9,
+      "target": {
+        "type": "unresolved"
+      },
+      "uncertainty": "unresolved_specifier"
+    },
+    {
+      "from": "main.stub",
+      "kind": "import",
+      "phase": "build",
+      "flags": [],
+      "spec": "./build-only.stub",
+      "span": [
+        409,
+        428
+      ],
+      "line": 11,
+      "target": {
+        "type": "file",
+        "path": "build-only.stub"
+      }
+    },
+    {
+      "from": "main.stub",
+      "kind": "import",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "pkg",
+      "span": [
+        433,
+        438
+      ],
+      "line": 12,
+      "target": {
+        "type": "file",
+        "path": "stub_modules/pkg/index.stub"
+      }
+    },
+    {
+      "from": "main.stub",
+      "kind": "manifest",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "pkg",
+      "span": [
+        433,
+        438
+      ],
+      "line": 12,
+      "target": {
+        "type": "file",
+        "path": "stub_modules/pkg/stub.json"
+      }
+    },
+    {
+      "from": "main.stub",
+      "kind": "fs_read_dir",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "./assets",
+      "span": [
+        516,
+        526
+      ],
+      "line": 13,
+      "target": {
+        "type": "dir",
+        "path": "assets"
+      }
+    },
+    {
+      "from": "main.stub",
+      "kind": "fs_read",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "./data/CONFIG.TXT",
+      "span": [
+        533,
+        552
+      ],
+      "line": 14,
+      "target": {
+        "type": "file",
+        "path": "data/config.txt"
+      },
+      "uncertainty": "case_mismatch"
+    },
+    {
+      "from": "stub_modules/pkg/index.stub",
+      "kind": "import",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "./inner",
+      "span": [
+        4,
+        13
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "stub_modules/pkg/inner.stub"
+      }
+    },
+    {
+      "from": "stub_modules/pkg/inner.stub",
+      "kind": "fs_read",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "./inner-data.txt",
+      "span": [
+        6,
+        24
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "stub_modules/pkg/inner-data.txt"
+      }
+    }
+  ],
+  "uncertainties": [
+    {
+      "file": "main.stub",
+      "kind": "partial_specifier",
+      "detail": "<fixture>/locales/*.json: 3 match(es)",
+      "spec": "./locales/*.json",
+      "span": [
+        237,
+        267
+      ],
+      "line": 6,
+      "col": 7
+    },
+    {
+      "file": "main.stub",
+      "kind": "computed_specifier",
+      "detail": "computed argument ?computed",
+      "spec": "<unknown>",
+      "span": [
+        272,
+        281
+      ],
+      "line": 7,
+      "col": 5
+    },
+    {
+      "file": "main.stub",
+      "kind": "unresolved_specifier",
+      "detail": "cannot resolve ./missing.stub (2 paths tried)",
+      "spec": "./missing.stub",
+      "span": [
+        286,
+        302
+      ],
+      "line": 8,
+      "col": 5
+    },
+    {
+      "file": "main.stub",
+      "kind": "unresolved_specifier",
+      "detail": "cannot resolve ./also-missing (2 paths tried)",
+      "spec": "./also-missing",
+      "span": [
+        316,
+        332
+      ],
+      "line": 9,
+      "col": 14
+    },
+    {
+      "file": "main.stub",
+      "kind": "case_mismatch",
+      "detail": "./data/CONFIG.TXT matches <fixture>/data/config.txt only case-insensitively",
+      "spec": "./data/CONFIG.TXT",
+      "span": [
+        533,
+        552
+      ],
+      "line": 14,
+      "col": 7
+    }
+  ],
+  "symlinks": {},
+  "stats": {
+    "entries": 1,
+    "files": 18,
+    "parsed_files": 6,
+    "edges": 19,
+    "uncertainties": 5
+  }
+}

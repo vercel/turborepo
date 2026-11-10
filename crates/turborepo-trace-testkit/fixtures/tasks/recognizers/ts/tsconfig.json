@@ -1,0 +1,8 @@
+{
+  // comments are allowed
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": { "outDir": "dist" },
+  "include": ["src", "test/**/*.ts"],
+  "exclude": ["src/**/*.fixture.ts"],
+  "references": [{ "path": "./packages/lib" }],
+}

@@ -1,0 +1,3 @@
+module.exports=[56057,a=>{"use strict";var b=a.i(87924),c=a.i(72131),d=a.i(34136);a.s(["SettingsForm",0,function({action:a}){let[e,f]=(0,c.useActionState)(a,"");return(0,b.jsxs)("form",{action:f,children:[(0,b.jsx)("input",{name:"name","aria-label":"name"}),(0,b.jsx)(d.Button,{label:"Save",type:"submit"}),(0,b.jsx)("output",{"data-testid":"saved",children:e})]})}])},34136,a=>{"use strict";var b=a.i(87924);a.s(["Button",0,function({label:a,type:c}){return(0,b.jsx)("button",{type:c??"button",className:"rounded bg-blue-500 px-2 text-white",children:a})}])}];
+
+//# sourceMappingURL=_06hv35-_fxj3t._.js.map

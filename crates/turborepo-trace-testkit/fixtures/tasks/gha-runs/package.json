@@ -1,0 +1,9 @@
+{
+  "name": "gha-runs",
+  "private": true,
+  "workspaces": ["packages/*", "tools/*"],
+  "scripts": {
+    "check-format": "prettier --check ."
+  },
+  "devDependencies": { "turbo": "2.0.0", "prettier": "3.0.0" }
+}

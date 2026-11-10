@@ -1,0 +1,91 @@
+{
+  "description": "code generators (\u00a719, M2.9): orval (orval.config.js; the spec's $ref files are inputs; a gitignored src/api/petstore.js) and drizzle-kit (drizzle.config.js; the schema module and what it imports are inputs; committed SQL migrations in drizzle/ that the code reads), run from package scripts. The oracle never runs generators, so tests affected through generator inputs are declared with expect_affected.",
+  "mutations": [
+    {
+      "name": "openapi-ref",
+      "description": "edit a schema file the spec reaches through $ref",
+      "ops": [
+        {
+          "op": "replace",
+          "path": "schemas/pet.yaml",
+          "find": "type: integer",
+          "with": "type: string"
+        }
+      ],
+      "expect_affected": [
+        "test/pets.test.js"
+      ]
+    },
+    {
+      "name": "openapi-spec",
+      "description": "edit the spec",
+      "ops": [
+        {
+          "op": "replace",
+          "path": "openapi.yaml",
+          "find": "description: a pet",
+          "with": "description: one pet"
+        }
+      ],
+      "expect_affected": [
+        "test/pets.test.js"
+      ]
+    },
+    {
+      "name": "orval-config",
+      "description": "edit orval.config.js",
+      "ops": [
+        {
+          "op": "replace",
+          "path": "orval.config.js",
+          "find": "input: './openapi.yaml',",
+          "with": "input: { target: './openapi.yaml' },"
+        }
+      ],
+      "expect_affected": [
+        "test/pets.test.js"
+      ]
+    },
+    {
+      "name": "drizzle-schema-import",
+      "description": "edit a module the drizzle schema imports; migrate.test reads the generated migration",
+      "ops": [
+        {
+          "op": "replace",
+          "path": "src/db/columns.js",
+          "find": "integer primary key",
+          "with": "integer primary key autoincrement"
+        }
+      ],
+      "expect_affected": [
+        "test/migrate.test.js"
+      ]
+    },
+    {
+      "name": "drizzle-config",
+      "description": "edit drizzle.config.js",
+      "ops": [
+        {
+          "op": "replace",
+          "path": "drizzle.config.js",
+          "find": "dialect: 'sqlite',",
+          "with": "dialect: 'sqlite',\n  strict: true,"
+        }
+      ],
+      "expect_affected": [
+        "test/migrate.test.js"
+      ]
+    },
+    {
+      "name": "edit-other",
+      "description": "control: edit a module only other.test loads",
+      "ops": [
+        {
+          "op": "append",
+          "path": "src/other.js",
+          "text": "\n// edited\n"
+        }
+      ]
+    }
+  ]
+}

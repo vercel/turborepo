@@ -1,0 +1,1 @@
+"use strict";var e=require("./a"),t=require("./b");function n(e){return e&&e.__esModule?e:{default:e}}var r=n(e),o=/\/\*/g,i=1/2/3,a=`x${r}y`,s=function(){try{return require("optional")}catch(e){return null}}(),c=require.resolve("./c");Object.defineProperty(exports,"__esModule",{value:!0}),exports.default=r.default;const l=()=>import("./d");

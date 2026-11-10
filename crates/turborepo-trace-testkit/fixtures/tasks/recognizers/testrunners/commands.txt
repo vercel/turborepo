@@ -1,0 +1,11 @@
+jest -c jest.unit.config.js
+jest --config '{"rootDir":"."}'
+vitest run
+vitest --config vitest.config.ts --dir src
+pytest -c pytest.ini tests/test_a.py::test_x
+go test ./...
+go test -run TestX ./pkg -coverprofile=cover.out
+cargo test --manifest-path crate/Cargo.toml
+mocha 'test/**/*.spec.js' -r ./test/setup.ts
+c8 --reporter=lcov vitest run
+playwright test

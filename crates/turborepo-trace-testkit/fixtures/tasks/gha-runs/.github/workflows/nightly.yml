@@ -1,0 +1,13 @@
+name: Nightly
+on:
+  schedule:
+    - cron: '0 3 * * *'
+
+jobs:
+  # The script starts the tests itself: nothing maps them.
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/install
+      - run: node .github/scripts/run-smoke.mjs

@@ -1,0 +1,6 @@
+datamodel-codegen
+datamodel-codegen --input schemas/user.json --input-file-type jsonschema --output app/user.py
+uv run datamodel-codegen --url https://example.com/schema.json --output remote.py
+strawberry export-schema app.schema:schema --output schema.graphql
+strawberry codegen --schema app.schema -o gen -p typescript queries/q.graphql
+python -m grpc_tools.protoc -I protos --python_out=app/gen --grpc_python_out=app/gen protos/svc.proto

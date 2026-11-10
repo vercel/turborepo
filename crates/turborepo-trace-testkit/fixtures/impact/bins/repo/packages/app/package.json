@@ -1,0 +1,12 @@
+{
+  "name": "@b/app",
+  "version": "1.0.0",
+  "main": "src/index.js",
+  "scripts": {
+    "codegen": "gen-client < schema.json > src/generated/client.js",
+    "test": "jest"
+  },
+  "devDependencies": {
+    "@b/gen": "workspace:*"
+  }
+}

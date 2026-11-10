@@ -1,0 +1,11 @@
+{
+  "name": "nx-ws",
+  "private": true,
+  "workspaces": ["apps/*", "libs/*"],
+  "scripts": {
+    "build:all": "nx run-many -t build",
+    "web": "nx run web:build",
+    "affected": "nx affected -t test"
+  },
+  "devDependencies": { "nx": "19.0.0" }
+}

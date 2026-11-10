@@ -1,0 +1,5 @@
+sqlc generate
+sqlc vet
+sqlc generate -f v1/sqlc.json
+cd v1 && sqlc compile
+sqlc version

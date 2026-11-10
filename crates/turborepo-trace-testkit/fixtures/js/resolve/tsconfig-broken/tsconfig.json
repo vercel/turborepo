@@ -1,0 +1,10 @@
+{
+  "compilerOptions": { "paths": { "@/*": ["./src/*"] } },
+  "include": ["src"],
+  "references": [
+    { "path": "./pkgs/missing" },
+    { "path": "./pkgs/bad" },
+    { "path": "./pkgs/bad-json" },
+    { "path": "./pkgs/good" }
+  ]
+}

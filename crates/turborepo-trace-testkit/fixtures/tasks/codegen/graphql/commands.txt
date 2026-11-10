@@ -1,0 +1,6 @@
+graphql-codegen
+graphql-codegen --config codegen.alt.yml
+gql-gen -c codegen.alt.yml --watch
+cd gqlconfig && graphql-codegen
+cd pkgjson && graphql-codegen-esm
+cd empty && graphql-codegen

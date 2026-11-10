@@ -1,0 +1,17 @@
+# Default schema location (prisma/schema.prisma), default client output plus a custom one.
+prisma generate
+prisma migrate dev --name init
+prisma migrate deploy
+prisma db push --skip-generate
+prisma db seed
+prisma format
+# --schema: a file, a multi-file folder.
+prisma generate --schema alt/schema.prisma
+prisma generate --schema multi/schema
+# prisma.config.ts: schema, migrations.path and migrations.seed.
+cd cfg && prisma generate
+cd cfg && prisma migrate reset --force
+# Not statically known: a schema from the environment, a generator without a known default output.
+cd envcfg && prisma generate
+prisma generate --schema weird/schema.prisma
+npx prisma studio

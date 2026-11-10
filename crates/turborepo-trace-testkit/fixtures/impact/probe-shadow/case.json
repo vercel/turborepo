@@ -1,0 +1,49 @@
+{
+  "description": "An added file at a probed path changes resolution: `./x` resolves to x/index.ts until x.ts (or x.js) is added.",
+  "mutations": [
+    {
+      "name": "add-shadow-ts",
+      "description": "add src/x.ts, which shadows src/x/index.ts",
+      "ops": [
+        {
+          "op": "write",
+          "path": "src/x.ts",
+          "content": "export const x = 'file';\n"
+        }
+      ]
+    },
+    {
+      "name": "add-shadow-js",
+      "description": "add src/x.js (js precedes ts in moduleFileExtensions)",
+      "ops": [
+        {
+          "op": "write",
+          "path": "src/x.js",
+          "content": "exports.x = 'js';\n"
+        }
+      ]
+    },
+    {
+      "name": "add-unrelated",
+      "description": "add src/z.ts",
+      "ops": [
+        {
+          "op": "write",
+          "path": "src/z.ts",
+          "content": "export const z = 1;\n"
+        }
+      ]
+    },
+    {
+      "name": "add-in-dir",
+      "description": "add a sibling inside src/x/ that nothing imports",
+      "ops": [
+        {
+          "op": "write",
+          "path": "src/x/other.ts",
+          "content": "export const o = 1;\n"
+        }
+      ]
+    }
+  ]
+}

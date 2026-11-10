@@ -1,0 +1,28 @@
+{
+  "description": "Type-only imports (`import type`, and a value import used only as a type, which TS elides). At runtime nothing loads types.ts; design \u00a717 counts type-only edges by default (typecheck reads them), so turbotrace without --runtime-only is expected to over-select here.",
+  "mutations": [
+    {
+      "name": "edit-types",
+      "description": "modify the interface file",
+      "ops": [
+        {
+          "op": "replace",
+          "path": "src/types.ts",
+          "find": "area(): number;",
+          "with": "area(): number;\n  name?: string;"
+        }
+      ]
+    },
+    {
+      "name": "edit-shape",
+      "description": "modify src/shape.ts",
+      "ops": [
+        {
+          "op": "append",
+          "path": "src/shape.ts",
+          "text": "\n// edited\n"
+        }
+      ]
+    }
+  ]
+}

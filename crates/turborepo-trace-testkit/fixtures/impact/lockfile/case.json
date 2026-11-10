@@ -1,0 +1,46 @@
+{
+  "description": "Third-party packages change through the lockfile: a bump of dep-b, used transitively through dep-a (the install updating node_modules is an untracked op).",
+  "mutations": [
+    {
+      "name": "bump-transitive",
+      "description": "bump dep-b 1.0.0 -> 1.1.0 (dep-a depends on it)",
+      "ops": [
+        {
+          "op": "write",
+          "path": "package-lock.json",
+          "content": "{\n  \"name\": \"lockfile\",\n  \"version\": \"1.0.0\",\n  \"lockfileVersion\": 3,\n  \"requires\": true,\n  \"packages\": {\n    \"\": {\n      \"name\": \"lockfile\",\n      \"version\": \"1.0.0\",\n      \"dependencies\": {\n        \"dep-a\": \"1.0.0\",\n        \"dep-c\": \"1.0.0\",\n        \"dep-d\": \"1.0.0\"\n      }\n    },\n    \"node_modules/dep-a\": {\n      \"version\": \"1.0.0\",\n      \"resolved\": \"https://registry.npmjs.org/dep-a/-/dep-a-1.0.0.tgz\",\n      \"integrity\": \"sha512-aaaa\",\n      \"dependencies\": {\n        \"dep-b\": \"^1.0.0\"\n      }\n    },\n    \"node_modules/dep-b\": {\n      \"version\": \"1.1.0\",\n      \"resolved\": \"https://registry.npmjs.org/dep-b/-/dep-b-1.1.0.tgz\",\n      \"integrity\": \"sha512-bbbc\"\n    },\n    \"node_modules/dep-c\": {\n      \"version\": \"1.0.0\",\n      \"resolved\": \"https://registry.npmjs.org/dep-c/-/dep-c-1.0.0.tgz\",\n      \"integrity\": \"sha512-cccc\"\n    },\n    \"node_modules/dep-d\": {\n      \"version\": \"1.0.0\",\n      \"resolved\": \"https://registry.npmjs.org/dep-d/-/dep-d-1.0.0.tgz\",\n      \"integrity\": \"sha512-dddd\"\n    }\n  }\n}\n"
+        }
+      ],
+      "untracked_ops": [
+        {
+          "op": "write",
+          "path": "node_modules/dep-b/package.json",
+          "content": "{\n  \"name\": \"dep-b\",\n  \"version\": \"1.1.0\",\n  \"main\": \"index.js\"\n}\n"
+        },
+        {
+          "op": "write",
+          "path": "node_modules/dep-b/index.js",
+          "content": "module.exports = () => 1;\n"
+        }
+      ]
+    },
+    {
+      "name": "bump-unused",
+      "description": "bump dep-d, which no test loads",
+      "ops": [
+        {
+          "op": "write",
+          "path": "package-lock.json",
+          "content": "{\n  \"name\": \"lockfile\",\n  \"version\": \"1.0.0\",\n  \"lockfileVersion\": 3,\n  \"requires\": true,\n  \"packages\": {\n    \"\": {\n      \"name\": \"lockfile\",\n      \"version\": \"1.0.0\",\n      \"dependencies\": {\n        \"dep-a\": \"1.0.0\",\n        \"dep-c\": \"1.0.0\",\n        \"dep-d\": \"1.0.0\"\n      }\n    },\n    \"node_modules/dep-a\": {\n      \"version\": \"1.0.0\",\n      \"resolved\": \"https://registry.npmjs.org/dep-a/-/dep-a-1.0.0.tgz\",\n      \"integrity\": \"sha512-aaaa\",\n      \"dependencies\": {\n        \"dep-b\": \"^1.0.0\"\n      }\n    },\n    \"node_modules/dep-b\": {\n      \"version\": \"1.0.0\",\n      \"resolved\": \"https://registry.npmjs.org/dep-b/-/dep-b-1.0.0.tgz\",\n      \"integrity\": \"sha512-bbbb\"\n    },\n    \"node_modules/dep-c\": {\n      \"version\": \"1.0.0\",\n      \"resolved\": \"https://registry.npmjs.org/dep-c/-/dep-c-1.0.0.tgz\",\n      \"integrity\": \"sha512-cccc\"\n    },\n    \"node_modules/dep-d\": {\n      \"version\": \"1.0.1\",\n      \"resolved\": \"https://registry.npmjs.org/dep-d/-/dep-d-1.0.1.tgz\",\n      \"integrity\": \"sha512-ddde\"\n    }\n  }\n}\n"
+        }
+      ],
+      "untracked_ops": [
+        {
+          "op": "write",
+          "path": "node_modules/dep-d/package.json",
+          "content": "{\n  \"name\": \"dep-d\",\n  \"version\": \"1.0.1\",\n  \"main\": \"index.js\"\n}\n"
+        }
+      ]
+    }
+  ]
+}

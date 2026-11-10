@@ -1,0 +1,62 @@
+{
+  "description": "Workspace packages importing each other through their package names (core <- util <- app; other is independent), one jest project per package.",
+  "mutations": [
+    {
+      "name": "edit-core",
+      "description": "modify @ws/core, used by util and (transitively) app",
+      "ops": [
+        {
+          "op": "append",
+          "path": "packages/core/src/index.ts",
+          "text": "\n// edited\n"
+        }
+      ]
+    },
+    {
+      "name": "edit-other",
+      "description": "modify the independent package",
+      "ops": [
+        {
+          "op": "append",
+          "path": "packages/other/src/index.ts",
+          "text": "\n// edited\n"
+        }
+      ]
+    },
+    {
+      "name": "edit-util-manifest",
+      "description": "add an exports map to @ws/util package.json (a resolution field)",
+      "ops": [
+        {
+          "op": "replace",
+          "path": "packages/util/package.json",
+          "find": "\"main\": \"src/index.ts\"",
+          "with": "\"main\": \"src/index.ts\",\n  \"exports\": {\n    \".\": \"./src/index.ts\"\n  }"
+        }
+      ]
+    },
+    {
+      "name": "bump-util-version",
+      "description": "bump the version of @ws/util (metadata only)",
+      "ops": [
+        {
+          "op": "replace",
+          "path": "packages/util/package.json",
+          "find": "\"version\": \"1.0.0\"",
+          "with": "\"version\": \"1.0.1\""
+        }
+      ]
+    },
+    {
+      "name": "add-core-file",
+      "description": "add an unimported file to @ws/core",
+      "ops": [
+        {
+          "op": "write",
+          "path": "packages/core/src/extra.ts",
+          "content": "export const extra = 1;\n"
+        }
+      ]
+    }
+  ]
+}
