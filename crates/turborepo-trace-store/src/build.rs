@@ -2903,8 +2903,12 @@ pub fn build(opts: &GraphOptions, langs: &[Arc<dyn Language>]) -> Result<BuildRe
     manifest.files = crate::manifest::write_files(&store, &files);
     report.manifest_written = manifest.write(&out)?;
     mark("build: files list + manifest");
-    // The previous snapshot's walked-file list is referenced by nothing now.
-    if let Some(prev) = prev_files.filter(|p| Some(p) != manifest.files.as_ref()) {
+    // The previous snapshot's walked-file list is referenced by nothing now. Only a
+    // name of the form this function writes is deleted: the manifest it came
+    // from is checkout-controlled (`Manifest::read` checks it too).
+    if let Some(prev) = prev_files
+        .filter(|p| Some(p) != manifest.files.as_ref() && crate::manifest::is_files_name(p))
+    {
         let _ = std::fs::remove_file(store.join(prev));
     }
     let _ = cx.hashes.save(None);

@@ -63,6 +63,20 @@ pub struct Manifest {
 
 const FILES_MAGIC: &[u8; 8] = b"DTFILES1";
 
+/// Whether `s` is a store key as builds write them: an xxh3-128 digest in 32
+/// lowercase hex digits. Keys name files in the store directory; a graph
+/// directory is checkout-controlled (and travels through caches), so a key
+/// read from it is only joined to the store when it has this form.
+pub fn is_shard_key(s: &str) -> bool {
+    s.len() == 32 && s.bytes().all(|b| matches!(b, b'0'..=b'9' | b'a'..=b'f'))
+}
+
+/// Whether `s` is the name of a walked-file list as [`write_files`] writes
+/// it: `files-` and an xxh3-128 digest in 32 lowercase hex digits.
+pub fn is_files_name(s: &str) -> bool {
+    s.strip_prefix("files-").is_some_and(is_shard_key)
+}
+
 /// Writes the walked files (repo-relative, sorted) to `<store>/files-<digest>`
 /// unless that file exists; returns its name.
 pub(crate) fn write_files(store: &Path, files: &[String]) -> Option<String> {
@@ -83,6 +97,9 @@ pub(crate) fn write_files(store: &Path, files: &[String]) -> Option<String> {
 
 /// Reads a walked-file list written by [`write_files`].
 pub(crate) fn read_files(store: &Path, name: &str) -> Option<Vec<String>> {
+    if !is_files_name(name) {
+        return None;
+    }
     let b = std::fs::read(store.join(name)).ok()?;
     if b.len() < 16 || &b[..8] != FILES_MAGIC {
         return None;
@@ -105,6 +122,9 @@ pub(crate) fn read_files(store: &Path, name: &str) -> Option<Vec<String>> {
 /// [`read_files`] does but not split into strings: iterate the paths with
 /// [`files_in`].
 pub(crate) fn read_files_raw(store: &Path, name: &str) -> Option<Vec<u8>> {
+    if !is_files_name(name) {
+        return None;
+    }
     let b = std::fs::read(store.join(name)).ok()?;
     if b.len() < 16 || &b[..8] != FILES_MAGIC {
         return None;
@@ -205,13 +225,27 @@ impl Manifest {
         }
     }
 
-    /// Reads `<out>/graph.json`. `None` if missing, unreadable, or of another
-    /// version.
+    /// Reads `<out>/graph.json`. `None` if missing, unreadable, of another
+    /// version, or naming a store file in another form than builds write
+    /// ([`Manifest::names_are_canonical`]).
     pub fn read(out: &Path) -> Option<Manifest> {
         let m: Manifest =
             serde_json::from_slice(&std::fs::read(out.join("graph.json")).ok()?).ok()?;
-        (m.schema == SCHEMA && m.version == VERSION && m.format == crate::shard::FORMAT_VERSION)
-            .then_some(m)
+        (m.schema == SCHEMA
+            && m.version == VERSION
+            && m.format == crate::shard::FORMAT_VERSION
+            && m.names_are_canonical())
+        .then_some(m)
+    }
+
+    /// Whether every store file the manifest names has the form builds write:
+    /// shard keys [`is_shard_key`], the walked-file list [`is_files_name`].
+    /// The names are joined to the store directory to read, rewrite and
+    /// delete files there, and `graph.json` is checkout-controlled: a name
+    /// with a separator, `..` or a root would reach outside the store.
+    pub fn names_are_canonical(&self) -> bool {
+        self.shards.iter().all(|s| is_shard_key(&s.key))
+            && self.files.as_deref().is_none_or(is_files_name)
     }
 
     /// Writes `<out>/graph.json` atomically.

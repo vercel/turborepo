@@ -149,7 +149,10 @@ pub(super) fn across_edit(
     }
     let old: Manifest =
         serde_json::from_slice(&std::fs::read(crate::cache_dir(out).join(STAMP)).ok()?).ok()?;
-    if old.files != manifest.files || old.shards.len() != manifest.shards.len() {
+    if old.files != manifest.files
+        || old.shards.len() != manifest.shards.len()
+        || !old.names_are_canonical()
+    {
         return None;
     }
     let mut changed = Vec::new();

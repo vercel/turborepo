@@ -833,8 +833,13 @@ pub fn load(path: &Path) -> Result<LoadedShard, ShardError> {
     }
 }
 
-/// Loads shard `key` from `pack` if it holds it, else from `<store>/<key>`.
+/// Loads shard `key` from `pack` if it holds it, else from `<store>/<key>`. A
+/// key not of the form builds write ([`crate::manifest::is_shard_key`]) is an
+/// error: keys come from checkout-controlled files, and are joined to `store`.
 pub fn load_from(store: &Path, pack: Option<&Pack>, key: &str) -> Result<LoadedShard, ShardError> {
+    if !crate::manifest::is_shard_key(key) {
+        return Err(ShardError::Format(key.into()));
+    }
     if let Some(s) = pack.and_then(|p| p.get(key)) {
         return Ok(s);
     }
@@ -1152,12 +1157,15 @@ impl Pack {
     }
 
     /// Rewrites the store's pack with exactly `shards` and removes the log and
-    /// the loose files of those shards.
+    /// the loose files of those shards (only names of the form builds write,
+    /// [`crate::manifest::is_shard_key`]: nothing outside the store).
     pub fn compact(store: &Path, shards: &[(&str, &LoadedShard)]) -> std::io::Result<()> {
         Pack::write(&store.join(PACK_FILE), shards)?;
         let _ = std::fs::remove_file(store.join(LOG_FILE));
         for (k, _) in shards {
-            let _ = std::fs::remove_file(store.join(k));
+            if crate::manifest::is_shard_key(k) {
+                let _ = std::fs::remove_file(store.join(k));
+            }
         }
         Ok(())
     }
@@ -1413,9 +1421,17 @@ mod tests {
         assert!(pack.contains("k2") && !pack.contains("k3"));
         assert_eq!(pack.get("k").unwrap().to_owned(), shard);
         assert_eq!(pack.get("k2").unwrap().get().package.name.as_str(), "bb");
-        std::fs::write(t.path().join("k3"), &bytes).unwrap();
-        let from_store = load_from(t.path(), Some(&pack), "k3").unwrap();
+        let k3 = "0123456789abcdef0123456789abcdef";
+        std::fs::write(t.path().join(k3), &bytes).unwrap();
+        let from_store = load_from(t.path(), Some(&pack), k3).unwrap();
         assert_eq!(from_store.to_owned(), shard);
+        // Only keys of the form builds write are joined to the store.
+        std::fs::create_dir(t.path().join("sub")).unwrap();
+        std::fs::write(t.path().join("sub/x"), &bytes).unwrap();
+        let sub = t.path().join("sub");
+        for key in ["../k3", "k3", "/k3", "0123456789ABCDEF0123456789ABCDEF"] {
+            assert!(load_from(&sub, None, key).is_err(), "{key}");
+        }
         let mut bad = bytes.clone();
         *bad.last_mut().unwrap() ^= 1;
         assert!(matches!(decode(&bad, "t"), Err(ShardError::Checksum(_))));

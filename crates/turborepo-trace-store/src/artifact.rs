@@ -614,11 +614,6 @@ fn inflate(j: &Job<'_>, name: &str) -> Result<Vec<u8>, ArtifactError> {
 }
 
 /// Whether `name` is a walked-file list's store name (`files-<32 hex digits>`).
-fn is_files_name(name: &str) -> bool {
-    name.strip_prefix("files-")
-        .is_some_and(|d| d.len() == 32 && d.bytes().all(|b| b.is_ascii_hexdigit()))
-}
-
 /// Installs the artifact `src` into the graph directory `out` for the
 /// repository at `root`.
 ///
@@ -734,6 +729,7 @@ pub fn unpack(
         || manifest.format != header.format
         || manifest.options_digest != header.options_digest
         || manifest.shards.len() != header.shards
+        || !manifest.names_are_canonical()
     {
         return Err(ArtifactError::Corrupt(
             "the manifest does not match the header".into(),
@@ -743,7 +739,7 @@ pub fn unpack(
     match (&manifest.files, &files) {
         (None, None) => {}
         (Some(name), Some(b))
-            if is_files_name(name)
+            if crate::manifest::is_files_name(name)
                 && *name == format!("files-{:032x}", xxhash_rust::xxh3::xxh3_128(b)) => {}
         _ => {
             return Err(ArtifactError::Corrupt(
@@ -918,6 +914,7 @@ pub fn unpack(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::manifest::is_files_name;
 
     #[test]
     fn walked_file_list_names() {
@@ -928,6 +925,8 @@ mod tests {
             "files-../../../../somewhere/else-0123456",
             "../files-0123456789abcdef0123456789abcdef",
             "files-0123456789abcdef0123456789abcdeg",
+            "files-0123456789ABCDEF0123456789abcdef",
+            "/tmp/files-0123456789abcdef0123456789abcdef",
             "graph.json",
             "",
         ] {

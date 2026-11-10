@@ -64,7 +64,7 @@ pub(crate) fn build_third_party(
                     root,
                 };
                 let reused = old_keys.get(&id).and_then(|k| {
-                    let s = shard::load(&cx.store.join(k)).ok()?;
+                    let s = shard::load_from(&cx.store, None, k).ok()?;
                     (s.get().package.root.as_str() == pkg.root
                         && third_party_key(cx, &pkg, obs_digest(cx, s.get())) == *k)
                         .then_some(s)
