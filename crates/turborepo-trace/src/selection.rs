@@ -385,13 +385,21 @@ pub(crate) fn unknown_tests(
     // framework: not unknown ones of this evaluation (`--tests jest` in a vitest
     // repository lists nothing).
     let mut others = NodeSet::new(g.node_count());
+    // Packages where jest or vitest found tests: a config of theirs decides what
+    // a test is there. Elsewhere jest and vitest run with their defaults.
+    let mut configured = std::collections::HashSet::new();
     for (fw, _) in turborepo_trace_store::fw::GRAPH_FRAMEWORKS {
+        let tests = g.tests(Some(*fw));
+        if matches!(*fw, "jest" | "vitest") {
+            configured.extend(tests.iter().map(|&t| g.package(t)));
+        }
         if !asked(fw) {
-            for t in g.tests(Some(*fw)) {
+            for t in tests {
                 others.insert(t);
             }
         }
     }
+    let defaults = JsDefaults::new(asked("jest"), asked("vitest"));
     (0..g.node_count())
         .map(NodeId)
         .filter(|&n| {
@@ -403,9 +411,42 @@ pub(crate) fn unknown_tests(
         })
         .filter(|&n| {
             let path = g.path(n);
-            test_like(path, js, py, go) && !not_tests.iter().any(|x| x.matches(path))
+            let by_default = || !configured.contains(&g.package(n)) && defaults.matches(path);
+            (test_like(path, js, py, go) || by_default())
+                && !not_tests.iter().any(|x| x.matches(path))
         })
         .collect()
+}
+
+/// The test files jest and vitest take without a config: jest's default
+/// `testMatch` (`__tests__/**`, `test.js`, `spec.js`, `*.test.js`, ...) and
+/// vitest's default `include`, for the frameworks asked for. vitest's default
+/// `exclude` is not applied: it is relative to the project's root, and a file
+/// it would leave out counts as one more unknown test, which runs.
+struct JsDefaults(Vec<turborepo_trace_frameworks::pattern::CompiledPattern>);
+
+impl JsDefaults {
+    fn new(jest: bool, vitest: bool) -> Self {
+        use turborepo_trace_frameworks::{
+            TestPattern, jest as j, pattern::CompiledPattern, vitest as v,
+        };
+        let globs = jest
+            .then_some(j::DEFAULT_TEST_MATCH)
+            .into_iter()
+            .chain(vitest.then_some(v::DEFAULT_INCLUDE))
+            .flatten();
+        JsDefaults(
+            globs
+                .map(|g| CompiledPattern::new(&TestPattern::Glob((*g).to_owned())))
+                .collect(),
+        )
+    }
+
+    /// Whether `path` (repository-relative) is a test file by these defaults.
+    fn matches(&self, path: &str) -> bool {
+        let abs = format!("/{path}");
+        self.0.iter().any(|p| p.matches(&abs))
+    }
 }
 
 /// Whether a path looks like a test file of a framework family that was asked
@@ -885,6 +926,37 @@ mod tests {
                 .collect();
             assert_eq!(fast, slow, "{dir:?}");
         }
+    }
+
+    #[test]
+    fn jest_and_vitest_defaults_without_a_config() {
+        let jest = JsDefaults::new(true, false);
+        for p in [
+            "pkg/__tests__/sum.js",
+            "pkg/__tests__/deep/helper.mts",
+            "pkg/test.js",
+            "pkg/spec.js",
+            "test.js",
+            "pkg/src/a.test.tsx",
+            "pkg/src/a.spec.cjs",
+        ] {
+            assert!(jest.matches(p), "jest: {p}");
+        }
+        for p in [
+            "pkg/src/sum.js",
+            "pkg/testing.js",
+            "pkg/a.test.json",
+            "pkg/latest.js",
+        ] {
+            assert!(!jest.matches(p), "jest: {p}");
+        }
+        let vitest = JsDefaults::new(false, true);
+        assert!(vitest.matches("pkg/src/a.test.ts"));
+        assert!(vitest.matches("pkg/a.spec.mjs"));
+        for p in ["pkg/test.js", "pkg/__tests__/sum.js", "pkg/spec.js"] {
+            assert!(!vitest.matches(p), "vitest: {p}");
+        }
+        assert!(!JsDefaults::new(false, false).matches("pkg/test.js"));
     }
 
     #[test]

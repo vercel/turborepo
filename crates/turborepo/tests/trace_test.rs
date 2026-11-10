@@ -550,6 +550,59 @@ fn tests_the_selection_does_not_know_are_reported() {
     );
 }
 
+/// jest without a config runs its default `testMatch`: every file below
+/// `__tests__`, a bare `test.js` and `spec.js`, and `*.test.js` / `*.spec.js`.
+/// The selection does not know these as tests, so they are listed as
+/// `UnknownTest` (they always run), and `--exit-code` does not say that nothing
+/// needs to run.
+#[cfg(unix)]
+#[test]
+fn jest_default_test_files_without_a_config_are_listed() {
+    let dir = fixture("trace_jest");
+    let math = dir.path().join("packages/math");
+    fs::remove_file(math.join("jest.config.js")).unwrap();
+    fs::remove_dir_all(math.join("test")).unwrap();
+    let shapes = [
+        "packages/math/__tests__/sum.js",
+        "packages/math/test.js",
+        "packages/math/spec.js",
+    ];
+    for shape in shapes {
+        let path = dir.path().join(shape);
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        fs::write(
+            path,
+            "const { add } = require(\"./src/add\");\n\ntest(\"adds\", () => {\n  expect(add(1, \
+             2)).toBe(3);\n});\n",
+        )
+        .unwrap();
+    }
+    git(dir.path(), &["add", "-A"]);
+    git(dir.path(), &["commit", "--quiet", "-m", "jest defaults"]);
+
+    let output = trace(dir.path(), &["affected", "--base", "HEAD", "--json"]);
+    assert!(output.status.success(), "{}", stderr(&output));
+    let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    let items = json["affectedTests"]["items"].as_array().unwrap();
+    for shape in shapes {
+        let item = items.iter().find(|i| i["path"] == shape);
+        assert!(
+            item.is_some_and(|i| i["reason"]["__typename"] == "UnknownTest"),
+            "{shape}: {json}"
+        );
+    }
+    let output = trace(dir.path(), &["affected", "--base", "HEAD", "--exit-code"]);
+    assert_eq!(
+        output.status.code(),
+        Some(1),
+        "jest's default test files are not run\nstdout:\n{}\nstderr:\n{}",
+        stdout(&output),
+        stderr(&output)
+    );
+    let listed: BTreeSet<String> = stdout(&output).lines().map(str::to_owned).collect();
+    assert_selects(&listed, &shapes, &[]);
+}
+
 /// With the gate off, `turbo trace` is `turbo run trace`, as before the command
 /// existed: a repository's task named `trace` runs.
 #[test]
