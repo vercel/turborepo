@@ -20,6 +20,70 @@ fn setup_with_turbo_json(dir: &std::path::Path, turbo_json: &str) {
 }
 
 #[test]
+fn test_excluded_dependency_does_not_execute() {
+    let tempdir = tempfile::tempdir().unwrap();
+    let root = tempdir.path();
+    setup_with_turbo_json(root, r#"{"tasks":{"build":{"dependsOn":["^build"]}}}"#);
+
+    // my-app -> util -> another: excluding the leaf must not run its script,
+    // while util still runs before my-app. No experimental command flag is set.
+    for (directory, dependency) in [
+        ("packages/another", None),
+        ("packages/util", Some("another")),
+        ("apps/my-app", Some("util")),
+    ] {
+        let path = root.join(directory);
+        let mut package: serde_json::Value =
+            serde_json::from_str(&fs::read_to_string(path.join("package.json")).unwrap()).unwrap();
+        package["scripts"]["build"] = serde_json::json!("node build.js");
+        if let Some(dependency) = dependency {
+            package["dependencies"] = serde_json::json!({dependency: "*"});
+        }
+        fs::write(path.join("package.json"), package.to_string()).unwrap();
+        let check_order = if directory == "apps/my-app" {
+            "if (!fs.existsSync('../../packages/util/ran.txt')) throw new Error('util must build \
+             first');"
+        } else {
+            ""
+        };
+        fs::write(
+            path.join("build.js"),
+            format!(
+                "const fs = require('fs'); {check_order} fs.writeFileSync('ran.txt', 'built');"
+            ),
+        )
+        .unwrap();
+    }
+    let local_config = root.join("packages/another/turbo.json");
+    for (definition, should_run) in [
+        (serde_json::json!({"extends": false}), false),
+        (serde_json::json!({"extends": false, "cache": false}), true),
+    ] {
+        fs::write(
+            &local_config,
+            serde_json::json!({"extends": ["//"], "tasks": {"build": definition}}).to_string(),
+        )
+        .unwrap();
+        for selector in [None, Some("--filter=my-app")] {
+            let mut args = vec!["run", "build", "--force"];
+            args.extend(selector);
+            let output = run_turbo(root, &args);
+            assert!(output.status.success(), "{}", combined_output(&output));
+            for directory in ["packages/another", "packages/util", "apps/my-app"] {
+                let marker = root.join(directory).join("ran.txt");
+                assert_eq!(
+                    marker.exists(),
+                    directory != "packages/another" || should_run
+                );
+                if marker.exists() {
+                    fs::remove_file(marker).unwrap();
+                }
+            }
+        }
+    }
+}
+
+#[test]
 fn test_command_replaces_script() {
     let tempdir = tempfile::tempdir().unwrap();
     setup_with_turbo_json(

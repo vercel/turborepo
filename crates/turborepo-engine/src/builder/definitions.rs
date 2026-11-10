@@ -326,7 +326,8 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
         let mut native_execution = native_task
             .map(|task| task.execution().clone())
             .unwrap_or(NativeTaskExecution::None);
-        if task_is_excluded(&turbo_json_chain, task_id.as_inner(), task_name) {
+        let excluded = task_is_excluded(&turbo_json_chain, task_id.as_inner(), task_name);
+        if excluded {
             native_execution = NativeTaskExecution::None;
         }
         let defines_task = matches!(native_execution, NativeTaskExecution::Command(_));
@@ -439,7 +440,11 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
         let had_explicit_outputs = processed_task_definition.outputs.is_some();
         let mut task_def =
             TaskDefinition::from_processed(processed_task_definition, &path_to_root)?;
-        task_def.command = command_override;
+        task_def.command = if excluded {
+            Some(TaskCommandOverride::OptOut)
+        } else {
+            command_override
+        };
 
         if task_def.command.is_none()
             && let NativeTaskExecution::Aggregate(dependencies) = &native_execution
