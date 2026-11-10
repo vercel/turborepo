@@ -1655,6 +1655,75 @@ process.exit(Number(process.env.PARITY_EXIT));
             }
         }
 
+        /// A group SIGTERM or SIGHUP reaches native turbo directly and again
+        /// through the npm wrapper's forward. That must count as one request.
+        #[test]
+        fn group_directed_sigterm_and_sighup_wait_for_one_graceful_cleanup() {
+            let launcher = ProcessLauncher::new();
+            for sig in [Signal::SIGTERM, Signal::SIGHUP] {
+                for entry in ENTRIES {
+                    eprintln!("case: {entry:?} {sig:?}");
+                    let (_tempdir, root, mut run, tree) =
+                        start_blocked(&launcher, entry, Terminal::Pipes);
+                    let app = root.join("apps/app-a");
+                    let release = ReleaseGuard::new(&root);
+                    let entrypoint = run.pid();
+                    send_signal_to_process_group(entrypoint, sig);
+                    run.wait_for(&app.join("cleanup.started"));
+                    thread::sleep(Duration::from_millis(500));
+                    run.assert_running("while cleanup was blocked");
+                    assert!(!app.join("descendant.release").exists());
+                    drop(release);
+                    let outcome = run.finish(EXIT_TIMEOUT);
+                    let output = &outcome.output;
+                    let context = format!("{entry:?} {sig:?}\n{output}");
+                    assert_eq!(outcome.code, 0, "{context}");
+                    assert!(app.join("descendant.release").exists(), "{context}");
+                    assert_eq!(
+                        output.matches("Shutting down Turborepo tasks...").count(),
+                        1,
+                        "{context}"
+                    );
+                    assert!(
+                        !output.contains("Force killed") && !output.contains("timed out"),
+                        "{context}"
+                    );
+                    tree.assert_gone(entrypoint);
+                }
+            }
+        }
+
+        #[test]
+        fn npm_wrapper_group_directed_repeat_does_not_escalate() {
+            let launcher = ProcessLauncher::new();
+            for sig in [Signal::SIGTERM, Signal::SIGHUP] {
+                eprintln!("case: {sig:?}");
+                let (_tempdir, root, mut run, tree) =
+                    start_blocked(&launcher, Entrypoint::NpmWrapper, Terminal::Pipes);
+                let app = root.join("apps/app-a");
+                let release = ReleaseGuard::new(&root);
+                let entrypoint = run.pid();
+                send_signal_to_process_group(entrypoint, sig);
+                run.wait_for(&app.join("cleanup.started"));
+                run.assert_running("before the repeated group signal");
+                send_signal_to_process_group(entrypoint, sig);
+                thread::sleep(Duration::from_millis(500));
+                run.assert_running("after the repeated group signal");
+                assert!(!app.join("descendant.release").exists());
+                drop(release);
+                let outcome = run.finish(EXIT_TIMEOUT);
+                let output = &outcome.output;
+                let context = format!("{sig:?}\n{output}");
+                assert_eq!(outcome.code, 0, "{context}");
+                assert!(app.join("descendant.release").exists(), "{context}");
+                assert!(
+                    !output.contains("Force killed") && !output.contains("timed out"),
+                    "{context}"
+                );
+                tree.assert_gone(entrypoint);
+            }
+        }
+
         #[test]
         fn second_stop_request_force_kills_without_orphans() {
             let launcher = ProcessLauncher::new();
