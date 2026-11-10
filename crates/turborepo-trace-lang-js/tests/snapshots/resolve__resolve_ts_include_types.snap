@@ -1,0 +1,399 @@
+---
+source: crates/turborepo-trace-lang-js/tests/resolve.rs
+expression: json
+---
+{
+  "version": 1,
+  "base": "<fixture>",
+  "entries": [
+    {
+      "path": "src/main.ts",
+      "files": [
+        "package.json",
+        "src/a.ts",
+        "src/c.mts",
+        "src/decl.d.ts",
+        "src/lib/b.ts",
+        "src/main.ts",
+        "src/plain.js",
+        "src/side.tsx",
+        "src/types.ts"
+      ]
+    }
+  ],
+  "files": [
+    {
+      "path": "package.json",
+      "reasons": [
+        "manifest"
+      ],
+      "parents": [
+        "src/a.ts",
+        "src/c.mts",
+        "src/decl.d.ts",
+        "src/lib/b.ts",
+        "src/main.ts",
+        "src/plain.js",
+        "src/side.tsx",
+        "src/types.ts"
+      ],
+      "parsed": false
+    },
+    {
+      "path": "src/a.ts",
+      "reasons": [
+        "dependency"
+      ],
+      "parents": [
+        "src/main.ts",
+        "src/plain.js"
+      ],
+      "parsed": true,
+      "lang": "js"
+    },
+    {
+      "path": "src/c.mts",
+      "reasons": [
+        "dependency"
+      ],
+      "parents": [
+        "src/main.ts"
+      ],
+      "parsed": true,
+      "lang": "js"
+    },
+    {
+      "path": "src/decl.d.ts",
+      "reasons": [
+        "dependency"
+      ],
+      "parents": [
+        "src/main.ts"
+      ],
+      "parsed": true,
+      "lang": "js"
+    },
+    {
+      "path": "src/lib/b.ts",
+      "reasons": [
+        "dependency"
+      ],
+      "parents": [
+        "src/main.ts"
+      ],
+      "parsed": true,
+      "lang": "js"
+    },
+    {
+      "path": "src/main.ts",
+      "reasons": [
+        "initial"
+      ],
+      "parents": [],
+      "parsed": true,
+      "lang": "js"
+    },
+    {
+      "path": "src/plain.js",
+      "reasons": [
+        "dependency"
+      ],
+      "parents": [
+        "src/main.ts"
+      ],
+      "parsed": true,
+      "lang": "js"
+    },
+    {
+      "path": "src/side.tsx",
+      "reasons": [
+        "dependency"
+      ],
+      "parents": [
+        "src/main.ts"
+      ],
+      "parsed": true,
+      "lang": "js"
+    },
+    {
+      "path": "src/types.ts",
+      "reasons": [
+        "dependency"
+      ],
+      "parents": [
+        "src/main.ts"
+      ],
+      "parsed": true,
+      "lang": "js"
+    }
+  ],
+  "edges": [
+    {
+      "from": "src/a.ts",
+      "kind": "manifest",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "package.json scope",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "package.json"
+      }
+    },
+    {
+      "from": "src/c.mts",
+      "kind": "manifest",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "package.json scope",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "package.json"
+      }
+    },
+    {
+      "from": "src/decl.d.ts",
+      "kind": "manifest",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "package.json scope",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "package.json"
+      }
+    },
+    {
+      "from": "src/lib/b.ts",
+      "kind": "manifest",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "package.json scope",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "package.json"
+      }
+    },
+    {
+      "from": "src/main.ts",
+      "kind": "import",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "./a.js",
+      "span": [
+        0,
+        26
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "src/a.ts"
+      }
+    },
+    {
+      "from": "src/main.ts",
+      "kind": "manifest",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "./a.js",
+      "span": [
+        0,
+        26
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "package.json"
+      }
+    },
+    {
+      "from": "src/main.ts",
+      "kind": "import",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "@lib/b",
+      "span": [
+        75,
+        97
+      ],
+      "line": 2,
+      "target": {
+        "type": "file",
+        "path": "src/lib/b.ts"
+      }
+    },
+    {
+      "from": "src/main.ts",
+      "kind": "import",
+      "phase": "runtime",
+      "flags": [
+        "type_only"
+      ],
+      "spec": "./types",
+      "span": [
+        119,
+        151
+      ],
+      "line": 3,
+      "target": {
+        "type": "file",
+        "path": "src/types.ts"
+      }
+    },
+    {
+      "from": "src/main.ts",
+      "kind": "import",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "./side",
+      "span": [
+        187,
+        202
+      ],
+      "line": 4,
+      "target": {
+        "type": "file",
+        "path": "src/side.tsx"
+      }
+    },
+    {
+      "from": "src/main.ts",
+      "kind": "import",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "./c.mjs",
+      "span": [
+        222,
+        245
+      ],
+      "line": 5,
+      "target": {
+        "type": "file",
+        "path": "src/c.mts"
+      }
+    },
+    {
+      "from": "src/main.ts",
+      "kind": "import",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "./decl",
+      "span": [
+        267,
+        289
+      ],
+      "line": 6,
+      "target": {
+        "type": "file",
+        "path": "src/decl.d.ts"
+      }
+    },
+    {
+      "from": "src/main.ts",
+      "kind": "import",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "./plain.js",
+      "span": [
+        338,
+        365
+      ],
+      "line": 7,
+      "target": {
+        "type": "file",
+        "path": "src/plain.js"
+      }
+    },
+    {
+      "from": "src/plain.js",
+      "kind": "import",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "./a.js",
+      "span": [
+        0,
+        26
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "src/a.ts"
+      }
+    },
+    {
+      "from": "src/plain.js",
+      "kind": "manifest",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "./a.js",
+      "span": [
+        0,
+        26
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "package.json"
+      }
+    },
+    {
+      "from": "src/side.tsx",
+      "kind": "manifest",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "package.json scope",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "package.json"
+      }
+    },
+    {
+      "from": "src/types.ts",
+      "kind": "manifest",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "package.json scope",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "package.json"
+      }
+    }
+  ],
+  "uncertainties": [],
+  "symlinks": {},
+  "stats": {
+    "entries": 1,
+    "files": 9,
+    "parsed_files": 8,
+    "edges": 16,
+    "uncertainties": 0
+  }
+}

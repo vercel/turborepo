@@ -125,6 +125,7 @@ turborepo-vercel-api-mock = { path = "crates/turborepo-vercel-api-mock" }
 turborepo-watch = { path = "crates/turborepo-watch", default-features = false }
 turborepo-ghostty = { path = "crates/turborepo-ghostty" }
 turborepo-trace-core = { path = "crates/turborepo-trace-core" }
+turborepo-trace-lang-js = { path = "crates/turborepo-trace-lang-js" }
 turborepo-trace-lockfile = { path = "crates/turborepo-trace-lockfile" }
 turborepo-trace-testkit = { path = "crates/turborepo-trace-testkit" }
 libghostty-vt = { git = "https://github.com/uzaaft/libghostty-rs", rev = "3c7766d4e5d6ce93870ad666a14c0b5a0e957360" }
@@ -173,8 +174,11 @@ nix = { version = "0.26.2", default-features = false, features = ["term"] }
 notify = "6.1.1"
 oxc_allocator = "0.156.0"
 oxc_ast = { version = "0.156.0", features = ["serialize"] }
+oxc_ast_visit = "0.156.0"
 oxc_estree = { version = "0.156.0", features = ["serialize"] }
 oxc_parser = "0.156.0"
+oxc_resolver = { version = "11.24.3", default-features = false }
+oxc_semantic = "0.156.0"
 oxc_span = "0.156.0"
 oxc_syntax = "0.156.0"
 layout-rs = "0.1.3"

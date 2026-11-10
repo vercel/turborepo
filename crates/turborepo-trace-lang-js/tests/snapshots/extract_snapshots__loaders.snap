@@ -1,0 +1,24 @@
+---
+source: crates/turborepo-trace-lang-js/tests/extract_snapshots.rs
+expression: "render(\"loaders.js\")"
+---
+2:27 require "module"
+    span: require('module')
+4:1 require "./via-create-require"
+    span: req('./via-create-require')
+7:1 require "./via-alias"
+    span: r('./via-alias')
+    uncertainty: aliased_loader "`r` is an alias of `require`"
+14:5 require "./bundled-a"
+    span: require('./bundled-a')
+    uncertainty: aliased_loader "`require` is shadowed by a local declaration (bundle wrapper?)"
+15:5 require "./bundled-*"
+    span: require('./bundled-' + name)
+    uncertainty: aliased_loader "`require` is shadowed by a local declaration (bundle wrapper?)"
+18:1 require "./after-bundle"
+    span: require('./after-bundle')
+22:3 require "./shadowed"
+    span: require('./shadowed')
+    uncertainty: aliased_loader "`require` is shadowed by a local declaration (bundle wrapper?)"
+diagnostic 25:1 eval_like: eval('require("./in-eval")')
+diagnostic 26:12 eval_like: new Function('return require("./in-function")')

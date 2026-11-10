@@ -1,0 +1,1106 @@
+---
+source: crates/turborepo-trace-lang-js/tests/resolve.rs
+expression: json
+---
+{
+  "version": 1,
+  "base": "<fixture>",
+  "entries": [
+    {
+      "path": "main.js",
+      "files": [
+        "data.json",
+        "main.js",
+        "node_modules/@scope/pkg/index.js",
+        "node_modules/@scope/pkg/package.json",
+        "node_modules/pkg-exports-only/only.js",
+        "node_modules/pkg-exports-only/package.json",
+        "node_modules/pkg-exports/cjs/index.cjs",
+        "node_modules/pkg-exports/legacy.js",
+        "node_modules/pkg-exports/package.json",
+        "node_modules/pkg-exports/src/features/a.js",
+        "node_modules/pkg-main/lib/entry.js",
+        "node_modules/pkg-main/package.json",
+        "package.json",
+        "src/dir/index.js",
+        "src/feature.js",
+        "src/internal/util.js",
+        "src/rel.js"
+      ]
+    },
+    {
+      "path": "esm.mjs",
+      "files": [
+        "esm.mjs",
+        "node_modules/pkg-exports/cjs/index.cjs",
+        "node_modules/pkg-exports/esm/index.mjs",
+        "node_modules/pkg-exports/esm/package.json",
+        "node_modules/pkg-exports/legacy.js",
+        "node_modules/pkg-exports/package.json",
+        "node_modules/pkg-module/dist/cjs.js",
+        "node_modules/pkg-module/package.json",
+        "package.json",
+        "src/feature.js",
+        "src/internal/util.js",
+        "src/rel.js"
+      ]
+    }
+  ],
+  "files": [
+    {
+      "path": "data.json",
+      "reasons": [
+        "dependency"
+      ],
+      "parents": [
+        "main.js"
+      ],
+      "parsed": false
+    },
+    {
+      "path": "esm.mjs",
+      "reasons": [
+        "initial"
+      ],
+      "parents": [],
+      "parsed": true,
+      "lang": "js"
+    },
+    {
+      "path": "main.js",
+      "reasons": [
+        "initial"
+      ],
+      "parents": [],
+      "parsed": true,
+      "lang": "js"
+    },
+    {
+      "path": "node_modules/@scope/pkg/index.js",
+      "reasons": [
+        "dependency"
+      ],
+      "parents": [
+        "main.js"
+      ],
+      "parsed": true,
+      "lang": "js"
+    },
+    {
+      "path": "node_modules/@scope/pkg/package.json",
+      "reasons": [
+        "manifest"
+      ],
+      "parents": [
+        "main.js",
+        "node_modules/@scope/pkg/index.js"
+      ],
+      "parsed": false
+    },
+    {
+      "path": "node_modules/pkg-exports-only/only.js",
+      "reasons": [
+        "dependency"
+      ],
+      "parents": [
+        "main.js"
+      ],
+      "parsed": true,
+      "lang": "js"
+    },
+    {
+      "path": "node_modules/pkg-exports-only/package.json",
+      "reasons": [
+        "manifest"
+      ],
+      "parents": [
+        "main.js",
+        "node_modules/pkg-exports-only/only.js"
+      ],
+      "parsed": false
+    },
+    {
+      "path": "node_modules/pkg-exports/cjs/index.cjs",
+      "reasons": [
+        "dependency"
+      ],
+      "parents": [
+        "main.js",
+        "node_modules/pkg-exports/esm/index.mjs"
+      ],
+      "parsed": true,
+      "lang": "js"
+    },
+    {
+      "path": "node_modules/pkg-exports/esm/index.mjs",
+      "reasons": [
+        "dependency"
+      ],
+      "parents": [
+        "esm.mjs"
+      ],
+      "parsed": true,
+      "lang": "js"
+    },
+    {
+      "path": "node_modules/pkg-exports/esm/package.json",
+      "reasons": [
+        "manifest"
+      ],
+      "parents": [
+        "esm.mjs",
+        "node_modules/pkg-exports/esm/index.mjs"
+      ],
+      "parsed": false
+    },
+    {
+      "path": "node_modules/pkg-exports/legacy.js",
+      "reasons": [
+        "dependency"
+      ],
+      "parents": [
+        "esm.mjs",
+        "main.js"
+      ],
+      "parsed": true,
+      "lang": "js"
+    },
+    {
+      "path": "node_modules/pkg-exports/package.json",
+      "reasons": [
+        "manifest"
+      ],
+      "parents": [
+        "esm.mjs",
+        "main.js",
+        "node_modules/pkg-exports/cjs/index.cjs",
+        "node_modules/pkg-exports/esm/index.mjs",
+        "node_modules/pkg-exports/legacy.js",
+        "node_modules/pkg-exports/src/features/a.js"
+      ],
+      "parsed": false
+    },
+    {
+      "path": "node_modules/pkg-exports/src/features/a.js",
+      "reasons": [
+        "dependency"
+      ],
+      "parents": [
+        "main.js"
+      ],
+      "parsed": true,
+      "lang": "js"
+    },
+    {
+      "path": "node_modules/pkg-main/lib/entry.js",
+      "reasons": [
+        "dependency"
+      ],
+      "parents": [
+        "main.js",
+        "node_modules/@scope/pkg/index.js"
+      ],
+      "parsed": true,
+      "lang": "js"
+    },
+    {
+      "path": "node_modules/pkg-main/package.json",
+      "reasons": [
+        "manifest"
+      ],
+      "parents": [
+        "main.js",
+        "node_modules/@scope/pkg/index.js",
+        "node_modules/pkg-main/lib/entry.js"
+      ],
+      "parsed": false
+    },
+    {
+      "path": "node_modules/pkg-module/dist/cjs.js",
+      "reasons": [
+        "dependency"
+      ],
+      "parents": [
+        "esm.mjs"
+      ],
+      "parsed": true,
+      "lang": "js"
+    },
+    {
+      "path": "node_modules/pkg-module/package.json",
+      "reasons": [
+        "manifest"
+      ],
+      "parents": [
+        "esm.mjs",
+        "node_modules/pkg-module/dist/cjs.js"
+      ],
+      "parsed": false
+    },
+    {
+      "path": "package.json",
+      "reasons": [
+        "manifest"
+      ],
+      "parents": [
+        "esm.mjs",
+        "main.js",
+        "src/dir/index.js",
+        "src/feature.js",
+        "src/internal/util.js",
+        "src/rel.js"
+      ],
+      "parsed": false
+    },
+    {
+      "path": "src/dir/index.js",
+      "reasons": [
+        "dependency"
+      ],
+      "parents": [
+        "main.js"
+      ],
+      "parsed": true,
+      "lang": "js"
+    },
+    {
+      "path": "src/feature.js",
+      "reasons": [
+        "dependency"
+      ],
+      "parents": [
+        "esm.mjs",
+        "main.js"
+      ],
+      "parsed": true,
+      "lang": "js"
+    },
+    {
+      "path": "src/internal/util.js",
+      "reasons": [
+        "dependency"
+      ],
+      "parents": [
+        "esm.mjs",
+        "main.js"
+      ],
+      "parsed": true,
+      "lang": "js"
+    },
+    {
+      "path": "src/rel.js",
+      "reasons": [
+        "dependency"
+      ],
+      "parents": [
+        "esm.mjs",
+        "main.js"
+      ],
+      "parsed": true,
+      "lang": "js"
+    }
+  ],
+  "edges": [
+    {
+      "from": "esm.mjs",
+      "kind": "import",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "pkg-exports",
+      "span": [
+        61,
+        90
+      ],
+      "line": 2,
+      "target": {
+        "type": "file",
+        "path": "node_modules/pkg-exports/esm/index.mjs"
+      }
+    },
+    {
+      "from": "esm.mjs",
+      "kind": "import",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "pkg-exports",
+      "span": [
+        61,
+        90
+      ],
+      "line": 2,
+      "target": {
+        "type": "file",
+        "path": "node_modules/pkg-exports/legacy.js"
+      }
+    },
+    {
+      "from": "esm.mjs",
+      "kind": "manifest",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "pkg-exports",
+      "span": [
+        61,
+        90
+      ],
+      "line": 2,
+      "target": {
+        "type": "file",
+        "path": "node_modules/pkg-exports/esm/package.json"
+      }
+    },
+    {
+      "from": "esm.mjs",
+      "kind": "manifest",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "pkg-exports",
+      "span": [
+        61,
+        90
+      ],
+      "line": 2,
+      "target": {
+        "type": "file",
+        "path": "node_modules/pkg-exports/package.json"
+      }
+    },
+    {
+      "from": "esm.mjs",
+      "kind": "manifest",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "pkg-exports",
+      "span": [
+        61,
+        90
+      ],
+      "line": 2,
+      "target": {
+        "type": "file",
+        "path": "package.json"
+      }
+    },
+    {
+      "from": "esm.mjs",
+      "kind": "import",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "pkg-module",
+      "span": [
+        92,
+        120
+      ],
+      "line": 3,
+      "target": {
+        "type": "file",
+        "path": "node_modules/pkg-module/dist/cjs.js"
+      }
+    },
+    {
+      "from": "esm.mjs",
+      "kind": "manifest",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "pkg-module",
+      "span": [
+        92,
+        120
+      ],
+      "line": 3,
+      "target": {
+        "type": "file",
+        "path": "node_modules/pkg-module/package.json"
+      }
+    },
+    {
+      "from": "esm.mjs",
+      "kind": "import",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "./src/rel.js",
+      "span": [
+        178,
+        208
+      ],
+      "line": 4,
+      "target": {
+        "type": "file",
+        "path": "src/rel.js"
+      }
+    },
+    {
+      "from": "esm.mjs",
+      "kind": "re_export",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "app/feature",
+      "span": [
+        210,
+        247
+      ],
+      "line": 5,
+      "target": {
+        "type": "file",
+        "path": "src/feature.js"
+      }
+    },
+    {
+      "from": "esm.mjs",
+      "kind": "dynamic_import",
+      "phase": "runtime",
+      "flags": [
+        "lazy"
+      ],
+      "spec": "#internal/util",
+      "span": [
+        268,
+        292
+      ],
+      "line": 6,
+      "target": {
+        "type": "file",
+        "path": "src/internal/util.js"
+      }
+    },
+    {
+      "from": "main.js",
+      "kind": "require",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "./src/rel",
+      "span": [
+        80,
+        100
+      ],
+      "line": 2,
+      "target": {
+        "type": "file",
+        "path": "src/rel.js"
+      }
+    },
+    {
+      "from": "main.js",
+      "kind": "manifest",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "./src/rel",
+      "span": [
+        80,
+        100
+      ],
+      "line": 2,
+      "target": {
+        "type": "file",
+        "path": "package.json"
+      }
+    },
+    {
+      "from": "main.js",
+      "kind": "require",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "./src/dir",
+      "span": [
+        149,
+        169
+      ],
+      "line": 3,
+      "target": {
+        "type": "file",
+        "path": "src/dir/index.js"
+      }
+    },
+    {
+      "from": "main.js",
+      "kind": "require",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "./data.json",
+      "span": [
+        223,
+        245
+      ],
+      "line": 4,
+      "target": {
+        "type": "file",
+        "path": "data.json"
+      }
+    },
+    {
+      "from": "main.js",
+      "kind": "require",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "#internal/util",
+      "span": [
+        277,
+        302
+      ],
+      "line": 5,
+      "target": {
+        "type": "file",
+        "path": "src/internal/util.js"
+      }
+    },
+    {
+      "from": "main.js",
+      "kind": "require",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "app/feature",
+      "span": [
+        338,
+        360
+      ],
+      "line": 6,
+      "target": {
+        "type": "file",
+        "path": "src/feature.js"
+      }
+    },
+    {
+      "from": "main.js",
+      "kind": "require",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "fs",
+      "span": [
+        399,
+        412
+      ],
+      "line": 7,
+      "target": {
+        "type": "builtin",
+        "name": "node:fs"
+      }
+    },
+    {
+      "from": "main.js",
+      "kind": "require",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "node:fs/promises",
+      "span": [
+        437,
+        464
+      ],
+      "line": 8,
+      "target": {
+        "type": "builtin",
+        "name": "node:fs/promises"
+      }
+    },
+    {
+      "from": "main.js",
+      "kind": "require",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "pkg-main",
+      "span": [
+        496,
+        515
+      ],
+      "line": 9,
+      "target": {
+        "type": "file",
+        "path": "node_modules/pkg-main/lib/entry.js"
+      }
+    },
+    {
+      "from": "main.js",
+      "kind": "manifest",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "pkg-main",
+      "span": [
+        496,
+        515
+      ],
+      "line": 9,
+      "target": {
+        "type": "file",
+        "path": "node_modules/pkg-main/package.json"
+      }
+    },
+    {
+      "from": "main.js",
+      "kind": "require",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "pkg-exports",
+      "span": [
+        545,
+        567
+      ],
+      "line": 10,
+      "target": {
+        "type": "file",
+        "path": "node_modules/pkg-exports/cjs/index.cjs"
+      }
+    },
+    {
+      "from": "main.js",
+      "kind": "require",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "pkg-exports",
+      "span": [
+        545,
+        567
+      ],
+      "line": 10,
+      "target": {
+        "type": "file",
+        "path": "node_modules/pkg-exports/legacy.js"
+      }
+    },
+    {
+      "from": "main.js",
+      "kind": "manifest",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "pkg-exports",
+      "span": [
+        545,
+        567
+      ],
+      "line": 10,
+      "target": {
+        "type": "file",
+        "path": "node_modules/pkg-exports/package.json"
+      }
+    },
+    {
+      "from": "main.js",
+      "kind": "require",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "pkg-exports/features/a",
+      "span": [
+        639,
+        672
+      ],
+      "line": 11,
+      "target": {
+        "type": "file",
+        "path": "node_modules/pkg-exports/src/features/a.js"
+      }
+    },
+    {
+      "from": "main.js",
+      "kind": "require",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "pkg-exports-only",
+      "span": [
+        716,
+        743
+      ],
+      "line": 12,
+      "target": {
+        "type": "file",
+        "path": "node_modules/pkg-exports-only/only.js"
+      }
+    },
+    {
+      "from": "main.js",
+      "kind": "manifest",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "pkg-exports-only",
+      "span": [
+        716,
+        743
+      ],
+      "line": 12,
+      "target": {
+        "type": "file",
+        "path": "node_modules/pkg-exports-only/package.json"
+      }
+    },
+    {
+      "from": "main.js",
+      "kind": "require",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "@scope/pkg",
+      "span": [
+        788,
+        809
+      ],
+      "line": 13,
+      "target": {
+        "type": "file",
+        "path": "node_modules/@scope/pkg/index.js"
+      }
+    },
+    {
+      "from": "main.js",
+      "kind": "manifest",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "@scope/pkg",
+      "span": [
+        788,
+        809
+      ],
+      "line": 13,
+      "target": {
+        "type": "file",
+        "path": "node_modules/@scope/pkg/package.json"
+      }
+    },
+    {
+      "from": "main.js",
+      "kind": "require",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "does-not-exist",
+      "span": [
+        845,
+        870
+      ],
+      "line": 14,
+      "target": {
+        "type": "unresolved"
+      },
+      "uncertainty": "unresolved_specifier"
+    },
+    {
+      "from": "main.js",
+      "kind": "require",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "./nope",
+      "span": [
+        913,
+        930
+      ],
+      "line": 15,
+      "target": {
+        "type": "unresolved"
+      },
+      "uncertainty": "unresolved_specifier"
+    },
+    {
+      "from": "main.js",
+      "kind": "require",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "./src/REL.js",
+      "span": [
+        970,
+        993
+      ],
+      "line": 16,
+      "target": {
+        "type": "file",
+        "path": "src/rel.js"
+      },
+      "uncertainty": "case_mismatch"
+    },
+    {
+      "from": "node_modules/@scope/pkg/index.js",
+      "kind": "require",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "pkg-main",
+      "span": [
+        17,
+        36
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "node_modules/pkg-main/lib/entry.js"
+      }
+    },
+    {
+      "from": "node_modules/@scope/pkg/index.js",
+      "kind": "manifest",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "pkg-main",
+      "span": [
+        17,
+        36
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "node_modules/@scope/pkg/package.json"
+      }
+    },
+    {
+      "from": "node_modules/@scope/pkg/index.js",
+      "kind": "manifest",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "pkg-main",
+      "span": [
+        17,
+        36
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "node_modules/pkg-main/package.json"
+      }
+    },
+    {
+      "from": "node_modules/pkg-exports-only/only.js",
+      "kind": "manifest",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "package.json scope",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "node_modules/pkg-exports-only/package.json"
+      }
+    },
+    {
+      "from": "node_modules/pkg-exports/cjs/index.cjs",
+      "kind": "manifest",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "package.json scope",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "node_modules/pkg-exports/package.json"
+      }
+    },
+    {
+      "from": "node_modules/pkg-exports/esm/index.mjs",
+      "kind": "import",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "../cjs/index.cjs",
+      "span": [
+        22,
+        47
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "node_modules/pkg-exports/cjs/index.cjs"
+      }
+    },
+    {
+      "from": "node_modules/pkg-exports/esm/index.mjs",
+      "kind": "manifest",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "../cjs/index.cjs",
+      "span": [
+        22,
+        47
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "node_modules/pkg-exports/esm/package.json"
+      }
+    },
+    {
+      "from": "node_modules/pkg-exports/esm/index.mjs",
+      "kind": "manifest",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "../cjs/index.cjs",
+      "span": [
+        22,
+        47
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "node_modules/pkg-exports/package.json"
+      }
+    },
+    {
+      "from": "node_modules/pkg-exports/legacy.js",
+      "kind": "manifest",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "package.json scope",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "node_modules/pkg-exports/package.json"
+      }
+    },
+    {
+      "from": "node_modules/pkg-exports/src/features/a.js",
+      "kind": "manifest",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "package.json scope",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "node_modules/pkg-exports/package.json"
+      }
+    },
+    {
+      "from": "node_modules/pkg-main/lib/entry.js",
+      "kind": "manifest",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "package.json scope",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "node_modules/pkg-main/package.json"
+      }
+    },
+    {
+      "from": "node_modules/pkg-module/dist/cjs.js",
+      "kind": "manifest",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "package.json scope",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "node_modules/pkg-module/package.json"
+      }
+    },
+    {
+      "from": "src/dir/index.js",
+      "kind": "manifest",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "package.json scope",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "package.json"
+      }
+    },
+    {
+      "from": "src/feature.js",
+      "kind": "manifest",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "package.json scope",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "package.json"
+      }
+    },
+    {
+      "from": "src/internal/util.js",
+      "kind": "manifest",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "package.json scope",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "package.json"
+      }
+    },
+    {
+      "from": "src/rel.js",
+      "kind": "manifest",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "package.json scope",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "package.json"
+      }
+    }
+  ],
+  "uncertainties": [
+    {
+      "file": "main.js",
+      "kind": "unresolved_specifier",
+      "detail": "cannot resolve 'does-not-exist' from <fixture>/main.js: Cannot find module 'does-not-exist'",
+      "spec": "does-not-exist",
+      "span": [
+        845,
+        870
+      ],
+      "line": 14,
+      "col": 17
+    },
+    {
+      "file": "main.js",
+      "kind": "unresolved_specifier",
+      "detail": "cannot resolve './nope' from <fixture>/main.js: Cannot find module './nope'",
+      "spec": "./nope",
+      "span": [
+        913,
+        930
+      ],
+      "line": 15,
+      "col": 20
+    },
+    {
+      "file": "main.js",
+      "kind": "case_mismatch",
+      "detail": "./src/REL.js matches <fixture>/src/rel.js only case-insensitively",
+      "spec": "./src/REL.js",
+      "span": [
+        970,
+        993
+      ],
+      "line": 16,
+      "col": 16
+    }
+  ],
+  "symlinks": {},
+  "stats": {
+    "entries": 2,
+    "files": 22,
+    "parsed_files": 14,
+    "edges": 47,
+    "uncertainties": 3
+  }
+}

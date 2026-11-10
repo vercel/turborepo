@@ -1,0 +1,315 @@
+---
+source: crates/turborepo-trace-lang-js/tests/resolve.rs
+expression: json
+---
+{
+  "version": 1,
+  "base": "<fixture>",
+  "entries": [
+    {
+      "path": "apps/web/index.js",
+      "files": [
+        "apps/web/index.js",
+        "apps/web/node_modules/@ws/lib",
+        "apps/web/package.json",
+        "node_modules/@ws/hoisted",
+        "packages/hoisted/index.js",
+        "packages/hoisted/package.json",
+        "packages/lib/impl.js",
+        "packages/lib/index.js",
+        "packages/lib/package.json"
+      ]
+    }
+  ],
+  "files": [
+    {
+      "path": "apps/web/index.js",
+      "reasons": [
+        "initial"
+      ],
+      "parents": [],
+      "parsed": true,
+      "lang": "js"
+    },
+    {
+      "path": "apps/web/node_modules/@ws/lib",
+      "reasons": [
+        "resolve"
+      ],
+      "parents": [
+        "apps/web/index.js"
+      ],
+      "parsed": false
+    },
+    {
+      "path": "apps/web/package.json",
+      "reasons": [
+        "manifest"
+      ],
+      "parents": [
+        "apps/web/index.js"
+      ],
+      "parsed": false
+    },
+    {
+      "path": "node_modules/@ws/hoisted",
+      "reasons": [
+        "resolve"
+      ],
+      "parents": [
+        "apps/web/index.js"
+      ],
+      "parsed": false
+    },
+    {
+      "path": "packages/hoisted/index.js",
+      "reasons": [
+        "dependency"
+      ],
+      "parents": [
+        "apps/web/index.js"
+      ],
+      "parsed": true,
+      "lang": "js"
+    },
+    {
+      "path": "packages/hoisted/package.json",
+      "reasons": [
+        "manifest"
+      ],
+      "parents": [
+        "apps/web/index.js",
+        "packages/hoisted/index.js"
+      ],
+      "parsed": false
+    },
+    {
+      "path": "packages/lib/impl.js",
+      "reasons": [
+        "dependency"
+      ],
+      "parents": [
+        "packages/lib/index.js"
+      ],
+      "parsed": true,
+      "lang": "js"
+    },
+    {
+      "path": "packages/lib/index.js",
+      "reasons": [
+        "dependency"
+      ],
+      "parents": [
+        "apps/web/index.js"
+      ],
+      "parsed": true,
+      "lang": "js"
+    },
+    {
+      "path": "packages/lib/package.json",
+      "reasons": [
+        "manifest"
+      ],
+      "parents": [
+        "apps/web/index.js",
+        "packages/lib/impl.js",
+        "packages/lib/index.js"
+      ],
+      "parsed": false
+    }
+  ],
+  "edges": [
+    {
+      "from": "apps/web/index.js",
+      "kind": "require",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "@ws/lib",
+      "span": [
+        0,
+        18
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "packages/lib/index.js"
+      }
+    },
+    {
+      "from": "apps/web/index.js",
+      "kind": "manifest",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "@ws/lib",
+      "span": [
+        0,
+        18
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "apps/web/package.json"
+      }
+    },
+    {
+      "from": "apps/web/index.js",
+      "kind": "manifest",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "@ws/lib",
+      "span": [
+        0,
+        18
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "packages/lib/package.json"
+      }
+    },
+    {
+      "from": "apps/web/index.js",
+      "kind": "require",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "@ws/hoisted",
+      "span": [
+        59,
+        81
+      ],
+      "line": 2,
+      "target": {
+        "type": "file",
+        "path": "packages/hoisted/index.js"
+      }
+    },
+    {
+      "from": "apps/web/index.js",
+      "kind": "manifest",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "@ws/hoisted",
+      "span": [
+        59,
+        81
+      ],
+      "line": 2,
+      "target": {
+        "type": "file",
+        "path": "packages/hoisted/package.json"
+      }
+    },
+    {
+      "from": "apps/web/index.js",
+      "kind": "require",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "dep",
+      "span": [
+        144,
+        158
+      ],
+      "line": 3,
+      "target": {
+        "type": "external",
+        "name": "dep"
+      }
+    },
+    {
+      "from": "apps/web/index.js",
+      "kind": "require",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "linked",
+      "span": [
+        208,
+        225
+      ],
+      "line": 4,
+      "target": {
+        "type": "external",
+        "name": "linked"
+      }
+    },
+    {
+      "from": "packages/hoisted/index.js",
+      "kind": "manifest",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "package.json scope",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "packages/hoisted/package.json"
+      }
+    },
+    {
+      "from": "packages/lib/impl.js",
+      "kind": "manifest",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "package.json scope",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "packages/lib/package.json"
+      }
+    },
+    {
+      "from": "packages/lib/index.js",
+      "kind": "require",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "./impl",
+      "span": [
+        0,
+        17
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "packages/lib/impl.js"
+      }
+    },
+    {
+      "from": "packages/lib/index.js",
+      "kind": "manifest",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "./impl",
+      "span": [
+        0,
+        17
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "packages/lib/package.json"
+      }
+    }
+  ],
+  "uncertainties": [],
+  "symlinks": {
+    "apps/web/node_modules/@ws/lib": "packages/lib",
+    "node_modules/@ws/hoisted": "packages/hoisted"
+  },
+  "externals": [
+    "dep",
+    "linked"
+  ],
+  "stats": {
+    "entries": 1,
+    "files": 9,
+    "parsed_files": 4,
+    "edges": 11,
+    "uncertainties": 0
+  }
+}

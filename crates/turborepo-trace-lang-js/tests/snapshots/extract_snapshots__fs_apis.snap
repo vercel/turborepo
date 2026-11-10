@@ -1,0 +1,43 @@
+---
+source: crates/turborepo-trace-lang-js/tests/extract_snapshots.rs
+expression: "render(\"fs_apis.mjs\")"
+---
+2:1 import "fs"
+    span: import fs, { readFileSync as read, promises as fsp } from 'fs'
+3:1 import "node:fs"
+    span: import * as nodeFs from 'node:fs'
+4:1 import "node:fs/promises"
+    span: import { readdir, stat } from 'node:fs/promises'
+5:1 import "fs-extra"
+    span: import fse from 'fs-extra'
+6:1 import "node:path"
+    span: import path from 'node:path'
+7:1 import "node:url"
+    span: import { fileURLToPath } from 'node:url'
+10:14 asset "data"
+    span: path.join(__dirname, 'data')
+12:1 fs_read "templates/page.html"
+    span: fs.readFileSync(path.join(__dirname, 'templates', 'page.html')
+13:1 fs_read "schema.json"
+    span: read(new URL('./schema.json', import.meta.url))
+14:1 fs_read "data/*.csv"
+    span: nodeFs.createReadStream(path.join(DATA, `${name}.csv`))
+    uncertainty: partial_specifier "name"
+15:1 fs_read_dir "data" [names]
+    span: nodeFs.readdirSync(DATA)
+16:7 fs_read "../README.md"
+    span: fsp.readFile(fileURLToPath(new URL('../README.md', import.meta.url)))
+17:7 fs_read_dir "data/images" [names]
+    span: readdir(path.resolve(DATA, 'images'))
+18:7 fs_read "./maybe.txt" @cwd [optional, names]
+    span: stat('./maybe.txt')
+    uncertainty: cwd_dependent "'./maybe.txt'"
+19:5 fs_read "/etc/ssl/certs" [optional, names]
+    span: fs.existsSync('/etc/ssl/certs')
+20:1 fs_read "package.json"
+    span: fse.readJsonSync(path.join(__dirname, 'package.json'))
+21:1 fs_read ".env" @cwd [optional, names]
+    span: fs.promises.access(process.cwd() + '/.env')
+    uncertainty: cwd_dependent "process.cwd() + '/.env'"
+23:3 fs_read "optional.json" [optional]
+    span: fs.readFileSync(path.join(__dirname, 'optional.json'))

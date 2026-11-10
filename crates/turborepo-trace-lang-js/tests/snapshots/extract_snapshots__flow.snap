@@ -1,0 +1,10 @@
+---
+source: crates/turborepo-trace-lang-js/tests/extract_snapshots.rs
+expression: "render(\"flow.js\")"
+---
+3:1 import "./types" [type_only]
+    span: import type { Node } from './types'
+4:1 import "./helper"
+    span: import { helper } from './helper'
+7:20 dynamic_import "./lazy" [lazy]
+    span: import('./lazy')

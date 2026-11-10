@@ -1,0 +1,274 @@
+---
+source: crates/turborepo-trace-lang-js/tests/resolve.rs
+expression: json
+---
+{
+  "version": 1,
+  "base": "<fixture>",
+  "entries": [
+    {
+      "path": "src/main.ts",
+      "files": [
+        "package.json",
+        "pkgs/good/src/main.ts",
+        "pkgs/good/src/x.ts",
+        "src/main.ts",
+        "src/rel.ts",
+        "src/util.ts"
+      ]
+    }
+  ],
+  "files": [
+    {
+      "path": "package.json",
+      "reasons": [
+        "manifest"
+      ],
+      "parents": [
+        "pkgs/good/src/main.ts",
+        "pkgs/good/src/x.ts",
+        "src/main.ts",
+        "src/rel.ts",
+        "src/util.ts"
+      ],
+      "parsed": false
+    },
+    {
+      "path": "pkgs/good/src/main.ts",
+      "reasons": [
+        "dependency"
+      ],
+      "parents": [
+        "src/main.ts"
+      ],
+      "parsed": true,
+      "lang": "js"
+    },
+    {
+      "path": "pkgs/good/src/x.ts",
+      "reasons": [
+        "dependency"
+      ],
+      "parents": [
+        "pkgs/good/src/main.ts"
+      ],
+      "parsed": true,
+      "lang": "js"
+    },
+    {
+      "path": "src/main.ts",
+      "reasons": [
+        "initial"
+      ],
+      "parents": [],
+      "parsed": true,
+      "lang": "js"
+    },
+    {
+      "path": "src/rel.ts",
+      "reasons": [
+        "dependency"
+      ],
+      "parents": [
+        "src/main.ts"
+      ],
+      "parsed": true,
+      "lang": "js"
+    },
+    {
+      "path": "src/util.ts",
+      "reasons": [
+        "dependency"
+      ],
+      "parents": [
+        "src/main.ts"
+      ],
+      "parsed": true,
+      "lang": "js"
+    }
+  ],
+  "edges": [
+    {
+      "from": "pkgs/good/src/main.ts",
+      "kind": "import",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "#good/x",
+      "span": [
+        0,
+        27
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "pkgs/good/src/x.ts"
+      }
+    },
+    {
+      "from": "pkgs/good/src/main.ts",
+      "kind": "manifest",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "#good/x",
+      "span": [
+        0,
+        27
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "package.json"
+      }
+    },
+    {
+      "from": "pkgs/good/src/x.ts",
+      "kind": "manifest",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "package.json scope",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "package.json"
+      }
+    },
+    {
+      "from": "src/main.ts",
+      "kind": "manifest",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "<fixture>/tsconfig.json",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "unresolved"
+      },
+      "uncertainty": "parse_incomplete"
+    },
+    {
+      "from": "src/main.ts",
+      "kind": "import",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "@/util",
+      "span": [
+        0,
+        29
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "src/util.ts"
+      }
+    },
+    {
+      "from": "src/main.ts",
+      "kind": "manifest",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "@/util",
+      "span": [
+        0,
+        29
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "package.json"
+      }
+    },
+    {
+      "from": "src/main.ts",
+      "kind": "import",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "./rel",
+      "span": [
+        60,
+        87
+      ],
+      "line": 2,
+      "target": {
+        "type": "file",
+        "path": "src/rel.ts"
+      }
+    },
+    {
+      "from": "src/main.ts",
+      "kind": "import",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "../pkgs/good/src/main",
+      "span": [
+        89,
+        129
+      ],
+      "line": 3,
+      "target": {
+        "type": "file",
+        "path": "pkgs/good/src/main.ts"
+      }
+    },
+    {
+      "from": "src/rel.ts",
+      "kind": "manifest",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "package.json scope",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "package.json"
+      }
+    },
+    {
+      "from": "src/util.ts",
+      "kind": "manifest",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "package.json scope",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "package.json"
+      }
+    }
+  ],
+  "uncertainties": [
+    {
+      "file": "src/main.ts",
+      "kind": "parse_incomplete",
+      "detail": "tsconfig <fixture>/tsconfig.json: skipped project reference <fixture>/pkgs/missing: Tsconfig not found <fixture>/pkgs/missing; skipped project reference <fixture>/pkgs/bad-json: Failed to load tsconfig \"<fixture>/pkgs/bad-json/base.json\": JSONError { path: \"<fixture>/pkgs/bad-json/base.json\", message: \"key must be a string at line 1 column 24\", line: 1, column: 24 }",
+      "spec": "<fixture>/tsconfig.json",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "col": 1
+    }
+  ],
+  "symlinks": {},
+  "stats": {
+    "entries": 1,
+    "files": 6,
+    "parsed_files": 5,
+    "edges": 10,
+    "uncertainties": 1
+  }
+}

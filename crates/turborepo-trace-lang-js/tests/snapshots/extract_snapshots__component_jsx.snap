@@ -1,0 +1,12 @@
+---
+source: crates/turborepo-trace-lang-js/tests/extract_snapshots.rs
+expression: "render(\"component.jsx\")"
+---
+1:1 import "react"
+    span: import React from 'react'
+2:1 import "./Button"
+    span: import Button from './Button'
+5:16 require "./icon.svg"
+    span: require('./icon.svg')
+9:42 dynamic_import "./analytics" [lazy]
+    span: import('./analytics')
