@@ -780,7 +780,14 @@ impl GitRepo {
                             let git_relative = match self.root.anchor(&resolved) {
                                 Ok(git_relative) => git_relative.to_unix(),
                                 Err(PathError::NotParent(..)) => {
-                                    outside_root.push(resolved);
+                                    // The in-memory exclusion filter below can't
+                                    // see files outside the repository, so let
+                                    // the walker apply exclusions, as manual
+                                    // hashing does.
+                                    glob_inclusions.push(
+                                        PackageInput::resolve(package_unix_path, raw_glob)?
+                                            .into_glob(),
+                                    );
                                     continue;
                                 }
                                 Err(err) => return Err(err.into()),
@@ -1735,13 +1742,32 @@ mod tests {
         let package_path = AnchoredSystemPathBuf::from_raw("packages/app")?;
         let outside = RelativeUnixPathBuf::new("../../../outside.txt").unwrap();
 
-        let cases: &[(&[&str], bool)] = &[
-            (&["../../../outside.txt"], true),
-            (&["../../../outside*.txt"], true),
-            (&["src/**", "../../../outside.txt"], false),
-            (&["src/**", "../../../outside*.txt"], false),
+        // (inputs, include_default_files, whether the outside file is hashed).
+        // `None` only checks agreement with manual hashing: the walker doesn't
+        // drop a literal include for an exclusion of the same path, with or
+        // without git.
+        let cases: &[(&[&str], bool, Option<bool>)] = &[
+            (&["../../../outside.txt"], true, Some(true)),
+            (&["../../../outside*.txt"], true, Some(true)),
+            (&["src/**", "../../../outside.txt"], false, Some(true)),
+            (&["src/**", "../../../outside*.txt"], false, Some(true)),
+            (
+                &["../../../outside*.txt", "!../../../outside.txt"],
+                true,
+                Some(false),
+            ),
+            (
+                &["../../../outside.txt", "!../../../outside.txt"],
+                true,
+                None,
+            ),
+            (
+                &["src/**", "../../../outside.txt", "!../../../outside.txt"],
+                false,
+                None,
+            ),
         ];
-        for (inputs, include_default_files) in cases {
+        for (inputs, include_default_files, expect_outside) in cases {
             let git_hashes = git.get_package_file_hashes(
                 &repo_root,
                 &package_path,
@@ -1749,11 +1775,14 @@ mod tests {
                 *include_default_files,
                 None,
             )?;
-            assert!(
-                git_hashes.contains_key(&outside),
-                "{inputs:?}: outside input should be hashed, got keys: {:?}",
-                git_hashes.keys().collect::<Vec<_>>()
-            );
+            if let Some(expect_outside) = expect_outside {
+                assert_eq!(
+                    git_hashes.contains_key(&outside),
+                    *expect_outside,
+                    "{inputs:?}: unexpected outside input hashing, got keys: {:?}",
+                    git_hashes.keys().collect::<Vec<_>>()
+                );
+            }
             assert!(
                 git_hashes.contains_key(&RelativeUnixPathBuf::new("src/a.js").unwrap()),
                 "{inputs:?}: package files should be hashed"
