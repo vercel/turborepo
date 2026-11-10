@@ -285,6 +285,27 @@ fn musl() -> bool {
     )
 }
 
+/// With the `turbo trace` gate off, `turbo trace build` is `turbo run trace
+/// build` in a managed repository too: both tasks run, through the managed
+/// tools, as before the command existed.
+#[test]
+fn gate_off_trace_runs_the_tasks_trace_and_build_in_a_managed_repository() {
+    if musl() {
+        return;
+    }
+    let repo = Repo::new();
+    for args in [
+        &["trace", "build", "--ui=stream"][..],
+        &["--filter", "web", "trace", "build", "--ui=stream"],
+    ] {
+        let (code, text) = repo.turbo(args);
+        assert_eq!(code, 0, "{args:?}: {text}");
+        for task in ["pnpm.cjs run trace", "pnpm.cjs run build"] {
+            assert!(text.contains(task), "{args:?}: {task}: {text}");
+        }
+    }
+}
+
 /// A repository-local turbo is executed only after the managed setup of the
 /// repository is authorized, whichever way `trace` is spelled: with the gate
 /// off, `turbo trace ...` is `turbo run trace ...` for the managed-run check as
