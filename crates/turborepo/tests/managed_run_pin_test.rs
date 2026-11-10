@@ -19,7 +19,7 @@ use std::{
 use turborepo_shim::TurboState;
 
 const CONFIG: &str = r#"{"futureFlags":{"experimentalSetup":true},"agentGuidance":false,
-    "noUpdateNotifier":true,"tasks":{"build":{"cache":false}},
+    "noUpdateNotifier":true,"tasks":{"build":{"cache":false},"trace":{"cache":false}},
     "setup":{"dependencies":"skip","javascript":{"tools":"managed"}}}"#;
 
 struct Repo {
@@ -50,7 +50,7 @@ impl Repo {
             ),
             (
                 "apps/web/package.json",
-                r#"{"name":"web","scripts":{"build":"build"}}"#,
+                r#"{"name":"web","scripts":{"build":"build","trace":"trace"}}"#,
             ),
         ] {
             fs::write(root.join(name), contents).unwrap();
@@ -134,6 +134,10 @@ impl Repo {
     }
 
     fn turbo(&self, args: &[&str]) -> (i32, String) {
+        self.turbo_with_env(args, &[])
+    }
+
+    fn turbo_with_env(&self, args: &[&str], env: &[(&str, &str)]) -> (i32, String) {
         let home = self.root.parent().unwrap().join("home");
         // Windows resolves the user state directory from these profile folders.
         let (local, roaming) = (home.join("AppData/Local"), home.join("AppData/Roaming"));
@@ -169,6 +173,7 @@ impl Repo {
                 command.env(key, value);
             }
         }
+        command.envs(env.iter().copied());
         let output = command.output().unwrap();
         let text = common::combined_output(&output);
         (output.status.code().unwrap_or(-1), text)
@@ -271,6 +276,85 @@ fn managed_run_keeps_compatible_local_turbo_and_refuses_incompatible_pins() {
     let package = TurboState::scoped_platform_package_dir();
     assert!(handoff.is_some_and(|line| line.contains(package)), "{text}");
     assert!(text.contains("pnpm.cjs run build"), "{text}");
+}
+
+fn musl() -> bool {
+    matches!(
+        turborepo_platform::host_libc(),
+        Ok(Some(turborepo_platform::Libc::Musl { .. }))
+    )
+}
+
+/// A repository-local turbo is executed only after the managed setup of the
+/// repository is authorized, whichever way `trace` is spelled: with the gate
+/// off, `turbo trace ...` is `turbo run trace ...` for the managed-run check as
+/// much as for the command that runs. With the gate on, `turbo trace` is
+/// routed exactly like `turbo query`.
+#[cfg(unix)]
+#[test]
+fn a_repository_local_turbo_never_runs_without_managed_authorization() {
+    use std::os::unix::fs::PermissionsExt;
+    if musl() {
+        return;
+    }
+    let repo = Repo::new();
+    let scratch = repo.root.parent().unwrap().to_owned();
+    let marker = scratch.join("local-turbo-ran");
+    let script = scratch.join("local-turbo");
+    fs::write(
+        &script,
+        format!("#!/bin/sh\necho \"$@\" >> '{}'\n", marker.display()),
+    )
+    .unwrap();
+    fs::set_permissions(&script, fs::Permissions::from_mode(0o755)).unwrap();
+    repo.pin(&script, "9.9.9");
+    let record = fs::read(&repo.trust).unwrap();
+    let lock = fs::read(repo.root.join("turbo.lock")).unwrap();
+    let ran = || {
+        let ran = marker.exists();
+        let _ = fs::remove_file(&marker);
+        ran
+    };
+    let refused = |args: &[&str], env: &[(&str, &str)], setup: &str| {
+        let (code, text) = repo.turbo_with_env(args, env);
+        assert_ne!(code, 0, "{setup} {args:?}: {text}");
+        assert!(
+            !ran(),
+            "{setup} {args:?}: the repository-local turbo ran: {text}"
+        );
+        assert!(text.contains("turbo setup"), "{setup} {args:?}: {text}");
+        assert!(!text.contains("panicked"), "{setup} {args:?}: {text}");
+    };
+    for setup in ["missing", "stale"] {
+        match setup {
+            "missing" => fs::remove_file(&repo.trust).unwrap(),
+            _ => {
+                fs::write(&repo.trust, &record).unwrap();
+                let mut changed = lock.clone();
+                changed.extend_from_slice(b"\n");
+                fs::write(repo.root.join("turbo.lock"), changed).unwrap();
+            }
+        }
+        for args in [
+            &["run", "trace"][..],
+            &["trace"],
+            &["--filter", "web", "trace"],
+            &["trace", "build"],
+        ] {
+            refused(args, &[], setup);
+        }
+        // Gate on: `turbo trace` is a discovery command, routed like `turbo query`.
+        let routed = |args: &[&str]| {
+            let (code, text) = repo.turbo_with_env(args, &[("TURBO_EXPERIMENTAL_TRACE", "1")]);
+            assert!(!text.contains("panicked"), "{setup} {args:?}: {text}");
+            (code == 0, ran())
+        };
+        assert_eq!(
+            routed(&["trace", "affected"]),
+            routed(&["query", "affected"]),
+            "{setup}"
+        );
+    }
 }
 
 impl Drop for Repo {

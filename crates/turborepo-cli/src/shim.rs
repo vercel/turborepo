@@ -100,8 +100,12 @@ impl TurboRunner for TurboCliRunner<'_> {
 }
 
 /// Preserve Args::new's informational exits before inspecting managed setup.
-/// A forwarded task argument after `--` is not a CLI help request.
+/// A forwarded task argument after `--` is not a CLI help request. The words
+/// are classified as `Args::new` classifies them: with the `turbo trace` gate
+/// off, `turbo trace ...` is `turbo run trace ...` and needs a managed run's
+/// authorization like any run.
 fn managed_run_args(words: Vec<std::ffi::OsString>) -> Result<Option<cli::Args>, String> {
+    let words = cli::Args::trace_is_a_task_without_the_gate(words);
     if words.len() <= 1
         || words
             .iter()
@@ -122,9 +126,10 @@ fn managed_run_args(words: Vec<std::ffi::OsString>) -> Result<Option<cli::Args>,
 }
 
 /// Commands that discover the repository, which may probe its toolchains,
-/// without running tasks. `turbo trace` discovers only while its gate is on:
-/// off, it refuses before reading the repository, so the shim reads nothing
-/// for it either.
+/// without running tasks. `turbo trace` discovers only while its gate is on,
+/// exactly like `turbo query`; off, [`managed_run_args`] sees `turbo run
+/// trace`, and a `trace` command that is left (no command word after the
+/// leading flags) refuses before reading the repository.
 fn discovers_only(command: Option<&cli::Command>) -> bool {
     match command {
         Some(

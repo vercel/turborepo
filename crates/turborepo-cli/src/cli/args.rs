@@ -692,7 +692,11 @@ impl Args {
     /// trace`), so the word is found with the grammar that
     /// [`Self::normalize_leading_run_flags`] uses: root and run flags, which
     /// consume their values, before the first command or task name.
-    fn trace_is_a_task_without_the_gate(mut os_args: Vec<OsString>) -> Vec<OsString> {
+    ///
+    /// Everything that classifies the command line before [`Self::new`] (the
+    /// shim's managed-run check, which decides whether a repository-local
+    /// turbo may run) applies it too, so that it sees the command `new` runs.
+    pub(crate) fn trace_is_a_task_without_the_gate(mut os_args: Vec<OsString>) -> Vec<OsString> {
         if os_args.len() > 1
             && !crate::commands::trace::enabled()
             && Self::command_after_leading_run_flags(&os_args, "trace")
