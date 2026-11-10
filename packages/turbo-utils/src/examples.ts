@@ -58,11 +58,50 @@ function getGitHubAuthHeaders(url: string): Record<string, string> {
 }
 
 /**
+ * Returns true when NO_PROXY / no_proxy says `parsedUrl` should be fetched
+ * directly. Entries are comma or whitespace separated. `*` matches every host.
+ * Any other entry matches its host and all of its subdomains (a leading `.` or
+ * `*.` is ignored), and may be limited to one port with a `:port` suffix.
+ */
+function shouldBypassProxy(parsedUrl: URL): boolean {
+  const noProxy = (process.env.no_proxy || process.env.NO_PROXY || "").trim();
+  if (!noProxy) {
+    return false;
+  }
+
+  const hostname = parsedUrl.hostname.toLowerCase();
+  const port =
+    parsedUrl.port || (parsedUrl.protocol === "https:" ? "443" : "80");
+
+  return noProxy.split(/[\s,]+/).some((rawEntry) => {
+    const entry = rawEntry.toLowerCase();
+    if (entry === "*") {
+      return true;
+    }
+
+    const portMatch = /^(?<host>.+):(?<port>\d+)$/.exec(entry);
+    if (portMatch?.groups && portMatch.groups.port !== port) {
+      return false;
+    }
+
+    const entryHost = (portMatch?.groups?.host ?? entry).replace(/^\*?\./, "");
+    return (
+      entryHost !== "" &&
+      (hostname === entryHost || hostname.endsWith(`.${entryHost}`))
+    );
+  });
+}
+
+/**
  * Gets proxy URL from environment variables.
- * Checks both lowercase and uppercase variants.
+ * Checks both lowercase and uppercase variants, and returns undefined for
+ * hosts excluded by NO_PROXY / no_proxy.
  */
 function getProxyForUrl(url: string): string | undefined {
   const parsedUrl = new URL(url);
+  if (shouldBypassProxy(parsedUrl)) {
+    return undefined;
+  }
   const isHttps = parsedUrl.protocol === "https:";
 
   if (isHttps) {
@@ -137,7 +176,7 @@ function buildFetchInit(url: string, options: RequestInit = {}): RequestInit {
  * Performs a fetch request with an automatic timeout, proxy support,
  * and GitHub authentication.
  * Centralizes the AbortController + setTimeout pattern to avoid repetition.
- * Automatically respects HTTP_PROXY/HTTPS_PROXY environment variables.
+ * Automatically respects HTTP_PROXY/HTTPS_PROXY/NO_PROXY environment variables.
  * Attaches a Bearer token from GITHUB_TOKEN/GH_TOKEN for known GitHub hosts.
  */
 async function fetchWithTimeout(

@@ -120,6 +120,81 @@ describe("examples", () => {
         }
       }
     });
+
+    describe("with NO_PROXY", () => {
+      const originalEnv = process.env;
+
+      beforeEach(() => {
+        process.env = { ...originalEnv };
+        for (const key of [
+          "https_proxy",
+          "http_proxy",
+          "HTTP_PROXY",
+          "no_proxy",
+          "NO_PROXY"
+        ]) {
+          // eslint-disable-next-line @typescript-eslint/no-dynamic-delete -- test env cleanup
+          delete process.env[key];
+        }
+        process.env.HTTPS_PROXY = "http://proxy.example.com:8080";
+        global.fetch = jest.fn(() =>
+          Promise.resolve({ ok: true } as Response)
+        ) as typeof fetch;
+      });
+
+      afterEach(() => {
+        process.env = originalEnv;
+      });
+
+      it.each([
+        "*",
+        "github.com",
+        ".github.com",
+        "*.github.com",
+        "GitHub.com",
+        "localhost, github.com",
+        "localhost,github.com:443"
+      ])("connects directly when NO_PROXY=%s", async (noProxy) => {
+        process.env.NO_PROXY = noProxy;
+
+        const url = "https://api.github.com/repos/vercel/turborepo";
+        await isUrlOk(url);
+
+        expect(global.fetch).toHaveBeenCalledWith(
+          url,
+          expect.objectContaining({ dispatcher: undefined })
+        );
+      });
+
+      it.each([
+        "localhost",
+        "notgithub.com",
+        "github.com.evil",
+        "github.com:8443"
+      ])("still uses the proxy when NO_PROXY=%s", async (noProxy) => {
+        process.env.NO_PROXY = noProxy;
+
+        const url = "https://api.github.com/repos/vercel/turborepo";
+        await isUrlOk(url);
+
+        expect(global.fetch).toHaveBeenCalledWith(
+          url,
+          expect.objectContaining({ dispatcher: expect.anything() })
+        );
+      });
+
+      it("reads lowercase no_proxy", async () => {
+        process.env.no_proxy = "github.com";
+
+        const url = "https://codeload.github.com/vercel/turborepo/tar.gz/main";
+        await isUrlOk(url);
+
+        expect(global.fetch).toHaveBeenCalledWith(
+          url,
+          expect.objectContaining({ dispatcher: undefined })
+        );
+      });
+    });
   });
 
   describe("downloadAndExtractExample", () => {
