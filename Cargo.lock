@@ -8849,6 +8849,33 @@ dependencies = [
 ]
 
 [[package]]
+name = "turborepo-trace-graph"
+version = "0.1.0"
+dependencies = [
+ "proptest",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror 2.0.18",
+ "turborepo-trace-core",
+]
+
+[[package]]
+name = "turborepo-trace-lang-go"
+version = "0.1.0"
+dependencies = [
+ "dashmap 6.2.1",
+ "insta",
+ "memchr",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "turborepo-trace-core",
+ "turborepo-trace-lockfile",
+ "turborepo-trace-testkit",
+]
+
+[[package]]
 name = "turborepo-trace-lang-js"
 version = "0.1.0"
 dependencies = [
@@ -8868,6 +8895,20 @@ dependencies = [
  "turborepo-trace-core",
  "turborepo-trace-testkit",
  "xxhash-rust",
+]
+
+[[package]]
+name = "turborepo-trace-lang-rust"
+version = "0.1.0"
+dependencies = [
+ "insta",
+ "memchr",
+ "serde_json",
+ "tempfile",
+ "toml",
+ "turborepo-trace-core",
+ "turborepo-trace-lockfile",
+ "turborepo-trace-testkit",
 ]
 
 [[package]]

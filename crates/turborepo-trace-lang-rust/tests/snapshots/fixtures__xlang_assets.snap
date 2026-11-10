@@ -1,0 +1,203 @@
+---
+source: crates/turborepo-trace-lang-rust/tests/fixtures.rs
+expression: json
+---
+{
+  "version": 1,
+  "base": "<fixture>",
+  "entries": [
+    {
+      "path": "src/main.rs",
+      "files": [
+        "Cargo.lock",
+        "Cargo.toml",
+        "data/config.json",
+        "data/schema.sql",
+        "src/main.rs"
+      ]
+    }
+  ],
+  "files": [
+    {
+      "path": "Cargo.lock",
+      "reasons": [
+        "manifest"
+      ],
+      "parents": [
+        "src/main.rs"
+      ],
+      "parsed": false
+    },
+    {
+      "path": "Cargo.toml",
+      "reasons": [
+        "manifest"
+      ],
+      "parents": [
+        "src/main.rs"
+      ],
+      "parsed": false
+    },
+    {
+      "path": "data/config.json",
+      "reasons": [
+        "asset"
+      ],
+      "parents": [
+        "src/main.rs"
+      ],
+      "parsed": false
+    },
+    {
+      "path": "data/schema.sql",
+      "reasons": [
+        "asset"
+      ],
+      "parents": [
+        "src/main.rs"
+      ],
+      "parsed": false
+    },
+    {
+      "path": "src/main.rs",
+      "reasons": [
+        "initial"
+      ],
+      "parents": [],
+      "parsed": true,
+      "lang": "rust"
+    }
+  ],
+  "edges": [
+    {
+      "from": "src/main.rs",
+      "kind": "manifest",
+      "phase": "build",
+      "flags": [],
+      "spec": "Cargo.lock",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "Cargo.lock"
+      }
+    },
+    {
+      "from": "src/main.rs",
+      "kind": "manifest",
+      "phase": "build",
+      "flags": [],
+      "spec": "Cargo.toml",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "Cargo.toml"
+      }
+    },
+    {
+      "from": "src/main.rs",
+      "kind": "asset",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "data/config.json",
+      "span": [
+        136,
+        192
+      ],
+      "line": 4,
+      "target": {
+        "type": "file",
+        "path": "data/config.json"
+      }
+    },
+    {
+      "from": "src/main.rs",
+      "kind": "fs_read",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "<unknown>",
+      "span": [
+        237,
+        244
+      ],
+      "line": 7,
+      "target": {
+        "type": "unresolved"
+      },
+      "uncertainty": "computed_specifier"
+    },
+    {
+      "from": "src/main.rs",
+      "kind": "asset",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "data/schema.sql",
+      "span": [
+        307,
+        376
+      ],
+      "line": 11,
+      "target": {
+        "type": "file",
+        "path": "data/schema.sql"
+      }
+    },
+    {
+      "from": "src/main.rs",
+      "kind": "asset",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "cache.db",
+      "span": [
+        443,
+        497
+      ],
+      "line": 13,
+      "target": {
+        "type": "unresolved"
+      },
+      "uncertainty": "unresolved_specifier"
+    }
+  ],
+  "uncertainties": [
+    {
+      "file": "src/main.rs",
+      "kind": "computed_specifier",
+      "detail": "p",
+      "spec": "<unknown>",
+      "span": [
+        237,
+        244
+      ],
+      "line": 7,
+      "col": 14
+    },
+    {
+      "file": "src/main.rs",
+      "kind": "unresolved_specifier",
+      "detail": "anchored path cache.db does not exist: created at runtime, or missing from the tree",
+      "spec": "cache.db",
+      "span": [
+        443,
+        497
+      ],
+      "line": 13,
+      "col": 17
+    }
+  ],
+  "symlinks": {},
+  "stats": {
+    "entries": 1,
+    "files": 5,
+    "parsed_files": 1,
+    "edges": 6,
+    "uncertainties": 2
+  }
+}

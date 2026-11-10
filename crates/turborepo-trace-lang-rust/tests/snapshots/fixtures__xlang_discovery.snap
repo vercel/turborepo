@@ -1,0 +1,159 @@
+---
+source: crates/turborepo-trace-lang-rust/tests/fixtures.rs
+expression: json
+---
+{
+  "version": 1,
+  "base": "<fixture>",
+  "entries": [
+    {
+      "path": "src/main.rs",
+      "files": [
+        "Cargo.lock",
+        "Cargo.toml",
+        "plugins/a.toml",
+        "plugins/b.toml",
+        "src/main.rs"
+      ]
+    }
+  ],
+  "files": [
+    {
+      "path": "Cargo.lock",
+      "reasons": [
+        "manifest"
+      ],
+      "parents": [
+        "src/main.rs"
+      ],
+      "parsed": false
+    },
+    {
+      "path": "Cargo.toml",
+      "reasons": [
+        "manifest"
+      ],
+      "parents": [
+        "src/main.rs"
+      ],
+      "parsed": false
+    },
+    {
+      "path": "plugins/a.toml",
+      "reasons": [
+        "asset"
+      ],
+      "parents": [
+        "src/main.rs"
+      ],
+      "parsed": false
+    },
+    {
+      "path": "plugins/b.toml",
+      "reasons": [
+        "asset"
+      ],
+      "parents": [
+        "src/main.rs"
+      ],
+      "parsed": false
+    },
+    {
+      "path": "src/main.rs",
+      "reasons": [
+        "initial"
+      ],
+      "parents": [],
+      "parsed": true,
+      "lang": "rust"
+    }
+  ],
+  "edges": [
+    {
+      "from": "src/main.rs",
+      "kind": "manifest",
+      "phase": "build",
+      "flags": [],
+      "spec": "Cargo.lock",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "Cargo.lock"
+      }
+    },
+    {
+      "from": "src/main.rs",
+      "kind": "manifest",
+      "phase": "build",
+      "flags": [],
+      "spec": "Cargo.toml",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "Cargo.toml"
+      }
+    },
+    {
+      "from": "src/main.rs",
+      "kind": "fs_read_dir",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "plugins",
+      "span": [
+        107,
+        164
+      ],
+      "line": 3,
+      "target": {
+        "type": "dir",
+        "path": "plugins"
+      }
+    },
+    {
+      "from": "src/main.rs",
+      "kind": "fs_read",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "<unknown>",
+      "span": [
+        316,
+        333
+      ],
+      "line": 7,
+      "target": {
+        "type": "unresolved"
+      },
+      "uncertainty": "computed_specifier"
+    }
+  ],
+  "uncertainties": [
+    {
+      "file": "src/main.rs",
+      "kind": "computed_specifier",
+      "detail": "p",
+      "spec": "<unknown>",
+      "span": [
+        316,
+        333
+      ],
+      "line": 7,
+      "col": 33
+    }
+  ],
+  "symlinks": {},
+  "stats": {
+    "entries": 1,
+    "files": 5,
+    "parsed_files": 1,
+    "edges": 4,
+    "uncertainties": 1
+  }
+}

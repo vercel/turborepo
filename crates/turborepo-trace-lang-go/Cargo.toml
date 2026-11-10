@@ -1,0 +1,26 @@
+[package]
+name = "turborepo-trace-lang-go"
+version = "0.1.0"
+edition = { workspace = true }
+license = "MIT"
+description = "Go language plugin for `turbo trace`"
+publish = false
+
+[lib]
+bench = false
+
+[dependencies]
+dashmap = { workspace = true }
+memchr = { workspace = true }
+turborepo-trace-core = { workspace = true }
+turborepo-trace-lockfile = { workspace = true }
+
+[dev-dependencies]
+insta = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tempfile = { workspace = true }
+turborepo-trace-testkit = { workspace = true }
+
+[lints]
+workspace = true

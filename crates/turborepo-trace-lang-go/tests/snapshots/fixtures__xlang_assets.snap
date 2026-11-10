@@ -1,0 +1,238 @@
+---
+source: crates/turborepo-trace-lang-go/tests/fixtures.rs
+expression: json
+---
+{
+  "version": 1,
+  "base": "<fixture>",
+  "entries": [
+    {
+      "path": "main.go",
+      "files": [
+        "data/config.json",
+        "data/schema.sql",
+        "go.mod",
+        "main.go"
+      ]
+    }
+  ],
+  "files": [
+    {
+      "path": "data/config.json",
+      "reasons": [
+        "asset"
+      ],
+      "parents": [
+        "main.go"
+      ],
+      "parsed": false
+    },
+    {
+      "path": "data/schema.sql",
+      "reasons": [
+        "asset"
+      ],
+      "parents": [
+        "main.go"
+      ],
+      "parsed": false
+    },
+    {
+      "path": "go.mod",
+      "reasons": [
+        "manifest"
+      ],
+      "parents": [
+        "main.go"
+      ],
+      "parsed": false
+    },
+    {
+      "path": "main.go",
+      "reasons": [
+        "initial"
+      ],
+      "parents": [],
+      "parsed": true,
+      "lang": "go"
+    }
+  ],
+  "edges": [
+    {
+      "from": "main.go",
+      "kind": "manifest",
+      "phase": "build",
+      "flags": [],
+      "spec": "go.mod",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "go.mod"
+      }
+    },
+    {
+      "from": "main.go",
+      "kind": "import",
+      "phase": "build",
+      "flags": [],
+      "spec": "fmt",
+      "span": [
+        106,
+        111
+      ],
+      "line": 5,
+      "target": {
+        "type": "builtin",
+        "name": "fmt"
+      }
+    },
+    {
+      "from": "main.go",
+      "kind": "import",
+      "phase": "build",
+      "flags": [],
+      "spec": "os",
+      "span": [
+        113,
+        117
+      ],
+      "line": 6,
+      "target": {
+        "type": "builtin",
+        "name": "os"
+      }
+    },
+    {
+      "from": "main.go",
+      "kind": "import",
+      "phase": "build",
+      "flags": [],
+      "spec": "path/filepath",
+      "span": [
+        119,
+        134
+      ],
+      "line": 7,
+      "target": {
+        "type": "builtin",
+        "name": "path/filepath"
+      }
+    },
+    {
+      "from": "main.go",
+      "kind": "import",
+      "phase": "build",
+      "flags": [],
+      "spec": "runtime",
+      "span": [
+        136,
+        145
+      ],
+      "line": 8,
+      "target": {
+        "type": "builtin",
+        "name": "runtime"
+      }
+    },
+    {
+      "from": "main.go",
+      "kind": "asset",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "data/config.json",
+      "span": [
+        237,
+        278
+      ],
+      "line": 14,
+      "target": {
+        "type": "file",
+        "path": "data/config.json"
+      },
+      "uncertainty": "env_dependent"
+    },
+    {
+      "from": "main.go",
+      "kind": "asset",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "data/schema.sql",
+      "span": [
+        290,
+        330
+      ],
+      "line": 15,
+      "target": {
+        "type": "file",
+        "path": "data/schema.sql"
+      },
+      "uncertainty": "env_dependent"
+    },
+    {
+      "from": "main.go",
+      "kind": "fs_read",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "<unknown>",
+      "span": [
+        423,
+        424
+      ],
+      "line": 20,
+      "target": {
+        "type": "unresolved"
+      },
+      "uncertainty": "computed_specifier"
+    }
+  ],
+  "uncertainties": [
+    {
+      "file": "main.go",
+      "kind": "env_dependent",
+      "detail": "path built from runtime.Caller: the source directory at build time, which exists at run time only next to the source tree",
+      "spec": "data/config.json",
+      "span": [
+        237,
+        278
+      ],
+      "line": 14,
+      "col": 12
+    },
+    {
+      "file": "main.go",
+      "kind": "env_dependent",
+      "detail": "path built from runtime.Caller: the source directory at build time, which exists at run time only next to the source tree",
+      "spec": "data/schema.sql",
+      "span": [
+        290,
+        330
+      ],
+      "line": 15,
+      "col": 12
+    },
+    {
+      "file": "main.go",
+      "kind": "computed_specifier",
+      "detail": "computed specifier <unknown>",
+      "spec": "<unknown>",
+      "span": [
+        423,
+        424
+      ],
+      "line": 20,
+      "col": 22
+    }
+  ],
+  "symlinks": {},
+  "stats": {
+    "entries": 1,
+    "files": 4,
+    "parsed_files": 1,
+    "edges": 8,
+    "uncertainties": 3
+  }
+}
