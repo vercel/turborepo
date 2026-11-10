@@ -1,19 +1,21 @@
 {
   "name": "turborepo",
+  "description": "The Turborepo agent skill for Claude Code",
   "owner": {
-    "name": "Vercel"
+    "name": "Vercel",
+    "url": "https://vercel.com"
   },
-  "description": "Turborepo agent skill",
   "plugins": [
     {
       "name": "turborepo",
       "displayName": "Turborepo",
-      "description": "Turborepo agent skill for Claude Code",
+      "description": "Configure and troubleshoot Turborepo by reading the version-matched docs shipped inside the installed turbo package. Use when working with turbo.json, task pipelines, caching, Remote Cache, the turbo CLI, filtering, environment variables, package boundaries, monorepo structure, or CI workflows.",
       "source": "./skills",
       "strict": false,
+      "version": "0.1.1",
       "author": {
         "name": "Vercel",
-        "url": "https://github.com/vercel"
+        "url": "https://vercel.com"
       },
       "homepage": "https://turborepo.dev",
       "repository": "https://github.com/vercel/turborepo",
@@ -23,12 +25,13 @@
         "monorepo",
         "build-system",
         "caching",
-        "vercel"
+        "remote-cache",
+        "turbo",
+        "vercel",
+        "coding-agents"
       ],
       "category": "development",
-      "skills": [
-        "./turborepo"
-      ]
+      "skills": ["./turborepo"]
     }
   ]
 }
