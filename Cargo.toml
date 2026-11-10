@@ -124,6 +124,7 @@ turborepo-vercel-api = { path = "crates/turborepo-vercel-api" }
 turborepo-vercel-api-mock = { path = "crates/turborepo-vercel-api-mock" }
 turborepo-watch = { path = "crates/turborepo-watch", default-features = false }
 turborepo-ghostty = { path = "crates/turborepo-ghostty" }
+turborepo-trace = { path = "crates/turborepo-trace" }
 turborepo-trace-core = { path = "crates/turborepo-trace-core" }
 turborepo-trace-frameworks = { path = "crates/turborepo-trace-frameworks", default-features = false }
 turborepo-trace-graph = { path = "crates/turborepo-trace-graph" }
@@ -181,12 +182,14 @@ notify = "6.1.1"
 oxc_allocator = "0.156.0"
 oxc_ast = { version = "0.156.0", features = ["serialize"] }
 oxc_ast_visit = "0.156.0"
+oxc_codegen = "0.156.0"
 oxc_estree = { version = "0.156.0", features = ["serialize"] }
 oxc_parser = "0.156.0"
 oxc_resolver = { version = "11.24.3", default-features = false }
 oxc_semantic = "0.156.0"
 oxc_span = "0.156.0"
 oxc_syntax = "0.156.0"
+oxc_transformer = "0.156.0"
 layout-rs = "0.1.3"
 owo-colors = "3.5.0"
 unrs_resolver = "1.11.1"
@@ -204,6 +207,7 @@ semver = "1.0.16"
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = { version = "1.0.147", features = ["preserve_order"] }
 serde_yaml_ng = "0.10.0"
+sha1 = "0.10.5"
 sha2 = "0.10.6"
 shell-words = "1.1.0"
 smallvec = { version = "1.15", features = ["const_generics", "union"] }

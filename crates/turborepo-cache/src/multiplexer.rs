@@ -375,8 +375,9 @@ impl CacheMultiplexer {
         }
     }
 
-    /// Dry-run-only batched existence check. Local hits take precedence; a
-    /// server without the query endpoint still works through individual HEADs.
+    /// Batched existence check (dry runs, and `turbo trace` looking for the
+    /// graph of a nearby commit). Local hits take precedence; a server
+    /// without the query endpoint still works through individual HEADs.
     pub async fn batch_exists(&self, keys: &[String]) -> Vec<Option<CacheHitMetadata>> {
         let mut hits = vec![None; keys.len()];
         let mut remote_keys = Vec::new();

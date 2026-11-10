@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<title>Impact of this change</title>
+<style>/*STYLE*/</style>
+</head>
+<body>
+<a class="skip" href="#main">Skip to content</a>
+<header class="bar" id="bar">
+  <div class="bar-in">
+    <span class="brand">turbotrace <span class="brand-sub">impact</span></span>
+    <nav class="nav" aria-label="Sections" id="nav"></nav>
+    <label class="search">
+      <span class="vh">Filter by path</span>
+      <input id="q" type="search" placeholder="Filter by path" autocomplete="off" spellcheck="false">
+    </label>
+  </div>
+  <div class="bar-in filters" id="filters" hidden></div>
+</header>
+<main id="main">
+  <section class="opening" aria-labelledby="claim">
+    <p class="context" id="context"></p>
+    <h1 id="claim">Reading the report</h1>
+    <p class="lede" id="lede"></p>
+    <figure class="how" aria-labelledby="how-cap">
+      <div class="how-ends" id="how-ends"></div>
+      <div class="how-total" id="how-total" aria-hidden="true"></div>
+      <svg class="how-zoom" id="how-zoom" viewBox="0 0 100 10" preserveAspectRatio="none" aria-hidden="true" focusable="false"></svg>
+      <div class="how-bar" id="how-bar" aria-hidden="true"></div>
+      <ul class="how-legend" id="how-legend"></ul>
+      <figcaption class="caption" id="how-cap"></figcaption>
+    </figure>
+  </section>
+
+  <section class="section" id="flow" aria-labelledby="flow-h">
+    <div class="section-head">
+      <h2 id="flow-h">From the change to the tests</h2>
+      <p class="caption" id="flow-cap"></p>
+    </div>
+    <figure class="flow" id="flow-fig">
+      <div class="flow-heads" id="flow-heads" aria-hidden="true"></div>
+      <div class="flow-view" id="flow-view" tabindex="-1"></div>
+      <div class="flow-list" id="flow-list"></div>
+    </figure>
+  </section>
+
+  <section class="section" id="sources" aria-labelledby="sources-h">
+    <div class="section-head">
+      <h2 id="sources-h">Where it comes from</h2>
+      <p class="caption" id="sources-cap"></p>
+    </div>
+    <div id="sources-table"></div>
+    <details class="more" id="idle"></details>
+  </section>
+
+  <section class="section" id="hubs" aria-labelledby="hubs-h">
+    <div class="section-head">
+      <h2 id="hubs-h">What it passes through</h2>
+      <p class="caption" id="hubs-cap"></p>
+    </div>
+    <div id="hubs-table"></div>
+  </section>
+
+  <section class="section" id="tests" aria-labelledby="tests-h">
+    <div class="section-head">
+      <h2 id="tests-h">Every entry</h2>
+      <div class="seg" role="group" aria-label="Entries shown" id="verdict"></div>
+    </div>
+    <div class="split">
+      <div id="tests-table"></div>
+      <aside class="detail" id="detail" aria-live="polite" aria-label="The selected entry"></aside>
+    </div>
+  </section>
+
+  <section class="section" id="floor" aria-labelledby="floor-h">
+    <div class="section-head">
+      <h2 id="floor-h">What runs on every change</h2>
+      <p class="caption" id="floor-cap"></p>
+    </div>
+    <div id="floor-body"></div>
+  </section>
+
+  <section class="section" id="rest" aria-labelledby="rest-h">
+    <div class="section-head">
+      <h2 id="rest-h">What does not run</h2>
+      <p class="caption" id="rest-cap"></p>
+    </div>
+    <div id="rest-body"></div>
+  </section>
+
+  <section class="section" id="tasks" aria-labelledby="tasks-h" hidden>
+    <div class="section-head">
+      <h2 id="tasks-h">Build tasks</h2>
+      <p class="caption" id="tasks-cap"></p>
+    </div>
+    <div id="tasks-body"></div>
+  </section>
+</main>
+<footer class="foot">
+  <p id="foot-cmd" class="mono"></p>
+  <p id="foot-note"></p>
+</footer>
+<div class="tip" id="tip" role="tooltip" hidden></div>
+<svg id="defs" class="defs" width="0" height="0" aria-hidden="true" focusable="false">
+  <defs>
+    <pattern id="hatch" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+      <rect width="6" height="6" class="hatch-bg"></rect>
+      <rect width="2.5" height="6" class="hatch-fg"></rect>
+    </pattern>
+  </defs>
+</svg>
+<noscript><p class="noscript">This report needs JavaScript to draw its data. It loads nothing from the network.</p></noscript>
+<script type="application/json" id="data">/*DATA*/</script>
+<script>/*SCRIPT*/</script>
+</body>
+</html>

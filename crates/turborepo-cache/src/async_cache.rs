@@ -221,6 +221,13 @@ impl AsyncCache {
         receiver.await.map_err(|_| CacheError::CacheShuttingDown)
     }
 
+    /// Which of `keys` the cache holds, with one batched remote request where
+    /// the server supports it (see [`CacheMultiplexer::batch_exists`]).
+    #[tracing::instrument(skip_all)]
+    pub async fn batch_exists(&self, keys: &[String]) -> Vec<Option<CacheHitMetadata>> {
+        self.real_cache.batch_exists(keys).await
+    }
+
     #[tracing::instrument(skip_all)]
     pub async fn fetch(
         &self,
