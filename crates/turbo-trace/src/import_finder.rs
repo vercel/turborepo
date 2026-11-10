@@ -95,7 +95,7 @@ fn find_require_calls(statements: &[Statement], results: &mut Vec<ImportResult>)
                         continue;
                     };
                     results.push(ImportResult {
-                        specifier: lit.value.to_string(),
+                        specifier: lit.value.display().to_string(),
                         span: callee.span,
                         statement_span: var_decl.span,
                         import_type: ImportType::Value,

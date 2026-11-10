@@ -9,7 +9,7 @@ use camino::{Utf8Path, Utf8PathBuf};
 use globwalk::{ValidatedGlob, WalkType};
 use miette::{Diagnostic, Report, SourceSpan};
 use oxc_allocator::Allocator;
-use oxc_estree::{CompactTSSerializer, ESTree};
+use oxc_estree::{CompactSerializer, ESTree};
 use oxc_parser::Parser;
 use oxc_span::SourceType;
 use thiserror::Error;
@@ -166,15 +166,15 @@ pub fn parse_file(
     let allocator = Allocator::default();
     let ret = Parser::new(&allocator, file_content, source_type).parse();
 
-    if ret.panicked {
-        let messages: Vec<String> = ret.errors.iter().map(|e| e.to_string()).collect();
+    if ret.fatal_error {
+        let messages: Vec<String> = ret.diagnostics.iter().map(|e| e.to_string()).collect();
         return Err(messages.join(", "));
     }
 
     let imports = import_finder::find_imports(&ret.module_record, &ret.program.body, import_type);
 
     let ast_json = if include_ast {
-        let mut serializer = CompactTSSerializer::new(false);
+        let mut serializer = CompactSerializer::new(true, false);
         ret.program.serialize(&mut serializer);
         let json_string = serializer.into_string();
         serde_json::from_str(&json_string).ok()
