@@ -1,7 +1,8 @@
 //! A graph directory inside the repository (`.turbo/trace`) is
 //! checkout-controlled, and it travels through caches: a commit can add a
 //! `graph.json` and store files of its choosing. Names read from them stay
-//! inside the store.
+//! inside the store, and archives that pass their checksum but not rkyv's
+//! checks are never read: a build traces their packages again.
 
 // Test code: helpers outside `#[test]` functions unwrap and expect as the tests do.
 #![allow(clippy::unwrap_used, clippy::expect_used)]
@@ -140,4 +141,65 @@ fn a_crafted_shard_key_reaches_nothing_outside_the_store() {
         assert!(victim.exists(), "{key}: deleted");
         assert_eq!(keys(&Manifest::read(&out).unwrap()), keys(&fresh.manifest));
     }
+}
+
+/// Shard file bytes with a valid header and checksum around an archive that is
+/// not one.
+fn forged(len: usize) -> Vec<u8> {
+    let archive = vec![0xff; len];
+    let mut out = Vec::with_capacity(32 + len);
+    out.extend_from_slice(b"DTSHARD\0");
+    out.extend_from_slice(&shard::FORMAT_VERSION.to_le_bytes());
+    out.extend_from_slice(&[0; 4]);
+    out.extend_from_slice(&xxhash_rust::xxh3::xxh3_64(&archive).to_le_bytes());
+    out.extend_from_slice(&[0; 8]);
+    out.extend_from_slice(&archive);
+    out
+}
+
+#[test]
+fn forged_shards_with_valid_checksums_are_traced_again() {
+    // Release builds used to check only the checksum, then read the archive
+    // unchecked.
+    let (_t, r) = repo();
+    let fresh = build(&opts(&r), &langs()).unwrap();
+    let out = out(&r);
+    let store = out.join("store");
+    let real = Pack::open(&store).unwrap();
+    let good = real
+        .get(&fresh.manifest.shards[0].key)
+        .unwrap()
+        .file_bytes();
+    assert_eq!(&good[..8], b"DTSHARD\0", "the header this test forges");
+    drop(real);
+    // Every shard of the snapshot as a loose file under its own key, and a pack
+    // whose log holds the same forgeries.
+    for f in ["pack", "pack.log"] {
+        let _ = std::fs::remove_file(store.join(f));
+    }
+    let records: Vec<(String, Vec<u8>)> = fresh
+        .manifest
+        .shards
+        .iter()
+        .map(|s| (s.key.clone(), forged(good.len() - 32)))
+        .collect();
+    for (k, b) in &records {
+        std::fs::write(store.join(k), b).unwrap();
+    }
+    Pack::append(&store, &records, None).unwrap();
+    for (k, _) in &records {
+        assert!(matches!(
+            shard::load_from(&store, Pack::open(&store).as_ref(), k),
+            Err(shard::ShardError::Archive(..))
+        ));
+    }
+    assert!(Graph::open(&out).is_err());
+    // A build traces every package again and leaves shards that load.
+    let again = build(&opts(&r), &langs()).unwrap();
+    assert_eq!(keys(&again.manifest), keys(&fresh.manifest));
+    let pack = Pack::open(&store);
+    for s in &again.manifest.shards {
+        shard::load_from(&store, pack.as_ref(), &s.key).unwrap();
+    }
+    Graph::open(&out).unwrap();
 }

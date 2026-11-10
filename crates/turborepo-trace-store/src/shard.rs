@@ -733,10 +733,11 @@ impl LoadedShard {
     /// The archived shard.
     #[inline]
     pub fn get(&self) -> &ArchivedShard {
-        // SAFETY: `decode` validated the archive (checked access in debug builds, the
-        // checksum of bytes we wrote ourselves in release builds), the range starts at
-        // a 16-byte aligned offset of an aligned buffer, and the buffer is
-        // never mutated afterwards.
+        // SAFETY: every `LoadedShard` is made by `validate`, which ran the checked
+        // `rkyv::access` on exactly this range (in every build profile: store files
+        // are checkout-controlled and travel through caches, so a matching checksum
+        // proves nothing); the range starts at a 16-byte aligned offset of an aligned
+        // buffer, and the buffer is never mutated afterwards.
         unsafe { rkyv::access_unchecked::<ArchivedShard>(&self.buf[self.start..self.end]) }
     }
 
@@ -792,11 +793,13 @@ fn check(bytes: &[u8], name: &str) -> Result<std::ops::Range<usize>, ShardError>
     Ok(HEADER..bytes.len())
 }
 
+/// Runs rkyv's checked access on the archive of `s`, in every build profile:
+/// [`LoadedShard::get`] then reads it unchecked. The checksum does not stand in
+/// for it: it only detects damage, and anyone who can write a store file (a
+/// commit that adds `.turbo/trace`, a cache entry) can recompute it.
 fn validate(s: LoadedShard, name: &str) -> Result<LoadedShard, ShardError> {
-    if cfg!(debug_assertions) {
-        rkyv::access::<ArchivedShard, rkyv::rancor::Error>(&s.buf[s.start..s.end])
-            .map_err(|e| ShardError::Archive(name.into(), e.to_string()))?;
-    }
+    rkyv::access::<ArchivedShard, rkyv::rancor::Error>(&s.buf[s.start..s.end])
+        .map_err(|e| ShardError::Archive(name.into(), e.to_string()))?;
     Ok(s)
 }
 
@@ -1439,6 +1442,44 @@ mod tests {
             decode(&bytes[..10], "t"),
             Err(ShardError::Format(_))
         ));
+    }
+
+    /// Shard file bytes with a valid header and checksum around `archive`: what
+    /// anyone who can write a store file can produce.
+    fn forged(archive: &[u8]) -> Vec<u8> {
+        let mut out = Vec::with_capacity(HEADER + archive.len());
+        out.extend_from_slice(MAGIC);
+        out.extend_from_slice(&FORMAT_VERSION.to_le_bytes());
+        out.extend_from_slice(&[0; 4]);
+        out.extend_from_slice(&xxhash_rust::xxh3::xxh3_64(archive).to_le_bytes());
+        out.extend_from_slice(&[0; 8]);
+        out.extend_from_slice(archive);
+        out
+    }
+
+    #[test]
+    fn a_forged_archive_with_a_valid_checksum_is_rejected_in_every_profile() {
+        // Release builds used to trust the checksum and read the archive unchecked.
+        let good = encode(&sample());
+        let bytes = forged(&vec![0xff; good.len() - HEADER]);
+        assert!(check(&bytes, "t").is_ok(), "the checksum matches");
+        assert!(matches!(decode(&bytes, "t"), Err(ShardError::Archive(..))));
+        // As a loose store file and as a record of the pack's log.
+        let t = tempfile::tempdir().unwrap();
+        let key = "0123456789abcdef0123456789abcdef";
+        std::fs::write(t.path().join(key), &bytes).unwrap();
+        assert!(matches!(
+            load_from(t.path(), None, key),
+            Err(ShardError::Archive(..))
+        ));
+        let logged = tempfile::tempdir().unwrap();
+        Pack::append(logged.path(), &[(key.to_owned(), bytes.clone())], None).unwrap();
+        let pack = Pack::open(logged.path()).unwrap();
+        assert!(pack.contains(key));
+        assert!(pack.get(key).is_none());
+        assert!(load_from(logged.path(), Some(&pack), key).is_err());
+        // The real archive still loads.
+        assert_eq!(decode(&good, "t").unwrap().to_owned(), sample());
     }
 
     #[test]

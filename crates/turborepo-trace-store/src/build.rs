@@ -3058,9 +3058,19 @@ fn rel_in(root: &str, e: &str) -> String {
 /// staged shards, and with it the order of the log's records, is the order the
 /// threads finished in: not a function of the tree, and read by nothing
 /// ([`shard::Pack`]).
+///
+/// A key the store holds under bytes that do not load (damaged, or forged: the
+/// store is checkout-controlled) gets a loose file with the shard instead,
+/// which [`shard::load_from`] reads when the pack's record fails; otherwise
+/// the snapshot would name a shard that never loads.
 pub(crate) fn write_shard(cx: &Cx, s: &Shard) -> Result<bool, Error> {
-    if cx.pack.as_ref().is_some_and(|p| p.contains(&s.key)) || cx.store.join(&s.key).exists() {
-        return Ok(false);
+    let loose = cx.store.join(&s.key);
+    if cx.pack.as_ref().is_some_and(|p| p.contains(&s.key)) || loose.exists() {
+        if shard::load_from(&cx.store, cx.pack.as_ref(), &s.key).is_ok() {
+            return Ok(false);
+        }
+        crate::write_atomic(&loose, &shard::encode(s)).map_err(|e| Error::io(&loose, e))?;
+        return Ok(true);
     }
     let bytes = shard::encode(s);
     let mut sink = cx.sink.lock().unwrap_or_else(|e| e.into_inner());
