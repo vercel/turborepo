@@ -626,8 +626,8 @@ async fn run_main(
                 args: args.clone(),
             };
             let child_event = event.child();
-            generate::run(&repo_root, &tag, command, &args, child_event)?;
-            Ok(0)
+            let exit_code = generate::run(&repo_root, &tag, command, &args, child_event)?;
+            Ok(exit_code)
         }
         Command::Info => {
             let event = CommandEventBuilder::new("info").with_parent(&root_telemetry);

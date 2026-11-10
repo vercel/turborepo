@@ -149,21 +149,19 @@ pub fn run(
     command: &Option<GenerateCommand>,
     args: &GeneratorCustomArgs,
     telemetry: CommandEventBuilder,
-) -> Result<(), Error> {
+) -> Result<i32, Error> {
     telemetry.track_generator_tag(tag);
     // check if a subcommand was passed
     if let Some(GenerateCommand::Workspace(workspace_args)) = command {
         let raw_args = serde_json::to_string(&workspace_args)?;
         telemetry.track_generator_option("workspace");
-        call_turbo_gen(repo_root, "workspace", tag, &raw_args)?;
+        call_turbo_gen(repo_root, "workspace", tag, &raw_args)
     } else {
         // if no subcommand was passed, run the generate command as default
         let raw_args = serde_json::to_string(&args)?;
         telemetry.track_generator_option("run");
-        call_turbo_gen(repo_root, "run", tag, &raw_args)?;
+        call_turbo_gen(repo_root, "run", tag, &raw_args)
     }
-
-    Ok(())
 }
 
 #[cfg(test)]
