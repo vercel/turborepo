@@ -1,0 +1,416 @@
+---
+source: crates/turborepo-trace-frameworks/tests/fixtures.rs
+expression: r.json()
+---
+{
+  "inputs": {
+    "framework": "jest",
+    "config_file": "<fixture>/jest.config.js",
+    "projects": [
+      {
+        "name": "basic",
+        "config_file": "<fixture>/jest.config.js",
+        "root_dir": "<fixture>",
+        "global": {
+          "config_files": [
+            "<fixture>/jest.config.js",
+            "<fixture>/jest.base.js"
+          ],
+          "js_entries": [
+            "<fixture>/jest.config.js",
+            "<fixture>/jest.base.js"
+          ],
+          "entries": [
+            {
+              "role": "setup_file",
+              "target": {
+                "path": "<fixture>/test-utils/env.ts"
+              }
+            },
+            {
+              "role": "setup_file",
+              "target": {
+                "path": "<fixture>/test-utils/ci-setup.ts"
+              }
+            },
+            {
+              "role": "setup_file_after_env",
+              "target": {
+                "path": "<fixture>/jest.setup.ts"
+              }
+            },
+            {
+              "role": "setup_file_after_env",
+              "target": {
+                "module": {
+                  "request": "jest-extended/all",
+                  "from_dir": "<fixture>"
+                }
+              }
+            },
+            {
+              "role": "global_setup",
+              "target": {
+                "path": "<fixture>/test-utils/global-setup.ts"
+              }
+            },
+            {
+              "role": "test_environment",
+              "target": {
+                "module": {
+                  "request": "jest-environment-jsdom",
+                  "from_dir": "<fixture>"
+                }
+              }
+            },
+            {
+              "role": "runner",
+              "target": {
+                "module": {
+                  "request": "jest",
+                  "from_dir": "<fixture>"
+                }
+              }
+            },
+            {
+              "role": "transform",
+              "target": {
+                "module": {
+                  "request": "@swc/jest",
+                  "from_dir": "<fixture>"
+                }
+              }
+            },
+            {
+              "role": "transform",
+              "target": {
+                "path": "<fixture>/test-utils/css-transform.js"
+              }
+            }
+          ],
+          "edges": [],
+          "probes": [
+            "<fixture>/jest.config.ts",
+            "<fixture>/jest.config.mjs",
+            "<fixture>/jest.config.cjs",
+            "<fixture>/jest.config.mts",
+            "<fixture>/jest.config.cts",
+            "<fixture>/jest.config.json"
+          ],
+          "memberships": [
+            {
+              "dir": "<fixture>",
+              "pattern": "**/__mocks__/**",
+              "reason": "manual mocks (jest haste map)"
+            }
+          ]
+        },
+        "resolution": {
+          "aliases": [
+            {
+              "matcher": {
+                "regex": "^@app/(.*)/(.*)$"
+              },
+              "replacements": [
+                "<fixture>/src/$1/$2"
+              ],
+              "source": "moduleNameMapper"
+            },
+            {
+              "matcher": {
+                "regex": "^@utils$"
+              },
+              "replacements": [
+                "<fixture>/test-utils/index.ts"
+              ],
+              "source": "moduleNameMapper"
+            },
+            {
+              "matcher": {
+                "regex": "^(\\.{1,2}/.*)\\.js$"
+              },
+              "replacements": [
+                "$1"
+              ],
+              "source": "moduleNameMapper"
+            },
+            {
+              "matcher": {
+                "regex": "\\.(css|less)$"
+              },
+              "replacements": [
+                "<fixture>/test-utils/style-mock.ts",
+                "identity-obj-proxy"
+              ],
+              "source": "moduleNameMapper"
+            }
+          ],
+          "roots": [
+            "<fixture>"
+          ],
+          "module_paths": [],
+          "module_directories": [
+            "node_modules"
+          ],
+          "module_path_ignore_patterns": [],
+          "extensions": [
+            "js",
+            "mjs",
+            "cjs",
+            "jsx",
+            "ts",
+            "mts",
+            "cts",
+            "tsx",
+            "json",
+            "node"
+          ]
+        },
+        "discovery": {
+          "roots": [
+            "<fixture>"
+          ],
+          "include": [
+            {
+              "glob": "**/__tests__/**/*.?([mc])[jt]s?(x)"
+            },
+            {
+              "glob": "**/?(*.)+(spec|test).?([mc])[jt]s?(x)"
+            }
+          ],
+          "exclude": [
+            {
+              "regex": "/node_modules/"
+            },
+            {
+              "regex": "<fixture>/src/legacy/"
+            }
+          ],
+          "glob_base": null,
+          "extensions": [
+            "js",
+            "mjs",
+            "cjs",
+            "jsx",
+            "ts",
+            "mts",
+            "cts",
+            "tsx",
+            "json",
+            "node"
+          ]
+        },
+        "mocks": {
+          "root_mock_dirs": [
+            "<fixture>"
+          ],
+          "haste_mocks": [
+            [
+              "@scope/pkg",
+              "<fixture>/__mocks__/@scope/pkg.js"
+            ],
+            [
+              "axios",
+              "<fixture>/__mocks__/axios.js"
+            ],
+            [
+              "db",
+              "<fixture>/src/lib/__mocks__/db.ts"
+            ]
+          ],
+          "implicit_package_mocks": true,
+          "automock": false,
+          "extensions": [
+            "js",
+            "mjs",
+            "cjs",
+            "jsx",
+            "ts",
+            "mts",
+            "cts",
+            "tsx",
+            "json",
+            "node"
+          ]
+        },
+        "snapshots": "default",
+        "uncertainties": []
+      }
+    ],
+    "uncertainties": []
+  },
+  "tests": [
+    {
+      "project": "basic",
+      "inputs": {
+        "test": "<fixture>/src/__tests__/db.test.ts",
+        "entries": [
+          {
+            "role": "automocked",
+            "target": {
+              "module": {
+                "request": "../lib/cache",
+                "from_dir": "<fixture>/src/__tests__"
+              }
+            }
+          },
+          {
+            "role": "automocked",
+            "target": {
+              "module": {
+                "request": "@app/lib/x",
+                "from_dir": "<fixture>/src/__tests__"
+              }
+            }
+          },
+          {
+            "role": "automocked",
+            "target": {
+              "module": {
+                "request": "left-pad",
+                "from_dir": "<fixture>/src/__tests__"
+              }
+            }
+          },
+          {
+            "role": "require_actual",
+            "target": {
+              "module": {
+                "request": "../lib/db",
+                "from_dir": "<fixture>/src/__tests__"
+              }
+            }
+          }
+        ],
+        "edges": [
+          {
+            "kind": "snapshot",
+            "to": "<fixture>/src/__tests__/__snapshots__/db.test.ts.snap",
+            "reason": "default snapshot path"
+          },
+          {
+            "kind": "manual_mock",
+            "to": "<fixture>/src/lib/__mocks__/db.ts",
+            "reason": "jest.mock('../lib/db')"
+          },
+          {
+            "kind": "manual_mock",
+            "to": "<fixture>/__mocks__/axios.js",
+            "reason": "jest.mock('axios')"
+          }
+        ],
+        "probes": [
+          "<fixture>/__mocks__/axios.mjs",
+          "<fixture>/__mocks__/axios.cjs",
+          "<fixture>/__mocks__/axios.jsx",
+          "<fixture>/__mocks__/axios.ts",
+          "<fixture>/__mocks__/axios.mts",
+          "<fixture>/__mocks__/axios.cts",
+          "<fixture>/__mocks__/axios.tsx",
+          "<fixture>/__mocks__/axios.json",
+          "<fixture>/__mocks__/axios.node",
+          "<fixture>/src/lib/__mocks__/cache.ts",
+          "<fixture>/src/lib/__mocks__/x.ts",
+          "<fixture>/__mocks__/left-pad.js",
+          "<fixture>/__mocks__/left-pad.mjs",
+          "<fixture>/__mocks__/left-pad.cjs",
+          "<fixture>/__mocks__/left-pad.jsx",
+          "<fixture>/__mocks__/left-pad.ts",
+          "<fixture>/__mocks__/left-pad.mts",
+          "<fixture>/__mocks__/left-pad.cts",
+          "<fixture>/__mocks__/left-pad.tsx",
+          "<fixture>/__mocks__/left-pad.json",
+          "<fixture>/__mocks__/left-pad.node"
+        ],
+        "memberships": [
+          {
+            "dir": "<fixture>/src/__tests__/__snapshots__",
+            "pattern": "db.test.ts.snap",
+            "reason": "default snapshot path"
+          }
+        ],
+        "mocks": [
+          {
+            "call": "jest.mock",
+            "request": "../lib/db",
+            "factory": false,
+            "line": 4
+          },
+          {
+            "call": "jest.mock",
+            "request": "axios",
+            "factory": false,
+            "line": 5
+          },
+          {
+            "call": "jest.mock",
+            "request": "../lib/cache",
+            "factory": false,
+            "line": 6
+          },
+          {
+            "call": "jest.mock",
+            "request": "../lib/x",
+            "factory": true,
+            "line": 7
+          },
+          {
+            "call": "jest.mock",
+            "request": "@app/lib/x",
+            "factory": false,
+            "line": 8
+          },
+          {
+            "call": "jest.mock",
+            "request": "left-pad",
+            "factory": false,
+            "line": 9
+          },
+          {
+            "call": "jest.requireActual",
+            "request": "../lib/db",
+            "factory": false,
+            "line": 11
+          }
+        ],
+        "loaded_real": [
+          "<fixture>/src/lib/cache.ts",
+          "<fixture>/src/lib/x.ts",
+          "<fixture>/src/lib/db.ts"
+        ],
+        "loaded_eager": [
+          "<fixture>/src/lib/db.ts"
+        ],
+        "uncertainties": []
+      }
+    },
+    {
+      "project": "basic",
+      "inputs": {
+        "test": "<fixture>/src/components/button.spec.tsx",
+        "entries": [
+          {
+            "role": "test_environment",
+            "target": {
+              "module": {
+                "request": "jest-environment-node",
+                "from_dir": "<fixture>"
+              }
+            }
+          }
+        ],
+        "edges": [],
+        "probes": [],
+        "memberships": [
+          {
+            "dir": "<fixture>/src/components/__snapshots__",
+            "pattern": "button.spec.tsx.snap",
+            "reason": "default snapshot path"
+          }
+        ],
+        "mocks": [],
+        "uncertainties": []
+      }
+    }
+  ]
+}

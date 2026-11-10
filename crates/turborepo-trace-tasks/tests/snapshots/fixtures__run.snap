@@ -1,0 +1,357 @@
+---
+source: crates/turborepo-trace-tasks/tests/fixtures.rs
+expression: family(stringify! (run))
+---
+$ node scripts/gen.mjs schema.json
+# node [node] Full
+{
+  "inputs": [
+    "schema.json"
+  ],
+  "entries": [
+    {
+      "path": "scripts/gen.mjs",
+      "lang": "js"
+    }
+  ],
+  "definition": [
+    "scripts/gen.mjs"
+  ]
+}
+
+$ node -r dotenv/config --env-file=.env.local scripts/gen.mjs
+# node [node] Full
+{
+  "inputs": [
+    ".env.local"
+  ],
+  "entries": [
+    {
+      "path": "scripts/gen.mjs",
+      "lang": "js"
+    }
+  ],
+  "toolchain": [
+    {
+      "ecosystem": "npm",
+      "name": "dotenv"
+    }
+  ],
+  "definition": [
+    "scripts/gen.mjs"
+  ]
+}
+
+$ tsx watch scripts/seed.ts
+# tsx [node] Full
+{
+  "configs": [
+    "tsconfig.json"
+  ],
+  "entries": [
+    {
+      "path": "scripts/seed.ts",
+      "lang": "js"
+    }
+  ],
+  "toolchain": [
+    {
+      "ecosystem": "npm",
+      "name": "tsx"
+    }
+  ],
+  "definition": [
+    "scripts/seed.ts"
+  ]
+}
+
+$ ts-node --project tsconfig.json scripts/seed
+# ts-node [node] Full
+{
+  "configs": [
+    "tsconfig.json"
+  ],
+  "entries": [
+    {
+      "path": "scripts/seed.ts",
+      "lang": "js"
+    }
+  ],
+  "toolchain": [
+    {
+      "ecosystem": "npm",
+      "name": "ts-node"
+    }
+  ],
+  "definition": [
+    "scripts/seed.ts"
+  ]
+}
+
+$ node -e "console.log(1)"
+# node [node] Partial
+{
+  "memberships": [
+    {
+      "dir": ".",
+      "pattern": "**",
+      "reason": "`node -e` inline code"
+    },
+    {
+      "dir": ".",
+      "pattern": "**",
+      "reason": "`node` not fully recognized"
+    }
+  ],
+  "uncertainties": [
+    {
+      "kind": "eval_like",
+      "detail": "`node -e` inline code"
+    }
+  ]
+}
+
+$ node --test
+# node [node] Full
+{
+  "memberships": [
+    {
+      "dir": ".",
+      "pattern": "**/test/**/*.{js,mjs,cjs,ts,mts,cts}",
+      "reason": "node --test default pattern"
+    },
+    {
+      "dir": ".",
+      "pattern": "**/{test,test-*,*.test,*-test,*_test}.{js,mjs,cjs,ts,mts,cts}",
+      "reason": "node --test default pattern"
+    }
+  ],
+  "runs": [
+    {
+      "kind": "tests",
+      "framework": "node-test",
+      "dir": "."
+    }
+  ]
+}
+
+$ python3 scripts/x.py
+# python3 [python] Full
+{
+  "entries": [
+    {
+      "path": "scripts/x.py",
+      "lang": "python"
+    }
+  ],
+  "toolchain": [
+    {
+      "ecosystem": "system",
+      "name": "python"
+    }
+  ],
+  "definition": [
+    "scripts/x.py"
+  ]
+}
+
+$ python -m tools.gen --out x
+# python [python] Full
+{
+  "entries": [
+    {
+      "path": "tools/gen/__main__.py",
+      "lang": "python"
+    }
+  ],
+  "toolchain": [
+    {
+      "ecosystem": "system",
+      "name": "python"
+    }
+  ],
+  "definition": [
+    "tools/gen/__main__.py"
+  ]
+}
+
+$ python -m pytest tests
+# python [python] Full
+{
+  "inputs": [
+    ".pytest.ini",
+    "pyproject.toml",
+    "pytest.ini",
+    "setup.cfg",
+    "tox.ini"
+  ],
+  "entries": [
+    {
+      "path": "tests",
+      "lang": "python"
+    }
+  ],
+  "toolchain": [
+    {
+      "ecosystem": "pypi",
+      "name": "pytest"
+    },
+    {
+      "ecosystem": "system",
+      "name": "python"
+    }
+  ],
+  "runs": [
+    {
+      "kind": "tests",
+      "framework": "pytest",
+      "dir": "tests"
+    }
+  ],
+  "definition": [
+    "tests"
+  ]
+}
+
+$ go run ./cmd/server
+# go [go] Full
+{
+  "configs": [
+    "go.mod",
+    "go.sum"
+  ],
+  "entries": [
+    {
+      "path": "cmd/server",
+      "lang": "go"
+    }
+  ],
+  "memberships": [
+    {
+      "dir": "cmd/server",
+      "pattern": "*.go",
+      "reason": "go package directory"
+    }
+  ],
+  "toolchain": [
+    {
+      "ecosystem": "system",
+      "name": "go"
+    }
+  ],
+  "definition": [
+    "cmd/server"
+  ]
+}
+
+$ go build -o bin/server ./cmd/server
+# go [go] Full
+{
+  "outputs": [
+    {
+      "path": "bin/server",
+      "kind": "artifact"
+    }
+  ],
+  "configs": [
+    "go.mod",
+    "go.sum"
+  ],
+  "entries": [
+    {
+      "path": "cmd/server",
+      "lang": "go"
+    }
+  ],
+  "memberships": [
+    {
+      "dir": "cmd/server",
+      "pattern": "*.go",
+      "reason": "go package directory"
+    }
+  ],
+  "toolchain": [
+    {
+      "ecosystem": "system",
+      "name": "go"
+    }
+  ],
+  "definition": [
+    "cmd/server"
+  ]
+}
+
+$ ./scripts/build.sh
+# build.sh [shell-script] Full
+{
+  "entries": [
+    {
+      "path": "scripts/build.sh",
+      "lang": "auto"
+    }
+  ],
+  "definition": [
+    "scripts/build.sh"
+  ]
+}
+
+$ deno run --allow-read scripts/seed.ts
+# deno [deno] Full
+{
+  "entries": [
+    {
+      "path": "scripts/seed.ts",
+      "lang": "js"
+    }
+  ],
+  "toolchain": [
+    {
+      "ecosystem": "system",
+      "name": "deno"
+    }
+  ],
+  "definition": [
+    "scripts/seed.ts"
+  ]
+}
+
+$ bun scripts/seed.ts
+# bun [package-manager] Full
+{
+  "entries": [
+    {
+      "path": "scripts/seed.ts",
+      "lang": "js"
+    }
+  ],
+  "toolchain": [
+    {
+      "ecosystem": "system",
+      "name": "bun"
+    }
+  ]
+}
+
+$ uv run python scripts/x.py
+# python [python] Full
+{
+  "entries": [
+    {
+      "path": "scripts/x.py",
+      "lang": "python"
+    }
+  ],
+  "toolchain": [
+    {
+      "ecosystem": "pypi",
+      "name": "uv"
+    },
+    {
+      "ecosystem": "system",
+      "name": "python"
+    }
+  ],
+  "definition": [
+    "scripts/x.py"
+  ]
+}

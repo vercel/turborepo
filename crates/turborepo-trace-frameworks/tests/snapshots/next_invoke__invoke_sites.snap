@@ -1,0 +1,467 @@
+---
+source: crates/turborepo-trace-frameworks/tests/next_invoke.rs
+expression: "serde_json::to_string_pretty(&rows).unwrap()"
+---
+[
+  {
+    "file": "app/login/page.tsx",
+    "line": 8,
+    "kind": "redirect",
+    "method": null,
+    "via": [
+      "next/navigation:redirect"
+    ],
+    "targets": [
+      "/teams/*"
+    ]
+  },
+  {
+    "file": "app/login/page.tsx",
+    "line": 10,
+    "kind": "navigation",
+    "method": null,
+    "via": [
+      "<Link href>"
+    ],
+    "targets": [
+      "/settings"
+    ]
+  },
+  {
+    "file": "app/settings/page.tsx",
+    "line": 11,
+    "kind": "swr",
+    "method": "GET",
+    "via": [
+      "Feed",
+      "fetch"
+    ],
+    "targets": [
+      "/api/health"
+    ]
+  },
+  {
+    "file": "app/sources/page.tsx",
+    "line": 8,
+    "kind": "fetch",
+    "method": "GET",
+    "via": [
+      "fetch"
+    ],
+    "targets": [
+      "unknown member: searchParams.u [request]"
+    ]
+  },
+  {
+    "file": "app/sources/page.tsx",
+    "line": 13,
+    "kind": "fetch",
+    "method": null,
+    "via": [
+      "Computed"
+    ],
+    "targets": [
+      "unknown call: pick('a')"
+    ]
+  },
+  {
+    "file": "app/teams/new/page.tsx",
+    "line": 4,
+    "kind": "action",
+    "method": "POST",
+    "via": [
+      "inline"
+    ],
+    "targets": [
+      "action page.tsx#<inline:subscribe>"
+    ]
+  },
+  {
+    "file": "app/users/[id]/page.tsx",
+    "line": 7,
+    "kind": "trpc",
+    "method": null,
+    "via": [
+      "caller.caller"
+    ],
+    "targets": [
+      "procedure greeting"
+    ]
+  },
+  {
+    "file": "components/backend.tsx",
+    "line": 8,
+    "kind": "fetch",
+    "method": "GET",
+    "via": [
+      "apiFetch",
+      "apiFetchInternal",
+      "fetch"
+    ],
+    "targets": [
+      "<origin>/v9/projects",
+      "https://app.example.com/v9/projects",
+      "/v9/projects",
+      "<origin>/api/v9/projects",
+      "https://app.example.com/api/v9/projects",
+      "/api/v9/projects"
+    ]
+  },
+  {
+    "file": "components/backend.tsx",
+    "line": 9,
+    "kind": "fetch",
+    "method": "GET",
+    "via": [
+      "fetch"
+    ],
+    "targets": [
+      "https://status.example.com/api/v2/status.json"
+    ]
+  },
+  {
+    "file": "components/dash.tsx",
+    "line": 11,
+    "kind": "swr",
+    "method": "GET",
+    "via": [
+      "apiFetch",
+      "apiFetchInternal",
+      "fetch"
+    ],
+    "targets": [
+      "<origin>/dash",
+      "https://app.example.com/dash",
+      "/dash",
+      "<origin>/api/dash",
+      "https://app.example.com/api/dash",
+      "/api/dash"
+    ]
+  },
+  {
+    "file": "components/items.tsx",
+    "line": 9,
+    "kind": "swr",
+    "method": "GET",
+    "via": [
+      "useTypedSWR",
+      "apiFetch",
+      "apiFetchInternal",
+      "fetch"
+    ],
+    "targets": [
+      "<origin>/v1/items/*",
+      "https://app.example.com/v1/items/*",
+      "/v1/items/*",
+      "<origin>/api/v1/items/*",
+      "https://app.example.com/api/v1/items/*",
+      "/api/v1/items/*"
+    ]
+  },
+  {
+    "file": "components/items.tsx",
+    "line": 12,
+    "kind": "fetch",
+    "method": "GET",
+    "via": [
+      "typedFetch",
+      "apiFetch",
+      "apiFetchInternal",
+      "fetch"
+    ],
+    "targets": [
+      "<origin>/v1/items/*",
+      "https://app.example.com/v1/items/*",
+      "/v1/items/*",
+      "<origin>/api/v1/items/*",
+      "https://app.example.com/api/v1/items/*",
+      "/api/v1/items/*"
+    ]
+  },
+  {
+    "file": "components/items.tsx",
+    "line": 16,
+    "kind": "fetch",
+    "method": "DELETE",
+    "via": [
+      "apiFetch",
+      "apiFetchInternal",
+      "fetch"
+    ],
+    "targets": [
+      "<origin>/v1/items/*",
+      "https://app.example.com/v1/items/*",
+      "/v1/items/*",
+      "<origin>/api/v1/items/*",
+      "https://app.example.com/api/v1/items/*",
+      "/api/v1/items/*"
+    ]
+  },
+  {
+    "file": "components/items.tsx",
+    "line": 22,
+    "kind": "fetch",
+    "method": "GET",
+    "via": [
+      "apiFetch",
+      "apiFetchInternal",
+      "fetch"
+    ],
+    "targets": [
+      "<origin>/health",
+      "https://app.example.com/health",
+      "/health",
+      "<origin>/api/health",
+      "https://app.example.com/api/health",
+      "/api/health"
+    ]
+  },
+  {
+    "file": "components/jobs.tsx",
+    "line": 19,
+    "kind": "swr",
+    "method": "GET",
+    "via": [
+      "useLazySWR → fetchJobsPage",
+      "fetch"
+    ],
+    "targets": [
+      "/api/jobs"
+    ]
+  },
+  {
+    "file": "components/members.tsx",
+    "line": 16,
+    "kind": "swr",
+    "method": "GET",
+    "via": [
+      "fetch"
+    ],
+    "targets": [
+      "/api/teams/*/members"
+    ]
+  },
+  {
+    "file": "components/sources.tsx",
+    "line": 12,
+    "kind": "fetch",
+    "method": "GET",
+    "via": [
+      "fetch"
+    ],
+    "targets": [
+      "unknown call: params.get('next') [request]"
+    ]
+  },
+  {
+    "file": "components/sources.tsx",
+    "line": 19,
+    "kind": "fetch",
+    "method": "GET",
+    "via": [
+      "fetch"
+    ],
+    "targets": [
+      "unknown expression: useState('').0 [input]"
+    ]
+  },
+  {
+    "file": "components/sources.tsx",
+    "line": 32,
+    "kind": "fetch",
+    "method": null,
+    "via": [
+      "apiFetch"
+    ],
+    "targets": [
+      "unknown call: sessionStorage.getItem('last') [storage]"
+    ]
+  },
+  {
+    "file": "components/team-card.tsx",
+    "line": 21,
+    "kind": "swr",
+    "method": "GET",
+    "via": [
+      "fetch"
+    ],
+    "targets": [
+      "/api/teams/*"
+    ]
+  },
+  {
+    "file": "components/team-form.tsx",
+    "line": 9,
+    "kind": "action",
+    "method": "POST",
+    "via": [
+      "hook:useActionState"
+    ],
+    "targets": [
+      "action actions.ts#createTeam"
+    ]
+  },
+  {
+    "file": "components/team-form.tsx",
+    "line": 10,
+    "kind": "action",
+    "method": "POST",
+    "via": [
+      "bind"
+    ],
+    "targets": [
+      "action actions.ts#renameTeam"
+    ]
+  },
+  {
+    "file": "components/team-form.tsx",
+    "line": 12,
+    "kind": "action",
+    "method": "POST",
+    "via": [
+      "hook:useAction"
+    ],
+    "targets": [
+      "action actions.ts#inviteMember"
+    ]
+  },
+  {
+    "file": "components/team-form.tsx",
+    "line": 24,
+    "kind": "action",
+    "method": "POST",
+    "via": [
+      "call"
+    ],
+    "targets": [
+      "action actions.ts#deleteTeam"
+    ]
+  },
+  {
+    "file": "components/unknown.tsx",
+    "line": 9,
+    "kind": "fetch",
+    "method": "GET",
+    "via": [
+      "fetch"
+    ],
+    "targets": [
+      "unknown call: localStorage.getItem('endpoint') [storage]"
+    ]
+  },
+  {
+    "file": "components/unknown.tsx",
+    "line": 10,
+    "kind": "fetch",
+    "method": null,
+    "via": [
+      "apiFetch"
+    ],
+    "targets": [
+      "unknown call: computeUrl(props.kind)"
+    ]
+  },
+  {
+    "file": "components/user-panel.tsx",
+    "line": 7,
+    "kind": "trpc",
+    "method": null,
+    "via": [
+      "api.useQuery"
+    ],
+    "targets": [
+      "procedure user.byId"
+    ]
+  },
+  {
+    "file": "components/user-panel.tsx",
+    "line": 8,
+    "kind": "trpc",
+    "method": null,
+    "via": [
+      "api.useSuspenseQuery"
+    ],
+    "targets": [
+      "procedure post.all"
+    ]
+  },
+  {
+    "file": "components/user-panel.tsx",
+    "line": 9,
+    "kind": "trpc",
+    "method": null,
+    "via": [
+      "api.useMutation"
+    ],
+    "targets": [
+      "procedure user.create"
+    ]
+  },
+  {
+    "file": "components/user-panel.tsx",
+    "line": 10,
+    "kind": "trpc",
+    "method": null,
+    "via": [
+      "utils.invalidate"
+    ],
+    "targets": [
+      "procedure user.list"
+    ]
+  },
+  {
+    "file": "components/user-panel.tsx",
+    "line": 12,
+    "kind": "trpc",
+    "method": null,
+    "via": [
+      "api.useMutation"
+    ],
+    "targets": [
+      "procedure post.comments.add"
+    ]
+  },
+  {
+    "file": "lib/use-jobs-query.ts",
+    "line": 8,
+    "kind": "query",
+    "method": "GET",
+    "via": [
+      "apiFetch",
+      "apiFetchInternal",
+      "fetch"
+    ],
+    "targets": [
+      "<origin>/jobs",
+      "https://app.example.com/jobs",
+      "/jobs",
+      "<origin>/api/jobs",
+      "https://app.example.com/api/jobs",
+      "/api/jobs"
+    ]
+  },
+  {
+    "file": "lib/use-jobs-query.ts",
+    "line": 16,
+    "kind": "query",
+    "method": "GET",
+    "via": [
+      "fetch"
+    ],
+    "targets": [
+      "/api/health"
+    ]
+  },
+  {
+    "file": "lib/use-jobs-query.ts",
+    "line": 24,
+    "kind": "query",
+    "method": "DELETE",
+    "via": [
+      "fetch"
+    ],
+    "targets": [
+      "/api/v1/items/*"
+    ]
+  }
+]

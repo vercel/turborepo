@@ -1,0 +1,221 @@
+---
+source: crates/turborepo-trace-frameworks/tests/nextjs.rs
+expression: "redact(serde_json::to_string_pretty(&v).unwrap(), root)"
+---
+{
+  "app_dir": "app",
+  "pages_dir": "pages",
+  "page_exts": [
+    "tsx",
+    "ts"
+  ],
+  "routes": [
+    {
+      "id": "metadata:app/opengraph-image.tsx",
+      "pattern": "/opengraph-image",
+      "kind": "handler",
+      "router": "app",
+      "slot": null,
+      "intercept": null,
+      "metadata": true
+    },
+    {
+      "id": "metadata:app/sitemap.ts",
+      "pattern": "/sitemap.xml",
+      "kind": "handler",
+      "router": "app",
+      "slot": null,
+      "intercept": null,
+      "metadata": true
+    },
+    {
+      "id": "page:app/(marketing)/about/page.tsx",
+      "pattern": "/about",
+      "kind": "page",
+      "router": "app",
+      "slot": null,
+      "intercept": null,
+      "metadata": false
+    },
+    {
+      "id": "page:app/(marketing)/pricing/page.tsx",
+      "pattern": "/pricing",
+      "kind": "page",
+      "router": "app",
+      "slot": null,
+      "intercept": null,
+      "metadata": false
+    },
+    {
+      "id": "page:app/[team]/@modal/(.)photo/[id]/page.tsx",
+      "pattern": "/[team]/photo/[id]",
+      "kind": "page",
+      "router": "app",
+      "slot": "app/[team]/@modal",
+      "intercept": {
+        "marker": "same",
+        "at": "app/[team]/@modal"
+      },
+      "metadata": false
+    },
+    {
+      "id": "page:app/[team]/@sidebar/settings/page.tsx",
+      "pattern": "/[team]/settings",
+      "kind": "page",
+      "router": "app",
+      "slot": "app/[team]/@sidebar",
+      "intercept": null,
+      "metadata": false
+    },
+    {
+      "id": "page:app/[team]/page.tsx",
+      "pattern": "/[team]",
+      "kind": "page",
+      "router": "app",
+      "slot": null,
+      "intercept": null,
+      "metadata": false
+    },
+    {
+      "id": "page:app/[team]/photo/[id]/page.tsx",
+      "pattern": "/[team]/photo/[id]",
+      "kind": "page",
+      "router": "app",
+      "slot": null,
+      "intercept": null,
+      "metadata": false
+    },
+    {
+      "id": "page:app/[team]/settings/page.tsx",
+      "pattern": "/[team]/settings",
+      "kind": "page",
+      "router": "app",
+      "slot": null,
+      "intercept": null,
+      "metadata": false
+    },
+    {
+      "id": "page:app/blog/[slug]/page.tsx",
+      "pattern": "/blog/[slug]",
+      "kind": "page",
+      "router": "app",
+      "slot": null,
+      "intercept": null,
+      "metadata": false
+    },
+    {
+      "id": "page:app/blog/new/page.tsx",
+      "pattern": "/blog/new",
+      "kind": "page",
+      "router": "app",
+      "slot": null,
+      "intercept": null,
+      "metadata": false
+    },
+    {
+      "id": "page:app/dashboard/page.tsx",
+      "pattern": "/dashboard",
+      "kind": "page",
+      "router": "app",
+      "slot": null,
+      "intercept": null,
+      "metadata": false
+    },
+    {
+      "id": "page:app/dashboard/settings/page.tsx",
+      "pattern": "/dashboard/settings",
+      "kind": "page",
+      "router": "app",
+      "slot": null,
+      "intercept": null,
+      "metadata": false
+    },
+    {
+      "id": "page:app/docs-local/[...path]/page.tsx",
+      "pattern": "/docs-local/[...path]",
+      "kind": "page",
+      "router": "app",
+      "slot": null,
+      "intercept": null,
+      "metadata": false
+    },
+    {
+      "id": "page:app/page.tsx",
+      "pattern": "/",
+      "kind": "page",
+      "router": "app",
+      "slot": null,
+      "intercept": null,
+      "metadata": false
+    },
+    {
+      "id": "page:app/shop/[[...filters]]/page.tsx",
+      "pattern": "/shop/[[...filters]]",
+      "kind": "page",
+      "router": "app",
+      "slot": null,
+      "intercept": null,
+      "metadata": false
+    },
+    {
+      "id": "pages-api:pages/api/hello.ts",
+      "pattern": "/api/hello",
+      "kind": "handler",
+      "router": "pages",
+      "slot": null,
+      "intercept": null,
+      "metadata": false
+    },
+    {
+      "id": "pages:pages/about.tsx",
+      "pattern": "/about",
+      "kind": "page",
+      "router": "pages",
+      "slot": null,
+      "intercept": null,
+      "metadata": false
+    },
+    {
+      "id": "pages:pages/legacy.tsx",
+      "pattern": "/legacy",
+      "kind": "page",
+      "router": "pages",
+      "slot": null,
+      "intercept": null,
+      "metadata": false
+    },
+    {
+      "id": "route:app/api/health/route.ts",
+      "pattern": "/api/health",
+      "kind": "handler",
+      "router": "app",
+      "slot": null,
+      "intercept": null,
+      "metadata": false
+    },
+    {
+      "id": "route:app/api/teams/[teamId]/members/route.ts",
+      "pattern": "/api/teams/[teamId]/members",
+      "kind": "handler",
+      "router": "app",
+      "slot": null,
+      "intercept": null,
+      "metadata": false
+    }
+  ],
+  "conflicts": [
+    {
+      "pattern": "/about",
+      "routes": [
+        "page:app/(marketing)/about/page.tsx",
+        "pages:pages/about.tsx"
+      ]
+    }
+  ],
+  "root_layouts": [
+    "app/layout.tsx"
+  ],
+  "pages_special": [
+    "pages/_app.tsx"
+  ]
+}

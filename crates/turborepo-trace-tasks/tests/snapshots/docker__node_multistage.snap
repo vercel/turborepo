@@ -1,0 +1,460 @@
+---
+source: crates/turborepo-trace-tasks/tests/docker.rs
+expression: s
+---
+## task:.#docker:web
+{
+  "sources": [
+    "npm"
+  ],
+  "deps": [
+    "docker:apps/web/Dockerfile"
+  ],
+  "commands": [
+    "docker build -f apps/web/Dockerfile -t web . [docker] Full"
+  ],
+  "spec": {
+    "configs": [
+      "apps/web/Dockerfile",
+      "package.json"
+    ],
+    "task_deps": [
+      {
+        "target": {
+          "kind": "id",
+          "id": "docker:apps/web/Dockerfile"
+        },
+        "reason": "docker build"
+      }
+    ],
+    "toolchain": [
+      {
+        "ecosystem": "system",
+        "name": "docker"
+      }
+    ],
+    "runs": [
+      {
+        "kind": "task",
+        "target": {
+          "kind": "id",
+          "id": "docker:apps/web/Dockerfile"
+        }
+      }
+    ]
+  }
+}
+
+## task:.#docker:web:build-stage
+{
+  "sources": [
+    "npm"
+  ],
+  "deps": [
+    "docker:apps/web/Dockerfile#build"
+  ],
+  "commands": [
+    "docker build -f apps/web/Dockerfile --target build . [docker] Full"
+  ],
+  "spec": {
+    "configs": [
+      "apps/web/Dockerfile",
+      "package.json"
+    ],
+    "task_deps": [
+      {
+        "target": {
+          "kind": "id",
+          "id": "docker:apps/web/Dockerfile#build"
+        },
+        "reason": "docker build"
+      }
+    ],
+    "toolchain": [
+      {
+        "ecosystem": "system",
+        "name": "docker"
+      }
+    ],
+    "runs": [
+      {
+        "kind": "task",
+        "target": {
+          "kind": "id",
+          "id": "docker:apps/web/Dockerfile#build"
+        }
+      }
+    ]
+  }
+}
+
+## task:.#docker:web:other-context
+{
+  "sources": [
+    "npm"
+  ],
+  "deps": [
+    "task:apps/web#build"
+  ],
+  "commands": [
+    "docker build -f apps/web/Dockerfile apps/web [docker] Full"
+  ],
+  "spec": {
+    "configs": [
+      "apps/web/.dockerignore",
+      "apps/web/Dockerfile",
+      "apps/web/Dockerfile.dockerignore",
+      "package.json"
+    ],
+    "memberships": [
+      {
+        "dir": "apps/web",
+        "pattern": "**",
+        "reason": "COPY ."
+      },
+      {
+        "dir": "apps/web",
+        "pattern": "{apps/web/package.json,apps/web/package.json/**}",
+        "reason": "COPY apps/web/package.json"
+      },
+      {
+        "dir": "apps/web",
+        "pattern": "{package.json,package.json/**}",
+        "reason": "COPY package.json"
+      },
+      {
+        "dir": "apps/web",
+        "pattern": "{packages/ui/package.json,packages/ui/package.json/**}",
+        "reason": "COPY packages/ui/package.json"
+      },
+      {
+        "dir": "apps/web",
+        "pattern": "{pnpm-lock.yaml,pnpm-lock.yaml/**}",
+        "reason": "COPY pnpm-lock.yaml"
+      },
+      {
+        "dir": "apps/web",
+        "pattern": "{pnpm-workspace.yaml,pnpm-workspace.yaml/**}",
+        "reason": "COPY pnpm-workspace.yaml"
+      }
+    ],
+    "task_deps": [
+      {
+        "target": {
+          "kind": "package",
+          "package": "apps/web/apps/web",
+          "name": "build"
+        },
+        "reason": "RUN: pnpm run"
+      },
+      {
+        "target": {
+          "kind": "package",
+          "package": "web",
+          "name": "build"
+        },
+        "reason": "RUN: turbo run"
+      }
+    ],
+    "toolchain": [
+      {
+        "ecosystem": "docker",
+        "name": "node:20-alpine"
+      },
+      {
+        "ecosystem": "npm",
+        "name": "turbo"
+      },
+      {
+        "ecosystem": "system",
+        "name": "docker"
+      }
+    ],
+    "runs": [
+      {
+        "kind": "task",
+        "target": {
+          "kind": "package",
+          "package": "apps/web/apps/web",
+          "name": "build"
+        }
+      },
+      {
+        "kind": "task",
+        "target": {
+          "kind": "package",
+          "package": "web",
+          "name": "build"
+        }
+      }
+    ]
+  }
+}
+
+## docker:apps/web/Dockerfile
+{
+  "sources": [
+    "docker"
+  ],
+  "deps": [
+    "docker:apps/web/Dockerfile#runner"
+  ],
+  "commands": [],
+  "spec": {
+    "configs": [
+      ".dockerignore",
+      "apps/web/Dockerfile",
+      "apps/web/Dockerfile.dockerignore"
+    ],
+    "task_deps": [
+      {
+        "target": {
+          "kind": "id",
+          "id": "docker:apps/web/Dockerfile#runner"
+        },
+        "reason": "final stage"
+      }
+    ]
+  }
+}
+
+## docker:apps/web/Dockerfile#base
+{
+  "sources": [
+    "docker"
+  ],
+  "deps": [],
+  "commands": [],
+  "spec": {
+    "configs": [
+      ".dockerignore",
+      "apps/web/Dockerfile",
+      "apps/web/Dockerfile.dockerignore"
+    ],
+    "toolchain": [
+      {
+        "ecosystem": "docker",
+        "name": "node:20-alpine"
+      }
+    ]
+  }
+}
+
+## docker:apps/web/Dockerfile#build
+{
+  "sources": [
+    "docker"
+  ],
+  "deps": [
+    "task:apps/web#build",
+    "docker:apps/web/Dockerfile#deps"
+  ],
+  "commands": [],
+  "spec": {
+    "configs": [
+      ".dockerignore",
+      "apps/web/Dockerfile",
+      "apps/web/Dockerfile.dockerignore"
+    ],
+    "memberships": [
+      {
+        "dir": ".",
+        "pattern": "**",
+        "exclude": [
+          "{**/*.md,**/*.md/**}",
+          "{**/dist,**/dist/**}",
+          "{**/node_modules,**/node_modules/**}",
+          "{.git,.git/**}",
+          "{apps/*/test,apps/*/test/**}",
+          "{apps/web/README.md,apps/web/README.md/**}",
+          "{docs,docs/**}",
+          "{node_modules,node_modules/**}"
+        ],
+        "reason": "COPY ."
+      },
+      {
+        "dir": ".",
+        "pattern": "{apps/web/README.md,apps/web/README.md/**}",
+        "exclude": [
+          "{apps/*/test,apps/*/test/**}",
+          "{docs,docs/**}"
+        ],
+        "reason": "COPY ."
+      }
+    ],
+    "task_deps": [
+      {
+        "target": {
+          "kind": "package",
+          "package": "apps/web",
+          "name": "build"
+        },
+        "reason": "RUN: pnpm run"
+      },
+      {
+        "target": {
+          "kind": "package",
+          "package": "web",
+          "name": "build"
+        },
+        "reason": "RUN: turbo run"
+      },
+      {
+        "target": {
+          "kind": "id",
+          "id": "docker:apps/web/Dockerfile#deps"
+        },
+        "reason": "docker stage"
+      }
+    ],
+    "toolchain": [
+      {
+        "ecosystem": "npm",
+        "name": "turbo"
+      }
+    ]
+  }
+}
+
+## docker:apps/web/Dockerfile#deps
+{
+  "sources": [
+    "docker"
+  ],
+  "deps": [
+    "docker:apps/web/Dockerfile#base"
+  ],
+  "commands": [],
+  "spec": {
+    "configs": [
+      ".dockerignore",
+      "apps/web/Dockerfile",
+      "apps/web/Dockerfile.dockerignore"
+    ],
+    "memberships": [
+      {
+        "dir": ".",
+        "pattern": "{apps/web/package.json,apps/web/package.json/**}",
+        "exclude": [
+          "{**/*.md,**/*.md/**}",
+          "{**/dist,**/dist/**}",
+          "{**/node_modules,**/node_modules/**}",
+          "{.git,.git/**}",
+          "{apps/*/test,apps/*/test/**}",
+          "{apps/web/README.md,apps/web/README.md/**}",
+          "{docs,docs/**}",
+          "{node_modules,node_modules/**}"
+        ],
+        "reason": "COPY apps/web/package.json"
+      },
+      {
+        "dir": ".",
+        "pattern": "{package.json,package.json/**}",
+        "exclude": [
+          "{**/*.md,**/*.md/**}",
+          "{**/dist,**/dist/**}",
+          "{**/node_modules,**/node_modules/**}",
+          "{.git,.git/**}",
+          "{apps/*/test,apps/*/test/**}",
+          "{apps/web/README.md,apps/web/README.md/**}",
+          "{docs,docs/**}",
+          "{node_modules,node_modules/**}"
+        ],
+        "reason": "COPY package.json"
+      },
+      {
+        "dir": ".",
+        "pattern": "{packages/ui/package.json,packages/ui/package.json/**}",
+        "exclude": [
+          "{**/*.md,**/*.md/**}",
+          "{**/dist,**/dist/**}",
+          "{**/node_modules,**/node_modules/**}",
+          "{.git,.git/**}",
+          "{apps/*/test,apps/*/test/**}",
+          "{apps/web/README.md,apps/web/README.md/**}",
+          "{docs,docs/**}",
+          "{node_modules,node_modules/**}"
+        ],
+        "reason": "COPY packages/ui/package.json"
+      },
+      {
+        "dir": ".",
+        "pattern": "{pnpm-lock.yaml,pnpm-lock.yaml/**}",
+        "exclude": [
+          "{**/*.md,**/*.md/**}",
+          "{**/dist,**/dist/**}",
+          "{**/node_modules,**/node_modules/**}",
+          "{.git,.git/**}",
+          "{apps/*/test,apps/*/test/**}",
+          "{apps/web/README.md,apps/web/README.md/**}",
+          "{docs,docs/**}",
+          "{node_modules,node_modules/**}"
+        ],
+        "reason": "COPY pnpm-lock.yaml"
+      },
+      {
+        "dir": ".",
+        "pattern": "{pnpm-workspace.yaml,pnpm-workspace.yaml/**}",
+        "exclude": [
+          "{**/*.md,**/*.md/**}",
+          "{**/dist,**/dist/**}",
+          "{**/node_modules,**/node_modules/**}",
+          "{.git,.git/**}",
+          "{apps/*/test,apps/*/test/**}",
+          "{apps/web/README.md,apps/web/README.md/**}",
+          "{docs,docs/**}",
+          "{node_modules,node_modules/**}"
+        ],
+        "reason": "COPY pnpm-workspace.yaml"
+      }
+    ],
+    "task_deps": [
+      {
+        "target": {
+          "kind": "id",
+          "id": "docker:apps/web/Dockerfile#base"
+        },
+        "reason": "docker stage"
+      }
+    ]
+  }
+}
+
+## docker:apps/web/Dockerfile#runner
+{
+  "sources": [
+    "docker"
+  ],
+  "deps": [
+    "docker:apps/web/Dockerfile#build"
+  ],
+  "commands": [],
+  "spec": {
+    "configs": [
+      ".dockerignore",
+      "apps/web/Dockerfile",
+      "apps/web/Dockerfile.dockerignore"
+    ],
+    "task_deps": [
+      {
+        "target": {
+          "kind": "id",
+          "id": "docker:apps/web/Dockerfile#build"
+        },
+        "reason": "docker stage"
+      }
+    ],
+    "toolchain": [
+      {
+        "ecosystem": "docker",
+        "name": "node:20-alpine"
+      }
+    ]
+  }
+}
+
+## RUN commands of apps/web/Dockerfile (context .)
+stage base: corepack enable [package-manager] Ignored
+stage deps: pnpm install --frozen-lockfile [package-manager] Ignored
+stage build: pnpm turbo run build --filter=web [turbo] Full
+stage build: pnpm build [package-manager] Full

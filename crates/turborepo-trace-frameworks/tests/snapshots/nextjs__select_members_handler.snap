@@ -1,0 +1,147 @@
+---
+source: crates/turborepo-trace-frameworks/tests/nextjs.rs
+expression: "redact(serde_json::to_string_pretty(&v).unwrap(), root)"
+---
+{
+  "specs": [
+    {
+      "spec": "<fixture>/e2e/annotated.spec.ts",
+      "verdict": "unaffected",
+      "reason": null,
+      "witness": [],
+      "cause": null,
+      "routes": [
+        "page:app/dashboard/page.tsx"
+      ],
+      "unresolved": [],
+      "ambiguities": []
+    },
+    {
+      "spec": "<fixture>/e2e/api.spec.ts",
+      "verdict": "unaffected",
+      "reason": null,
+      "witness": [],
+      "cause": null,
+      "routes": [
+        "route:app/api/health/route.ts"
+      ],
+      "unresolved": [],
+      "ambiguities": []
+    },
+    {
+      "spec": "<fixture>/e2e/blog.spec.ts",
+      "verdict": "unaffected",
+      "reason": null,
+      "witness": [],
+      "cause": null,
+      "routes": [
+        "page:app/(marketing)/pricing/page.tsx",
+        "page:app/blog/[slug]/page.tsx",
+        "page:app/blog/new/page.tsx"
+      ],
+      "unresolved": [],
+      "ambiguities": []
+    },
+    {
+      "spec": "<fixture>/e2e/dynamic.spec.ts",
+      "verdict": "affected",
+      "reason": {
+        "kind": "incomplete_visits"
+      },
+      "witness": [
+        "app/api/teams/[teamId]/members/route.ts",
+        "route:app/api/teams/[teamId]/members/route.ts",
+        "components/members.tsx",
+        "app/[team]/settings/page.tsx",
+        "route:app/[team]/settings/page.tsx",
+        "next:any-route:.",
+        "e2e/dynamic.spec.ts"
+      ],
+      "cause": "modified app/api/teams/[teamId]/members/route.ts",
+      "routes": [],
+      "unresolved": [
+        "e2e/dynamic.spec.ts:4: url",
+        "no navigation found"
+      ],
+      "ambiguities": []
+    },
+    {
+      "spec": "<fixture>/e2e/home.spec.ts",
+      "verdict": "unaffected",
+      "reason": null,
+      "witness": [],
+      "cause": null,
+      "routes": [
+        "page:app/page.tsx"
+      ],
+      "unresolved": [],
+      "ambiguities": []
+    },
+    {
+      "spec": "<fixture>/e2e/mfe.spec.ts",
+      "verdict": "unaffected",
+      "reason": null,
+      "witness": [],
+      "cause": null,
+      "routes": [
+        "page:app/[team]/page.tsx"
+      ],
+      "unresolved": [],
+      "ambiguities": [
+        "microfrontend-flag: docs-app/new-help"
+      ]
+    },
+    {
+      "spec": "<fixture>/e2e/route.spec.ts",
+      "verdict": "affected",
+      "reason": {
+        "kind": "route",
+        "detail": "route:app/api/teams/[teamId]/members/route.ts"
+      },
+      "witness": [
+        "app/api/teams/[teamId]/members/route.ts",
+        "route:app/api/teams/[teamId]/members/route.ts",
+        "e2e/route.spec.ts"
+      ],
+      "cause": "modified app/api/teams/[teamId]/members/route.ts",
+      "routes": [
+        "page:app/[team]/page.tsx",
+        "page:app/[team]/settings/page.tsx",
+        "route:app/api/teams/[teamId]/members/route.ts"
+      ],
+      "unresolved": [],
+      "ambiguities": []
+    },
+    {
+      "spec": "<fixture>/e2e/team.spec.ts",
+      "verdict": "affected",
+      "reason": {
+        "kind": "fetched_route",
+        "detail": "route:app/api/teams/[teamId]/members/route.ts"
+      },
+      "witness": [
+        "app/api/teams/[teamId]/members/route.ts",
+        "route:app/api/teams/[teamId]/members/route.ts",
+        "components/members.tsx",
+        "app/[team]/settings/page.tsx",
+        "route:app/[team]/settings/page.tsx",
+        "e2e/team.spec.ts"
+      ],
+      "cause": "modified app/api/teams/[teamId]/members/route.ts",
+      "routes": [
+        "page:app/[team]/@modal/(.)photo/[id]/page.tsx",
+        "page:app/[team]/photo/[id]/page.tsx",
+        "page:app/[team]/settings/page.tsx",
+        "page:app/blog/[slug]/page.tsx",
+        "page:app/dashboard/settings/page.tsx",
+        "page:app/docs-local/[...path]/page.tsx",
+        "page:app/shop/[[...filters]]/page.tsx"
+      ],
+      "unresolved": [],
+      "ambiguities": [
+        "param-may-equal-static(/*/settings): page:app/blog/[slug]/page.tsx, page:app/dashboard/settings/page.tsx, page:app/docs-local/[...path]/page.tsx, page:app/shop/[[...filters]]/page.tsx"
+      ]
+    }
+  ],
+  "unmatched": []
+}

@@ -1,0 +1,62 @@
+[package]
+name = "turborepo-trace-frameworks"
+version = "0.1.0"
+edition = { workspace = true }
+license = "MIT"
+description = "Test-framework adapters for `turbo trace`: config discovery and static evaluation, setup files, module mappers, mocks, snapshots and test discovery (jest, vitest)"
+publish = false
+
+[lib]
+bench = false
+
+[features]
+default = ["go", "rust"]
+# The `go test` adapter (`gotest`), on the Go language plugin.
+go = ["dep:turborepo-trace-lang-go"]
+# The `cargo test` adapter (`cargotest`), on the Rust language plugin.
+rust = ["dep:turborepo-trace-lang-rust"]
+# The pytest adapter (`pytest`). Off by default: no Python language is compiled in.
+python = []
+# Next.js build fingerprints per module with canonical identifiers
+# (`nextjs::build::modules`): parser and scope analysis.
+oxc = [
+  "dep:oxc_allocator",
+  "dep:oxc_ast",
+  "dep:oxc_ast_visit",
+  "dep:oxc_parser",
+  "dep:oxc_semantic",
+  "dep:oxc_span",
+]
+
+[dependencies]
+aho-corasick = "1.1"
+oxc_allocator = { workspace = true, optional = true }
+oxc_ast = { workspace = true, optional = true }
+oxc_ast_visit = { workspace = true, optional = true }
+oxc_parser = { workspace = true, optional = true }
+oxc_semantic = { workspace = true, optional = true }
+oxc_span = { workspace = true, optional = true }
+rayon = { workspace = true }
+regex = { workspace = true }
+turborepo-trace-core = { workspace = true }
+turborepo-trace-graph = { workspace = true }
+turborepo-trace-lang-go = { workspace = true, optional = true }
+turborepo-trace-lang-js = { workspace = true }
+turborepo-trace-lang-rust = { workspace = true, optional = true }
+turborepo-trace-lockfile = { workspace = true }
+# The automaton of a test pattern: whether it can tell two roots apart (`location`).
+regex-automata = "0.4"
+# JS regexes with lookaround or backreferences (patterns in runner configs), which `regex`
+# leaves out.
+fancy-regex = "0.20"
+serde = { workspace = true }
+serde_json = { workspace = true }
+toml = { workspace = true }
+xxhash-rust = { workspace = true }
+
+[dev-dependencies]
+insta = { workspace = true }
+tempfile = { workspace = true }
+
+[lints]
+workspace = true

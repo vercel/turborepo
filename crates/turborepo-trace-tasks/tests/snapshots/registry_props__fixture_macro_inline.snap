@@ -1,0 +1,101 @@
+---
+source: crates/turborepo-trace-tasks/tests/registry_props.rs
+expression: "$crate :: testkit :: fixture_text(\"fixtures/tasks/recognizers/ts\", commands)"
+---
+$ tsc -p tsconfig.json
+# tsc [tsc] Full
+{
+  "outputs": [
+    {
+      "path": "dist",
+      "kind": "artifact"
+    }
+  ],
+  "configs": [
+    "node_modules/@tsconfig/node20/tsconfig.json",
+    "packages/lib/tsconfig.json",
+    "tsconfig.base.json",
+    "tsconfig.json"
+  ],
+  "memberships": [
+    {
+      "dir": "src",
+      "pattern": "**/*",
+      "exclude": [
+        "**/*.fixture.ts"
+      ],
+      "reason": "tsconfig include"
+    },
+    {
+      "dir": "test",
+      "pattern": "**/*.ts",
+      "reason": "tsconfig include"
+    }
+  ],
+  "toolchain": [
+    {
+      "ecosystem": "npm",
+      "name": "@tsconfig/node20"
+    },
+    {
+      "ecosystem": "npm",
+      "name": "typescript"
+    }
+  ]
+}
+
+$ npx tsc --noEmit && echo done
+# tsc [tsc] Full | echo [noop] Ignored
+{
+  "configs": [
+    "node_modules/@tsconfig/node20/tsconfig.json",
+    "packages/lib/tsconfig.json",
+    "tsconfig.base.json",
+    "tsconfig.json"
+  ],
+  "memberships": [
+    {
+      "dir": "src",
+      "pattern": "**/*",
+      "exclude": [
+        "**/*.fixture.ts"
+      ],
+      "reason": "tsconfig include",
+      "data": true
+    },
+    {
+      "dir": "test",
+      "pattern": "**/*.ts",
+      "reason": "tsconfig include",
+      "data": true
+    }
+  ],
+  "toolchain": [
+    {
+      "ecosystem": "npm",
+      "name": "@tsconfig/node20"
+    },
+    {
+      "ecosystem": "npm",
+      "name": "typescript"
+    }
+  ]
+}
+
+$ unknown-tool --x
+# unknown-tool [-] Unknown
+{
+  "memberships": [
+    {
+      "dir": ".",
+      "pattern": "**",
+      "reason": "unknown command `unknown-tool`"
+    }
+  ],
+  "uncertainties": [
+    {
+      "kind": "unknown_command",
+      "detail": "unknown-tool"
+    }
+  ]
+}

@@ -1,0 +1,284 @@
+---
+source: crates/turborepo-trace-frameworks/tests/pytest.rs
+expression: s
+---
+{
+  "inputs": {
+    "framework": "pytest",
+    "config_file": "<fixture>/pyproject.toml",
+    "projects": [
+      {
+        "name": "<fixture>",
+        "config_file": "<fixture>/pyproject.toml",
+        "root_dir": "<fixture>",
+        "global": {
+          "config_files": [
+            "<fixture>/pyproject.toml"
+          ],
+          "js_entries": [],
+          "entries": [
+            {
+              "role": "plugin",
+              "target": {
+                "module": {
+                  "request": "demo_plugin",
+                  "from_dir": "<fixture>"
+                }
+              }
+            }
+          ],
+          "edges": [],
+          "probes": [
+            "<fixture>/pytest.ini",
+            "<fixture>/.pytest.ini"
+          ],
+          "memberships": [],
+          "package": {
+            "ecosystem": "pypi",
+            "name": "demo",
+            "root": "<fixture>"
+          }
+        },
+        "resolution": {
+          "aliases": [],
+          "roots": [
+            "<fixture>/tests"
+          ],
+          "module_paths": [
+            "<fixture>/src"
+          ],
+          "module_directories": [],
+          "module_path_ignore_patterns": [],
+          "extensions": [
+            "py"
+          ]
+        },
+        "discovery": {
+          "roots": [
+            "<fixture>/tests"
+          ],
+          "include": [
+            {
+              "glob": "**/test_*.py"
+            },
+            {
+              "glob": "**/check_*.py"
+            }
+          ],
+          "exclude": [
+            {
+              "glob": "**/*.egg/**"
+            },
+            {
+              "glob": "**/.*/**"
+            },
+            {
+              "glob": "**/_darcs/**"
+            },
+            {
+              "glob": "**/build/**"
+            },
+            {
+              "glob": "**/CVS/**"
+            },
+            {
+              "glob": "**/dist/**"
+            },
+            {
+              "glob": "**/node_modules/**"
+            },
+            {
+              "glob": "**/venv/**"
+            },
+            {
+              "glob": "**/{arch}/**"
+            },
+            {
+              "glob": "tests/skipme"
+            },
+            {
+              "glob": "tests/skipme/**"
+            }
+          ],
+          "glob_base": "<fixture>",
+          "extensions": [
+            "py"
+          ]
+        },
+        "mocks": {
+          "root_mock_dirs": [],
+          "haste_mocks": [],
+          "implicit_package_mocks": false,
+          "automock": false,
+          "extensions": []
+        },
+        "snapshots": "default",
+        "uncertainties": []
+      }
+    ],
+    "uncertainties": []
+  },
+  "tests": [
+    {
+      "test": "<fixture>/tests/test_a.py",
+      "entries": [
+        {
+          "role": "conftest",
+          "target": {
+            "path": "<fixture>/conftest.py"
+          }
+        },
+        {
+          "role": "conftest",
+          "target": {
+            "path": "<fixture>/tests/conftest.py"
+          }
+        },
+        {
+          "role": "plugin",
+          "target": {
+            "module": {
+              "request": "tests.fixtures.db",
+              "from_dir": "<fixture>"
+            }
+          }
+        }
+      ],
+      "edges": [],
+      "probes": [
+        "<fixture>/tests/__init__.py"
+      ],
+      "memberships": [
+        {
+          "dir": "<fixture>/tests/__snapshots__",
+          "pattern": "test_a*",
+          "reason": "syrupy snapshots"
+        }
+      ],
+      "mocks": [],
+      "uncertainties": [],
+      "package": {
+        "ecosystem": "pypi",
+        "name": "demo",
+        "root": "<fixture>"
+      },
+      "import_roots": {
+        "front": [
+          "<fixture>/src"
+        ],
+        "back": []
+      }
+    },
+    {
+      "test": "<fixture>/tests/unit/check_c.py",
+      "entries": [
+        {
+          "role": "conftest",
+          "target": {
+            "path": "<fixture>/conftest.py"
+          }
+        },
+        {
+          "role": "conftest",
+          "target": {
+            "path": "<fixture>/tests/conftest.py"
+          }
+        },
+        {
+          "role": "imported_by_test",
+          "target": {
+            "path": "<fixture>/tests/unit/__init__.py"
+          }
+        },
+        {
+          "role": "plugin",
+          "target": {
+            "module": {
+              "request": "tests.fixtures.db",
+              "from_dir": "<fixture>"
+            }
+          }
+        }
+      ],
+      "edges": [],
+      "probes": [
+        "<fixture>/tests/unit/conftest.py",
+        "<fixture>/tests/__init__.py"
+      ],
+      "memberships": [],
+      "mocks": [],
+      "uncertainties": [],
+      "package": {
+        "ecosystem": "pypi",
+        "name": "demo",
+        "root": "<fixture>"
+      },
+      "import_roots": {
+        "front": [
+          "<fixture>/src"
+        ],
+        "back": []
+      }
+    },
+    {
+      "test": "<fixture>/tests/unit/test_b.py",
+      "entries": [
+        {
+          "role": "conftest",
+          "target": {
+            "path": "<fixture>/conftest.py"
+          }
+        },
+        {
+          "role": "conftest",
+          "target": {
+            "path": "<fixture>/tests/conftest.py"
+          }
+        },
+        {
+          "role": "imported_by_test",
+          "target": {
+            "path": "<fixture>/tests/unit/__init__.py"
+          }
+        },
+        {
+          "role": "plugin",
+          "target": {
+            "module": {
+              "request": "tests.fixtures.db",
+              "from_dir": "<fixture>"
+            }
+          }
+        },
+        {
+          "role": "plugin",
+          "target": {
+            "module": {
+              "request": "tests.fixtures.extra",
+              "from_dir": "<fixture>"
+            }
+          }
+        }
+      ],
+      "edges": [],
+      "probes": [
+        "<fixture>/tests/unit/conftest.py",
+        "<fixture>/tests/__init__.py"
+      ],
+      "memberships": [],
+      "mocks": [],
+      "uncertainties": [],
+      "package": {
+        "ecosystem": "pypi",
+        "name": "demo",
+        "root": "<fixture>"
+      },
+      "import_roots": {
+        "front": [
+          "<fixture>/src"
+        ],
+        "back": []
+      }
+    }
+  ]
+}

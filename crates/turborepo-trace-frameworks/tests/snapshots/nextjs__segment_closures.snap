@@ -1,0 +1,78 @@
+---
+source: crates/turborepo-trace-frameworks/tests/nextjs.rs
+expression: "redact(serde_json::to_string_pretty(&v).unwrap(), root)"
+---
+{
+  "page:app/[team]/settings/page.tsx": {
+    "files": [
+      "app/[team]/@modal/default.tsx",
+      "app/[team]/@sidebar/default.tsx",
+      "app/[team]/@sidebar/settings/page.tsx",
+      "app/[team]/layout.tsx",
+      "app/[team]/settings/error.tsx",
+      "app/[team]/settings/page.tsx",
+      "app/[team]/settings/template.tsx",
+      "app/global-error.tsx",
+      "app/layout.tsx",
+      "app/not-found.tsx",
+      "app/opengraph-image.tsx",
+      "app/sitemap.ts"
+    ],
+    "soft": [
+      "app/[team]/@modal/(.)photo/[id]/page.tsx"
+    ]
+  },
+  "page:app/[team]/page.tsx": {
+    "files": [
+      "app/[team]/@modal/default.tsx",
+      "app/[team]/@sidebar/default.tsx",
+      "app/[team]/layout.tsx",
+      "app/[team]/page.tsx",
+      "app/global-error.tsx",
+      "app/layout.tsx",
+      "app/not-found.tsx",
+      "app/opengraph-image.tsx",
+      "app/sitemap.ts"
+    ],
+    "soft": [
+      "app/[team]/@modal/(.)photo/[id]/page.tsx"
+    ]
+  },
+  "page:app/(marketing)/about/page.tsx": {
+    "files": [
+      "app/(marketing)/about/page.tsx",
+      "app/(marketing)/layout.tsx",
+      "app/global-error.tsx",
+      "app/layout.tsx",
+      "app/not-found.tsx",
+      "app/opengraph-image.tsx",
+      "app/sitemap.ts"
+    ],
+    "soft": []
+  },
+  "page:app/blog/[slug]/page.tsx": {
+    "files": [
+      "app/blog/[slug]/loading.tsx",
+      "app/blog/[slug]/page.tsx",
+      "app/global-error.tsx",
+      "app/layout.tsx",
+      "app/not-found.tsx",
+      "app/opengraph-image.tsx",
+      "app/sitemap.ts"
+    ],
+    "soft": []
+  },
+  "route:app/api/health/route.ts": {
+    "files": [
+      "app/api/health/route.ts"
+    ],
+    "soft": []
+  },
+  "pages:pages/legacy.tsx": {
+    "files": [
+      "pages/_app.tsx",
+      "pages/legacy.tsx"
+    ],
+    "soft": []
+  }
+}

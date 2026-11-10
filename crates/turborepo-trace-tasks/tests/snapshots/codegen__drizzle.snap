@@ -1,0 +1,287 @@
+---
+source: crates/turborepo-trace-tasks/tests/codegen.rs
+expression: family(stringify! (drizzle))
+---
+$ drizzle-kit generate
+# drizzle-kit [drizzle-kit] Full
+{
+  "outputs": [
+    {
+      "path": "drizzle",
+      "kind": "generated"
+    }
+  ],
+  "configs": [
+    "drizzle.config.ts"
+  ],
+  "entries": [
+    {
+      "path": "drizzle.config.ts",
+      "lang": "js"
+    },
+    {
+      "path": "src/db/schema/users.ts",
+      "lang": "js"
+    }
+  ],
+  "memberships": [
+    {
+      "dir": "drizzle/meta",
+      "pattern": "**",
+      "reason": "drizzle snapshots"
+    },
+    {
+      "dir": "src/db/schema",
+      "pattern": "*.ts",
+      "reason": "drizzle schema"
+    }
+  ],
+  "toolchain": [
+    {
+      "ecosystem": "npm",
+      "name": "drizzle-kit"
+    }
+  ]
+}
+
+$ drizzle-kit push
+# drizzle-kit [drizzle-kit] Full
+{
+  "configs": [
+    "drizzle.config.ts"
+  ],
+  "entries": [
+    {
+      "path": "drizzle.config.ts",
+      "lang": "js"
+    },
+    {
+      "path": "src/db/schema/users.ts",
+      "lang": "js"
+    }
+  ],
+  "memberships": [
+    {
+      "dir": "src/db/schema",
+      "pattern": "*.ts",
+      "reason": "drizzle schema"
+    }
+  ],
+  "toolchain": [
+    {
+      "ecosystem": "npm",
+      "name": "drizzle-kit"
+    }
+  ],
+  "env": [
+    "DATABASE_URL"
+  ]
+}
+
+$ drizzle-kit migrate
+# drizzle-kit [drizzle-kit] Full
+{
+  "configs": [
+    "drizzle.config.ts"
+  ],
+  "entries": [
+    {
+      "path": "drizzle.config.ts",
+      "lang": "js"
+    }
+  ],
+  "memberships": [
+    {
+      "dir": "drizzle",
+      "pattern": "**",
+      "reason": "drizzle migrations"
+    }
+  ],
+  "toolchain": [
+    {
+      "ecosystem": "npm",
+      "name": "drizzle-kit"
+    }
+  ],
+  "env": [
+    "DATABASE_URL"
+  ]
+}
+
+$ drizzle-kit pull
+# drizzle-kit [drizzle-kit] Partial
+{
+  "outputs": [
+    {
+      "path": "drizzle",
+      "kind": "generated"
+    }
+  ],
+  "configs": [
+    "drizzle.config.ts"
+  ],
+  "entries": [
+    {
+      "path": "drizzle.config.ts",
+      "lang": "js"
+    }
+  ],
+  "memberships": [
+    {
+      "dir": ".",
+      "pattern": "**",
+      "reason": "`drizzle-kit` not fully recognized"
+    }
+  ],
+  "toolchain": [
+    {
+      "ecosystem": "npm",
+      "name": "drizzle-kit"
+    }
+  ],
+  "env": [
+    "DATABASE_URL"
+  ],
+  "uncertainties": [
+    {
+      "kind": "env_dependent",
+      "detail": "`drizzle-kit pull` reads the database schema"
+    }
+  ]
+}
+
+$ drizzle-kit check
+# drizzle-kit [drizzle-kit] Full
+{
+  "configs": [
+    "drizzle.config.ts"
+  ],
+  "entries": [
+    {
+      "path": "drizzle.config.ts",
+      "lang": "js"
+    }
+  ],
+  "memberships": [
+    {
+      "dir": "drizzle",
+      "pattern": "**",
+      "reason": "drizzle migrations"
+    }
+  ],
+  "toolchain": [
+    {
+      "ecosystem": "npm",
+      "name": "drizzle-kit"
+    }
+  ]
+}
+
+$ drizzle-kit generate --config other.config.ts
+# drizzle-kit [drizzle-kit] Full
+{
+  "inputs": [
+    "src/db/relations.ts",
+    "src/db/schema/users.ts"
+  ],
+  "outputs": [
+    {
+      "path": "migrations",
+      "kind": "generated"
+    }
+  ],
+  "configs": [
+    "other.config.ts"
+  ],
+  "entries": [
+    {
+      "path": "other.config.ts",
+      "lang": "js"
+    },
+    {
+      "path": "src/db/relations.ts",
+      "lang": "js"
+    },
+    {
+      "path": "src/db/schema/users.ts",
+      "lang": "js"
+    }
+  ],
+  "memberships": [
+    {
+      "dir": "migrations/meta",
+      "pattern": "**",
+      "reason": "drizzle snapshots"
+    }
+  ],
+  "toolchain": [
+    {
+      "ecosystem": "npm",
+      "name": "drizzle-kit"
+    }
+  ]
+}
+
+$ drizzle-kit generate:pg --config dyn.config.ts
+# drizzle-kit [drizzle-kit] Partial
+{
+  "outputs": [
+    {
+      "path": "drizzle",
+      "kind": "generated"
+    }
+  ],
+  "configs": [
+    "dyn.config.ts"
+  ],
+  "entries": [
+    {
+      "path": "dyn.config.ts",
+      "lang": "js"
+    }
+  ],
+  "memberships": [
+    {
+      "dir": ".",
+      "pattern": "**",
+      "reason": "`drizzle-kit` not fully recognized"
+    },
+    {
+      "dir": ".",
+      "pattern": "**",
+      "reason": "code generator config not fully known"
+    },
+    {
+      "dir": "drizzle/meta",
+      "pattern": "**",
+      "reason": "drizzle snapshots"
+    }
+  ],
+  "toolchain": [
+    {
+      "ecosystem": "npm",
+      "name": "drizzle-kit"
+    }
+  ],
+  "uncertainties": [
+    {
+      "kind": "env_dependent",
+      "detail": "drizzle `out`: process.env.OUT_DIR"
+    },
+    {
+      "kind": "env_dependent",
+      "detail": "drizzle `schema`: schemas()"
+    }
+  ]
+}
+
+$ drizzle-kit studio
+# drizzle-kit [drizzle-kit] Ignored
+{
+  "toolchain": [
+    {
+      "ecosystem": "npm",
+      "name": "drizzle-kit"
+    }
+  ]
+}

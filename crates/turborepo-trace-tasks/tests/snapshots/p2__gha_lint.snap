@@ -1,0 +1,26 @@
+---
+source: crates/turborepo-trace-tasks/tests/p2.rs
+expression: out
+---
+gha:.github/workflows/ci.yml#build on push: paths ["src/**", "package.json", "!src/**/*.md"] paths-ignore []
+  missing **/pnpm-lock.yaml
+  missing .nvmrc
+  missing lib/**/*.ts
+  missing pnpm-lock.yaml
+  missing tools/install.js
+  missing tools/scripts/check.js
+  missing tsconfig.json
+gha:.github/workflows/ci.yml#setup on push: paths ["src/**", "package.json", "!src/**/*.md"] paths-ignore []
+  missing .nvmrc
+  missing pnpm-lock.yaml
+  missing tools/install.js
+gha:.github/workflows/ci.yml#test on push: paths ["src/**", "package.json", "!src/**/*.md"] paths-ignore []
+  missing **/pnpm-lock.yaml
+  missing .nvmrc
+  missing lib/**/*.ts
+  missing pnpm-lock.yaml
+  missing tools/install.js
+  missing tools/lib.sh
+  missing tools/run-tests.sh
+  missing tools/scripts/check.js
+  missing tsconfig.json
