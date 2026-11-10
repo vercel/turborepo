@@ -1,0 +1,34 @@
+{
+  "name": "turborepo",
+  "owner": {
+    "name": "Vercel"
+  },
+  "description": "Turborepo agent skill",
+  "plugins": [
+    {
+      "name": "turborepo",
+      "displayName": "Turborepo",
+      "description": "Turborepo agent skill for Claude Code",
+      "source": "./skills",
+      "strict": false,
+      "author": {
+        "name": "Vercel",
+        "url": "https://github.com/vercel"
+      },
+      "homepage": "https://turborepo.dev",
+      "repository": "https://github.com/vercel/turborepo",
+      "license": "MIT",
+      "keywords": [
+        "turborepo",
+        "monorepo",
+        "build-system",
+        "caching",
+        "vercel"
+      ],
+      "category": "development",
+      "skills": [
+        "./turborepo"
+      ]
+    }
+  ]
+}
