@@ -717,7 +717,8 @@ impl Args {
             Ok(args) => args,
             Err(error_text) => {
                 if let Some(error) = duplicate_argument(&os_args, &error_text) {
-                    eprintln!("{:?}", Report::new(error));
+                    // Stderr can already be closed; keep the exit code (see main.rs).
+                    let _ = writeln!(io::stderr(), "{:?}", Report::new(error));
                 } else {
                     error!(
                         "{}",
@@ -730,7 +731,13 @@ impl Args {
         // We have to override the --version flag because we use `get_version`
         // instead of a hard-coded version or the crate version
         if parsed_args.version {
-            println!("{}", get_version());
+            // Like help, a closed stdout (`turbo --version | true`) is not an error.
+            if let Err(error) = writeln!(io::stdout(), "{}", get_version())
+                && error.kind() != io::ErrorKind::BrokenPipe
+            {
+                error!("failed to print version: {error}");
+                exit_with_heap_profile(1);
+            }
             exit_with_heap_profile(0);
         }
 

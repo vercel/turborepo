@@ -1,7 +1,7 @@
 // Bump all rust changes
 #![deny(clippy::all)]
 
-use std::{ffi::OsStr, future::Future, pin::Pin, sync::Arc};
+use std::{ffi::OsStr, future::Future, io::Write, pin::Pin, sync::Arc};
 
 use anyhow::Result;
 use miette::Report;
@@ -96,7 +96,9 @@ fn main() -> Result<()> {
 
     let query_server: Arc<dyn turborepo_cli::QueryServer> = Arc::new(TurboQueryServer);
     let exit_code = turborepo_cli::main(Some(query_server)).unwrap_or_else(|err| {
-        eprintln!("{:?}", Report::new(err));
+        // Stderr can already be closed (`turbo ... 2>&1 | head -1`). Keep the
+        // error's exit code instead of panicking in `eprintln!`.
+        let _ = writeln!(std::io::stderr(), "{:?}", Report::new(err));
         1
     });
 

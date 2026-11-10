@@ -529,3 +529,63 @@ macro_rules! check_json_output {
         $crate::check_json_output!(@with_install false, $fixture, $package_manager, $command, $($name => [$($query),*] $(; $status)?,)*)
     }
 }
+
+/// Run turbo with stdout connected to a pipe whose reader has already gone
+/// away, like `turbo ls | true`. Returns the exit status and stderr.
+#[cfg(unix)]
+pub fn run_turbo_with_closed_stdout(
+    dir: &Path,
+    args: &[&str],
+) -> (std::process::ExitStatus, String) {
+    run_turbo_with_closed_pipe(dir, args, true)
+}
+
+/// Run turbo with stderr connected to a pipe whose reader has already gone
+/// away, like `turbo ... 2>&1 | head -1` after `head` exits. Returns the exit
+/// status and stdout.
+#[cfg(unix)]
+pub fn run_turbo_with_closed_stderr(
+    dir: &Path,
+    args: &[&str],
+) -> (std::process::ExitStatus, String) {
+    run_turbo_with_closed_pipe(dir, args, false)
+}
+
+#[cfg(unix)]
+fn run_turbo_with_closed_pipe(
+    dir: &Path,
+    args: &[&str],
+    close_stdout: bool,
+) -> (std::process::ExitStatus, String) {
+    use std::{io::Read, process::Stdio};
+
+    // Drop the read end before turbo starts, so every write gets EPIPE.
+    let (reader, closed) = std::io::pipe().unwrap();
+    drop(reader);
+    let config_dir = tempfile::tempdir().unwrap();
+    let mut cmd = std::process::Command::new(assert_cmd::cargo::cargo_bin("turbo"));
+    cmd.args(args)
+        .current_dir(dir)
+        .env("TURBO_CONFIG_DIR_PATH", config_dir.path())
+        .env("TURBO_TELEMETRY_DISABLED", "1")
+        .env("TURBO_TELEMETRY_MESSAGE_DISABLED", "1")
+        .env("TURBO_GLOBAL_WARNING_DISABLED", "1")
+        .env("TURBO_PRINT_VERSION_DISABLED", "1")
+        .env("DO_NOT_TRACK", "1");
+    if close_stdout {
+        cmd.stdout(closed).stderr(Stdio::piped());
+    } else {
+        cmd.stdout(Stdio::piped()).stderr(closed);
+    }
+    let mut child = cmd.spawn().unwrap();
+    // `cmd` holds the other copy of the closed pipe's write end; close it too.
+    drop(cmd);
+    let mut open: Box<dyn Read> = match (child.stdout.take(), child.stderr.take()) {
+        (Some(stdout), None) => Box::new(stdout),
+        (None, Some(stderr)) => Box::new(stderr),
+        _ => unreachable!("exactly one stream is piped"),
+    };
+    let mut output = String::new();
+    open.read_to_string(&mut output).unwrap();
+    (child.wait().unwrap(), output)
+}
