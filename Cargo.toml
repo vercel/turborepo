@@ -49,6 +49,26 @@ opt-level = "z"
 inherits = "release"
 strip = true
 
+# `turbo trace`: the trace crates off its hot path (the parser, the flow analysis, the graph
+# and the store keep opt-level 3) are optimized for size: -3.3 MB, timing within noise.
+[profile.release-turborepo.package.turborepo-trace]
+opt-level = "s"
+
+[profile.release-turborepo.package.turborepo-trace-frameworks]
+opt-level = "s"
+
+[profile.release-turborepo.package.turborepo-trace-lang-go]
+opt-level = "s"
+
+[profile.release-turborepo.package.turborepo-trace-lang-rust]
+opt-level = "s"
+
+[profile.release-turborepo.package.turborepo-trace-lockfile]
+opt-level = "s"
+
+[profile.release-turborepo.package.turborepo-trace-tasks]
+opt-level = "s"
+
 # Declare dependencies used across workspace packages requires single version bump.
 # ref: https://doc.rust-lang.org/cargo/reference/specifying-dependencies.html#inheriting-a-dependency-from-a-workspace
 [workspace.dependencies]
