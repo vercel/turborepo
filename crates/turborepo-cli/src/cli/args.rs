@@ -686,8 +686,51 @@ impl Args {
         false
     }
 
+    /// With the `turbo trace` gate off, `turbo trace ...` is what it was before
+    /// the command existed: `turbo run trace ...`, a task named trace. Run
+    /// flags may come first (`turbo --filter web trace`, `turbo --no-daemon
+    /// trace`), so the word is found with the grammar that
+    /// [`Self::normalize_leading_run_flags`] uses: root and run flags, which
+    /// consume their values, before the first command or task name.
+    fn trace_is_a_task_without_the_gate(mut os_args: Vec<OsString>) -> Vec<OsString> {
+        if os_args.len() > 1
+            && !crate::commands::trace::enabled()
+            && Self::command_after_leading_run_flags(&os_args, "trace")
+        {
+            os_args.insert(1, OsString::from("run"));
+        }
+        os_args
+    }
+
+    /// Whether the command `name` comes after any leading root and run flags
+    /// (rather than a task name, a `--`, another command or a malformed word).
+    fn command_after_leading_run_flags(words: &[OsString], name: &str) -> bool {
+        let root = Self::command();
+        let Some(run) = root.default_subcommand else {
+            return false;
+        };
+        let flags: Vec<_> = root.flags.iter().chain(run.flags).copied().collect();
+        let probe = usage::Command {
+            flags: &flags,
+            args: run.args,
+            default_subcommand: None,
+            ..*root
+        };
+        let argv: Vec<_> = words.iter().skip(1).map(OsString::as_os_str).collect();
+        let mut parser = usage::Parser::new(&probe, &argv);
+        while let Some(event) = parser.next_event() {
+            match event {
+                Ok(usage::Event::Flag { .. }) => {}
+                Ok(usage::Event::Command(command)) => return command.name == name,
+                _ => return false,
+            }
+        }
+        false
+    }
+
     #[tracing::instrument(skip_all)]
     pub fn new(os_args: Vec<OsString>) -> Self {
+        let os_args = Self::trace_is_a_task_without_the_gate(os_args);
         if os_args.len() == 1 {
             let help_args = [OsString::from("--help")];
             if let usage::embedded::Outcome::Exit(exit) = Args::embedded_outcome(&help_args) {
@@ -1079,6 +1122,15 @@ impl Args {
                     ..Default::default()
                 },
             ),
+            Some(Command::Trace {
+                command: Some(TraceCommand::Affected(affected)),
+            }) => (
+                RunSelector::default(),
+                ExecutionSelector {
+                    filter: affected.filter.clone(),
+                    ..default_execution_selector
+                },
+            ),
             Some(Command::Query {
                 subcommand: Some(QuerySubcommand::Ls(ls_args)),
                 ..
@@ -1099,6 +1151,16 @@ impl Args {
         match &self.command {
             Some(Command::Run { run_args, .. }) => Some(run_args),
             Some(Command::Config) => self.config_run_args.as_ref(),
+            _ => None,
+        }
+    }
+
+    /// The arguments of `turbo trace affected`, if that is the command.
+    pub fn trace_affected_args(&self) -> Option<&TraceAffectedArgs> {
+        match &self.command {
+            Some(Command::Trace {
+                command: Some(TraceCommand::Affected(affected)),
+            }) => Some(affected),
             _ => None,
         }
     }
@@ -1438,6 +1500,14 @@ pub enum Command {
         #[usage(long)]
         experimental_write_cache: bool,
     },
+    /// EXPERIMENTAL: Select the tests that a change can affect
+    ///
+    /// Requires TURBO_EXPERIMENTAL_TRACE=1. Not supported on Windows yet.
+    #[usage(hide = true)]
+    Trace {
+        #[usage(subcommand)]
+        command: Option<TraceCommand>,
+    },
     /// Unlink the current directory from your Vercel organization and disable
     /// Remote Caching
     Unlink,
@@ -1554,6 +1624,73 @@ pub struct LsArgs {
     /// Output format
     #[usage(long, value_enum)]
     pub output: Option<OutputFormat>,
+}
+
+#[derive(Subcommands, Clone, Debug, PartialEq)]
+pub enum TraceCommand {
+    /// List the tests that the changes between two git refs, or the given
+    /// files, can affect
+    Affected(TraceAffectedArgs),
+    /// Show the chain of references from a test to a file
+    Why {
+        /// The test file
+        test: String,
+        /// The file the test may depend on
+        file: String,
+    },
+    /// Report the code the trace cannot analyze statically, and the
+    /// assumptions it makes
+    Lint {
+        /// Output the findings as JSON
+        #[usage(long)]
+        json: bool,
+    },
+}
+
+#[derive(UsageArgs, Clone, Debug, Default, PartialEq)]
+pub struct TraceAffectedArgs {
+    /// Base git ref for comparison (default: TURBO_SCM_BASE, else the merge
+    /// base with `main`)
+    #[usage(long, conflicts = "changed")]
+    pub base: Option<String>,
+    /// Head git ref for comparison (default: TURBO_SCM_HEAD, else the working
+    /// tree, uncommitted and untracked files included)
+    #[usage(long, conflicts = "changed")]
+    pub head: Option<String>,
+    /// Show only the tests of the packages this selector matches. The
+    /// selection itself always considers the whole repository
+    #[usage(short = 'F', long)]
+    pub filter: Vec<String>,
+    /// Use these files as the changes instead of reading them from git.
+    /// A file that exists counts as modified, one that does not as deleted
+    #[usage(long, value_name = "FILE", num_args = 1..)]
+    pub changed: Vec<String>,
+    /// Only tests of these frameworks: jest, vitest, gotest, cargo-test or
+    /// all (default: all)
+    #[usage(long, value_name = "FRAMEWORK", num_args = 1..)]
+    pub tests: Vec<String>,
+    /// Make no assumptions: every uncertainty selects
+    #[usage(long)]
+    pub strict: bool,
+    /// Explain why each of these tests is or is not selected, instead of
+    /// listing the selection
+    #[usage(long, value_name = "TEST", num_args = 1.., conflicts("json", "exit_code"))]
+    pub explain: Vec<String>,
+    /// Output the selection as JSON
+    #[usage(long)]
+    pub json: bool,
+    /// Exit with code 1 when a test is selected, 0 when none is, or 2 on
+    /// errors. Useful for CI gating
+    #[usage(long)]
+    pub exit_code: bool,
+    /// Override the filesystem cache directory, where the graph of a commit
+    /// is fetched from and, in CI, put
+    #[usage(long)]
+    pub cache_dir: Option<NonEmptyPath>,
+    /// Set the cache behavior for the graph, as `turbo run --cache` does for
+    /// task outputs (for example `local:r,remote:rw`)
+    #[usage(long)]
+    pub cache: Option<String>,
 }
 
 #[derive(UsageArgs, Clone, Debug, PartialEq)]

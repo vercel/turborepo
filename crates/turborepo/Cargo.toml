@@ -35,6 +35,8 @@ turborepo-platform = { workspace = true }
 turborepo-setup = { path = "../turborepo-setup", features = ["test-support"] }
 turborepo-shim = { workspace = true }
 turborepo-tool-install = { path = "../turborepo-tool-install" }
+# `trace_test` keeps the per-machine caches of `turbo trace` inside each fixture.
+turborepo-trace-core = { workspace = true, features = ["debug-knobs"] }
 which = { workspace = true }
 
 [target.'cfg(any(target_os = "linux", target_os = "macos"))'.dev-dependencies]

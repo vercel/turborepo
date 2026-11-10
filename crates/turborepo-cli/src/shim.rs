@@ -122,17 +122,20 @@ fn managed_run_args(words: Vec<std::ffi::OsString>) -> Result<Option<cli::Args>,
 }
 
 /// Commands that discover the repository, which may probe its toolchains,
-/// without running tasks.
+/// without running tasks. `turbo trace` discovers only while its gate is on:
+/// off, it refuses before reading the repository, so the shim reads nothing
+/// for it either.
 fn discovers_only(command: Option<&cli::Command>) -> bool {
-    matches!(
-        command,
+    match command {
         Some(
             cli::Command::Ls { .. }
-                | cli::Command::Query { .. }
-                | cli::Command::Boundaries { .. }
-                | cli::Command::Devtools { .. }
-        )
-    )
+            | cli::Command::Query { .. }
+            | cli::Command::Boundaries { .. }
+            | cli::Command::Devtools { .. },
+        ) => true,
+        Some(cli::Command::Trace { .. }) => crate::commands::trace::enabled(),
+        _ => false,
+    }
 }
 
 /// Implementation of `ConfigProvider` that uses `turborepo-cli`'s configuration

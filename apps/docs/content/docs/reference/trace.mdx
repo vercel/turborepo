@@ -1,0 +1,187 @@
+---
+title: trace
+description: API reference for the `turbo trace` command
+product: turborepo
+type: reference
+summary: Reference for the experimental `turbo trace` command that selects the tests a change can affect.
+related:
+  - /docs/reference/query
+  - /docs/reference/system-environment-variables
+---
+
+import { ExperimentalBadge } from "@/components/geistdocs/experimental-badge";
+
+<ExperimentalBadge>Experimental</ExperimentalBadge>
+
+`turbo trace` selects the test files that a change can affect. It follows the imports and other references of each test file through your repository, and reports a test when a changed file is in its trace.
+
+```bash title="Terminal"
+TURBO_EXPERIMENTAL_TRACE=1 turbo trace affected
+```
+
+<Callout type="warn" title="Experimental">
+  `turbo trace` is experimental and hidden from `turbo --help`. Its flags,
+  output and storage may change in any release.
+</Callout>
+
+## Enabling the command
+
+The command runs only when the [`TURBO_EXPERIMENTAL_TRACE`](/docs/reference/system-environment-variables#turbo_experimental_trace) environment variable is set to `1` or `true`. Without it, `turbo trace` means what it did before the command existed: `turbo run trace`, which runs a task named `trace`.
+
+The variable is read only from the environment. It is not a `turbo.json` key, and it is not an input to task hashes: setting it does not change `turbo run`.
+
+## Limitations
+
+- **Not supported on Windows yet.** On Windows, the command exits with an error.
+- **Flags only.** The command reads its options from flags. There is no configuration file.
+- **Static analysis.** Selection is a function of the base and head trees and the repository's configuration. It never runs your tests or your build.
+
+## Storage and caching
+
+The command stores the graph it builds in `.turbo/trace` at the root of the repository and refreshes it against the tree on each run. Like the rest of `.turbo`, it belongs in your `.gitignore`.
+
+The graph's caches, some of which are keyed by this machine's file timestamps, are kept in your user cache directory (`~/.cache/turbo/trace` on Linux, `~/Library/Caches/turbo/trace` on macOS), never in `.turbo`. Restoring `.turbo` into another checkout, as `actions/cache` does, is safe: the graph is refreshed against that checkout's tree before it answers.
+
+**Through Turborepo's cache.** In CI, `turbo trace affected` puts the graph it built into Turborepo's cache, under a key made of the commit SHA, the `turbo` version, the operating system and the architecture. A checkout without a graph fetches one before its first build: the graph of `HEAD`, else of the merge base with the base ref, else of one of the merge base's 20 nearest first-parent ancestors. The fetched graph is refreshed against the working tree, so it only saves time: the selection is the same as with a graph built from scratch. The graph goes wherever task outputs go: the local cache, [Remote Caching](/docs/core-concepts/remote-caching) (with signatures when enabled), `--cache-dir` and `--cache`. A machine outside CI fetches graphs and never puts one.
+
+## `turbo trace affected`
+
+List the test files that the changes between two git refs, or the given files, can affect.
+
+```bash title="Terminal"
+turbo trace affected [flags]
+```
+
+With no flags, the changes are those from the merge base with `main` to the working tree, including uncommitted and untracked files. The output lists one test path per line, relative to the repository root:
+
+```txt title="Output"
+packages/app/test/total.test.js
+packages/math/test/add.test.js
+```
+
+<Callout type="warn">
+  The comparison requires everything between base and head to exist in the
+  checkout. If the changes cannot be read, every test is selected.
+</Callout>
+
+### `--base <ref>`
+
+The base git ref for comparison. Defaults to the [`TURBO_SCM_BASE`](/docs/reference/system-environment-variables#turbo_scm_base) environment variable when it is set, else the merge base with `main`.
+
+### `--head <ref>`
+
+The head git ref for comparison. Defaults to the [`TURBO_SCM_HEAD`](/docs/reference/system-environment-variables#turbo_scm_head) environment variable when it is set, else the working tree.
+
+The references between files are always read from the working tree. So when `--head` is not the checked-out commit (for example a commit ahead of `HEAD`), the files that differ between `--head` and the working tree count as changes too. The selection then covers more than the changes up to `--head`; check out `--head` first to select for exactly those.
+
+### `--changed <file...>`
+
+Use these files as the changes instead of reading them from git. Paths are relative to the current directory. A file that exists counts as modified; one that does not counts as deleted. Cannot be combined with `--base` or `--head`.
+
+```bash title="Terminal"
+turbo trace affected --changed packages/math/src/add.js
+```
+
+### `--filter <selector>` (`-F`)
+
+Show only the tests of the packages that match the [filter](/docs/reference/run#--filter-string). The filter narrows the output only: selection always considers the whole repository, so a test in `app` that depends on a changed file in `math` is still reported with `--filter=app`.
+
+### `--tests <framework...>`
+
+Report only tests of these frameworks: `jest`, `vitest`, `gotest`, `cargo-test`, or `all`. Defaults to `all`. Any other value is an error.
+
+### `--strict`
+
+Make no assumptions: every uncertainty selects the tests it may affect.
+
+### `--explain <test...>`
+
+Explain why each of the given test files is or is not selected, instead of listing the selection. A file that the selection lists as an `UnknownTest` is explained as an unknown test, which always runs. Cannot be combined with `--json` or `--exit-code`.
+
+### `--json`
+
+Print the selection as JSON. The shape matches the `affectedTasks` field of [`turbo query affected`](/docs/reference/query#affected), so the command can later move into `turbo query`:
+
+```json title="Output"
+{
+  "affectedTests": {
+    "items": [
+      {
+        "path": "packages/app/test/total.test.js",
+        "package": "app",
+        "task": "app#test",
+        "reason": {
+          "__typename": "FileChanged",
+          "filePath": "packages/math/src/add.js"
+        }
+      }
+    ],
+    "length": 1
+  },
+  "uncoveredTasks": {
+    "items": [],
+    "length": 0
+  }
+}
+```
+
+Each item has:
+
+- `path`: the test file, relative to the repository root.
+- `package`: the name of the package that contains it (`//` for the root).
+- `task`: the task that runs it (`<package>#<script>`), or `null` when none is known.
+- `reason`: why it is selected. `__typename` is one of:
+
+| `__typename`               | Meaning                                                                            | Fields        |
+| -------------------------- | ---------------------------------------------------------------------------------- | ------------- |
+| `TestChanged`              | The test file itself changed.                                                      |               |
+| `FileChanged`              | A changed file is reached through imports.                                         | `filePath`    |
+| `PackageDependencyChanged` | A third-party package that the test uses resolves differently.                    | `packageName` |
+| `NameReferenced`           | A string in loaded code names a changed path.                                      | `filePath`    |
+| `TaskChanged`              | A CI job, script or service that runs the test changed.                            | `filePath`    |
+| `Uncertain`                | The test reaches code that cannot be analyzed statically, so any change selects it. | `filePath`    |
+| `NotInGraph`               | A test file that is not a traced source file.                                      |               |
+| `UnknownTest`              | A file that looks like a test in a package whose list of tests cannot be told (a runner's defaults, a pattern that leaves it out): always selected. |               |
+| `AllTestsChanged`          | Every test is selected: the changes could not be read, or a file that steers the selection changed. | `description` |
+
+`uncoveredTasks` lists the tasks that start tests the command cannot map to files, such as a runner it does not cover (mocha, `node --test`): each must run whole. Each has `task` (`<package>#<script>`), `package` and `description`. Without `--json`, they are printed to stderr.
+
+With `--tests`, the tasks that start a framework you did not ask for are listed too, because the command selected none of their tests: for example, `--tests vitest` lists every task that runs jest. Run those tasks whole, or select their tests with another call (`--tests jest`).
+
+The items are sorted by path, and two runs on the same tree print the same bytes.
+
+### `--exit-code`
+
+Exit with code `1` when a test is selected or a task must run whole, `0` when nothing must run, or `2` on errors. Useful for CI gating.
+
+```bash title="Terminal"
+turbo trace affected --exit-code
+```
+
+### `--cache-dir <path>`
+
+The filesystem cache directory the graph is fetched from and, in CI, put into, as [`turbo run --cache-dir`](/docs/reference/run#--cache-dir-path).
+
+### `--cache <options>`
+
+Read and write the graph in the local and remote caches as [`turbo run --cache`](/docs/reference/run#--cache-options) does for task outputs. For example, `--cache=local:r,remote:r` fetches graphs but never puts one.
+
+## `turbo trace why <test> <file>`
+
+Print the chain of references from a test file to a file in its trace. Paths are relative to the current directory. Exits with an error when the file is not in the test's trace.
+
+```bash title="Terminal"
+turbo trace why packages/app/test/total.test.js packages/math/src/add.js
+```
+
+## `turbo trace lint`
+
+Report the code that cannot be analyzed statically, and the assumptions the selection makes. Exits with code `1` when there are findings, and `0` otherwise.
+
+```bash title="Terminal"
+turbo trace lint
+```
+
+### `--json`
+
+Print the findings as JSON.

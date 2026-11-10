@@ -34,6 +34,7 @@ pub(crate) mod query;
 pub(crate) mod run;
 pub(crate) mod setup;
 pub(crate) mod telemetry;
+pub(crate) mod trace;
 pub(crate) mod unlink;
 
 #[derive(Debug, Clone)]
