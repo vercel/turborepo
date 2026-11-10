@@ -60,8 +60,10 @@ function getGitHubAuthHeaders(url: string): Record<string, string> {
 /**
  * Returns true when NO_PROXY / no_proxy says `parsedUrl` should be fetched
  * directly. Entries are comma or whitespace separated. `*` matches every host.
- * Any other entry matches its host and all of its subdomains (a leading `.` or
- * `*.` is ignored), and may be limited to one port with a `:port` suffix.
+ * Any other entry matches its host and all of its subdomains, as in curl and
+ * Go (a leading `.` or `*.` is ignored), and may be limited to one port with a
+ * `:port` suffix. IPv6 entries may be bare (`::1`) or bracketed (`[::1]`,
+ * `[::1]:8080`).
  */
 function shouldBypassProxy(parsedUrl: URL): boolean {
   const noProxy = (process.env.no_proxy || process.env.NO_PROXY || "").trim();
@@ -69,7 +71,8 @@ function shouldBypassProxy(parsedUrl: URL): boolean {
     return false;
   }
 
-  const hostname = parsedUrl.hostname.toLowerCase();
+  // URL keeps the brackets around an IPv6 host; compare without them.
+  const hostname = parsedUrl.hostname.toLowerCase().replace(/^\[(.*)\]$/, "$1");
   const port =
     parsedUrl.port || (parsedUrl.protocol === "https:" ? "443" : "80");
 
@@ -79,12 +82,16 @@ function shouldBypassProxy(parsedUrl: URL): boolean {
       return true;
     }
 
-    const portMatch = /^(?<host>.+):(?<port>\d+)$/.exec(entry);
+    // Only a hostname or a bracketed IPv6 literal can carry a `:port`, so a
+    // bare IPv6 entry such as `::1` is not split at its last colon.
+    const portMatch = /^(?<host>[^:]+|\[[^\]]+\]):(?<port>\d+)$/.exec(entry);
     if (portMatch?.groups && portMatch.groups.port !== port) {
       return false;
     }
 
-    const entryHost = (portMatch?.groups?.host ?? entry).replace(/^\*?\./, "");
+    const entryHost = (portMatch?.groups?.host ?? entry)
+      .replace(/^\[(.*)\]$/, "$1")
+      .replace(/^\*?\./, "");
     return (
       entryHost !== "" &&
       (hostname === entryHost || hostname.endsWith(`.${entryHost}`))

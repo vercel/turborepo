@@ -183,6 +183,36 @@ describe("examples", () => {
         );
       });
 
+      it.each(["::1", "[::1]", "[::1]:8443", "localhost, ::1"])(
+        "connects directly to an IPv6 host when NO_PROXY=%s",
+        async (noProxy) => {
+          process.env.NO_PROXY = noProxy;
+
+          const url = "https://[::1]:8443/repos/vercel/turborepo";
+          await isUrlOk(url);
+
+          expect(global.fetch).toHaveBeenCalledWith(
+            url,
+            expect.objectContaining({ dispatcher: undefined })
+          );
+        }
+      );
+
+      it.each(["::2", "[::1]:443"])(
+        "still uses the proxy for an IPv6 host when NO_PROXY=%s",
+        async (noProxy) => {
+          process.env.NO_PROXY = noProxy;
+
+          const url = "https://[::1]:8443/repos/vercel/turborepo";
+          await isUrlOk(url);
+
+          expect(global.fetch).toHaveBeenCalledWith(
+            url,
+            expect.objectContaining({ dispatcher: expect.anything() })
+          );
+        }
+      );
+
       it("reads lowercase no_proxy", async () => {
         process.env.no_proxy = "github.com";
 
