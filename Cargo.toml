@@ -125,6 +125,7 @@ turborepo-vercel-api-mock = { path = "crates/turborepo-vercel-api-mock" }
 turborepo-watch = { path = "crates/turborepo-watch", default-features = false }
 turborepo-ghostty = { path = "crates/turborepo-ghostty" }
 turborepo-trace-core = { path = "crates/turborepo-trace-core" }
+turborepo-trace-lockfile = { path = "crates/turborepo-trace-lockfile" }
 turborepo-trace-testkit = { path = "crates/turborepo-trace-testkit" }
 libghostty-vt = { git = "https://github.com/uzaaft/libghostty-rs", rev = "3c7766d4e5d6ce93870ad666a14c0b5a0e957360" }
 
@@ -182,6 +183,7 @@ unrs_resolver = "1.11.1"
 path-clean = "1.0.1"
 petgraph = { version = "0.8.3", default-features = false, features = ["std"] }
 pretty_assertions = "1.3.0"
+proptest = { version = "1.6", default-features = false, features = ["std"] }
 radix_trie = "0.2.1"
 rand = "0.9.3"
 ratatui = "0.30.2"

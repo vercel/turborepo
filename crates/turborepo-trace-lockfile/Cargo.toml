@@ -1,0 +1,25 @@
+[package]
+name = "turborepo-trace-lockfile"
+version = "0.1.0"
+edition = { workspace = true }
+license = "MIT"
+description = "Lockfile parsing (pnpm, npm, yarn classic/berry, bun) and change-impact diffing for `turbo trace`"
+publish = false
+
+[lib]
+name = "turborepo_trace_lockfile"
+bench = false
+
+[dependencies]
+bitflags = { workspace = true }
+fixedbitset = { workspace = true }
+memchr = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+
+[dev-dependencies]
+proptest = { workspace = true }
+
+[lints]
+workspace = true
