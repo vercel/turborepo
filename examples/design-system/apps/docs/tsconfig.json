@@ -1,8 +1,4 @@
 {
   "extends": "@repo/typescript-config/react-app.json",
-  "include": ["."],
-  "exclude": ["dist", "build", "node_modules"],
-  "compilerOptions": {
-    "strictNullChecks": true
-  }
+  "include": ["stories", ".storybook", "vite.config.ts"]
 }
