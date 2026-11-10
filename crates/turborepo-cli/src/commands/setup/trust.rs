@@ -26,8 +26,9 @@ struct Record {
     schema: u32,
     root: PathBuf,
     /// Unix device, or Windows volume serial number, as setup saw it. Recorded
-    /// for diagnostics only, never compared: a block-level snapshot restored
-    /// onto another device keeps the path and inode but gets a new device.
+    /// for diagnostics only, never compared: a repository restored, copied or
+    /// remounted on another device at the same path keeps the path and inode
+    /// but gets a new device.
     device: u64,
     /// Unix inode, or the Windows file index: the directory's identity here.
     inode: u64,
@@ -185,7 +186,7 @@ fn open(_: &Path, _: &fs::Metadata, _: bool) -> io::Result<File> {
 
 /// Repository identity: inode, or file index on Windows, with the device (or
 /// volume serial number) beside it. A same-path re-clone gets a new inode,
-/// while a snapshot restored onto another device keeps it.
+/// while a restore or copy onto another device keeps it.
 fn identity(path: &Path) -> io::Result<(u64, u64)> {
     #[cfg(unix)]
     {
@@ -345,9 +346,9 @@ impl TrustStore {
     }
 
     /// Whether the record still names this exact directory: only the inode (the
-    /// file index on Windows) is compared, so a snapshot restored onto another
-    /// device at the same path matches, while a re-clone or move at the same
-    /// path gets a new inode.
+    /// file index on Windows) is compared, so a repository restored, copied or
+    /// remounted on another device at the same path matches, while a re-clone
+    /// or move at the same path gets a new inode.
     fn same_directory(&self, record: &Record) -> io::Result<bool> {
         let (_, inode) = identity(&self.root)?;
         Ok(inode == record.inode)

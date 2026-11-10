@@ -212,14 +212,14 @@ fn moved_and_same_path_recloned_roots_cannot_reuse_records() {
 }
 
 #[test]
-fn snapshot_restore_onto_another_device_keeps_the_recorded_tools() {
+fn a_directory_restored_on_another_device_keeps_the_recorded_tools() {
     let f = Fixture::new();
     let u = Upstream::new(&f, false, None);
     f.run(&u, FROZEN).unwrap();
     let installed = trust(&f).recorded().unwrap().unwrap();
     let (path, mut value) = record(&f);
-    // A block-level snapshot restored onto another device keeps this path and
-    // inode but gets a new device id.
+    // A repository restored, copied or remounted on another device at the same
+    // path keeps this path and inode but gets a new device id.
     value["device"] = Value::from(value["device"].as_u64().unwrap() + 1);
     fs::write(&path, value.to_string()).unwrap();
     let recorded = trust(&f).recorded().unwrap().unwrap();
