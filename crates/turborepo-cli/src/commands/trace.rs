@@ -174,9 +174,19 @@ async fn run_inner(
     let handler = SignalHandler::new(signal);
     let filtered = matches!(&command, TraceCommand::Affected(a) if !a.filter.is_empty());
 
+    // `affected` reads its changes through turbo's SCM layer once the run is
+    // built: the same queries start now, while turbo builds its package graph.
+    let prefetch = match &command {
+        TraceCommand::Affected(args) => turborepo_trace::prefetch_requests(
+            &base.repo_root,
+            &affected_request(args, None).changes,
+        ),
+        _ => Vec::new(),
+    };
     let (run, _analytics) = RunBuilder::new(base.discovery_builder_input()?, None)?
         .add_all_tasks()
         .do_not_validate_engine()
+        .prefetch_changed_files(prefetch)
         .build(&handler, telemetry)
         .await?;
 
@@ -218,7 +228,7 @@ async fn run_inner(
     if let Some(changes) = &transport
         && (cache_config.local.read || cache_config.remote.read)
     {
-        let candidates = transport::candidates(&root, changes);
+        let candidates = transport::candidates(&root, &scm, changes);
         match transport::restore(&root, cache, &candidates).await {
             Ok(Some(restored)) => eprintln!("turbo trace: {restored}"),
             Ok(None) => {}

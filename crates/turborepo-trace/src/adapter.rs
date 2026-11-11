@@ -1,9 +1,10 @@
 //! The adapters to Turborepo: the JavaScript workspace members come from
-//! turbo's package graph ([`Packages`]). With `--head`, the changed files come
-//! from turbo's SCM layer (`SCM::changed_files`, the same code as `turbo run
-//! --affected`), with a status layer on top ([`ScmChanges`]); without it, the
-//! engine's own diff against the merge base gives the same set more cheaply
-//! (`api::scm_changes`, and the parity tests below).
+//! turbo's package graph ([`Packages`]), and the changed files from turbo's
+//! SCM layer (`SCM::changed_files`, the same code as `turbo run --affected`)
+//! with a status layer on top ([`ScmChanges`]). The base ref is resolved and
+//! validated by turbo too (`GitRepo::resolve_base`). `turbo trace` starts the
+//! same `changed_files` queries while turbo builds its package graph
+//! ([`prefetch_requests`]), so the git scans overlap the build.
 //!
 //! turbo lists changed paths without a status (`git diff --name-only
 //! --no-renames`, plus uncommitted and untracked files). The selection needs to
@@ -19,7 +20,7 @@ use std::{
 
 use turbopath::AbsoluteSystemPath;
 use turborepo_repository::package_graph::{PackageGraph, PackageName};
-use turborepo_scm::SCM;
+use turborepo_scm::{GitRepo, SCM, git::ChangedFilesRequest};
 use turborepo_trace_graph::{Change, ChangeKind, ChangeList, ChangeSource};
 use turborepo_trace_store::workspace::{ListedMembers, Members};
 
@@ -105,7 +106,11 @@ impl ScmChanges {
         base: Option<&str>,
         head: Option<&str>,
     ) -> ScmChanges {
-        let base = match resolve_base(root.as_std_path(), base) {
+        let resolved = match head
+            .map(validate_ref)
+            .transpose()
+            .and_then(|_| resolve_base(scm, base))
+        {
             Ok(b) => b,
             Err(e) => {
                 return ScmChanges {
@@ -117,25 +122,32 @@ impl ScmChanges {
         // The debug variable of the engine's tooling (`EXACT_BASE`): the base as
         // given, for clones without history.
         let exact = crate::lockdiff::exact_base(false);
-        let git = match Git::new(root.as_std_path(), &base, exact) {
+        let git = match Git::new(root.as_std_path(), &resolved, exact) {
             Ok(g) => g,
             Err(e) => {
                 return ScmChanges {
-                    base: Some(base),
+                    base: Some(resolved),
                     changes: Err(format!("{e:#}")),
                 };
             }
         };
-        let changes = changed_paths(root, scm, &base, head, !exact).and_then(|paths| {
-            with_status(root.as_std_path(), &git, &paths).map_err(|e| format!("{e:#}"))
-        });
+        // The queries of `prefetch_requests`, with the same arguments: the base as
+        // given (turbo resolves it again, to the same ref).
+        let changes = queries(base, head, !exact)
+            .into_iter()
+            .try_fold(BTreeSet::new(), |mut out, q| {
+                changed_paths(root, scm, &q, &mut out).map(|()| out)
+            })
+            .and_then(|paths| {
+                with_status(root.as_std_path(), &git, &paths).map_err(|e| format!("{e:#}"))
+            });
         // The changes are against the merge base, and so must be the base's
         // contents: the merge base itself when there is one (`main` may have
         // moved on since), the ref when there are several (a criss-cross
         // history), which `affected` resolves to the same merge bases.
         let base = match git.bases.as_slice() {
             [one] => one.clone(),
-            _ => base,
+            _ => resolved,
         };
         ScmChanges {
             base: Some(base),
@@ -153,75 +165,120 @@ impl ChangeSource for ScmChanges {
     }
 }
 
-/// The base ref as turbo's SCM layer resolves it: the given one, else the
-/// GitHub Actions base (local, else `origin/<ref>`), else `main`, else
-/// `master`.
-pub(crate) fn resolve_base(root: &Path, given: Option<&str>) -> Result<String, String> {
-    if let Some(b) = given.filter(|b| !b.is_empty()) {
-        return Ok(b.to_owned());
-    }
-    let exists = |r: &str| {
-        git(
-            root,
-            &[
-                "rev-parse",
-                "--verify",
-                "--quiet",
-                &format!("{r}^{{commit}}"),
-            ],
-        )
-        .is_ok()
-    };
-    if let Some(r) = turborepo_scm::GitRepo::get_github_base_ref(turborepo_scm::git::CIEnv::new()) {
-        if exists(&r) {
-            return Ok(r);
-        }
-        let remote = format!("origin/{r}");
-        if exists(&remote) {
-            return Ok(remote);
-        }
-        return Err(format!("cannot resolve the GitHub Actions base ref {r}"));
-    }
-    ["main", "master"]
-        .into_iter()
-        .find(|b| exists(b))
-        .map(str::to_owned)
-        .ok_or_else(|| "no base: pass --base (neither main nor master exists)".to_owned())
+/// A ref git would read as an option is refused, as turbo refuses it.
+pub(crate) fn validate_ref(r: &str) -> Result<(), String> {
+    GitRepo::validate_git_ref(r).map_err(|e| e.to_string())
 }
 
-/// `SCM::changed_files` from the merge base of `base` and HEAD to the working
-/// tree (or to `head`, and from there to the working tree); from `base`
-/// itself without `merge_base`.
+/// The base ref as turbo's SCM layer resolves it (`GitRepo::resolve_base`):
+/// the given one (validated), else the GitHub Actions base, else `main`, else
+/// `master`.
+pub(crate) fn resolve_base(scm: &SCM, given: Option<&str>) -> Result<String, String> {
+    match scm {
+        SCM::Git(repo) => repo
+            .resolve_base(
+                given.filter(|b| !b.is_empty()),
+                turborepo_scm::git::CIEnv::new(),
+            )
+            .map_err(|e| match e {
+                turborepo_scm::Error::UnableToResolveRef => "no base: pass --base (neither main \
+                                                             nor master exists, and no GitHub \
+                                                             Actions base resolves)"
+                    .to_owned(),
+                e => e.to_string(),
+            }),
+        SCM::Manual(_) => Err("not a git repository".to_owned()),
+    }
+}
+
+/// One `SCM::changed_files` query: from `from` (`None`: the base turbo
+/// resolves) to `to` (`None`: HEAD, and with `uncommitted` the working
+/// tree).
+struct Query {
+    from: Option<String>,
+    to: Option<String>,
+    uncommitted: bool,
+    merge_base: bool,
+}
+
+/// The queries of the changes from `base` to `head`: from the merge base of
+/// `base` and HEAD to the working tree; with `head`, from that merge base to
+/// `head`, and from `head` to the working tree. From `base` itself without
+/// `merge_base`.
+fn queries(base: Option<&str>, head: Option<&str>, merge_base: bool) -> Vec<Query> {
+    let base = base.filter(|b| !b.is_empty()).map(str::to_owned);
+    match head {
+        None => vec![Query {
+            from: base,
+            to: None,
+            uncommitted: true,
+            merge_base,
+        }],
+        Some(h) => vec![
+            Query {
+                from: base,
+                to: Some(h.to_owned()),
+                uncommitted: false,
+                merge_base,
+            },
+            Query {
+                from: Some(h.to_owned()),
+                to: None,
+                uncommitted: true,
+                merge_base: false,
+            },
+        ],
+    }
+}
+
+/// The `SCM::changed_files` queries [`ScmChanges`] will make for the changes
+/// from `base` to `head` at `root`, for `SCM::prefetch_changes` (through
+/// `RunBuilder::prefetch_changed_files`): started before turbo's package
+/// graph is built, they overlap it.
+pub fn prefetch_requests(
+    root: &AbsoluteSystemPath,
+    base: Option<&str>,
+    head: Option<&str>,
+) -> Vec<ChangedFilesRequest> {
+    let exact = crate::lockdiff::exact_base(false);
+    queries(base, head, !exact)
+        .into_iter()
+        .map(|q| ChangedFilesRequest {
+            turbo_root: root.to_owned(),
+            from_commit: q.from,
+            to_commit: q.to,
+            include_uncommitted: q.uncommitted,
+            merge_base: q.merge_base,
+        })
+        .collect()
+}
+
+/// Adds the paths of one `SCM::changed_files` query to `out`.
 fn changed_paths(
     root: &AbsoluteSystemPath,
     scm: &SCM,
-    base: &str,
-    head: Option<&str>,
-    merge_base: bool,
-) -> Result<BTreeSet<String>, String> {
-    let mut out = BTreeSet::new();
-    let mut add = |from: &str, to: Option<&str>, uncommitted: bool, merge_base: bool| match scm
-        .changed_files(root, Some(from), to, uncommitted, false, merge_base)
-    {
+    q: &Query,
+    out: &mut BTreeSet<String>,
+) -> Result<(), String> {
+    match scm.changed_files(
+        root,
+        q.from.as_deref(),
+        q.to.as_deref(),
+        q.uncommitted,
+        false,
+        q.merge_base,
+    ) {
         Ok(Ok(files)) => {
             out.extend(files.iter().map(|f| f.to_unix().to_string()));
             Ok(())
         }
         Ok(Err(range)) => Err(format!(
             "cannot diff {} against {}",
-            range.from_ref.as_deref().unwrap_or("?"),
+            range.from_ref.as_deref().unwrap_or("the base"),
             range.to_ref.as_deref().unwrap_or("HEAD")
         )),
         Err(e) => Err(e.to_string()),
-    };
-    match head {
-        None => add(base, None, true, merge_base)?,
-        Some(h) => {
-            add(base, Some(h), false, merge_base)?;
-            add(h, None, true, false)?;
-        }
     }
-    Ok(out)
 }
 
 /// The status of each changed path: from its existence at each merge base of
@@ -692,6 +749,24 @@ mod tests {
         git(&r, &["add", "-A"]);
         git(&r, &["commit", "-qm", "base"]);
         d
+    }
+
+    /// An untracked file that a `.ignore` file hides is a change: git does not
+    /// read `.ignore` files (the graph's own walk does), and the changes are
+    /// git's, as for `turbo run --affected`.
+    #[test]
+    fn untracked_file_hidden_by_dot_ignore_is_changed() {
+        let d = change_repo(&[(".ignore", "hidden/\n*.gen.js\n"), ("src/x.js", "1;\n")]);
+        let r = std::fs::canonicalize(d.path()).unwrap();
+        write(&r, "hidden/h.js", "2;\n");
+        write(&r, "src/y.gen.js", "3;\n");
+        let (b, _) = theirs(&r, "HEAD", None);
+        for p in ["hidden/h.js", "src/y.gen.js"] {
+            assert!(
+                b.contains(&("added".to_owned(), p.to_owned())),
+                "{p}: {b:?}"
+            );
+        }
     }
 
     /// A file replaced by a directory of the same name. git (and

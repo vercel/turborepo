@@ -9,7 +9,7 @@ use turborepo_trace_graph::{ChangeList, ChangeSource, GivenChanges};
 
 use crate::{
     Error,
-    adapter::{Packages, ScmChanges, members, package_name, resolve_base},
+    adapter::{Packages, ScmChanges, members, package_name},
     affected::{AffectedCmd, AffectedFormat},
     graph::GraphLoc,
     selection::{Document, Mode, Run},
@@ -33,11 +33,12 @@ pub struct Repo<'a> {
 /// Where the changes come from.
 #[derive(Clone, Debug)]
 pub enum Changes {
-    /// `SCM::changed_files` from `base` (default: the GitHub Actions base, else
-    /// `main` or `master`; the merge base with HEAD, as `turbo run
-    /// --affected`) to `head` (default: the working tree, uncommitted and
-    /// untracked files included). Any SCM error selects every test
-    /// ([`Reason::AllTestsChanged`]).
+    /// `SCM::changed_files` from `base` (resolved by turbo: default the GitHub
+    /// Actions base, else `main` or `master`; the merge base with HEAD, as
+    /// `turbo run --affected`) to `head` (default: the working tree,
+    /// uncommitted and untracked files included). A ref that starts with `-`
+    /// is refused ([`Error::InvalidRequest`]); any other SCM error selects
+    /// every test ([`Reason::AllTestsChanged`]).
     Scm {
         /// `--base`.
         base: Option<String>,
@@ -209,6 +210,17 @@ fn check_tests(req: &AffectedRequest) -> Result<(), Error> {
     }
 }
 
+/// `--base` and `--head` as turbo takes refs: one that git would read as an
+/// option (`-...`) is refused.
+fn check_refs(req: &AffectedRequest) -> Result<(), Error> {
+    if let Changes::Scm { base, head } = &req.changes {
+        for r in base.iter().chain(head) {
+            crate::adapter::validate_ref(r).map_err(Error::InvalidRequest)?;
+        }
+    }
+    Ok(())
+}
+
 fn abs(repo: &Repo<'_>, p: &str) -> PathBuf {
     turborepo_trace_core::fs::normalize(&repo.cwd.as_std_path().join(p))
 }
@@ -249,42 +261,45 @@ fn selection(mut cmd: AffectedCmd) -> Result<Document, Error> {
     doc.ok_or_else(|| Error::Failed("the selection produced no document".to_owned()))
 }
 
-/// Points `cmd` at the changes from `base` (resolved as turbo's SCM layer
-/// does) to `head`, or to the working tree.
-///
-/// To the working tree (no `head`), the engine reads them as for `--since`:
-/// one diff of the merge base against the working tree (uncommitted changes
-/// included, with each path's status and its links at the base), and as
-/// untracked files the files of the graph's own `.gitignore`-respecting walk
-/// that git does not track, which spares git's untracked scan (the slowest
-/// part of turbo's `SCM::changed_files` on a large repository). With `head`,
-/// turbo's `SCM::changed_files` lists them (from the merge base to `head`,
-/// and from `head` to the working tree) with the status layer of
-/// [`ScmChanges`]. Either way an error here, or later in the diff, selects
-/// every test.
+/// Points `cmd` at the changes from `base` (resolved by turbo's SCM layer)
+/// to `head`, or to the working tree: turbo's `SCM::changed_files` lists
+/// them (from the merge base to `head`, and from `head` to the working tree),
+/// with the status layer of [`ScmChanges`]. An error here, or later in the
+/// diff, selects every test.
 fn scm_changes(
     repo: &Repo<'_>,
     cmd: &mut AffectedCmd,
     base: Option<&str>,
     head: Option<&str>,
 ) -> Result<(), String> {
-    match head {
-        None => {
-            cmd.since = Some(resolve_base(repo.root.as_std_path(), base)?);
-        }
-        Some(_) => {
-            let source = ScmChanges::new(repo.root, repo.scm, base, head);
-            source.changes()?;
-            cmd.change_source = Some(Arc::new(source));
-        }
-    }
+    let source = ScmChanges::new(repo.root, repo.scm, base, head);
+    source.changes()?;
+    cmd.change_source = Some(Arc::new(source));
     Ok(())
+}
+
+/// The `SCM::changed_files` queries [`affected`] and [`explain`] make for
+/// `changes`, for `RunBuilder::prefetch_changed_files`: started while turbo
+/// builds its package graph, the git scans overlap the build, and the
+/// command's own queries take their results. Empty for
+/// [`Changes::Files`].
+pub fn prefetch_requests(
+    root: &AbsoluteSystemPath,
+    changes: &Changes,
+) -> Vec<turborepo_scm::git::ChangedFilesRequest> {
+    match changes {
+        Changes::Scm { base, head } => {
+            crate::adapter::prefetch_requests(root, base.as_deref(), head.as_deref())
+        }
+        Changes::Files(_) => Vec::new(),
+    }
 }
 
 /// Selects the tests a change affects.
 pub fn affected(repo: &Repo<'_>, req: &AffectedRequest) -> Result<AffectedTests, Error> {
     supported()?;
     check_tests(req)?;
+    check_refs(req)?;
     host_defaults();
     let mut cmd = command(repo, req);
     match &req.changes {
@@ -453,6 +468,7 @@ pub fn explain(
 ) -> Result<(), Error> {
     supported()?;
     check_tests(req)?;
+    check_refs(req)?;
     host_defaults();
     let mut cmd = command(repo, req);
     cmd.explain = tests

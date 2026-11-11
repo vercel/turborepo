@@ -121,17 +121,30 @@ impl Git {
     // Invariant: the merge base is asked for whenever `exact` is false, the branch this is on.
     #[allow(clippy::expect_used)]
     pub fn new(root: &Path, rev: &str, exact: bool) -> anyhow::Result<Git> {
+        // A revision git would read as an option is refused, as turbo refuses it.
+        crate::adapter::validate_ref(rev).map_err(|e| anyhow::anyhow!(e))?;
         // Every git call at once (process startup dominates).
         let commit = format!("{rev}^{{commit}}");
         let (top, valid, merge, is_shallow) = std::thread::scope(|s| {
-            let valid = s.spawn(|| git(root, &["rev-parse", "--verify", "--quiet", &commit]));
+            let valid = s.spawn(|| {
+                git(
+                    root,
+                    &[
+                        "rev-parse",
+                        "--verify",
+                        "--quiet",
+                        "--end-of-options",
+                        &commit,
+                    ],
+                )
+            });
             // Every merge base: one, or several in a criss-cross history.
             let merge = (!exact).then(|| {
                 s.spawn(|| {
                     Command::new("git")
                         .arg("-C")
                         .arg(root)
-                        .args(["merge-base", "--all", rev, "HEAD"])
+                        .args(["merge-base", "--all", "--end-of-options", rev, "HEAD"])
                         .output()
                 })
             });

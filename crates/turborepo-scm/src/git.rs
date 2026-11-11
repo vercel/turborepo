@@ -484,7 +484,8 @@ impl GitRepo {
         Ok(output.trim().to_owned())
     }
 
-    fn validate_git_ref(git_ref: &str) -> Result<(), Error> {
+    /// Rejects a ref that git would read as an option (`-...`).
+    pub fn validate_git_ref(git_ref: &str) -> Result<(), Error> {
         if git_ref.starts_with('-') {
             return Err(Error::InvalidGitRef(git_ref.to_string()));
         }
@@ -772,7 +773,10 @@ impl GitRepo {
         None
     }
 
-    fn resolve_base(&self, base_override: Option<&str>, env: CIEnv) -> Result<String, Error> {
+    /// The base ref of a change comparison: `base_override` (validated), else
+    /// the GitHub Actions base (with the `origin/` fallback when that future
+    /// flag is on), else `main`, else `master`.
+    pub fn resolve_base(&self, base_override: Option<&str>, env: CIEnv) -> Result<String, Error> {
         if let Some(valid_from) = base_override {
             Self::validate_git_ref(valid_from)?;
             return Ok(valid_from.to_string());

@@ -35,6 +35,7 @@ use std::{
 
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPathBuf};
 use turborepo_cache::AsyncCache;
+use turborepo_scm::SCM;
 use turborepo_trace_store::{
     Manifest,
     artifact::{self, ArtifactError, Header, PackOptions},
@@ -76,25 +77,35 @@ fn rev(root: &Path, args: &[&str]) -> Option<String> {
 }
 
 /// The commits whose graph a build at `root` can start from, best first:
-/// `HEAD`, the merge base of the base ref (as `changes` resolve it) and
+/// `HEAD`, the merge base of the base ref (as `changes` resolve it, through
+/// turbo's SCM layer) and
 /// `HEAD`, and the merge base's first-parent ancestors (at most
 /// [`MAX_ANCESTORS`]). Without a base (`--changed`, or one that does not
 /// resolve), `HEAD`'s first-parent ancestors. Empty outside a git repository.
-pub fn candidates(root: &AbsoluteSystemPath, changes: &Changes) -> Vec<String> {
+pub fn candidates(root: &AbsoluteSystemPath, scm: &SCM, changes: &Changes) -> Vec<String> {
     let root = root.as_std_path();
     let Some(head) = rev(root, &["rev-parse", "--verify", "--quiet", "HEAD^{commit}"]) else {
         return Vec::new();
     };
     let base = match changes {
-        Changes::Scm { base, .. } => resolve_base(root, base.as_deref()).ok(),
+        Changes::Scm { base, .. } => resolve_base(scm, base.as_deref()).ok(),
         Changes::Files(_) => None,
     };
     let start = base
-        .and_then(|b| rev(root, &["merge-base", &b, "HEAD"]))
+        .and_then(|b| rev(root, &["merge-base", "--end-of-options", &b, "HEAD"]))
         .unwrap_or_else(|| head.clone());
     let count = format!("--max-count={}", MAX_ANCESTORS + 1);
     let mut out = vec![head];
-    if let Ok(list) = git(root, &["rev-list", "--first-parent", &count, &start]) {
+    if let Ok(list) = git(
+        root,
+        &[
+            "rev-list",
+            "--first-parent",
+            &count,
+            "--end-of-options",
+            &start,
+        ],
+    ) {
         out.extend(
             list.lines()
                 .map(str::trim)

@@ -66,7 +66,7 @@ mod xfile;
 pub use adapter::Packages;
 pub use api::{
     AffectedRequest, AffectedTest, AffectedTests, Changes, LintRequest, Reason, Repo,
-    UncoveredTask, affected, explain, lint, supported, why,
+    UncoveredTask, affected, explain, lint, prefetch_requests, supported, why,
 };
 pub use error::Error;
 
