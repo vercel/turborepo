@@ -32,13 +32,35 @@ fn stderr(output: &Output) -> String {
     String::from_utf8_lossy(&output.stderr).into_owned()
 }
 
-/// Runs `turbo <args>` in `cwd` with the gate on, plus `env`. The per-machine
-/// caches of the graph are kept in the fixture's `.git` (`root`): removed with
-/// the fixture and never part of its tree.
+/// The user's cache directory of the turbo runs of a fixture (`root`): in its
+/// `.git`, removed with the fixture and never part of its tree.
+fn cache_home(root: &Path) -> std::path::PathBuf {
+    root.join(".git").join("trace-cache-home")
+}
+
+/// Where `turbo trace` keeps the per-machine caches of the graph of `root`'s
+/// runs: `turbo/trace` in the user's cache directory (`$XDG_CACHE_HOME` on
+/// Linux, `~/Library/Caches` on macOS).
+fn machine_cache(root: &Path) -> std::path::PathBuf {
+    let base = if cfg!(target_os = "macos") {
+        cache_home(root).join("Library/Caches")
+    } else {
+        cache_home(root)
+    };
+    base.join("turbo/trace")
+}
+
+/// Runs `turbo <args>` in `cwd` with the gate on, plus `env`, as it ships: no
+/// debug variable is set (`turbo_command` removes every `TURBO_*` of the test's
+/// own environment), and the user's cache directory is the fixture's
+/// ([`cache_home`]).
 fn turbo_at(root: &Path, cwd: &Path, args: &[&str], env: &[(&str, &str)]) -> Output {
-    let machine = root.join(".git").join("trace-machine-cache");
-    let machine = machine.to_str().unwrap();
-    let mut all = vec![GATE, ("TURBO_TRACE_DEBUG_MACHINE_CACHE", machine)];
+    let home = cache_home(root);
+    let home = home.to_str().unwrap();
+    let mut all = vec![GATE, ("XDG_CACHE_HOME", home)];
+    if cfg!(target_os = "macos") {
+        all.push(("HOME", home));
+    }
     all.extend_from_slice(env);
     run_turbo_with_env(cwd, args, &all)
 }
@@ -607,6 +629,49 @@ fn a_base_that_moved_on_is_compared_at_the_merge_base() {
     assert_selects(&selected, &[JEST_ADD, JEST_TOTAL], &[JEST_GREET]);
 }
 
+/// The configuration `turbo trace` ships in, in a pull request's CI run: no
+/// debug variable, the base from GitHub Actions (`GITHUB_BASE_REF`) resolved by
+/// turbo's SCM layer and compared at the merge base, the caches in the user's
+/// cache directory, and the graph put into turbo's cache (CI only).
+#[cfg(unix)]
+#[test]
+fn a_pull_request_run_in_the_shipped_configuration() {
+    let dir = fixture("trace_jest");
+    git(dir.path(), &["checkout", "--quiet", "-b", "work"]);
+    edit_mul(dir.path());
+    git(dir.path(), &["commit", "--quiet", "-am", "mul"]);
+    git(dir.path(), &["checkout", "--quiet", "main"]);
+    fs::write(
+        dir.path().join("packages/math/src/add.js"),
+        "function add(a, b) {\n  return b + a;\n}\n\nmodule.exports = { add };\n",
+    )
+    .unwrap();
+    git(dir.path(), &["commit", "--quiet", "-am", "main moves on"]);
+    git(dir.path(), &["checkout", "--quiet", "work"]);
+    let cache = dir.path().join(".git/turbo-cache");
+    let output = trace_with_env(
+        dir.path(),
+        &["affected", "--cache-dir", cache.to_str().unwrap()],
+        &[
+            ("CI", "1"),
+            ("GITHUB_ACTIONS", "true"),
+            ("GITHUB_BASE_REF", "main"),
+        ],
+    );
+    assert!(output.status.success(), "{}", stderr(&output));
+    let selected: BTreeSet<String> = stdout(&output).lines().map(str::to_owned).collect();
+    assert_selects(&selected, &[JEST_MUL, JEST_TOTAL], &[JEST_ADD, JEST_GREET]);
+    let err = stderr(&output);
+    assert!(
+        err.contains("Resolved base ref from GitHub Actions event: main"),
+        "{err}"
+    );
+    assert!(err.contains("put the graph of"), "{err}");
+    assert_eq!(cached_artifacts(&cache).len(), 1);
+    assert!(machine_cache(dir.path()).is_dir());
+    assert!(!dir.path().join(".turbo/trace/cache").exists());
+}
+
 /// A jest package without a config file (jest's defaults): the selection does
 /// not know which files are its tests, so it lists the files that look like
 /// tests as `UnknownTest`, which always run. They are in the output, and
@@ -967,8 +1032,7 @@ fn the_graph_is_in_dot_turbo_and_its_caches_are_not() {
     assert_eq!(names, ["graph.json", "store"], "{names:?}");
     assert!(!dir.path().join(".turbotrace").exists());
     // The caches are in the per-machine directory, one per graph directory.
-    let machine = dir.path().join(".git/trace-machine-cache");
-    let caches: Vec<_> = fs::read_dir(&machine).unwrap().collect();
+    let caches: Vec<_> = fs::read_dir(machine_cache(dir.path())).unwrap().collect();
     assert_eq!(caches.len(), 1);
     let cache = caches[0].as_ref().unwrap().path();
     // (The walk cache is not written for a tree edited within two seconds.)
