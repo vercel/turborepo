@@ -454,7 +454,7 @@ fn lint_reads_no_baseline_file() {
         "this is not json\n",
         r#"{"version":1,"entries":[{"rule":"unconstrained-load","file":"packages/app/src/total.js","key":"gone","count":1}]}"#,
     ] {
-        fs::write(dir.path().join("turbotrace-lint-baseline.json"), text).unwrap();
+        fs::write(dir.path().join("lint-baseline.json"), text).unwrap();
         for args in [&["lint"][..], &["lint", "--json"][..]] {
             let output = trace(dir.path(), args);
             assert_eq!(
@@ -857,7 +857,7 @@ fn a_run_leaves_the_work_tree_clean() {
 /// not read, and the command succeeds.
 #[cfg(unix)]
 #[test]
-fn turbotrace_toml_is_not_read() {
+fn a_configuration_file_is_not_read() {
     let dir = fixture("trace_jest");
     fs::write(dir.path().join("turbotrace.toml"), "this is [not toml\n").unwrap();
     let output = trace(dir.path(), &["affected", "--base", "HEAD"]);

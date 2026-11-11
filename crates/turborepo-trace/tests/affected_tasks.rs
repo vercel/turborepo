@@ -1,4 +1,4 @@
-//! `turbotrace affected` and build tasks end to end: which tests a change
+//! `affected` and build tasks end to end: which tests a change
 //! selects through the tasks that produce files the tests load (generated-file
 //! linking).
 // Test code: helpers outside `#[test]` functions unwrap and expect as the tests do.
@@ -21,7 +21,7 @@ fn copy_dir(from: &Path, to: &Path) {
     }
 }
 
-fn turbotrace(root: &Path, args: &[&str]) -> String {
+fn harness(root: &Path, args: &[&str]) -> String {
     // These tests are about how open uncertainty travels; their fixtures use a read
     // with a computed path as the uncertain site. Such reads are bounded by
     // names by default (tests/affected_names.rs), so that layer is off here.
@@ -30,10 +30,10 @@ fn turbotrace(root: &Path, args: &[&str]) -> String {
         .env("TURBO_TRACE_DEBUG_NAMES", "0")
         .current_dir(root)
         .output()
-        .expect("run turbotrace");
+        .expect("run the harness");
     assert!(
         o.status.success(),
-        "turbotrace {args:?} failed: {}",
+        "harness {args:?} failed: {}",
         String::from_utf8_lossy(&o.stderr)
     );
     String::from_utf8(o.stdout).unwrap()
@@ -46,7 +46,7 @@ fn affected(root: &Path, changed: &[&str]) -> Vec<String> {
         args.push("--changed");
         args.push(c);
     }
-    turbotrace(root, &args).lines().map(str::to_owned).collect()
+    harness(root, &args).lines().map(str::to_owned).collect()
 }
 
 /// A pnpm-style workspace link: `<from>/node_modules/<name>` → `<to>`.
@@ -101,7 +101,7 @@ fn git(root: &Path, args: &[&str]) {
 
 /// The jest tests selected for the working tree against `HEAD`.
 fn since_head(root: &Path) -> Vec<String> {
-    turbotrace(root, &["affected", "--tests", "jest", "--since", "HEAD"])
+    harness(root, &["affected", "--tests", "jest", "--since", "HEAD"])
         .lines()
         .map(str::to_owned)
         .collect()
@@ -200,7 +200,7 @@ fn tsc_build_outputs_link_to_their_project() {
     assert_eq!(affected(r, &["packages/patched/src/index.ts"]), [VERSION]);
 
     // The project node: the importer depends on it, not on the solution task.
-    let deps = turbotrace(r, &["deps", "apps/web/lib/icon-button.ts"]);
+    let deps = harness(r, &["deps", "apps/web/lib/icon-button.ts"]);
     assert!(
         deps.lines()
             .any(|l| l == "tsproject:packages/icons/tsconfig.json"),
@@ -212,7 +212,7 @@ fn tsc_build_outputs_link_to_their_project() {
     );
     assert!(!deps.lines().any(|l| l.starts_with("apps/docs/")), "{deps}");
     // The solution task still depends on everything (a valid `--tasks` entry).
-    let tasks = turbotrace(
+    let tasks = harness(
         r,
         &[
             "affected",
@@ -418,7 +418,7 @@ fn files_a_task_only_reads_do_not_lend_their_uncertainty() {
     // still depends on it.
     let script = "packages/assets/scripts/visual/extract.mjs";
     assert_eq!(selected(script), [GEN, LIB, TOOL, TYPED]);
-    let tasks = turbotrace(
+    let tasks = harness(
         r,
         &[
             "affected",
@@ -515,10 +515,10 @@ fn committed_outputs_of_a_task_nothing_runs_are_just_files() {
         none
     );
     assert_eq!(affected(r, &[output]), [TEST]);
-    let deps = turbotrace(r, &["deps", TEST]);
+    let deps = harness(r, &["deps", TEST]);
     assert!(!deps.lines().any(|l| l == GENERATOR), "{deps}");
     // The task itself still depends on its script.
-    let tasks = turbotrace(
+    let tasks = harness(
         r,
         &[
             "affected",
@@ -538,7 +538,7 @@ fn committed_outputs_of_a_task_nothing_runs_are_just_files() {
         &web_manifest("pnpm --filter @acme/content generate-types && jest"),
     );
     assert_eq!(affected(r, &["README.md"]), [TEST]);
-    let deps = turbotrace(r, &["deps", TEST]);
+    let deps = harness(r, &["deps", TEST]);
     assert!(deps.lines().any(|l| l == GENERATOR), "{deps}");
     write(r, "apps/web/package.json", &web_manifest("jest"));
     assert_eq!(affected(r, &["README.md"]), none);
@@ -566,7 +566,7 @@ fn committed_outputs_of_a_task_nothing_runs_are_just_files() {
     std::fs::remove_file(r.join(output)).unwrap();
     assert_eq!(affected(r, &["README.md"]), [TEST]);
 
-    // No CI that turbotrace reads (a fresh graph of the same repository without the
+    // No CI that the trace reads (a fresh graph of the same repository without the
     // workflow): where the tests run and what runs before them is not known, so the
     // committed file stays linked to its generator.
     write(r, output, "export const entryTypes = ['post'];\n");

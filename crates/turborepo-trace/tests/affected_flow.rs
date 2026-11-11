@@ -1,4 +1,4 @@
-//! `turbotrace affected` on files whose reads the value-flow engine resolves
+//! `affected` on files whose reads the value-flow engine resolves
 //! (`crates/turborepo-trace-lang-js/src/flow`): the target edit selects the
 //! test, an unrelated edit selects nothing, and what stays unknown keeps the
 //! test on the floor.
@@ -31,10 +31,10 @@ fn affected_env(root: &Path, changed: &[&str], env: &[(&str, &str)]) -> Vec<Stri
         .envs(env.iter().copied())
         .current_dir(root)
         .output()
-        .expect("run turbotrace");
+        .expect("run the harness");
     assert!(
         o.status.success(),
-        "turbotrace {args:?} failed: {}",
+        "harness {args:?} failed: {}",
         String::from_utf8_lossy(&o.stderr)
     );
     let mut v: Vec<String> = String::from_utf8(o.stdout)

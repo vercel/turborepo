@@ -1,4 +1,4 @@
-//! `turbotrace affected` end to end over test-runner configs whose values need
+//! `affected` end to end over test-runner configs whose values need
 //! evaluation: one small repository per config shape that used to raise an
 //! uncertainty on every test of its project (which selects them all on every
 //! change). For each: an unrelated edit selects no test, and an edit of
@@ -47,10 +47,10 @@ fn affected(root: &Path, framework: &str, changed: &[&str]) -> Vec<String> {
         .env("TURBO_TRACE_DEBUG_NAMES", "0")
         .current_dir(root)
         .output()
-        .expect("run turbotrace");
+        .expect("run the harness");
     assert!(
         o.status.success(),
-        "turbotrace {args:?} failed: {}",
+        "harness {args:?} failed: {}",
         String::from_utf8_lossy(&o.stderr)
     );
     String::from_utf8(o.stdout)

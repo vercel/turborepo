@@ -1,4 +1,4 @@
-//! `turbotrace affected` end to end for values that cross files: a module path
+//! `affected` end to end for values that cross files: a module path
 //! or the key of a lookup table that a caller passes to a helper in another
 //! file (`turborepo_trace_lang_js::xfile`, applied in the derived layer of the
 //! graph).
@@ -23,18 +23,20 @@ fn run_env(root: &Path, args: &[&str], env: &[(&str, &str)]) -> Output {
     // These tests are about binding, whatever the default is.
     c.args(args)
         .current_dir(root)
-        .env("TURBO_TRACE_DEBUG_BIND", "1");
+        .env("TURBO_TRACE_DEBUG_BIND", "1")
+        // The hints file of these tests (`turbo trace` reads none).
+        .env("TURBO_TRACE_DEBUG_HINTS", root.join("hints.toml"));
     for (k, v) in env {
         c.env(k, v);
     }
-    c.output().expect("run turbotrace")
+    c.output().expect("run the harness")
 }
 
 fn lines_env(root: &Path, args: &[&str], env: &[(&str, &str)]) -> Vec<String> {
     let o = run_env(root, args, env);
     assert!(
         o.status.success(),
-        "turbotrace {args:?} failed: {}",
+        "harness {args:?} failed: {}",
         String::from_utf8_lossy(&o.stderr)
     );
     String::from_utf8(o.stdout)
@@ -850,19 +852,19 @@ fn a_replayed_run_is_the_run_bound_from_nothing() {
     // Hints: one that adds a module load to the helper, changed, and taken away.
     write(
         r,
-        "turbotrace.toml",
+        "hints.toml",
         "[[hint]]\nfiles = \"packages/helpers/setup-endpoint.ts\"\ndepends-on = \
          [\"services/svc-b/src/routes.ts\"]\n",
     );
     step("a hint");
     write(
         r,
-        "turbotrace.toml",
+        "hints.toml",
         "[[hint]]\nfiles = \"packages/x/test/c.test.ts\"\ndepends-on = \
          [\"services/svc-a/src/**\"]\n",
     );
     step("another hint");
-    std::fs::remove_file(r.join("turbotrace.toml")).unwrap();
+    std::fs::remove_file(r.join("hints.toml")).unwrap();
     step("no hint");
     assert_eq!(step("nothing changed again"), "cached");
     // A damaged recorded run is not used.

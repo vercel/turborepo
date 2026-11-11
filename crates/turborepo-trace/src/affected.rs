@@ -123,7 +123,6 @@ pub struct AffectedCmd {
     /// With --format selection: a changed path that matches makes the caller
     /// run the full set in every mode, because it steers the selection
     /// itself (a glob relative to the repository root; repeatable).
-    /// `turbotrace.toml` always counts where it is read.
     pub run_all_if_changed: Vec<String>,
     /// With --format selection: files that look like tests (`*.test.*`,
     /// `*.spec.*`) and belong to a runner that was not asked for, such as
@@ -1651,13 +1650,7 @@ fn affected(cmd: AffectedCmd, out: &mut dyn Write, host: Option<&Host>) -> Resul
                         .map(|p| Glob::new(p).map_err(|e| anyhow::anyhow!("{p}: {e}")))
                         .collect()
                 };
-                // `turbotrace.toml` steers the selection only where it is read.
-                let mut run_all: Vec<String> = crate::selection::DEFAULT_RUN_ALL
-                    .iter()
-                    .filter(|_| turborepo_trace_core::project::reads_turbotrace_toml())
-                    .map(|s| (*s).to_owned())
-                    .collect();
-                run_all.extend(cmd.run_all_if_changed.iter().cloned());
+                let run_all = cmd.run_all_if_changed.clone();
                 let doc = crate::selection::build(&crate::selection::Input {
                     g: &g,
                     report: &report,

@@ -1,4 +1,4 @@
-//! `turbotrace affected` and `turbotrace fingerprint` end to end on small JS
+//! `affected` and `fingerprint` end to end on small JS
 //! repos.
 // Test code: helpers outside `#[test]` functions unwrap and expect as the tests do.
 #![allow(clippy::unwrap_used, clippy::expect_used)]
@@ -21,14 +21,14 @@ fn run(root: &Path, args: &[&str]) -> Output {
         .args(args)
         .current_dir(root)
         .output()
-        .expect("run turbotrace")
+        .expect("run the harness")
 }
 
 fn ok(root: &Path, args: &[&str]) -> String {
     let o = run(root, args);
     assert!(
         o.status.success(),
-        "turbotrace {args:?} failed: {}",
+        "harness {args:?} failed: {}",
         String::from_utf8_lossy(&o.stderr)
     );
     String::from_utf8(o.stdout).unwrap()

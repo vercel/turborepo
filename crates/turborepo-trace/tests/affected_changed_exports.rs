@@ -1,4 +1,4 @@
-//! `turbotrace affected --since`: export-level tracking of a modified file.
+//! `affected --since`: export-level tracking of a modified file.
 //! Only the exports whose definition changed are followed, an importer passes
 //! the change on through the exports that read it, and a file whose top level
 //! runs code is still tracked this way when what it does at load time is the
@@ -31,14 +31,14 @@ fn run_env(root: &Path, args: &[&str], env: &[(&str, &str)]) -> Output {
         .envs(env.iter().copied())
         .current_dir(root)
         .output()
-        .expect("run turbotrace")
+        .expect("run the harness")
 }
 
 fn ok_env(root: &Path, args: &[&str], env: &[(&str, &str)]) -> String {
     let o = run_env(root, args, env);
     assert!(
         o.status.success(),
-        "turbotrace {args:?} failed: {}",
+        "harness {args:?} failed: {}",
         String::from_utf8_lossy(&o.stderr)
     );
     String::from_utf8(o.stdout).unwrap()

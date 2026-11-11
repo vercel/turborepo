@@ -54,8 +54,9 @@ pub fn refuse_unless_enabled() -> Option<i32> {
     }
 }
 
-/// The `--json` document of `turbo trace affected`, shaped like the
-/// `affectedTasks` field of `turbo query` so it can graduate there.
+/// The `--json` document of `turbo trace affected`: each list has the same
+/// shape as the `affectedTasks` field of `turbo query` (`items`, `length`), so
+/// the command can graduate there.
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 struct AffectedJson<'a> {

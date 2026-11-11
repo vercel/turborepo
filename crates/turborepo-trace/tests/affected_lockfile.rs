@@ -1,4 +1,4 @@
-//! `turbotrace affected --since` on lockfile changes that leave every manifest
+//! `affected --since` on lockfile changes that leave every manifest
 //! alone: a project's test runner is re-resolved to another peer variant, or a
 //! dependency of the runner is bumped. The shape comes from a real pnpm
 //! monorepo: two packages that declare `vitest` and no DOM library were moved
@@ -28,14 +28,14 @@ fn run(root: &Path, args: &[&str]) -> Output {
         .args(args)
         .current_dir(root)
         .output()
-        .expect("run turbotrace")
+        .expect("run the harness")
 }
 
 fn ok(root: &Path, args: &[&str]) -> String {
     let o = run(root, args);
     assert!(
         o.status.success(),
-        "turbotrace {args:?} failed: {}",
+        "harness {args:?} failed: {}",
         String::from_utf8_lossy(&o.stderr)
     );
     String::from_utf8(o.stdout).unwrap()

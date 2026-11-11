@@ -1,4 +1,4 @@
-//! Core of `turbo trace` (imported from turbotrace): a multi-language,
+//! Core of `turbo trace` : a multi-language,
 //! file-level dependency tracer.
 //!
 //! This crate holds everything that is language-independent:
@@ -60,7 +60,6 @@ mod options;
 pub mod os;
 pub mod output;
 pub mod platform;
-pub mod project;
 pub mod record;
 pub mod resolve_path;
 mod sched;

@@ -5,7 +5,7 @@
 // The claim under test: a jest or vitest test that replaces a module with a mock does not
 // run the module's code, so a change that reaches the test only through the replaced
 // module does not select it. Whatever the rule cuts, the opposite must hold: for every
-// first-party file whose code runs in the test, `turbotrace affected --changed <file>`
+// first-party file whose code runs in the test, `affected --changed <file>`
 // selects the test.
 //
 // Every case is a small project of its own (one jest or vitest project: a config, a module
@@ -40,7 +40,7 @@
 //                   [--single N] [--work DIR] [--keep] [-v] [--json FILE]
 //
 // Needs node and the network (one `npm install` into <work>/node_modules, reused between
-// runs). Exit status 1 when there are findings. The turbotrace tooling builds the binary
+// runs). Exit status 1 when there are findings. The trace's development tooling builds the binary
 // and runs this script.
 import { execFileSync, spawnSync } from 'node:child_process';
 import fs from 'node:fs';
@@ -816,7 +816,7 @@ if (SINGLE > 0) {
   }
 }
 
-// ---- what turbotrace selects ----
+// ---- what the trace selects ----
 
 execFileSync(BIN, ['graph', 'build', '--root', WORK], { cwd: WORK, stdio: ['ignore', 'ignore', 'inherit'] });
 // One call per slot: slot k changes the k-th file of every case (cases share nothing, so

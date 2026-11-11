@@ -33,7 +33,7 @@ fn affected(root: &Path, changed: &str, extra: &[&str]) -> Vec<String> {
         .env_remove("TURBO_TRACE_DEBUG_LOADS_PACKAGE")
         .env_remove("TURBO_TRACE_DEBUG_BIND")
         .output()
-        .expect("run turbotrace");
+        .expect("run the harness");
     assert!(
         o.status.success(),
         "turbotrace failed: {}",

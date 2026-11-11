@@ -1,4 +1,4 @@
-//! `turbotrace affected --since`: a changed `package.json` is applied field by
+//! `affected --since`: a changed `package.json` is applied field by
 //! field. Fields that no resolution reads (`version`, `description`, ...) and
 //! scripts select only the readers of the file and the tasks of the changed
 //! scripts; resolution fields (`exports`, `main`, `type`, `imports`, `browser`)
@@ -25,14 +25,14 @@ fn run_env(root: &Path, args: &[&str], env: &[(&str, &str)]) -> Output {
     for (k, v) in env {
         c.env(k, v);
     }
-    c.output().expect("run turbotrace")
+    c.output().expect("run the harness")
 }
 
 fn ok_env(root: &Path, args: &[&str], env: &[(&str, &str)]) -> String {
     let o = run_env(root, args, env);
     assert!(
         o.status.success(),
-        "turbotrace {args:?} failed: {}",
+        "harness {args:?} failed: {}",
         String::from_utf8_lossy(&o.stderr)
     );
     String::from_utf8(o.stdout).unwrap()
@@ -85,7 +85,7 @@ const B_MANIFEST: &str = r#"{
 /// A workspace: `@acme/a` (`src/index.js` requires `./util`; `src/ver.js`
 /// requires the manifest, `src/name.js` reads it through `fs`; one test for
 /// each) and `@acme/b`, which requires `@acme/a` through its `node_modules`
-/// link and whose `build` task (a command turbotrace doesn't know, outputs
+/// link and whose `build` task (a command the trace doesn't know, outputs
 /// `dist/**`) produces the file `dist.test.js` loads.
 fn repo(a_manifest: &str) -> tempfile::TempDir {
     let d = tempfile::tempdir().unwrap();

@@ -1,4 +1,4 @@
-//! `turbotrace affected --since`: a governor of the base tree that the head
+//! `affected --since`: a governor of the base tree that the head
 //! graph no longer names.
 //!
 //! `affected` reads the graph of the head. What decided a file's records at the
@@ -35,7 +35,7 @@ fn run(root: &Path, args: &[&str]) -> Output {
         .args(args)
         .current_dir(root)
         .output()
-        .expect("run turbotrace")
+        .expect("run the harness")
 }
 
 fn git(root: &Path, args: &[&str]) {
@@ -65,7 +65,7 @@ fn commit(r: &Path, message: &str) {
 fn lines(o: Output, args: &[&str]) -> Vec<String> {
     assert!(
         o.status.success(),
-        "turbotrace {args:?} failed: {}",
+        "harness {args:?} failed: {}",
         String::from_utf8_lossy(&o.stderr)
     );
     String::from_utf8(o.stdout)

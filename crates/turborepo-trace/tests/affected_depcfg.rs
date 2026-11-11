@@ -1,4 +1,4 @@
-//! `turbotrace affected --since`: a changed dependency that a tool's config
+//! `affected --since`: a changed dependency that a tool's config
 //! names (`crates/turborepo-trace/src/confignames.rs`).
 //!
 //! The field that names the package decides who consumes it. A list of packages
@@ -41,7 +41,7 @@ fn run_env(root: &Path, args: &[&str], env: &[(&str, &str)]) -> Output {
     for (k, v) in env {
         c.env(k, v);
     }
-    c.output().expect("run turbotrace")
+    c.output().expect("run the harness")
 }
 
 fn git(root: &Path, args: &[&str]) {
@@ -330,7 +330,7 @@ fn since_with(r: &Path, extra: &[&str], env: &[(&str, &str)]) -> Vec<String> {
     let o = run_env(r, &args, env);
     assert!(
         o.status.success(),
-        "turbotrace {args:?} failed: {}",
+        "harness {args:?} failed: {}",
         String::from_utf8_lossy(&o.stderr)
     );
     String::from_utf8(o.stdout)

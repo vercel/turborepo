@@ -275,7 +275,7 @@ impl TracerBuilder {
         }
         let pool = rayon::ThreadPoolBuilder::new()
             .num_threads(options.threads)
-            .thread_name(|i| format!("turbotrace-{i}"))
+            .thread_name(|i| format!("turbo-trace-{i}"))
             .build()
             .map_err(|e| TraceError::ThreadPool(e.to_string()))?;
         let ignore = GlobSet::new(&options.ignore);

@@ -71,7 +71,7 @@ fn selects(root: &Path, changed: &str, bind: bool, extra: &[&str]) -> bool {
     if !bind {
         c.env("TURBO_TRACE_DEBUG_BIND", "0");
     }
-    let o = c.output().expect("run turbotrace");
+    let o = c.output().expect("run the harness");
     assert!(
         o.status.success(),
         "turbotrace failed: {}",

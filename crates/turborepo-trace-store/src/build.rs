@@ -2269,7 +2269,7 @@ pub fn build(opts: &GraphOptions, langs: &[Arc<dyn Language>]) -> Result<BuildRe
         let fs = Arc::clone(tracer.fs_arc());
         let root = repo.clone();
         let _ = std::thread::Builder::new()
-            .name("turbotrace-binindex".into())
+            .name("turbo-trace-binindex".into())
             .spawn(move || {
                 turborepo_trace_frameworks::fsx::with_fs(&fs, || {
                     turborepo_trace_tasks::recognizers::bins::npm::prewarm_index(&root)

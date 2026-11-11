@@ -1,4 +1,4 @@
-//! `turbotrace affected` end to end for the package assumption of the names
+//! `affected` end to end for the package assumption of the names
 //! bound (`turborepo_trace_graph::names`): a read with a computed path is taken
 //! to read only files of the package it runs for, unless the code says where
 //! the path goes.
@@ -23,7 +23,7 @@ fn run(root: &Path, args: &[&str], env: &[(&str, &str)]) -> String {
     for (k, v) in env {
         c.env(k, v);
     }
-    let o = c.output().expect("run turbotrace");
+    let o = c.output().expect("run the harness");
     assert!(
         o.status.success(),
         "turbotrace affected failed: {}",

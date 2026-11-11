@@ -210,11 +210,9 @@ pub(crate) fn machine_cache_dir() -> PathBuf {
 /// What every command of `turbo trace` sets first: the graph's caches in a
 /// per-machine directory, not below `.turbo/trace` (some are keyed by this
 /// machine's file stamps, and `.turbo` travels: CI caches it with
-/// `actions/cache`); and no `turbotrace.toml`.
+/// `actions/cache`).
 fn host_defaults() {
     turborepo_trace_store::set_machine_cache(Some(machine_cache_dir()));
-    // v1 takes its options from flags only: `turbotrace.toml` is not read.
-    turborepo_trace_core::project::set_reads_turbotrace_toml(false);
 }
 
 /// The frameworks `--tests` takes: those whose tests `turbo trace` lists by

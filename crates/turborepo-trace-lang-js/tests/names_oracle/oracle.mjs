@@ -5,7 +5,7 @@
 // The claim under test: a read with a computed path can only read a repository file that a
 // string or a file location of the code loaded with it names (or that a reference, a
 // listing or an open record covers). So for every path a program really reads,
-// `turbotrace affected <entry> --changed <path>` must select the entry.
+// `affected <entry> --changed <path>` must select the entry.
 //
 // The programs are generated from a grammar of the ways a path reaches an opaque read:
 //
@@ -61,7 +61,7 @@
 //
 //   node oracle.mjs --turbotrace <bin> [--only TEXT] [--keep] [-v] [--json FILE]
 //
-// Exit status 1 when there are findings. The turbotrace tooling builds the binary and
+// Exit status 1 when there are findings. The trace's development tooling builds the binary and
 // runs this script.
 import { execFileSync, spawnSync } from 'node:child_process';
 import fs from 'node:fs';

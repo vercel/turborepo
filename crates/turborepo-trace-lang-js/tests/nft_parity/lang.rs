@@ -1,4 +1,4 @@
-//! Adapters that express nft test options turbotrace has no flag for, without
+//! Adapters that express nft test options the trace has no flag for, without
 //! touching the JS plugin: `exportsOnly` (via
 //! [`JsResolveOptions::exports_only`]) and nft's `paths` aliases.
 //!

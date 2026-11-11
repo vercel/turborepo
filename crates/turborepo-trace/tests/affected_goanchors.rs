@@ -1,4 +1,4 @@
-//! `turbotrace affected` and the location of a Go file: a test that finds a
+//! `affected` and the location of a Go file: a test that finds a
 //! directory from `runtime.Caller` names where that directory goes, not
 //! everything below it (`turborepo_trace_lang_go::anchors`). All under the
 //! default policy.
@@ -76,10 +76,10 @@ impl Repo {
             .env_remove("TURBO_TRACE_DEBUG_ANCHORS")
             .envs(self.env.iter().copied())
             .output()
-            .expect("run turbotrace");
+            .expect("run the harness");
         assert!(
             o.status.success(),
-            "turbotrace {args:?} failed: {}",
+            "harness {args:?} failed: {}",
             String::from_utf8_lossy(&o.stderr)
         );
         String::from_utf8(o.stdout).unwrap()

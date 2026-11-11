@@ -1,4 +1,4 @@
-//! `turbotrace affected` end to end for who runs a process
+//! `affected` end to end for who runs a process
 //! (`turborepo_trace_graph::names`): a build script that a test reaches only
 //! through the output of a build task is named by the task (its working
 //! directory, its package), not by the test.
@@ -23,7 +23,7 @@ fn run(root: &Path, args: &[&str], env: &[(&str, &str)]) -> String {
     for (k, v) in env {
         c.env(k, v);
     }
-    let o = c.output().expect("run turbotrace");
+    let o = c.output().expect("run the harness");
     assert!(
         o.status.success(),
         "turbotrace affected failed: {}",

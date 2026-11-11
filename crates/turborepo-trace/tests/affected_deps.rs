@@ -1,4 +1,4 @@
-//! `turbotrace affected --since`: a dependency edit in a `package.json` selects
+//! `affected --since`: a dependency edit in a `package.json` selects
 //! the consumers of that dependency, including the ones that use it without an
 //! import (the JSX runtime, a preset named in a config string, a binary run by
 //! a script, `@types`). A dependency nobody in the package references selects
@@ -29,14 +29,14 @@ fn run_env(root: &Path, args: &[&str], env: &[(&str, &str)]) -> Output {
     for (k, v) in env {
         c.env(k, v);
     }
-    c.output().expect("run turbotrace")
+    c.output().expect("run the harness")
 }
 
 fn ok_env(root: &Path, args: &[&str], env: &[(&str, &str)]) -> String {
     let o = run_env(root, args, env);
     assert!(
         o.status.success(),
-        "turbotrace {args:?} failed: {}",
+        "harness {args:?} failed: {}",
         String::from_utf8_lossy(&o.stderr)
     );
     String::from_utf8(o.stdout).unwrap()

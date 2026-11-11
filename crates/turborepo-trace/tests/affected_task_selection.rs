@@ -1,5 +1,5 @@
-//! `turbotrace affected --tasks`: which build tasks a small edit selects in a
-//! workspace whose root package has scripts turbotrace cannot read (a service
+//! `affected --tasks`: which build tasks a small edit selects in a
+//! workspace whose root package has scripts the trace cannot read (a service
 //! image build, a notification hook) next to a repository-wide lint config.
 //!
 //! The shape is the one of a large service monorepo: one root shell script
@@ -19,15 +19,15 @@ fn write(root: &Path, rel: &str, content: &str) {
     std::fs::write(p, content).unwrap();
 }
 
-fn turbotrace(root: &Path, args: &[&str]) -> String {
+fn harness(root: &Path, args: &[&str]) -> String {
     let o = Command::new(support::harness())
         .args(args)
         .current_dir(root)
         .output()
-        .expect("run turbotrace");
+        .expect("run the harness");
     assert!(
         o.status.success(),
-        "turbotrace {args:?} failed: {}",
+        "harness {args:?} failed: {}",
         String::from_utf8_lossy(&o.stderr)
     );
     String::from_utf8(o.stdout).unwrap()
@@ -36,7 +36,7 @@ fn turbotrace(root: &Path, args: &[&str]) -> String {
 /// The tasks a one-file edit selects, with the uncertainty floor off: what the
 /// change itself reaches.
 fn tasks(root: &Path, changed: &str) -> Vec<String> {
-    turbotrace(
+    harness(
         root,
         &[
             "affected",
@@ -203,7 +203,7 @@ fn has(list: &[String], id: &str) -> bool {
 
 /// The tasks a one-file edit selects under the default policy.
 fn tasks_by_default(root: &Path, changed: &str) -> Vec<String> {
-    turbotrace(root, &["affected", "--tasks", "**", "--changed", changed])
+    harness(root, &["affected", "--tasks", "**", "--changed", changed])
         .lines()
         .map(str::to_owned)
         .collect()
@@ -281,7 +281,7 @@ fn a_wildcard_leaves_out_tasks_run_by_hand() {
     let with = |extra: &[&str]| -> Vec<String> {
         let mut args = vec!["affected", "--changed", changed, "--on-uncertain", "ignore"];
         args.extend_from_slice(extra);
-        turbotrace(r, &args).lines().map(str::to_owned).collect()
+        harness(r, &args).lines().map(str::to_owned).collect()
     };
     let fix = "task:services/svc-a#clean-code:fix";
     let dev = "task:services/svc-a#dev";

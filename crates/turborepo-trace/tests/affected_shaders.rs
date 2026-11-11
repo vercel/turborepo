@@ -1,4 +1,4 @@
-//! `turbotrace affected` end to end over shader modules (`.wgsl`) that JS/TS
+//! `affected` end to end over shader modules (`.wgsl`) that JS/TS
 //! modules import and that import each other with ES import lines
 //! (`turborepo_trace_lang_js::wgsl`): a changed shader selects the tests of
 //! every module that loads it, directly or through another shader, and a test
@@ -25,14 +25,14 @@ fn run(root: &Path, args: &[&str]) -> Output {
         .args(args)
         .current_dir(root)
         .output()
-        .expect("run turbotrace")
+        .expect("run the harness")
 }
 
 fn ok(root: &Path, args: &[&str]) -> String {
     let o = run(root, args);
     assert!(
         o.status.success(),
-        "turbotrace {args:?} failed: {}",
+        "harness {args:?} failed: {}",
         String::from_utf8_lossy(&o.stderr)
     );
     String::from_utf8(o.stdout).unwrap()

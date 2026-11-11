@@ -1,4 +1,4 @@
-//! `turbotrace affected` and Go reads with a computed path: `os.ReadFile(path)`
+//! `affected` and Go reads with a computed path: `os.ReadFile(path)`
 //! on a parameter, a struct field or the result of a helper is bounded by the
 //! path-like strings of the test's code, like the same reads in JS, instead of
 //! selecting the test on every change. All under the default policy.
@@ -68,10 +68,10 @@ impl Repo {
             .env_remove("TURBO_TRACE_DEBUG_NAMES")
             .envs(env.iter().copied())
             .output()
-            .expect("run turbotrace");
+            .expect("run the harness");
         assert!(
             o.status.success(),
-            "turbotrace {args:?} failed: {}",
+            "harness {args:?} failed: {}",
             String::from_utf8_lossy(&o.stderr)
         );
         String::from_utf8(o.stdout).unwrap()

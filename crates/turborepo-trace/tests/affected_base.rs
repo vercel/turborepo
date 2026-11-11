@@ -50,14 +50,14 @@ fn git(root: &Path, args: &[&str]) -> String {
     String::from_utf8_lossy(&o.stdout).trim().to_owned()
 }
 
-fn turbotrace(root: &Path, args: &[&str]) -> Output {
+fn harness(root: &Path, args: &[&str]) -> Output {
     Command::new(support::harness())
         .args(args)
         .current_dir(root)
         .env_remove("TURBO_TRACE_DEBUG_EXACT_BASE")
         .env_remove("TURBO_TRACE_DEBUG_MODE")
         .output()
-        .expect("run turbotrace")
+        .expect("run the harness")
 }
 
 /// The selected jest tests since `rev`, as the module names they test (`a`,
@@ -65,9 +65,9 @@ fn turbotrace(root: &Path, args: &[&str]) -> Output {
 fn selected(root: &Path, rev: &str, extra: &[&str]) -> (Vec<String>, String) {
     let mut args = vec!["affected", "--tests", "jest", "--since", rev];
     args.extend_from_slice(extra);
-    let o = turbotrace(root, &args);
+    let o = harness(root, &args);
     let err = String::from_utf8_lossy(&o.stderr).into_owned();
-    assert!(o.status.success(), "turbotrace {args:?} failed: {err}");
+    assert!(o.status.success(), "harness {args:?} failed: {err}");
     let names = String::from_utf8(o.stdout)
         .unwrap()
         .lines()
@@ -167,7 +167,7 @@ fn a_branch_that_merged_main_into_itself() {
         "{err}"
     );
     // The base is in the JSON output, and it is what every consumer compared with.
-    let o = turbotrace(
+    let o = harness(
         r,
         &[
             "affected", "--tests", "jest", "--since", "main", "--format", "json",
@@ -184,7 +184,7 @@ fn a_branch_that_merged_main_into_itself() {
         .map(|c| c["path"].as_str().unwrap())
         .collect();
     assert_eq!(changed, ["src/a.js", "src/b.js"]);
-    let o = turbotrace(
+    let o = harness(
         r,
         &[
             "affected",
@@ -321,7 +321,7 @@ fn the_merge_ref_of_a_pull_request() {
             "clone", "-q", "--depth", "1", "--branch", "pr-merge", &url, ".",
         ],
     );
-    let out = turbotrace(
+    let out = harness(
         one.path(),
         &["affected", "--tests", "jest", "--since", "HEAD^1"],
     );
@@ -368,7 +368,7 @@ fn several_merge_bases_count_together() {
     let (tests, err) = selected(r, "main", &[]);
     assert_eq!(tests, ["a", "c", "m"]);
     assert!(err.contains("2 merge bases of main and HEAD"), "{err}");
-    let o = turbotrace(
+    let o = harness(
         r,
         &[
             "affected", "--tests", "jest", "--since", "main", "--format", "json",
@@ -383,7 +383,7 @@ fn several_merge_bases_count_together() {
         .collect();
     listed.sort();
     assert_eq!(listed, bases);
-    let o = turbotrace(
+    let o = harness(
         r,
         &[
             "affected",
@@ -450,7 +450,7 @@ fn a_shallow_checkout_never_guesses_a_base() {
             "main:refs/remotes/origin/main",
         ],
     );
-    let out = turbotrace(
+    let out = harness(
         r,
         &["affected", "--tests", "jest", "--since", "origin/main"],
     );
@@ -464,7 +464,7 @@ fn a_shallow_checkout_never_guesses_a_base() {
         "{err}"
     );
     // The selection document: everything runs, and it says why. Exit code 0.
-    let out = turbotrace(
+    let out = harness(
         r,
         &[
             "affected",
@@ -492,7 +492,7 @@ fn a_shallow_checkout_never_guesses_a_base() {
     );
     assert!(v.get("base_commit").is_none());
     // A revision that is not there at all.
-    let out = turbotrace(r, &["affected", "--tests", "jest", "--since", "HEAD~1"]);
+    let out = harness(r, &["affected", "--tests", "jest", "--since", "HEAD~1"]);
     let err = String::from_utf8_lossy(&out.stderr).into_owned();
     assert!(
         !out.status.success() && err.contains("is not in this shallow checkout"),
@@ -514,7 +514,7 @@ fn a_shallow_checkout_never_guesses_a_base() {
         ],
     );
     assert_eq!(git(r, &["merge-base", "origin/main", "HEAD"]), m1);
-    let out = turbotrace(
+    let out = harness(
         r,
         &["affected", "--tests", "jest", "--since", "origin/main"],
     );
@@ -545,7 +545,7 @@ fn histories_without_a_common_commit() {
     git(r, &["checkout", "-q", "--orphan", "other"]);
     edit(r, "a", "other");
     commit(r, "another root");
-    let out = turbotrace(r, &["affected", "--tests", "jest", "--since", "main"]);
+    let out = harness(r, &["affected", "--tests", "jest", "--since", "main"]);
     let err = String::from_utf8_lossy(&out.stderr).into_owned();
     assert!(!out.status.success());
     assert!(err.contains("have no common ancestor"), "{err}");

@@ -3,7 +3,7 @@
 //
 // A load can say where it resolves from: `createRequire(require.resolve('pkg'))('./x.js')`,
 // a path joined next to `require.resolve('pkg/package.json')`, a module searched from
-// there. In a checkout without `node_modules` turbotrace cannot find the file. It links the
+// there. In a checkout without `node_modules` the trace cannot find the file. It links the
 // module through the lockfile, and for a package of the registry it ASSUMES that the load
 // stays inside the package tree that lockfile entry stands for (the package and what it
 // installs), as everything a registry package loads by itself does. The record is covered:
@@ -16,7 +16,7 @@
 // with `TURBO_TRACE_DEBUG_LOCATED_PACKAGE=0`). Then the packages are installed the way pnpm does
 // it (a virtual store, one link per declared dependency, the hidden hoist of every
 // workspace package for the code inside the store), every case's program runs under Node
-// with a preload that records each file it loads, and `turbotrace affected` is asked about
+// with a preload that records each file it loads, and `affected` is asked about
 // the graph of the uninstalled tree.
 //
 // Kinds of case:

@@ -1,4 +1,4 @@
-//! `turbotrace affected` on Go modules without a module cache, as in a fresh CI
+//! `affected` on Go modules without a module cache, as in a fresh CI
 //! checkout: third-party imports are linked to the module versions `go.mod`
 //! requires, so they select tests on a change of `go.mod` or `go.sum` and on
 //! nothing else. All under the default policy.
@@ -78,7 +78,7 @@ fn repo() -> Repo {
 }
 
 impl Repo {
-    fn turbotrace(&self, args: &[&str]) -> String {
+    fn harness(&self, args: &[&str]) -> String {
         let o = Command::new(support::harness())
             .args(args)
             .current_dir(&self.root)
@@ -86,10 +86,10 @@ impl Repo {
             .env_remove("GOFLAGS")
             .env_remove("GOWORK")
             .output()
-            .expect("run turbotrace");
+            .expect("run the harness");
         assert!(
             o.status.success(),
-            "turbotrace {args:?} failed: {}",
+            "harness {args:?} failed: {}",
             String::from_utf8_lossy(&o.stderr)
         );
         String::from_utf8(o.stdout).unwrap()
@@ -115,7 +115,7 @@ impl Repo {
     /// The Go tests the working tree's changes select, default policy, sorted.
     fn selected(&self) -> Vec<String> {
         let mut v: Vec<String> = self
-            .turbotrace(&["affected", "--tests", "gotest", "--since", "HEAD"])
+            .harness(&["affected", "--tests", "gotest", "--since", "HEAD"])
             .lines()
             .map(str::to_owned)
             .collect();
@@ -139,7 +139,7 @@ fn sorted(mut v: Vec<&str>) -> Vec<&str> {
 fn third_party_imports_without_a_module_cache_leave_no_floor() {
     let r = repo();
     // No test is selected on every change.
-    let floor = r.turbotrace(&["uncertainty", "--tests", "gotest"]);
+    let floor = r.harness(&["floor", "--tests", "gotest"]);
     assert!(
         floor.starts_with("uncertainty floor: 0 of 5 entries"),
         "{floor}"
@@ -159,14 +159,14 @@ fn third_party_imports_without_a_module_cache_leave_no_floor() {
     r.reset();
     // The import is an edge to the module version of go.mod, as with a module
     // cache.
-    let deps = r.turbotrace(&["deps", PARSE]);
+    let deps = r.harness(&["deps", PARSE]);
     assert!(
         deps.lines()
             .any(|l| l == "go:github.com/acme-test/assert@v1.2.0"),
         "{deps}"
     );
     // An import below two nested modules may come from either: both are linked.
-    let deps = r.turbotrace(&["deps", "svc/ingest/app/emit/emit.go"]);
+    let deps = r.harness(&["deps", "svc/ingest/app/emit/emit.go"]);
     for module in [
         "go:cloud.acme.test/go/storage@v1.30.1",
         "go:cloud.acme.test/go@v0.110.0",
@@ -188,7 +188,7 @@ fn a_bumped_requirement_selects_the_tests_of_its_module() {
     // Not the tests of the other modules, which have their own go.mod
     // (svc/flags requires the same library).
     assert_eq!(sel, sorted(vec![EMIT, PARSE, PURE]));
-    let why = r.turbotrace(&[
+    let why = r.harness(&[
         "affected",
         "--tests",
         "gotest",
@@ -259,7 +259,7 @@ fn a_workspace_shares_one_build_list() {
     git(&r.root, &["add", "-A"]);
     git(&r.root, &["commit", "-qm", "workspace"]);
     assert_eq!(r.selected(), [""; 0]);
-    let floor = r.turbotrace(&["uncertainty", "--tests", "gotest"]);
+    let floor = r.harness(&["floor", "--tests", "gotest"]);
     assert!(
         floor.starts_with("uncertainty floor: 0 of 5 entries"),
         "{floor}"
@@ -287,7 +287,7 @@ fn a_module_cache_gives_the_same_edges() {
     std::fs::create_dir_all(&m).unwrap();
     std::fs::write(m.join("go.mod"), "module github.com/acme-test/assert\n").unwrap();
     std::fs::write(m.join("assert.go"), "package assert\n").unwrap();
-    let deps = r.turbotrace(&["deps", PARSE]);
+    let deps = r.harness(&["deps", PARSE]);
     assert!(
         deps.lines()
             .any(|l| l == "go:github.com/acme-test/assert@v1.2.0"),

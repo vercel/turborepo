@@ -1,4 +1,4 @@
-//! `turbotrace affected --since`: an alias entry of a vitest config selects the
+//! `affected --since`: an alias entry of a vitest config selects the
 //! tests that can load a file with a request the alias changes, not every test
 //! of the config (`crates/turborepo-trace/src/aliasdiff.rs`).
 // Test code: helpers outside `#[test]` functions unwrap and expect as the tests do.
@@ -45,10 +45,10 @@ fn since(root: &Path, env: &[(&str, &str)]) -> Vec<String> {
     for (k, v) in env {
         c.env(k, v);
     }
-    let o = c.output().expect("run turbotrace");
+    let o = c.output().expect("run the harness");
     assert!(
         o.status.success(),
-        "turbotrace {args:?} failed: {}",
+        "harness {args:?} failed: {}",
         String::from_utf8_lossy(&o.stderr)
     );
     String::from_utf8(o.stdout)

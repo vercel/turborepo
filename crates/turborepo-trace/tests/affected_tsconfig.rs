@@ -1,4 +1,4 @@
-//! `turbotrace affected --since`: a `tsconfig.json` whose project references
+//! `affected --since`: a `tsconfig.json` whose project references
 //! changed (`crates/turborepo-trace/src/tsconfigdiff.rs`).
 //!
 //! `references` orders builds and guides editors. A test runner that only
@@ -36,7 +36,7 @@ fn run_env(root: &Path, args: &[&str], env: &[(&str, &str)]) -> Output {
     for (k, v) in env {
         c.env(k, v);
     }
-    c.output().expect("run turbotrace")
+    c.output().expect("run the harness")
 }
 
 fn git(root: &Path, args: &[&str]) {
@@ -217,7 +217,7 @@ fn repo() -> tempfile::TempDir {
 fn lines(o: Output, args: &[&str]) -> Vec<String> {
     assert!(
         o.status.success(),
-        "turbotrace {args:?} failed: {}",
+        "harness {args:?} failed: {}",
         String::from_utf8_lossy(&o.stderr)
     );
     String::from_utf8(o.stdout)
@@ -486,7 +486,7 @@ fn floor(r: &Path, graph: &Path, env: &[(&str, &str)]) -> u64 {
     let o = run_env(r, &args, env);
     assert!(
         o.status.success(),
-        "turbotrace {args:?} failed: {}",
+        "harness {args:?} failed: {}",
         String::from_utf8_lossy(&o.stderr)
     );
     let v: serde_json::Value = serde_json::from_slice(&o.stdout).expect("json");

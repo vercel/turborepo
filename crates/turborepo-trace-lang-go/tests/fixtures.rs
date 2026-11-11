@@ -138,7 +138,7 @@ fn deterministic_across_threads() {
 }
 
 // Cross-language parity scenarios (`fixtures/go/xlang/*`), also run by
-// turbotrace's runtime oracle.
+// the trace's runtime oracle.
 
 fn xlang(cat: &str) {
     let name = format!("xlang/{cat}");

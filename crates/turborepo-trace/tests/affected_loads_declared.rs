@@ -1,4 +1,4 @@
-//! `turbotrace affected` and `turbotrace uncertainty` end to end for bounded
+//! `affected` and `uncertainty` end to end for bounded
 //! loads (`turborepo_trace_graph::loads`): in a workspace whose packages
 //! resolve only what they declare, a module load with an unknown target selects
 //! the tests that reach it only when the change affects a package the load can
@@ -23,10 +23,10 @@ fn run(root: &Path, args: &[&str], env: &[(&str, &str)]) -> String {
     for (k, v) in env {
         c.env(k, v);
     }
-    let o = c.output().expect("run turbotrace");
+    let o = c.output().expect("run the harness");
     assert!(
         o.status.success(),
-        "turbotrace {args:?} failed: {}",
+        "harness {args:?} failed: {}",
         String::from_utf8_lossy(&o.stderr)
     );
     String::from_utf8(o.stdout).unwrap()
@@ -354,7 +354,7 @@ fn certain_edges_outside_the_declared_packages_are_reported() {
         .current_dir(r)
         .env_remove("TURBO_TRACE_DEBUG_LOADS_PACKAGE")
         .output()
-        .expect("run turbotrace");
+        .expect("run the harness");
     let lint: serde_json::Value = serde_json::from_slice(&o.stdout)
         .unwrap_or_else(|e| panic!("{e}: {}", String::from_utf8_lossy(&o.stderr)));
     let found: Vec<(&str, u64, &str)> = lint["findings"]

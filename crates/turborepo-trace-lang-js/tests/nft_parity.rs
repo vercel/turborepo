@@ -15,7 +15,7 @@
 //! dependencies, hoisted). The harness rebuilds that layout under
 //! `target/nft-parity/root/`: `package.json` from `fixtures/js/nft/_root`, a
 //! fresh copy of the cases in `test/unit/`, and `node_modules/` installed by
-//! the turbotrace tooling (pinned by nft's `pnpm-lock.yaml`). Cases
+//! the trace's development tooling (pinned by nft's `pnpm-lock.yaml`). Cases
 //! that need packages that are not installed are skipped.
 //!
 //! Environment:
@@ -280,7 +280,7 @@ fn nft_parity() {
     if env_flag("NFT_PARITY_REQUIRE_DEPS") {
         assert!(
             deps_installed,
-            "nft npm dependencies missing in {}; the turbotrace tooling installs them",
+            "nft npm dependencies missing in {}; the development tooling installs them",
             root.display()
         );
     }
@@ -316,7 +316,7 @@ fn nft_parity() {
         let missing_pkgs = missing_packages(case, &root);
         if r.skip.is_none() && !missing_pkgs.is_empty() {
             r.skip = Some(format!(
-                "requires-npm: {} not installed (the turbotrace tooling installs them)",
+                "requires-npm: {} not installed (the development tooling installs them)",
                 missing_pkgs.join(", ")
             ));
         }

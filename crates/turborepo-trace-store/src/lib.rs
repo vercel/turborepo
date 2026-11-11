@@ -1,4 +1,4 @@
-//! The whole-repo graph store of `turbo trace` (imported from turbotrace).
+//! The whole-repo graph store of `turbo trace` .
 //!
 //! - [`build`]: walks the repository, partitions it into per-package shards
 //!   (workspace packages, the root package, third-party packages), traces only
@@ -68,7 +68,7 @@ pub use compose::{
     cwd::CwdDropped,
     cwd_edge_site,
     env::{EnvAnswer, EnvDecl, EnvOracle, EnvStats},
-    hints::{HINTS_FILE, Hint, Hints, Loads, OTHER_TABLES},
+    hints::{Hint, Hints, Loads, OTHER_TABLES},
 };
 pub use manifest::Manifest;
 
@@ -298,7 +298,7 @@ pub(crate) fn spawn_cache_write(
     let writing = Writing::begin(out);
     // A thread that cannot be spawned drops the closure, and `writing` with it.
     let _ = std::thread::Builder::new()
-        .name("turbotrace-cache-write".into())
+        .name("turbo-trace-cache-write".into())
         .spawn(move || {
             f();
             drop(writing);
@@ -450,8 +450,8 @@ mod tests {
     /// first waiter took them all: the other returned at once.
     #[test]
     fn a_wait_for_a_graphs_cache_writes_is_not_taken_by_another_waiter() {
-        let a = Path::new("/nonexistent/turbotrace-writes-test/a");
-        let b = Path::new("/nonexistent/turbotrace-writes-test/b");
+        let a = Path::new("/nonexistent/turbo-trace-writes-test/a");
+        let b = Path::new("/nonexistent/turbo-trace-writes-test/b");
         let written = Arc::new(AtomicBool::new(false));
         let (release, released) = std::sync::mpsc::channel::<()>();
         let w = Arc::clone(&written);
@@ -481,7 +481,7 @@ mod tests {
     /// started.
     #[test]
     fn a_failed_cache_write_ends_the_wait() {
-        let a = Path::new("/nonexistent/turbotrace-writes-test/fails");
+        let a = Path::new("/nonexistent/turbo-trace-writes-test/fails");
         spawn_cache_write(
             a,
             || panic!("a cache write fails (expected in this test)"),

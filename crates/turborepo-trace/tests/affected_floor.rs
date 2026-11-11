@@ -1,4 +1,4 @@
-//! `turbotrace affected` and `turbotrace uncertainty` end to end for records
+//! `affected` and `uncertainty` end to end for records
 //! that used to keep tests selected on every change although something bounds
 //! them:
 //!
@@ -37,10 +37,10 @@ fn run(root: &Path, args: &[&str], env: &[(&str, &str)]) -> String {
     for (k, v) in env {
         c.env(k, v);
     }
-    let o = c.output().expect("run turbotrace");
+    let o = c.output().expect("run the harness");
     assert!(
         o.status.success(),
-        "turbotrace {args:?} failed: {}",
+        "harness {args:?} failed: {}",
         String::from_utf8_lossy(&o.stderr)
     );
     String::from_utf8(o.stdout).unwrap()
@@ -259,7 +259,7 @@ fn the_lint_reports_an_unknown_plugin_once_at_its_config_line() {
         .args(["lint", "--tests", "vitest", "--format", "json"])
         .current_dir(r)
         .output()
-        .expect("run turbotrace");
+        .expect("run the harness");
     let v: serde_json::Value = serde_json::from_slice(&o.stdout)
         .unwrap_or_else(|e| panic!("{e}: {}", String::from_utf8_lossy(&o.stderr)));
     let found: Vec<(&str, u64, &str)> = v["findings"]
@@ -321,7 +321,7 @@ fn the_lint_reports_an_unknown_plugin_once_at_its_config_line() {
         .args(["--rule", "undeclared-dependency=error"])
         .current_dir(r)
         .output()
-        .expect("run turbotrace");
+        .expect("run the harness");
     let v: serde_json::Value = serde_json::from_slice(&o.stdout)
         .unwrap_or_else(|e| panic!("{e}: {}", String::from_utf8_lossy(&o.stderr)));
     let rules: Vec<&str> = v["findings"]

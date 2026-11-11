@@ -28,7 +28,7 @@ use serde::{Deserialize, Serialize};
 use super::Finding;
 
 /// The file name looked up in the repository root.
-pub const DEFAULT_FILE: &str = "turbotrace-lint-baseline.json";
+pub const DEFAULT_FILE: &str = "lint-baseline.json";
 
 /// The format version this binary reads and writes.
 const VERSION: u32 = 1;

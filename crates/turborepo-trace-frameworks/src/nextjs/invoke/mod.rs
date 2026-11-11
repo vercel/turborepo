@@ -198,8 +198,7 @@ pub fn graph_code_files<G: turborepo_trace_graph::GraphView>(
 }
 
 /// The relation of `app` over `graph` (paths relative to `graph_root`) in its
-/// shared form, with the default API table plus the `[[nextjs.url_apis]]` of
-/// `turbotrace.toml` in the graph root and in the app directory.
+/// shared form, with the default API table.
 pub fn static_relation<G: turborepo_trace_graph::GraphView>(
     app: &NextApp,
     graph: &G,
@@ -208,49 +207,16 @@ pub fn static_relation<G: turborepo_trace_graph::GraphView>(
 ) -> (Scan, SharedRelation) {
     let files = graph_code_files(graph, graph_root);
     let resolver = super::select::GraphImports::from_graph(graph, graph_root);
-    let scan = static_scan(&files, &resolver, graph_root, &[&app.root]);
+    let scan = static_scan(&files, &resolver);
     let mut rel = relation_of(app, graph, graph_root, &scan, bound);
     rel.stats.files = files.len();
     (scan, rel)
 }
 
-/// Scans `files` with the default API table plus the `[[nextjs.url_apis]]` of
-/// `turbotrace.toml` in the graph root and in each of `app_roots`. One scan
-/// serves the relations of several apps ([`relation_of`]).
-pub fn static_scan(
-    files: &[PathBuf],
-    resolver: &dyn ImportResolver,
-    graph_root: &Path,
-    app_roots: &[&Path],
-) -> Scan {
-    scan(files, &url_apis(graph_root, app_roots).0, resolver)
-}
-
-/// The API table of a scan: the defaults plus the `[[nextjs.url_apis]]` of
-/// `turbotrace.toml` in the graph root and in each of `app_roots`, and one
-/// message per file whose `[nextjs]` table cannot be read (`<file>: <error>`).
-/// The entries of such a file are not in the table, so a caller that selects by
-/// the relation reports the message instead of going on without the wrappers
-/// the file declares.
-pub fn url_apis(graph_root: &Path, app_roots: &[&Path]) -> (Vec<UrlApi>, Vec<String>) {
-    let mut apis = super::fetch::default_url_apis();
-    let mut errors = Vec::new();
-    let mut tomls = vec![graph_root.join("turbotrace.toml")];
-    tomls.extend(app_roots.iter().map(|a| a.join("turbotrace.toml")));
-    if !turborepo_trace_core::project::reads_turbotrace_toml() {
-        tomls.clear();
-    }
-    tomls.sort();
-    tomls.dedup();
-    for f in tomls {
-        if let Ok(text) = crate::fsx::read_to_string(&f) {
-            match super::fetch::parse_url_apis_toml(&text) {
-                Ok(more) => apis.extend(more),
-                Err(e) => errors.push(format!("{}: {}", f.display(), e.trim_end())),
-            }
-        }
-    }
-    (apis, errors)
+/// Scans `files` with the default API table. One scan serves the relations of
+/// several apps ([`relation_of`]).
+pub fn static_scan(files: &[PathBuf], resolver: &dyn ImportResolver) -> Scan {
+    scan(files, &super::fetch::default_url_apis(), resolver)
 }
 
 /// The first-party code files (absolute paths) that the nodes `seeds` load:

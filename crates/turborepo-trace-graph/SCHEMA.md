@@ -1,4 +1,4 @@
-# turbotrace graph interchange formats
+# Graph interchange formats
 
 `turborepo-trace-graph` reads and writes a whole-repo graph as versioned JSON. Both formats (JSON and
 NDJSON) carry the same data as the [`GraphView`](src/view.rs) trait.

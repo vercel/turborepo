@@ -73,7 +73,7 @@ fn registry_bin() {
 }
 
 // Cross-language parity scenarios (`fixtures/rust/xlang/*`), also run by
-// turbotrace's runtime oracle.
+// the trace's runtime oracle.
 
 fn xlang(cat: &str, entry: &str) {
     let dir = format!(

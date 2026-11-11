@@ -14,7 +14,7 @@
 //! directory with a repository (`repo/`) and host files next to it (`host/`),
 //! which the source names instead of `/tmp`, `/proc` and `/bin`, so the old
 //! behavior (the unconfined trace) can be shown on the same source. The whole
-//! fixture, with the real paths, is built as a graph by turbotrace's own
+//! fixture, with the real paths, is built as a graph by the trace's own
 //! command tests.
 
 // Test code: helpers outside `#[test]` functions unwrap and expect as the tests do.
@@ -275,7 +275,7 @@ fn listing_a_host_directory_is_an_external_reference() {
     // of the repository root, which is not expanded.
     assert_eq!(new.details(), [ROOT_LISTING]);
 
-    // The unconfined trace (`turbotrace trace`, and the graph before) expands it.
+    // The unconfined trace (`trace`, and the graph before) expands it.
     let old = lab.analyze("profiles.js", &listing(), false);
     assert_eq!(
         old.host_targets(),

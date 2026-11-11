@@ -1,4 +1,4 @@
-//! `turbotrace affected` end to end for reads whose path cannot be evaluated:
+//! `affected` end to end for reads whose path cannot be evaluated:
 //! they are bounded by the path-like strings and file locations of the code
 //! loaded with them (`turborepo_trace_graph::names`), instead of selecting
 //! their tests on every change.
@@ -24,14 +24,14 @@ fn run_env(root: &Path, args: &[&str], env: &[(&str, &str)]) -> Output {
     for (k, v) in env {
         c.env(k, v);
     }
-    c.output().expect("run turbotrace")
+    c.output().expect("run the harness")
 }
 
 fn ok_env(root: &Path, args: &[&str], env: &[(&str, &str)]) -> String {
     let o = run_env(root, args, env);
     assert!(
         o.status.success(),
-        "turbotrace {args:?} failed: {}",
+        "harness {args:?} failed: {}",
         String::from_utf8_lossy(&o.stderr)
     );
     String::from_utf8(o.stdout).unwrap()

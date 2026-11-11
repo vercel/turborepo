@@ -598,7 +598,7 @@ mod tests {
     /// addition), directories made and removed, links at the base,
     /// committed and uncommitted changes.
     #[test]
-    fn changes_match_turbotrace_since() {
+    fn changes_match_the_engine_diff() {
         let d = repo();
         let r = std::fs::canonicalize(d.path()).unwrap();
         let (a, la) = ours(&r, "main");
@@ -613,7 +613,7 @@ mod tests {
 
     /// With the base at HEAD, only the working tree's changes.
     #[test]
-    fn changes_match_turbotrace_since_head() {
+    fn changes_match_the_engine_diff_from_head() {
         let d = repo();
         let r = std::fs::canonicalize(d.path()).unwrap();
         assert_eq!(ours(&r, "HEAD"), theirs(&r, "HEAD", None));

@@ -1,8 +1,9 @@
-//! The `[lint]` table of the repository's `turbotrace.toml`.
+//! The `[lint]` table of the hints file (`TURBO_TRACE_DEBUG_HINTS`, for the
+//! tests; `turbo trace lint` takes its options from flags only).
 //!
 //! ```toml
 //! [lint]
-//! baseline = "turbotrace-lint-baseline.json"   # relative to the repository root
+//! baseline = "lint-baseline.json"   # relative to the repository root
 //! tests = ["jest", "vitest"]                   # whose cost is reported; default: all
 //! exclude = ["**/__fixtures__/**"]             # globs over repo-relative paths
 //!
@@ -17,10 +18,7 @@
 //! keys inside the table are errors, everything outside it belongs to
 //! other readers.
 
-use std::{
-    collections::BTreeMap,
-    path::{Path, PathBuf},
-};
+use std::{collections::BTreeMap, path::PathBuf};
 
 use anyhow::{Context, Result, anyhow};
 use serde::Deserialize;
@@ -76,22 +74,17 @@ pub fn parse(text: &str, source: &str) -> Result<Config> {
     })
 }
 
-/// The file `crate::graph::derived` reads the hints from:
-/// `<root>/turbotrace.toml`, or the file named by `TURBO_TRACE_DEBUG_HINTS`
-/// (empty: none).
-fn path(root: &Path) -> Option<PathBuf> {
-    match turborepo_trace_core::debug::var_os("HINTS") {
-        Some(p) if p.is_empty() => None,
-        Some(p) => Some(PathBuf::from(p)),
-        None if !turborepo_trace_core::project::reads_turbotrace_toml() => None,
-        None => Some(root.join(turborepo_trace_store::HINTS_FILE)),
-    }
+/// The file `crate::graph::derived` reads the hints from: the one named by
+/// `TURBO_TRACE_DEBUG_HINTS` (the tests' configuration file), else none.
+fn path() -> Option<PathBuf> {
+    turborepo_trace_core::debug::var_os("HINTS")
+        .filter(|p| !p.is_empty())
+        .map(PathBuf::from)
 }
 
-/// The `[lint]` table of the repository at `root`; the defaults when there is
-/// no file.
-pub fn load(root: &Path) -> Result<Config> {
-    let Some(p) = path(root) else {
+/// The `[lint]` table of the hints file; the defaults when there is none.
+pub fn load() -> Result<Config> {
+    let Some(p) = path() else {
         return Ok(Config::default());
     };
     match std::fs::read_to_string(&p) {

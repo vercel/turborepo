@@ -1,4 +1,4 @@
-//! `turbotrace affected`: mock-aware loading. A jest or vitest test is not
+//! `affected`: mock-aware loading. A jest or vitest test is not
 //! selected by a change it reaches only through a module it replaces with a
 //! mock that does not load the module; every form that loads the real module
 //! after all keeps it selected. The runtime behaviour behind each case is
@@ -22,10 +22,10 @@ fn run(root: &Path, args: &[&str], env: &[(&str, &str)]) -> String {
         .envs(env.iter().copied())
         .current_dir(root)
         .output()
-        .expect("run turbotrace");
+        .expect("run the harness");
     assert!(
         o.status.success(),
-        "turbotrace {args:?} failed: {}",
+        "harness {args:?} failed: {}",
         String::from_utf8_lossy(&o.stderr)
     );
     String::from_utf8(o.stdout).unwrap()
@@ -150,7 +150,7 @@ fn what_loads_the_real_module_keeps_the_test_selected() {
         "jest.doMock('../src/m', () => ({ v: 2 }));",
         "beforeAll(() => { jest.mock('../src/m', () => ({ v: 2 })); });",
         "if (process.env.X) { jest.mock('../src/m', () => ({ v: 2 })); }",
-        // A factory turbotrace cannot read.
+        // A factory the trace cannot read.
         "jest.mock('../src/m', factory);",
         // Undone later.
         "jest.mock('../src/m', () => ({ v: 2 }));\njest.unmock('../src/m');",
@@ -199,7 +199,7 @@ fn another_way_to_the_change_keeps_the_test_selected() {
     );
     assert_eq!(selected(d.path(), "jest", "src/deep.ts", &[]), [TEST]);
     assert!(selected(d.path(), "jest", "src/m.ts", &[]).is_empty());
-    // A helper that loads the real module, or that unmocks something turbotrace
+    // A helper that loads the real module, or that unmocks something the trace
     // cannot name.
     for helper in [
         "export const real = () => jest.requireActual('./m');\n",

@@ -95,7 +95,7 @@ pub(crate) fn extract(
     }
     std::thread::scope(|scope| {
         std::thread::Builder::new()
-            .name("turbotrace-facts".into())
+            .name("turbo-trace-facts".into())
             .stack_size(super::STACK_BYTES)
             .spawn_scoped(scope, || analyze(text, dialect, file_name, sites))
             .ok()?

@@ -1,4 +1,4 @@
-//! `turbotrace affected` on tests that work in a temporary directory. The
+//! `affected` on tests that work in a temporary directory. The
 //! value-flow engine knows that a path below the temporary directory is outside
 //! the repository, so reads there are no references. What the test puts there
 //! must then be a dependency by itself: the source of a copy, and a module that
@@ -32,10 +32,10 @@ fn affected_env(root: &Path, changed: &[&str], env: &[(&str, &str)]) -> Vec<Stri
         .envs(env.iter().copied())
         .current_dir(root)
         .output()
-        .expect("run turbotrace");
+        .expect("run the harness");
     assert!(
         o.status.success(),
-        "turbotrace {args:?} failed: {}",
+        "harness {args:?} failed: {}",
         String::from_utf8_lossy(&o.stderr)
     );
     let mut v: Vec<String> = String::from_utf8(o.stdout)

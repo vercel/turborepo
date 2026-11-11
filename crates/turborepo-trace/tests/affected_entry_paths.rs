@@ -69,7 +69,7 @@ fn run(root: &Path, args: &[&str]) -> String {
         .args(args)
         .current_dir(root)
         .output()
-        .expect("run turbotrace");
+        .expect("run the harness");
     assert!(
         o.status.success(),
         "{args:?}: {}",

@@ -24,6 +24,11 @@ TURBO_EXPERIMENTAL_TRACE=1 turbo trace affected
   output and storage may change in any release.
 </Callout>
 
+<Callout type="info" title="Not the `--trace` flag">
+  `turbo trace` is a command. The global `--trace <FILE>` flag is unrelated:
+  it saves a performance trace of any `turbo` command to a file.
+</Callout>
+
 ## Enabling the command
 
 The command runs only when the [`TURBO_EXPERIMENTAL_TRACE`](/docs/reference/system-environment-variables#turbo_experimental_trace) environment variable is set to `1` or `true`. Without it, `turbo trace` means what it did before the command existed: `turbo run trace`, which runs a task named `trace`.
@@ -101,7 +106,7 @@ Explain why each of the given test files is or is not selected, instead of listi
 
 ### `--json`
 
-Print the selection as JSON. The shape matches the `affectedTasks` field of [`turbo query affected`](/docs/reference/query#affected), so the command can later move into `turbo query`:
+Print the selection as JSON. Each list has the same shape as the `affectedTasks` field of [`turbo query affected`](/docs/reference/query#affected) (`items` and `length`), so the command can later move into `turbo query`:
 
 ```json title="Output"
 {

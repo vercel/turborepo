@@ -1,4 +1,4 @@
-//! `turbotrace affected --since`: the resolution fields of a `package.json`
+//! `affected --since`: the resolution fields of a `package.json`
 //! (`exports`, `imports`, `main`, `types`, `typesVersions`, ...) are applied
 //! entry by entry. A changed, added or removed entry selects the importers
 //! whose requests it answers, and nothing else; shapes outside the model keep
@@ -25,14 +25,14 @@ fn run_env(root: &Path, args: &[&str], env: &[(&str, &str)]) -> Output {
     for (k, v) in env {
         c.env(k, v);
     }
-    c.output().expect("run turbotrace")
+    c.output().expect("run the harness")
 }
 
 fn ok_env(root: &Path, args: &[&str], env: &[(&str, &str)]) -> String {
     let o = run_env(root, args, env);
     assert!(
         o.status.success(),
-        "turbotrace {args:?} failed: {}",
+        "harness {args:?} failed: {}",
         String::from_utf8_lossy(&o.stderr)
     );
     String::from_utf8(o.stdout).unwrap()
@@ -399,7 +399,7 @@ fn type_entries_reach_only_entries_that_type_check() {
     };
     // What type resolution finds for `./util` changes. The importing package's
     // tests run under jest, which transpiles file by file: they cannot observe
-    // it. A plain entry (type-checked for all turbotrace knows) is selected.
+    // it. A plain entry (type-checked as far as the trace knows) is selected.
     edit(
         r,
         r#""types": "./src/util.d.ts", "default""#,

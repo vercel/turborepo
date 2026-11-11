@@ -1,4 +1,4 @@
-//! Workflow changes in `turbotrace affected`
+//! Workflow changes in `affected`
 //! (`crates/turborepo-trace/src/workflows.rs`), end to end over
 //! `fixtures/tasks/gha-runs` in a temporary git repository: a changed job
 //! selects the tests it runs and nothing else; edits that only steer a workflow
@@ -59,10 +59,10 @@ fn run(root: &Path, args: &[&str]) -> Vec<String> {
         .args(args)
         .current_dir(root)
         .output()
-        .expect("run turbotrace");
+        .expect("run the harness");
     assert!(
         o.status.success(),
-        "turbotrace {args:?} failed: {}",
+        "harness {args:?} failed: {}",
         String::from_utf8_lossy(&o.stderr)
     );
     String::from_utf8(o.stdout)

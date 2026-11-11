@@ -394,7 +394,7 @@ pub struct LintCmd {
     /// root), in addition to `exclude` of `[lint]`. Repeatable.
     pub exclude: Vec<String>,
     /// The baseline file [default: `baseline` of `[lint]`, else
-    /// turbotrace-lint-baseline.json in the repository root].
+    /// lint-baseline.json in the repository root].
     pub baseline: Option<PathBuf>,
     /// Ignore the baseline: every finding is new.
     pub no_baseline: bool,
@@ -465,7 +465,7 @@ fn set_severity(
 }
 
 fn settings(cmd: &LintCmd, root: &Path) -> Result<Settings> {
-    let conf = config::load(root)?;
+    let conf = config::load()?;
     let mut severity: BTreeMap<&'static str, Severity> =
         RULES.iter().map(|r| (r.name, r.default)).collect();
     for (name, value) in &conf.rules {

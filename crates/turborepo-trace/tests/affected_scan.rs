@@ -182,10 +182,10 @@ fn selected(root: &Path, path: &str, extra: &[&str]) -> Vec<String> {
         .args(&args)
         .current_dir(root)
         .output()
-        .expect("run turbotrace");
+        .expect("run the harness");
     assert!(
         o.status.success(),
-        "turbotrace {args:?} failed: {}",
+        "harness {args:?} failed: {}",
         String::from_utf8_lossy(&o.stderr)
     );
     String::from_utf8(o.stdout)

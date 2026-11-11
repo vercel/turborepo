@@ -114,7 +114,7 @@ impl TreeIndex {
     ) -> Option<TreeIndex> {
         let pool = rayon::ThreadPoolBuilder::new()
             .num_threads(threads.max(1))
-            .thread_name(|i| format!("turbotrace-treeindex-{i}"))
+            .thread_name(|i| format!("turbo-trace-treeindex-{i}"))
             .build()
             .ok()?;
         let count = std::sync::atomic::AtomicUsize::new(0);
@@ -390,7 +390,7 @@ impl Slot {
     ) {
         let threads = std::thread::available_parallelism().map_or(4, |n| n.get());
         let h = std::thread::Builder::new()
-            .name("turbotrace-treeindex".into())
+            .name("turbo-trace-treeindex".into())
             .spawn(move || TreeIndex::build(&fs, &root, &walked, threads));
         if let Ok(h) = h {
             *self.handle.lock().unwrap_or_else(|e| e.into_inner()) = Some(h);

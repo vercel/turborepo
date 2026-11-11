@@ -1,4 +1,4 @@
-//! `turbotrace affected`: changes a test cannot observe when its runner only
+//! `affected`: changes a test cannot observe when its runner only
 //! transpiles.
 //!
 //! - Erased-equal changes (`--since`): a modified file whose runtime JavaScript
@@ -29,14 +29,14 @@ fn run_env(root: &Path, args: &[&str], env: &[(&str, &str)]) -> Output {
         .envs(env.iter().copied())
         .current_dir(root)
         .output()
-        .expect("run turbotrace")
+        .expect("run the harness")
 }
 
 fn ok_env(root: &Path, args: &[&str], env: &[(&str, &str)]) -> String {
     let o = run_env(root, args, env);
     assert!(
         o.status.success(),
-        "turbotrace {args:?} failed: {}",
+        "harness {args:?} failed: {}",
         String::from_utf8_lossy(&o.stderr)
     );
     String::from_utf8(o.stdout).unwrap()

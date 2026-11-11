@@ -6,7 +6,7 @@
 // of a package that package (or a package around it, the root included) declares, or of a
 // package nested in one of those; and by induction everything a chain of such loads brings
 // in is covered. So for every project file a test really loads,
-// `turbotrace affected --tests jest --changed <file>` must select the test.
+// `affected --tests jest --changed <file>` must select the test.
 //
 // The oracle writes one pnpm-style workspace:
 //
@@ -46,7 +46,7 @@
 //               declared packages and the module in the undeclared package is lost. One
 //               case is a theorem instead (a relative value asked of a function whose place
 //               is not known): nothing may be guessed from the file, the load stays open.
-//   floor       a load that turbotrace does not record (the handoff to a third-party loader
+//   floor       a load that the trace does not record (the handoff to a third-party loader
 //               below), in a test that also reaches a recorded load. Without the bound the
 //               floor selected that test on every change and so covered the unrecorded load
 //               by accident; with the bound it does not. Counted apart as LOST WITH THE
@@ -55,7 +55,7 @@
 //               it turns out covered (the list is kept honest).
 //   outside     the specifier is handed to a third-party loader, which resolves from its own
 //               place in the virtual store and so finds every workspace package through the
-//               hidden hoist. turbotrace records no load for it, with or without the bound
+//               hidden hoist. The trace records no load for it, with or without the bound
 //               (the test loads no file with a load site of its own): counted as BASELINE
 //               (not selected either way), a FINDING only if the bound loses what an open
 //               load selected. A known hole of the load model, not of the bound.
@@ -67,7 +67,7 @@
 //
 //   node oracle.mjs --turbotrace <bin> [--only TEXT] [--keep] [-v] [--json FILE]
 //
-// Exit status 1 when there are findings. The turbotrace tooling builds the binary and
+// Exit status 1 when there are findings. The trace's development tooling builds the binary and
 // runs this script.
 import { execFileSync, spawnSync } from 'node:child_process';
 import fs from 'node:fs';

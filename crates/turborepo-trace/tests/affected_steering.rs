@@ -1,4 +1,4 @@
-//! `turbotrace affected`: repo steering files (`.github/**`, `CODEOWNERS`,
+//! `affected`: repo steering files (`.github/**`, `CODEOWNERS`,
 //! `.vercel.approvers`, ...) can't change what an application does. A changed
 //! one affects only the entries that reference it explicitly; it does not flow
 //! through whole-directory task inputs, task nodes or the uncertainty floor of
@@ -24,14 +24,14 @@ fn run(root: &Path, args: &[&str]) -> Output {
         .args(args)
         .current_dir(root)
         .output()
-        .expect("run turbotrace")
+        .expect("run the harness")
 }
 
 fn ok(root: &Path, args: &[&str]) -> String {
     let o = run(root, args);
     assert!(
         o.status.success(),
-        "turbotrace {args:?} failed: {}",
+        "harness {args:?} failed: {}",
         String::from_utf8_lossy(&o.stderr)
     );
     String::from_utf8(o.stdout).unwrap()
@@ -59,7 +59,7 @@ const READ_TEST: &str = ".github/scripts/read.test.js";
 const TOOL_DYN_TEST: &str = ".github/scripts/dyn.test.js";
 const ENTRIES: [&str; 5] = [APP_TEST, DYN_TEST, X_TEST, READ_TEST, TOOL_DYN_TEST];
 
-/// A workspace with one package whose `build` script is a command turbotrace
+/// A workspace with one package whose `build` script is a command the trace
 /// doesn't know (so the task's input is the whole package directory, approvers
 /// file included) and whose output `dist/**` a test loads; an application test
 /// behind an open uncertainty; and CI tooling below `.github/` with its own

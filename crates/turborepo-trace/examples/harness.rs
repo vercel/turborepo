@@ -252,7 +252,7 @@ pub mod affected {
         /// With --format selection: a changed path that matches makes the
         /// caller run the full set in every mode, because it steers the
         /// selection itself (a glob relative to the repository root;
-        /// repeatable). `turbotrace.toml` always counts.
+        /// repeatable).
         #[usage(long, value_name = "GLOB")]
         pub run_all_if_changed: Vec<String>,
         /// With --format selection: files that look like tests (`*.test.*`,
@@ -566,7 +566,7 @@ pub mod lint {
         #[usage(long, value_name = "GLOB")]
         pub exclude: Vec<String>,
         /// The baseline file [default: `baseline` of `[lint]`, else
-        /// turbotrace-lint-baseline.json in the repository root].
+        /// lint-baseline.json in the repository root].
         #[usage(long, value_name = "FILE", conflicts = "no_baseline")]
         pub baseline: Option<PathBuf>,
         /// Ignore the baseline: every finding is new.
@@ -655,7 +655,7 @@ pub mod selection {
 
 /// The command line.
 #[derive(Debug, Parser)]
-#[usage(name = "turbotrace", about = "turborepo-trace test harness")]
+#[usage(name = "harness", about = "turborepo-trace test harness")]
 struct Cli {
     #[usage(subcommand)]
     command: Command,

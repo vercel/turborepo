@@ -1,6 +1,7 @@
 //! The Next.js build-output reader over `fixtures/next-build/lab`: a trimmed
 //! copy of a real Turbopack build of the lab app
-//! (turbotrace's `scripts/next-build-lab/mkfixture.mjs`; Next 16.4.5).
+//! (the development repository's `scripts/next-build-lab/mkfixture.mjs`; Next
+//! 16.4.5).
 
 // Test code: helpers outside `#[test]` functions unwrap and expect as the tests do.
 #![allow(clippy::unwrap_used, clippy::expect_used)]

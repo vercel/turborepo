@@ -43,10 +43,6 @@ pub(crate) const SCHEMA: &str = "turbotrace-selection";
 pub(crate) const VERSION: u32 = 1;
 /// The debug variable of the switch ([`Mode`]): `TURBO_TRACE_DEBUG_MODE`.
 pub(crate) const MODE_ENV: &str = "MODE";
-/// Changed paths that make everything run, whatever the mode: the tool's own
-/// inputs.
-pub(crate) const DEFAULT_RUN_ALL: &[&str] = &["turbotrace.toml"];
-
 /// The switch: what `run` carries.
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
@@ -239,7 +235,7 @@ pub(crate) struct Document {
     pub(crate) schema: String,
     /// [`VERSION`].
     pub(crate) version: u32,
-    /// The turbotrace version that wrote it.
+    /// The trace version that wrote it.
     #[serde(default)]
     pub(crate) turbotrace: String,
     /// The position of the switch.
@@ -354,7 +350,7 @@ pub(crate) struct Input<'a> {
     pub(crate) merge_bases: &'a [String],
     pub(crate) mode: Mode,
     pub(crate) mode_source: ModeSource,
-    /// `--run-all-if-changed` globs, with [`DEFAULT_RUN_ALL`].
+    /// `--run-all-if-changed` globs.
     pub(crate) run_all: &'a [Glob],
     /// `--not-tests` globs.
     pub(crate) not_tests: &'a [Glob],

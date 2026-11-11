@@ -1,4 +1,4 @@
-//! `turbotrace lint` end to end on a small jest repo: the rule
+//! `lint` end to end on a small jest repo: the rule
 //! `unconstrained-load`, the baseline, suppression comments, the configuration
 //! and the output formats.
 // Test code: helpers outside `#[test]` functions unwrap and expect as the tests do.
@@ -14,15 +14,18 @@ fn write(root: &Path, rel: &str, content: &str) {
     std::fs::write(p, content).unwrap();
 }
 
-/// Exit code, stdout and stderr of `turbotrace <args>` with extra environment
+/// Exit code, stdout and stderr of `<args>` with extra environment
 /// variables.
 fn run_env(root: &Path, args: &[&str], env: &[(&str, &str)]) -> (i32, String, String) {
     let mut c = Command::new(support::harness());
-    c.args(args).current_dir(root);
+    // The configuration file of these tests (`turbo trace lint` reads none).
+    c.args(args)
+        .current_dir(root)
+        .env("TURBO_TRACE_DEBUG_HINTS", root.join("hints.toml"));
     for (k, v) in env {
         c.env(k, v);
     }
-    let o = c.output().expect("run turbotrace");
+    let o = c.output().expect("run the harness");
     (
         o.status.code().expect("exit code"),
         String::from_utf8(o.stdout).unwrap(),
@@ -34,12 +37,12 @@ fn run(root: &Path, args: &[&str]) -> (i32, String, String) {
     run_env(root, args, &[])
 }
 
-/// `turbotrace lint --tests jest <extra>`: exit code and stdout.
+/// `lint --tests jest <extra>`: exit code and stdout.
 fn lint(root: &Path, extra: &[&str]) -> (i32, String) {
     let mut args = vec!["lint", "--tests", "jest"];
     args.extend_from_slice(extra);
     let (code, out, err) = run(root, &args);
-    assert!(code == 0 || code == 1, "turbotrace {args:?}: {err}");
+    assert!(code == 0 || code == 1, "harness {args:?}: {err}");
     (code, out)
 }
 
@@ -56,7 +59,7 @@ const MESSAGE: &str =
 const KEY: &str = "computed_specifier/param: name; parameter exports.load#0";
 const FIX: &str = "give the specifier a literal prefix: `import(`./handlers/${name}`)` or \
                    `require(path.join(__dirname, 'handlers', name))`";
-const BASELINE: &str = "turbotrace-lint-baseline.json";
+const BASELINE: &str = "lint-baseline.json";
 
 /// Three jest tests. `src/load.js` requires a module named by a parameter
 /// (unconstrained). `src/prefix.js` loads with a literal prefix, a path
@@ -161,7 +164,7 @@ fn baseline_round_trip() {
     assert_eq!(code, 0, "{out}");
     assert_eq!(
         out,
-        "turbotrace-lint-baseline.json: 1 finding(s) written as 1 entr(ies)\n"
+        "lint-baseline.json: 1 finding(s) written as 1 entr(ies)\n"
     );
     assert_eq!(
         std::fs::read_to_string(r.join(BASELINE)).unwrap(),
@@ -496,7 +499,7 @@ fn rules_are_switched_by_flag_and_by_config() {
     // The configuration: a warning, another baseline file, tests, excludes.
     write(
         r,
-        "turbotrace.toml",
+        "hints.toml",
         "[lint]\nbaseline = \"ci/lint-baseline.json\"\ntests = [\"jest\"]\nexclude = \
          [\"src/legacy/**\"]\n\n[lint.rules]\nunconstrained-load = \"warn\"\nunconstrained-read = \
          \"off\"\n",
@@ -600,22 +603,18 @@ fn rules_are_switched_by_flag_and_by_config() {
     );
 
     // Mistakes in the table are errors that name the file.
-    write(
-        r,
-        "turbotrace.toml",
-        "[lint.rules]\nno-such-rule = \"error\"\n",
-    );
+    write(r, "hints.toml", "[lint.rules]\nno-such-rule = \"error\"\n");
     let (code, _, err) = run(r, &["lint"]);
     assert_eq!(code, 1);
     assert!(
-        err.contains("turbotrace.toml: unknown rule `no-such-rule`"),
+        err.contains("hints.toml: unknown rule `no-such-rule`"),
         "{err}"
     );
-    write(r, "turbotrace.toml", "[lint]\nbaselin = \"x.json\"\n");
+    write(r, "hints.toml", "[lint]\nbaselin = \"x.json\"\n");
     let (code, _, err) = run(r, &["lint"]);
     assert_eq!(code, 1);
     assert!(
-        err.contains("turbotrace.toml") && err.contains("baselin"),
+        err.contains("hints.toml") && err.contains("baselin"),
         "{err}"
     );
 }

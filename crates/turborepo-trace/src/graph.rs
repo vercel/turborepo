@@ -212,21 +212,17 @@ pub(crate) fn open(loc: &GraphLoc, no_refresh: bool, stats: bool) -> Result<Grap
 /// `g` with the facts derived from the composed graph applied:
 /// working-directory-relative references resolved per test
 /// (`turborepo_trace_store::Graph::cwd_patch`) and the repository's
-/// hints (`turborepo_trace_store::Hints`: `<root>/turbotrace.toml`, or the file
-/// named by `TURBO_TRACE_DEBUG_HINTS`, for example when replaying commits that
-/// predate the hints file). `TURBO_TRACE_DEBUG_HINTS=` (empty) turns the hints
-/// off, and `TURBO_TRACE_DEBUG_CWD=0` the whole derived layer, hints included
-/// (A/B measurements, escape hatches). Values that other files supply are bound
+/// hints (`turborepo_trace_store::Hints`, from the file named by
+/// `TURBO_TRACE_DEBUG_HINTS`: the tests' configuration; `turbo trace` reads
+/// none). `TURBO_TRACE_DEBUG_CWD=0` turns the whole derived layer off, hints
+/// included (A/B measurements). Values that other files supply are bound
 /// to their suppliers (`crate::xfile`; `TURBO_TRACE_DEBUG_BIND=0` turns that
 /// off).
 pub(crate) fn derived(g: &Graph, stats: bool) -> Result<turborepo_trace_graph::Patched<'_, Graph>> {
     let t = Instant::now();
-    let hints_path = match turborepo_trace_core::debug::var_os("HINTS") {
-        Some(p) if p.is_empty() => None,
-        Some(p) => Some(PathBuf::from(p)),
-        None if !turborepo_trace_core::project::reads_turbotrace_toml() => None,
-        None => Some(Path::new(g.root()).join(turborepo_trace_store::HINTS_FILE)),
-    };
+    let hints_path = turborepo_trace_core::debug::var_os("HINTS")
+        .filter(|p| !p.is_empty())
+        .map(PathBuf::from);
     let hints = match &hints_path {
         Some(p) => turborepo_trace_store::Hints::load(p).map_err(|e| anyhow::anyhow!("{e}"))?,
         None => None,

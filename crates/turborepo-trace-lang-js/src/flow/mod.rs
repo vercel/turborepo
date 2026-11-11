@@ -343,7 +343,7 @@ fn run(
     // parser bug on unusual input) is contained by the join.
     let out = std::thread::scope(|scope| {
         std::thread::Builder::new()
-            .name("turbotrace-flow".into())
+            .name("turbo-trace-flow".into())
             .stack_size(STACK_BYTES)
             .spawn_scoped(scope, || {
                 analyze(text, dialect, file_name, sites, env_facts, anchors)

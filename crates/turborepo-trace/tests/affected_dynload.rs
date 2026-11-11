@@ -1,4 +1,4 @@
-//! `turbotrace affected` end to end for module loads the per-file analysis
+//! `affected` end to end for module loads the per-file analysis
 //! cannot bound on its own: paths relative to the test runner's working
 //! directory in shared helpers.
 // Test code: helpers outside `#[test]` functions unwrap and expect as the tests do.
@@ -19,18 +19,21 @@ fn write(root: &Path, rel: &str, content: &str) {
 
 fn run_env(root: &Path, args: &[&str], env: &[(&str, &str)]) -> Output {
     let mut c = Command::new(support::harness());
-    c.args(args).current_dir(root);
+    // The hints file of these tests (`turbo trace` reads none).
+    c.args(args)
+        .current_dir(root)
+        .env("TURBO_TRACE_DEBUG_HINTS", root.join("hints.toml"));
     for (k, v) in env {
         c.env(k, v);
     }
-    c.output().expect("run turbotrace")
+    c.output().expect("run the harness")
 }
 
 fn ok_env(root: &Path, args: &[&str], env: &[(&str, &str)]) -> String {
     let o = run_env(root, args, env);
     assert!(
         o.status.success(),
-        "turbotrace {args:?} failed: {}",
+        "harness {args:?} failed: {}",
         String::from_utf8_lossy(&o.stderr)
     );
     String::from_utf8(o.stdout).unwrap()
@@ -351,7 +354,7 @@ fn a_pattern_over_the_working_directory_itself_stays_open() {
 
 /// The real chain behind a framework that loads route tables and imports the
 /// handler modules they name by path, with the two sites the analysis cannot
-/// bound declared in `turbotrace.toml`:
+/// bound declared in the hints file:
 ///
 /// ```text
 /// packages/framework/normalize.js   import(spec)               (spec: a handler path from a route table)
@@ -451,7 +454,7 @@ fn module_strings_link_route_tables_to_handlers() {
     );
     assert!(!deps.contains("services/b/"), "{deps}");
 
-    write(r, "turbotrace.toml", SITE_HINTS);
+    write(r, "hints.toml", SITE_HINTS);
     assert!(affected(r, &["--changed", "README.md"]).is_empty());
     assert_eq!(
         affected(r, &["--changed", "services/a/src/handlers/get.js"]),
@@ -508,7 +511,7 @@ fn hints_bound_dynamic_loads() {
     // change.
     assert_eq!(affected(r, &["--changed", "README.md"]), [A, B]);
 
-    write(r, "turbotrace.toml", HINTS);
+    write(r, "hints.toml", HINTS);
     assert!(affected(r, &["--changed", "README.md"]).is_empty());
     // test → helper → <cwd>/src/routes → the handlers it names → what they import.
     assert_eq!(affected(r, &["--changed", "services/a/src/routes.js"]), [A]);
@@ -551,7 +554,7 @@ fn hints_bound_dynamic_loads() {
 
     // The hints file can live elsewhere (replaying commits that predate it), or be
     // off.
-    std::fs::rename(r.join("turbotrace.toml"), r.join("elsewhere.toml")).unwrap();
+    std::fs::rename(r.join("hints.toml"), r.join("elsewhere.toml")).unwrap();
     let elsewhere = r.join("elsewhere.toml");
     let env = [("TURBO_TRACE_DEBUG_HINTS", elsewhere.to_str().unwrap())];
     let args = ["affected", "--tests", "jest", "--changed", "README.md"];
@@ -563,8 +566,8 @@ fn hints_bound_dynamic_loads() {
         [A, B]
     );
     // A malformed hints file is an error, not silently ignored.
-    write(r, "turbotrace.toml", "[[hint]]\nfiles = \"x\"\nload = []\n");
+    write(r, "hints.toml", "[[hint]]\nfiles = \"x\"\nload = []\n");
     let o = run_env(r, &args, &[]);
     assert!(!o.status.success());
-    assert!(String::from_utf8_lossy(&o.stderr).contains("turbotrace.toml"));
+    assert!(String::from_utf8_lossy(&o.stderr).contains("hints.toml"));
 }

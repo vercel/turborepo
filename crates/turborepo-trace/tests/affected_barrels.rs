@@ -1,4 +1,4 @@
-//! `turbotrace affected --since`: export-level tracing through barrel files. A
+//! `affected --since`: export-level tracing through barrel files. A
 //! modified re-exported file is skipped for a test only when the test imports
 //! none of its names through the barrel, the file is side-effect free at both
 //! revisions, and the test runner doesn't type-check.
@@ -23,14 +23,14 @@ fn run(root: &Path, args: &[&str]) -> Output {
         .args(args)
         .current_dir(root)
         .output()
-        .expect("run turbotrace")
+        .expect("run the harness")
 }
 
 fn ok(root: &Path, args: &[&str]) -> String {
     let o = run(root, args);
     assert!(
         o.status.success(),
-        "turbotrace {args:?} failed: {}",
+        "harness {args:?} failed: {}",
         String::from_utf8_lossy(&o.stderr)
     );
     String::from_utf8(o.stdout).unwrap()
@@ -216,7 +216,7 @@ fn a_change_of_what_linking_asks_for_selects() {
             .env("TURBO_TRACE_DEBUG_EXPORTS", "0")
             .current_dir(r)
             .output()
-            .expect("run turbotrace");
+            .expect("run the harness");
         String::from_utf8(o.stdout).unwrap()
     };
     let v: serde_json::Value = serde_json::from_str(&without(r, "json")).unwrap();
@@ -470,7 +470,7 @@ fn export_star_collisions_select() {
             .env("TURBO_TRACE_DEBUG_EXPORT_DIFF", "0")
             .current_dir(r)
             .output()
-            .expect("run turbotrace");
+            .expect("run the harness");
         String::from_utf8(o.stdout).unwrap()
     };
     assert_eq!(

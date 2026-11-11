@@ -6,8 +6,7 @@
 //! [`turborepo_trace_core::api::ApiEntry`]): `fetch`, `new Request`, SWR keys,
 //! axios/ky, `navigator.sendBeacon`, `EventSource`, `new URL(x, base)`, server
 //! `redirect()`, and client navigation (`router.push`, `<Link href>`, an `href`
-//! given to any other component, `location.assign`). Project wrappers come from
-//! `turbotrace.toml` where it is read ([`parse_url_apis_toml`]).
+//! given to any other component, `location.assign`).
 //!
 //! Each argument is evaluated to URL patterns ([`super::jseval`]); the caller
 //! matches them against the route table by overlap ([`super::select`]).
@@ -56,9 +55,8 @@ pub enum Style {
     Jsx,
 }
 
-/// One URL-producing API. Unknown keys are refused: a misspelt `prefix` in a
-/// `turbotrace.toml` would otherwise give a wrapper without one, whose URLs
-/// match no route.
+/// One URL-producing API. Unknown keys are refused: a misspelt `prefix` would
+/// otherwise give a wrapper without one, whose URLs match no route.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct UrlApi {
@@ -208,72 +206,6 @@ pub fn default_url_apis() -> Vec<UrlApi> {
         v.push(api(Some(m), "default.request", Fetch).field("url"));
     }
     v
-}
-
-/// The wrappers a large Next.js app uses: an example of a project table.
-/// `fetchAPI` prefixes paths with `/api` unless they already start with it.
-pub const FRONT_URL_APIS_TOML: &str = r#"
-# turbotrace.toml (apps/web): project fetch wrappers for Next.js fetch discovery.
-[[nextjs.url_apis]]
-module = "@acme/api-client/fetch-api"
-name = "fetchAPI"
-prefix = "/api"
-
-[[nextjs.url_apis]]
-module = "@acme/api-client/fetch-api"
-name = "default"
-prefix = "/api"
-
-[[nextjs.url_apis]]
-module = "@acme/api-client/fetch-api/app"
-name = "fetchAPI"
-prefix = "/api"
-
-[[nextjs.url_apis]]
-module = "@acme/api-client/typed/fetch-api/client"
-name = "clientTypedFetchData"
-prefix = "/api"
-
-[[nextjs.url_apis]]
-module = "@acme/api-client/typed/fetch-api/client"
-name = "clientTypedFetch"
-prefix = "/api"
-
-[[nextjs.url_apis]]
-module = "@acme/api-client/typed/fetch-api/app"
-name = "typedFetchData"
-prefix = "/api"
-
-[[nextjs.url_apis]]
-module = "@acme/api-client/typed/fetch-api/app"
-name = "typedFetch"
-prefix = "/api"
-
-[[nextjs.url_apis]]
-module = "@acme/api-client/typed/swr"
-name = "useTypedSWR"
-prefix = "/api"
-"#;
-
-#[derive(Deserialize)]
-struct TomlRoot {
-    #[serde(default)]
-    nextjs: Option<TomlNext>,
-}
-
-#[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
-struct TomlNext {
-    #[serde(default)]
-    url_apis: Vec<UrlApi>,
-}
-
-/// Reads `[[nextjs.url_apis]]` entries from a `turbotrace.toml` text. The other
-/// tables of the file belong to other readers (the hints, the lint)
-/// and are not looked at; an unknown key inside `[nextjs]` is an error.
-pub fn parse_url_apis_toml(text: &str) -> Result<Vec<UrlApi>, String> {
-    let r: TomlRoot = toml::from_str(text).map_err(|e| e.to_string())?;
-    Ok(r.nextjs.map(|n| n.url_apis).unwrap_or_default())
 }
 
 /// One discovered site.
@@ -808,49 +740,4 @@ fn memchr_lt(src: &[u8], from: usize) -> Option<usize> {
         .iter()
         .position(|&b| b == b'<')
         .map(|p| from + p)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn the_table_is_read_next_to_the_other_readers_tables() {
-        // The hints (`[[hint]]`, `[[env]]`) and the lint (`[lint]`) read the
-        // same file: their tables are not this reader's business.
-        let apis = parse_url_apis_toml(
-            r#"
-[[hint]]
-files = "a.ts"
-loads = []
-
-[[env]]
-name = "DATA"
-values = ["data/*.json"]
-
-[lint]
-baseline = "ci/lint-baseline.json"
-
-[[nextjs.url_apis]]
-module = "@acme/fetch"
-name = "apiFetch"
-prefix = "/api"
-"#,
-        )
-        .unwrap();
-        assert_eq!(apis.len(), 1);
-        assert_eq!(apis[0].prefix.as_deref(), Some("/api"));
-        assert_eq!(parse_url_apis_toml("[lint]\n").unwrap(), []);
-        // A misspelt key is an error, not a wrapper without a prefix or no table at
-        // all.
-        let e = parse_url_apis_toml(
-            "[[nextjs.url_apis]]\nmodule = \"@acme/fetch\"\nname = \"apiFetch\"\nprefx = \
-             \"/api\"\n",
-        )
-        .unwrap_err();
-        assert!(e.contains("prefx"), "{e}");
-        let e = parse_url_apis_toml("[[nextjs.url_api]]\nname = \"x\"\n").unwrap_err();
-        assert!(e.contains("url_api"), "{e}");
-        assert!(parse_url_apis_toml(FRONT_URL_APIS_TOML).unwrap().len() >= 4);
-    }
 }

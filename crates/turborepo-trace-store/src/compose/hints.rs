@@ -1,7 +1,6 @@
-//! Hints: declared dependencies and bounds for dynamic references, read from
-//! `turbotrace.toml` and applied to the composed graph
-//! ([`Graph::hints_patch`]). `turbo trace` does not read the file
-//! (`turborepo_trace_core::project::reads_turbotrace_toml`).
+//! Hints: declared dependencies and bounds for dynamic references, read from a
+//! TOML file and applied to the composed graph ([`Graph::hints_patch`]). `turbo
+//! trace` reads none; the tests name one (`TURBO_TRACE_DEBUG_HINTS`).
 //!
 //! A hint is the escape hatch for references no analysis can bound: a framework
 //! that imports handler modules from path strings in route tables, a helper
@@ -66,10 +65,7 @@ use super::{
 };
 use crate::paths::join_repo;
 
-/// The file name looked up in the repository root.
-pub const HINTS_FILE: &str = "turbotrace.toml";
-
-/// The top-level tables of [`HINTS_FILE`] that other readers of the file own:
+/// The top-level tables of a hints file that other readers of the file own:
 /// accepted and not looked at by [`Hints::parse`]. A reader that gets a table
 /// of its own is added here, or every command that opens a graph refuses a file
 /// with that table.

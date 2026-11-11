@@ -1,4 +1,4 @@
-//! `turbotrace affected` end to end for anchored names: a file that uses its
+//! `affected` end to end for anchored names: a file that uses its
 //! own location or the working directory names where that base goes
 //! (`turborepo_trace_lang_js::flow::anchors`), not everything below it.
 // Test code: helpers outside `#[test]` functions unwrap and expect as the tests do.
@@ -31,7 +31,7 @@ fn affected(root: &Path, graph: &str, changed: &str, env: &[(&str, &str)]) -> Ve
     for (k, v) in env {
         c.env(k, v);
     }
-    let o = c.output().expect("run turbotrace");
+    let o = c.output().expect("run the harness");
     assert!(
         o.status.success(),
         "turbotrace affected failed: {}",
@@ -60,7 +60,7 @@ fn explain(root: &Path, graph: &str, changed: &str, entry: &str) -> String {
         ])
         .current_dir(root)
         .output()
-        .expect("run turbotrace");
+        .expect("run the harness");
     format!(
         "{}{}",
         String::from_utf8_lossy(&o.stdout),
@@ -380,7 +380,7 @@ fn affected_with(
     for (k, v) in env {
         c.env(k, v);
     }
-    let o = c.output().expect("run turbotrace");
+    let o = c.output().expect("run the harness");
     assert!(
         o.status.success(),
         "turbotrace affected failed: {}",

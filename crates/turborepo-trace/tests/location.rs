@@ -179,7 +179,7 @@ impl Lab {
     }
 }
 
-fn turbotrace(place: &Place, args: &[&str]) -> String {
+fn harness(place: &Place, args: &[&str]) -> String {
     // The root is given, not found: for one place it is a path through a link.
     let o = Command::new(support::harness())
         .args(args)
@@ -187,7 +187,7 @@ fn turbotrace(place: &Place, args: &[&str]) -> String {
         .arg(&place.root)
         .current_dir(&place.root)
         .output()
-        .expect("run turbotrace");
+        .expect("run the harness");
     assert!(
         o.status.success(),
         "{}: turbotrace {args:?} failed: {}",
@@ -216,7 +216,7 @@ struct Seen {
 /// The configs that `lint` reports for `test-pattern-above-root` at `place`.
 fn located(place: &Place) -> Vec<String> {
     // (Only this rule: an error of another one is the exit code.)
-    let json = turbotrace(
+    let json = harness(
         place,
         &[
             "lint",
@@ -287,8 +287,8 @@ fn see(place: &Place, changes: &mut Option<Vec<String>>) -> Seen {
     // One thread: which file is the first to fill a memo is no part of this test
     // (the development repository's `host_paths.rs` has that one; the targets of a
     // crate are recorded on whichever file asked first).
-    turbotrace(place, &["graph", "build", "--threads", "1"]);
-    let json = turbotrace(
+    harness(place, &["graph", "build", "--threads", "1"]);
+    let json = harness(
         place,
         &["graph", "export", "--no-refresh", "--format", "json"],
     );
@@ -305,7 +305,7 @@ fn see(place: &Place, changes: &mut Option<Vec<String>>) -> Seen {
     });
     let mut outputs = Vec::new();
     let mut ask = |args: &[&str]| {
-        outputs.push((args.join(" "), turbotrace(place, args)));
+        outputs.push((args.join(" "), harness(place, args)));
     };
     ask(&["floor", "--tests", "all", "--no-refresh"]);
     let affected = ["affected", "--tests", "all", "--no-refresh", "--changed"];
@@ -328,7 +328,7 @@ fn see(place: &Place, changes: &mut Option<Vec<String>>) -> Seen {
     // The same of a graph that several threads built (the default) and that the
     // query refreshes first (the default): neither is a part of the answer.
     std::fs::remove_dir_all(place.dir.join(".turbo/trace")).unwrap();
-    turbotrace(place, &["graph", "build"]);
+    harness(place, &["graph", "build"]);
     ask(&[
         "affected",
         "--tests",
@@ -490,7 +490,7 @@ fn compare_kinds(fixture: &str, places: &[&Place], seen: &[&Seen]) -> Vec<(Strin
             if a != b {
                 diffs.push((
                     cmd.split(' ').next().unwrap_or_default().to_owned(),
-                    format!("{at}: `turbotrace {cmd}` prints\n{b}\nand at the first place\n{a}"),
+                    format!("{at}: `harness {cmd}` prints\n{b}\nand at the first place\n{a}"),
                 ));
             }
         }
@@ -1056,7 +1056,7 @@ fn a_repository_whose_paths_leave_it_is_the_same_at_every_place() {
     // above).
     let task = |change: &str| {
         let args = ["affected", "--tasks", "task:.#reenter", "--changed", change];
-        turbotrace(&lab.places[0], &args)
+        harness(&lab.places[0], &args)
     };
     assert_eq!(task("data/in.json").trim(), "task:.#reenter");
     assert_eq!(task("docs/notes.txt").trim(), "task:.#reenter");
@@ -1240,13 +1240,13 @@ fn an_absolute_path_into_the_checkout_of_one_place_is_the_same_dependency_everyw
     // A file appearing where another reading of the path looks selects too: the
     // path names `notes.txt` at the root if the repository is mounted at `<the
     // place>/docs`.
-    let added = turbotrace(
+    let added = harness(
         &lab.places[0],
         &["affected", "--tests", "all", "--changed", "notes.txt"],
     );
     assert!(added.lines().any(|l| l == "src/abs.test.js"), "{added}");
     // `--explain` says what the path is.
-    let why = turbotrace(
+    let why = harness(
         &lab.places[0],
         &[
             "affected",
@@ -1452,9 +1452,9 @@ fn at_an_ordinary_place_code_that_names_its_checkout_selects_what_it_did() {
             );
         }
     }
-    turbotrace(place, &["graph", "build"]);
+    harness(place, &["graph", "build"]);
     let tests = |change: &str| -> Vec<String> {
-        turbotrace(place, &["affected", "--tests", "all", "--changed", change])
+        harness(place, &["affected", "--tests", "all", "--changed", change])
             .lines()
             .map(str::to_owned)
             .collect()
@@ -1486,7 +1486,7 @@ fn at_an_ordinary_place_code_that_names_its_checkout_selects_what_it_did() {
         );
     }
     // `--explain` says that the place decides it.
-    let explain = turbotrace(
+    let explain = harness(
         place,
         &[
             "affected",
@@ -1508,7 +1508,7 @@ fn at_an_ordinary_place_code_that_names_its_checkout_selects_what_it_did() {
     assert_eq!(tests("no/such/file.txt"), [""; 0]);
     let task = |change: &str| {
         let args = ["affected", "--tasks", "task:.#check", "--changed", change];
-        turbotrace(place, &args)
+        harness(place, &args)
     };
     assert_eq!(task("data/abs.json").trim(), "task:.#check");
     assert_eq!(task("data/reenter.json").trim(), "task:.#check");
@@ -1699,11 +1699,11 @@ fn the_root_is_a_working_directory_of_a_test_in_a_package() {
              goroot.json\")\n}}\n"
         ),
     );
-    turbotrace(place, &["graph", "build"]);
+    harness(place, &["graph", "build"]);
     let run = |extra: &[&str], change: &str| -> Vec<String> {
         let mut args = vec!["affected", "--tests", "all", "--changed", change];
         args.extend(extra);
-        turbotrace(place, &args).lines().map(str::to_owned).collect()
+        harness(place, &args).lines().map(str::to_owned).collect()
     };
     let all_of_a = [
         "packages/a/src/helper.test.js",
@@ -1775,7 +1775,7 @@ fn the_root_is_a_working_directory_of_a_test_in_a_package() {
         String::from_utf8_lossy(&off.stdout).trim(),
         "apps/web/src/gen.test.js"
     );
-    let explain = turbotrace(
+    let explain = harness(
         place,
         &[
             "affected",
@@ -1839,7 +1839,7 @@ fn a_computed_name_at_the_mount_point_and_a_read_below_a_temporary_directory() {
             &format!("{HEAD}test('{test}', () => {{ {body} }});\n"),
         );
     }
-    turbotrace(place, &["graph", "build"]);
+    harness(place, &["graph", "build"]);
     let run = |extra: &[&str], env: Option<(&str, &str)>, change: &str| -> Vec<String> {
         let mut c = Command::new(support::harness());
         c.args(["affected", "--tests", "all", "--changed", change])
@@ -1859,7 +1859,7 @@ fn a_computed_name_at_the_mount_point_and_a_read_below_a_temporary_directory() {
             .collect()
     };
     // The records, by file.
-    let export: Value = serde_json::from_str(&turbotrace(
+    let export: Value = serde_json::from_str(&harness(
         place,
         &["graph", "export", "--no-refresh", "--format", "json"],
     ))
@@ -1963,7 +1963,7 @@ fn a_computed_name_at_the_mount_point_and_a_read_below_a_temporary_directory() {
         ),
         ["src/mid.test.js"]
     );
-    let explain = turbotrace(
+    let explain = harness(
         place,
         &[
             "affected",
@@ -1987,7 +1987,7 @@ fn a_computed_name_at_the_mount_point_and_a_read_below_a_temporary_directory() {
         turborepo_trace_graph::output::MOUNT_READ_NOTE,
         turborepo_trace_core::output::MOUNT_READ_NOTE
     );
-    let explain = turbotrace(
+    let explain = harness(
         place,
         &[
             "affected",
@@ -2033,7 +2033,7 @@ fn selection(
         changed,
     ];
     args.extend_from_slice(extra);
-    let v: Value = serde_json::from_str(&turbotrace(place, &args)).unwrap();
+    let v: Value = serde_json::from_str(&harness(place, &args)).unwrap();
     let (mut entries, mut unknown, mut runs) = (Vec::new(), Vec::new(), Vec::new());
     for p in v["packages"].as_array().into_iter().flatten() {
         for s in p["selected"].as_array().into_iter().flatten() {
@@ -2113,7 +2113,7 @@ fn a_test_like_file_that_no_pattern_matches_here_stays_unknown() {
         "#!/bin/sh\nfor f in tools/*.test.js; do node -r ./tools/setup.js \"$f\" < \
          tools/fixture.txt; done\n",
     );
-    turbotrace(place, &["graph", "build"]);
+    harness(place, &["graph", "build"]);
     assert_eq!(located(place), [""; 0]);
     for changed in ["tools/setup.js", "tools/fixture.txt", "tools/run-all.sh"] {
         let (entries, unknown, runs) = selection(place, changed, &[]);
@@ -2190,11 +2190,11 @@ fn a_test_that_only_runs_in_the_root_reads_a_climbing_path_from_the_root() {
         "apps/web/src/h.test.js",
         "require('../../../packages/util/h');\ntest('h', () => {});\n",
     );
-    turbotrace(&place, &["graph", "build"]);
+    harness(&place, &["graph", "build"]);
     let tests = |extra: &[&str], change: &str| -> Vec<String> {
         let mut args = vec!["affected", "--tests", "all", "--changed", change];
         args.extend_from_slice(extra);
-        turbotrace(&place, &args).lines().map(str::to_owned).collect()
+        harness(&place, &args).lines().map(str::to_owned).collect()
     };
     // The root project's test runs in the root only: the reading is taken.
     assert_eq!(tests(&[], "data/h.json"), ["roottests/r.test.js"]);
@@ -2206,7 +2206,7 @@ fn a_test_that_only_runs_in_the_root_reads_a_climbing_path_from_the_root() {
     );
     // The assumption is stated where it decides, and the lint rule lists the
     // reference.
-    let explain = turbotrace(
+    let explain = harness(
         &place,
         &[
             "affected",
@@ -2225,7 +2225,7 @@ fn a_test_that_only_runs_in_the_root_reads_a_climbing_path_from_the_root() {
         ),
         "{explain}"
     );
-    let json = turbotrace(
+    let json = harness(
         &place,
         &[
             "lint",
@@ -2435,7 +2435,7 @@ fn a_test_behind_a_path_alias_below_node_modules_is_not_cleared() {
             root: dir.clone(),
             dir,
         };
-        let doc: Value = serde_json::from_str(&turbotrace(
+        let doc: Value = serde_json::from_str(&harness(
             &place,
             &[
                 "affected",
@@ -2462,7 +2462,7 @@ fn a_test_behind_a_path_alias_below_node_modules_is_not_cleared() {
         if !runs {
             wrong.push(format!("{name}: {pkg}"));
         }
-        let why = turbotrace(
+        let why = harness(
             &place,
             &[
                 "affected",
@@ -2482,7 +2482,7 @@ fn a_test_behind_a_path_alias_below_node_modules_is_not_cleared() {
             wrong.push(format!("{name}: --explain says\n{why}"));
         }
         // The records say why.
-        let records = turbotrace(&place, &["floor", "--tests", "all", "--no-refresh"]);
+        let records = harness(&place, &["floor", "--tests", "all", "--no-refresh"]);
         let reason = "are not applied to it";
         if records.contains(reason) != name.starts_with("below") {
             wrong.push(format!("{name}: `floor` says\n{records}"));
@@ -2601,7 +2601,7 @@ fn alias_case(name: &str, make: &dyn Fn(&Path), changed: &str, test: &str) -> Ve
             root: dir.clone(),
             dir,
         };
-        let doc: Value = serde_json::from_str(&turbotrace(
+        let doc: Value = serde_json::from_str(&harness(
             &place,
             &[
                 "affected",
@@ -2615,7 +2615,7 @@ fn alias_case(name: &str, make: &dyn Fn(&Path), changed: &str, test: &str) -> Ve
         ))
         .unwrap();
         if !selection_runs(&doc, test) {
-            let records = turbotrace(&place, &["floor", "--tests", "all", "--no-refresh"]);
+            let records = harness(&place, &["floor", "--tests", "all", "--no-refresh"]);
             wrong.push(format!(
                 "{name}, {pname}: {test} does not run on a change of {changed}: \
                  {doc}\nuncertainty:\n{records}"
@@ -2803,12 +2803,12 @@ fn aliases_at_an_ordinary_place_have_no_open_record() {
         root: dir.clone(),
         dir,
     };
-    let records = turbotrace(&place, &["floor", "--tests", "all"]);
+    let records = harness(&place, &["floor", "--tests", "all"]);
     assert!(
         !records.contains("are not applied to it"),
         "an ordinary place has the alias record:\n{records}"
     );
-    let doc: Value = serde_json::from_str(&turbotrace(
+    let doc: Value = serde_json::from_str(&harness(
         &place,
         &[
             "affected",
@@ -2993,7 +2993,7 @@ fn a_graph_moved_below_node_modules_answers_as_a_cold_build_there() {
             root: dir.to_path_buf(),
             dir: dir.to_path_buf(),
         };
-        let doc: Value = serde_json::from_str(&turbotrace(
+        let doc: Value = serde_json::from_str(&harness(
             &place,
             &[
                 "affected",
@@ -3100,8 +3100,8 @@ fn ask_at(dir: &Path, changed: &str, restore: Option<&Path>) -> String {
         "--format",
         "selection",
     ];
-    let doc: Value = serde_json::from_str(&turbotrace(&place, &args)).unwrap();
-    let records = turbotrace(&place, &["floor", "--tests", "all", "--no-refresh"]);
+    let doc: Value = serde_json::from_str(&harness(&place, &args)).unwrap();
+    let records = harness(&place, &["floor", "--tests", "all", "--no-refresh"]);
     format!("{}\n{records}", doc["packages"])
 }
 
@@ -3787,14 +3787,14 @@ fn ask(dir: &Path, changed: &[&str], restore: Option<&Path>) -> String {
             "--format",
             "selection",
         ];
-        let doc: Value = serde_json::from_str(&turbotrace(&place, &args)).unwrap();
+        let doc: Value = serde_json::from_str(&harness(&place, &args)).unwrap();
         out.push_str(&format!("changed {c}: {}\n", doc["packages"]));
     }
-    out.push_str(&turbotrace(
+    out.push_str(&harness(
         &place,
         &["floor", "--tests", "all", "--no-refresh"],
     ));
-    let json = turbotrace(
+    let json = harness(
         &place,
         &["graph", "export", "--no-refresh", "--format", "json"],
     );

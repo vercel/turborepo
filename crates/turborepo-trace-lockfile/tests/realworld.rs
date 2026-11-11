@@ -2,7 +2,7 @@
 //! in the sandbox, not stored in the repo):
 //!
 //! - `TURBO_TRACE_DEBUG_LOCKFILE_RW`: output dir of the generator of real
-//!   package-manager lockfiles in turbotrace's repository
+//!   package-manager lockfiles in the trace's development repository
 //!   (`<pm>/{v1,v2,v3}.<lockfile>`). v1→v2 bumps `express` 4.21.1 → 4.21.2
 //!   directly in `packages/a`; v2→v3 overrides the transitive `agent-base`
 //!   7.1.1 → 7.1.3.

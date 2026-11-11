@@ -16,7 +16,7 @@ const SKIP_NODE20_ONLY: &[&str] = &[
     "module-sync-condition-cjs-node20",
 ];
 
-/// Cases that test nft API hooks with no turbotrace equivalent.
+/// Cases that test nft API hooks with no equivalent in the trace.
 const SKIP_NFT_API: &[(&str, &str)] = &[(
     "resolve-hook",
     "tests nft's custom `resolve` + `readFile` hooks (synthetic `custom-resolution-*` ids)",
@@ -98,8 +98,8 @@ pub struct Case {
     pub conditions: Option<Vec<String>>,
     /// nft `exportsOnly`.
     pub exports_only: bool,
-    /// nft options this harness cannot express with turbotrace (reported, the
-    /// case still runs).
+    /// nft options this harness cannot express with the trace's options
+    /// (reported, the case still runs).
     pub unsupported: Vec<String>,
     /// Why the case is skipped, if it is.
     pub skip: Option<String>,
@@ -238,7 +238,7 @@ fn load_case(dir: &Path, name: String) -> Result<Case, String> {
 
 /// nft's `conditions` option replaces only the user part of the condition set:
 /// nft always matches `default`, plus `require` or `import` by module system,
-/// and `node` only when the option is unset. turbotrace's `--conditions`
+/// and `node` only when the option is unset. The trace's `--conditions`
 /// replaces the whole set, so add them back.
 pub fn turbotrace_conditions(nft: &[String]) -> Vec<String> {
     let mut out: Vec<String> = nft.to_vec();

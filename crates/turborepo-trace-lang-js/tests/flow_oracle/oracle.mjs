@@ -3,7 +3,7 @@
 //
 // For every program (the hand-written ones in cases/ and the ones gen.mjs generates from a
 // seed) it
-//   1. runs `turbotrace extract --format json` on the file, and
+//   1. runs `extract --format json` on the file, and
 //   2. runs the file under Node with instrument.cjs preloaded, once per input vector (the
 //      environment bits FLOW_K0..FLOW_K3 that programs use as opaque conditions), recording
 //      the first argument of every tracked file API, `require` and `import()` call with the
@@ -22,13 +22,13 @@
 // References next to a resolved module (base `require.resolve`: `require.resolve('m')/x`,
 // `import.meta.resolve('m')/../y`, `require.resolve('m', from <start>)`) are not text a site
 // receives: the oracle finds the module with Node itself, from the place the reference names
-// (locate() below, independent of turbotrace's resolver), and the reference then stands for
+// (locate() below, independent of the trace's resolver), and the reference then stands for
 // that absolute path. The project has several copies of one package (next to the program's
 // package, next to a sibling directory, inside a dependency), so a reference resolved from
 // the wrong place names another file. A call through a function made by `createRequire` is
 // recorded with the file Node resolved; it is covered by a reference that names that file
 // (a bare reference is resolved from the program, a path with `require`'s extension search).
-// For such programs the oracle also runs `turbotrace trace` and requires every file a
+// For such programs the oracle also runs `trace` and requires every file a
 // covered load resolved to in the project to be in the trace: that checks the resolver.
 // `partial_specifier` records are not open (they are informational); `cwd_dependent` ones
 // are not either: the reference next to them has to cover the value relative to the
@@ -47,7 +47,7 @@
 // every program: both check that what the token evaluator claims alone is sound too.
 //
 // Exit status 1 when there are findings (or, with --strict-crash, crashing hand-written
-// cases). The turbotrace tooling builds the binary and runs this script.
+// cases). The trace's development tooling builds the binary and runs this script.
 import { execFileSync, spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
@@ -233,7 +233,7 @@ function coversResolved(m, abs, file) {
   }
 }
 
-// The files `turbotrace trace` reaches from `file`, as absolute paths.
+// The files `trace` reaches from `file`, as absolute paths.
 function traced(file) {
   try {
     const out = execFileSync(BIN, ['trace', '--format', 'list', '--base', proj, '--cwd', proj, file], { encoding: 'utf8', maxBuffer: 64 << 20 });

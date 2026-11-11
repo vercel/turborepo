@@ -1,4 +1,4 @@
-//! `turbotrace affected` end to end for module loads whose specifier is known
+//! `affected` end to end for module loads whose specifier is known
 //! in part or as a set of values: a pattern that is not expanded keeps an open
 //! record, and a module mapper of the test runner applies to every value of a
 //! reference. Both cases come from the multi-file runtime oracle (shapes `bare`
@@ -32,7 +32,7 @@ fn affected_env(root: &Path, changed: &str, env: &[(&str, &str)]) -> Vec<String>
         .envs(env.iter().copied())
         .current_dir(root)
         .output()
-        .expect("run turbotrace");
+        .expect("run the harness");
     assert!(
         o.status.success(),
         "turbotrace affected --changed {changed} failed: {}",

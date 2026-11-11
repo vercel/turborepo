@@ -16,7 +16,7 @@ use turborepo_trace_frameworks::{
     framework,
     nextjs::{
         NextApp,
-        fetch::{FRONT_URL_APIS_TOML, default_url_apis, parse_url_apis_toml},
+        fetch::default_url_apis,
         jseval::{Files, JsFile},
         matcher::RequestContext,
         select::{
@@ -374,13 +374,6 @@ fn fetch_sites() {
         .expect("/api/settings site");
     assert!(missing.routes.is_empty(), "{missing:?}");
     assert_eq!(missing.not_found, 1, "{missing:?}");
-
-    // Project wrappers from turbotrace.toml.
-    let apis = parse_url_apis_toml(FRONT_URL_APIS_TOML).unwrap();
-    assert!(
-        apis.iter()
-            .any(|a| a.name == "fetchAPI" && a.prefix.as_deref() == Some("/api"))
-    );
 }
 
 fn specs(root: &Path) -> Vec<SpecVisits> {

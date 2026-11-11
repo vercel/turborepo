@@ -3,7 +3,7 @@
 //
 // The claim under test: if a test entry E, run under Node, loads the project file T through
 // any chain of `require`, `import()` and static imports, then
-// `turbotrace affected --tests jest --changed T` lists E. Binding moves the dependencies of
+// `affected --tests jest --changed T` lists E. Binding moves the dependencies of
 // a module load whose path is a parameter from the helper to the files that supply the
 // value and drops the helper's open record; a value it loses on the way is a test that is
 // not selected.
@@ -18,7 +18,7 @@
 //      `setupFiles` (loaded before the entry) and `moduleNameMapper` (applied to every
 //      specifier), once per input vector (the environment bits FLOW_K0..FLOW_K3) when the
 //      program reads them, and collects the project files the process loaded;
-//   3. runs `turbotrace affected --tests jest --changed <file>` for every file of the
+//   3. runs `affected --tests jest --changed <file>` for every file of the
 //      project, with binding (TURBO_TRACE_DEBUG_BIND=1, which is also the default) and with
 //      TURBO_TRACE_DEBUG_BIND=0.
 // A pair (entry, loaded file) that the default run does not select is a FINDING. When the
@@ -48,7 +48,7 @@
 // --only filters by program name or shape tag. --keep leaves the projects with findings on
 // disk (and with -v every project). --show prints the sources of the programs with findings
 // (with --only: of every program). --shapes prints the counts per shape tag. Exit status 1
-// when there are findings of any kind. The turbotrace tooling builds the binary and runs
+// when there are findings of any kind. The trace's development tooling builds the binary and runs
 // this script; `node triage.mjs <report>` groups the findings of its report.
 import { execFile } from 'node:child_process';
 import fs from 'node:fs';

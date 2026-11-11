@@ -1,4 +1,4 @@
-//! `turbotrace affected` on file reads and module loads whose path comes from
+//! `affected` on file reads and module loads whose path comes from
 //! an environment variable (`turborepo_trace_store::compose::env`): the values
 //! the repository assigns are dependencies of the reader, a value that is only
 //! ever set outside the repository is none, and an assignment that cannot be
@@ -29,14 +29,16 @@ fn affected_with(root: &Path, changed: &[&str], extra: &[&str]) -> Vec<String> {
         args.push(c);
     }
     let o = Command::new(support::harness())
+        // The hints file of these tests (`turbo trace` reads none).
+        .env("TURBO_TRACE_DEBUG_HINTS", root.join("hints.toml"))
         .args(&args)
         .current_dir(root)
         .env_remove("TURBO_TRACE_DEBUG_ENV")
         .output()
-        .expect("run turbotrace");
+        .expect("run the harness");
     assert!(
         o.status.success(),
-        "turbotrace {args:?} failed: {}",
+        "harness {args:?} failed: {}",
         String::from_utf8_lossy(&o.stderr)
     );
     let mut v: Vec<String> = String::from_utf8(o.stdout)
@@ -390,7 +392,7 @@ fn module_load_from_the_environment() {
 }
 
 /// What something outside the repository's code sets a variable to is declared
-/// in `turbotrace.toml`.
+/// in the hints file.
 #[test]
 fn declared_value() {
     let d = repo();
@@ -401,7 +403,7 @@ fn declared_value() {
     assert_eq!(affected(r, &["ci/flags.json"]), none());
     write(
         r,
-        "turbotrace.toml",
+        "hints.toml",
         "[[env]]\nname = \"FLAGS_TEST_DATAFILE\"\nvalues = [\"ci/flags.json\"]\n",
     );
     assert_eq!(affected(r, &["ci/flags.json"]), ["src/client.test.js"]);
@@ -418,6 +420,8 @@ fn switch_off() {
     write(r, "src/client.test.js", CLIENT_TEST);
     assert_eq!(strict(r, &["unrelated.txt"]), none());
     let o = Command::new(support::harness())
+        // The hints file of these tests (`turbo trace` reads none).
+        .env("TURBO_TRACE_DEBUG_HINTS", r.join("hints.toml"))
         .args([
             "affected",
             "--tests",
@@ -429,7 +433,7 @@ fn switch_off() {
         .current_dir(r)
         .env("TURBO_TRACE_DEBUG_ENV", "0")
         .output()
-        .expect("run turbotrace");
+        .expect("run the harness");
     assert!(o.status.success());
     assert_eq!(
         String::from_utf8(o.stdout).unwrap().trim(),
@@ -456,7 +460,7 @@ fn module_load_nobody_assigns_stays_open() {
     assert_eq!(affected(r, &["unrelated.txt"]), ["src/plugins.test.js"]);
     write(
         r,
-        "turbotrace.toml",
+        "hints.toml",
         "[[env]]\nname = \"WIDGET_PLUGIN\"\nvalues = []\n",
     );
     assert_eq!(affected(r, &["unrelated.txt"]), none());
@@ -480,6 +484,8 @@ fn patch_is_cached_by_the_manifest() {
     );
     let stats = |changed: &str| -> (String, Vec<String>) {
         let o = Command::new(support::harness())
+            // The hints file of these tests (`turbo trace` reads none).
+            .env("TURBO_TRACE_DEBUG_HINTS", r.join("hints.toml"))
             .args([
                 "affected",
                 "--tests",
@@ -492,7 +498,7 @@ fn patch_is_cached_by_the_manifest() {
             .env_remove("TURBO_TRACE_DEBUG_ENV")
             .env_remove("TURBO_TRACE_DEBUG_DERIVED_CACHE")
             .output()
-            .expect("run turbotrace");
+            .expect("run the harness");
         assert!(o.status.success());
         let err = String::from_utf8(o.stderr).unwrap();
         let line = err

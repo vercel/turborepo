@@ -5,7 +5,7 @@
 //! The copies model what two real builds differ in: rebuild noise (build id,
 //! action ids, content-hash names), a changed module, stylesheet changes,
 //! routing changes. The checks against real builds of mutated apps are the
-//! lab's (turbotrace's `scripts/next-build-lab`).
+//! lab's (the development repository's `scripts/next-build-lab`).
 
 // Test code: helpers outside `#[test]` functions unwrap and expect as the tests do.
 #![allow(clippy::unwrap_used, clippy::expect_used)]
