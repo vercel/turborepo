@@ -2,7 +2,7 @@ use std::{collections::HashSet, sync::Arc};
 
 use async_graphql::{Any, Enum, InputObject, Json, Object, SimpleObject, Value};
 use turborepo_errors::Spanned;
-use turborepo_types::TaskCommandOverride;
+use turborepo_types::{TaskCommandOverride, TaskDefinition, TaskDefinitionExt};
 
 use crate::{Array, Error, QueryRun, QueryTaskId, package::Package};
 
@@ -247,6 +247,32 @@ impl RepositoryTask {
     /// tasks and command overrides.
     async fn command(&self) -> Option<String> {
         self.resolved_command()
+    }
+
+    /// The log file this task writes, relative to the repository root. Null
+    /// when the task does not cache, since it writes no log file.
+    async fn log_file(&self) -> Option<String> {
+        let run = self.package.run();
+        let definition = run.task_definition(&self.task_id())?;
+        if !definition.cache {
+            return None;
+        }
+
+        let package_context = run
+            .repo_context()
+            .pkg_dep_graph()
+            .package_task_context(self.package.get_name())?;
+        let relative_log_file = TaskDefinition::workspace_relative_log_file(
+            &self.name,
+            package_context.log_namespace(),
+        );
+        Some(
+            package_context
+                .directory()
+                .to_owned()
+                .join(&relative_log_file)
+                .to_string(),
+        )
     }
 
     /// Environment patterns after resolving task configuration inheritance.
