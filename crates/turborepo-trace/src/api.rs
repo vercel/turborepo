@@ -316,6 +316,7 @@ pub fn prefetch_requests(
 }
 
 /// Selects the tests a change affects.
+#[tracing::instrument(skip_all)]
 pub fn affected(repo: &Repo<'_>, req: &AffectedRequest) -> Result<AffectedTests, Error> {
     supported()?;
     check_tests(req)?;
@@ -483,6 +484,7 @@ fn reason(class: &str, via: Option<&str>) -> Reason {
 
 /// `turbo trace affected --explain <test>...`: the readable reason for each
 /// named test (paths relative to [`Repo::cwd`]), as text.
+#[tracing::instrument(skip_all)]
 pub fn explain(
     repo: &Repo<'_>,
     req: &AffectedRequest,
@@ -524,6 +526,7 @@ pub fn explain(
 /// `turbo trace why <test> <file>`: the chain of references from the test to
 /// the file, as text (paths relative to [`Repo::cwd`]). An error when the file
 /// is not in the test's trace.
+#[tracing::instrument(skip_all)]
 pub fn why(repo: &Repo<'_>, test: &str, file: &str, out: &mut dyn Write) -> Result<(), Error> {
     supported()?;
     host_defaults();
@@ -553,6 +556,7 @@ pub struct LintRequest {
 
 /// Runs the lints and writes the findings to `out`. Returns the exit code: 0
 /// without new findings, 1 with.
+#[tracing::instrument(skip_all)]
 pub fn lint(repo: &Repo<'_>, req: &LintRequest, out: &mut dyn Write) -> Result<i32, Error> {
     supported()?;
     host_defaults();

@@ -178,6 +178,7 @@ fn install(file: &Path, root: &Path, out: &Path) -> Result<artifact::UnpackRepor
 /// Fetches and installs the graph of the first of `candidates` that turbo's
 /// cache holds, when the repository at `root` has no graph yet. `Ok(None)`:
 /// there is a graph already, or the cache holds none of the candidates.
+#[tracing::instrument(skip_all)]
 pub async fn restore(
     root: &AbsoluteSystemPath,
     cache: &AsyncCache,
@@ -251,6 +252,7 @@ pub fn should_save() -> bool {
 /// of `sha`, unless the cache holds one already; waits until it is written.
 /// `duration_ms`: what the build took (turbo's cache records the time saved).
 /// Returns whether it put one.
+#[tracing::instrument(skip_all)]
 pub async fn save(
     root: &AbsoluteSystemPath,
     cache: &AsyncCache,
