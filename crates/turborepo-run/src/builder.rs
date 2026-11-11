@@ -2464,6 +2464,7 @@ impl RunBuilder {
                     query_server: self.query_server,
                     shutdown_started_emitted: Arc::new(std::sync::atomic::AtomicBool::new(false)),
                 },
+                hash_inputs: Arc::new(tokio::sync::OnceCell::new()),
             },
             analytics_handle,
         ))

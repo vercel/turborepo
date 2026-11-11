@@ -467,6 +467,10 @@ mod tests {
             .map_err(|error| AffectedPackagesError::Other(Box::new(error)))
         }
 
+        fn task_hashes(&self) -> turborepo_query_api::TaskHashesFuture<'_> {
+            Box::pin(std::future::ready(Ok(Arc::new(HashMap::new()))))
+        }
+
         fn check_boundaries(&self, _show_progress: bool) -> BoundariesFuture<'_> {
             unimplemented!("not needed for affected_tasks tests")
         }
