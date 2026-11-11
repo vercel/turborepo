@@ -347,12 +347,12 @@ fn lang_package_name(
                 toml_field(text, &["[project]", "[tool.poetry]"], "name").unwrap_or_else(dir_name);
             Some(format!(
                 "pypi:{}",
-                turborepo_trace_lockfile::requirements::canonicalize_name(&name)
+                turborepo_trace_lockfile::pep503_name(&name)
             ))
         }
         "setup.py" => Some(format!(
             "pypi:{}",
-            turborepo_trace_lockfile::requirements::canonicalize_name(&dir_name())
+            turborepo_trace_lockfile::pep503_name(&dir_name())
         )),
         _ => None,
     }

@@ -561,7 +561,7 @@ pub fn project_package(dir: &Path) -> Option<PackageRef> {
     }
     Some(PackageRef {
         ecosystem: "pypi",
-        name: turborepo_trace_lockfile::requirements::canonicalize_name(&name?),
+        name: turborepo_trace_lockfile::pep503_name(&name?),
         version,
         root: dir.to_path_buf(),
     })

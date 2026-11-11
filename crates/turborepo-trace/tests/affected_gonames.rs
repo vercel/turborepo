@@ -95,7 +95,7 @@ impl Repo {
 #[test]
 fn computed_reads_in_go_leave_no_floor() {
     let r = repo();
-    let floor = r.run(&["uncertainty", "--tests", "gotest"], &[]);
+    let floor = r.run(&["floor", "--tests", "gotest"], &[]);
     assert!(
         floor.starts_with("uncertainty floor: 0 of 4 entries"),
         "{floor}"
@@ -103,7 +103,7 @@ fn computed_reads_in_go_leave_no_floor() {
     // Without the names the reads are open and every test that reaches one is on
     // the floor.
     let open = r.run(
-        &["uncertainty", "--tests", "gotest"],
+        &["floor", "--tests", "gotest"],
         &[("TURBO_TRACE_DEBUG_NAMES", "0")],
     );
     assert!(

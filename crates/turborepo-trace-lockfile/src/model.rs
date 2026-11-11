@@ -24,14 +24,6 @@ pub enum LockfileFormat {
     Go,
     /// Cargo `Cargo.lock` (see [`crate::cargo`]).
     Cargo,
-    /// uv `uv.lock` (see [`crate::uv`]).
-    Uv,
-    /// Poetry `poetry.lock` (see [`crate::poetry`]).
-    Poetry,
-    /// pip `requirements*.txt` (see [`crate::requirements`]).
-    Requirements,
-    /// Pipenv `Pipfile.lock` (see [`crate::pipfile`]).
-    Pipfile,
 }
 
 impl fmt::Display for LockfileFormat {
@@ -44,10 +36,6 @@ impl fmt::Display for LockfileFormat {
             Self::Bun => "bun",
             Self::Go => "go",
             Self::Cargo => "cargo",
-            Self::Uv => "uv",
-            Self::Poetry => "poetry",
-            Self::Requirements => "requirements",
-            Self::Pipfile => "pipfile",
         })
     }
 }

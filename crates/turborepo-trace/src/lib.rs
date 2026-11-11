@@ -11,10 +11,8 @@
 //! changed files from turbo's [`SCM`](turborepo_scm::SCM) ([`Repo`]).
 //!
 //! The typed API ([`affected`], [`explain`], [`why`], [`lint`]) is what `turbo
-//! trace` calls. `commands` (hidden) has the full option set of each command,
-//! as the standalone command line has them, and the read-only inspection
-//! commands its tests observe the graph through (`graph export`, `deps`,
-//! `uncertainty`).
+//! trace` calls. `commands` (hidden) has the full option set of each command
+//! and `graph build`, for the crate's tests (`examples/harness.rs`).
 //!
 //! Everything here is synchronous and CPU-bound (rayon inside): async callers
 //! use `spawn_blocking`.
@@ -26,16 +24,11 @@ mod adapter;
 mod affected;
 mod aliasdiff;
 mod api;
-mod attrdump;
-mod audit;
 mod barrel;
 mod configdiff;
 mod confignames;
 mod cycles;
 mod dirchange;
-mod e2e;
-mod e2e_cache;
-mod e2e_static;
 mod erase;
 mod error;
 mod exportsdiff;
@@ -57,8 +50,6 @@ mod task_entries;
 pub mod transport;
 mod tsconfigdiff;
 mod tsgovern;
-mod uncertainty;
-mod viz;
 mod why;
 mod workflows;
 mod xfile;
@@ -88,10 +79,9 @@ impl From<u8> for ExitCode {
     }
 }
 
-/// The full option set of each command, as the standalone command line has it
-/// (the test harness, `examples/harness.rs`, and the standalone tooling drive
-/// the engine through these). `turbo trace` uses the typed API at the crate
-/// root.
+/// The full option set of each command and `graph build`, for the crate's
+/// tests (the test harness, `examples/harness.rs`, drives the library through
+/// these). `turbo trace` uses the typed API at the crate root.
 #[doc(hidden)]
 pub mod commands {
     use std::io::Write;
@@ -99,17 +89,10 @@ pub mod commands {
     use crate::{Error, ExitCode};
     pub use crate::{
         affected::{AffectedCmd, AffectedFormat, OnUncertain},
-        e2e::E2eArgs,
-        e2e_static::Follow,
-        graph::{
-            BuildCmd, BuildOpts, ExportCmd, ExportFormat, FilesCmd, GraphExternals, GraphLoc,
-            QueryFormat, QueryOpts,
-        },
+        graph::{BuildCmd, BuildOpts, GraphExternals, GraphLoc},
         langs::LangArgs,
         lint::{LintCmd, LintFormat},
         selection::Mode,
-        uncertainty::{Order, ReportFormat, UncertaintyCmd},
-        viz::VizArgs,
         why::{ExternalsArg, PhaseArg, TraceOpts, WhyCmd},
     };
 
@@ -133,19 +116,23 @@ pub mod commands {
         finish(crate::graph::cmd_build(cmd, out))
     }
 
-    /// `graph export`.
-    pub fn graph_export(cmd: ExportCmd, out: &mut dyn Write) -> Result<ExitCode, Error> {
-        finish(crate::graph::cmd_export(cmd, out))
-    }
-
-    /// `deps` (`reverse = false`) and `dependents` (`reverse = true`).
-    pub fn files(cmd: FilesCmd, reverse: bool, out: &mut dyn Write) -> Result<ExitCode, Error> {
-        finish(crate::graph::cmd_files(cmd, reverse, out))
-    }
-
-    /// `uncertainty`: the uncertainty floor report.
-    pub fn uncertainty(cmd: UncertaintyCmd, out: &mut dyn Write) -> Result<ExitCode, Error> {
-        finish(crate::uncertainty::cmd_uncertainty(cmd, out))
+    /// Runs `f` on the graph at `loc` (refreshed unless `no_refresh`) with its
+    /// derived facts applied, as `affected` reads it, and the repository root:
+    /// the tests observe the graph through it (the harness's `graph export`
+    /// and `deps`).
+    pub fn with_graph<R>(
+        loc: &GraphLoc,
+        no_refresh: bool,
+        f: impl FnOnce(&turborepo_trace_graph::Patched<'_, turborepo_trace_store::Graph>, &str) -> R,
+    ) -> Result<R, Error> {
+        let opened = (|| -> anyhow::Result<R> {
+            let g = crate::graph::open(loc, no_refresh, false)?;
+            let root = g.root().to_owned();
+            let d = crate::graph::derived(&g, false)?;
+            Ok(f(&d, &root))
+        })();
+        turborepo_trace_store::wait_for_cache_writes();
+        opened.map_err(Error::from)
     }
 
     /// Cache writes a graph build left in the background finish before a

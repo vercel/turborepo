@@ -17,10 +17,6 @@
 //! | bun | `bun.lock` | lockfileVersion 0–2 (text); binary `bun.lockb` is not supported |
 //! | go | `go.mod` + `go.sum` ([`gosum`]) | any `go` directive |
 //! | cargo | `Cargo.lock` ([`cargo`]) | `version` 1–4 |
-//! | uv | `uv.lock` ([`uv`]) | `version` 1 |
-//! | poetry | `poetry.lock` ([`poetry`]) | `lock-version` 1.x, 2.x |
-//! | pip | `requirements*.txt` ([`requirements`]) | pinned (`pip-compile`), hashes and `# via` |
-//! | pipenv | `Pipfile.lock` ([`pipfile`]) | `pipfile-spec` 6 |
 //!
 //! ```
 //! use turborepo_trace_lockfile::{parse, LockfileKind};
@@ -40,13 +36,8 @@ pub mod gosum;
 mod json;
 mod model;
 mod npm;
-pub mod pipfile;
 mod pnpm;
-pub mod poetry;
-mod pytoml;
-pub mod requirements;
 mod util;
-pub mod uv;
 mod yaml;
 mod yarn_berry;
 mod yarn_classic;
@@ -129,14 +120,25 @@ pub enum LockfileKind {
     GoSum,
     /// Cargo `Cargo.lock`.
     Cargo,
-    /// uv `uv.lock`.
-    Uv,
-    /// Poetry `poetry.lock`.
-    Poetry,
-    /// pip `requirements*.txt`.
-    Requirements,
-    /// Pipenv `Pipfile.lock`.
-    Pipfile,
+}
+
+/// A Python distribution name in its PEP 503 form: lowercase, runs of `-`,
+/// `_` and `.` become one `-` (how a project names itself in `pypi:<name>`).
+pub fn pep503_name(name: &str) -> String {
+    let mut out = String::with_capacity(name.len());
+    let mut sep = false;
+    for c in name.trim().chars() {
+        if matches!(c, '-' | '_' | '.') {
+            sep = true;
+        } else {
+            if sep && !out.is_empty() {
+                out.push('-');
+            }
+            sep = false;
+            out.push(c.to_ascii_lowercase());
+        }
+    }
+    out
 }
 
 /// Detects the lockfile kind from its file name and, for `yarn.lock` (and
@@ -151,12 +153,6 @@ pub fn detect(file_name: &str, contents: &str) -> Result<LockfileKind> {
         "go.mod" => return Ok(LockfileKind::GoMod),
         "go.sum" => return Ok(LockfileKind::GoSum),
         "Cargo.lock" => return Ok(LockfileKind::Cargo),
-        "uv.lock" => return Ok(LockfileKind::Uv),
-        "poetry.lock" => return Ok(LockfileKind::Poetry),
-        "Pipfile.lock" => return Ok(LockfileKind::Pipfile),
-        _ if base.starts_with("requirements") && base.ends_with(".txt") => {
-            return Ok(LockfileKind::Requirements);
-        }
         "bun.lockb" => {
             return Err(Error::Unsupported(
                 "bun.lockb is binary; run `bun install --save-text-lockfile`".into(),
@@ -196,10 +192,6 @@ pub fn parse(kind: LockfileKind, contents: &str) -> Result<Lockfile> {
         LockfileKind::GoMod => gosum::parse(contents, None),
         LockfileKind::GoSum => gosum::parse_go_sum(contents).map(|s| gosum::go_sum_lockfile(&s)),
         LockfileKind::Cargo => cargo::parse(contents),
-        LockfileKind::Uv => uv::parse(contents),
-        LockfileKind::Poetry => poetry::parse(contents),
-        LockfileKind::Requirements => requirements::parse(contents),
-        LockfileKind::Pipfile => pipfile::parse(contents),
     }
 }
 
@@ -222,4 +214,16 @@ pub fn parse_path(path: impl AsRef<Path>) -> Result<Lockfile> {
         source,
     })?;
     parse_named(&display, &contents)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn pep503_names() {
+        assert_eq!(pep503_name("Friendly-Bard"), "friendly-bard");
+        assert_eq!(pep503_name("FRIENDLY._.bard"), "friendly-bard");
+        assert_eq!(pep503_name("typing_extensions"), "typing-extensions");
+    }
 }

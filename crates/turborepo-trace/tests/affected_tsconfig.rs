@@ -481,15 +481,7 @@ fn a_project_that_inherits_what_it_includes() {
 fn floor(r: &Path, graph: &Path, env: &[(&str, &str)]) -> u64 {
     let graph = graph.to_str().unwrap();
     let args = [
-        "uncertainty",
-        "--graph",
-        graph,
-        "--tests",
-        "jest",
-        "--tests",
-        "vitest",
-        "--format",
-        "json",
+        "floor", "--graph", graph, "--tests", "jest", "--tests", "vitest", "--json",
     ];
     let o = run_env(r, &args, env);
     assert!(

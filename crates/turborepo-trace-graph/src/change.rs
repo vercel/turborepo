@@ -747,6 +747,9 @@ pub struct UncertaintyCounts {
     /// Of the covered records, unresolved specifiers covered by probes, config
     /// inputs and lockfile links.
     pub probed: usize,
+    /// Of the covered records, loads with an unknown target that the declared
+    /// packages bound.
+    pub declared: usize,
     /// Records ignored by default (`--strict` counts them; `--strict-eval`
     /// counts `eval_like`).
     pub ignored: usize,

@@ -213,18 +213,6 @@ fn jest_tests_and_inputs() {
     );
     assert_eq!(o.trim(), "unaffected test/c.test.js");
 
-    // Playwright specs are selected from source when no build fingerprint is given
-    // (tests/affected_playwright_source.rs); this repository has no Playwright
-    // config.
-    let o = run(
-        r,
-        &["affected", "--tests", "playwright", "--changed", "src/b.js"],
-    );
-    assert!(o.status.success());
-    assert_eq!(String::from_utf8_lossy(&o.stdout), "");
-    let err = String::from_utf8_lossy(&o.stderr);
-    assert!(err.contains("no Playwright specs"), "{err}");
-
     // --exit-code.
     let o = run(
         r,

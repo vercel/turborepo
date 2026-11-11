@@ -177,8 +177,8 @@ fn baseline_round_trip() {
     assert_eq!(
         out.lines().collect::<Vec<_>>(),
         [
-            "baselined: 1 finding(s) accepted by turbotrace-lint-baseline.json, by the tests they \
-             hold on the floor",
+            "baselined: 1 finding(s) accepted by lint-baseline.json, by the tests they hold on \
+             the floor",
             row.as_str(),
             "",
             "0 new, 1 baselined, 0 suppressed, 0 stale; 2 of 3 tests on the floor",
@@ -254,8 +254,8 @@ fn baseline_round_trip() {
     assert_eq!(code, 1, "{out}");
     assert!(
         out.contains(
-            "stale baseline entries: turbotrace-lint-baseline.json lists findings that are gone. \
-             Update the baseline and commit the file."
+            "stale baseline entries: lint-baseline.json lists findings that are gone. Update the \
+             baseline and commit the file."
         ),
         "{out}"
     );
@@ -331,8 +331,8 @@ fn suppression_comments() {
     let (_, out) = lint(r, &["--update-baseline"]);
     assert_eq!(
         out,
-        "turbotrace-lint-baseline.json: 0 finding(s) written as 0 entr(ies); 1 suppressed \
-         finding(s) are not in the baseline\n"
+        "lint-baseline.json: 0 finding(s) written as 0 entr(ies); 1 suppressed finding(s) are not \
+         in the baseline\n"
     );
     std::fs::remove_file(r.join(BASELINE)).unwrap();
     // The selection is not changed by the comment: the tests stay on the floor.
@@ -592,7 +592,7 @@ fn rules_are_switched_by_flag_and_by_config() {
         selected.lines().any(|l| l == "test/c.test.js"),
         "{selected}"
     );
-    let (code, floor, err) = run(r, &["uncertainty", "--tests", "jest"]);
+    let (code, floor, err) = run(r, &["floor", "--tests", "jest"]);
     assert_eq!(code, 0, "{err}");
     assert!(
         floor.starts_with("uncertainty floor: 3 of 3 entries"),
@@ -818,8 +818,8 @@ fn json_and_github_formats() {
              suppression matches no `unconstrained-load` finding on its line or the next. Fix: \
              remove the comment",
             more.as_str(),
-            "::error file=turbotrace-lint-baseline.json,title=turbo trace stale baseline \
-             entry::The baseline lists a finding that is gone: src/other.js  unconstrained-load  \
+            "::error file=lint-baseline.json,title=turbo trace stale baseline entry::The baseline \
+             lists a finding that is gone: src/other.js  unconstrained-load  \
              computed_specifier/param: mod; parameter exports.other#0. Update the baseline and \
              commit the file.",
             "2 new, 1 baselined, 0 suppressed, 1 stale; 3 of 3 tests on the floor",
@@ -1147,11 +1147,11 @@ fn lint_uncertainty_and_affected_agree_under_every_switch() {
         let (code, out, err) = run("lint", &[]);
         assert!(code == 0 || code == 1, "{switch}: {err}");
         let lint = count(&out, " tests on the floor");
-        let (code, out, err) = run("uncertainty", &[]);
+        let (code, out, err) = run("floor", &[]);
         assert_eq!(code, 0, "{switch}: {err}");
         assert!(out.starts_with("uncertainty floor: "), "{out}");
         let floor = count(out.lines().next().unwrap(), " entries");
-        let (code, out, err) = run("uncertainty", &["--format", "json"]);
+        let (code, out, err) = run("floor", &["--json"]);
         assert_eq!(code, 0, "{switch}: {err}");
         let v: serde_json::Value = serde_json::from_str(&out).expect("json");
         declared.push(v["records"]["declared"].as_u64().unwrap_or(0));

@@ -37,7 +37,7 @@ use std::{
 };
 
 use turborepo_trace_graph::{Change, ChangeKind, GraphView, PackageId, PackageVersion};
-use turborepo_trace_lockfile::{LockDiff, Lockfile, LockfileKind};
+use turborepo_trace_lockfile::{LockDiff, Lockfile};
 use turborepo_trace_store::Graph;
 
 /// The debug variable (`TURBO_TRACE_DEBUG_EXACT_BASE`) that makes `--since
@@ -283,27 +283,6 @@ impl Git {
             configs: BaseFiles::default(),
             links: Default::default(),
         })
-    }
-
-    /// The base as a reader should see it in a report: the revision as given
-    /// when that is the base itself, else the resolved commit and where it
-    /// comes from.
-    pub fn shown(&self) -> String {
-        if self.exact || (self.bases.len() == 1 && self.rev == self.given_commit) {
-            self.given.clone()
-        } else if self.bases.len() > 1 {
-            format!(
-                "{} merge bases of {} and HEAD",
-                self.bases.len(),
-                self.given
-            )
-        } else {
-            format!(
-                "{} (the merge base of {} and HEAD)",
-                &self.rev[..self.rev.len().min(12)],
-                self.given
-            )
-        }
     }
 
     /// One line for stderr: what the working tree is compared with.
@@ -746,8 +725,6 @@ fn ecosystem(name: &str) -> Option<&'static str> {
         | "bun.lock" => "npm",
         "Cargo.lock" => "crates",
         "go.sum" | "go.mod" => "go",
-        "uv.lock" | "poetry.lock" | "Pipfile.lock" => "pypi",
-        _ if name.starts_with("requirements") && name.ends_with(".txt") => "pypi",
         _ => return None,
     })
 }
@@ -787,16 +764,7 @@ fn parse(name: &str, text: Option<&str>, go_sum: Option<&str>) -> Option<Lockfil
     if name == "go.mod" {
         return turborepo_trace_lockfile::gosum::parse(text, go_sum).ok();
     }
-    turborepo_trace_lockfile::parse_named(name, text)
-        .ok()
-        .or_else(|| {
-            // `requirements*.txt` names are detected by prefix; anything else falls
-            // through.
-            turborepo_trace_lockfile::detect(name, text)
-                .ok()
-                .filter(|k| *k == LockfileKind::Requirements)
-                .and_then(|k| turborepo_trace_lockfile::parse(k, text).ok())
-        })
+    turborepo_trace_lockfile::parse_named(name, text).ok()
 }
 
 /// Computes the package effects of `changes` (see the module docs).
@@ -1005,15 +973,7 @@ pub fn effects(g: &Graph, changes: &[Change], git: Option<&Git>, mut pre: PrePar
                 ids.len(),
                 n
             ));
-            if eco == "pypi" && !ids.is_empty() {
-                // A Python lockfile stays a file change when something it locks
-                // changed. A Python import that no installed
-                // distribution provides has the declarations
-                // and lockfiles of its project as inputs (which distribution
-                // provides a module is known only once it is installed), so a
-                // bump reaches such a file through the lockfile
-                // itself, not through a package node.
-            } else if eco != "go" {
+            if eco != "go" {
                 fx.drop.insert(c.path.clone());
             } else if go_sum_same {
                 // `go.mod` always stays a file change. `go.sum` stays one whenever a module
@@ -1122,7 +1082,7 @@ mod tests {
     #[test]
     fn helpers() {
         assert_eq!(ecosystem("pnpm-lock.yaml"), Some("npm"));
-        assert_eq!(ecosystem("requirements-dev.txt"), Some("pypi"));
+        assert_eq!(ecosystem("requirements-dev.txt"), None);
         assert_eq!(ecosystem("go.sum"), Some("go"));
         assert_eq!(ecosystem("package.json"), None);
         assert!(under("", "apps/web"));

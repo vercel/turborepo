@@ -134,7 +134,7 @@ fn a_changed_shader_selects_what_loads_it_through_other_shaders() {
     // The loader plugin compiles the shaders; their imports are edges, so nothing
     // is uncertain.
     assert!(affected(r, "README.md").is_empty());
-    let report = ok(r, &["uncertainty", "--tests", "vitest"]);
+    let report = ok(r, &["floor", "--tests", "vitest"]);
     assert!(
         report.contains("uncertainty floor: 0 of 2 entries"),
         "{report}"

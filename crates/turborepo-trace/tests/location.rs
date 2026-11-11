@@ -9,7 +9,7 @@
 //! symbolic link (the two repositories written here also on a RAM disk below
 //! `/dev`, where there is one). At every place the graph must be the same
 //! (its export without the root, and its shards: the same bytes under the same
-//! keys), and so must `uncertainty` and `affected` for a null change, for
+//! keys), and so must `floor` and `affected` for a null change, for
 //! single files (every file of a small repository, [`SAMPLE`] evenly spaced
 //! ones of a larger one) and for every file at once: of a graph built with one
 //! thread and asked as it is, and again of a graph that several threads built
@@ -62,9 +62,9 @@ fn copy_dir(from: &Path, to: &Path) {
     }
 }
 
-/// What `graph pack` did in turbotrace: the graph of the checkout at `dir`
-/// saved to `to`. `turbo trace` has no pack file: its graph travels as its
-/// directory (copied with the checkout's files, or restored from turbo's
+/// What `graph pack` did in the standalone tooling: the graph of the checkout
+/// at `dir` saved to `to`. `turbo trace` has no pack file: its graph travels as
+/// its directory (copied with the checkout's files, or restored from turbo's
 /// cache), so a copy of that directory stands for the pack.
 fn pack_graph(dir: &Path, to: &Path) {
     let _ = std::fs::remove_dir_all(to);
@@ -201,9 +201,9 @@ fn turbotrace(place: &Place, args: &[&str]) -> String {
 struct Seen {
     /// The graph's export without the root.
     export: Value,
-    /// The shards, key and bytes, sorted (see turbotrace's `host_paths.rs`:
-    /// read through the store's index, since the order of the log is no
-    /// part of a graph).
+    /// The shards, key and bytes, sorted (see the development repository's
+    /// `host_paths.rs`: read through the store's index, since the order of
+    /// the log is no part of a graph).
     shards: Vec<(String, Vec<u8>)>,
     /// Command lines and what they print.
     outputs: Vec<(String, String)>,
@@ -285,8 +285,8 @@ fn files_of(export: &Value) -> Vec<String> {
 /// place, for every place).
 fn see(place: &Place, changes: &mut Option<Vec<String>>) -> Seen {
     // One thread: which file is the first to fill a memo is no part of this test
-    // (turbotrace's `host_paths.rs` has that one; the targets of a crate are
-    // recorded on whichever file asked first).
+    // (the development repository's `host_paths.rs` has that one; the targets of a
+    // crate are recorded on whichever file asked first).
     turbotrace(place, &["graph", "build", "--threads", "1"]);
     let json = turbotrace(
         place,
@@ -307,7 +307,7 @@ fn see(place: &Place, changes: &mut Option<Vec<String>>) -> Seen {
     let mut ask = |args: &[&str]| {
         outputs.push((args.join(" "), turbotrace(place, args)));
     };
-    ask(&["uncertainty", "--tests", "all", "--no-refresh"]);
+    ask(&["floor", "--tests", "all", "--no-refresh"]);
     let affected = ["affected", "--tests", "all", "--no-refresh", "--changed"];
     // A change of nothing in the graph: what is selected on every change.
     let mut null = affected.to_vec();
@@ -439,8 +439,8 @@ fn compare(fixture: &str, places: &[&Place], seen: &[&Seen]) -> Vec<String> {
 }
 
 /// [`compare`], each difference with what kind of thing differs: `table <name>`
-/// (of the export), `shard keys`, `shard bytes`, `uncertainty` or `affected`
-/// (what the command prints).
+/// (of the export), `shard keys`, `shard bytes`, `floor` or `affected` (what
+/// the command prints).
 fn compare_kinds(fixture: &str, places: &[&Place], seen: &[&Seen]) -> Vec<(String, String)> {
     let mut diffs = Vec::new();
     let first = seen[0];
@@ -521,9 +521,7 @@ fn compare_kinds(fixture: &str, places: &[&Place], seen: &[&Seen]) -> Vec<(Strin
 /// thing: correct the list then.
 ///
 /// (Not seen by this test, and open as well: `TMPDIR=<dir>/node_modules/x cargo
-/// test -p turborepo-trace` still fails in `affected_playwright*.rs` and
-/// `affected_tsconfig.rs`: the Playwright selection of Next.js apps runs
-/// outside the build's file-system context and reads absolute paths there.)
+/// test -p turborepo-trace` still fails in `affected_tsconfig.rs`.)
 const KNOWN: &[(&str, &str, &[&str])] = &[
     (
         "impact/tsconfig-paths",
@@ -548,26 +546,22 @@ const KNOWN: &[(&str, &str, &[&str])] = &[
 ];
 const KNOWN_KINDS_TSCONFIG_PATHS: &[&str] = &[
     "affected",
+    "floor",
     "shard keys",
     "table edges",
     "table probes",
     "table uncertainties",
-    "uncertainty",
 ];
 const KNOWN_KINDS_JS_RESOLVE: &[&str] = &[
+    "floor",
     "shard keys",
     "table edges",
     "table probes",
     "table uncertainties",
-    "uncertainty",
 ];
 const KNOWN_KINDS_NEXT_E2E: &[&str] = KNOWN_KINDS_JS_RESOLVE;
-const KNOWN_KINDS_NEXT_APP: &[&str] = &[
-    "shard keys",
-    "table edges",
-    "table uncertainties",
-    "uncertainty",
-];
+const KNOWN_KINDS_NEXT_APP: &[&str] =
+    &["floor", "shard keys", "table edges", "table uncertainties"];
 
 /// Copies each repository to every place of a lab and compares what the tool
 /// says there.
@@ -1709,10 +1703,7 @@ fn the_root_is_a_working_directory_of_a_test_in_a_package() {
     let run = |extra: &[&str], change: &str| -> Vec<String> {
         let mut args = vec!["affected", "--tests", "all", "--changed", change];
         args.extend(extra);
-        turbotrace(place, &args)
-            .lines()
-            .map(str::to_owned)
-            .collect()
+        turbotrace(place, &args).lines().map(str::to_owned).collect()
     };
     let all_of_a = [
         "packages/a/src/helper.test.js",
@@ -1759,21 +1750,6 @@ fn the_root_is_a_working_directory_of_a_test_in_a_package() {
             "{strict:?}"
         );
     }
-    // Playwright specs: what the global setup reads selects every spec, what a spec
-    // reads selects it.
-    let specs = |change: &str| -> Vec<String> {
-        let args = ["affected", "--tests", "playwright", "--changed", change];
-        turbotrace(place, &args)
-            .lines()
-            .map(str::to_owned)
-            .collect()
-    };
-    assert_eq!(
-        specs("data/pw.json"),
-        ["apps/e2e/specs/a.spec.ts", "apps/e2e/specs/b.spec.ts"]
-    );
-    assert_eq!(specs("data/spec.json"), ["apps/e2e/specs/a.spec.ts"]);
-    assert_eq!(specs("data/other.json"), [""; 0]);
     // The path that the package's directory explains is not read from the root,
     // unless the assumption is off.
     assert_eq!(run(&[], "dist/gen.json"), [""; 0]);
@@ -2218,10 +2194,7 @@ fn a_test_that_only_runs_in_the_root_reads_a_climbing_path_from_the_root() {
     let tests = |extra: &[&str], change: &str| -> Vec<String> {
         let mut args = vec!["affected", "--tests", "all", "--changed", change];
         args.extend_from_slice(extra);
-        turbotrace(&place, &args)
-            .lines()
-            .map(str::to_owned)
-            .collect()
+        turbotrace(&place, &args).lines().map(str::to_owned).collect()
     };
     // The root project's test runs in the root only: the reading is taken.
     assert_eq!(tests(&[], "data/h.json"), ["roottests/r.test.js"]);
@@ -2509,10 +2482,10 @@ fn a_test_behind_a_path_alias_below_node_modules_is_not_cleared() {
             wrong.push(format!("{name}: --explain says\n{why}"));
         }
         // The records say why.
-        let records = turbotrace(&place, &["uncertainty", "--tests", "all", "--no-refresh"]);
-        let reason = "what the imports of this file resolve to is not known: the paths";
+        let records = turbotrace(&place, &["floor", "--tests", "all", "--no-refresh"]);
+        let reason = "are not applied to it";
         if records.contains(reason) != name.starts_with("below") {
-            wrong.push(format!("{name}: `uncertainty` says\n{records}"));
+            wrong.push(format!("{name}: `floor` says\n{records}"));
         }
     }
     assert!(
@@ -2642,7 +2615,7 @@ fn alias_case(name: &str, make: &dyn Fn(&Path), changed: &str, test: &str) -> Ve
         ))
         .unwrap();
         if !selection_runs(&doc, test) {
-            let records = turbotrace(&place, &["uncertainty", "--tests", "all", "--no-refresh"]);
+            let records = turbotrace(&place, &["floor", "--tests", "all", "--no-refresh"]);
             wrong.push(format!(
                 "{name}, {pname}: {test} does not run on a change of {changed}: \
                  {doc}\nuncertainty:\n{records}"
@@ -2830,7 +2803,7 @@ fn aliases_at_an_ordinary_place_have_no_open_record() {
         root: dir.clone(),
         dir,
     };
-    let records = turbotrace(&place, &["uncertainty", "--tests", "all"]);
+    let records = turbotrace(&place, &["floor", "--tests", "all"]);
     assert!(
         !records.contains("are not applied to it"),
         "an ordinary place has the alias record:\n{records}"
@@ -3128,7 +3101,7 @@ fn ask_at(dir: &Path, changed: &str, restore: Option<&Path>) -> String {
         "selection",
     ];
     let doc: Value = serde_json::from_str(&turbotrace(&place, &args)).unwrap();
-    let records = turbotrace(&place, &["uncertainty", "--tests", "all", "--no-refresh"]);
+    let records = turbotrace(&place, &["floor", "--tests", "all", "--no-refresh"]);
     format!("{}\n{records}", doc["packages"])
 }
 
@@ -3819,7 +3792,7 @@ fn ask(dir: &Path, changed: &[&str], restore: Option<&Path>) -> String {
     }
     out.push_str(&turbotrace(
         &place,
-        &["uncertainty", "--tests", "all", "--no-refresh"],
+        &["floor", "--tests", "all", "--no-refresh"],
     ));
     let json = turbotrace(
         &place,

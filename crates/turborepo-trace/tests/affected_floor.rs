@@ -61,12 +61,7 @@ fn affected(
 
 fn floor(root: &Path, framework: &str, env: &[(&str, &str)]) -> serde_json::Value {
     run(root, &["graph", "build"], env);
-    serde_json::from_str(&run(
-        root,
-        &["uncertainty", "--tests", framework, "--format", "json"],
-        env,
-    ))
-    .unwrap()
+    serde_json::from_str(&run(root, &["floor", "--tests", framework, "--json"], env)).unwrap()
 }
 
 /// A pnpm workspace with one link per declared dependency.

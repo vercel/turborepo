@@ -26,7 +26,6 @@ All of them are read through `turborepo_trace_core::debug`. A rule switch is on 
 |---|---|
 | `TURBO_TRACE_DEBUG_ANCHORS` | `turborepo-trace-lang-go/lib.rs`, `turborepo-trace-lang-js/lib.rs` |
 | `TURBO_TRACE_DEBUG_ANCHORS_OFF` | `turborepo-trace-lang-js/names.rs` |
-| `TURBO_TRACE_DEBUG_ATTR_DUMP` | `turborepo-trace/attrdump.rs` |
 | `TURBO_TRACE_DEBUG_BARREL_TIMING` | `turborepo-trace-graph/barrel.rs` |
 | `TURBO_TRACE_DEBUG_BARRELS` | `turborepo-trace/barrel.rs` |
 | `TURBO_TRACE_DEBUG_BIND` | `turborepo-trace/xfile.rs` |
@@ -48,14 +47,6 @@ All of them are read through `turborepo_trace_core::debug`. A rule switch is on 
 | `TURBO_TRACE_DEBUG_DEBUG_REUSE` | `turborepo-trace-store/filereuse.rs` |
 | `TURBO_TRACE_DEBUG_DEBUG_WALK` | `turborepo-trace-store/build.rs`, `turborepo-trace-store/walk.rs` |
 | `TURBO_TRACE_DEBUG_DERIVED_CACHE` | `turborepo-trace-store/compose/derived.rs`, `turborepo-trace/xfile.rs` |
-| `TURBO_TRACE_DEBUG_E2E_ALL_RULES` | `turborepo-trace/e2e_static.rs` |
-| `TURBO_TRACE_DEBUG_E2E_CACHE` | `turborepo-trace/e2e_cache.rs` |
-| `TURBO_TRACE_DEBUG_E2E_CHECK` | `turborepo-trace/e2e_static.rs` |
-| `TURBO_TRACE_DEBUG_E2E_DEBUG` | `turborepo-trace/e2e_static.rs` |
-| `TURBO_TRACE_DEBUG_E2E_FOLLOW` | `turborepo-trace/e2e_static.rs` |
-| `TURBO_TRACE_DEBUG_E2E_FOLLOW_ALWAYS` | `turborepo-trace/e2e.rs` |
-| `TURBO_TRACE_DEBUG_E2E_REACH` | `turborepo-trace/e2e_static.rs` |
-| `TURBO_TRACE_DEBUG_E2E_WHATIF` | `turborepo-trace/e2e_static.rs` |
 | `TURBO_TRACE_DEBUG_ENV` | `turborepo-trace-lang-js/extract/mod.rs`, `turborepo-trace/graph.rs` |
 | `TURBO_TRACE_DEBUG_ENV_REPORT` | `turborepo-trace-store/compose/env.rs` |
 | `TURBO_TRACE_DEBUG_ERASE` | `turborepo-trace/barrel.rs` |
@@ -101,7 +92,7 @@ All of them are read through `turborepo_trace_core::debug`. A rule switch is on 
 | `TURBO_TRACE_DEBUG_TSCONFIG_FIELDS` | `turborepo-trace/tsconfigdiff.rs` |
 | `TURBO_TRACE_DEBUG_TSCONFIG_GOVERNED` | `turborepo-trace/tsgovern.rs` |
 | `TURBO_TRACE_DEBUG_TSCONFIG_PROBED` | `turborepo-trace-lang-js/resolve/mod.rs` |
-| `TURBO_TRACE_DEBUG_TYPE_EDGES` | `turborepo-trace/barrel.rs`, `turborepo-trace/uncertainty.rs` |
+| `TURBO_TRACE_DEBUG_TYPE_EDGES` | `turborepo-trace/barrel.rs`, `turborepo-trace/lint/mod.rs` |
 | `TURBO_TRACE_DEBUG_UNANSWERED_DIRECTORY` | `turborepo-trace-lang-js/resolve/mod.rs` |
 | `TURBO_TRACE_DEBUG_UNPACK_MMAP` | `turborepo-trace-store/artifact.rs` |
 

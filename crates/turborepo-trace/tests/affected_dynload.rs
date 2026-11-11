@@ -328,7 +328,7 @@ fn a_pattern_below_the_working_directory_is_resolved_per_test() {
         affected(r, &["--no-refresh", "--changed-from", "changes.txt"]),
         [B]
     );
-    let o = ok(r, &["uncertainty", "--tests", "jest"]);
+    let o = ok(r, &["floor", "--tests", "jest"]);
     assert!(o.contains("0 of 3 entries"), "{o}");
 }
 
@@ -342,7 +342,7 @@ fn a_pattern_over_the_working_directory_itself_stays_open() {
     );
     let r = d.path();
     assert_eq!(affected(r, &["--changed", "README.md"]), [A, B]);
-    let o = ok(r, &["uncertainty", "--tests", "jest"]);
+    let o = ok(r, &["floor", "--tests", "jest"]);
     assert!(
         o.contains("2 of 3 entries") && o.contains("packages/helper/load.js"),
         "{o}"

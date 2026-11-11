@@ -40,8 +40,6 @@ pub enum AffectedFormat {
     List,
     /// JSON with a verdict and a witness chain per entry.
     Json,
-    /// The impact report as text (crate::viz).
-    Summary,
     /// The selection document for a CI pipeline (crate::selection,
     /// `docs/ci.md`).
     Selection,
@@ -59,9 +57,7 @@ pub struct AffectedCmd {
     /// graph root.
     pub entries_from: Vec<String>,
     /// Use the test files of a framework as entries: jest, vitest, pytest,
-    /// gotest, cargo-test, or `all`. Repeatable. `playwright` selects the
-    /// end-to-end specs of Next.js apps from source (the routes the change
-    /// reaches and the routes a spec visits) and is its own command.
+    /// gotest, cargo-test, or `all`. Repeatable.
     pub tests: Vec<String>,
     /// Use build tasks as entries: a glob over task ids without the kind prefix
     /// (`apps/*#build`, `*#test`), or over full ids (`task:apps/*#build`,
@@ -115,12 +111,9 @@ pub struct AffectedCmd {
     /// Ignore type-only edges (pure test execution; typecheck reads them).
     pub runtime_only: bool,
     /// Output format: the affected entries one per line, JSON with a verdict
-    /// and a witness chain per entry, or `summary`: how much is selected
-    /// and why, from which changed files, through which hubs, into which
-    /// packages, what keeps the uncertainty floor and what was not
-    /// selected, as a text report. `selection` is the document a CI
-    /// pipeline reads: per package, the test files the selection would
-    /// run and what the caller must run under the mode.
+    /// and a witness chain per entry, or `selection`: the document a CI
+    /// pipeline reads: per package, the test files the selection would run
+    /// and what the caller must run under the mode.
     pub format: AffectedFormat,
     /// With --format selection: the switch. `shadow` (the default): the caller
     /// must run the full set, and the selection is recorded next to it.
@@ -147,8 +140,6 @@ pub struct AffectedCmd {
     /// and why, and the exit code is 0, so that a pipeline never stops
     /// because of the selection step.
     pub no_fail_open: bool,
-    /// The impact report's flags.
-    pub viz: crate::viz::VizArgs,
     /// Print a readable reason for these entries instead of the list (they are
     /// checked as entries too). Repeatable.
     pub explain: Vec<String>,
@@ -174,18 +165,6 @@ pub struct AffectedCmd {
     pub no_refresh: bool,
     /// Print timings to stderr.
     pub stats: bool,
-    /// Print the unlikely-path audit instead of the list: the selected entries
-    /// with no path of ordinary imports from a changed file, their
-    /// plausibility signals, and the sources that put them in the
-    /// selection, ranked by the entries each one triggers.
-    pub audit: bool,
-    /// With --audit: the number of sources to rank.
-    pub top: usize,
-    /// With --audit --format json: the entries to list with their verdicts:
-    /// all, selected, flagged (with a signal) or none.
-    pub audit_entries: String,
-    /// End-to-end specs (`--tests playwright`).
-    pub e2e: crate::e2e::E2eArgs,
     /// Changes with their status from a host (`turbo trace`: Turborepo's SCM
     /// layer), instead of `changed`, `changed_from` and `since`; the
     /// source's base is the base revision.
@@ -246,7 +225,6 @@ impl Default for AffectedCmd {
             not_tests: Default::default(),
             full_package: Default::default(),
             no_fail_open: Default::default(),
-            viz: Default::default(),
             explain: Default::default(),
             exit_code: Default::default(),
             loc: Default::default(),
@@ -255,10 +233,6 @@ impl Default for AffectedCmd {
             no_workflows: Default::default(),
             no_refresh: Default::default(),
             stats: Default::default(),
-            audit: Default::default(),
-            top: 15,
-            audit_entries: "all".to_owned(),
-            e2e: Default::default(),
             change_source: None,
         }
     }
@@ -457,10 +431,6 @@ pub(crate) fn collect_entries(
         }
     }
     for t in tests {
-        // End-to-end specs are entries by path (crate::e2e).
-        if t == crate::e2e::FRAMEWORK {
-            continue;
-        }
         let fw = if t == "all" { None } else { Some(t.as_str()) };
         if let Some(f) = fw
             && !turborepo_trace_store::fw::GRAPH_FRAMEWORKS
@@ -732,24 +702,13 @@ fn affected(cmd: AffectedCmd, out: &mut dyn Write, host: Option<&Host>) -> Resul
              --tasks <glob>"
         );
     }
-    // End-to-end specs (crate::e2e): entries of this evaluation, decided with the
-    // build.
-    let e2e = crate::e2e::prepare(&cmd.e2e, &cmd.tests, &root)?;
-    // Without a change input, the changes are those since the recorded commit.
-    let recorded_commit = e2e
-        .as_ref()
-        .filter(|_| cmd.changed.is_empty() && cmd.changed_from.is_empty())
-        .and_then(crate::e2e::E2e::recorded_commit);
     // A host's change source: its base is the merge base its changes are against
     // (or the ref, for a history with several), resolved here as for `--since`.
     let source_base = cmd.change_source.as_ref().and_then(|s| s.base());
     let since = if cmd.change_source.is_some() {
         source_base.as_deref()
     } else {
-        cmd.since
-            .as_deref()
-            .filter(|s| !s.is_empty())
-            .or(recorded_commit.as_deref())
+        cmd.since.as_deref().filter(|s| !s.is_empty())
     };
     // The base: the merge base of the revision and HEAD (lockdiff::Git). Everything
     // below that reads the base reads it through `git`.
@@ -770,8 +729,6 @@ fn affected(cmd: AffectedCmd, out: &mut dyn Write, host: Option<&Host>) -> Resul
     // The revision as given, and the commit it resolved to.
     let since_given = since;
     let since = git.as_ref().map(|g| g.rev.as_str());
-    // For the impact report's header.
-    let since_shown = git.as_ref().map(Git::shown);
 
     // 1. Changes.
     let mut changes: Vec<Change> = Vec::new();
@@ -924,12 +881,6 @@ fn affected(cmd: AffectedCmd, out: &mut dyn Write, host: Option<&Host>) -> Resul
             changes.retain(|c| !c.path.starts_with(&o));
         }
     }
-    // Recordings made before the base revision: what changed in between counts too.
-    let mut before: Vec<Change> = Vec::new();
-    if let Some(e) = &e2e {
-        before = e.changes_before(&root, since);
-        changes.extend(before.iter().cloned());
-    }
     changes.extend(turbo_section_changes(&root, &changes, git.as_ref()));
     changes.sort();
     changes.dedup();
@@ -950,11 +901,6 @@ fn affected(cmd: AffectedCmd, out: &mut dyn Write, host: Option<&Host>) -> Resul
         .strict_eval(cmd.strict_eval)
         .strict(cmd.strict);
     let aopts = opts.affected.clone();
-    // End-to-end specs run in their Playwright config's directory (crate::e2e).
-    if let Some(e) = &e2e {
-        let cwds = e.entry_cwds(&g);
-        g.set_entry_cwds(cwds);
-    }
     // Under --strict a working-directory path keeps its reading from the repository
     // root (`turborepo_trace_store::Graph::set_cwd_root_always`).
     g.set_cwd_root_always(cmd.strict);
@@ -1125,7 +1071,7 @@ fn affected(cmd: AffectedCmd, out: &mut dyn Write, host: Option<&Host>) -> Resul
     // there or gone all the same.
     let origin = crate::dirchange::Origin {
         bare: &bare,
-        before: &before,
+        before: &[],
     };
     cs.dirs = crate::dirchange::dirs(&root, &changes, git.as_ref(), &origin, &|d| {
         let mut any = false;
@@ -1148,9 +1094,6 @@ fn affected(cmd: AffectedCmd, out: &mut dyn Write, host: Option<&Host>) -> Resul
     specs.extend(cmd.entries_opt.iter().cloned());
     // Entries to explain are entries too.
     specs.extend(cmd.explain.iter().cloned());
-    if let Some(e) = &e2e {
-        specs.extend(e.entries());
-    }
     let t_entries0 = Instant::now();
     let mut entries = collect_entries(&g, &root, &specs, &cmd.entries_from, &cmd.tests)?;
     let task_entries = collect_tasks(&g, &cmd.tasks, cmd.all_tasks)?;
@@ -1162,22 +1105,6 @@ fn affected(cmd: AffectedCmd, out: &mut dyn Write, host: Option<&Host>) -> Resul
     let t_eval0 = Instant::now();
     // With a base revision, modified files that only reach entries through barrels
     // whose names they don't provide are skipped (crate::barrel).
-    // Measurement tooling: TURBO_TRACE_DEBUG_ATTR_DUMP=<dir> (crate::attrdump).
-    let attr_dir = crate::attrdump::dir();
-    // The impact report (crate::viz) reads the same record of the passes.
-    let viz_on = cmd.viz.html_on() || cmd.format == AffectedFormat::Summary;
-    let mut viz_layers: [(&'static str, Vec<u32>); 4] = [
-        ("steering", Vec::new()),
-        ("workflow", Vec::new()),
-        ("services", Vec::new()),
-        ("loads", Vec::new()),
-    ];
-    let mut viz_named: Vec<turborepo_trace_graph::names::NamedGroup> = Vec::new();
-    if attr_dir.is_some() || viz_on {
-        turborepo_trace_graph::attr::start();
-    }
-    // Route files and Playwright specs are compiled file by file (crate::e2e).
-    let e2e_isolated = e2e.as_ref().map(|e| e.isolated(&g));
     let outcome = crate::barrel::evaluate(
         &engine,
         &root,
@@ -1185,7 +1112,7 @@ fn affected(cmd: AffectedCmd, out: &mut dyn Write, host: Option<&Host>) -> Resul
         &entries.set,
         &eval_opts,
         git.as_ref(),
-        e2e_isolated.as_ref(),
+        None,
         // What was traced with each file: the mock calls.
         Some(crate::barrel::GraphFacts {
             mock_files: &|| {
@@ -1229,29 +1156,9 @@ fn affected(cmd: AffectedCmd, out: &mut dyn Write, host: Option<&Host>) -> Resul
         ..
     } = outcome;
     turborepo_trace_core::timing::mark("affected: evaluate (barrels, erase, modes, passes)");
-    let attr_passes = turborepo_trace_graph::attr::take();
-    if let Some(d) = &attr_dir {
-        crate::attrdump::graph(d, &engine, &aopts)?;
-        crate::attrdump::passes(d, &attr_passes)?;
-        crate::attrdump::layer(d, "engine", &g, &report)?;
-    }
-    let viz_engine_change: Vec<u32> = report
-        .entries
-        .iter()
-        .filter(|e| viz_on && (e.cause.is_some() || e.uncertain.is_none()))
-        .map(|e| e.entry.0)
-        .collect();
     // What the steering changes reach through explicit references.
     let steering_reach = crate::steering::reach(&engine, &steer, &steering_changes);
     crate::steering::merge(&g, &steering_reach, &entries.set, &mut report);
-    if attr_dir.is_some() || viz_on {
-        let mut r = crate::attrdump::empty(&report);
-        crate::steering::merge(&g, &steering_reach, &entries.set, &mut r);
-        if let Some(d) = &attr_dir {
-            crate::attrdump::layer(d, "steering", &g, &r)?;
-        }
-        viz_layers[0].1 = r.entries.iter().map(|e| e.entry.0).collect();
-    }
     if steering_only {
         // The loads of steering files are open here, as before: nothing else changed,
         // so no package is affected that could bound them (crate::loads).
@@ -1286,20 +1193,6 @@ fn affected(cmd: AffectedCmd, out: &mut dyn Write, host: Option<&Host>) -> Resul
         &entries.set,
         cmd.strict,
     );
-    if attr_dir.is_some() || viz_on {
-        let mut r = crate::attrdump::empty(&report);
-        wf.apply(&g, &entries.set, &mut r);
-        if let Some(d) = &attr_dir {
-            crate::attrdump::layer(d, "workflow", &g, &r)?;
-        }
-        viz_layers[1].1 = r.entries.iter().map(|e| e.entry.0).collect();
-        let mut r = crate::attrdump::empty(&report);
-        svc.apply(&g, &entries.set, &mut r);
-        if let Some(d) = &attr_dir {
-            crate::attrdump::layer(d, "services", &g, &r)?;
-        }
-        viz_layers[2].1 = r.entries.iter().map(|e| e.entry.0).collect();
-    }
     fx.notes.extend(svc.notes.iter().cloned());
     // Changed paths that code loaded with a computed read names (crate::names).
     let names_stats = if aopts.named && !engine.named_sites(&aopts).is_empty() {
@@ -1405,22 +1298,6 @@ fn affected(cmd: AffectedCmd, out: &mut dyn Write, host: Option<&Host>) -> Resul
                 eprintln!("  {:9} {:10}  {}", r.inclusive, r.exclusive, g.path(r.node));
             }
         }
-        if attr_dir.is_some() || viz_on {
-            let groups = crate::names::groups(
-                &g,
-                &engine,
-                &layer,
-                &named_changes,
-                &entries.set,
-                &runtime,
-                &aopts,
-            );
-            if let Some(d) = &attr_dir {
-                let rt: Vec<u32> = runtime.iter().map(|n| n.0).collect();
-                crate::attrdump::named(d, &groups, &rt)?;
-            }
-            viz_named = groups;
-        }
         // The same for what Next.js configs load (crate::nextconfigdiff), when a read
         // that names bound runs while one of them loads: in the same pass.
         let mut also = None;
@@ -1472,26 +1349,6 @@ fn affected(cmd: AffectedCmd, out: &mut dyn Write, host: Option<&Host>) -> Resul
             .unwrap_or_else(|| NodeSet::new(g.node_count()));
         // A manifest or a layout file before the change (crate::loads::lent).
         let base = |path: &str| git.as_ref().and_then(|g| g.show(path));
-        // For the attribution dump and the impact report: what the layer selects by
-        // itself.
-        if attr_dir.is_some() || viz_on {
-            let mut alone = crate::attrdump::empty(&report);
-            crate::loads::apply(
-                &engine,
-                &root,
-                &cs,
-                &load_paths,
-                &base,
-                &entries.set,
-                &runtime,
-                &eval_opts,
-                &mut alone,
-            );
-            if let Some(d) = &attr_dir {
-                crate::attrdump::layer(d, "loads", &g, &alone)?;
-            }
-            viz_layers[3].1 = alone.entries.iter().map(|e| e.entry.0).collect();
-        }
         // The same for what Next.js configs load (crate::nextconfigdiff), when a load
         // with an unknown target runs while one of them loads.
         if let Some(p) = next_loads.as_mut()
@@ -1530,40 +1387,6 @@ fn affected(cmd: AffectedCmd, out: &mut dyn Write, host: Option<&Host>) -> Resul
     }
     let t_eval = t_eval0.elapsed();
     turborepo_trace_core::timing::mark("affected: steering + workflow runs");
-    if let Some(d) = &attr_dir {
-        crate::attrdump::layer(d, "final", &g, &report)?;
-        let packages: Vec<serde_json::Value> = fx
-            .packages
-            .iter()
-            .map(|p| {
-                let info = g.package_info(p.package);
-                serde_json::json!({
-                    "name": info.name,
-                    "version": info.version.as_str(),
-                    "importers": p.importers.iter().map(|i| g.package_info(*i).root).collect::<Vec<_>>(),
-                    "source": p.source,
-                    "reason": p.reason,
-                })
-            })
-            .collect();
-        crate::attrdump::meta(
-            d,
-            &serde_json::json!({
-                "changes": changes.iter().map(|c| (format!("{:?}", c.kind), c.path.clone())).collect::<Vec<_>>(),
-                "kept": cs.files.iter().map(|c| c.path.as_str()).collect::<Vec<_>>(),
-                "dropped_lock": fx.drop,
-                "dropped_config": cfx.drop,
-                "steering": steering_changes.iter().map(|c| c.path.as_str()).collect::<Vec<_>>(),
-                "steering_only": steering_only,
-                "config_seeds": cfx.seeds.len(),
-                "packages": packages,
-                "notes": fx.notes,
-                "entries": entries.set.iter().map(|n| n.0).collect::<Vec<_>>(),
-                "missing": entries.missing,
-                "names": aopts.named,
-            }),
-        )?;
-    }
     // Entries that exist but are not in the graph cannot be cleared.
     let missing_verdict = match policy {
         Policy::Affected => Some(Verdict::Affected),
@@ -1666,132 +1489,7 @@ fn affected(cmd: AffectedCmd, out: &mut dyn Write, host: Option<&Host>) -> Resul
         _ => {}
     }
 
-    // The impact report (crate::viz): a view of the result above.
-    let viz_model = if viz_on && e2e.is_some() {
-        // The summary of an end-to-end selection is its own (crate::e2e_static).
-        if !e2e.as_ref().is_some_and(crate::e2e::E2e::is_from_source) {
-            // The validation tooling (a build fingerprint was given).
-            eprintln!(
-                "note: --format summary and --html are not available with --next-fingerprint"
-            );
-        } else if cmd.viz.html_on() {
-            eprintln!("note: --html is not available with --tests playwright; --format summary is");
-        }
-        None
-    } else if viz_on {
-        let config_notes: Vec<(&str, String)> = cfx
-            .drop
-            .iter()
-            .map(|p| {
-                let note = match cfx.reports.iter().find(|r| &r.path == p) {
-                    Some(r) if !r.fields.is_empty() => format!(
-                        "Applied field by field ({}): {}",
-                        r.fields.join(", "),
-                        r.reason
-                    ),
-                    _ => "Applied field by field: only what reads the changed fields counts"
-                        .to_owned(),
-                };
-                (p.as_str(), note)
-            })
-            .collect();
-        let mut notes = fx.notes.clone();
-        notes.extend(cfx.reports.iter().map(config_note));
-        let mut command: Vec<String> = std::env::args().skip(1).collect();
-        command.insert(0, "turbotrace".to_owned());
-        let (model, timings) = crate::viz::build(&crate::viz::Input {
-            g: &g,
-            engine: &engine,
-            opts: &aopts,
-            passes: &attr_passes,
-            report: &report,
-            engine_change: &viz_engine_change,
-            layers: viz_layers,
-            named: &viz_named,
-            entries: &entries.set,
-            // The entries the engine evaluated without type-only edges.
-            runtime: &pruned
-                .runtime_entries
-                .clone()
-                .unwrap_or_else(|| NodeSet::new(g.node_count())),
-            missing: &entries.missing,
-            missing_verdict,
-            changes: &changes,
-            kept: &cs.files,
-            dropped_lock: fx
-                .drop
-                .iter()
-                .filter(|p| !wf.drop.contains(*p))
-                .map(String::as_str)
-                .collect(),
-            dropped_workflow: wf.drop.iter().map(String::as_str).collect(),
-            dropped_config: config_notes,
-            steering: &steering_changes,
-            steering_only,
-            pruned: &pruned,
-            notes,
-            since: since_shown.as_deref(),
-            root: &root,
-            command: command.join(" "),
-        });
-        if cmd.viz.html_on() {
-            let (_, graph_dir) = cmd.loc.resolve()?;
-            crate::viz::write_html(&cmd.viz, &graph_dir, &model, &timings, cmd.stats)?;
-        }
-        Some(model)
-    } else {
-        None
-    };
-
-    if e2e.is_some() && cmd.format == AffectedFormat::Selection {
-        bail!(
-            "--format selection is not available with --tests playwright: that selection reads \
-             recordings of earlier runs, and the selection document is static analysis of the two \
-             source trees only"
-        );
-    }
-    if let Some(e2e) = &e2e {
-        let explain: Vec<String> = cmd
-            .explain
-            .iter()
-            .map(|x| rel_to_root(&root, &cwd, x).unwrap_or_else(|| x.clone()))
-            .collect();
-        return e2e.finish(
-            &crate::e2e::Evaluated {
-                graph: &g,
-                report: &report,
-                missing: &entries.missing,
-                changes: &changes,
-                explain: &explain,
-                json: cmd.format == AffectedFormat::Json,
-                exit_code: cmd.exit_code,
-                strict: cmd.strict,
-                summary: cmd.format == AffectedFormat::Summary,
-            },
-            out,
-        );
-    }
-    if cmd.audit {
-        crate::audit::run(
-            &g,
-            &engine,
-            &crate::audit::Selection {
-                changes: &cs,
-                entries: &entries.set,
-                report: &report,
-                opts: &eval_opts,
-                pruned: &pruned,
-                steering: &steering_changes,
-            },
-            &crate::audit::Output {
-                top: cmd.top,
-                entries: &cmd.audit_entries,
-                json: cmd.format == AffectedFormat::Json,
-                stats: cmd.stats,
-            },
-            out,
-        )?;
-    } else if !cmd.explain.is_empty() {
+    if !cmd.explain.is_empty() {
         let by_path: BTreeMap<&str, &turborepo_trace_graph::EntryResult> = report
             .entries
             .iter()
@@ -1946,11 +1644,6 @@ fn affected(cmd: AffectedCmd, out: &mut dyn Write, host: Option<&Host>) -> Resul
         }
     } else {
         match cmd.format {
-            AffectedFormat::Summary => {
-                if let Some(model) = &viz_model {
-                    crate::viz::write_summary(model, out)?;
-                }
-            }
             AffectedFormat::Selection => {
                 let (mode, mode_source, _) = crate::selection::resolve_mode(cmd.mode);
                 let globs = |list: &[String]| -> Result<Vec<Glob>> {

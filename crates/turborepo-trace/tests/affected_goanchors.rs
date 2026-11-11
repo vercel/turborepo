@@ -12,8 +12,9 @@
 //! | `e2e` | a harness that takes the repository root from its own location, runs a child process there, and keeps `<root>/services/svc-a` in a struct field that another method reads with a parameter |
 //! | `tools/slo` | a function that returns `<root>/services` from its own location; the test lists it and reads a file of every service |
 //!
-//! A runtime oracle in turbotrace's repository runs the same tests with
-//! `go test` under `strace` and checks that every file they open is selected.
+//! A runtime oracle in the trace's development repository runs the same tests
+//! with `go test` under `strace` and checks that every file they open is
+//! selected.
 // Test code: helpers outside `#[test]` functions unwrap and expect as the tests do.
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 

@@ -477,14 +477,14 @@ fn a_module_path_parameter_belongs_to_the_caller() {
 fn the_floor_report_shows_bound_records_on_the_supplier() {
     let d = runner_repo();
     let r = d.path();
-    let out = lines_env(r, &["uncertainty", "--tests", "jest"], &[]).join("\n");
+    let out = lines_env(r, &["floor", "--tests", "jest"], &[]).join("\n");
     // The record moved from the runner to the test that lets it escape.
     assert!(out.contains("uncertainty floor: 1 of 2 entries"), "{out}");
     assert!(out.contains("packages/runner/test/other.test.ts"), "{out}");
     assert!(!out.contains("packages/runner/generate.ts\n"), "{out}");
     let off = lines_env(
         r,
-        &["uncertainty", "--tests", "jest"],
+        &["floor", "--tests", "jest"],
         &[("TURBO_TRACE_DEBUG_BIND", "0")],
     )
     .join("\n");

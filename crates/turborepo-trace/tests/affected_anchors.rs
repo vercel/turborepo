@@ -355,21 +355,6 @@ fn a_root_that_is_no_read_names_nothing() {
         ),
         [TOOLS, UP]
     );
-    // Measurement tooling: the dump's name groups have the working-directory path.
-    let dump = r.join(".dump");
-    affected(
-        r,
-        ".tt",
-        "docs/guide.md",
-        &[("TURBO_TRACE_DEBUG_ATTR_DUMP", dump.to_str().unwrap())],
-    );
-    let named = std::fs::read_to_string(dump.join("named.tsv")).unwrap();
-    assert!(
-        named
-            .lines()
-            .any(|l| l.starts_with("cwdpath\tthe working directory (the repository root)\t")),
-        "{named}"
-    );
 }
 
 /// [`affected`] with more arguments.

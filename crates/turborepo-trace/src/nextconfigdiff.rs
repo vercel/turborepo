@@ -944,7 +944,14 @@ pub fn prepare(
     let outcome = crate::barrel::evaluate(engine, root, cs, &set, opts, git, Some(&set), None);
     let mut named = outcome.report;
     let mut evaluated: Vec<EntryResult> = std::mem::take(&mut named.entries);
-    let bounded = crate::attrdump::empty(&named);
+    let bounded = AffectedReport {
+        policy: named.policy,
+        entry_count: named.entry_count,
+        entries: Vec::new(),
+        seed_count: 0,
+        reached_count: 0,
+        unmatched: Vec::new(),
+    };
     // A loaded module that is itself modified is affected, whatever it exports (the
     // barrel rule defers a modified module to the entries that use its exports,
     // and here the module is the entry), unless its runtime JavaScript did not

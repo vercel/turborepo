@@ -259,114 +259,6 @@ fn explain_says_what_the_load_can_reach_and_what_is_assumed() {
     );
 }
 
-#[test]
-fn the_uncertainty_report_says_for_which_packages_a_load_selects() {
-    let d = repo(true);
-    let r = d.path();
-    // By default the loads are listed without a walk.
-    let out = run(r, &["uncertainty", "--tests", "jest"], &[]);
-    assert!(
-        out.contains(
-            "bounded loads: 1 load(s) with an unknown target in 1 file(s) are not on the floor"
-        ),
-        "{out}"
-    );
-    assert!(
-        out.contains("          packages/framework/normalize.js"),
-        "{out}"
-    );
-    let out = run(r, &["uncertainty", "--tests", "jest", "--loads"], &[]);
-    assert!(out.contains("uncertainty floor: 0 of 2 entries"), "{out}");
-    assert!(
-        out.contains("1 load(s) bounded by declared dependencies"),
-        "{out}"
-    );
-    assert!(
-        out.contains("bounded loads: 2 entr(ies) reach a load whose target is not known"),
-        "{out}"
-    );
-    assert!(
-        out.contains("Without this bound the floor is 2 instead of 0"),
-        "{out}"
-    );
-    assert!(
-        out.contains(
-            "such a load selects an entry only when the change affects a package that the load \
-             can reach: the package of its file or of the entry, or a package one of them declares"
-        ),
-        "{out}"
-    );
-    assert!(
-        out.contains(
-            "  the rule: a file requires, imports and reads only files of its own package and of \
-             the packages that package declares. For a load by specifier the module system \
-             enforces it"
-        ),
-        "{out}"
-    );
-    assert!(
-        out.contains(
-            "       2  packages/framework/normalize.js: the load reaches 2 of 8 package(s) \
-             (packages/framework/ and what it declares); entries of 2 package(s), each with its \
-             own package and what that declares"
-        ),
-        "{out}"
-    );
-    // The declared closure (the A/B switch): what the packages of the entries
-    // depend on.
-    let closure = run(
-        r,
-        &["uncertainty", "--tests", "jest", "--loads"],
-        &[("TURBO_TRACE_DEBUG_LOADS_STEP", "0")],
-    );
-    assert!(
-        closure.contains(
-            "       2  packages/framework/normalize.js: entries of 2 package(s), which depend on \
-             6 of 8 package(s)"
-        ),
-        "{closure}"
-    );
-    assert!(
-        closure.contains(
-            "a package that the entry's package depends on (itself, what it declares, and what \
-             those declare)"
-        ),
-        "{closure}"
-    );
-    let json: serde_json::Value = serde_json::from_str(&run(
-        r,
-        &[
-            "uncertainty",
-            "--tests",
-            "jest",
-            "--loads",
-            "--format",
-            "json",
-        ],
-        &[],
-    ))
-    .unwrap();
-    assert_eq!(json["floor"], 0, "{json}");
-    assert_eq!(json["bounded_loads"]["entries"], 2, "{json}");
-    assert_eq!(
-        json["bounded_loads"]["floor_without_the_bound"], 2,
-        "{json}"
-    );
-    assert_eq!(
-        json["bounded_loads"]["sites"][0]["depends_on_packages"], 6,
-        "{json}"
-    );
-    assert_eq!(
-        json["bounded_loads"]["sites"][0]["one_resolution_step"],
-        serde_json::json!(["packages/framework", "packages/util"]),
-        "{json}"
-    );
-    // With the switch off it is the floor again.
-    let out = run(r, &["uncertainty", "--tests", "jest"], OFF);
-    assert!(out.contains("uncertainty floor: 2 of 2 entries"), "{out}");
-    assert!(!out.contains("bounded loads"), "{out}");
-}
-
 /// npm links every workspace package into the root `node_modules`: a package
 /// resolves what it does not declare, so the declared packages bound nothing
 /// and the load is open.
@@ -375,7 +267,7 @@ fn a_hoisted_workspace_keeps_its_loads_open() {
     let d = repo(false);
     let r = d.path();
     assert_eq!(affected(r, "packages/leaf/index.js", &[], &[]), [A, B]);
-    let out = run(r, &["uncertainty", "--tests", "jest"], &[]);
+    let out = run(r, &["floor", "--tests", "jest"], &[]);
     assert!(out.contains("uncertainty floor: 2 of 2 entries"), "{out}");
 }
 
@@ -455,31 +347,36 @@ fn certain_edges_outside_the_declared_packages_are_reported() {
         "services/b/src/reach.js",
         "module.exports = require('../../../packages/leaf/index.js');\n",
     );
-    let out = run(
-        r,
-        &[
-            "uncertainty",
-            "--tests",
-            "jest",
-            "--undeclared-dependencies",
-        ],
-        &[],
+    // `lint` exits with 1 when it has findings.
+    let o = Command::new(support::harness())
+        .args(["lint", "--tests", "jest", "--no-baseline"])
+        .args(["--rule", "undeclared-dependency=warn", "--format", "json"])
+        .current_dir(r)
+        .env_remove("TURBO_TRACE_DEBUG_LOADS_PACKAGE")
+        .output()
+        .expect("run turbotrace");
+    let lint: serde_json::Value = serde_json::from_slice(&o.stdout)
+        .unwrap_or_else(|e| panic!("{e}: {}", String::from_utf8_lossy(&o.stderr)));
+    let found: Vec<(&str, u64, &str)> = lint["findings"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|f| f["rule"] == "undeclared-dependency")
+        .map(|f| {
+            (
+                f["file"].as_str().unwrap(),
+                f["line"].as_u64().unwrap(),
+                f["message"].as_str().unwrap(),
+            )
+        })
+        .collect();
+    assert_eq!(found.len(), 1, "{lint}");
+    assert_eq!(
+        (found[0].0, found[0].1),
+        ("services/b/src/reach.js", 1),
+        "{lint}"
     );
-    assert!(
-        out.contains("no dependency outside the declared packages: 1 finding(s)"),
-        "{out}"
-    );
-    assert!(
-        out.contains(
-            "services/b/src/reach.js:1: loads packages/leaf/index.js of packages/leaf/, which \
-             services/b/ does not declare (relative path: ../../../packages/leaf/index.js)"
-        ),
-        "{out}"
-    );
-    assert!(
-        out.contains("       1  services/b/ -> packages/leaf/"),
-        "{out}"
-    );
+    assert!(found[0].2.contains("packages/leaf/"), "{lint}");
 }
 
 /// A package in whose directory other packages live (a Go module at
@@ -621,23 +518,11 @@ fn a_load_that_binding_closed_is_not_a_bounded_load() {
     assert!(affected(r, "packages/far/index.js", &[], &[]).is_empty());
     assert!(affected(r, "packages/far/index.js", &[], NO_BIND).is_empty());
     // One bounded record, on the supplier; none on the floor.
-    let report = run(r, &["uncertainty", "--tests", "jest", "--loads"], &[]);
-    assert!(
-        report.contains("uncertainty floor: 0 of 2 entries"),
-        "{report}"
-    );
-    assert!(
-        report.contains(
-            "bounded loads: 1 entr(ies) reach a load whose target is not known (1 record(s), 1 \
-             file(s) reached)"
-        ),
-        "{report}"
-    );
-    assert!(report.contains("services/c/test/c.test.js"), "{report}");
-    assert!(
-        report.contains("a value passed to packages/h/index.js:2"),
-        "{report}"
-    );
+    let floor: serde_json::Value =
+        serde_json::from_str(&run(r, &["floor", "--tests", "jest", "--json"], &[])).unwrap();
+    assert_eq!(floor["floor"], 0, "{floor}");
+    assert_eq!(floor["entries"], 2, "{floor}");
+    assert_eq!(floor["records"]["declared"], 1, "{floor}");
     // The test of `d` is explained by the edge, not by a load.
     let why = run(
         r,
@@ -918,38 +803,4 @@ fn a_removed_package_selects_the_loads_that_could_reach_it() {
     let r = d.path();
     remove(r, "packages/leaf");
     assert_eq!(affected(r, "packages/leaf/package.json", &[], &[]), [A, B]);
-}
-
-/// The impact report (`--format summary`, `--html`) names the load as the cause
-/// of the tests that only it selects, as a cause of its own next to the
-/// uncertainty floor.
-#[test]
-fn the_impact_report_names_the_load_as_the_cause() {
-    let d = repo(true);
-    let r = d.path();
-    let args = [
-        "affected",
-        "--tests",
-        "jest",
-        "--changed",
-        "packages/util/other.js",
-    ];
-    let mut summary = args.to_vec();
-    summary.extend(["--format", "summary"]);
-    let out = run(r, &summary, &[]);
-    println!("{out}");
-    assert!(out.contains("2 of 2"), "{out}");
-    assert!(out.contains("Load with an unknown target"), "{out}");
-    assert!(!out.contains("Uncertainty floor"), "{out}");
-    let page = d.path().join("out/report.html");
-    let flag = format!("--html={}", page.display());
-    let mut html = args.to_vec();
-    html.push(&flag);
-    run(r, &html, &[]);
-    let html = std::fs::read_to_string(page).unwrap();
-    assert!(html.contains("Load with an unknown target"), "report page");
-    // Without the bound the same tests are the floor.
-    let out = run(r, &summary, OFF);
-    assert!(out.contains("Uncertainty floor"), "{out}");
-    assert!(!out.contains("Load with an unknown target"), "{out}");
 }

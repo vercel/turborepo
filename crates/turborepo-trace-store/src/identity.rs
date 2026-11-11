@@ -402,12 +402,6 @@ fn load_lockfiles_inner(
         let (eco, kind) = match name {
             "Cargo.lock" => ("crates", LockfileKind::Cargo),
             "go.sum" => ("go", LockfileKind::GoSum),
-            "uv.lock" => ("pypi", LockfileKind::Uv),
-            "poetry.lock" => ("pypi", LockfileKind::Poetry),
-            "Pipfile.lock" => ("pypi", LockfileKind::Pipfile),
-            _ if name.starts_with("requirements") && name.ends_with(".txt") => {
-                ("pypi", LockfileKind::Requirements)
-            }
             _ => continue,
         };
         let Ok(bytes) = std::fs::read(root.join(f)) else {

@@ -798,30 +798,6 @@ fn merge(
     added
 }
 
-/// Measurement tooling: per name that names a changed path, the entries
-/// selected through it alone (`crate::attrdump`).
-pub(crate) fn groups<V: GraphView>(
-    g: &Graph,
-    engine: &Engine<'_, V>,
-    layer: &Layer,
-    changes: &[Change],
-    entries: &NodeSet,
-    runtime_entries: &NodeSet,
-    opts: &AffectedOptions,
-) -> Vec<turborepo_trace_graph::names::NamedGroup> {
-    let cwds = entry_cwds(g);
-    let tasks = task_dirs(g);
-    engine.named_groups(
-        &layer.index,
-        changes,
-        entries,
-        Some(runtime_entries),
-        opts,
-        &cwds,
-        &tasks,
-    )
-}
-
 #[cfg(test)]
 mod tests {
     use turborepo_trace_graph::ChangeKind;

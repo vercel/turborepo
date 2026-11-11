@@ -545,7 +545,7 @@ pub fn cmd_lint(cmd: LintCmd, out: &mut dyn Write) -> Result<ExitCode> {
     let engine = Engine::with_options(&dg, opts);
     let t = Instant::now();
     let entries = collect_entries(&g, &root, &[], &[], &set.tests)?;
-    let runtime = crate::uncertainty::runtime_entries(&g, &root, &entries.set);
+    let runtime = runtime_entries(&g, &root, &entries.set);
     let t_entries = t.elapsed();
 
     let ctx = Ctx {
@@ -702,4 +702,30 @@ pub fn cmd_lint(cmd: LintCmd, out: &mut dyn Write) -> Result<ExitCode> {
     } else {
         ExitCode::SUCCESS
     })
+}
+
+/// The entries that `affected` evaluates without type-only edges: jest and
+/// vitest tests whose runner transpiles file by file
+/// (`turborepo_trace_graph::barrel::modes`). None with
+/// `TURBO_TRACE_DEBUG_TYPE_EDGES=0`, as for `affected`.
+fn runtime_entries(
+    g: &turborepo_trace_store::Graph,
+    root: &std::path::Path,
+    entries: &turborepo_trace_graph::NodeSet,
+) -> turborepo_trace_graph::NodeSet {
+    use turborepo_trace_graph::{
+        GraphView,
+        barrel::{Runner, entry_runner},
+    };
+    let mut set = turborepo_trace_graph::NodeSet::new(g.node_count());
+    if turborepo_trace_core::debug::var_os("TYPE_EDGES").is_some_and(|v| v == "0") {
+        return set;
+    }
+    let disk = crate::barrel::DiskSource::new(root);
+    for n in entries.iter() {
+        if entry_runner(g, &disk, n) == Runner::Isolated {
+            set.insert(n);
+        }
+    }
+    set
 }

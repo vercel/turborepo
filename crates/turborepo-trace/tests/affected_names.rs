@@ -167,15 +167,14 @@ fn an_unrelated_change_selects_no_reader() {
     assert!(affected(r, &["--changed", "services/e/src/x.js"]).is_empty());
     // The floor report: no test reaches open uncertainty; the reads are bounded by
     // names.
-    let report = ok_env(r, &["uncertainty", "--tests", "jest"], &[]);
+    let report = ok_env(r, &["floor", "--tests", "jest"], &[]);
     assert!(
         report.contains("uncertainty floor: 0 of 5 entries"),
         "{report}"
     );
-    assert!(report.contains("bounded by names"), "{report}");
     let report = ok_env(
         r,
-        &["uncertainty", "--tests", "jest"],
+        &["floor", "--tests", "jest"],
         &[("TURBO_TRACE_DEBUG_NAMES", "0")],
     );
     assert!(

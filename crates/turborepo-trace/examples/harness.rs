@@ -1,9 +1,8 @@
-//! The test harness: the library behind turbotrace's own command line
-//! (`affected`, `why`, `lint`, and what the tests observe the graph through:
-//! `graph build|export`, `deps`, `dependents`, `uncertainty`), so the command
-//! tests run it as a process with their arguments, working directory and
-//! environment. The option types are turbotrace's command-line types (generated
-//! from them), converted into the library's. Not shipped: a dev-only example.
+//! The test harness: a command line over the library (`affected`, `why`,
+//! `lint` with their full option sets, and `graph build`), so the command tests
+//! run it as a process with their arguments, working directory and
+//! environment. The option types are converted into the library's. Not
+//! shipped: a dev-only example.
 #![allow(missing_docs, clippy::unwrap_used, clippy::expect_used)]
 
 use std::path::PathBuf;
@@ -238,13 +237,9 @@ pub mod affected {
         #[usage(long)]
         pub runtime_only: bool,
         /// Output format: the affected entries one per line, JSON with a
-        /// verdict and a witness chain per entry, or `summary`: how
-        /// much is selected and why, from which changed files, through
-        /// which hubs, into which packages, what keeps the uncertainty floor
-        /// and what was not selected, as a text report.
-        /// `selection` is the document a CI pipeline reads (`docs/ci.md`): per
-        /// package, the test files turbotrace would run and what the
-        /// caller must run under --mode.
+        /// verdict and a witness chain per entry, or `selection`: the
+        /// document a CI pipeline reads: per package, the test files the
+        /// selection would run and what the caller must run under --mode.
         #[usage(long, value_enum, default = "list")]
         pub format: AffectedFormat,
         /// With --format selection: the switch. `shadow` (the default): the
@@ -278,8 +273,6 @@ pub mod affected {
         /// never stops because of the selection step.
         #[usage(long)]
         pub no_fail_open: bool,
-        #[usage(flatten)]
-        pub viz: crate::viz::VizArgs,
         /// Print a readable reason for these entries instead of the list (they
         /// are checked as entries too). Repeatable.
         #[usage(long, value_name = "ENTRY")]
@@ -313,28 +306,6 @@ pub mod affected {
         /// Print timings to stderr.
         #[usage(long)]
         pub stats: bool,
-        /// Print the unlikely-path audit instead of the list: the selected
-        /// entries with no path of ordinary imports from a changed
-        /// file, their plausibility signals, and the sources
-        /// that put them in the selection, ranked by the entries each one
-        /// triggers.
-        #[usage(long, conflicts = "explain")]
-        pub audit: bool,
-        /// With --audit: the number of sources to rank.
-        #[usage(
-            long,
-            value_name = "N",
-            default_value_t = 15,
-            default = "15",
-            requires = "audit"
-        )]
-        pub top: usize,
-        /// With --audit --format json: the entries to list with their verdicts:
-        /// all, selected, flagged (with a signal) or none.
-        #[usage(long, value_name = "WHICH", default = "all", requires = "audit")]
-        pub audit_entries: String,
-        #[usage(flatten)]
-        pub e2e: crate::e2e::E2eArgs,
     }
 
     impl From<AffectedCmd> for turborepo_trace::commands::AffectedCmd {
@@ -361,7 +332,6 @@ pub mod affected {
                 not_tests: c.not_tests,
                 full_package: c.full_package,
                 no_fail_open: c.no_fail_open,
-                viz: c.viz.into(),
                 explain: c.explain,
                 exit_code: c.exit_code,
                 loc: c.loc.into(),
@@ -370,10 +340,6 @@ pub mod affected {
                 no_workflows: c.no_workflows,
                 no_refresh: c.no_refresh,
                 stats: c.stats,
-                audit: c.audit,
-                top: c.top,
-                audit_entries: c.audit_entries,
-                e2e: c.e2e.into(),
                 change_source: None,
             }
         }
@@ -384,8 +350,6 @@ pub mod affected {
     pub enum AffectedFormat {
         List,
         Json,
-        /// The impact report as text (crate::viz).
-        Summary,
         /// The selection document for a CI pipeline (crate::selection,
         /// `docs/ci.md`).
         Selection,
@@ -396,7 +360,6 @@ pub mod affected {
             match c {
                 AffectedFormat::List => Self::List,
                 AffectedFormat::Json => Self::Json,
-                AffectedFormat::Summary => Self::Summary,
                 AffectedFormat::Selection => Self::Selection,
             }
         }
@@ -415,91 +378,6 @@ pub mod affected {
                 OnUncertain::Affected => Self::Affected,
                 OnUncertain::Unknown => Self::Unknown,
                 OnUncertain::Ignore => Self::Ignore,
-            }
-        }
-    }
-}
-pub mod e2e {
-    #![allow(unused_imports)]
-    use std::path::PathBuf;
-
-    use super::*;
-    /// Options of `affected --tests playwright`.
-    #[derive(Debug, Default, Args)]
-    pub struct E2eArgs {
-        /// Validation tooling, not a way to select (hidden): the oracle scripts
-        /// compare the selection from source with two builds and
-        /// recorded visits. The fingerprint of the build under test
-        /// (`turbotrace next fingerprint`). Repeatable: one per app.
-        #[usage(long, value_name = "FILE", hide = true)]
-        pub next_fingerprint: Vec<PathBuf>,
-        /// Validation tooling, not a way to select (hidden): a directory of
-        /// recorded visits (written by the Playwright recorder).
-        /// Repeatable.
-        #[usage(long, value_name = "DIR", hide = true)]
-        pub visits: Vec<PathBuf>,
-        /// Validation tooling, not a way to select (hidden): the fingerprint of
-        /// a build the recordings ran against. Repeatable. Fingerprint
-        /// files inside a --visits directory are found without it.
-        #[usage(long, value_name = "FILE", hide = true)]
-        pub base_fingerprint: Vec<PathBuf>,
-        /// With --tests playwright: only the specs of this Playwright config.
-        /// Repeatable. Default: every `playwright.config.*` under the
-        /// root.
-        #[usage(long, value_name = "FILE")]
-        pub playwright_config: Vec<PathBuf>,
-        /// With --tests playwright: how far a spec's visit is followed from the
-        /// URLs it names. `links` (the default) follows redirects and links of
-        /// the visited pages, and a target that is not known means the
-        /// spec may visit any route: no assumption, and on a large app
-        /// every spec of an app the change reaches. `calls`
-        /// assumes a spec stays on the pages its URLs name and follows only
-        /// what those pages request; `redirects` also follows redirects
-        /// to one known URL; `named` follows nothing. These three can
-        /// skip a spec that reaches a changed page by a click or a
-        /// redirect.
-        #[usage(long, value_enum, value_name = "RULE")]
-        pub follow: Option<e2e_static::Follow>,
-    }
-
-    impl From<E2eArgs> for turborepo_trace::commands::E2eArgs {
-        fn from(c: E2eArgs) -> Self {
-            Self {
-                next_fingerprint: c.next_fingerprint,
-                visits: c.visits,
-                base_fingerprint: c.base_fingerprint,
-                playwright_config: c.playwright_config,
-                follow: c.follow.map(Into::into),
-            }
-        }
-    }
-}
-pub mod e2e_static {
-    #![allow(unused_imports)]
-    use std::path::PathBuf;
-
-    use super::*;
-    /// How far a visit is followed from the routes a spec names.
-    #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord, ValueEnum)]
-    pub enum Follow {
-        /// Only the routes the spec's URLs match.
-        Named,
-        /// Plus the routes those routes request at run time.
-        Calls,
-        /// Plus where their code redirects to, when the target is one known
-        /// URL.
-        Redirects,
-        /// Plus every redirect target and the pages they can navigate to.
-        Links,
-    }
-
-    impl From<Follow> for turborepo_trace::commands::Follow {
-        fn from(c: Follow) -> Self {
-            match c {
-                Follow::Named => Self::Named,
-                Follow::Calls => Self::Calls,
-                Follow::Redirects => Self::Redirects,
-                Follow::Links => Self::Links,
             }
         }
     }
@@ -580,73 +458,6 @@ pub mod graph {
         }
     }
 
-    /// `graph export`.
-    #[derive(Debug, Args)]
-    pub struct ExportCmd {
-        #[usage(flatten)]
-        pub loc: GraphLoc,
-        /// Output format.
-        #[usage(long, value_enum, default = "json")]
-        pub format: ExportFormat,
-        /// Output file (stdout otherwise).
-        #[usage(long, short = 'o', value_name = "FILE")]
-        pub output: Option<PathBuf>,
-        /// Use the stored graph as is, without refreshing it.
-        #[usage(long)]
-        pub no_refresh: bool,
-    }
-
-    impl From<ExportCmd> for turborepo_trace::commands::ExportCmd {
-        fn from(c: ExportCmd) -> Self {
-            Self {
-                loc: c.loc.into(),
-                format: c.format.into(),
-                output: c.output,
-                no_refresh: c.no_refresh,
-            }
-        }
-    }
-
-    #[derive(Copy, Clone, Debug, PartialEq, Eq, ValueEnum)]
-    pub enum ExportFormat {
-        Json,
-        Ndjson,
-        Dot,
-    }
-
-    impl From<ExportFormat> for turborepo_trace::commands::ExportFormat {
-        fn from(c: ExportFormat) -> Self {
-            match c {
-                ExportFormat::Json => Self::Json,
-                ExportFormat::Ndjson => Self::Ndjson,
-                ExportFormat::Dot => Self::Dot,
-            }
-        }
-    }
-
-    /// `deps` / `dependents`.
-    #[derive(Debug, Args)]
-    pub struct FilesCmd {
-        /// Files (relative to the current directory).
-        #[usage(required = true)]
-        pub files: Vec<PathBuf>,
-        /// Maximum depth.
-        #[usage(long, value_name = "N")]
-        pub depth: Option<u32>,
-        #[usage(flatten)]
-        pub opts: QueryOpts,
-    }
-
-    impl From<FilesCmd> for turborepo_trace::commands::FilesCmd {
-        fn from(c: FilesCmd) -> Self {
-            Self {
-                files: c.files,
-                depth: c.depth,
-                opts: c.opts.into(),
-            }
-        }
-    }
-
     #[derive(Copy, Clone, Debug, PartialEq, Eq, ValueEnum)]
     pub enum GraphExternals {
         Stop,
@@ -680,56 +491,6 @@ pub mod graph {
                 root: c.root,
                 graph: c.graph,
                 members: Default::default(),
-            }
-        }
-    }
-
-    #[derive(Copy, Clone, Debug, PartialEq, Eq, ValueEnum)]
-    pub enum QueryFormat {
-        List,
-        Json,
-        Dot,
-        Tree,
-    }
-
-    impl From<QueryFormat> for turborepo_trace::commands::QueryFormat {
-        fn from(c: QueryFormat) -> Self {
-            match c {
-                QueryFormat::List => Self::List,
-                QueryFormat::Json => Self::Json,
-                QueryFormat::Dot => Self::Dot,
-                QueryFormat::Tree => Self::Tree,
-            }
-        }
-    }
-
-    /// Options shared by `query`, `deps` and `dependents`.
-    #[derive(Debug, Args)]
-    pub struct QueryOpts {
-        #[usage(flatten)]
-        pub loc: GraphLoc,
-        /// Output format.
-        #[usage(long, value_enum, default = "list")]
-        pub format: QueryFormat,
-        /// JSON output: include the edges between result nodes.
-        #[usage(long)]
-        pub edges: bool,
-        /// Use the stored graph as is, without refreshing it.
-        #[usage(long)]
-        pub no_refresh: bool,
-        /// Print timings to stderr.
-        #[usage(long)]
-        pub stats: bool,
-    }
-
-    impl From<QueryOpts> for turborepo_trace::commands::QueryOpts {
-        fn from(c: QueryOpts) -> Self {
-            Self {
-                loc: c.loc.into(),
-                format: c.format.into(),
-                edges: c.edges,
-                no_refresh: c.no_refresh,
-                stats: c.stats,
             }
         }
     }
@@ -891,206 +652,6 @@ pub mod selection {
         }
     }
 }
-pub mod uncertainty {
-    #![allow(unused_imports)]
-    use std::path::PathBuf;
-
-    use super::*;
-    #[derive(Copy, Clone, Debug, PartialEq, Eq, ValueEnum)]
-    pub enum Order {
-        Freed,
-        Weighted,
-    }
-
-    impl From<Order> for turborepo_trace::commands::Order {
-        fn from(c: Order) -> Self {
-            match c {
-                Order::Freed => Self::Freed,
-                Order::Weighted => Self::Weighted,
-            }
-        }
-    }
-
-    #[derive(Copy, Clone, Debug, PartialEq, Eq, ValueEnum)]
-    pub enum ReportFormat {
-        Text,
-        Json,
-    }
-
-    impl From<ReportFormat> for turborepo_trace::commands::ReportFormat {
-        fn from(c: ReportFormat) -> Self {
-            match c {
-                ReportFormat::Text => Self::Text,
-                ReportFormat::Json => Self::Json,
-            }
-        }
-    }
-
-    /// `uncertainty`.
-    #[derive(Debug, Args)]
-    pub struct UncertaintyCmd {
-        /// Entry files or globs (relative to the current directory; globs match
-        /// graph files).
-        #[usage(value_name = "ENTRIES")]
-        pub entries: Vec<String>,
-        /// More entry files or globs. Repeatable.
-        #[usage(long = "entries", value_name = "GLOB|FILE")]
-        pub entries_opt: Vec<String>,
-        /// Read entries from a file (`-`: stdin), one per line, relative to the
-        /// graph root.
-        #[usage(long, value_name = "FILE|-")]
-        pub entries_from: Vec<String>,
-        /// Use the test files of a framework as entries: jest, vitest, pytest,
-        /// gotest, cargo-test, or `all`. Repeatable.
-        #[usage(long, value_name = "FRAMEWORK")]
-        pub tests: Vec<String>,
-        /// Use build tasks as entries (see `affected --tasks`). Repeatable.
-        #[usage(long, value_name = "GLOB")]
-        pub tasks: Vec<String>,
-        /// With --tasks: also the tasks run by hand by their nature (see
-        /// `affected --all-tasks`).
-        #[usage(long, requires = "tasks")]
-        pub all_tasks: bool,
-        /// Count `eval`, `new Function` and other code evaluation (`eval_like`)
-        /// as open, as `affected --strict-eval` does.
-        #[usage(long)]
-        pub strict_eval: bool,
-        /// Count every uncertainty as open, as `affected --strict` does.
-        #[usage(long)]
-        pub strict: bool,
-        /// Ignore type-only edges.
-        #[usage(long)]
-        pub runtime_only: bool,
-        /// Number of sites in the greedy order.
-        #[usage(long, value_name = "N", default_value_t = 25, default = "25")]
-        pub top: usize,
-        /// How the order picks the next site. `freed`: the site that frees the
-        /// most entries, those for which it is the last unresolved
-        /// site. `weighted`: every entry on the floor splits one point
-        /// between the unresolved sites it reaches, and the site with the
-        /// most points goes first, so sites that only free entries together
-        /// rank high too.
-        #[usage(long, value_enum, default = "freed")]
-        pub order: Order,
-        /// What if: report the floor as if the open records of this file, or of
-        /// one line of it, were resolved. `FILE[:LINE]` as printed in
-        /// the report (relative to the repository root). Repeatable.
-        #[usage(long, value_name = "FILE[:LINE]")]
-        pub assume_resolved: Vec<String>,
-        /// Read --assume-resolved values from a file (`-`: stdin), one per
-        /// line. Empty lines and lines starting with `#` are skipped.
-        #[usage(long, value_name = "FILE|-")]
-        pub assume_resolved_from: Vec<String>,
-        /// What if: report the floor as if every open record of this class were
-        /// resolved: `KIND[/EFFECT[/ORIGIN]]`, where `*` matches
-        /// anything (`computed_specifier/read`, `*/*/param`).
-        /// Repeatable.
-        #[usage(long, value_name = "CLASS")]
-        pub assume_class: Vec<String>,
-        /// What if: report the floor as if this node were not reached: a file
-        /// (relative to the repository root), a task id
-        /// (`task:.#build`) or a glob over them; `PREFIX**` matches
-        /// every node that starts with the prefix (`task:**`: every task). No
-        /// entry reaches it or anything through it. Predicts the effect
-        /// of removing a hub. Repeatable.
-        #[usage(long, value_name = "NODE")]
-        pub assume_cut: Vec<String>,
-        /// Debug: instead of the report, print the entries that reach one of
-        /// the files listed in FILE (one path per line, relative to the
-        /// repository root), along the edges the floor follows for each
-        /// entry.
-        #[usage(long, value_name = "FILE", hide = true)]
-        pub reach_from: Option<String>,
-        /// Count the entries that reach each load with an unknown target that
-        /// the declared packages bound, and the floor without that
-        /// bound (a walk per load).
-        #[usage(long)]
-        pub loads: bool,
-        /// Instead of the report: the certain edges that break the rule "a file
-        /// requires, imports or reads only files of the packages its
-        /// package depends on" (the findings of the lint rule "no
-        /// dependency outside the declared packages"; --top limits the
-        /// lists).
-        #[usage(long, hide = true)]
-        pub undeclared_dependencies: bool,
-        /// Debug, with --reach-from: per listed file, the number of entries
-        /// that reach it.
-        #[usage(long, hide = true)]
-        pub reach_each: bool,
-        /// Output format.
-        #[usage(long, value_enum, default = "text")]
-        pub format: ReportFormat,
-        #[usage(flatten)]
-        pub loc: GraphLoc,
-        /// Use the stored graph as is, without refreshing it.
-        #[usage(long)]
-        pub no_refresh: bool,
-        /// Print timings to stderr.
-        #[usage(long)]
-        pub stats: bool,
-    }
-
-    impl From<UncertaintyCmd> for turborepo_trace::commands::UncertaintyCmd {
-        fn from(c: UncertaintyCmd) -> Self {
-            Self {
-                entries: c.entries,
-                entries_opt: c.entries_opt,
-                entries_from: c.entries_from,
-                tests: c.tests,
-                tasks: c.tasks,
-                all_tasks: c.all_tasks,
-                strict_eval: c.strict_eval,
-                strict: c.strict,
-                runtime_only: c.runtime_only,
-                top: c.top,
-                order: c.order.into(),
-                assume_resolved: c.assume_resolved,
-                assume_resolved_from: c.assume_resolved_from,
-                assume_class: c.assume_class,
-                assume_cut: c.assume_cut,
-                reach_from: c.reach_from,
-                loads: c.loads,
-                undeclared_dependencies: c.undeclared_dependencies,
-                reach_each: c.reach_each,
-                format: c.format.into(),
-                loc: c.loc.into(),
-                no_refresh: c.no_refresh,
-                stats: c.stats,
-            }
-        }
-    }
-}
-pub mod viz {
-    #![allow(unused_imports)]
-    use std::path::PathBuf;
-
-    use super::*;
-    /// The flags of the report.
-    #[derive(Debug, Args)]
-    pub struct VizArgs {
-        /// Also write the impact report: one self-contained HTML file (no
-        /// network requests) that shows which changed files select
-        /// which entries, through which hubs, and what
-        /// was not selected. Without FILE it goes to `impact.html` in the graph
-        /// directory. The path is printed on stderr. Write the value as
-        /// `--html=FILE`.
-        #[usage(long, value_name = "FILE", require_equals = true)]
-        pub html: Option<Option<PathBuf>>,
-        /// Open the HTML report in the browser (implies --html). Ignored
-        /// without a terminal and in CI.
-        #[usage(long)]
-        pub open: bool,
-    }
-
-    impl From<VizArgs> for turborepo_trace::commands::VizArgs {
-        fn from(c: VizArgs) -> Self {
-            Self {
-                html: c.html,
-                open: c.open,
-            }
-        }
-    }
-}
 
 /// The command line.
 #[derive(Debug, Parser)]
@@ -1114,20 +675,216 @@ enum Command {
         #[usage(subcommand)]
         command: GraphCmd,
     },
-    /// Files the given files transitively depend on.
-    Deps(graph::FilesCmd),
-    /// Files that transitively depend on the given files.
-    Dependents(graph::FilesCmd),
-    /// The uncertainty floor.
-    Uncertainty(uncertainty::UncertaintyCmd),
+    /// Files the given files transitively depend on, one per line.
+    Deps(DepsCmd),
+    /// The uncertainty floor, as `lint` and `affected` report it.
+    Floor(FloorCmd),
 }
 
 #[derive(Debug, Subcommand)]
 enum GraphCmd {
     /// Build or refresh the graph.
     Build(graph::BuildCmd),
-    /// Export the composed graph.
-    Export(graph::ExportCmd),
+    /// Export the composed graph (JSON or NDJSON).
+    Export(ExportCmd),
+}
+
+/// `graph export`: the composed graph, as the library reads it.
+#[derive(Debug, Args)]
+struct ExportCmd {
+    #[usage(flatten)]
+    loc: graph::GraphLoc,
+    /// Output format.
+    #[usage(long, value_enum, default = "json")]
+    format: ExportFormat,
+    /// Use the stored graph as is, without refreshing it.
+    #[usage(long)]
+    no_refresh: bool,
+}
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq, ValueEnum)]
+enum ExportFormat {
+    /// One JSON document.
+    Json,
+    /// One JSON record per line.
+    Ndjson,
+}
+
+/// `deps`: the closure of the given files, without the files themselves.
+#[derive(Debug, Args)]
+struct DepsCmd {
+    /// Files (relative to the current directory).
+    #[usage(required = true)]
+    files: Vec<PathBuf>,
+    #[usage(flatten)]
+    loc: graph::GraphLoc,
+}
+
+type Out<'a> = std::io::BufWriter<std::io::StdoutLock<'a>>;
+
+fn export(
+    c: ExportCmd,
+    out: &mut Out<'_>,
+) -> Result<turborepo_trace::ExitCode, turborepo_trace::Error> {
+    let loc = c.loc.into();
+    let format = c.format;
+    turborepo_trace::commands::with_graph(&loc, c.no_refresh, |g, root| match format {
+        ExportFormat::Json => turborepo_trace_graph::json::write_json(g, Some(root), false, out),
+        ExportFormat::Ndjson => turborepo_trace_graph::json::write_ndjson(g, Some(root), out),
+    })?
+    .map_err(|e| turborepo_trace::Error::Failed(e.to_string()))?;
+    Ok(turborepo_trace::ExitCode::SUCCESS)
+}
+
+fn deps(
+    c: DepsCmd,
+    out: &mut Out<'_>,
+) -> Result<turborepo_trace::ExitCode, turborepo_trace::Error> {
+    use turborepo_trace_graph::{AffectedOptions, Engine, EngineOptions, output};
+    let loc: turborepo_trace::commands::GraphLoc = c.loc.into();
+    let cwd = std::env::current_dir().map_err(turborepo_trace::Error::Io)?;
+    turborepo_trace::commands::with_graph(&loc, false, |g, root| {
+        let root = std::path::Path::new(root);
+        let mut lits = Vec::new();
+        for f in &c.files {
+            let p = turborepo_trace_core::fs::normalize(&cwd.join(f));
+            let rel = p.strip_prefix(root).map_err(|_| {
+                format!(
+                    "{} is outside the graph root {}",
+                    f.display(),
+                    root.display()
+                )
+            })?;
+            lits.push(format!("{:?}", rel.to_string_lossy()));
+        }
+        let set = lits.join(" + ");
+        // The graph reflects the working tree, as for `affected`.
+        let engine = Engine::with_options(
+            g,
+            EngineOptions {
+                affected: AffectedOptions::default().after_change(true),
+                ..Default::default()
+            },
+        );
+        let result = engine
+            .query(&format!("deps({set}) - ({set})"))
+            .map_err(|e| e.to_string())?;
+        output::write(
+            &engine,
+            &result,
+            &output::OutputOptions {
+                format: output::Format::List,
+                edges: false,
+            },
+            out,
+        )
+        .map_err(|e| e.to_string())
+    })?
+    .map_err(turborepo_trace::Error::Failed)?;
+    Ok(turborepo_trace::ExitCode::SUCCESS)
+}
+
+/// `floor`: the uncertainty floor through the library's commands: its size
+/// and the sites that hold it from `lint` (no baseline), the tests on it from
+/// `affected` with a change of nothing (selected on every change), and the
+/// uncertainty records by disposition from `affected --format json`.
+#[derive(Debug, Args)]
+struct FloorCmd {
+    /// The test files: jest, vitest, gotest, cargo-test or `all`. Repeatable.
+    #[usage(long, value_name = "FRAMEWORK")]
+    tests: Vec<String>,
+    #[usage(flatten)]
+    loc: graph::GraphLoc,
+    /// Use the stored graph as is, without refreshing it.
+    #[usage(long)]
+    no_refresh: bool,
+    /// Output JSON.
+    #[usage(long)]
+    json: bool,
+}
+
+fn floor(
+    c: FloorCmd,
+    out: &mut Out<'_>,
+) -> Result<turborepo_trace::ExitCode, turborepo_trace::Error> {
+    use std::io::Write;
+
+    use turborepo_trace::commands::{self, AffectedCmd, AffectedFormat, LintCmd, LintFormat};
+    let failed = |e: serde_json::Error| turborepo_trace::Error::Failed(e.to_string());
+    let loc: commands::GraphLoc = c.loc.into();
+    let mut lint = Vec::new();
+    commands::lint(
+        LintCmd {
+            tests: c.tests.clone(),
+            no_baseline: true,
+            format: LintFormat::Json,
+            loc: loc.clone(),
+            no_refresh: c.no_refresh,
+            ..Default::default()
+        },
+        &mut lint,
+    )?;
+    let lint: serde_json::Value = serde_json::from_slice(&lint).map_err(failed)?;
+    // A change of nothing (a path relative to the working directory, inside the
+    // repository).
+    let nothing = "no/such/file-of-the-floor";
+    let run = |format| {
+        let mut buf = Vec::new();
+        commands::affected(
+            AffectedCmd {
+                tests: c.tests.clone(),
+                changed: vec![nothing.to_owned()],
+                format,
+                loc: loc.clone(),
+                no_refresh: true,
+                ..Default::default()
+            },
+            &mut buf,
+        )
+        .map(|_| buf)
+    };
+    let list = String::from_utf8_lossy(&run(AffectedFormat::List)?).into_owned();
+    let json: serde_json::Value =
+        serde_json::from_slice(&run(AffectedFormat::Json)?).map_err(failed)?;
+    let findings: Vec<&serde_json::Value> =
+        lint["findings"].as_array().into_iter().flatten().collect();
+    let mut sites: Vec<&str> = findings.iter().filter_map(|f| f["file"].as_str()).collect();
+    sites.dedup();
+    let entries: Vec<&str> = list.lines().collect();
+    let v = serde_json::json!({
+        "floor": lint["summary"]["floor"],
+        "entries": lint["summary"]["tests"],
+        "sites": sites,
+        "floor_entries": entries,
+        "records": json["uncertainty"],
+    });
+    let w = |e: std::io::Error| turborepo_trace::Error::Io(e);
+    if c.json {
+        serde_json::to_writer_pretty(&mut *out, &v).map_err(failed)?;
+        writeln!(out).map_err(w)?;
+    } else {
+        writeln!(
+            out,
+            "uncertainty floor: {} of {} entries",
+            v["floor"], v["entries"]
+        )
+        .map_err(w)?;
+        for f in &findings {
+            writeln!(
+                out,
+                "  site {}:{} {}: {}",
+                f["file"].as_str().unwrap_or_default(),
+                f["line"],
+                f["rule"].as_str().unwrap_or_default(),
+                f["message"].as_str().unwrap_or_default()
+            )
+            .map_err(w)?;
+        }
+        for e in &entries {
+            writeln!(out, "  entry {e}").map_err(w)?;
+        }
+    }
+    Ok(turborepo_trace::ExitCode::SUCCESS)
 }
 
 fn main() -> std::process::ExitCode {
@@ -1146,10 +903,9 @@ fn main() -> std::process::ExitCode {
         } => commands::graph_build(c.into(), &mut out),
         Command::Graph {
             command: GraphCmd::Export(c),
-        } => commands::graph_export(c.into(), &mut out),
-        Command::Deps(c) => commands::files(c.into(), false, &mut out),
-        Command::Dependents(c) => commands::files(c.into(), true, &mut out),
-        Command::Uncertainty(c) => commands::uncertainty(c.into(), &mut out),
+        } => export(c, &mut out),
+        Command::Deps(c) => deps(c, &mut out),
+        Command::Floor(c) => floor(c, &mut out),
     };
     let flushed = out.flush();
     match (r, flushed) {

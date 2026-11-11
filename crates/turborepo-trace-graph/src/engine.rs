@@ -263,8 +263,10 @@ impl<'g, G: GraphView> Engine<'g, G> {
             for u in self.g.uncertainties(n) {
                 match opts.disposition(&u, self.g.lang(n)) {
                     Disposition::Open => c.open += 1,
-                    Disposition::Scoped | Disposition::Named | Disposition::Declared => {
-                        c.covered += 1
+                    Disposition::Scoped | Disposition::Named => c.covered += 1,
+                    Disposition::Declared => {
+                        c.covered += 1;
+                        c.declared += 1;
                     }
                     Disposition::Probed => {
                         c.covered += 1;
