@@ -183,12 +183,20 @@ async fn run_inner(
         ),
         _ => Vec::new(),
     };
-    let (run, _analytics) = RunBuilder::new(base.discovery_builder_input()?, None)?
-        .add_all_tasks()
+    // The trace needs turbo's package graph, SCM and cache, not its task graph
+    // and not the file hashes: no task is run or hashed. A `--filter` that
+    // selects by task (a tag, `filterUsingTasks`) is the exception: its
+    // packages come from the task graph, as for `turbo ls`.
+    let builder = RunBuilder::new(base.discovery_builder_input()?, None)?
+        .skip_repo_index_and_scm_state()
         .do_not_validate_engine()
-        .prefetch_changed_files(prefetch)
-        .build(&handler, telemetry)
-        .await?;
+        .prefetch_changed_files(prefetch);
+    let builder = if builder.needs_task_graph_for_scope() {
+        builder.add_all_tasks()
+    } else {
+        builder
+    };
+    let (run, _analytics) = builder.build(&handler, telemetry).await?;
 
     // What the library needs of the run. The run itself (the package graph,
     // the lockfile, the task graph) is dropped before the trace's heavy phase;
