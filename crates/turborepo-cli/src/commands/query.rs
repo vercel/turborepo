@@ -381,7 +381,7 @@ mod tests {
         }
 
         fn task_hashes(&self) -> turborepo_query_api::TaskHashesFuture<'_> {
-            Box::pin(async { Ok(Arc::new(std::collections::HashMap::new())) })
+            Box::pin(async { Ok(std::sync::Arc::new(std::collections::HashMap::new())) })
         }
 
         fn check_boundaries(
