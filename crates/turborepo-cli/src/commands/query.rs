@@ -380,6 +380,10 @@ mod tests {
             Ok(Default::default())
         }
 
+        fn task_hashes(&self) -> turborepo_query_api::TaskHashesFuture<'_> {
+            Box::pin(async { Ok(Arc::new(std::collections::HashMap::new())) })
+        }
+
         fn check_boundaries(
             &self,
             _show_progress: bool,

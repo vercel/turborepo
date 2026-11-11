@@ -121,6 +121,18 @@ repository root, and matches the `logFile` that `turbo run --dry=json` reports
 for that task. It is `null` when the task sets `cache: false`, because a task
 that does not cache writes no log file.
 
+### Task hashes
+
+Each task's `hash` is the hash the task contributes to cache lookups, and it
+matches the `hash` that `turbo run --dry=json` reports for that task. Both read
+the same inputs Turbo hashes before a run, so they agree for the same repository
+state, environment, and configuration.
+
+The hash is `null` when it cannot be known before the task runs, such as when a
+task's inputs include files that its dependencies produce. `hashReason` then
+explains why, matching the dry run's `hashReason`; it is `null` when the hash is
+known up front.
+
 ## Package task catalogue
 
 `package.tasks` lists the package's native scripts and resolved Task Graph entries,

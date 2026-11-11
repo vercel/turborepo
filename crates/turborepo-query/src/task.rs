@@ -4,7 +4,7 @@ use async_graphql::{Any, Enum, InputObject, Json, Object, SimpleObject, Value};
 use turborepo_errors::Spanned;
 use turborepo_types::{TaskCommandOverride, TaskDefinition, TaskDefinitionExt};
 
-use crate::{Array, Error, QueryRun, QueryTaskId, package::Package};
+use crate::{Array, Error, QueryRun, QueryTaskHash, QueryTaskId, package::Package};
 
 /// Configured environment patterns, without expanding names or reading values.
 #[derive(Default, SimpleObject)]
@@ -142,6 +142,15 @@ impl RepositoryTask {
         QueryTaskId::new(self.package.get_name().to_string(), self.name.clone())
     }
 
+    /// The hash a dry-run summary reports for this task.
+    async fn task_hash(&self) -> Result<QueryTaskHash, Error> {
+        let task_hashes = self.package.run().task_hashes().await?;
+        Ok(task_hashes
+            .get(&self.task_id())
+            .cloned()
+            .unwrap_or_default())
+    }
+
     pub fn executes(&self) -> bool {
         match self
             .package
@@ -273,6 +282,19 @@ impl RepositoryTask {
                 .join(&relative_log_file)
                 .to_string(),
         )
+    }
+
+    /// The hash this task contributes to cache lookups, matching the hash
+    /// `turbo run --dry=json` reports. Null when the hash waits until
+    /// execution, where `hashReason` says why.
+    async fn hash(&self) -> Result<Option<String>, Error> {
+        Ok(self.task_hash().await?.hash)
+    }
+
+    /// Why this task's hash cannot be known until it executes, such as inputs
+    /// produced by its dependencies. Null when the hash is known up front.
+    async fn hash_reason(&self) -> Result<Option<String>, Error> {
+        Ok(self.task_hash().await?.hash_reason)
     }
 
     /// Environment patterns after resolving task configuration inheritance.

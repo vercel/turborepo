@@ -16,12 +16,12 @@ pub(crate) mod scope;
 mod task_definition_test;
 
 use std::{
-    collections::{BTreeMap, HashSet},
+    collections::{BTreeMap, HashMap, HashSet},
     future::Future,
     io::{self, IsTerminal, Write},
     process::Command,
     sync::{
-        Arc,
+        Arc, OnceLock,
         atomic::{AtomicBool, Ordering},
     },
     time::Duration,
@@ -32,7 +32,7 @@ use itertools::Itertools;
 use shared_child::SharedChild;
 use tokio::{pin, select, task::JoinHandle};
 use tracing::{debug, error, info, instrument, warn};
-use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
+use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, RelativeUnixPathBuf};
 use turborepo_api_client::APIAuth;
 
 #[derive(Clone)]
@@ -47,11 +47,12 @@ pub struct RunBuilderInput {
 }
 
 use turborepo_ci::Vendor;
-use turborepo_engine::{Built, Engine};
+use turborepo_engine::{Built, Engine, TaskNode};
 pub use turborepo_env::EnvironmentVariableMap;
 use turborepo_microfrontends_config::{MicrofrontendsConfigs, UnifiedTurboJsonLoader};
 use turborepo_microfrontends_proxy::ProxyServer;
 use turborepo_process::ProcessManager;
+use turborepo_query_api::{QueryTaskHash, QueryTaskId};
 use turborepo_repository::package_graph::{PackageGraph, PackageName, PackageNode};
 pub use turborepo_run_cache::RunCache;
 use turborepo_run_context::RepoContext;
@@ -62,10 +63,13 @@ use turborepo_signals::{ShutdownReason, SignalHandler};
 use turborepo_task_access::TaskAccess;
 use turborepo_task_graph::Visitor;
 use turborepo_task_hash::{
-    GlobalHashableInputs, PackageInputsHashes, collect_global_file_hash_inputs,
-    compute_external_deps_hashes, get_internal_deps_hash, global_hash::GLOBAL_CACHE_KEY,
+    GlobalHashableInputs, PackageInputsHashes, TaskHasher, collect_global_file_hash_inputs,
+    compute_external_deps_hashes, deferred_task_hash_message, get_internal_deps_hash,
+    global_hash::GLOBAL_CACHE_KEY,
 };
-use turborepo_telemetry::events::generic::GenericEventBuilder;
+use turborepo_telemetry::events::{
+    EventBuilder, generic::GenericEventBuilder, task::PackageTaskEventBuilder,
+};
 use turborepo_turbo_json::TurboJson;
 use turborepo_types::{EnvMode, TaskDefinition, UIMode};
 use turborepo_ui::{ColorConfig, LIGHT_GREY, TerminalSink, sender::UISender, tui, tui::TuiSender};
@@ -177,6 +181,122 @@ pub struct Run {
     repo: Arc<RepoContext>,
     execution: ExecutionContext,
     services: RunServices,
+    /// Pre-execution hash inputs, computed on first use and shared by clones.
+    hash_inputs: Arc<tokio::sync::OnceCell<RunHashInputs>>,
+}
+
+/// Task hashes keyed by task identity, as a dry-run summary reports them.
+type TaskHashes = HashMap<QueryTaskId, QueryTaskHash>;
+
+/// The pre-execution hash inputs for a run.
+///
+/// These are the expensive parts of hashing that do not depend on which tasks
+/// run or on their order: package file hashes, global file inputs, internal
+/// and external dependency hashes, and the global hash. Execution hands them
+/// to the visitor; a query hashes tasks from them. Computing them once per run
+/// keeps both paths in agreement.
+pub(crate) struct RunHashInputs {
+    package_inputs_hashes: PackageInputsHashes,
+    global_file_hash_map: HashMap<RelativeUnixPathBuf, String>,
+    global_hashable_env_vars: turborepo_env::DetailedMap,
+    root_internal_dependencies_hash: Option<String>,
+    root_external_dependencies_hash: Option<String>,
+    external_deps_hashes: Option<HashMap<String, String>>,
+    global_cache_key: String,
+    global_hash: String,
+    global_env: EnvironmentVariableMap,
+    /// Task hashes derived from the inputs above, computed on first request.
+    task_hashes: OnceLock<Arc<TaskHashes>>,
+}
+
+impl RunHashInputs {
+    /// Hash and hash reason for every task in the run's Task Graph.
+    fn task_hashes(&self, run: &Run) -> Result<Arc<TaskHashes>, Error> {
+        if let Some(task_hashes) = self.task_hashes.get() {
+            return Ok(task_hashes.clone());
+        }
+        let task_hashes = Arc::new(self.calculate_task_hashes(run)?);
+        // Racing first callers both compute the same hashes; the first result
+        // stored is kept.
+        Ok(self.task_hashes.get_or_init(|| task_hashes).clone())
+    }
+
+    fn calculate_task_hashes(&self, run: &Run) -> Result<TaskHashes, Error> {
+        use petgraph::algo::toposort;
+
+        let engine = &run.execution.engine;
+        let mut task_hasher = TaskHasher::new(
+            self.package_inputs_hashes.clone(),
+            &run.execution.opts.run_opts,
+            &run.execution.env_at_execution_start,
+            &self.global_hash,
+            run.repo_root(),
+            self.global_env.clone(),
+            &run.root_turbo_json().global_env,
+        );
+        if let Some(external_deps_hashes) = &self.external_deps_hashes {
+            task_hasher.set_external_deps_hash_cache(external_deps_hashes.clone());
+        }
+
+        let graph = engine.task_graph();
+        // Dependencies before dependents: a task's hash folds in its
+        // dependencies' hashes.
+        let mut order = toposort(graph, None).map_err(|_| Error::TaskGraphCycle)?;
+        order.reverse();
+
+        let global_env_mode = run.execution.opts.run_opts.env_mode;
+        let mut hashes = HashMap::with_capacity(order.len());
+        let mut deferred = HashSet::new();
+        for node in order {
+            let TaskNode::Task(task_id) = &graph[node] else {
+                continue;
+            };
+            let definition = engine
+                .task_definition(task_id)
+                .ok_or(Error::MissingTaskGraphEntry)?;
+            let dependency_set = engine
+                .dependencies(task_id)
+                .ok_or(Error::MissingTaskGraphEntry)?;
+            let package_name = PackageName::from(task_id.package());
+            let package_context = run
+                .pkg_dep_graph()
+                .package_task_context(&package_name)
+                .ok_or(Error::MissingTaskGraphEntry)?;
+            let env_mode = definition.env_mode.unwrap_or(global_env_mode);
+
+            // A task with inputs that only exist after its dependencies run
+            // is hashed at execution time, as a dry run reports it.
+            let waits_on_dependency = !deferred.is_empty()
+                && dependency_set.iter().any(|dependency| {
+                    matches!(dependency, TaskNode::Task(task_id) if deferred.contains(task_id))
+                });
+            let hash = if definition.inputs.has_deferred_inputs() || waits_on_dependency {
+                deferred.insert(task_id.clone());
+                QueryTaskHash {
+                    hash: None,
+                    hash_reason: Some(deferred_task_hash_message(&definition.inputs).to_string()),
+                }
+            } else {
+                let telemetry = PackageTaskEventBuilder::new(task_id.package(), task_id.task())
+                    .with_parent(&run.services.run_telemetry)
+                    .child();
+                QueryTaskHash {
+                    hash: Some(task_hasher.calculate_task_hash(
+                        task_id,
+                        definition,
+                        env_mode,
+                        &package_context,
+                        &dependency_set,
+                        telemetry,
+                    )?),
+                    hash_reason: None,
+                }
+            };
+            hashes.insert(query_task_id(task_id), hash);
+        }
+
+        Ok(hashes)
+    }
 }
 
 // The join handle covers the render thread plus its sink-restoring
@@ -1072,6 +1192,228 @@ impl Run {
         info!("Proxy shutdown complete, proceeding with visitor cleanup");
     }
 
+    /// The run's pre-execution hash inputs, computed on first use.
+    ///
+    /// Execution hands them to the visitor; a query hashes tasks from them.
+    /// Both need the same expensive inputs, so they are computed once per run
+    /// instead of per consumer.
+    async fn hash_inputs(&self) -> Result<&RunHashInputs, Error> {
+        self.hash_inputs
+            .get_or_try_init(|| async {
+                // Barrier for the untracked-file scan: file hashing below needs
+                // the complete index. Nothing executes before this resolves, so
+                // hash error semantics are unchanged from when `Run`
+                // construction waited.
+                let repo_index_arc = {
+                    use tracing::Instrument;
+                    self.services
+                        .repo_index
+                        .get()
+                        .instrument(tracing::info_span!("repo_index_untracked_await"))
+                        .await
+                };
+                let repo_index = repo_index_arc.as_ref().as_ref();
+
+                let is_monorepo = !self.execution.opts.run_opts.single_package;
+
+                // Run four expensive operations concurrently using rayon::scope:
+                // 1. Package file hashing - walks every package's files and computes hashes
+                // 2. Internal deps hashing - walks root internal dependency packages
+                // 3. Global file hash inputs - globwalks global deps and hashes them
+                // 4. External deps hashing - hashes every package's transitive lockfile
+                //    dependencies (consumed later by the task hasher)
+                //
+                // These are completely independent and dominate the pre-execution
+                // phase. Running them in parallel can significantly reduce wall-clock
+                // time.
+                let internal_dep_paths = is_monorepo.then(|| {
+                    self.pkg_dep_graph()
+                        .root_internal_package_dependencies_paths()
+                });
+
+                let mut file_hash_result = None;
+                let mut internal_deps_result = None;
+                let mut global_file_result = None;
+                let mut external_deps_hashes = None;
+
+                let _hash_scope_span = tracing::info_span!("hash_scope").entered();
+                turborepo_rayon_compat::block_in_place(|| {
+                    rayon::scope(|s| {
+                        s.spawn(|_| {
+                            let _span = tracing::info_span!("calculate_file_hashes_task").entered();
+                            let needs_expanded = self.execution.opts.run_opts.dry_run.is_some()
+                                || self.execution.opts.run_opts.summarize
+                                || self.services.observability_handle.is_some();
+                            file_hash_result = Some(PackageInputsHashes::calculate_file_hashes(
+                                self.scm(),
+                                self.execution.engine.tasks(),
+                                self.pkg_dep_graph(),
+                                self.execution.engine.task_definitions(),
+                                self.repo_root(),
+                                repo_index,
+                                needs_expanded,
+                            ));
+                        });
+                        s.spawn(|_| {
+                            let _span =
+                                tracing::info_span!("get_internal_deps_hash_task").entered();
+                            internal_deps_result = Some(
+                                internal_dep_paths
+                                    .map(|dep_paths| {
+                                        get_internal_deps_hash(
+                                            self.scm(),
+                                            self.repo_root(),
+                                            dep_paths,
+                                            repo_index,
+                                        )
+                                    })
+                                    .transpose(),
+                            );
+                        });
+                        s.spawn(|_| {
+                            let _span = tracing::info_span!("collect_global_file_hash_inputs_task")
+                                .entered();
+                            let resolution_file_fallback = self
+                                .pkg_dep_graph()
+                                .external_resolution_fallback_inputs()
+                                .unwrap_or_default();
+                            let root_engines = self.pkg_dep_graph().root_engines();
+                            let root_engines = (!root_engines.is_empty()).then_some(root_engines);
+                            global_file_result = Some(collect_global_file_hash_inputs(
+                                root_engines,
+                                self.repo_root(),
+                                self.pkg_dep_graph().package_manager(),
+                                &resolution_file_fallback,
+                                self.root_turbo_json().global_deps_for_hash(),
+                                &self.execution.env_at_execution_start,
+                                &self.root_turbo_json().global_env,
+                                self.scm(),
+                            ));
+                        });
+                        if is_monorepo {
+                            s.spawn(|_| {
+                                let _span =
+                                    tracing::info_span!("compute_external_deps_hashes_task")
+                                        .entered();
+                                external_deps_hashes =
+                                    Some(compute_external_deps_hashes(self.pkg_dep_graph()));
+                            });
+                        }
+                    });
+                });
+
+                drop(_hash_scope_span);
+
+                let package_inputs_hashes =
+                    file_hash_result.ok_or(Error::FileHashTaskIncomplete)??;
+                let root_internal_dependencies_hash =
+                    internal_deps_result.ok_or(Error::InternalDepsTaskIncomplete)??;
+                let global_file_inputs =
+                    global_file_result.ok_or(Error::GlobalFileHashTaskIncomplete)??;
+                let external_deps_hashes = external_deps_hashes.transpose()?;
+
+                let root_external_dependencies_hash = if is_monorepo {
+                    let cache = external_deps_hashes.as_ref().ok_or_else(|| {
+                        turborepo_task_hash::Error::MissingExternalDependencyHash(PackageName::Root)
+                    })?;
+                    Some(
+                        cache
+                            .get(PackageName::Root.as_str())
+                            .cloned()
+                            .ok_or_else(|| {
+                                turborepo_task_hash::Error::MissingExternalDependencyHash(
+                                    PackageName::Root,
+                                )
+                            })?,
+                    )
+                } else {
+                    None
+                };
+
+                // Bind every task to the selected portable snapshot, never the
+                // local generation path. Preserve the exact original key when
+                // unconfigured.
+                let global_cache_key = self
+                    .execution
+                    .managed_environment
+                    .as_ref()
+                    .map(|tools| {
+                        format!(
+                            "{GLOBAL_CACHE_KEY}:turborepo.setup.execution.v1:{}",
+                            tools.snapshot().fingerprint()
+                        )
+                    })
+                    .unwrap_or_else(|| GLOBAL_CACHE_KEY.to_string());
+
+                let mut inputs = RunHashInputs {
+                    package_inputs_hashes,
+                    global_file_hash_map: global_file_inputs.global_file_hash_map,
+                    global_hashable_env_vars: global_file_inputs.global_hashable_env_vars,
+                    root_internal_dependencies_hash,
+                    root_external_dependencies_hash,
+                    external_deps_hashes,
+                    global_cache_key,
+                    global_hash: String::new(),
+                    global_env: EnvironmentVariableMap::default(),
+                    task_hashes: OnceLock::new(),
+                };
+                let (global_hash, global_env) = {
+                    let global_hash_inputs = self.global_hashable_inputs(&inputs);
+                    let global_hash = global_hash_inputs.calculate_global_hash();
+                    let global_env = {
+                        let mut env = self
+                            .execution
+                            .env_at_execution_start
+                            .from_wildcards(global_hash_inputs.pass_through_env.unwrap_or_default())
+                            .map_err(Error::Env)?;
+                        if let Some(resolved_global) = &global_hash_inputs.resolved_env_vars {
+                            env.union(&resolved_global.all);
+                        }
+                        env
+                    };
+                    (global_hash, global_env)
+                };
+                inputs.global_hash = global_hash;
+                inputs.global_env = global_env;
+
+                Ok(inputs)
+            })
+            .await
+    }
+
+    /// The global hash inputs implied by `hash_inputs`.
+    fn global_hashable_inputs<'a>(&'a self, inputs: &'a RunHashInputs) -> GlobalHashableInputs<'a> {
+        let pass_through_env = match self.execution.opts.run_opts.env_mode {
+            EnvMode::Loose => {
+                // Remove the passthroughs from hash consideration if we're explicitly loose.
+                None
+            }
+            EnvMode::Strict => self.root_turbo_json().global_pass_through_env.as_deref(),
+        };
+        let root_engines = self.pkg_dep_graph().root_engines();
+        let root_engines = (!root_engines.is_empty()).then_some(root_engines);
+
+        GlobalHashableInputs {
+            global_cache_key: &inputs.global_cache_key,
+            global_file_hash_map: inputs.global_file_hash_map.clone(),
+            root_external_dependencies_hash: inputs.root_external_dependencies_hash.as_deref(),
+            root_internal_dependencies_hash: inputs.root_internal_dependencies_hash.as_deref(),
+            engines: root_engines.map(|engines| {
+                engines
+                    .iter()
+                    .map(|(key, value)| (key.as_str(), value.as_str()))
+                    .collect()
+            }),
+            env: &self.root_turbo_json().global_env,
+            resolved_env_vars: Some(inputs.global_hashable_env_vars.clone()),
+            pass_through_env,
+            env_mode: self.execution.opts.run_opts.env_mode,
+            framework_inference: self.execution.opts.run_opts.framework_inference,
+            env_at_execution_start: &self.execution.env_at_execution_start,
+            global_configuration: self.execution.opts.future_flags.global_configuration,
+        }
+    }
+
     #[instrument(skip_all)]
     async fn execute_visitor(
         &self,
@@ -1092,183 +1434,21 @@ impl Run {
             .ok()
             .and_then(|mut prefetch| prefetch.take());
 
-        // Barrier for the untracked-file scan: file hashing below needs the
-        // complete index. Nothing executes before this resolves, so hash
-        // error semantics are unchanged from when `Run` construction waited.
-        let repo_index_arc = {
-            use tracing::Instrument;
-            self.services
-                .repo_index
-                .get()
-                .instrument(tracing::info_span!("repo_index_untracked_await"))
-                .await
-        };
-        let repo_index = repo_index_arc.as_ref().as_ref();
-
         self.pkg_dep_graph()
             .package_task_context(&PackageName::Root)
             .ok_or(Error::MissingRootWorkspace)?;
 
-        let is_monorepo = !self.execution.opts.run_opts.single_package;
+        let hash_inputs = self.hash_inputs().await?;
+        // `hash_inputs` waits for the untracked-file scan, so the index the
+        // visitor needs is already resolved; this call reuses that result.
+        let repo_index_arc = self.services.repo_index.get().await;
+        let repo_index = repo_index_arc.as_ref().as_ref();
 
-        // Run four expensive operations concurrently using rayon::scope:
-        // 1. Package file hashing - walks every package's files and computes hashes
-        // 2. Internal deps hashing - walks root internal dependency packages
-        // 3. Global file hash inputs - globwalks global deps and hashes them
-        // 4. External deps hashing - hashes every package's transitive lockfile
-        //    dependencies (consumed later by the task hasher)
-        //
-        // These are completely independent and dominate the pre-execution phase.
-        // Running them in parallel can significantly reduce wall-clock time.
-        let internal_dep_paths = is_monorepo.then(|| {
-            self.pkg_dep_graph()
-                .root_internal_package_dependencies_paths()
-        });
-
-        let env_mode = self.execution.opts.run_opts.env_mode;
-
-        let mut file_hash_result = None;
-        let mut internal_deps_result = None;
-        let mut global_file_result = None;
-        let mut external_deps_hashes = None;
-
-        let _hash_scope_span = tracing::info_span!("hash_scope").entered();
-        turborepo_rayon_compat::block_in_place(|| {
-            rayon::scope(|s| {
-                s.spawn(|_| {
-                    let _span = tracing::info_span!("calculate_file_hashes_task").entered();
-                    let needs_expanded = self.execution.opts.run_opts.dry_run.is_some()
-                        || self.execution.opts.run_opts.summarize
-                        || self.services.observability_handle.is_some();
-                    file_hash_result = Some(PackageInputsHashes::calculate_file_hashes(
-                        self.scm(),
-                        self.execution.engine.tasks(),
-                        self.pkg_dep_graph(),
-                        self.execution.engine.task_definitions(),
-                        self.repo_root(),
-                        repo_index,
-                        needs_expanded,
-                    ));
-                });
-                s.spawn(|_| {
-                    let _span = tracing::info_span!("get_internal_deps_hash_task").entered();
-                    internal_deps_result = Some(
-                        internal_dep_paths
-                            .map(|dep_paths| {
-                                get_internal_deps_hash(
-                                    self.scm(),
-                                    self.repo_root(),
-                                    dep_paths,
-                                    repo_index,
-                                )
-                            })
-                            .transpose(),
-                    );
-                });
-                s.spawn(|_| {
-                    let _span =
-                        tracing::info_span!("collect_global_file_hash_inputs_task").entered();
-                    let resolution_file_fallback = self
-                        .pkg_dep_graph()
-                        .external_resolution_fallback_inputs()
-                        .unwrap_or_default();
-                    let root_engines = self.pkg_dep_graph().root_engines();
-                    let root_engines = (!root_engines.is_empty()).then_some(root_engines);
-                    global_file_result = Some(collect_global_file_hash_inputs(
-                        root_engines,
-                        self.repo_root(),
-                        self.pkg_dep_graph().package_manager(),
-                        &resolution_file_fallback,
-                        self.root_turbo_json().global_deps_for_hash(),
-                        &self.execution.env_at_execution_start,
-                        &self.root_turbo_json().global_env,
-                        self.scm(),
-                    ));
-                });
-                if is_monorepo {
-                    s.spawn(|_| {
-                        let _span =
-                            tracing::info_span!("compute_external_deps_hashes_task").entered();
-                        external_deps_hashes =
-                            Some(compute_external_deps_hashes(self.pkg_dep_graph()));
-                    });
-                }
-            });
-        });
-
-        drop(_hash_scope_span);
-
-        let _setup_span = tracing::debug_span!("post_hashing_setup").entered();
-
-        let package_inputs_hashes = file_hash_result.ok_or(Error::FileHashTaskIncomplete)??;
-        let root_internal_dependencies_hash =
-            internal_deps_result.ok_or(Error::InternalDepsTaskIncomplete)??;
-        let global_file_inputs =
-            global_file_result.ok_or(Error::GlobalFileHashTaskIncomplete)??;
-        let external_deps_hashes = external_deps_hashes.transpose()?;
-
-        let root_external_dependencies_hash = if is_monorepo {
-            let cache = external_deps_hashes.as_ref().ok_or_else(|| {
-                turborepo_task_hash::Error::MissingExternalDependencyHash(PackageName::Root)
-            })?;
-            Some(
-                cache
-                    .get(PackageName::Root.as_str())
-                    .cloned()
-                    .ok_or_else(|| {
-                        turborepo_task_hash::Error::MissingExternalDependencyHash(PackageName::Root)
-                    })?,
-            )
-        } else {
-            None
-        };
-
-        let pass_through_env = match env_mode {
-            EnvMode::Loose => {
-                // Remove the passthroughs from hash consideration if we're explicitly loose.
-                None
-            }
-            EnvMode::Strict => self.root_turbo_json().global_pass_through_env.as_deref(),
-        };
-
-        // Bind every task to the selected portable snapshot, never the local
-        // generation path. Preserve the exact original key when unconfigured.
-        let managed_cache_key = self.execution.managed_environment.as_ref().map(|tools| {
-            format!(
-                "{GLOBAL_CACHE_KEY}:turborepo.setup.execution.v1:{}",
-                tools.snapshot().fingerprint()
-            )
-        });
         if let Some(tools) = &self.execution.managed_environment {
             tools.revalidate().map_err(Error::ManagedTools)?;
         }
-        let global_hash_inputs = GlobalHashableInputs {
-            global_cache_key: managed_cache_key.as_deref().unwrap_or(GLOBAL_CACHE_KEY),
-            global_file_hash_map: global_file_inputs.global_file_hash_map,
-            root_external_dependencies_hash: root_external_dependencies_hash.as_deref(),
-            root_internal_dependencies_hash: root_internal_dependencies_hash.as_deref(),
-            engines: global_file_inputs.engines,
-            env: &self.root_turbo_json().global_env,
-            resolved_env_vars: Some(global_file_inputs.global_hashable_env_vars),
-            pass_through_env,
-            env_mode,
-            framework_inference: self.execution.opts.run_opts.framework_inference,
-            env_at_execution_start: &self.execution.env_at_execution_start,
-            global_configuration: self.execution.opts.future_flags.global_configuration,
-        };
-        let global_hash = global_hash_inputs.calculate_global_hash();
 
-        let global_env = {
-            let mut env = self
-                .execution
-                .env_at_execution_start
-                .from_wildcards(global_hash_inputs.pass_through_env.unwrap_or_default())
-                .map_err(Error::Env)?;
-            if let Some(resolved_global) = &global_hash_inputs.resolved_env_vars {
-                env.union(&resolved_global.all);
-            }
-            env
-        };
+        let global_hash_inputs = self.global_hashable_inputs(hash_inputs);
 
         let run_tracker = RunTracker::new(
             self.execution.start_at,
@@ -1279,25 +1459,23 @@ impl Run {
         )
         .with_scm_state_prefetch(scm_state_prefetch);
 
-        drop(_setup_span);
-
         let mut visitor = Visitor::new(
             self.repo.as_ref(),
             self.services.run_cache.clone(),
             run_tracker,
             &self.execution.task_access,
             &self.execution.opts.run_opts,
-            package_inputs_hashes,
+            hash_inputs.package_inputs_hashes.clone(),
             &self.execution.env_at_execution_start,
-            &global_hash,
+            &hash_inputs.global_hash,
             self.services.processes.clone(),
             repo_index,
-            global_env,
+            hash_inputs.global_env.clone(),
             &self.root_turbo_json().global_env,
             ui_sender,
             is_watch,
             self.execution.micro_frontend_configs.as_ref(),
-            external_deps_hashes,
+            hash_inputs.external_deps_hashes.clone(),
         )
         .await?;
 
@@ -1816,6 +1994,18 @@ impl turborepo_query_api::QueryRun for Run {
                 .collect()
         })
         .map_err(|error| turborepo_query_api::AffectedPackagesError::Other(Box::new(error)))
+    }
+
+    fn task_hashes(&self) -> turborepo_query_api::TaskHashesFuture<'_> {
+        Box::pin(async move {
+            let inputs = self
+                .hash_inputs()
+                .await
+                .map_err(|error| turborepo_query_api::Error::TaskHash(Box::new(error)))?;
+            inputs
+                .task_hashes(self)
+                .map_err(|error| turborepo_query_api::Error::TaskHash(Box::new(error)))
+        })
     }
 
     fn check_boundaries(&self, show_progress: bool) -> turborepo_query_api::BoundariesFuture<'_> {
