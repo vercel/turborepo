@@ -1110,7 +1110,8 @@ impl APIClient {
         })
     }
     /// Create a new request builder with the preflight check done,
-    /// team parameters added, CI header, and a content type of json.
+    /// team parameters added, User-Agent and CI headers, and a content type of
+    /// json.
     pub(crate) async fn create_request_builder(
         &self,
         url: &str,
@@ -1144,6 +1145,7 @@ impl APIClient {
 
         let mut request_builder = self
             .api_request(method, url, allow_auth.then_some(token))?
+            .header("User-Agent", self.user_agent.clone())
             .header("Content-Type", "application/json");
 
         if allow_auth {
