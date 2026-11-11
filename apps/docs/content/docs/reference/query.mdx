@@ -114,6 +114,13 @@ expanded names, framework-inferred variables, or a complete process environment.
 The query does not execute tasks or report cache hits. Unlike dry-run summaries,
 this selection does not include file-hash inventories.
 
+### Log files
+
+Each task's `logFile` is the path to the log the task writes, relative to the
+repository root, and matches the `logFile` that `turbo run --dry=json` reports
+for that task. It is `null` when the task sets `cache: false`, because a task
+that does not cache writes no log file.
+
 ## Package task catalogue
 
 `package.tasks` lists the package's native scripts and resolved Task Graph entries,
