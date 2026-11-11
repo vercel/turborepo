@@ -198,6 +198,7 @@ async fn run_inner(
     let scm = run.scm().clone();
     let run_cache = run.run_cache().clone();
     let cache_config = run.opts().cache_opts.cache;
+    let root_turbo_json = run.opts().repo_opts.root_turbo_json_path.clone();
     // `--filter` narrows the output only: selection always sees the whole
     // repository.
     let filtered_packages = filtered.then(|| {
@@ -215,6 +216,7 @@ async fn run_inner(
         cwd: &cwd,
         packages: &packages,
         scm: &scm,
+        root_turbo_json: &root_turbo_json,
     };
 
     // `affected` starts from the graph of a nearby commit in turbo's cache when

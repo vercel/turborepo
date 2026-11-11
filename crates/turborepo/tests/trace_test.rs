@@ -374,6 +374,75 @@ fn lint_is_clean_on_the_fixtures() {
     }
 }
 
+/// The trace reads the root `turbo.json` only: with another one
+/// (`--root-turbo-json`), `affected` selects every test and says why, and
+/// `why` and `lint` fail.
+#[cfg(unix)]
+#[test]
+fn another_root_turbo_json_selects_every_test() {
+    let dir = fixture("trace_jest");
+    fs::copy(
+        dir.path().join("turbo.json"),
+        dir.path().join("custom-turbo.json"),
+    )
+    .unwrap();
+    let custom = ["--root-turbo-json", "custom-turbo.json"];
+    let output = trace(
+        dir.path(),
+        &[
+            &[
+                "affected",
+                "--changed",
+                "packages/math/src/mul.js",
+                "--json",
+            ][..],
+            &custom[..],
+        ]
+        .concat(),
+    );
+    assert!(output.status.success(), "{}", stderr(&output));
+    let json: serde_json::Value = serde_json::from_str(&stdout(&output)).unwrap();
+    let items = json["affectedTests"]["items"].as_array().unwrap();
+    let paths: BTreeSet<&str> = items.iter().map(|i| i["path"].as_str().unwrap()).collect();
+    assert_eq!(
+        paths,
+        BTreeSet::from([JEST_ADD, JEST_MUL, JEST_TOTAL, JEST_GREET]),
+        "{json}"
+    );
+    for item in items {
+        assert_eq!(item["reason"]["__typename"], "AllTestsChanged", "{json}");
+        let why = item["reason"]["description"].as_str().unwrap();
+        assert!(why.contains("--root-turbo-json"), "{why}");
+    }
+    // The default file, named: the selection as without the flag.
+    let named = trace(
+        dir.path(),
+        &[
+            "affected",
+            "--changed",
+            "packages/math/src/mul.js",
+            "--root-turbo-json",
+            "turbo.json",
+        ],
+    );
+    assert!(named.status.success(), "{}", stderr(&named));
+    let lines: BTreeSet<String> = stdout(&named).lines().map(str::to_owned).collect();
+    assert_selects(&lines, &[JEST_MUL, JEST_TOTAL], &[JEST_ADD, JEST_GREET]);
+    for args in [
+        &["lint"][..],
+        &["why", JEST_MUL, "packages/math/src/mul.js"][..],
+    ] {
+        let output = trace(dir.path(), &[args, &custom[..]].concat());
+        assert!(!output.status.success(), "{args:?}: {}", stdout(&output));
+        // (miette wraps the message.)
+        let err: String = stderr(&output)
+            .chars()
+            .filter(|c| !c.is_whitespace() && *c != '|')
+            .collect();
+        assert!(err.contains("--root-turbo-json"), "{}", stderr(&output));
+    }
+}
+
 /// `turbo trace lint` takes its options from flags only: a baseline file in
 /// the repository root is not read (one that does not parse, or that names a
 /// finding the tree no longer has, would fail the check).

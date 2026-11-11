@@ -28,6 +28,28 @@ pub struct Repo<'a> {
     pub packages: &'a Packages,
     /// The SCM layer (`run.scm()`): the changed files.
     pub scm: &'a SCM,
+    /// The root `turbo.json` turbo reads (`run.opts().repo_opts
+    /// .root_turbo_json_path`, `--root-turbo-json`). The trace reads
+    /// `<root>/turbo.json` (or `turbo.jsonc`) only: with another one,
+    /// `affected` selects every test ([`Reason::AllTestsChanged`]), and `why`
+    /// and `lint` fail.
+    pub root_turbo_json: &'a AbsoluteSystemPath,
+}
+
+/// Why the trace cannot read the repository's task configuration as turbo
+/// does, if it cannot: a root `turbo.json` other than `<root>/turbo.json` or
+/// `<root>/turbo.jsonc` (`--root-turbo-json`).
+fn unsupported_config(repo: &Repo<'_>) -> Option<String> {
+    let default = ["turbo.json", "turbo.jsonc"].iter().any(|name| {
+        repo.root.join_component(name).as_std_path() == repo.root_turbo_json.as_std_path()
+    });
+    (!default).then(|| {
+        format!(
+            "the root turbo.json is {} (--root-turbo-json), and the trace reads only {}",
+            repo.root_turbo_json,
+            repo.root.join_component("turbo.json")
+        )
+    })
 }
 
 /// Where the changes come from.
@@ -301,6 +323,9 @@ pub fn affected(repo: &Repo<'_>, req: &AffectedRequest) -> Result<AffectedTests,
     check_tests(req)?;
     check_refs(req)?;
     host_defaults();
+    if let Some(why) = unsupported_config(repo) {
+        return everything(repo, req, &why);
+    }
     let mut cmd = command(repo, req);
     match &req.changes {
         Changes::Files(files) => {
@@ -470,6 +495,9 @@ pub fn explain(
     check_tests(req)?;
     check_refs(req)?;
     host_defaults();
+    if let Some(why) = unsupported_config(repo) {
+        return Err(Error::Failed(format!("{why} (every test is selected)")));
+    }
     let mut cmd = command(repo, req);
     cmd.explain = tests
         .iter()
@@ -501,6 +529,9 @@ pub fn explain(
 pub fn why(repo: &Repo<'_>, test: &str, file: &str, out: &mut dyn Write) -> Result<(), Error> {
     supported()?;
     host_defaults();
+    if let Some(why) = unsupported_config(repo) {
+        return Err(Error::Failed(why));
+    }
     let cwd = repo.cwd.as_std_path().to_path_buf();
     let cmd = crate::why::WhyCmd {
         entry: abs(repo, test),
@@ -527,6 +558,9 @@ pub struct LintRequest {
 pub fn lint(repo: &Repo<'_>, req: &LintRequest, out: &mut dyn Write) -> Result<i32, Error> {
     supported()?;
     host_defaults();
+    if let Some(why) = unsupported_config(repo) {
+        return Err(Error::Failed(why));
+    }
     let cmd = crate::lint::LintCmd {
         format: if req.json {
             crate::lint::LintFormat::Json

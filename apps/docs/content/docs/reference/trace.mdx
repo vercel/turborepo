@@ -34,6 +34,7 @@ The variable is read only from the environment. It is not a `turbo.json` key, an
 
 - **Not supported on Windows yet.** On Windows, the command exits with an error.
 - **Flags only.** The command reads its options from flags. There is no configuration file, and `turbo trace lint` reads no baseline file.
+- **The root `turbo.json`.** The trace reads `turbo.json` (or `turbo.jsonc`) at the repository root. With another one (`--root-turbo-json`), `turbo trace affected` selects every test, and `why` and `lint` stop with an error.
 - **Static analysis.** Selection is a function of the base and head trees and the repository's configuration. It never runs your tests or your build.
 
 ## Storage and caching
