@@ -374,6 +374,30 @@ fn lint_is_clean_on_the_fixtures() {
     }
 }
 
+/// `turbo trace lint` takes its options from flags only: a baseline file in
+/// the repository root is not read (one that does not parse, or that names a
+/// finding the tree no longer has, would fail the check).
+#[cfg(unix)]
+#[test]
+fn lint_reads_no_baseline_file() {
+    let dir = fixture("trace_jest");
+    for text in [
+        "this is not json\n",
+        r#"{"version":1,"entries":[{"rule":"unconstrained-load","file":"packages/app/src/total.js","key":"gone","count":1}]}"#,
+    ] {
+        fs::write(dir.path().join("turbotrace-lint-baseline.json"), text).unwrap();
+        for args in [&["lint"][..], &["lint", "--json"][..]] {
+            let output = trace(dir.path(), args);
+            assert_eq!(
+                output.status.code(),
+                Some(0),
+                "{args:?}: {}",
+                stderr(&output)
+            );
+        }
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Gate on: selection on the vitest fixture.
 //

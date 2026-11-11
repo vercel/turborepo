@@ -538,6 +538,8 @@ pub fn lint(repo: &Repo<'_>, req: &LintRequest, out: &mut dyn Write) -> Result<i
             graph: None,
             members: members(repo.packages),
         },
+        // Options are flags only: no baseline file is read (every finding is new).
+        no_baseline: true,
         ..Default::default()
     };
     let code = crate::commands::finish(crate::lint::cmd_lint(cmd, out))?;
