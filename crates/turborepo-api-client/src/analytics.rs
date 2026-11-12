@@ -33,3 +33,43 @@ impl AnalyticsClient for APIClient {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod test {
+    use std::time::Duration;
+
+    use turborepo_types::Credential;
+
+    use super::*;
+    use crate::build_user_agent;
+
+    #[tokio::test]
+    async fn test_record_analytics_sends_user_agent() -> anyhow::Result<()> {
+        let server = httpmock::MockServer::start_async().await;
+        let events = server
+            .mock_async(|w, t| {
+                w.method(httpmock::Method::POST)
+                    .path("/v8/artifacts/events")
+                    .header("user-agent", build_user_agent("2.0.0"));
+                t.status(200);
+            })
+            .await;
+        let client = APIClient::new(
+            server.base_url(),
+            Some(Duration::from_secs(10)),
+            None,
+            "2.0.0",
+            false,
+        )?;
+        let api_auth = APIAuth {
+            team_id: Some("team_id".into()),
+            token: Credential::generic("token".into()),
+            team_slug: None,
+        };
+
+        client.record_analytics(&api_auth, vec![]).await?;
+
+        events.assert_calls_async(1).await;
+        Ok(())
+    }
+}
