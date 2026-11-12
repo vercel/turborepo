@@ -488,7 +488,9 @@ function runTurboChild(env, useCtrlCPipe) {
     process.argv.slice(2),
     {
       stdio: useCtrlCPipe ? ["inherit", "inherit", "inherit", "pipe"] : "inherit",
-      env,
+      // A group SIGTERM or SIGHUP reaches turbo directly and again through
+      // the forward below. This marker lets turbo count them as one request.
+      env: { ...env, __TURBO_NPM_WRAPPER: "1" },
     }
   );
 

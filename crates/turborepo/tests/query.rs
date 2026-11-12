@@ -134,3 +134,27 @@ fn test_task_queries() -> Result<(), anyhow::Error> {
 
     Ok(())
 }
+
+#[test]
+fn test_task_log_files() -> Result<(), anyhow::Error> {
+    check_json_output!(
+        "task_log_file",
+        "npm@10.5.0",
+        "query",
+        "get each task's log file" => ["query { packages { items { tasks { items { fullName logFile } } } } }"],
+    );
+
+    Ok(())
+}
+
+#[test]
+fn test_task_hashes() -> Result<(), anyhow::Error> {
+    check_json_output!(
+        "task_hash",
+        "npm@10.5.0",
+        "query",
+        "get each task's hash" => ["query { packages { items { tasks { items { fullName hash hashReason } } } } }"],
+    );
+
+    Ok(())
+}

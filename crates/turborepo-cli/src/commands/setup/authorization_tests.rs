@@ -240,6 +240,33 @@ fn lock_declaration_and_captured_source_drift_fail_closed() {
 }
 
 #[test]
+fn a_directory_restored_on_another_device_authorizes_while_other_identity_changes_do_not() {
+    for case in 0..4 {
+        let (f, _upstream) = installed();
+        let path = record(&f);
+        let mut value: Value = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+        match case {
+            // A repository restored, copied or remounted on another device at
+            // the same path keeps this path and inode but gets a new device id.
+            0 => value["device"] = json!(value["device"].as_u64().unwrap() + 1),
+            // A re-clone at the same path has a new inode.
+            1 => value["inode"] = json!(value["inode"].as_u64().unwrap() + 1),
+            // A changed turbo.lock is a different resolution.
+            2 => value["lock_sha256"] = json!("0".repeat(64)),
+            // A different canonical path is a different repository.
+            _ => value["root"] = json!(f.owned.home()),
+        }
+        fs::write(&path, value.to_string()).unwrap();
+        if case == 0 {
+            inspect(&f).unwrap().with_current(|_, _| ()).unwrap();
+        } else {
+            assert!(inspect(&f).is_err(), "case {case}");
+        }
+        f.no_execution();
+    }
+}
+
+#[test]
 fn a_missing_or_unsealed_environment_is_checked_before_every_use() {
     for case in 0..3 {
         let (f, u) = installed();

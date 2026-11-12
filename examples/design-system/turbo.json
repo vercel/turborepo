@@ -9,7 +9,11 @@
     "lint": {
       "dependsOn": ["^lint"]
     },
+    "check-types": {
+      "dependsOn": ["^build", "^check-types"]
+    },
     "dev": {
+      "dependsOn": ["^build"],
       "cache": false,
       "persistent": true
     },
@@ -17,10 +21,9 @@
       "cache": false
     },
     "preview-storybook": {
-      "dependsOn": [
-        "^build"
-      ],
-      "cache": false
+      "dependsOn": ["build"],
+      "cache": false,
+      "persistent": true
     }
   }
 }

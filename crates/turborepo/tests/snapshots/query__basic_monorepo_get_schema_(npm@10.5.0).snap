@@ -423,6 +423,42 @@ expression: query_output
               "deprecationReason": null
             },
             {
+              "name": "logFile",
+              "description": "The log file this task writes, relative to the repository root. Null\nwhen the task does not cache, since it writes no log file.",
+              "args": [],
+              "type": {
+                "kind": "SCALAR",
+                "name": "String",
+                "ofType": null
+              },
+              "isDeprecated": false,
+              "deprecationReason": null
+            },
+            {
+              "name": "hash",
+              "description": "The hash this task contributes to cache lookups, matching the hash\n`turbo run --dry=json` reports. Null when the hash waits until\nexecution, where `hashReason` says why.",
+              "args": [],
+              "type": {
+                "kind": "SCALAR",
+                "name": "String",
+                "ofType": null
+              },
+              "isDeprecated": false,
+              "deprecationReason": null
+            },
+            {
+              "name": "hashReason",
+              "description": "Why this task's hash cannot be known until it executes, such as inputs\nproduced by its dependencies. Null when the hash is known up front.",
+              "args": [],
+              "type": {
+                "kind": "SCALAR",
+                "name": "String",
+                "ofType": null
+              },
+              "isDeprecated": false,
+              "deprecationReason": null
+            },
+            {
               "name": "environment",
               "description": "Environment patterns after resolving task configuration inheritance.\nGlobal patterns are exposed separately by `globalEnvironment`.",
               "args": [],
@@ -2814,6 +2850,42 @@ expression: query_output
             {
               "name": "command",
               "description": "The command Turbo will execute for this task, including implicit native\ntasks and command overrides.",
+              "args": [],
+              "type": {
+                "kind": "SCALAR",
+                "name": "String",
+                "ofType": null
+              },
+              "isDeprecated": false,
+              "deprecationReason": null
+            },
+            {
+              "name": "logFile",
+              "description": "The log file this task writes, relative to the repository root. Null\nwhen the task does not cache, since it writes no log file.",
+              "args": [],
+              "type": {
+                "kind": "SCALAR",
+                "name": "String",
+                "ofType": null
+              },
+              "isDeprecated": false,
+              "deprecationReason": null
+            },
+            {
+              "name": "hash",
+              "description": "The hash this task contributes to cache lookups, matching the hash\n`turbo run --dry=json` reports. Null when the hash waits until\nexecution, where `hashReason` says why.",
+              "args": [],
+              "type": {
+                "kind": "SCALAR",
+                "name": "String",
+                "ofType": null
+              },
+              "isDeprecated": false,
+              "deprecationReason": null
+            },
+            {
+              "name": "hashReason",
+              "description": "Why this task's hash cannot be known until it executes, such as inputs\nproduced by its dependencies. Null when the hash is known up front.",
               "args": [],
               "type": {
                 "kind": "SCALAR",

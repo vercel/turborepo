@@ -89,7 +89,7 @@ pub enum Error {
     Hash(#[from] turborepo_hash::Error),
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub struct PackageInputsHashes {
     hashes: HashMap<TaskId<'static>, String>,
     expanded_hashes: HashMap<TaskId<'static>, Arc<FileHashes>>,

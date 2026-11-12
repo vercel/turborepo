@@ -1,35 +1,30 @@
-const { resolve } = require("node:path");
+import babelParser from "@babel/eslint-parser";
+import js from "@eslint/js";
+import turbo from "eslint-plugin-turbo";
+import globals from "globals";
 
-const project = resolve(process.cwd(), "tsconfig.json");
-
-/*
- * This is a custom ESLint configuration for use with
- * typescript packages.
- *
- * This config extends the Vercel Engineering Style Guide.
- * For more information, see https://github.com/vercel/style-guide
- *
- */
-
-module.exports = {
-  extends: [
-    "@vercel/style-guide/eslint/node",
-    "@vercel/style-guide/eslint/typescript",
-  ].map(require.resolve),
-  parserOptions: {
-    project,
-  },
-  plugins: ["only-warn"],
-  globals: {
-    React: true,
-    JSX: true,
-  },
-  settings: {
-    "import/resolver": {
-      typescript: {
-        project,
+export default [
+  { ignores: ["**/dist/**", "**/storybook-static/**", "**/.turbo/**"] },
+  js.configs.recommended,
+  turbo.configs["flat/recommended"],
+  { languageOptions: { globals: globals.node } },
+  {
+    files: ["**/*.{ts,tsx}"],
+    languageOptions: {
+      parser: babelParser,
+      parserOptions: {
+        requireConfigFile: false,
+        babelOptions: {
+          babelrc: false,
+          configFile: false,
+          parserOpts: { plugins: ["typescript", "jsx"] },
+        },
       },
     },
+    // TypeScript 7 checks names and unused declarations without a compiler-API plugin.
+    rules: {
+      "no-undef": "off",
+      "no-unused-vars": "off",
+    },
   },
-  ignorePatterns: ["node_modules/", "dist/"],
-};
+];

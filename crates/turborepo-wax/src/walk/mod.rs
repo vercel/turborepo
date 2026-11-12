@@ -672,17 +672,22 @@ impl WalkTree {
     ) -> Self {
         let root = root.into();
         let WalkBehavior { link, depth } = behavior.into();
-        let builder = WalkDir::new(root.as_path());
+        let builder = WalkDir::new(root.as_path())
+            .follow_links(match link {
+                LinkBehavior::ReadFile => false,
+                LinkBehavior::ReadTarget => true,
+            })
+            .max_depth(depth);
+        // Following links can reach one directory by several paths. Sorting
+        // makes the path a walk reaches first the same on every file system.
+        let builder = match link {
+            LinkBehavior::ReadFile => builder,
+            LinkBehavior::ReadTarget => builder.sort_by_file_name(),
+        };
         WalkTree {
             prefix,
             is_dir: false,
-            input: builder
-                .follow_links(match link {
-                    LinkBehavior::ReadFile => false,
-                    LinkBehavior::ReadTarget => true,
-                })
-                .max_depth(depth)
-                .into_iter(),
+            input: builder.into_iter(),
         }
     }
 }

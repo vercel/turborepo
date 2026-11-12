@@ -1,0 +1,69 @@
+---
+source: crates/turborepo/tests/query.rs
+expression: query_output
+---
+{
+  "data": {
+    "packages": {
+      "items": [
+        {
+          "tasks": {
+            "items": []
+          }
+        },
+        {
+          "tasks": {
+            "items": [
+              {
+                "fullName": "ui#build",
+                "hash": "3dac7a108330f1ad",
+                "hashReason": null
+              },
+              {
+                "fullName": "ui#bundle",
+                "hash": null,
+                "hashReason": "Deferred because dependencyOutputs hashing mode was used."
+              },
+              {
+                "fullName": "ui#lint",
+                "hash": "85e1077c56e8d491",
+                "hashReason": null
+              },
+              {
+                "fullName": "ui#test",
+                "hash": "023692f464323f24",
+                "hashReason": null
+              }
+            ]
+          }
+        },
+        {
+          "tasks": {
+            "items": [
+              {
+                "fullName": "web#build",
+                "hash": "137271e463707b41",
+                "hashReason": null
+              },
+              {
+                "fullName": "web#bundle",
+                "hash": null,
+                "hashReason": "Deferred because dependencyOutputs hashing mode was used."
+              },
+              {
+                "fullName": "web#lint",
+                "hash": "9c40174f77f744f5",
+                "hashReason": null
+              },
+              {
+                "fullName": "web#test",
+                "hash": "f012e9e5ebcf8632",
+                "hashReason": null
+              }
+            ]
+          }
+        }
+      ]
+    }
+  }
+}

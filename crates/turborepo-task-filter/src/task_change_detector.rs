@@ -677,6 +677,40 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn root_gitattributes_change_returns_all() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPath::from_std_path(tmp.path()).unwrap();
+        let pkg_graph = make_pkg_graph(root, &["lib-a", "lib-b"]).await;
+
+        let a_build = TaskId::new("lib-a", "build");
+        let b_test = TaskId::new("lib-b", "test");
+        let engine = make_engine(
+            &[
+                (a_build.clone(), default_def()),
+                (b_test.clone(), default_def()),
+            ],
+            &[],
+        );
+
+        let result = affected_task_ids(&engine, &pkg_graph, &changed(&[".gitattributes"]), &[]);
+        assert_eq!(result, HashSet::from([a_build, b_test]));
+    }
+
+    #[tokio::test]
+    async fn nested_gitattributes_change_is_not_global() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPath::from_std_path(tmp.path()).unwrap();
+        let pkg_graph = make_pkg_graph(root, &["lib-a"]).await;
+
+        let a_build = TaskId::new("lib-a", "build");
+        let engine = make_engine(&[(a_build.clone(), default_def())], &[]);
+
+        let result =
+            affected_task_ids(&engine, &pkg_graph, &changed(&["docs/.gitattributes"]), &[]);
+        assert!(result.is_empty(), "{result:?}");
+    }
+
+    #[tokio::test]
     async fn invalid_global_dep_glob_is_skipped() {
         let tmp = tempfile::tempdir().unwrap();
         let root = AbsoluteSystemPath::from_std_path(tmp.path()).unwrap();

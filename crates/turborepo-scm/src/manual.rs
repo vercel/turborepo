@@ -77,7 +77,7 @@ fn hash_file_with_attrs(
     crate::crlf::manual_hash_file_maybe_normalized(path, text_attr)
 }
 
-fn hash_discovered_file(
+pub(crate) fn hash_discovered_file(
     root: &AbsoluteSystemPath,
     path: &AbsoluteSystemPath,
     attr_path: &str,
@@ -213,7 +213,7 @@ pub(crate) fn get_input_file_hashes_without_git<S: AsRef<str>>(
             &external_inclusions,
             &external_exclusions,
             globwalk::WalkType::Files,
-            globwalk::Settings::default().follow_links(),
+            globwalk::Settings::default().follow_links_within_base(),
         )?;
         for file_path in &files {
             if !exact_exclusions.is_empty() {
