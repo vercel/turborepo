@@ -1,13 +1,13 @@
 ---
 name: add
-description: Add Turborepo conservatively to an existing package-manager repository. Use when a repository needs minimal selected-task Turborepo configuration, including when another setup flow needs Turborepo before enabling its own feature.
+description: Add Turborepo to an existing repository in any language toolchain that Turborepo supports. Use when a repository needs minimal selected-task Turborepo configuration, including when another setup flow needs Turborepo before enabling its own feature.
 ---
 
 # Add Turborepo
 
-Add Turborepo conservatively to an existing package-manager repository, preserving package scripts and current behavior. This skill adds Turborepo as an additional task runner path for selected tasks; it does not convert every repository workflow to Turborepo.
+Add Turborepo to an existing repository, preserving existing task commands and current behavior. This skill adds Turborepo as an additional task runner path for selected tasks; it does not convert every repository workflow to Turborepo.
 
-Use this skill for repositories with a root `package.json` and selected package scripts. For workspace repositories, configure selected workspace package tasks. For single-package repositories, configure only selected root tasks.
+Use this skill for repositories whose packages Turborepo can discover from the manifests of a supported toolchain. For workspace repositories, configure selected workspace package tasks. For single-package repositories, configure only selected root tasks.
 
 ## Required documentation
 
@@ -17,8 +17,9 @@ Read the current official guidance before changing files:
 - [Configuring tasks](https://turborepo.dev/docs/crafting-your-repository/configuring-tasks)
 - [Configuration reference](https://turborepo.dev/docs/reference/configuration)
 - [Package configurations](https://turborepo.dev/docs/reference/package-configurations) when package-level overrides may be needed
+- The guide for each toolchain the repository uses, for example [Rust](https://turborepo.dev/docs/guides/tools/rust), [Python](https://turborepo.dev/docs/guides/tools/python), or [Go](https://turborepo.dev/docs/guides/tools/go)
 
-Treat these pages as the source of truth for current configuration and package-manager commands. If required documentation cannot be verified, stop rather than relying on remembered syntax.
+Treat these pages as the source of truth for current configuration, toolchain prerequisites, and toolchain commands. If required documentation cannot be verified, stop rather than relying on remembered syntax.
 
 `turbo setup` is managed-toolchain/dependency setup for repositories that already have a root `turbo.json` or `turbo.jsonc` and supported toolchain declarations. It is not a replacement for adding Turborepo. Do not introduce `turbo.lock`, toolchain declarations, or `setup` configuration solely for this flow unless the user explicitly requests managed toolchains.
 
@@ -27,16 +28,17 @@ Treat these pages as the source of truth for current configuration and package-m
 Require all of the following:
 
 1. A clean local Git checkout. Never discard unrelated work.
-2. A root `package.json` and one lockfile for npm, pnpm, Yarn, or Bun.
-3. Either a single root package or an existing package-manager workspace with packages.
+2. A root manifest for each toolchain involved, with its lockfile when current guidance requires one.
+3. Either a single root package or an existing workspace with packages, in a form that current guidance supports for that toolchain.
 4. A package or workspace layout that can remain unchanged.
-5. Selected package scripts whose current orchestration and environment requirements can be determined from repository configuration and CI workflows.
+5. Selected tasks whose current commands, orchestration, and environment requirements can be determined from repository configuration and CI workflows.
 
 Stop instead of changing files when:
 
-- the repository has no root `package.json` or no selected package scripts to configure;
+- the repository has no manifest that Turborepo can discover packages from, or no selected tasks to configure;
+- adding Turborepo requires introducing a toolchain, package manager, or manifest type that the repository does not already use;
 - adding Turborepo requires changing package managers, moving packages, or restructuring applications;
-- multiple conflicting lockfiles make package-manager ownership ambiguous;
+- multiple conflicting lockfiles for one toolchain make dependency ownership ambiguous;
 - required task ordering, generated outputs, or environment dependencies cannot be inferred safely.
 
 Explain the failed condition and leave the repository unchanged.
@@ -47,16 +49,16 @@ Explain the failed condition and leave the repository unchanged.
 
 Inspect:
 
-- the root package manifest, workspace definition when present, lockfile, and package manifests;
-- root scripts that run selected root tasks or orchestrate workspace commands;
-- scripts shared by multiple packages when workspaces are present;
+- the root manifest, workspace definition when present, lockfile, and package manifests of each toolchain;
+- root entry points, such as scripts and task-runner targets, that run selected root tasks or orchestrate workspace commands;
+- tasks shared by multiple packages when workspaces are present;
 - package dependency relationships when workspaces are present;
 - GitHub Actions and other CI configuration for task ordering, filters, outputs, services, and environment variables;
 - existing build artifacts and ignored generated directories.
 
 Summarize:
 
-- detected package manager and package or workspace layout;
+- detected toolchains and package or workspace layout;
 - candidate tasks and package coverage;
 - observed dependencies, outputs, and environment requirements;
 - behavior that cannot be inferred.
@@ -70,24 +72,25 @@ Configure only tasks whose behavior is clear. Prefer focused lint, type-check, f
 Do not:
 
 - rename or move packages;
-- change package managers or workspace definitions;
-- rewrite package-level scripts;
+- change toolchains, package managers, or workspace membership;
+- rewrite package-level task commands;
 - add remote caching;
 - add product-specific CI tags or enable another product's CI feature;
 - configure deployment, end-to-end, integration, or environment-provisioning tasks unless the user explicitly requests them.
 
-Preserve existing root scripts by default. When retaining an existing root orchestrator, name its Turbo alternative `<task>:turbo`. Replace an existing orchestration script only when the Turbo command is demonstrably equivalent.
+Preserve existing root entry points by default. When retaining an existing root orchestrator, give its Turbo alternative a distinct name that follows the existing naming convention, such as `<task>:turbo`. Replace an existing orchestration entry point only when the Turbo command is demonstrably equivalent.
 
 ### 3. Add Turborepo
 
 When launched by another setup skill for a same-PR setup flow, make the change in that setup's current branch or worktree. For standalone use or separate review, create a branch from the latest remote default branch. If there is no remote default branch, stop unless the user explicitly asked for a local-only test.
 
-Install `turbo` as a root development dependency with the repository's existing package manager. Preserve its dependency style and regenerate the lockfile through the package manager; never edit the lockfile manually.
+Make `turbo` available to the repository as current installation guidance describes for its toolchain. When the repository pins its tool versions, pin `turbo` to an exact version the same way, through the repository's existing tooling. Regenerate any affected lockfile through the tool that owns it; never edit a lockfile manually.
 
-Ensure the root `package.json` declares the package manager according to current Turborepo guidance. Preserve an existing valid `packageManager`; otherwise add `devEngines.packageManager` using the detected package manager name and exact version from the lockfile or package-manager command. Do not guess a version.
+Meet the prerequisites that current guidance lists for each toolchain, such as a workspace name or a toolchain declaration. Preserve existing valid declarations and add only what is missing. Take exact versions from the lockfile or from the toolchain's own command. Do not guess a version.
 
 Create a root `turbo.json` or `turbo.jsonc` using the current documented schema. Configure only the selected tasks:
 
+- enable only the toolchain support that the selected tasks need, including any future flag that current guidance requires, and tell the user when that support is experimental;
 - encode task dependencies only when repository evidence establishes them;
 - declare generated outputs when they can be identified confidently;
 - include shared root files used by package tasks in task `inputs`; when adding custom `inputs`, include `"$TURBO_DEFAULT$"` so package source-control inputs and ignore behavior are preserved, and use `"$TURBO_ROOT$/<path>"` for root files outside a package;
@@ -97,7 +100,9 @@ Create a root `turbo.json` or `turbo.jsonc` using the current documented schema.
 
 Do not add speculative `dependsOn`, `inputs`, `outputs`, or environment configuration.
 
-Preserve existing ignore rules. Ensure the package manager's dependency directory and Turborepo's local `.turbo` directory are ignored without replacing the repository's `.gitignore`.
+Toolchain support can register built-in tasks that were not selected. Do not treat those tasks as validated. Report them as deferred.
+
+Preserve existing ignore rules. Ensure the toolchain's dependency directory and Turborepo's local `.turbo` directory are ignored without replacing the repository's `.gitignore`.
 
 ### 4. Validate behavior
 
@@ -107,8 +112,8 @@ First inspect the Turbo dry-run output and confirm:
 
 - only intended packages and tasks are selected;
 - task dependencies match observed ordering;
-- no package with a matching script is unexpectedly omitted;
-- no package without the script is forced to run it;
+- no package that defines the task is unexpectedly omitted;
+- no package that lacks the task is forced to run it;
 - changing a shared root input invalidates the affected task cache. For tasks with shared root inputs, run once to populate cache, run again to confirm a cache hit, change one root input, confirm the affected task misses cache, then revert the change.
 
 Then run the existing command and its Turbo equivalent for each selected low-risk task. Compare package coverage, ordering where material, exit status, and expected outputs. Do not claim equivalence from a successful Turbo command alone.
@@ -125,7 +130,7 @@ Whether the Turborepo addition is included in another pull request or published 
 
 - why Turborepo is being added;
 - the tasks configured and package coverage;
-- preserved scripts and any root script intentionally replaced;
+- preserved commands and any root entry point intentionally replaced;
 - inferred dependencies, outputs, inputs, and environment configuration;
 - validation comparing existing and Turbo commands;
 - deferred or unsupported tasks.
