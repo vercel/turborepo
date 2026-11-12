@@ -122,7 +122,7 @@ If validation reveals uncertain behavior, narrow the configuration or stop. Neve
 
 When launched by another setup skill for a same-PR setup flow, do not open a separate pull request. Return the diff and validation results so the caller can include the Turborepo addition in its pull request.
 
-When launched standalone, or when the user asks for separate review, review the complete diff, commit using the repository's commit style, push the branch, and open a draft pull request. Do not include another product's CI enablement or task tags in the Turborepo-only pull request. Do not merge it unless the user explicitly asks.
+When launched standalone, or when the user asks for separate review, review the complete diff, commit using the repository's commit style, push the branch, and open a draft pull request. Do not merge it unless the user explicitly asks.
 
 Whether the Turborepo addition is included in another pull request or published separately, the summary must include:
 
