@@ -30,7 +30,7 @@ use turborepo_run_opts::{Opts, RemoteCacheDisabledReason};
 use turborepo_run_summary::{ScmStatePrefetch, observability};
 use turborepo_scm::SCM;
 use turborepo_scope::{
-    ChangedFilesDetector, GitChangeDetector, TargetSelector, filter::ResolutionError,
+    ChangedFilesDetector, GitChangeDetector, GitRange, TargetSelector, filter::ResolutionError,
 };
 use turborepo_shim::TurboState;
 use turborepo_signals::SignalHandler;
@@ -186,6 +186,19 @@ struct SelectionModes {
 type RemoteCachePreflight =
     tokio::task::JoinHandle<turborepo_api_client::Result<CachingStatusResponse>>;
 
+/// The change-set query `--affected` uses: uncommitted changes included, diffed
+/// from the merge base of the base ref and head. Lockfile scoping reads the
+/// same range, so both compare against the same base revision.
+fn affected_git_range(from_ref: Option<&str>, to_ref: Option<&str>) -> GitRange {
+    GitRange {
+        from_ref: from_ref.map(str::to_owned),
+        to_ref: to_ref.map(str::to_owned),
+        include_uncommitted: true,
+        allow_unknown_objects: true,
+        merge_base: true,
+    }
+}
+
 pub(crate) fn changed_files_for_affected_range<D: ChangedFilesDetector>(
     detector: &D,
     repo_root: &AbsoluteSystemPath,
@@ -195,7 +208,15 @@ pub(crate) fn changed_files_for_affected_range<D: ChangedFilesDetector>(
     Result<turborepo_types::TaskInputChanges, turborepo_scm::git::InvalidRange>,
     turborepo_scm::Error,
 > {
-    detector.task_input_changes(repo_root, from_ref, to_ref, true, true, true)
+    let range = affected_git_range(from_ref, to_ref);
+    detector.task_input_changes(
+        repo_root,
+        range.from_ref.as_deref(),
+        range.to_ref.as_deref(),
+        range.include_uncommitted,
+        range.allow_unknown_objects,
+        range.merge_base,
+    )
 }
 
 trait CacheStatusProbe: Send + Sync + 'static {
@@ -2512,6 +2533,14 @@ impl RunBuilder {
                     &changed_files,
                     &root_turbo_json.global_deps,
                     managed_setup,
+                    || {
+                        change_detector.lockfile_contents(
+                            &self.repo_root,
+                            pkg_dep_graph,
+                            &affected_git_range(from_ref.as_deref(), to_ref.as_deref()),
+                            &changed_files.files,
+                        )
+                    },
                 );
                 tracing::info!(
                     total_tasks,
