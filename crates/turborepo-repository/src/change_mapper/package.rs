@@ -187,27 +187,25 @@ impl<'a> GlobalDepsPackageChangeMapper<'a> {
 
 impl PackageChangeMapper for GlobalDepsPackageChangeMapper<'_> {
     fn detect_package(&self, path: &AnchoredSystemPath) -> PackageMapping {
-        match self.base.detect_package(path) {
-            // Since `DefaultPackageChangeMapper` is overly conservative, we can check here if
-            // the path is actually in globalDeps and if not, return it as
-            // PackageDetection::Package(WorkspacePackage::root()).
-            PackageMapping::All(_) => {
-                let cleaned_path = path.clean();
-                let in_global_deps = self.global_deps_matcher.is_match(cleaned_path.as_str());
+        // Configured global dependencies are part of every task's hash, so they
+        // take precedence over package ownership and lockfile handling: a global
+        // file inside a package, or a lockfile listed as global, still changes
+        // every package.
+        if self.global_deps_matcher.is_match(path.clean().as_str()) {
+            return PackageMapping::All(AllPackageChangeReason::GlobalDepsChanged {
+                file: path.to_owned(),
+            });
+        }
 
-                if in_global_deps {
-                    PackageMapping::All(AllPackageChangeReason::GlobalDepsChanged {
-                        file: path.to_owned(),
-                    })
-                } else {
-                    PackageMapping::Packages(vec![(
-                        WorkspacePackage::root(),
-                        PackageInclusionReason::FileChanged {
-                            file: path.to_owned(),
-                        },
-                    )])
-                }
-            }
+        match self.base.detect_package(path) {
+            // `DefaultPackageChangeMapper` treats every file outside a package as
+            // global. The path is not in globalDeps, so attribute it to the root.
+            PackageMapping::All(_) => PackageMapping::Packages(vec![(
+                WorkspacePackage::root(),
+                PackageInclusionReason::FileChanged {
+                    file: path.to_owned(),
+                },
+            )]),
             result => result,
         }
     }
@@ -854,6 +852,71 @@ mod tests {
                 file: AnchoredSystemPathBuf::from_raw("package.json")?,
             })
         );
+
+        Ok(())
+    }
+
+    /// Configured global dependencies are part of every task hash, so they must
+    /// invalidate every package even when the file is a lockfile or lives
+    /// inside a package.
+    #[tokio::test]
+    async fn global_deps_take_precedence_over_lockfile_and_package_owner()
+    -> Result<(), anyhow::Error> {
+        let repo_root = tempdir()?;
+        let root = AbsoluteSystemPath::from_std_path(repo_root.path())?;
+        let manifest = root.join_components(&["packages", "a", "package.json"]);
+        manifest.ensure_dir()?;
+        manifest.create_with_contents(r#"{"name":"a"}"#)?;
+
+        struct D(AbsoluteSystemPathBuf);
+        impl PackageDiscovery for D {
+            async fn discover_packages(
+                &self,
+            ) -> Result<discovery::DiscoveryResponse, discovery::Error> {
+                Ok(discovery::DiscoveryResponse {
+                    package_manager: PackageManager::Npm,
+                    workspaces: vec![discovery::WorkspaceData::new(self.0.clone(), None)?],
+                })
+            }
+            async fn discover_packages_blocking(
+                &self,
+            ) -> Result<discovery::DiscoveryResponse, discovery::Error> {
+                self.discover_packages().await
+            }
+        }
+        let pkg_graph = PackageGraphBuilder::new(root, PackageJson::default())
+            .with_package_discovery(D(manifest))
+            .build()
+            .await?;
+
+        let shared = ["packages", "a", "shared.json"].join(std::path::MAIN_SEPARATOR_STR);
+        let detector = GlobalDepsPackageChangeMapper::new(
+            &pkg_graph,
+            ["package-lock.json", "packages/a/shared.json"].into_iter(),
+        )?;
+        let change_mapper = ChangeMapper::new(&pkg_graph, vec![], detector);
+
+        for file in ["package-lock.json", shared.as_str()] {
+            let file = AnchoredSystemPathBuf::from_raw(file)?;
+            let result = change_mapper
+                .changed_packages([file.clone()].into(), LockfileContents::Unchanged)?;
+            assert_eq!(
+                result,
+                PackageChanges::All(AllPackageChangeReason::GlobalDepsChanged { file })
+            );
+        }
+
+        // A non-global file in the same package stays scoped to it.
+        let other = AnchoredSystemPathBuf::from_raw(
+            ["packages", "a", "index.js"].join(std::path::MAIN_SEPARATOR_STR),
+        )?;
+        let PackageChanges::Some(packages) =
+            change_mapper.changed_packages([other].into(), LockfileContents::Unchanged)?
+        else {
+            panic!("expected a scoped change");
+        };
+        let names: Vec<&str> = packages.keys().map(|p| p.name.as_ref()).collect();
+        assert_eq!(names, vec!["a"]);
 
         Ok(())
     }
