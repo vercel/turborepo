@@ -12,6 +12,7 @@ The files are the same MDX sources used by turborepo.dev. Site-absolute links su
 | Understand packages and task relationships        | [Package and task graph](./core-concepts/package-and-task-graph.mdx)                                                    |
 | Configure tasks, dependencies, inputs, or outputs | [Configuring tasks](./crafting-your-repository/configuring-tasks.mdx)                                                   |
 | Look up `turbo.json` fields                       | [Configuration reference](./reference/configuration.mdx)                                                                |
+| Configure `turbo setup` defaults                  | [Setup policy](./reference/setup-policy.mdx)                                                                            |
 | Run or filter tasks                               | [Running tasks](./crafting-your-repository/running-tasks.mdx) and [`turbo run` reference](./reference/run.mdx)          |
 | Configure caching or debug cache misses           | [Caching](./crafting-your-repository/caching.mdx)                                                                       |
 | Set up Remote Cache                               | [Remote Caching](./core-concepts/remote-caching.mdx)                                                                    |
@@ -19,8 +20,13 @@ The files are the same MDX sources used by turborepo.dev. Site-absolute links su
 | Structure a repository                            | [Structuring a repository](./crafting-your-repository/structuring-a-repository.mdx)                                     |
 | Create an internal package                        | [Creating an internal package](./crafting-your-repository/creating-an-internal-package.mdx)                             |
 | Manage workspace dependencies                     | [Managing dependencies](./crafting-your-repository/managing-dependencies.mdx)                                           |
+| Install custom CLIs with `turbo setup`            | [Additional tools](./reference/additional-tools.mdx)                                                                    |
 | Configure package-specific tasks                  | [Package Configurations](./reference/package-configurations.mdx)                                                        |
 | Set up CI                                         | [Constructing CI](./crafting-your-repository/constructing-ci.mdx) and [CI vendor guides](./guides/ci-vendors/index.mdx) |
+| Install managed toolchains                        | [Managed toolchains](./core-concepts/managed-toolchains.mdx) and [`turbo setup` reference](./reference/setup.mdx)       |
+| Use managed toolchains outside of tasks           | [`turbo exec`](./reference/exec.mdx), including `--print-env` for editors, and [shell hook](./reference/hook.mdx)       |
+| Check managed toolchain platforms                 | [Managed toolchain platforms](./reference/managed-toolchain-platforms.mdx)                                              |
+| Keep turbo.lock current with dependency bots      | [Updating turbo.lock with dependency bots](./guides/updating-turbo-lock.mdx)                                            |
 | Configure watch mode                              | [`turbo watch` reference](./reference/watch.mdx)                                                                        |
 | Enforce package boundaries                        | [Boundaries](./reference/boundaries.mdx)                                                                                |
 | Look up a command or option                       | [Reference](./reference/index.mdx) and [options overview](./reference/options-overview.mdx)                             |

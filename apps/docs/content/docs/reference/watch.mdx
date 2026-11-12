@@ -52,6 +52,18 @@ Caching tasks with Watch Mode is currently experimental, under the `--experiment
 turbo watch your-tasks --experimental-write-cache
 ```
 
+### Managed toolchains
+
+In a repository with [managed toolchains](/docs/core-concepts/managed-toolchains), `turbo watch` runs every task with the tools that [`turbo setup`](/docs/reference/setup) installed, like [`turbo run`](/docs/core-concepts/managed-toolchains#how-turbo-run-uses-managed-tools). It checks the installation when it starts and again before every rerun:
+
+- **At startup**, `turbo watch` fails before running any tasks if the tools are missing, damaged, or out of date, and tells you to run `turbo setup`.
+- **Before a rerun**, `turbo watch` stops with the same guidance if a declaration, such as `.nvmrc`, changed without `turbo setup`.
+- **After `turbo setup` changed the tools**, for example when it updated `turbo.lock` while `turbo watch` was running, the next rerun stops and asks you to restart:
+
+```txt title="Terminal"
+Managed tools changed after `turbo watch` started. Restart `turbo watch` to use them.
+```
+
 ### Task outputs
 
 If you have tasks that write to files checked into source control, there is a possibility that Watch Mode will run in an infinite loop. This is because Watch Mode watches your
