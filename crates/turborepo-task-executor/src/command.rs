@@ -165,15 +165,7 @@ pub struct ToolchainCommandProvider<'a, M = crate::NoMfeConfig> {
     /// definitions. An argv replaces the native catalog resolution; an
     /// opt-out makes the task an explicit no-op.
     command_overrides: HashMap<TaskId<'static>, TaskCommandOverride>,
-    /// Lazily resolved package-manager binary path for JS framing.
-    package_manager_binary: std::sync::OnceLock<Result<std::path::PathBuf, which::Error>>,
     managed_path: bool,
-    /// Lazily resolved cargo binary path for Cargo framing.
-    cargo_binary: std::sync::OnceLock<Result<std::path::PathBuf, which::Error>>,
-    /// Lazily resolved uv binary path for Python framing.
-    uv_binary: std::sync::OnceLock<Result<std::path::PathBuf, which::Error>>,
-    /// Lazily resolved go binary path for Go framing.
-    go_binary: std::sync::OnceLock<Result<std::path::PathBuf, which::Error>>,
 }
 
 impl<'a, M: MfeConfigProvider> ToolchainCommandProvider<'a, M> {
@@ -188,11 +180,7 @@ impl<'a, M: MfeConfigProvider> ToolchainCommandProvider<'a, M> {
             task_args,
             mfe_configs,
             command_overrides,
-            package_manager_binary: std::sync::OnceLock::new(),
             managed_path: false,
-            cargo_binary: std::sync::OnceLock::new(),
-            uv_binary: std::sync::OnceLock::new(),
-            go_binary: std::sync::OnceLock::new(),
         }
     }
 
@@ -207,6 +195,9 @@ impl<'a, M: MfeConfigProvider> ToolchainCommandProvider<'a, M> {
     /// PATH, whose managed bin comes first, and never falls back to the host
     /// PATH. On Windows the managed exports are `.exe` hard links and `.cmd`
     /// forwarders, found through PATHEXT like any other PATH lookup.
+    ///
+    /// Each answer belongs to the environment it was asked in, so it is never
+    /// carried over to the next caller.
     fn lookup(
         &self,
         name: &str,
@@ -226,30 +217,23 @@ impl<'a, M: MfeConfigProvider> ToolchainCommandProvider<'a, M> {
     fn package_manager_binary(
         &self,
         environment: &EnvironmentVariableMap,
-    ) -> Result<Option<&std::path::Path>, CommandProviderError> {
+    ) -> Result<Option<std::path::PathBuf>, CommandProviderError> {
         let Some(package_manager) = self.package_graph.package_manager() else {
             return Ok(None);
         };
-        match self
-            .package_manager_binary
-            .get_or_init(|| self.lookup(package_manager.command(), environment))
-        {
-            Ok(path) => Ok(Some(path.as_path())),
-            Err(error) => Err(CommandProviderError::Which(*error)),
-        }
+        self.lookup(package_manager.command(), environment)
+            .map(Some)
+            .map_err(CommandProviderError::Which)
     }
 
     /// Cargo, uv and Go stay optional here: a missing tool is reported by the
     /// native command resolver with its own guidance.
-    fn tool_binary<'b>(
+    fn tool_binary(
         &self,
-        cell: &'b std::sync::OnceLock<Result<std::path::PathBuf, which::Error>>,
         name: &str,
         environment: &EnvironmentVariableMap,
-    ) -> Option<&'b std::path::Path> {
-        cell.get_or_init(|| self.lookup(name, environment))
-            .as_deref()
-            .ok()
+    ) -> Option<std::path::PathBuf> {
+        self.lookup(name, environment).ok()
     }
 
     fn package_context(
@@ -294,15 +278,14 @@ impl<'a, M: MfeConfigProvider, E: From<CommandProviderError>> CommandProvider<E>
                     Some(NativeCommandProgram::PackageManager) => {
                         (self.package_manager_binary(environment)?, None)
                     }
-                    Some(NativeCommandProgram::Tool(tool)) if tool == "cargo" => (
-                        None,
-                        self.tool_binary(&self.cargo_binary, tool, environment),
-                    ),
+                    Some(NativeCommandProgram::Tool(tool)) if tool == "cargo" => {
+                        (None, self.tool_binary(tool, environment))
+                    }
                     Some(NativeCommandProgram::Tool(tool)) if tool == "uv" => {
-                        (None, self.tool_binary(&self.uv_binary, tool, environment))
+                        (None, self.tool_binary(tool, environment))
                     }
                     Some(NativeCommandProgram::Tool(tool)) if tool == "go" => {
-                        (None, self.tool_binary(&self.go_binary, tool, environment))
+                        (None, self.tool_binary(tool, environment))
                     }
                     Some(NativeCommandProgram::Tool(_)) | None => (None, None),
                 }
@@ -311,8 +294,8 @@ impl<'a, M: MfeConfigProvider, E: From<CommandProviderError>> CommandProvider<E>
                 &package_context,
                 native_task,
                 self.package_graph.package_manager(),
-                package_manager_binary,
-                tool_binary,
+                package_manager_binary.as_deref(),
+                tool_binary.as_deref(),
                 self.task_args.args_for_task(task_id),
                 override_command,
             )
@@ -696,16 +679,17 @@ mod tests {
                 task_id.clone(),
                 TaskCommandOverride::Argv(vec!["custom-build".to_string()]),
             )]),
-        );
-        provider
-            .package_manager_binary
-            .set(Err(which::Error::CannotFindBinaryPath))
-            .unwrap();
+        )
+        .with_managed_path();
+        // The override must not reach the package manager: there is none on the
+        // task PATH it would have to find it on.
+        let empty_bin = repo_root.join_component("empty-bin");
+        empty_bin.create_dir_all().unwrap();
 
         let command = CommandProvider::<CommandProviderError>::command(
             &provider,
             &task_id,
-            &EnvironmentVariableMap::default(),
+            &path_only(empty_bin.as_str()),
         )
         .unwrap();
         assert!(command.is_some(), "override should bypass binary lookup");
@@ -980,6 +964,43 @@ mod tests {
             Ok(host) => assert_eq!(ordinary.unwrap().unwrap().program(), host.as_os_str()),
             Err(_) => assert!(ordinary.is_err()),
         }
+    }
+
+    /// A resolution is only true for the environment it was asked in: the
+    /// caller that probes tasks without a task PATH must not decide the binary
+    /// every authorized dispatch resolves afterwards.
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn managed_lookup_answers_only_for_the_environment_it_is_given() {
+        use std::os::unix::fs::PermissionsExt;
+        let (_directory, root, package_dir) = create_test_repo();
+        let graph = package_graph(
+            &root,
+            &package_dir,
+            PackageJson {
+                scripts: BTreeMap::from([("build".into(), Spanned::new("next build".into()))]),
+                ..Default::default()
+            },
+        )
+        .await;
+        let bin = root.join_components(&["managed", "bin"]);
+        bin.create_dir_all().unwrap();
+        let npm = bin.join_component("npm");
+        fs::write(&npm, "#!/bin/sh\necho managed-npm \"$@\"\n").unwrap();
+        fs::set_permissions(&npm, fs::Permissions::from_mode(0o755)).unwrap();
+        let provider =
+            ToolchainCommandProvider::new(&graph, TaskArgs::new(&[], &[]), None, HashMap::new())
+                .with_managed_path();
+
+        assert!(
+            native_command(&provider, "web", &EnvironmentVariableMap::default()).is_err(),
+            "a probe with no task PATH cannot resolve the package manager"
+        );
+        let command = native_command(&provider, "web", &path_only(bin.as_str()))
+            .unwrap()
+            .unwrap();
+        assert_eq!(command.program(), npm.as_std_path().as_os_str());
+        assert!(command_stdout(command).await.starts_with("managed-npm "));
     }
 
     #[cfg(windows)]
