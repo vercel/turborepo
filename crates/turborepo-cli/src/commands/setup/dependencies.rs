@@ -53,6 +53,11 @@ pub enum Error {
          tools offline, or set setup.<toolchain>.dependencies to \"skip\" in turbo.json"
     )]
     OfflineUnsupported(String),
+    #[error(
+        "setup.dependencyInstallOrder in turbo.json must list each of this repository's \
+         toolchains exactly once: {expected}\n{problems}"
+    )]
+    InstallOrder { expected: String, problems: String },
     #[error(transparent)]
     Install(#[from] js_install::Error),
     #[error(transparent)]
@@ -267,6 +272,7 @@ pub(super) struct Dependencies {
     /// `--offline` setup and plans use each manager's native offline mode.
     /// Checks run no installer, so they describe the usual commands.
     offline: bool,
+    schedule: Schedule,
 }
 
 impl Dependencies {
@@ -280,6 +286,15 @@ impl Dependencies {
         request: &SetupRequest,
     ) -> Result<Self, super::Error> {
         let root = discovery.snapshot_root()?.as_std_path();
+        let order = discovery.policy().dependency_install_order();
+        let found: Vec<_> = plan
+            .toolchains()
+            .iter()
+            .map(|toolchain| &toolchain.id)
+            .collect();
+        let places = order
+            .map(|order| install_places(&found, order))
+            .transpose()?;
         let mut steps = Vec::new();
         for toolchain in plan.toolchains() {
             let (dependencies, source) = toolchain.dependencies;
@@ -300,9 +315,16 @@ impl Dependencies {
             };
             steps.push((id.clone(), step));
         }
+        if let Some(places) = &places {
+            steps.sort_by_key(|(id, _)| places[id]);
+        }
         let dependencies = Self {
             steps,
             offline: request.offline && request.mode != super::Mode::Check,
+            schedule: match places {
+                Some(_) => Schedule::InOrder,
+                None => Schedule::Parallel,
+            },
         };
         // Offline setup needs the committed lock anyway; without one, or with
         // a stale one, the offline tool path reports that instead.
@@ -351,6 +373,7 @@ impl Dependencies {
                 Step::Skip(effective::TOOLS_ONLY.into()),
             )],
             offline: false,
+            schedule: Schedule::Parallel,
         }
     }
 
@@ -418,11 +441,6 @@ impl Dependencies {
         Ok(steps)
     }
 
-    /// After provisioning: every enabled installer in order, each with the
-    /// managed environment that setup just recorded. Online, the first
-    /// failing installer ends the run. Offline, every installer still runs
-    /// from its cache, so the report lists each one that could not.
-    /// `tool_store` names a fixture's tool store in place of the user's.
     pub fn install(
         &self,
         root: &Path,
@@ -439,6 +457,7 @@ impl Dependencies {
         let mut report = DependencyReport {
             steps: Vec::new(),
             offline: self.offline,
+            ran_concurrently: false,
         };
         if self.skipped() {
             report.steps = self
@@ -463,25 +482,123 @@ impl Dependencies {
         if let Some(blocked) = blocked.filter(|blocked| !blocked.is_empty()) {
             return Err(Error::OfflineUnsupported(blocked.join("\n")));
         }
+        let env = Environment::recorded(root, &sources, &store)?;
+        let mut installs = Vec::new();
         for (id, step) in &self.steps {
-            let adapter = match step {
-                Step::Skip(reason) => {
-                    report.steps.push(skipped(id, reason));
-                    continue;
+            if let Step::Install(adapter) = step {
+                installs.push((id, adapter, adapter.run(root, lock, self.offline)?));
+            }
+        }
+        report.ran_concurrently = self.schedule == Schedule::Parallel && installs.len() > 1;
+        let outcomes = self.schedule.run(
+            &installs,
+            |(id, adapter, run)| {
+                let mut step = console.step((*id).clone(), run.command[0], run.display());
+                let exit = adapter.execute(run, root, &env, &mut step)?;
+                Ok::<_, Error>(step.finish(exit)?)
+            },
+            |outcome| match outcome {
+                Ok(step) => matches!(step.result, StepResult::Failed { .. }) && !self.offline,
+                Err(_) => true,
+            },
+        );
+        let mut outcomes = outcomes.into_iter();
+        for (id, step) in &self.steps {
+            match step {
+                Step::Skip(reason) => report.steps.push(skipped(id, reason)),
+                Step::Install(_) => {
+                    if let Some(outcome) = outcomes.next() {
+                        report.steps.push(outcome?);
+                    }
                 }
-                Step::Install(adapter) => adapter,
-            };
-            let run = adapter.run(root, lock, self.offline)?;
-            let env = Environment::recorded(root, &sources, &store)?;
-            let mut step = console.step(id.clone(), run.command[0], run.display());
-            let exit = adapter.execute(&run, root, &env, &mut step)?;
-            report.steps.push(step.finish(exit)?);
-            if exit.is_some() && !self.offline {
-                break;
             }
         }
         Ok(report)
     }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Schedule {
+    Parallel,
+    InOrder,
+}
+
+impl Schedule {
+    fn run<J: Sync, O: Send>(
+        self,
+        jobs: &[J],
+        run: impl Fn(&J) -> O + Sync,
+        stops: impl Fn(&O) -> bool,
+    ) -> Vec<O> {
+        match self {
+            Self::Parallel => std::thread::scope(|scope| {
+                let run = &run;
+                let handles: Vec<_> = jobs
+                    .iter()
+                    .map(|job| scope.spawn(move || run(job)))
+                    .collect();
+                handles
+                    .into_iter()
+                    .map(|handle| {
+                        handle
+                            .join()
+                            .unwrap_or_else(|panic| std::panic::resume_unwind(panic))
+                    })
+                    .collect()
+            }),
+            Self::InOrder => {
+                let mut results = Vec::new();
+                for job in jobs {
+                    let result = run(job);
+                    let stop = stops(&result);
+                    results.push(result);
+                    if stop {
+                        break;
+                    }
+                }
+                results
+            }
+        }
+    }
+}
+
+fn install_places(
+    found: &[&ToolchainId],
+    order: &[ToolchainId],
+) -> Result<BTreeMap<ToolchainId, usize>, Error> {
+    let mut places = BTreeMap::new();
+    let mut repeated = BTreeSet::new();
+    for (place, id) in order.iter().enumerate() {
+        if places.insert(id.clone(), place).is_some() {
+            repeated.insert(id.as_str());
+        }
+    }
+    let missing: Vec<_> = (found.iter())
+        .filter(|id| !places.contains_key(**id))
+        .map(|id| id.as_str())
+        .collect();
+    let unknown: Vec<_> = (order.iter())
+        .filter(|id| !found.contains(id))
+        .map(ToolchainId::as_str)
+        .collect();
+    let repeated: Vec<_> = repeated.into_iter().collect();
+    let problems: Vec<_> = [
+        ("missing", missing),
+        ("not a toolchain in this repository", unknown),
+        ("listed more than once", repeated),
+    ]
+    .into_iter()
+    .filter(|(_, ids)| !ids.is_empty())
+    .map(|(problem, ids)| format!("  {problem}: {}", ids.join(", ")))
+    .collect();
+    if problems.is_empty() {
+        return Ok(places);
+    }
+    let expected: Vec<_> = found.iter().map(|id| id.as_str()).collect();
+    Err(Error::InstallOrder {
+        expected: expected.join(", "),
+        problems: problems.join("\n"),
+    })
 }
 
 /// Distinct skip reasons, as the dependency lines report them.
@@ -594,5 +711,117 @@ impl Environment {
             .ok_or(Error::NotInstalled(name));
         #[cfg(not(windows))]
         which::which_in(name, Some(&self.bin), &self.bin).map_err(|_| Error::NotInstalled(name))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::{
+        sync::{Condvar, Mutex},
+        time::Duration,
+    };
+
+    use turborepo_repository::toolchain::ToolchainId;
+
+    use super::{Schedule, install_places};
+
+    const FOUND: [&ToolchainId; 3] = [
+        &ToolchainId::JAVASCRIPT,
+        &ToolchainId::PYTHON,
+        &ToolchainId::RUST,
+    ];
+
+    #[test]
+    fn an_install_order_naming_every_toolchain_once_sets_each_place() {
+        let order = [
+            ToolchainId::RUST,
+            ToolchainId::PYTHON,
+            ToolchainId::JAVASCRIPT,
+        ];
+        let places = install_places(&FOUND, &order).unwrap();
+        let places: Vec<_> = FOUND.iter().map(|id| places[*id]).collect();
+        assert_eq!(places, [2, 1, 0]);
+    }
+
+    #[test]
+    fn an_install_order_that_differs_from_the_toolchains_names_every_problem() {
+        let order = [
+            ToolchainId::PYTHON,
+            ToolchainId::GO,
+            ToolchainId::JAVASCRIPT,
+            ToolchainId::PYTHON,
+        ];
+        let error = install_places(&FOUND, &order).unwrap_err().to_string();
+        assert_eq!(
+            error,
+            "setup.dependencyInstallOrder in turbo.json must list each of this repository's \
+             toolchains exactly once: javascript, python, rust\n  missing: rust\n  not a \
+             toolchain in this repository: go\n  listed more than once: python"
+        );
+        for order in [&[][..], &[ToolchainId::JAVASCRIPT, ToolchainId::PYTHON]] {
+            assert!(install_places(&FOUND, order).is_err(), "{order:?}");
+        }
+    }
+
+    struct Meeting {
+        arrived: Mutex<usize>,
+        everyone_here: Condvar,
+        expected: usize,
+    }
+
+    impl Meeting {
+        fn new(expected: usize) -> Self {
+            Self {
+                arrived: Mutex::new(0),
+                everyone_here: Condvar::new(),
+                expected,
+            }
+        }
+
+        fn wait(&self) {
+            let mut arrived = self.arrived.lock().unwrap();
+            *arrived += 1;
+            self.everyone_here.notify_all();
+            let (arrived, timeout) = self
+                .everyone_here
+                .wait_timeout_while(arrived, Duration::from_secs(10), |arrived| {
+                    *arrived < self.expected
+                })
+                .unwrap();
+            assert!(!timeout.timed_out(), "only {} jobs overlapped", *arrived);
+        }
+    }
+
+    #[test]
+    fn parallel_jobs_all_run_at_once_and_report_in_job_order() {
+        let jobs = ["js", "cargo", "uv", "go"];
+        let meeting = Meeting::new(jobs.len());
+        let results = Schedule::Parallel.run(
+            &jobs,
+            |job| {
+                meeting.wait();
+                *job
+            },
+            |_| true,
+        );
+        assert_eq!(results, jobs);
+    }
+
+    #[test]
+    fn in_order_jobs_never_overlap_and_stop_after_a_failure() {
+        let running = Mutex::new(0);
+        let jobs = ["js", "uv", "cargo"];
+        let results = Schedule::InOrder.run(
+            &jobs,
+            |job| {
+                *running.lock().unwrap() += 1;
+                assert_eq!(*running.lock().unwrap(), 1, "jobs overlapped");
+                std::thread::sleep(Duration::from_millis(20));
+                *running.lock().unwrap() -= 1;
+                (*job, *job == "uv")
+            },
+            |(_, failed)| *failed,
+        );
+        assert_eq!(results, [("js", false), ("uv", true)]);
     }
 }

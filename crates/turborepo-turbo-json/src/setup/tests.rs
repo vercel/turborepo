@@ -48,6 +48,21 @@ fn absent_or_empty_policy_leaves_every_value_inferred() {
 }
 
 #[test]
+fn dependency_install_order_is_kept_as_written() {
+    let absent = SetupPolicy::from_raw(None, &FutureFlags::default()).unwrap();
+    assert_eq!(absent.dependency_install_order(), None);
+    assert_eq!(parse("{}").unwrap().dependency_install_order(), None);
+    let ordered = parse(r#"{"dependencyInstallOrder":["python","javascript"]}"#).unwrap();
+    assert_eq!(
+        ordered.dependency_install_order(),
+        Some(&[ToolchainId::PYTHON, ToolchainId::JAVASCRIPT][..])
+    );
+    assert!(ordered.is_configured());
+    assert!(parse(r#"{"dependencyInstallOrder":"javascript"}"#).is_err());
+    assert!(parse(r#"{"dependencyInstallOrder":[true]}"#).is_err());
+}
+
+#[test]
 fn toolchain_values_override_root_values() {
     let policy = parse(
         r#"{"tools":"managed","dependencies":"locked",
