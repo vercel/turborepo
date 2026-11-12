@@ -21,7 +21,9 @@ use crate::package_graph::{
 
 mod package;
 
-const DEFAULT_GLOBAL_DEPS: &[&str] = &["turbo.json", "turbo.jsonc"];
+pub const ROOT_GITATTRIBUTES: &str = ".gitattributes";
+
+const DEFAULT_GLOBAL_DEPS: &[&str] = &["turbo.json", "turbo.jsonc", ROOT_GITATTRIBUTES];
 
 /// Managed toolchain resolution affects every package and task, even when
 /// configured global dependency globs exclude the lockfile.

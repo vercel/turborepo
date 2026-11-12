@@ -151,7 +151,6 @@ pub fn affected_task_ids_with_managed_setup(
 /// tasks should be considered affected regardless of their individual inputs.
 ///
 /// Global changes include:
-/// - Root config files: `package.json`, `turbo.json`, `turbo.jsonc`
 /// - The package manager's lockfile
 /// - Files matching user-configured `globalDependencies` globs
 /// - Files inside a package the root package depends on, directly or
@@ -456,6 +455,40 @@ mod tests {
         let result = affected_task_ids(&engine, &pkg_graph, &changed(&["turbo.jsonc"]), &[]);
         assert_eq!(result.len(), 1);
         assert!(result.contains(&a_build));
+    }
+
+    #[tokio::test]
+    async fn root_gitattributes_change_returns_all() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPath::from_std_path(tmp.path()).unwrap();
+        let pkg_graph = make_pkg_graph(root, &["lib-a", "lib-b"]).await;
+
+        let a_build = TaskId::new("lib-a", "build");
+        let b_test = TaskId::new("lib-b", "test");
+        let engine = make_engine(
+            &[
+                (a_build.clone(), default_def()),
+                (b_test.clone(), default_def()),
+            ],
+            &[],
+        );
+
+        let result = affected_task_ids(&engine, &pkg_graph, &changed(&[".gitattributes"]), &[]);
+        assert_eq!(result, HashSet::from([a_build, b_test]));
+    }
+
+    #[tokio::test]
+    async fn nested_gitattributes_change_is_not_global() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPath::from_std_path(tmp.path()).unwrap();
+        let pkg_graph = make_pkg_graph(root, &["lib-a"]).await;
+
+        let a_build = TaskId::new("lib-a", "build");
+        let engine = make_engine(&[(a_build.clone(), default_def())], &[]);
+
+        let result =
+            affected_task_ids(&engine, &pkg_graph, &changed(&["docs/.gitattributes"]), &[]);
+        assert!(result.is_empty(), "{result:?}");
     }
 
     #[tokio::test]
