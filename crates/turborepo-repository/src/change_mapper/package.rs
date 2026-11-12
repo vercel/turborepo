@@ -794,6 +794,37 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn root_gitattributes_is_global() -> Result<(), anyhow::Error> {
+        let repo_root = tempdir()?;
+        let pkg_graph = PackageGraphBuilder::new(
+            AbsoluteSystemPath::from_std_path(repo_root.path())?,
+            PackageJson::default(),
+        )
+        .with_package_discovery(MockDiscovery)
+        .build()
+        .await?;
+
+        let detector = GlobalDepsPackageChangeMapper::new(&pkg_graph, std::iter::empty::<&str>())?;
+        let change_mapper = ChangeMapper::new(&pkg_graph, vec![], detector);
+
+        let result = change_mapper.changed_packages(
+            [AnchoredSystemPathBuf::from_raw(".gitattributes")?]
+                .into_iter()
+                .collect(),
+            LockfileContents::Unchanged,
+        )?;
+
+        assert_eq!(
+            result,
+            PackageChanges::All(AllPackageChangeReason::DefaultGlobalFileChanged {
+                file: AnchoredSystemPathBuf::from_raw(".gitattributes")?,
+            })
+        );
+
+        Ok(())
+    }
+
+    #[tokio::test]
     async fn negated_global_deps_do_not_affect_all_packages() -> Result<(), anyhow::Error> {
         let repo_root = tempdir()?;
         let pkg_graph = PackageGraphBuilder::new(
