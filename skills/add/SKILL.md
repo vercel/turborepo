@@ -1,6 +1,6 @@
 ---
 name: add
-description: Add Turborepo to an existing repository in any language toolchain that Turborepo supports. Use when a repository needs minimal selected-task Turborepo configuration, including when another setup flow needs Turborepo before enabling its own feature.
+description: Add Turborepo to an existing repository in any language toolchain that Turborepo supports.
 ---
 
 # Add Turborepo
