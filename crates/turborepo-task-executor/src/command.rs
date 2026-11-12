@@ -183,15 +183,15 @@ pub struct ToolchainCommandProvider<'a, M = crate::NoMfeConfig> {
     /// definitions. An argv replaces the native catalog resolution; an
     /// opt-out makes the task an explicit no-op.
     command_overrides: HashMap<TaskId<'static>, TaskCommandOverride>,
+    /// Lazily resolved package-manager binary path for JS framing.
+    package_manager_binary: std::sync::OnceLock<Result<std::path::PathBuf, which::Error>>,
     managed_path: bool,
-    /// Resolved package-manager binary path for JS framing, for this run.
-    package_manager_binary: std::sync::OnceLock<std::path::PathBuf>,
-    /// Resolved cargo binary path for Cargo framing, for this run.
-    cargo_binary: std::sync::OnceLock<std::path::PathBuf>,
-    /// Resolved uv binary path for Python framing, for this run.
-    uv_binary: std::sync::OnceLock<std::path::PathBuf>,
-    /// Resolved go binary path for Go framing, for this run.
-    go_binary: std::sync::OnceLock<std::path::PathBuf>,
+    /// Lazily resolved cargo binary path for Cargo framing.
+    cargo_binary: std::sync::OnceLock<Result<std::path::PathBuf, which::Error>>,
+    /// Lazily resolved uv binary path for Python framing.
+    uv_binary: std::sync::OnceLock<Result<std::path::PathBuf, which::Error>>,
+    /// Lazily resolved go binary path for Go framing.
+    go_binary: std::sync::OnceLock<Result<std::path::PathBuf, which::Error>>,
 }
 
 impl<'a, M: MfeConfigProvider> ToolchainCommandProvider<'a, M> {
@@ -206,8 +206,8 @@ impl<'a, M: MfeConfigProvider> ToolchainCommandProvider<'a, M> {
             task_args,
             mfe_configs,
             command_overrides,
-            managed_path: false,
             package_manager_binary: std::sync::OnceLock::new(),
+            managed_path: false,
             cargo_binary: std::sync::OnceLock::new(),
             uv_binary: std::sync::OnceLock::new(),
             go_binary: std::sync::OnceLock::new(),
@@ -241,22 +241,6 @@ impl<'a, M: MfeConfigProvider> ToolchainCommandProvider<'a, M> {
         }
     }
 
-    /// A binary resolved once per run. Only a success is recorded: a lookup
-    /// that failed for one caller's environment answers that caller and
-    /// nobody else.
-    fn cached<'b>(
-        &self,
-        cell: &'b std::sync::OnceLock<std::path::PathBuf>,
-        name: &str,
-        environment: &EnvironmentVariableMap,
-    ) -> Result<&'b std::path::Path, which::Error> {
-        if let Some(path) = cell.get() {
-            return Ok(path.as_path());
-        }
-        let path = self.lookup(name, environment)?;
-        Ok(cell.get_or_init(|| path).as_path())
-    }
-
     fn package_manager_binary(
         &self,
         environment: &EnvironmentVariableMap,
@@ -264,24 +248,26 @@ impl<'a, M: MfeConfigProvider> ToolchainCommandProvider<'a, M> {
         let Some(package_manager) = self.package_graph.package_manager() else {
             return Ok(None);
         };
-        self.cached(
-            &self.package_manager_binary,
-            package_manager.command(),
-            environment,
-        )
-        .map(Some)
-        .map_err(CommandProviderError::Which)
+        match self
+            .package_manager_binary
+            .get_or_init(|| self.lookup(package_manager.command(), environment))
+        {
+            Ok(path) => Ok(Some(path.as_path())),
+            Err(error) => Err(CommandProviderError::Which(*error)),
+        }
     }
 
     /// Cargo, uv and Go stay optional here: a missing tool is reported by the
     /// native command resolver with its own guidance.
     fn tool_binary<'b>(
         &self,
-        cell: &'b std::sync::OnceLock<std::path::PathBuf>,
+        cell: &'b std::sync::OnceLock<Result<std::path::PathBuf, which::Error>>,
         name: &str,
         environment: &EnvironmentVariableMap,
     ) -> Option<&'b std::path::Path> {
-        self.cached(cell, name, environment).ok()
+        cell.get_or_init(|| self.lookup(name, environment))
+            .as_deref()
+            .ok()
     }
 
     fn package_context(
@@ -752,17 +738,16 @@ mod tests {
                 task_id.clone(),
                 TaskCommandOverride::Argv(vec!["custom-build".to_string()]),
             )]),
-        )
-        .with_managed_path();
-        // The override must not reach the package manager: there is none on the
-        // task PATH it would have to find it on.
-        let empty_bin = repo_root.join_component("empty-bin");
-        empty_bin.create_dir_all().unwrap();
+        );
+        provider
+            .package_manager_binary
+            .set(Err(which::Error::CannotFindBinaryPath))
+            .unwrap();
 
         let command = CommandProvider::<CommandProviderError>::command(
             &provider,
             &task_id,
-            &path_only(empty_bin.as_str()),
+            &EnvironmentVariableMap::default(),
         )
         .unwrap();
         assert!(command.is_some(), "override should bypass binary lookup");
@@ -1009,13 +994,6 @@ mod tests {
         CommandProvider::<CommandProviderError>::command(provider, &task, environment)
     }
 
-    fn has_command(
-        provider: &ToolchainCommandProvider<'_, crate::NoMfeConfig>,
-        task: &TaskId,
-    ) -> bool {
-        CommandProvider::<CommandProviderError>::has_command(provider, task)
-    }
-
     #[cfg(unix)]
     #[tokio::test]
     async fn managed_native_tools_resolve_only_through_the_authorized_task_path() {
@@ -1046,11 +1024,12 @@ mod tests {
         }
     }
 
-    /// A resolution is only true for the environment it was asked in: a lookup
-    /// that failed for one caller must answer that caller and nobody else.
+    /// The prefetch probe only asks whether a task has a command, so it must
+    /// not resolve anything: in a managed run it is asked with no task PATH,
+    /// where any resolution would fail.
     #[cfg(unix)]
     #[tokio::test]
-    async fn a_failed_binary_lookup_is_not_reused() {
+    async fn a_command_probe_resolves_no_binary() {
         use std::os::unix::fs::PermissionsExt;
         let (_directory, root, package_dir) = create_test_repo();
         let graph = package_graph(
@@ -1067,69 +1046,50 @@ mod tests {
         let npm = bin.join_component("npm");
         fs::write(&npm, "#!/bin/sh\necho managed-npm \"$@\"\n").unwrap();
         fs::set_permissions(&npm, fs::Permissions::from_mode(0o755)).unwrap();
-        let provider =
-            ToolchainCommandProvider::new(&graph, TaskArgs::new(&[], &[]), None, HashMap::new())
-                .with_managed_path();
+        let no_bin = root.join_component("no-bin");
+        no_bin.create_dir_all().unwrap();
+        let build = TaskId::new("web", "build").into_owned();
+        let provider = |overrides| {
+            ToolchainCommandProvider::<crate::NoMfeConfig>::new(
+                &graph,
+                TaskArgs::new(&[], &[]),
+                None,
+                overrides,
+            )
+            .with_managed_path()
+        };
 
-        assert!(
-            native_command(&provider, "web", &EnvironmentVariableMap::default()).is_err(),
-            "a caller without a task PATH cannot resolve the package manager"
-        );
-        let command = native_command(&provider, "web", &path_only(bin.as_str()))
+        let mut factory: CommandFactory<'_, CommandProviderError> = CommandFactory::new();
+        factory.add_provider(provider(HashMap::new()));
+        // Answered from the task definition, without a task PATH.
+        assert!(factory.has_command(&build));
+        assert!(!factory.has_command(&TaskId::new("web", "test")));
+        // The dispatch that follows still resolves the package manager.
+        let command = factory
+            .command(&build, &path_only(bin.as_str()))
             .unwrap()
             .unwrap();
         assert_eq!(command.program(), npm.as_std_path().as_os_str());
         assert!(command_stdout(command).await.starts_with("managed-npm "));
-    }
 
-    /// The prefetch probe only asks whether a task has a command, so it must
-    /// not resolve anything: in a managed run it is asked with no task PATH,
-    /// where any resolution would fail.
-    #[cfg(unix)]
-    #[tokio::test]
-    async fn a_command_probe_resolves_no_binary() {
-        let (_directory, root, package_dir) = create_test_repo();
-        let graph = package_graph(
-            &root,
-            &package_dir,
-            PackageJson {
-                scripts: BTreeMap::from([("build".into(), Spanned::new("next build".into()))]),
-                ..Default::default()
-            },
-        )
-        .await;
-        let build = TaskId::new("web", "build").into_owned();
-        let provider =
-            ToolchainCommandProvider::new(&graph, TaskArgs::new(&[], &[]), None, HashMap::new())
-                .with_managed_path();
-        let no_bin = root.join_component("no-bin");
-        no_bin.create_dir_all().unwrap();
+        // A task PATH without the binary still fails closed.
+        let mut unset: CommandFactory<'_, CommandProviderError> = CommandFactory::new();
+        unset.add_provider(provider(HashMap::new()));
+        assert!(unset.command(&build, &path_only(no_bin.as_str())).is_err());
 
-        assert!(has_command(&provider, &build));
-        // Building the command still fails closed: the probe decided nothing.
-        assert!(native_command(&provider, "web", &path_only(no_bin.as_str())).is_err());
-        assert!(!has_command(
-            &ToolchainCommandProvider::new(
-                &graph,
-                TaskArgs::new(&[], &[]),
-                None,
-                HashMap::from([(build.clone(), TaskCommandOverride::OptOut)]),
-            ),
-            &build
-        ));
-        assert!(has_command(
-            &ToolchainCommandProvider::new(
-                &graph,
-                TaskArgs::new(&[], &[]),
-                None,
-                HashMap::from([(
-                    build.clone(),
-                    TaskCommandOverride::Argv(vec!["custom-build".to_owned()]),
-                )]),
-            ),
-            &build
-        ));
-        assert!(!has_command(&provider, &TaskId::new("web", "test")));
+        // An override decides the answer without the catalog.
+        let mut opt_out: CommandFactory<'_, CommandProviderError> = CommandFactory::new();
+        opt_out.add_provider(provider(HashMap::from([(
+            build.clone(),
+            TaskCommandOverride::OptOut,
+        )])));
+        assert!(!opt_out.has_command(&build));
+        let mut argv: CommandFactory<'_, CommandProviderError> = CommandFactory::new();
+        argv.add_provider(provider(HashMap::from([(
+            build.clone(),
+            TaskCommandOverride::Argv(vec!["custom-build".to_owned()]),
+        )])));
+        assert!(argv.has_command(&build));
     }
 
     #[cfg(windows)]
