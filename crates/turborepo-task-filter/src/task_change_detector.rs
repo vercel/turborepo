@@ -151,7 +151,6 @@ pub fn affected_task_ids_with_managed_setup(
 /// tasks should be considered affected regardless of their individual inputs.
 ///
 /// Global changes include:
-/// - Root config files: `package.json`, `turbo.json`, `turbo.jsonc`
 /// - The package manager's lockfile
 /// - Files matching user-configured `globalDependencies` globs
 /// - Files inside a package the root package depends on, directly or
