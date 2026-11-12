@@ -4,7 +4,6 @@
 //! spinner, child output and failure replays go to stderr.
 
 use std::{
-    cell::RefCell,
     cmp::Ordering,
     collections::{BTreeMap, VecDeque},
     fmt::Write as _,
@@ -457,6 +456,13 @@ impl Write for Shared {
         self.0.lock().unwrap_or_else(|e| e.into_inner()).write(buf)
     }
 
+    fn write_all(&mut self, buf: &[u8]) -> io::Result<()> {
+        self.0
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .write_all(buf)
+    }
+
     fn flush(&mut self) -> io::Result<()> {
         self.0.lock().unwrap_or_else(|e| e.into_inner()).flush()
     }
@@ -467,8 +473,21 @@ pub(super) struct Console {
     spinner: bool,
     /// stdout's terminal width, for wrapping the tool section.
     width: Option<usize>,
-    out: RefCell<Box<dyn Write>>,
+    out: Mutex<Box<dyn Write + Send>>,
     err: SharedWriter,
+    installs: Mutex<RunningInstalls>,
+}
+
+#[derive(Default)]
+struct RunningInstalls {
+    running: Vec<String>,
+    spinner: Spinner,
+}
+
+impl RunningInstalls {
+    fn message(&self) -> String {
+        self.running.join(", ")
+    }
 }
 
 impl Console {
@@ -479,8 +498,9 @@ impl Console {
             width: console::Term::stdout()
                 .size_checked()
                 .map(|(_, columns)| usize::from(columns)),
-            out: RefCell::new(Box::new(io::stdout())),
+            out: Mutex::new(Box::new(io::stdout())),
             err: Arc::new(Mutex::new(Box::new(io::stderr()))),
+            installs: Mutex::default(),
         }
     }
 
@@ -498,16 +518,49 @@ impl Console {
             },
             spinner: false,
             width: None,
-            out: RefCell::new(Box::new(Buffer(captured.out.clone()))),
+            out: Mutex::new(Box::new(Buffer(captured.out.clone()))),
             err: Arc::new(Mutex::new(Box::new(Buffer(captured.err.clone())))),
+            installs: Mutex::default(),
         };
         (console, captured)
     }
 
     fn out(&self, text: &str) -> io::Result<()> {
-        let mut out = self.out.borrow_mut();
+        let mut out = self.out.lock().unwrap_or_else(|e| e.into_inner());
         out.write_all(text.as_bytes())?;
         out.flush()
+    }
+
+    fn installs(&self) -> std::sync::MutexGuard<'_, RunningInstalls> {
+        self.installs.lock().unwrap_or_else(|e| e.into_inner())
+    }
+
+    fn show_on_spinner(&self, command: &str) {
+        let mut installs = self.installs();
+        installs.running.push(command.to_owned());
+        let message = installs.message();
+        match installs.spinner.0 {
+            None => installs.spinner = self.spinner(&message),
+            Some(_) => installs.spinner.set_message(&message),
+        }
+    }
+
+    fn drop_from_spinner(&self, command: &str) {
+        let mut installs = self.installs();
+        if let Some(index) = installs.running.iter().position(|run| run == command) {
+            installs.running.remove(index);
+        }
+        match installs.running.is_empty() {
+            true => installs.spinner.clear(),
+            false => {
+                let message = installs.message();
+                installs.spinner.set_message(&message);
+            }
+        }
+    }
+
+    fn exclusively_above_spinner<T>(&self, write: impl FnOnce() -> T) -> T {
+        self.installs().spinner.suspend(write)
     }
 
     pub fn tools(&self, report: &ToolReport) -> io::Result<()> {
@@ -543,10 +596,11 @@ impl Console {
     pub fn spinner(&self, message: &str) -> Spinner {
         Spinner(self.spinner.then(|| {
             let spinner = turborepo_ui::start_spinner(message);
-            let messages = spinner.clone();
+            let (messages, suspends) = (spinner.clone(), spinner.clone());
             ActiveSpinner {
                 clear: Box::new(move || spinner.finish_and_clear()),
                 set_message: Box::new(move |message| messages.set_message(message.to_owned())),
+                suspend: Box::new(move |write| suspends.suspend(write)),
             }
         }))
     }
@@ -567,23 +621,39 @@ impl Console {
             started: Instant::now(),
             pump: None,
             captured: None,
-            spinner: Spinner(None),
+            on_spinner: false,
         }
     }
 }
 
 /// Clears its spinner when dropped or cleared.
+#[derive(Default)]
 pub(super) struct Spinner(Option<ActiveSpinner>);
 
 struct ActiveSpinner {
-    clear: Box<dyn FnOnce()>,
-    set_message: Box<dyn Fn(&str)>,
+    clear: Box<dyn FnOnce() + Send>,
+    set_message: Box<dyn Fn(&str) + Send>,
+    suspend: Suspend,
 }
+
+type Suspend = Box<dyn Fn(&mut dyn FnMut()) + Send>;
 
 impl Spinner {
     pub(super) fn set_message(&self, message: &str) {
         if let Some(active) = &self.0 {
             (active.set_message)(message);
+        }
+    }
+
+    fn suspend<T>(&self, write: impl FnOnce() -> T) -> T {
+        let Some(active) = &self.0 else {
+            return write();
+        };
+        let (mut write, mut written) = (Some(write), None);
+        (active.suspend)(&mut || written = write.take().map(|write| write()));
+        match written {
+            Some(written) => written,
+            None => unreachable!("suspend runs its closure once"),
         }
     }
 
@@ -709,7 +779,7 @@ pub(super) struct InstallStep<'a> {
     pump: Option<Pump>,
     /// Output a runner captured itself, handed over through `output`.
     captured: Option<Sink>,
-    spinner: Spinner,
+    on_spinner: bool,
 }
 
 impl InstallStep<'_> {
@@ -720,9 +790,15 @@ impl InstallStep<'_> {
         }
     }
 
+    fn start(&mut self) {
+        if !std::mem::replace(&mut self.on_spinner, true) {
+            self.console.show_on_spinner(&self.command);
+        }
+    }
+
     /// A spinner for a runner that captures its child's output itself.
     pub fn spin(&mut self) {
-        self.spinner = self.console.spinner(&self.command);
+        self.start();
     }
 
     /// Output a runner captured itself, shown as piped output is: streamed
@@ -765,7 +841,7 @@ impl InstallStep<'_> {
             sink,
             progress: received,
         });
-        self.spinner = self.console.spinner(&self.command);
+        self.start();
         Ok(stdio)
     }
 
@@ -774,9 +850,6 @@ impl InstallStep<'_> {
     pub fn finish(mut self, exit: Option<i32>) -> io::Result<StepOutcome> {
         let elapsed = self.started.elapsed();
         let sink = self.stop();
-        if exit.is_some() {
-            self.replay(sink)?;
-        }
         let command = std::mem::take(&mut self.command);
         let result = match exit {
             None => StepResult::Installed { command, elapsed },
@@ -790,8 +863,12 @@ impl InstallStep<'_> {
             toolchain: self.toolchain.clone(),
             result,
         };
-        self.console
-            .out(&render_step(&outcome, self.console.style))?;
+        self.console.exclusively_above_spinner(|| {
+            if exit.is_some() {
+                self.replay(sink)?;
+            }
+            self.console.out(&render_step(&outcome, self.console.style))
+        })?;
         Ok(outcome)
     }
 
@@ -806,7 +883,9 @@ impl InstallStep<'_> {
             while pump.progress.recv_timeout(GRACE).is_ok() && Instant::now() < deadline {}
             pump.sink.lock().unwrap_or_else(|e| e.into_inner()).take()
         });
-        self.spinner.clear();
+        if std::mem::take(&mut self.on_spinner) {
+            self.console.drop_from_spinner(&self.command);
+        }
         sink.or_else(|| self.captured.take())
     }
 
@@ -828,9 +907,11 @@ impl InstallStep<'_> {
 impl Drop for InstallStep<'_> {
     fn drop(&mut self) {
         let sink = self.stop();
-        let _ = self.replay(sink);
+        let _ = self.console.exclusively_above_spinner(|| self.replay(sink));
     }
 }
+
+const MAX_PENDING_LINE: usize = 64 << 10;
 
 /// `{program} │ ` before every line, again after a bare `\r` so progress
 /// redraws keep it.
@@ -838,6 +919,7 @@ struct LinePrefixer<W: Write> {
     inner: W,
     prefix: String,
     line_start: bool,
+    pending: Vec<u8>,
 }
 
 impl<W: Write> LinePrefixer<W> {
@@ -846,33 +928,44 @@ impl<W: Write> LinePrefixer<W> {
             inner,
             prefix: format!("{program} │ "),
             line_start: true,
+            pending: Vec::new(),
         }
     }
 
     /// Ends a partial last line.
     fn finish(&mut self) -> io::Result<()> {
         if !self.line_start {
-            self.inner.write_all(b"\n")?;
+            self.pending.push(b'\n');
             self.line_start = true;
         }
+        self.inner.write_all(&self.pending)?;
+        self.pending.clear();
         self.inner.flush()
     }
 }
 
 impl<W: Write> Write for LinePrefixer<W> {
     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
-        let mut out = Vec::with_capacity(buf.len() + self.prefix.len());
         for &byte in buf {
             if self.line_start && byte != b'\n' {
-                out.extend_from_slice(self.prefix.as_bytes());
+                self.pending.extend_from_slice(self.prefix.as_bytes());
                 self.line_start = false;
             }
-            out.push(byte);
+            self.pending.push(byte);
             if byte == b'\n' || byte == b'\r' {
                 self.line_start = true;
             }
         }
-        self.inner.write_all(&out)?;
+        let ended = match self.pending.len() > MAX_PENDING_LINE {
+            true => Some(self.pending.len()),
+            false => (self.pending.iter())
+                .rposition(|byte| matches!(byte, b'\n' | b'\r'))
+                .map(|end| end + 1),
+        };
+        if let Some(ended) = ended {
+            self.inner.write_all(&self.pending[..ended])?;
+            self.pending.drain(..ended);
+        }
         Ok(buf.len())
     }
 
