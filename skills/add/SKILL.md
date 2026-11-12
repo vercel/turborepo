@@ -21,7 +21,6 @@ Read the current official guidance before changing files:
 
 Treat these pages as the source of truth for current configuration, toolchain prerequisites, and toolchain commands. If required documentation cannot be verified, stop rather than relying on remembered syntax.
 
-`turbo setup` is managed-toolchain/dependency setup for repositories that already have a root `turbo.json` or `turbo.jsonc` and supported toolchain declarations. It is not a replacement for adding Turborepo. Do not introduce `turbo.lock`, toolchain declarations, or `setup` configuration solely for this flow unless the user explicitly requests managed toolchains.
 
 ## Applicability
 
