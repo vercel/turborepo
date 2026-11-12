@@ -98,21 +98,11 @@ impl<'a, R: TaskGraphRunOpts> ExecContextFactory<'a, R> {
     }
 
     /// Whether `exec_context` would produce a runnable task (and so a cache
-    /// restore) for `task_id`. Managed dispatch resolves the package manager
-    /// from the authorized task PATH, so the probe asks with that environment;
-    /// an ordinary repository's provider does not read one.
+    /// restore) for `task_id`. Answered from the repository, not a run: which
+    /// provider handles a task does not depend on the environment, so nothing
+    /// is resolved and no managed selection is revalidated.
     pub fn has_command(&self, task_id: &TaskId<'static>) -> bool {
-        let environment = match &self.visitor.managed_environment {
-            Some(tools) => match tools.revalidate() {
-                Ok(environment) => environment,
-                Err(_) => return false,
-            },
-            None => EnvironmentVariableMap::default(),
-        };
-        matches!(
-            self.command_factory.command(task_id, &environment),
-            Ok(Some(_))
-        )
+        self.command_factory.has_command(task_id)
     }
 
     pub fn exec_context(
