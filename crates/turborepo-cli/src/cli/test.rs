@@ -327,6 +327,40 @@ fn config_accepts_run_configuration_flags_before_command() {
 }
 
 #[test]
+fn setup_verbose_and_global_log_verbosity_are_independent() {
+    let args = parse_args(["turbo", "-vv", "setup", "--verbose"]).unwrap();
+    let Some(Command::Setup { setup_args }) = &args.command else {
+        panic!("not setup: {:?}", args.command);
+    };
+    assert!(setup_args.verbose);
+    assert_eq!(u8::from(args.verbosity), 2);
+}
+
+#[test]
+fn verbose_is_setup_only_and_points_other_commands_at_verbosity() {
+    for words in [
+        &["turbo", "setup", "--verbose"][..],
+        &["turbo", "--cwd", "repo", "setup", "--verbose"],
+        &["turbo", "run", "build", "--", "--verbose"],
+        &["turbo", "build", "--", "--verbose"],
+    ] {
+        assert!(parse_args(words.iter().copied()).is_ok(), "{words:?}");
+    }
+    for words in [
+        &["turbo", "build", "--verbose"][..],
+        &["turbo", "run", "build", "--verbose"],
+        &["turbo", "--verbose", "setup"],
+        &["turbo", "prune", "web", "--verbose"],
+    ] {
+        let error = parse_args(words.iter().copied()).unwrap_err();
+        assert!(
+            error.contains("The --verbose flag is not supported. Please use --verbosity instead."),
+            "{words:?}: {error}"
+        );
+    }
+}
+
+#[test]
 fn setup_parser_keeps_controls_separate_from_tasks() {
     use crate::cli::SetupArgs;
 
@@ -340,6 +374,7 @@ fn setup_parser_keeps_controls_separate_from_tasks() {
         "--tools-only",
         "--no-lock",
         "--update-lock",
+        "--verbose",
     ] {
         let args = parse_args(["turbo", "--verbosity=2", "setup", flag, "--cwd", "repo"]).unwrap();
         assert!(matches!(args.command, Some(Command::Setup { .. })));

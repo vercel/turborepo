@@ -269,13 +269,6 @@ impl ShimArgs {
                                  `--debug` as a value, use `-- --debug`."
                         .to_string(),
                 });
-            } else if arg == "--verbose" {
-                return Err(Error::UnsupportedFlag {
-                    flag: "--verbose".to_string(),
-                    suggestion: "Please use --verbosity instead.\n if you are trying to pass \
-                                 `--verbose` as a value, use `-- --verbose`."
-                        .to_string(),
-                });
             } else {
                 remaining_turbo_args.push(arg);
             }

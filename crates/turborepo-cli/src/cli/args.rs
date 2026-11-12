@@ -860,6 +860,7 @@ impl Args {
                 ));
             }
         }
+        Self::reject_verbose_outside_setup(&words)?;
         let refs: Vec<&std::ffi::OsStr> = words.iter().map(OsString::as_os_str).collect();
         let mut args = Args::try_parse_from(&refs)
             .map_err(|error| Args::render_failure(&refs[1..], &error))?;
@@ -974,6 +975,23 @@ impl Args {
         if leading_run_flag && !parser.double_dash_seen() {
             words.insert(1, OsString::from("run"));
         }
+    }
+
+    fn reject_verbose_outside_setup(words: &[OsString]) -> Result<(), String> {
+        let before_tail = words
+            .iter()
+            .position(|word| word == "--")
+            .unwrap_or(words.len());
+        if words[..before_tail].iter().any(|word| word == "--verbose")
+            && !Self::is_setup_command(words)
+        {
+            return Err(
+                "error: The --verbose flag is not supported. Please use --verbosity instead.\n if \
+                 you are trying to pass `--verbose` as a value, use `-- --verbose`."
+                    .into(),
+            );
+        }
+        Ok(())
     }
 
     fn reject_duplicate_scalar_flags(words: &[OsString]) -> Result<(), String> {
@@ -1179,6 +1197,10 @@ pub struct SetupArgs {
     /// Refresh floating requests and provision repository-policy-selected tools
     #[usage(long)]
     pub update_lock: bool,
+    /// Stream every dependency installer's output live instead of showing a
+    /// spinner
+    #[usage(long)]
+    pub verbose: bool,
 }
 
 /// Defines the subcommandsds for CLI
