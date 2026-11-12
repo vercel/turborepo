@@ -21,7 +21,6 @@ Read the current official guidance before changing files:
 
 Treat these pages as the source of truth for current configuration, toolchain prerequisites, and toolchain commands. If required documentation cannot be verified, stop rather than relying on remembered syntax.
 
-
 ## Applicability
 
 Require all of the following:
