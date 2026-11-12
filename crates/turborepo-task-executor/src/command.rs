@@ -18,6 +18,9 @@ use turborepo_types::{TaskArgs, TaskCommandOverride};
 
 use crate::MfeConfigProvider;
 
+/// Dependency that brings a package its own `microfrontends` proxy binary.
+const MICROFRONTENDS_PACKAGE: &str = "@vercel/microfrontends";
+
 fn apply_environment(cmd: &mut Command, environment: &EnvironmentVariableMap) {
     cmd.env_clear();
     cmd.envs(environment.iter());
@@ -50,6 +53,13 @@ pub trait CommandProvider<E> {
         task_id: &TaskId,
         environment: &EnvironmentVariableMap,
     ) -> Result<Option<Command>, E>;
+
+    /// Whether [`CommandProvider::command`] would produce a command for this
+    /// task, decided from the repository alone. Which provider handles a task
+    /// never depends on the environment, so asking this resolves no binary.
+    fn has_command(&self, _task_id: &TaskId) -> bool {
+        false
+    }
 }
 
 /// A collection of command providers.
@@ -97,6 +107,14 @@ impl<'a, E> CommandFactory<'a, E> {
             }
         }
         Ok(None)
+    }
+
+    /// Whether [`CommandFactory::command`] could produce a command for this
+    /// task, without resolving one.
+    pub fn has_command(&self, task_id: &TaskId) -> bool {
+        self.providers
+            .iter()
+            .any(|provider| provider.has_command(task_id))
     }
 }
 
@@ -268,6 +286,18 @@ impl<'a, M: MfeConfigProvider> ToolchainCommandProvider<'a, M> {
 impl<'a, M: MfeConfigProvider, E: From<CommandProviderError>> CommandProvider<E>
     for ToolchainCommandProvider<'a, M>
 {
+    fn has_command(&self, task_id: &TaskId) -> bool {
+        match self.command_overrides.get(task_id) {
+            Some(TaskCommandOverride::OptOut) => false,
+            Some(TaskCommandOverride::Argv(argv)) => !argv.is_empty(),
+            None => self
+                .package_graph
+                .package_task_context(&PackageName::from(task_id.package()))
+                .and_then(|context| context.native_tasks().get(task_id.task()))
+                .is_some_and(|task| task.command().is_some()),
+        }
+    }
+
     fn command(
         &self,
         task_id: &TaskId,
@@ -466,6 +496,19 @@ impl<'a, M: MfeConfigProvider> MicroFrontendProxyProvider<'a, M> {
 impl<'a, M: MfeConfigProvider, E: From<CommandProviderError>> CommandProvider<E>
     for MicroFrontendProxyProvider<'a, M>
 {
+    fn has_command(&self, task_id: &TaskId) -> bool {
+        if self.dev_tasks(task_id).is_none() {
+            return false;
+        }
+        let Ok(package_context) = self.validated_package_context(task_id) else {
+            return false;
+        };
+        package_context.native_tasks().defines("proxy")
+            || self
+                .package_graph
+                .has_dependency_declaration(package_context.package(), MICROFRONTENDS_PACKAGE)
+    }
+
     fn command(
         &self,
         task_id: &TaskId,
@@ -494,7 +537,6 @@ impl<'a, M: MfeConfigProvider, E: From<CommandProviderError>> CommandProvider<E>
         let has_custom_proxy = package_context.native_tasks().defines("proxy");
 
         // Check if package depends on @vercel/microfrontends via declarations.
-        const MICROFRONTENDS_PACKAGE: &str = "@vercel/microfrontends";
         let has_mfe_dependency = self
             .package_graph
             .has_dependency_declaration(package_context.package(), MICROFRONTENDS_PACKAGE);
@@ -980,6 +1022,74 @@ mod tests {
             Ok(host) => assert_eq!(ordinary.unwrap().unwrap().program(), host.as_os_str()),
             Err(_) => assert!(ordinary.is_err()),
         }
+    }
+
+    /// The prefetch probe only asks whether a task has a command, so it must
+    /// not resolve anything: in a managed run it is asked with no task PATH,
+    /// where any resolution would fail.
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn a_command_probe_resolves_no_binary() {
+        use std::os::unix::fs::PermissionsExt;
+        let (_directory, root, package_dir) = create_test_repo();
+        let graph = package_graph(
+            &root,
+            &package_dir,
+            PackageJson {
+                scripts: BTreeMap::from([("build".into(), Spanned::new("next build".into()))]),
+                ..Default::default()
+            },
+        )
+        .await;
+        let bin = root.join_components(&["managed", "bin"]);
+        bin.create_dir_all().unwrap();
+        let npm = bin.join_component("npm");
+        fs::write(&npm, "#!/bin/sh\necho managed-npm \"$@\"\n").unwrap();
+        fs::set_permissions(&npm, fs::Permissions::from_mode(0o755)).unwrap();
+        let no_bin = root.join_component("no-bin");
+        no_bin.create_dir_all().unwrap();
+        let build = TaskId::new("web", "build").into_owned();
+        let provider = |overrides| {
+            ToolchainCommandProvider::<crate::NoMfeConfig>::new(
+                &graph,
+                TaskArgs::new(&[], &[]),
+                None,
+                overrides,
+            )
+            .with_managed_path()
+        };
+
+        let mut factory: CommandFactory<'_, CommandProviderError> = CommandFactory::new();
+        factory.add_provider(provider(HashMap::new()));
+        // Answered from the task definition, without a task PATH.
+        assert!(factory.has_command(&build));
+        assert!(!factory.has_command(&TaskId::new("web", "test")));
+        // The dispatch that follows still resolves the package manager.
+        let command = factory
+            .command(&build, &path_only(bin.as_str()))
+            .unwrap()
+            .unwrap();
+        assert_eq!(command.program(), npm.as_std_path().as_os_str());
+        assert!(command_stdout(command).await.starts_with("managed-npm "));
+
+        // A task PATH without the binary still fails closed.
+        let mut unset: CommandFactory<'_, CommandProviderError> = CommandFactory::new();
+        unset.add_provider(provider(HashMap::new()));
+        assert!(unset.command(&build, &path_only(no_bin.as_str())).is_err());
+
+        // An override decides the answer without the catalog.
+        let mut opt_out: CommandFactory<'_, CommandProviderError> = CommandFactory::new();
+        opt_out.add_provider(provider(HashMap::from([(
+            build.clone(),
+            TaskCommandOverride::OptOut,
+        )])));
+        assert!(!opt_out.has_command(&build));
+        let mut argv: CommandFactory<'_, CommandProviderError> = CommandFactory::new();
+        argv.add_provider(provider(HashMap::from([(
+            build.clone(),
+            TaskCommandOverride::Argv(vec!["custom-build".to_owned()]),
+        )])));
+        assert!(argv.has_command(&build));
     }
 
     #[cfg(windows)]
