@@ -187,27 +187,23 @@ impl<'a> GlobalDepsPackageChangeMapper<'a> {
 
 impl PackageChangeMapper for GlobalDepsPackageChangeMapper<'_> {
     fn detect_package(&self, path: &AnchoredSystemPath) -> PackageMapping {
+        let cleaned_path = path.clean();
+        if self.global_deps_matcher.is_match(cleaned_path.as_str()) {
+            return PackageMapping::All(AllPackageChangeReason::GlobalDepsChanged {
+                file: path.to_owned(),
+            });
+        }
+
         match self.base.detect_package(path) {
             // Since `DefaultPackageChangeMapper` is overly conservative, we can check here if
             // the path is actually in globalDeps and if not, return it as
             // PackageDetection::Package(WorkspacePackage::root()).
-            PackageMapping::All(_) => {
-                let cleaned_path = path.clean();
-                let in_global_deps = self.global_deps_matcher.is_match(cleaned_path.as_str());
-
-                if in_global_deps {
-                    PackageMapping::All(AllPackageChangeReason::GlobalDepsChanged {
-                        file: path.to_owned(),
-                    })
-                } else {
-                    PackageMapping::Packages(vec![(
-                        WorkspacePackage::root(),
-                        PackageInclusionReason::FileChanged {
-                            file: path.to_owned(),
-                        },
-                    )])
-                }
-            }
+            PackageMapping::All(_) => PackageMapping::Packages(vec![(
+                WorkspacePackage::root(),
+                PackageInclusionReason::FileChanged {
+                    file: path.to_owned(),
+                },
+            )]),
             result => result,
         }
     }
@@ -853,6 +849,114 @@ mod tests {
             PackageChanges::All(AllPackageChangeReason::GlobalDepsChanged {
                 file: AnchoredSystemPathBuf::from_raw("package.json")?,
             })
+        );
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn package_file_in_global_deps_triggers_all() -> Result<(), anyhow::Error> {
+        let repo_root = tempdir()?;
+        let root = AbsoluteSystemPath::from_std_path(repo_root.path())?;
+        let a_manifest = root.join_components(&["packages", "a", "package.json"]);
+        a_manifest.ensure_dir()?;
+        a_manifest.create_with_contents(r#"{"name":"a"}"#)?;
+        let b_manifest = root.join_components(&["packages", "b", "package.json"]);
+        b_manifest.ensure_dir()?;
+        b_manifest.create_with_contents(r#"{"name":"b"}"#)?;
+
+        struct TwoPackagesDiscovery {
+            a: AbsoluteSystemPathBuf,
+            b: AbsoluteSystemPathBuf,
+        }
+        impl PackageDiscovery for TwoPackagesDiscovery {
+            async fn discover_packages(
+                &self,
+            ) -> Result<discovery::DiscoveryResponse, discovery::Error> {
+                Ok(discovery::DiscoveryResponse {
+                    package_manager: PackageManager::Npm,
+                    workspaces: vec![
+                        discovery::WorkspaceData::new(self.a.clone(), None)?,
+                        discovery::WorkspaceData::new(self.b.clone(), None)?,
+                    ],
+                })
+            }
+            async fn discover_packages_blocking(
+                &self,
+            ) -> Result<discovery::DiscoveryResponse, discovery::Error> {
+                self.discover_packages().await
+            }
+        }
+
+        let pkg_graph = PackageGraphBuilder::new(root, PackageJson::default())
+            .with_package_discovery(TwoPackagesDiscovery {
+                a: a_manifest,
+                b: b_manifest,
+            })
+            .build()
+            .await?;
+
+        // packages/a/shared.json is in globalDependencies
+        let detector =
+            GlobalDepsPackageChangeMapper::new(&pkg_graph, ["packages/a/shared.json"].into_iter())?;
+        let change_mapper = ChangeMapper::new(&pkg_graph, vec![], detector);
+
+        let shared_file = AnchoredSystemPathBuf::from_raw(
+            ["packages", "a", "shared.json"].join(std::path::MAIN_SEPARATOR_STR),
+        )?;
+
+        let result = change_mapper.changed_packages(
+            [shared_file.clone()].into_iter().collect(),
+            LockfileContents::Unchanged,
+        )?;
+
+        assert_eq!(
+            result,
+            PackageChanges::All(AllPackageChangeReason::GlobalDepsChanged { file: shared_file })
+        );
+
+        // A non-global file in package a should still be scoped only to package a
+        let a_file = AnchoredSystemPathBuf::from_raw(
+            ["packages", "a", "index.ts"].join(std::path::MAIN_SEPARATOR_STR),
+        )?;
+        let result = change_mapper.changed_packages(
+            [a_file.clone()].into_iter().collect(),
+            LockfileContents::Unchanged,
+        )?;
+        let PackageChanges::Some(packages) = result else {
+            panic!("expected scoped package changes");
+        };
+        assert_eq!(packages.len(), 1);
+        let (pkg, _) = packages.into_iter().next().unwrap();
+        assert_eq!(pkg.name.as_ref(), "a");
+
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn lockfile_in_global_deps_triggers_all() -> Result<(), anyhow::Error> {
+        let repo_root = tempdir()?;
+        let pkg_graph = PackageGraphBuilder::new(
+            AbsoluteSystemPath::from_std_path(repo_root.path())?,
+            PackageJson::default(),
+        )
+        .with_package_discovery(MockDiscovery)
+        .build()
+        .await?;
+
+        let detector =
+            GlobalDepsPackageChangeMapper::new(&pkg_graph, ["package-lock.json"].into_iter())?;
+        let change_mapper = ChangeMapper::new(&pkg_graph, vec![], detector);
+
+        let lockfile = AnchoredSystemPathBuf::from_raw("package-lock.json")?;
+        let result = change_mapper.changed_packages(
+            [lockfile.clone()].into_iter().collect(),
+            LockfileContents::Unchanged,
+        )?;
+
+        assert_eq!(
+            result,
+            PackageChanges::All(AllPackageChangeReason::GlobalDepsChanged { file: lockfile })
         );
 
         Ok(())
