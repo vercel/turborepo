@@ -79,6 +79,14 @@ pub enum Error {
         path: String,
         existing_path: String,
     },
+    #[error(
+        "Nested packages are not supported: package at \"{child}\" is inside package at \
+         \"{parent}\". Move the nested package outside its parent package."
+    )]
+    NestedPackages {
+        parent: AnchoredSystemPathBuf,
+        child: AnchoredSystemPathBuf,
+    },
     #[error("Path error: {0}")]
     Path(#[from] turbopath::PathError),
     #[diagnostic(transparent)]
@@ -1444,6 +1452,7 @@ impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedPackageManage
             &observations,
             &workspace_roots,
         )?);
+        javascript::validate_package_directories(&knowledge)?;
         for root in knowledge.workspace_roots() {
             tracing::debug!(
                 kind = root.kind(),
@@ -2176,6 +2185,52 @@ mod test {
         DiscoverPackageScopesFuture, DiscoverPackagesFuture, DiscoveredPackageScope,
         DiscoveredPackageScopes, DiscoveredPackages, WorkspaceRoot,
     };
+
+    #[tokio::test]
+    async fn nested_package_directories_are_rejected_in_eager_and_lazy_graphs() {
+        let temp = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPath::from_std_path(temp.path()).unwrap();
+        let package_jsons = HashMap::from([
+            (
+                root.join_components(&["apps", "a", "package.json"]),
+                PackageJson {
+                    name: Some(Spanned::new("a".into())),
+                    ..Default::default()
+                },
+            ),
+            (
+                root.join_components(&["apps", "a", "b", "package.json"]),
+                PackageJson {
+                    name: Some(Spanned::new("b".into())),
+                    ..Default::default()
+                },
+            ),
+        ]);
+        let builder = || {
+            PackageGraphBuilder::new(root, PackageJson::default())
+                .with_package_discovery(MockDiscovery)
+                .with_package_jsons(Some(package_jsons.clone()))
+                .without_external_dependencies()
+        };
+        let eager = builder()
+            .build()
+            .await
+            .expect_err("nested packages must fail");
+        let lazy = builder()
+            .build_lazy()
+            .await
+            .err()
+            .expect("nested packages must fail");
+        for error in [eager, lazy] {
+            let message = error.to_string().replace('\\', "/");
+            assert!(
+                message.contains("Nested packages are not supported"),
+                "{message}"
+            );
+            assert!(message.contains("\"apps/a\""), "{message}");
+            assert!(message.contains("\"apps/a/b\""), "{message}");
+        }
+    }
 
     #[tokio::test]
     async fn injected_sources_control_discovery_and_manifest_errors() {

@@ -1075,6 +1075,75 @@ mod test {
         (temp_folder, resolver)
     }
 
+    // Native package scopes may nest, so use them for language-independent
+    // filtering fixtures that need both parent and child packages.
+    fn make_native_project<T: GitChangeDetector>(
+        dependencies: &[(&str, &str)],
+        extras: &[&str],
+        package_inference: Option<PackageInference>,
+        change_detector: T,
+    ) -> (TempDir, super::FilterResolver<'static, T>) {
+        let tempdir = tempfile::tempdir().unwrap();
+        let root = Box::leak(Box::new(
+            AbsoluteSystemPathBuf::try_from(tempdir.path().to_path_buf()).unwrap(),
+        ));
+        let directories = dependencies
+            .iter()
+            .flat_map(|(source, target)| [*source, *target])
+            .chain(extras.iter().copied())
+            .collect::<HashSet<_>>();
+        let packages = directories
+            .into_iter()
+            .map(|directory| {
+                let manifest = root.join_unix_path(
+                    RelativeUnixPathBuf::new(format!("{directory}/package.toml")).unwrap(),
+                );
+                manifest.ensure_dir().unwrap();
+                DiscoveredPackage::package(
+                    Some(get_name(directory).1.to_string()),
+                    PackageJson::default(),
+                    manifest,
+                )
+                .with_native_relationships(
+                    dependencies
+                        .iter()
+                        .filter(|(source, _)| *source == directory)
+                        .map(|(_, target)| {
+                            Relationship::internal(get_name(target).1, DependencyKind::Production)
+                        })
+                        .collect(),
+                )
+            })
+            .collect();
+        let graph = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap()
+            .block_on(
+                PackageGraph::builder(root, PackageJson::default())
+                    .with_package_discovery(MockDiscovery)
+                    .with_contributor(Arc::new(ColocatedContributor {
+                        id: ToolchainId::new("filter-test"),
+                        output: DiscoveredPackages::new(
+                            packages,
+                            vec![WorkspaceRoot::new("filter-test", root.clone())],
+                        ),
+                    }))
+                    .build(),
+            )
+            .unwrap();
+        let graph = Box::leak(Box::new(graph));
+        (
+            tempdir,
+            FilterResolver::new_with_change_detector(
+                graph,
+                root,
+                package_inference,
+                change_detector,
+            ),
+        )
+    }
+
     #[test_case(
         vec![
             TargetSelector {
@@ -1310,7 +1379,7 @@ mod test {
         package_inference: Option<PackageInference>,
         expected: &[&str],
     ) {
-        let (_tempdir, resolver) = make_project(
+        let (_tempdir, resolver) = make_native_project(
             &[
                 ("packages/project-0", "packages/project-1"),
                 ("packages/project-0", "project-5"),
@@ -1938,9 +2007,7 @@ mod test {
         let root = AbsoluteSystemPathBuf::new(tempdir.path().to_str().unwrap()).unwrap();
         let mut package_jsons = HashMap::new();
         for (directory, name) in [
-            ("apps", "apps"),
             ("apps/shared", "@repo/js"),
-            ("apps/shared/child", "child"),
             ("packages/unrelated", "unrelated"),
             ("packages/native-dep", "native-dep"),
         ] {
@@ -1971,6 +2038,27 @@ mod test {
         let mut builder = PackageGraph::builder(&root, PackageJson::default())
             .with_package_discovery(MockDiscovery)
             .with_package_jsons(Some(package_jsons))
+            .with_contributor(Arc::new(ColocatedContributor {
+                id: ToolchainId::new("test-nested"),
+                output: DiscoveredPackages::new(
+                    [("apps", "apps"), ("apps/shared/child", "child")]
+                        .into_iter()
+                        .map(|(directory, name)| {
+                            let manifest = root.join_unix_path(
+                                RelativeUnixPathBuf::new(format!("{directory}/package.toml"))
+                                    .unwrap(),
+                            );
+                            manifest.ensure_dir().unwrap();
+                            DiscoveredPackage::package(
+                                Some(name.to_string()),
+                                PackageJson::default(),
+                                manifest,
+                            )
+                        })
+                        .collect(),
+                    vec![WorkspaceRoot::new("test-nested", root.clone())],
+                ),
+            }))
             .with_contributor(Arc::new(ColocatedContributor {
                 id: ToolchainId::new("test-consumer"),
                 output: DiscoveredPackages::new(
@@ -2321,17 +2409,18 @@ mod test {
     /// when packages are nested.
     #[test]
     fn test_package_inference_selects_deepest_package() {
-        // Create a structure with nested packages
-        let (_tempdir, turbo_root, graph) = make_package_graph(&[
-            "apps",        // shallow package
-            "apps/web",    // deeper package inside apps
-            "apps/web/ui", // even deeper package
-            "packages/shared",
-        ]);
+        let (_tempdir, resolver) = make_native_project(
+            &[],
+            &["apps", "apps/web", "apps/web/ui", "packages/shared"],
+            None,
+            TestChangeDetector::new(&[]),
+        );
+        let turbo_root = resolver.turbo_root;
+        let graph = resolver.pkg_graph;
 
         // When invoked from apps/web/ui/src, should infer apps/web/ui (the deepest)
         let inference_path = AnchoredSystemPathBuf::try_from("apps/web/ui/src").unwrap();
-        let inference = PackageInference::calculate(turbo_root, &inference_path, &graph);
+        let inference = PackageInference::calculate(turbo_root, &inference_path, graph);
 
         assert_eq!(
             inference.package_names,
@@ -2345,7 +2434,7 @@ mod test {
 
         // When invoked from apps/web/src (outside ui), should infer apps/web
         let inference_path = AnchoredSystemPathBuf::try_from("apps/web/src").unwrap();
-        let inference = PackageInference::calculate(turbo_root, &inference_path, &graph);
+        let inference = PackageInference::calculate(turbo_root, &inference_path, graph);
 
         assert_eq!(
             inference.package_names,
@@ -2462,7 +2551,8 @@ mod test {
     /// filter like `./*` fails to match the child packages.
     ///
     /// Reproduction structure:
-    /// - `apps` is a workspace (has package.json with name "apps")
+    /// These native scopes permit nesting, which JavaScript packages do not.
+    /// - `apps` is a package named "apps"
     /// - `apps/app-a` is a workspace
     /// - `apps/app-b` is a workspace
     /// - `apps/app-a/app-a-client` is a nested workspace
@@ -2480,7 +2570,7 @@ mod test {
         // - apps/app-b depends on pkg-c
         // - apps/app-a/app-a-client depends on app-a
         // - packages/pkg-a, pkg-b, pkg-c, tooling-config
-        let (_tempdir, resolver) = make_project(
+        let (_tempdir, resolver) = make_native_project(
             &[
                 ("apps/app-a", "packages/pkg-a"),
                 ("apps/app-b", "packages/pkg-c"),

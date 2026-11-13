@@ -253,50 +253,21 @@ mod tests {
 
     #[tokio::test]
     async fn nested_package_owns_its_files() -> Result<(), anyhow::Error> {
+        use crate::toolchain::ToolchainId;
+
         let repo_root = tempdir()?;
         let root = AbsoluteSystemPath::from_std_path(repo_root.path())?;
-        let parent_manifest = root.join_components(&["packages", "parent", "package.json"]);
-        let child_manifest = root.join_components(&["packages", "parent", "child", "package.json"]);
-        parent_manifest.ensure_dir()?;
-        parent_manifest.create_with_contents(r#"{"name":"parent"}"#)?;
-        child_manifest.ensure_dir()?;
-        child_manifest.create_with_contents(r#"{"name":"child"}"#)?;
-
-        struct NestedDiscovery {
-            parent_manifest: AbsoluteSystemPathBuf,
-            child_manifest: AbsoluteSystemPathBuf,
-        }
-        impl PackageDiscovery for NestedDiscovery {
-            async fn discover_packages(
-                &self,
-            ) -> Result<discovery::DiscoveryResponse, discovery::Error> {
-                Ok(discovery::DiscoveryResponse {
-                    package_manager: PackageManager::Npm,
-                    // Parent first reproduces the observation order that used
-                    // to make it incorrectly claim the child's files.
-                    workspaces: vec![
-                        discovery::WorkspaceData::new(self.parent_manifest.clone(), None)?,
-                        discovery::WorkspaceData::new(self.child_manifest.clone(), None)?,
-                    ],
-                })
-            }
-
-            async fn discover_packages_blocking(
-                &self,
-            ) -> Result<discovery::DiscoveryResponse, discovery::Error> {
-                self.discover_packages().await
-            }
-        }
-
-        let graph = PackageGraphBuilder::new(root, PackageJson::default())
-            .with_package_discovery(NestedDiscovery {
-                parent_manifest,
-                child_manifest,
-            })
-            .build()
-            .await?;
+        // Native packages may nest. Keep the parent-first discovery order
+        // that previously let a parent claim its child's files.
+        let graph = colocated_graph(
+            root,
+            "parent-js",
+            &[(ToolchainId::RUST, "Cargo.toml")],
+            PackageJson::default(),
+        )
+        .await?;
         let file = AnchoredSystemPathBuf::from_raw(
-            ["packages", "parent", "child", "src", "index.ts"].join(std::path::MAIN_SEPARATOR_STR),
+            ["packages", "shared", "child", "src", "index.ts"].join(std::path::MAIN_SEPARATOR_STR),
         )?;
 
         let PackageMapping::Packages(packages) =
@@ -307,8 +278,8 @@ mod tests {
         let [(package, _)] = packages.as_slice() else {
             panic!("expected only the child package");
         };
-        assert_eq!(package.name.as_ref(), "child");
-        assert_eq!(package.path.to_unix().as_str(), "packages/parent/child");
+        assert_eq!(package.name.as_ref(), "child-rust");
+        assert_eq!(package.path.to_unix().as_str(), "packages/shared/child");
 
         Ok(())
     }
@@ -437,6 +408,11 @@ mod tests {
                     Ok(DiscoveredPackages::new(
                         vec![
                             DiscoveredPackage::package(
+                                Some(format!("parent-{}", self.id)),
+                                PackageJson::default(),
+                                self.root.join_components(&["packages", &self.manifest]),
+                            ),
+                            DiscoveredPackage::package(
                                 Some(self.id.to_string()),
                                 PackageJson::default(),
                                 self.root
@@ -472,9 +448,7 @@ mod tests {
 
         let mut manifests = std::collections::HashMap::new();
         for (directory, name) in [
-            (vec!["packages"], "parent"),
             (vec!["packages", "shared"], javascript_name),
-            (vec!["packages", "shared", "child"], "child-js"),
             (vec!["packages", "unrelated"], "unrelated"),
         ] {
             let path = root
@@ -559,8 +533,9 @@ mod tests {
                 else {
                     panic!("expected nested packages");
                 };
-                let expected = std::iter::once("child-js".to_string())
-                    .chain(native.iter().map(|(id, _)| format!("child-{id}")))
+                let expected = native
+                    .iter()
+                    .map(|(id, _)| format!("child-{id}"))
                     .collect::<std::collections::BTreeSet<_>>();
                 assert_eq!(
                     packages
