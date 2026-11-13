@@ -864,7 +864,7 @@ impl InstallStep<'_> {
             result,
         };
         self.console.exclusively_above_spinner(|| {
-            if exit.is_some() {
+            if exit.is_some() || matches!(&sink, Some(Sink::Stream(_))) {
                 self.replay(sink)?;
             }
             self.console.out(&render_step(&outcome, self.console.style))

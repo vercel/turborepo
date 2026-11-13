@@ -409,6 +409,16 @@ mod child {
     }
 
     #[test]
+    fn plain_flushes_a_partial_last_line_on_success() {
+        let (console, captured) = Console::capture(Mode::Plain);
+        let mut step = console.step(ToolchainId::JAVASCRIPT, "sh", "sh partial".into());
+        let exit = run(&mut step, "printf partial");
+        assert_eq!(exit, None);
+        step.finish(exit).unwrap();
+        assert_eq!(captured.err(), "sh │ partial\n");
+    }
+
+    #[test]
     fn interactive_hides_output_on_success() {
         let (console, captured) = Console::capture(Mode::Interactive);
         let mut step = console.step(ToolchainId::JAVASCRIPT, "sh", "sh quiet".into());
