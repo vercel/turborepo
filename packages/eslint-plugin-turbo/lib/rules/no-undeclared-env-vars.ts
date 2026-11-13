@@ -11,6 +11,7 @@ import {
 import { frameworks } from "@turbo/types";
 import { RULES } from "../constants";
 import { Project, getWorkspaceFromFilePath } from "../utils/calculate-inputs";
+import { wildcardToRegexPattern } from "../utils/wildcard-processing";
 
 const debug = process.env.RUNNER_DEBUG
   ? logger.info
@@ -304,7 +305,10 @@ const frameworkEnvMatches = (filePath: string): Set<RegExp> => {
       if (hasMatch) {
         return new Set([
           ...acc,
-          ...envWildcards.map((envWildcard) => RegExp(envWildcard))
+          ...envWildcards.map(
+            (envWildcard) =>
+              new RegExp(`^${wildcardToRegexPattern(envWildcard)}$`)
+          )
         ]);
       }
       return acc;
