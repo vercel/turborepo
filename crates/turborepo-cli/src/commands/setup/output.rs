@@ -176,6 +176,7 @@ pub(super) enum Note {
 pub(super) struct DependencyReport {
     pub steps: Vec<StepOutcome>,
     pub offline: bool,
+    pub ran_concurrently: bool,
 }
 
 impl DependencyReport {
@@ -435,14 +436,31 @@ pub(super) fn render_final(deps: &DependencyReport, elapsed: Duration, style: St
                 .map(|(step, _)| step.toolchain.as_str())
                 .collect::<Vec<_>>()
                 .join(", ");
-            format!(
-                "{cross} {} installers failed offline ({ids}); run turbo setup without --offline \
-                 to download what they need",
-                many.len()
-            )
+            if deps.offline {
+                format!(
+                    "{cross} {} installers failed offline ({ids}); run turbo setup without \
+                     --offline to download what they need",
+                    many.len()
+                )
+            } else {
+                format!("{cross} {} installers failed ({ids})", many.len())
+            }
         }
     };
-    format!("{line}\n")
+    let hint = match failures.is_empty() {
+        true => String::new(),
+        false => install_order_hint(deps, style),
+    };
+    format!("{line}\n{hint}")
+}
+
+fn install_order_hint(deps: &DependencyReport, style: Style) -> String {
+    if !deps.ran_concurrently || deps.offline {
+        return String::new();
+    }
+    let hint = "Installers ran in parallel. If one needs another's dependencies, list your \
+                toolchains in setup.dependencyInstallOrder in turbo.json.";
+    format!("{}\n", style.paint(&GREY, hint))
 }
 
 type SharedWriter = Arc<Mutex<Box<dyn Write + Send>>>;

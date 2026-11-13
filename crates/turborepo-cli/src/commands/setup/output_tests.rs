@@ -200,6 +200,7 @@ fn the_final_line_and_lock_reminder_are_set_apart_by_blank_lines() {
             deps: DependencyReport {
                 steps: vec![],
                 offline: false,
+                ran_concurrently: false,
             },
             lock,
         };
@@ -228,6 +229,7 @@ fn a_successful_run_ends_ready() {
             3.1,
         )],
         offline: false,
+        ran_concurrently: false,
     };
     let text = deps
         .steps
@@ -249,6 +251,7 @@ fn an_online_failure_names_the_command_and_exit_code() {
             1,
         )],
         offline: false,
+        ran_concurrently: false,
     };
     let text = render_step(&deps.steps[0], style(false))
         + &render_final(&deps, Duration::from_secs(2), style(false));
@@ -264,6 +267,7 @@ fn offline_failures_aggregate_and_return_the_first_code() {
             installed(ToolchainId::GO, "go mod download", 0.2),
         ],
         offline: true,
+        ran_concurrently: false,
     };
     let many = DependencyReport {
         steps: vec![
@@ -271,11 +275,51 @@ fn offline_failures_aggregate_and_return_the_first_code() {
             failed(ToolchainId::PYTHON, "uv sync --offline", 2),
         ],
         offline: true,
+        ran_concurrently: false,
     };
     let text = render_final(&one, Duration::ZERO, style(false))
         + &render_final(&many, Duration::ZERO, style(false));
     insta::assert_snapshot!(text);
     assert_eq!((one.exit_code(), many.exit_code()), (1, 7));
+}
+
+#[test]
+fn online_failures_of_installers_running_together_aggregate() {
+    let deps = DependencyReport {
+        steps: vec![
+            failed(ToolchainId::JAVASCRIPT, "pnpm install --frozen-lockfile", 1),
+            failed(ToolchainId::RUST, "cargo fetch --locked", 101),
+        ],
+        offline: false,
+        ran_concurrently: true,
+    };
+    assert_eq!(
+        render_final(&deps, Duration::ZERO, style(false)),
+        "✗ 2 installers failed (javascript, rust)\nInstallers ran in parallel. If one needs \
+         another's dependencies, list your toolchains in setup.dependencyInstallOrder in \
+         turbo.json.\n"
+    );
+    assert_eq!(deps.exit_code(), 1);
+}
+
+#[test]
+fn only_a_parallel_online_failure_points_at_the_opt_out() {
+    let report = |result: fn() -> StepOutcome, offline, ran_concurrently| DependencyReport {
+        steps: vec![result()],
+        offline,
+        ran_concurrently,
+    };
+    let fail = || failed(ToolchainId::PYTHON, "uv sync", 1);
+    let pass = || installed(ToolchainId::PYTHON, "uv sync", 1.0);
+    for (deps, hinted) in [
+        (report(fail, false, true), true),
+        (report(fail, false, false), false),
+        (report(fail, true, true), false),
+        (report(pass, false, true), false),
+    ] {
+        let text = render_final(&deps, Duration::ZERO, style(false));
+        assert_eq!(text.contains("dependencyInstallOrder"), hinted, "{deps:?}");
+    }
 }
 
 #[test]
@@ -286,10 +330,12 @@ fn skips_are_one_line_when_nothing_installs_else_one_per_toolchain() {
             skipped(ToolchainId::RUST, "--tools-only"),
         ],
         offline: false,
+        ran_concurrently: false,
     };
     let none = DependencyReport {
         steps: vec![],
         offline: false,
+        ran_concurrently: false,
     };
     let partial = DependencyReport {
         steps: vec![
@@ -297,6 +343,7 @@ fn skips_are_one_line_when_nothing_installs_else_one_per_toolchain() {
             skipped(ToolchainId::PYTHON, "turbo.json setup policy"),
         ],
         offline: false,
+        ran_concurrently: false,
     };
     assert_eq!(
         render_skips(&all, style(false)),
