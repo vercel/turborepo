@@ -130,6 +130,7 @@ mod tests {
             .unwrap();
         PackageGraph::builder(root, package_json)
             .with_package_manager(PackageManager::Pnpm)
+            .with_cargo()
             .build()
             .await
             .unwrap()
@@ -150,7 +151,25 @@ mod tests {
     async fn directory_resolution_uses_the_deepest_package_owner() {
         let tmp = TempDir::new().unwrap();
         let root = root(&tmp);
-        package(&root, "apps/shell", "shell");
+        // A JavaScript member may sit inside a native package, and must take
+        // precedence over that ancestor when resolving a development port.
+        root.join_component("Cargo.toml")
+            .create_with_contents(
+                "[workspace]\nmembers = [\"apps/shell\"]\n\n[workspace.metadata]\nname = \
+                 \"native-workspace\"\n",
+            )
+            .unwrap();
+        root.join_components(&["apps", "shell", "src"])
+            .create_dir_all()
+            .unwrap();
+        root.join_components(&["apps", "shell", "Cargo.toml"])
+            .create_with_contents(
+                "[package]\nname = \"shell\"\nversion = \"0.1.0\"\nedition = \"2024\"\n",
+            )
+            .unwrap();
+        root.join_components(&["apps", "shell", "src", "lib.rs"])
+            .create_with_contents("")
+            .unwrap();
         package(&root, "apps/shell/packages/widget", "widget");
         let graph = package_graph(&root).await;
         let configs = configs(

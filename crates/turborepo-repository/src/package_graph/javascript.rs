@@ -1,5 +1,5 @@
 use std::{
-    collections::{BTreeMap, HashMap},
+    collections::{BTreeMap, BTreeSet, HashMap},
     sync::Arc,
 };
 
@@ -25,6 +25,29 @@ use crate::{
 pub(super) struct ResolutionSnapshot {
     pub generation: Arc<ExternalResolutionGeneration>,
     pub warning: Option<String>,
+}
+
+pub(super) fn validate_package_directories(
+    knowledge: &RepositoryKnowledge,
+) -> Result<(), super::builder::Error> {
+    // The repository root may contain members. Only package.json member
+    // directories must be disjoint, regardless of their discovery order.
+    let directories: BTreeSet<_> = knowledge
+        .package_json_packages()
+        .map(|(_, directory)| directory)
+        .filter(|directory| !directory.as_str().is_empty())
+        .collect();
+    for &child in &directories {
+        for parent in child.ancestors().skip(1) {
+            if directories.contains(parent) {
+                return Err(super::builder::Error::NestedPackages {
+                    parent: parent.to_owned(),
+                    child: child.to_owned(),
+                });
+            }
+        }
+    }
+    Ok(())
 }
 
 fn resolution_packages(knowledge: &RepositoryKnowledge) -> Vec<(&str, &AnchoredSystemPath)> {
