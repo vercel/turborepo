@@ -86,11 +86,12 @@ fn skipped(id: ToolchainId, reason: &str) -> StepOutcome {
 }
 
 #[test]
-fn mode_is_interactive_only_on_a_terminal_outside_ci() {
-    assert_eq!(Mode::detect(false, true), Mode::Interactive);
-    assert_eq!(Mode::detect(true, true), Mode::Plain);
-    assert_eq!(Mode::detect(false, false), Mode::Plain);
-    assert_eq!(Mode::detect(true, false), Mode::Plain);
+fn mode_is_interactive_only_on_a_terminal_outside_ci_without_verbose() {
+    assert_eq!(Mode::detect(false, true, false), Mode::Interactive);
+    assert_eq!(Mode::detect(true, true, false), Mode::Plain);
+    assert_eq!(Mode::detect(false, false, false), Mode::Plain);
+    assert_eq!(Mode::detect(true, false, false), Mode::Plain);
+    assert_eq!(Mode::detect(false, true, true), Mode::Plain);
 }
 
 #[test]

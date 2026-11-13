@@ -25,21 +25,20 @@ pub(super) enum Mode {
     /// stderr is a terminal outside CI: a spinner, with child output buffered
     /// and replayed only on failure.
     Interactive,
-    /// CI or a non-terminal stderr: child output streams live, prefixed.
     Plain,
 }
 
 impl Mode {
-    pub(super) fn detect(ci: bool, stderr_is_terminal: bool) -> Self {
-        if !ci && stderr_is_terminal {
+    pub(super) fn detect(ci: bool, stderr_is_terminal: bool, verbose: bool) -> Self {
+        if !ci && stderr_is_terminal && !verbose {
             Self::Interactive
         } else {
             Self::Plain
         }
     }
 
-    pub(super) fn current(ci: bool) -> Self {
-        Self::detect(ci, io::stderr().is_terminal())
+    pub(super) fn current(ci: bool, verbose: bool) -> Self {
+        Self::detect(ci, io::stderr().is_terminal(), verbose)
     }
 }
 

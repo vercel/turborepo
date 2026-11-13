@@ -235,7 +235,7 @@ pub fn run_with_telemetry(
 ) -> Result<i32, Error> {
     let started = Instant::now();
     let console = output::Console::new(output::Style {
-        mode: output::Mode::current(turborepo_ci::is_ci()),
+        mode: output::Mode::current(turborepo_ci::is_ci(), setup_args.verbose),
         color: color_config,
     });
     let mut report = telemetry::Report::default();
@@ -696,7 +696,7 @@ pub fn setup_for_tests(
     };
     // Like run_with_policy, never telemetry. Binary tests run real Git.
     let console = output::Console::new(output::Style {
-        mode: output::Mode::current(turborepo_ci::is_ci()),
+        mode: output::Mode::current(turborepo_ci::is_ci(), setup_args.verbose),
         color: ColorConfig::new(true),
     });
     run_reporting(
