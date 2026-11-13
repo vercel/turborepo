@@ -341,6 +341,24 @@ fn prefixer_prefixes_lines_and_progress_redraws() {
 }
 
 #[test]
+fn installers_streaming_together_never_split_a_line() {
+    let out = Arc::new(Mutex::new(Vec::new()));
+    let shared: SharedWriter = Arc::new(Mutex::new(Box::new(Buffer(out.clone()))));
+    let mut pnpm = LinePrefixer::new(Shared(shared.clone()), "pnpm");
+    let mut cargo = LinePrefixer::new(Shared(shared), "cargo");
+    pnpm.write_all(b"res").unwrap();
+    cargo.write_all(b"Downloa").unwrap();
+    pnpm.write_all(b"olved 3\nadd").unwrap();
+    cargo.write_all(b"ded serde\n").unwrap();
+    pnpm.finish().unwrap();
+    cargo.finish().unwrap();
+    assert_eq!(
+        String::from_utf8(out.lock().unwrap().clone()).unwrap(),
+        "pnpm │ resolved 3\ncargo │ Downloaded serde\npnpm │ add\n"
+    );
+}
+
+#[test]
 fn completed_reports_print_no_final_line() {
     let (console, captured) = Console::capture(Mode::Plain);
     let code = console
@@ -389,6 +407,16 @@ mod child {
         assert!(matches!(outcome.result, StepResult::Failed { code: 3, .. }));
         assert_eq!(captured.err(), "sh │ out\nsh │ err\nsh │ partial\n");
         assert_eq!(timeless(&captured.out()), "✗ sh noisy");
+    }
+
+    #[test]
+    fn plain_flushes_a_partial_last_line_on_success() {
+        let (console, captured) = Console::capture(Mode::Plain);
+        let mut step = console.step(ToolchainId::JAVASCRIPT, "sh", "sh partial".into());
+        let exit = run(&mut step, "printf partial");
+        assert_eq!(exit, None);
+        step.finish(exit).unwrap();
+        assert_eq!(captured.err(), "sh │ partial\n");
     }
 
     #[test]
