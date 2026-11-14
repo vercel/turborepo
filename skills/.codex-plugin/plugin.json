@@ -1,0 +1,43 @@
+{
+  "name": "turborepo",
+  "version": "0.1.1",
+  "description": "Configure and troubleshoot Turborepo by reading the version-matched docs shipped inside the installed turbo package.",
+  "author": {
+    "name": "Vercel",
+    "url": "https://vercel.com"
+  },
+  "homepage": "https://turborepo.dev",
+  "repository": "https://github.com/vercel/turborepo",
+  "license": "MIT",
+  "keywords": [
+    "turborepo",
+    "monorepo",
+    "build-system",
+    "caching",
+    "remote-cache",
+    "turbo",
+    "vercel"
+  ],
+  "skills": ["./turborepo"],
+  "interface": {
+    "displayName": "Turborepo",
+    "shortDescription": "Configure and troubleshoot Turborepo with its bundled docs",
+    "longDescription": "Turborepo is a high-performance build system for JavaScript and TypeScript monorepos. This plugin teaches coding agents to configure and troubleshoot Turborepo by reading the documentation that ships inside the installed turbo package, so guidance always matches the installed version.\n\nUse it when working with turbo.json, task pipelines, local or Remote Cache, the turbo CLI, filtering, environment variables, package boundaries, monorepo structure, or CI workflows. The skill points agents at node_modules/turbo/docs (or the resolved package path) rather than relying on outdated general advice. If turbo is missing, it tells the agent to inspect the repository's package manager and version constraints before installing.\n\nThe skill text matches skills/turborepo/SKILL.md in this repository.",
+    "developerName": "Vercel",
+    "category": "Developer Tools",
+    "capabilities": [
+      "Turborepo configuration",
+      "Task pipelines and caching",
+      "Remote Cache and CI workflows"
+    ],
+    "websiteURL": "https://turborepo.dev",
+    "defaultPrompt": [
+      "Configure turbo.json task pipelines for my monorepo",
+      "Diagnose why Turborepo Remote Cache misses in CI",
+      "Set up package filtering and environment variables for turbo run"
+    ],
+    "brandColor": "#FF1E56",
+    "composerIcon": "./assets/logo.svg",
+    "logo": "./assets/logo.svg"
+  }
+}
