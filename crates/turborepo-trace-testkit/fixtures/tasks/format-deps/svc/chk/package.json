@@ -1,0 +1,9 @@
+{
+  "name": "chk",
+  "version": "1.0.0",
+  "scripts": {
+    "generate": "gen-chk --out src/gen && pnpm -w fmt:check",
+    "generate:fix": "gen-chk --out src/gen && pnpm -w lint:fix",
+    "format": "pnpm -w fmt-select src"
+  }
+}

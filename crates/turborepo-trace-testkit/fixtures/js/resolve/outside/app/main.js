@@ -1,0 +1,1 @@
+const shared = require('shared');

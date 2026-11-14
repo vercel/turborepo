@@ -1,0 +1,9 @@
+drizzle-kit generate
+drizzle-kit push
+drizzle-kit migrate
+drizzle-kit pull
+drizzle-kit check
+drizzle-kit generate --config other.config.ts
+# drizzle-kit 0.20 subcommand style, with a config whose fields are computed.
+drizzle-kit generate:pg --config dyn.config.ts
+drizzle-kit studio

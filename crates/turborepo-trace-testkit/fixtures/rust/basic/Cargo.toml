@@ -1,0 +1,8 @@
+[workspace]
+members = ["app", "util"]
+exclude = ["excluded"]
+resolver = "2"
+
+[workspace.dependencies]
+util = { path = "util" }
+regdep = { version = "1", default-features = false }

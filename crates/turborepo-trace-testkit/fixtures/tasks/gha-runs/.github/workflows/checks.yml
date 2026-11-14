@@ -1,0 +1,27 @@
+name: Checks
+on:
+  workflow_call:
+    inputs:
+      shard:
+        description: One shard, as JSON
+        type: string
+        required: true
+      node-version:
+        description: Node version
+        type: string
+        default: '22'
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      FILTERS: ${{ fromJson(inputs.shard).filters }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install
+        uses: ./.github/actions/install
+        with:
+          node-version: ${{ inputs.node-version }}
+      - name: turbo ci:checks
+        run: pnpm exec turbo ci:checks $FILTERS --continue --output-logs=errors-only

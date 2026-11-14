@@ -1,0 +1,136 @@
+---
+source: crates/turborepo-trace-tasks/tests/codegen.rs
+expression: family(stringify! (sqlc))
+---
+$ sqlc generate
+# sqlc [sqlc] Full
+{
+  "inputs": [
+    "db/queries/users.sql",
+    "db/schema.sql"
+  ],
+  "outputs": [
+    {
+      "path": "gen/py",
+      "kind": "generated"
+    },
+    {
+      "path": "internal/db",
+      "pattern": "{db.go,models.go,querier.go,copyfrom.go,batch.go,*.sql.go}",
+      "kind": "generated"
+    }
+  ],
+  "configs": [
+    "sqlc.yaml"
+  ],
+  "memberships": [
+    {
+      "dir": "db/migrations",
+      "pattern": "*.sql",
+      "reason": "sqlc sql"
+    },
+    {
+      "dir": "db/queries",
+      "pattern": "*.sql",
+      "reason": "sqlc sql"
+    }
+  ],
+  "toolchain": [
+    {
+      "ecosystem": "go",
+      "name": "github.com/sqlc-dev/sqlc/cmd/sqlc"
+    },
+    {
+      "ecosystem": "sqlc",
+      "name": "https://downloads.sqlc.dev/plugin/sqlc-gen-python_1.2.0.wasm"
+    }
+  ]
+}
+
+$ sqlc vet
+# sqlc [sqlc] Full
+{
+  "inputs": [
+    "db/queries/users.sql",
+    "db/schema.sql"
+  ],
+  "configs": [
+    "sqlc.yaml"
+  ],
+  "memberships": [
+    {
+      "dir": "db/migrations",
+      "pattern": "*.sql",
+      "reason": "sqlc sql"
+    },
+    {
+      "dir": "db/queries",
+      "pattern": "*.sql",
+      "reason": "sqlc sql"
+    }
+  ],
+  "toolchain": [
+    {
+      "ecosystem": "go",
+      "name": "github.com/sqlc-dev/sqlc/cmd/sqlc"
+    },
+    {
+      "ecosystem": "sqlc",
+      "name": "https://downloads.sqlc.dev/plugin/sqlc-gen-python_1.2.0.wasm"
+    }
+  ]
+}
+
+$ sqlc generate -f v1/sqlc.json
+# sqlc [sqlc] Full
+{
+  "inputs": [
+    "v1/query.sql",
+    "v1/schema.sql"
+  ],
+  "outputs": [
+    {
+      "path": "v1/gen",
+      "pattern": "{dbtx.go,models.go,querier.go,copyfrom.go,batch.go,*.sql.go}",
+      "kind": "generated"
+    }
+  ],
+  "configs": [
+    "v1/sqlc.json"
+  ],
+  "toolchain": [
+    {
+      "ecosystem": "go",
+      "name": "github.com/sqlc-dev/sqlc/cmd/sqlc"
+    }
+  ]
+}
+
+$ cd v1 && sqlc compile
+# sqlc [sqlc] Full
+{
+  "inputs": [
+    "v1/query.sql",
+    "v1/schema.sql"
+  ],
+  "configs": [
+    "v1/sqlc.json"
+  ],
+  "toolchain": [
+    {
+      "ecosystem": "go",
+      "name": "github.com/sqlc-dev/sqlc/cmd/sqlc"
+    }
+  ]
+}
+
+$ sqlc version
+# sqlc [sqlc] Ignored
+{
+  "toolchain": [
+    {
+      "ecosystem": "go",
+      "name": "github.com/sqlc-dev/sqlc/cmd/sqlc"
+    }
+  ]
+}

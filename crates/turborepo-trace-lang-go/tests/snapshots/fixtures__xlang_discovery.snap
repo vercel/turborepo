@@ -1,0 +1,251 @@
+---
+source: crates/turborepo-trace-lang-go/tests/fixtures.rs
+expression: json
+---
+{
+  "version": 1,
+  "base": "<fixture>",
+  "entries": [
+    {
+      "path": "main.go",
+      "files": [
+        "go.mod",
+        "main.go",
+        "static/app.css",
+        "templates/about.tmpl",
+        "templates/index.tmpl"
+      ]
+    }
+  ],
+  "files": [
+    {
+      "path": "go.mod",
+      "reasons": [
+        "manifest"
+      ],
+      "parents": [
+        "main.go"
+      ],
+      "parsed": false
+    },
+    {
+      "path": "main.go",
+      "reasons": [
+        "initial"
+      ],
+      "parents": [],
+      "parsed": true,
+      "lang": "go"
+    },
+    {
+      "path": "static/app.css",
+      "reasons": [
+        "asset"
+      ],
+      "parents": [
+        "main.go"
+      ],
+      "parsed": false
+    },
+    {
+      "path": "templates/about.tmpl",
+      "reasons": [
+        "asset"
+      ],
+      "parents": [
+        "main.go"
+      ],
+      "parsed": false
+    },
+    {
+      "path": "templates/index.tmpl",
+      "reasons": [
+        "asset"
+      ],
+      "parents": [
+        "main.go"
+      ],
+      "parsed": false
+    }
+  ],
+  "edges": [
+    {
+      "from": "main.go",
+      "kind": "manifest",
+      "phase": "build",
+      "flags": [],
+      "spec": "go.mod",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "go.mod"
+      }
+    },
+    {
+      "from": "main.go",
+      "kind": "import",
+      "phase": "build",
+      "flags": [],
+      "spec": "embed",
+      "span": [
+        112,
+        119
+      ],
+      "line": 5,
+      "target": {
+        "type": "builtin",
+        "name": "embed"
+      }
+    },
+    {
+      "from": "main.go",
+      "kind": "import",
+      "phase": "build",
+      "flags": [],
+      "spec": "fmt",
+      "span": [
+        121,
+        126
+      ],
+      "line": 6,
+      "target": {
+        "type": "builtin",
+        "name": "fmt"
+      }
+    },
+    {
+      "from": "main.go",
+      "kind": "import",
+      "phase": "build",
+      "flags": [],
+      "spec": "os",
+      "span": [
+        128,
+        132
+      ],
+      "line": 7,
+      "target": {
+        "type": "builtin",
+        "name": "os"
+      }
+    },
+    {
+      "from": "main.go",
+      "kind": "import",
+      "phase": "build",
+      "flags": [],
+      "spec": "path/filepath",
+      "span": [
+        134,
+        149
+      ],
+      "line": 8,
+      "target": {
+        "type": "builtin",
+        "name": "path/filepath"
+      }
+    },
+    {
+      "from": "main.go",
+      "kind": "embed",
+      "phase": "build",
+      "flags": [],
+      "spec": "static",
+      "span": [
+        164,
+        170
+      ],
+      "line": 11,
+      "target": {
+        "type": "glob",
+        "pattern": "static",
+        "matches": [
+          "static/app.css"
+        ],
+        "truncated": false
+      }
+    },
+    {
+      "from": "main.go",
+      "kind": "fs_read_dir",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "templates",
+      "span": [
+        232,
+        243
+      ],
+      "line": 15,
+      "target": {
+        "type": "glob",
+        "pattern": "templates/**",
+        "matches": [
+          "templates/about.tmpl",
+          "templates/index.tmpl"
+        ],
+        "truncated": false
+      },
+      "uncertainty": "cwd_dependent"
+    },
+    {
+      "from": "main.go",
+      "kind": "fs_read",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "templates/*",
+      "span": [
+        296,
+        332
+      ],
+      "line": 17,
+      "target": {
+        "type": "glob",
+        "pattern": "templates/*",
+        "matches": [
+          "templates/about.tmpl",
+          "templates/index.tmpl"
+        ],
+        "truncated": false
+      },
+      "uncertainty": "cwd_dependent"
+    }
+  ],
+  "uncertainties": [
+    {
+      "file": "main.go",
+      "kind": "cwd_dependent",
+      "detail": "templates is relative to the working directory",
+      "spec": "templates",
+      "span": [
+        232,
+        243
+      ],
+      "line": 15,
+      "col": 27
+    },
+    {
+      "file": "main.go",
+      "kind": "cwd_dependent",
+      "detail": "templates/* is relative to the working directory; <fixture>/templates/*: 2 match(es)",
+      "spec": "templates/*",
+      "span": [
+        296,
+        332
+      ],
+      "line": 17,
+      "col": 23
+    }
+  ],
+  "symlinks": {},
+  "stats": {
+    "entries": 1,
+    "files": 5,
+    "parsed_files": 1,
+    "edges": 8,
+    "uncertainties": 2
+  }
+}

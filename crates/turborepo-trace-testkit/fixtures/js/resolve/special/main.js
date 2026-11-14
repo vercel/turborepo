@@ -1,0 +1,11 @@
+require('better-sqlite3');
+require('gyp-pkg');
+require('pregyp-pkg');
+require('abi-pkg');
+require('sharp');
+require('esbuild');
+require('@prisma/client');
+require('msgpackr-extract');
+require('semver');
+require('direct-addon');
+require('nobin-pkg');

@@ -1,0 +1,664 @@
+---
+source: crates/turborepo-trace-tasks/tests/codegen.rs
+expression: family(stringify! (protobuf))
+---
+$ buf generate
+# buf [buf] Full
+{
+  "inputs": [
+    "buf.lock"
+  ],
+  "outputs": [
+    {
+      "path": "gen/custom",
+      "kind": "generated"
+    },
+    {
+      "path": "gen/go",
+      "pattern": "**/*.pb.go",
+      "kind": "generated"
+    },
+    {
+      "path": "gen/ts",
+      "kind": "generated"
+    }
+  ],
+  "configs": [
+    "buf.gen.yaml",
+    "buf.yaml"
+  ],
+  "memberships": [
+    {
+      "dir": "proto",
+      "pattern": "**/*.proto",
+      "exclude": [
+        "internal/**"
+      ],
+      "reason": "buf module"
+    }
+  ],
+  "toolchain": [
+    {
+      "ecosystem": "buf",
+      "name": "buf.build/connectrpc/es"
+    },
+    {
+      "ecosystem": "system",
+      "name": "buf"
+    },
+    {
+      "ecosystem": "system",
+      "name": "protoc-gen-custom"
+    },
+    {
+      "ecosystem": "system",
+      "name": "protoc-gen-go"
+    }
+  ]
+}
+
+$ buf generate --template buf.gen.yaml -o out
+# buf [buf] Full
+{
+  "inputs": [
+    "buf.lock"
+  ],
+  "outputs": [
+    {
+      "path": "out/gen/custom",
+      "kind": "generated"
+    },
+    {
+      "path": "out/gen/go",
+      "pattern": "**/*.pb.go",
+      "kind": "generated"
+    },
+    {
+      "path": "out/gen/ts",
+      "kind": "generated"
+    }
+  ],
+  "configs": [
+    "buf.gen.yaml",
+    "buf.yaml"
+  ],
+  "memberships": [
+    {
+      "dir": "proto",
+      "pattern": "**/*.proto",
+      "exclude": [
+        "internal/**"
+      ],
+      "reason": "buf module"
+    }
+  ],
+  "toolchain": [
+    {
+      "ecosystem": "buf",
+      "name": "buf.build/connectrpc/es"
+    },
+    {
+      "ecosystem": "system",
+      "name": "buf"
+    },
+    {
+      "ecosystem": "system",
+      "name": "protoc-gen-custom"
+    },
+    {
+      "ecosystem": "system",
+      "name": "protoc-gen-go"
+    }
+  ]
+}
+
+$ cd v1 && buf generate
+# buf [buf] Full
+{
+  "inputs": [
+    "v1/buf.lock"
+  ],
+  "outputs": [
+    {
+      "path": "v1/gen/py",
+      "pattern": "**/*_pb2.py",
+      "kind": "generated"
+    }
+  ],
+  "configs": [
+    "v1/buf.gen.yaml",
+    "v1/buf.yaml"
+  ],
+  "memberships": [
+    {
+      "dir": "v1",
+      "pattern": "**/*.proto",
+      "exclude": [
+        "vendor/**"
+      ],
+      "reason": "buf module"
+    }
+  ],
+  "toolchain": [
+    {
+      "ecosystem": "buf",
+      "name": "buf.build/grpc/python"
+    },
+    {
+      "ecosystem": "system",
+      "name": "buf"
+    },
+    {
+      "ecosystem": "system",
+      "name": "protoc-gen-python"
+    }
+  ]
+}
+
+$ buf lint
+# buf [buf] Full
+{
+  "inputs": [
+    "buf.lock"
+  ],
+  "configs": [
+    "buf.yaml"
+  ],
+  "memberships": [
+    {
+      "dir": "proto",
+      "pattern": "**/*.proto",
+      "exclude": [
+        "internal/**"
+      ],
+      "reason": "buf module"
+    }
+  ],
+  "toolchain": [
+    {
+      "ecosystem": "system",
+      "name": "buf"
+    }
+  ]
+}
+
+$ buf build -o image.binpb
+# buf [buf] Full
+{
+  "inputs": [
+    "buf.lock"
+  ],
+  "outputs": [
+    {
+      "path": "image.binpb",
+      "kind": "generated"
+    }
+  ],
+  "configs": [
+    "buf.yaml"
+  ],
+  "memberships": [
+    {
+      "dir": "proto",
+      "pattern": "**/*.proto",
+      "exclude": [
+        "internal/**"
+      ],
+      "reason": "buf module"
+    }
+  ],
+  "toolchain": [
+    {
+      "ecosystem": "system",
+      "name": "buf"
+    }
+  ]
+}
+
+$ buf format -w
+# buf [buf] Full
+{
+  "inputs": [
+    "buf.lock"
+  ],
+  "outputs": [
+    {
+      "path": "proto",
+      "pattern": "**/*.proto",
+      "kind": "in_place"
+    }
+  ],
+  "configs": [
+    "buf.yaml"
+  ],
+  "memberships": [
+    {
+      "dir": "proto",
+      "pattern": "**/*.proto",
+      "exclude": [
+        "internal/**"
+      ],
+      "reason": "buf module"
+    }
+  ],
+  "toolchain": [
+    {
+      "ecosystem": "system",
+      "name": "buf"
+    }
+  ]
+}
+
+$ buf generate buf.build/acme/petapis
+# buf [buf] Partial
+{
+  "outputs": [
+    {
+      "path": "gen/custom",
+      "kind": "generated"
+    },
+    {
+      "path": "gen/go",
+      "pattern": "**/*.pb.go",
+      "kind": "generated"
+    },
+    {
+      "path": "gen/ts",
+      "kind": "generated"
+    }
+  ],
+  "configs": [
+    "buf.gen.yaml"
+  ],
+  "memberships": [
+    {
+      "dir": ".",
+      "pattern": "**",
+      "reason": "`buf` not fully recognized"
+    },
+    {
+      "dir": ".",
+      "pattern": "**",
+      "reason": "code generator config not fully known"
+    }
+  ],
+  "toolchain": [
+    {
+      "ecosystem": "buf",
+      "name": "buf.build/connectrpc/es"
+    },
+    {
+      "ecosystem": "system",
+      "name": "buf"
+    },
+    {
+      "ecosystem": "system",
+      "name": "protoc-gen-custom"
+    },
+    {
+      "ecosystem": "system",
+      "name": "protoc-gen-go"
+    }
+  ],
+  "uncertainties": [
+    {
+      "kind": "env_dependent",
+      "detail": "buf remote input `buf.build/acme/petapis`"
+    }
+  ]
+}
+
+$ cd work && buf build
+# buf [buf] Full
+{
+  "inputs": [
+    "work/a/buf.lock",
+    "work/b/buf.lock",
+    "work/buf.lock"
+  ],
+  "configs": [
+    "work/a/buf.yaml",
+    "work/b/buf.yaml",
+    "work/buf.work.yaml"
+  ],
+  "memberships": [
+    {
+      "dir": "work/a",
+      "pattern": "**/*.proto",
+      "reason": "buf module"
+    },
+    {
+      "dir": "work/b",
+      "pattern": "**/*.proto",
+      "reason": "buf module"
+    }
+  ],
+  "toolchain": [
+    {
+      "ecosystem": "system",
+      "name": "buf"
+    }
+  ]
+}
+
+$ buf dep update
+# buf [buf] Partial
+{
+  "outputs": [
+    {
+      "path": "buf.lock",
+      "kind": "generated"
+    }
+  ],
+  "configs": [
+    "buf.yaml"
+  ],
+  "memberships": [
+    {
+      "dir": ".",
+      "pattern": "**",
+      "reason": "`buf` not fully recognized"
+    }
+  ],
+  "toolchain": [
+    {
+      "ecosystem": "system",
+      "name": "buf"
+    }
+  ],
+  "uncertainties": [
+    {
+      "kind": "env_dependent",
+      "detail": "buf dependency update resolves remote modules"
+    }
+  ]
+}
+
+$ protoc -I proto --go_out=gen/go --go_opt=paths=source_relative --go-grpc_out=gen/go proto/acme/v1/user.proto
+# protoc [protoc] Full
+{
+  "inputs": [
+    "proto/acme/v1/common.proto",
+    "proto/acme/v1/user.proto"
+  ],
+  "outputs": [
+    {
+      "path": "gen/go",
+      "pattern": "**/*.pb.go",
+      "kind": "generated"
+    },
+    {
+      "path": "gen/go",
+      "pattern": "**/*_grpc.pb.go",
+      "kind": "generated"
+    }
+  ],
+  "toolchain": [
+    {
+      "ecosystem": "system",
+      "name": "protoc"
+    }
+  ]
+}
+
+$ protoc --proto_path=proto --python_out=. --pyi_out=. proto/acme/v1/user.proto
+# protoc [protoc] Full
+{
+  "inputs": [
+    "proto/acme/v1/common.proto",
+    "proto/acme/v1/user.proto"
+  ],
+  "outputs": [
+    {
+      "path": ".",
+      "pattern": "**/*_pb2.py",
+      "kind": "generated"
+    },
+    {
+      "path": ".",
+      "pattern": "**/*_pb2.pyi",
+      "kind": "generated"
+    }
+  ],
+  "toolchain": [
+    {
+      "ecosystem": "system",
+      "name": "protoc"
+    }
+  ]
+}
+
+$ protoc -Iproto --plugin=protoc-gen-ts_proto=./node_modules/.bin/protoc-gen-ts_proto --ts_proto_out=src/gen proto/acme/v1/*.proto
+# protoc [protoc] Full
+{
+  "outputs": [
+    {
+      "path": "src/gen",
+      "kind": "generated"
+    }
+  ],
+  "memberships": [
+    {
+      "dir": "proto",
+      "pattern": "**/*.proto",
+      "reason": "protoc include path"
+    },
+    {
+      "dir": "proto/acme/v1",
+      "pattern": "*.proto",
+      "reason": "protoc inputs"
+    }
+  ],
+  "toolchain": [
+    {
+      "ecosystem": "npm",
+      "name": "ts-proto"
+    },
+    {
+      "ecosystem": "system",
+      "name": "protoc"
+    },
+    {
+      "ecosystem": "system",
+      "name": "protoc-gen-ts_proto"
+    }
+  ]
+}
+
+$ protoc -I proto --custom_out=proto proto/acme/v1/user.proto
+# protoc [protoc] Full
+{
+  "inputs": [
+    "proto/acme/v1/common.proto",
+    "proto/acme/v1/user.proto"
+  ],
+  "outputs": [
+    {
+      "path": "proto",
+      "pattern": "**/user*",
+      "exclude": [
+        "**/*.proto"
+      ],
+      "kind": "generated"
+    }
+  ],
+  "toolchain": [
+    {
+      "ecosystem": "system",
+      "name": "protoc"
+    },
+    {
+      "ecosystem": "system",
+      "name": "protoc-gen-custom"
+    }
+  ]
+}
+
+$ protoc -I proto --descriptor_set_out=desc.binpb --include_imports proto/acme/v1/user.proto
+# protoc [protoc] Full
+{
+  "inputs": [
+    "proto/acme/v1/common.proto",
+    "proto/acme/v1/user.proto"
+  ],
+  "outputs": [
+    {
+      "path": "desc.binpb",
+      "kind": "generated"
+    }
+  ],
+  "toolchain": [
+    {
+      "ecosystem": "system",
+      "name": "protoc"
+    }
+  ]
+}
+
+$ cd work && protoc -I a -I b b/b.proto --cpp_out=gen
+# protoc [protoc] Full
+{
+  "inputs": [
+    "work/a/missing/dep.proto",
+    "work/b/b.proto",
+    "work/b/missing/dep.proto"
+  ],
+  "outputs": [
+    {
+      "path": "work/gen",
+      "pattern": "**/*.pb.{h,cc}",
+      "kind": "generated"
+    }
+  ],
+  "toolchain": [
+    {
+      "ecosystem": "system",
+      "name": "protoc"
+    }
+  ]
+}
+
+$ python -m grpc_tools.protoc -I proto --python_out=py --grpc_python_out=py proto/acme/v1/user.proto
+# python [python] Full
+{
+  "inputs": [
+    "proto/acme/v1/common.proto",
+    "proto/acme/v1/user.proto"
+  ],
+  "outputs": [
+    {
+      "path": "py",
+      "pattern": "**/*_pb2.py",
+      "kind": "generated"
+    },
+    {
+      "path": "py",
+      "pattern": "**/*_pb2_grpc.py",
+      "kind": "generated"
+    }
+  ],
+  "toolchain": [
+    {
+      "ecosystem": "pypi",
+      "name": "grpcio-tools"
+    },
+    {
+      "ecosystem": "system",
+      "name": "python"
+    }
+  ]
+}
+
+$ npx grpc_tools_node_protoc --js_out=import_style=commonjs,binary:js --grpc_out=grpc_js:js -I proto proto/acme/v1/user.proto
+# grpc_tools_node_protoc [protoc] Full
+{
+  "inputs": [
+    "proto/acme/v1/common.proto",
+    "proto/acme/v1/user.proto"
+  ],
+  "outputs": [
+    {
+      "path": "js",
+      "kind": "generated"
+    },
+    {
+      "path": "js",
+      "pattern": "**/*_pb.js",
+      "kind": "generated"
+    }
+  ],
+  "toolchain": [
+    {
+      "ecosystem": "npm",
+      "name": "grpc-tools"
+    },
+    {
+      "ecosystem": "system",
+      "name": "protoc-gen-grpc"
+    }
+  ]
+}
+
+$ protoc @args.txt
+# protoc [protoc] Partial
+{
+  "inputs": [
+    "args.txt"
+  ],
+  "memberships": [
+    {
+      "dir": ".",
+      "pattern": "**",
+      "reason": "`protoc` not fully recognized"
+    },
+    {
+      "dir": ".",
+      "pattern": "**",
+      "reason": "code generator config not fully known"
+    }
+  ],
+  "toolchain": [
+    {
+      "ecosystem": "system",
+      "name": "protoc"
+    }
+  ],
+  "uncertainties": [
+    {
+      "kind": "shell_unsupported",
+      "detail": "protoc arguments file `@args.txt`"
+    }
+  ]
+}
+
+$ protoc-gen-go < req.bin
+# protoc-gen-go [protoc] Partial
+{
+  "inputs": [
+    "req.bin"
+  ],
+  "memberships": [
+    {
+      "dir": ".",
+      "pattern": "**",
+      "reason": "`protoc-gen-go` not fully recognized"
+    },
+    {
+      "dir": ".",
+      "pattern": "**",
+      "reason": "code generator config not fully known"
+    }
+  ],
+  "toolchain": [
+    {
+      "ecosystem": "system",
+      "name": "protoc-gen-go"
+    }
+  ],
+  "uncertainties": [
+    {
+      "kind": "unknown_command",
+      "detail": "protoc plugin `protoc-gen-go` run directly"
+    }
+  ]
+}

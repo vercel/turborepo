@@ -1,0 +1,43 @@
+[package]
+name = "turborepo-trace-store"
+version = "0.1.0"
+edition = { workspace = true }
+license = "MIT"
+description = "Whole-repo graph for `turbo trace`: per-package shards, content-addressed store, incremental rebuild and composition"
+publish = false
+
+[lib]
+name = "turborepo_trace_store"
+bench = false
+
+[dependencies]
+dashmap = { workspace = true }
+ignore = "0.4"
+memchr = { workspace = true }
+memmap2 = "0.9"
+rayon = { workspace = true }
+rkyv = "0.8"
+rustc-hash = "2"
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+toml = { workspace = true }
+turborepo-trace-core = { workspace = true }
+turborepo-trace-frameworks = { workspace = true }
+turborepo-trace-graph = { workspace = true }
+turborepo-trace-lang-js = { workspace = true }
+turborepo-trace-lockfile = { workspace = true }
+turborepo-trace-tasks = { workspace = true }
+xxhash-rust = { workspace = true }
+zstd = "0.13"
+
+[dev-dependencies]
+proptest = { workspace = true }
+tempfile = { workspace = true }
+# The tests cover Go and Rust packages: their adapters are on for the tests.
+turborepo-trace-frameworks = { workspace = true, features = ["go", "rust"] }
+turborepo-trace-lang-go = { workspace = true }
+turborepo-trace-lang-rust = { workspace = true }
+
+[lints]
+workspace = true

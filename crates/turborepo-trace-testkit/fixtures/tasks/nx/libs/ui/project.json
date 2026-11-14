@@ -1,0 +1,16 @@
+{
+  "name": "ui",
+  "targets": {
+    "build": {
+      "executor": "@nx/js:tsc",
+      "outputs": ["{options.outputPath}"],
+      "options": {
+        "tsConfig": "libs/ui/tsconfig.lib.json",
+        "main": "libs/ui/src/index.ts",
+        "outputPath": "dist/libs/ui",
+        "assets": ["libs/ui/*.md"]
+      }
+    },
+    "test": { "executor": "nx:run-script", "options": { "script": "test" } }
+  }
+}

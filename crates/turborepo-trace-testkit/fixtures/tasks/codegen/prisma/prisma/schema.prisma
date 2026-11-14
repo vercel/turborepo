@@ -1,0 +1,18 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+generator zod {
+  provider = "zod-prisma-types"
+  output   = "../src/zod" // relative to this file
+}
+
+model User {
+  id    Int    @id @default(autoincrement())
+  email String @unique
+}

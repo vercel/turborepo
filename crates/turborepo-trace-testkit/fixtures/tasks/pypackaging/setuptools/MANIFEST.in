@@ -1,0 +1,6 @@
+include README.rst
+recursive-include docs *.rst *.txt
+graft src/stpkg/data
+prune docs/_build
+global-exclude *.pyc
+exclude conf/secret.cfg

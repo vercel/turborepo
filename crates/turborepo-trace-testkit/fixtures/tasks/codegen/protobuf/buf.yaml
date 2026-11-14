@@ -1,0 +1,7 @@
+version: v2
+modules:
+  - path: proto
+    excludes:
+      - proto/internal
+deps:
+  - buf.build/googleapis/googleapis

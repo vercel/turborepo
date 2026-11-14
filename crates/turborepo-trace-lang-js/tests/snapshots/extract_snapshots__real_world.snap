@@ -1,0 +1,13 @@
+---
+source: crates/turborepo-trace-lang-js/tests/extract_snapshots.rs
+expression: "render(\"real_world.js\")"
+---
+6:18 require "./exporters/log | ./exporters/agent" [conditional]
+    span: require(inAWSLambda && !usingLambdaExtension ? './exporters/log' : './…
+9:17 require "url"
+    span: require('u' + 'rl')
+12:16 require "./snippets/x/tracer_logger.js"
+    span: require(String.raw`./snippets/x/tracer_logger.js`)
+16:10 require "<unknown>"
+    span: require(path)
+    uncertainty: computed_specifier "path; parameter load#0"

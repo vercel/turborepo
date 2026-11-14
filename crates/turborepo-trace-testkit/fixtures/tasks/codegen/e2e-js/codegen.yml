@@ -1,0 +1,6 @@
+schema: schema.graphql
+documents: src/queries/*.graphql
+generates:
+  src/gql/graphql.js:
+    plugins:
+      - typescript-document-nodes

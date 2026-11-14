@@ -1,0 +1,294 @@
+---
+source: crates/turborepo-trace-frameworks/tests/fixtures.rs
+expression: r.json()
+---
+{
+  "inputs": {
+    "framework": "vitest",
+    "config_file": "<fixture>/vitest.config.ts",
+    "projects": [
+      {
+        "name": "<fixture>",
+        "config_file": "<fixture>/vitest.config.ts",
+        "root_dir": "<fixture>",
+        "global": {
+          "config_files": [
+            "<fixture>/vitest.config.ts",
+            "<fixture>/vite.config.ts"
+          ],
+          "js_entries": [
+            "<fixture>/vitest.config.ts",
+            "<fixture>/vite.config.ts"
+          ],
+          "entries": [
+            {
+              "role": "setup_file",
+              "target": {
+                "path": "<fixture>/test/setup.ts"
+              }
+            },
+            {
+              "role": "global_setup",
+              "target": {
+                "path": "<fixture>/test/global.ts"
+              }
+            },
+            {
+              "role": "test_environment",
+              "target": {
+                "module": {
+                  "request": "jsdom",
+                  "from_dir": "<fixture>"
+                }
+              }
+            },
+            {
+              "role": "runner",
+              "target": {
+                "module": {
+                  "request": "vitest",
+                  "from_dir": "<fixture>"
+                }
+              }
+            }
+          ],
+          "edges": [],
+          "probes": [
+            "<fixture>/vitest.config.mts",
+            "<fixture>/vitest.config.cts",
+            "<fixture>/vitest.config.js",
+            "<fixture>/vitest.config.mjs",
+            "<fixture>/vitest.config.cjs",
+            "<fixture>/vite.config.mts",
+            "<fixture>/vite.config.cts",
+            "<fixture>/vite.config.js",
+            "<fixture>/vite.config.mjs",
+            "<fixture>/vite.config.cjs"
+          ],
+          "memberships": []
+        },
+        "resolution": {
+          "aliases": [
+            {
+              "matcher": {
+                "prefix": "@test"
+              },
+              "replacements": [
+                "<fixture>/test"
+              ],
+              "source": "test.alias"
+            },
+            {
+              "matcher": {
+                "replace": "^~icons\\/(.*)$"
+              },
+              "replacements": [
+                "<fixture>/src/icons/$1.svg"
+              ],
+              "source": "resolve.alias"
+            },
+            {
+              "matcher": {
+                "prefix": "@lib"
+              },
+              "replacements": [
+                "<fixture>/src/lib"
+              ],
+              "source": "resolve.alias"
+            }
+          ],
+          "roots": [
+            "<fixture>"
+          ],
+          "module_paths": [],
+          "module_directories": [
+            "node_modules"
+          ],
+          "module_path_ignore_patterns": [],
+          "extensions": [
+            "mjs",
+            "js",
+            "mts",
+            "ts",
+            "jsx",
+            "tsx",
+            "json"
+          ]
+        },
+        "discovery": {
+          "roots": [
+            "<fixture>"
+          ],
+          "include": [
+            {
+              "glob": "src/**/*.{test,spec}.ts"
+            }
+          ],
+          "exclude": [
+            {
+              "glob": "**/node_modules/**"
+            },
+            {
+              "glob": "**/dist/**"
+            },
+            {
+              "glob": "**/cypress/**"
+            },
+            {
+              "glob": "**/.{idea,git,cache,output,temp}/**"
+            },
+            {
+              "glob": "**/{karma,rollup,webpack,vite,vitest,jest,ava,babel,nyc,cypress,tsup,build,eslint,prettier}.config.*"
+            },
+            {
+              "glob": "e2e/**"
+            }
+          ],
+          "glob_base": "<fixture>",
+          "extensions": []
+        },
+        "mocks": {
+          "root_mock_dirs": [
+            "<fixture>"
+          ],
+          "haste_mocks": [],
+          "implicit_package_mocks": false,
+          "automock": false,
+          "extensions": [
+            "mjs",
+            "js",
+            "mts",
+            "ts",
+            "jsx",
+            "tsx",
+            "json"
+          ]
+        },
+        "snapshots": "default",
+        "uncertainties": []
+      }
+    ],
+    "uncertainties": []
+  },
+  "tests": [
+    {
+      "project": "<fixture>",
+      "inputs": {
+        "test": "<fixture>/src/app.test.ts",
+        "entries": [
+          {
+            "role": "test_environment",
+            "target": {
+              "module": {
+                "request": "happy-dom",
+                "from_dir": "<fixture>"
+              }
+            }
+          },
+          {
+            "role": "automocked",
+            "target": {
+              "module": {
+                "request": "./missing",
+                "from_dir": "<fixture>/src"
+              }
+            }
+          },
+          {
+            "role": "require_actual",
+            "target": {
+              "module": {
+                "request": "@lib/api",
+                "from_dir": "<fixture>/src"
+              }
+            }
+          }
+        ],
+        "edges": [
+          {
+            "kind": "snapshot",
+            "to": "<fixture>/src/__snapshots__/app.test.ts.snap",
+            "reason": "default snapshot path"
+          },
+          {
+            "kind": "manual_mock",
+            "to": "<fixture>/src/lib/__mocks__/api.ts",
+            "reason": "vi.mock('@lib/api')"
+          },
+          {
+            "kind": "manual_mock",
+            "to": "<fixture>/__mocks__/lodash.ts",
+            "reason": "vi.mock('lodash')"
+          }
+        ],
+        "probes": [
+          "<fixture>/__mocks__/lodash.mjs",
+          "<fixture>/__mocks__/lodash.js",
+          "<fixture>/__mocks__/lodash.mts",
+          "<fixture>/__mocks__/lodash.jsx",
+          "<fixture>/__mocks__/lodash.tsx",
+          "<fixture>/__mocks__/lodash.json",
+          "<fixture>/src/__mocks__/missing.mjs",
+          "<fixture>/src/__mocks__/missing.js",
+          "<fixture>/src/__mocks__/missing.mts",
+          "<fixture>/src/__mocks__/missing.ts",
+          "<fixture>/src/__mocks__/missing.jsx",
+          "<fixture>/src/__mocks__/missing.tsx",
+          "<fixture>/src/__mocks__/missing.json"
+        ],
+        "memberships": [
+          {
+            "dir": "<fixture>/src/__snapshots__",
+            "pattern": "app.test.ts.snap",
+            "reason": "default snapshot path"
+          }
+        ],
+        "mocks": [
+          {
+            "call": "vi.mock",
+            "request": "@lib/api",
+            "factory": false,
+            "line": 4
+          },
+          {
+            "call": "vi.mock",
+            "request": "lodash",
+            "factory": false,
+            "line": 5
+          },
+          {
+            "call": "vi.mock",
+            "request": "./missing",
+            "factory": false,
+            "line": 6
+          },
+          {
+            "call": "vi.mock",
+            "request": "./lib/api",
+            "factory": true,
+            "line": 7
+          },
+          {
+            "call": "vi.importActual",
+            "request": "@lib/api",
+            "factory": false,
+            "line": 8
+          }
+        ],
+        "loaded_real": [
+          "<fixture>/src/lib/api.ts"
+        ],
+        "mock_hazards": [
+          {
+            "what": "vi.mock('./missing') does not resolve",
+            "line": 6
+          }
+        ],
+        "loaded_eager": [
+          "<fixture>/src/lib/api.ts"
+        ],
+        "uncertainties": []
+      }
+    }
+  ]
+}

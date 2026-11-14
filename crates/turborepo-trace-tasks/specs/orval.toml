@@ -1,0 +1,36 @@
+# orval: `orval [--config f] [--project p]`, or `orval --input spec --output target`.
+# Config projects (`orval.config.*`): `input` (or `input.target`) specs with the files their
+# `$ref`s reach; `output` (or `output.target`, relative to `output.workspace`) is the target
+# file with its `<stem>.*` siblings, or its directory for the `tags` modes; `schemas`
+# directories and the workspace `index.ts` are outputs too.
+id = "orval"
+programs = ["orval"]
+toolchain = ["npm:orval"]
+flags = ["--config|-c", "--project|-p", "--input|-i", "--output|-o", "--mode", "--client", "--tsconfig"]
+
+[config]
+label = "orval"
+flag = "--config"
+names = ["orval.config.ts", "orval.config.mts", "orval.config.cts", "orval.config.js", "orval.config.mjs", "orval.config.cjs", ".orvalrc", ".orvalrc.json", ".orvalrc.js", ".orvalrc.ts"]
+required = "orval without a config"
+unreadable = "orval config could not be evaluated"
+key_flag = "--project"
+
+[values]
+input = { field = "*.input", or_key = "target" }
+target = { field = "*.output", or_key = "target", base_field = "workspace" }
+schemas = { field = "*.output.schemas", or_key = "path", base_field = "workspace", optional = true }
+workspace = { field = "*.output.workspace", optional = true }
+
+[[variant]]
+when = ["--input", "--output"]
+config = false
+rules = [{ scan = "refs", on = "--input" }, { output = "--output", siblings = true, dir_when = { mode = ["tags", "tags-split"] } }]
+
+[[variant]]
+rules = [
+  { scan = "refs", on = "input" },
+  { output = "target", siblings = true, dir_when = { mode = ["tags", "tags-split"] } },
+  { output = "schemas" },
+  { output = "workspace", join = "index.ts" },
+]

@@ -1,0 +1,218 @@
+{
+ "version": 4,
+ "routes": {
+  "/_not-found": {
+   "initialStatus": 404,
+   "routeType": "page",
+   "response": "complete",
+   "compute": "static",
+   "htmlSize": 4851,
+   "experimentalBypassFor": [
+    {
+     "type": "header",
+     "key": "next-action"
+    },
+    {
+     "type": "header",
+     "key": "content-type",
+     "value": "multipart/form-data;.*"
+    }
+   ],
+   "initialRevalidateSeconds": false,
+   "srcRoute": "/_not-found",
+   "dataRoute": "/_not-found.rsc",
+   "allowHeader": [
+    "host",
+    "x-matched-path",
+    "x-prerender-revalidate",
+    "x-prerender-revalidate-if-generated",
+    "x-next-revalidated-tags",
+    "x-next-revalidate-tag-token"
+   ]
+  },
+  "/about": {
+   "routeType": "page",
+   "response": "complete",
+   "compute": "static",
+   "htmlSize": 5535,
+   "experimentalBypassFor": [
+    {
+     "type": "header",
+     "key": "next-action"
+    },
+    {
+     "type": "header",
+     "key": "content-type",
+     "value": "multipart/form-data;.*"
+    }
+   ],
+   "initialRevalidateSeconds": false,
+   "srcRoute": "/about",
+   "dataRoute": "/about.rsc",
+   "allowHeader": [
+    "host",
+    "x-matched-path",
+    "x-prerender-revalidate",
+    "x-prerender-revalidate-if-generated",
+    "x-next-revalidated-tags",
+    "x-next-revalidate-tag-token"
+   ]
+  },
+  "/blog/first": {
+   "routeType": "page",
+   "response": "complete",
+   "compute": "static",
+   "htmlSize": 5563,
+   "experimentalBypassFor": [
+    {
+     "type": "header",
+     "key": "next-action"
+    },
+    {
+     "type": "header",
+     "key": "content-type",
+     "value": "multipart/form-data;.*"
+    }
+   ],
+   "initialRevalidateSeconds": false,
+   "srcRoute": "/blog/[slug]",
+   "dataRoute": "/blog/first.rsc",
+   "allowHeader": [
+    "host",
+    "x-matched-path",
+    "x-prerender-revalidate",
+    "x-prerender-revalidate-if-generated",
+    "x-next-revalidated-tags",
+    "x-next-revalidate-tag-token"
+   ]
+  },
+  "/blog/second": {
+   "routeType": "page",
+   "response": "complete",
+   "compute": "static",
+   "htmlSize": 5539,
+   "experimentalBypassFor": [
+    {
+     "type": "header",
+     "key": "next-action"
+    },
+    {
+     "type": "header",
+     "key": "content-type",
+     "value": "multipart/form-data;.*"
+    }
+   ],
+   "initialRevalidateSeconds": false,
+   "srcRoute": "/blog/[slug]",
+   "dataRoute": "/blog/second.rsc",
+   "allowHeader": [
+    "host",
+    "x-matched-path",
+    "x-prerender-revalidate",
+    "x-prerender-revalidate-if-generated",
+    "x-next-revalidated-tags",
+    "x-next-revalidate-tag-token"
+   ]
+  },
+  "/legacy/1": {
+   "routeType": "page",
+   "response": "complete",
+   "compute": "static",
+   "initialRevalidateSeconds": false,
+   "srcRoute": "/legacy/[id]",
+   "dataRoute": "/_next/data/Al-SShdjXUxDRuupQCSZm/legacy/1.json",
+   "allowHeader": [
+    "host",
+    "x-matched-path",
+    "x-prerender-revalidate",
+    "x-prerender-revalidate-if-generated",
+    "x-next-revalidated-tags",
+    "x-next-revalidate-tag-token"
+   ]
+  },
+  "/pricing": {
+   "routeType": "page",
+   "response": "complete",
+   "compute": "static",
+   "htmlSize": 5745,
+   "experimentalBypassFor": [
+    {
+     "type": "header",
+     "key": "next-action"
+    },
+    {
+     "type": "header",
+     "key": "content-type",
+     "value": "multipart/form-data;.*"
+    }
+   ],
+   "initialRevalidateSeconds": false,
+   "srcRoute": "/pricing",
+   "dataRoute": "/pricing.rsc",
+   "allowHeader": [
+    "host",
+    "x-matched-path",
+    "x-prerender-revalidate",
+    "x-prerender-revalidate-if-generated",
+    "x-next-revalidated-tags",
+    "x-next-revalidate-tag-token"
+   ]
+  }
+ },
+ "dynamicRoutes": {
+  "/blog/[slug]": {
+   "routeType": "page",
+   "response": "empty",
+   "compute": "blocking",
+   "experimentalBypassFor": [
+    {
+     "type": "header",
+     "key": "next-action"
+    },
+    {
+     "type": "header",
+     "key": "content-type",
+     "value": "multipart/form-data;.*"
+    }
+   ],
+   "routeRegex": "^/blog/([^/]+?)(?:/)?$",
+   "dataRoute": "/blog/[slug].rsc",
+   "fallback": null,
+   "fallbackRootParams": [],
+   "fallbackRouteParams": [],
+   "dataRouteRegex": "^/blog/([^/]+?)\\.rsc$",
+   "prefetchDataRoute": null,
+   "allowHeader": [
+    "host",
+    "x-matched-path",
+    "x-prerender-revalidate",
+    "x-prerender-revalidate-if-generated",
+    "x-next-revalidated-tags",
+    "x-next-revalidate-tag-token"
+   ]
+  },
+  "/legacy/[id]": {
+   "routeRegex": "^/legacy/([^/]+?)(?:/)?$",
+   "dataRoute": "/_next/data/Al-SShdjXUxDRuupQCSZm/legacy/[id].json",
+   "fallback": null,
+   "routeType": "page",
+   "response": "empty",
+   "compute": "blocking",
+   "dataRouteRegex": "^/_next/data/Al\\-SShdjXUxDRuupQCSZm/legacy/([^/]+?)\\.json$",
+   "allowHeader": [
+    "host",
+    "x-matched-path",
+    "x-prerender-revalidate",
+    "x-prerender-revalidate-if-generated",
+    "x-next-revalidated-tags",
+    "x-next-revalidate-tag-token"
+   ]
+  }
+ },
+ "notFoundRoutes": [],
+ "preview": {
+  "previewModeId": "REDACTED",
+  "previewModeSigningKey": "REDACTED",
+  "previewModeEncryptionKey": "REDACTED"
+ }
+}

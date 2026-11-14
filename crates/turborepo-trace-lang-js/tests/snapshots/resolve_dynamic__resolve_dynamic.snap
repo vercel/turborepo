@@ -1,0 +1,904 @@
+---
+source: crates/turborepo-trace-lang-js/tests/resolve_dynamic.rs
+expression: run.json(&run.root)
+---
+{
+  "version": 1,
+  "base": "<fixture>",
+  "entries": [
+    {
+      "path": "main.js",
+      "files": [
+        "assets/logo.png",
+        "child.js",
+        "data/config.json",
+        "data/users.json",
+        "impl/fast.js",
+        "impl/slow.js",
+        "lib/helper.js",
+        "locales/de.json",
+        "locales/en.json",
+        "locales/sub/fr.json",
+        "main.js",
+        "package.json",
+        "plugins/a.js",
+        "plugins/b.js",
+        "plugins/c/index.js",
+        "runtime/conf/dev.yml",
+        "runtime/conf/prod.yml",
+        "runtime/settings.json",
+        "templates/a.html",
+        "templates/b.html",
+        "templates/partials/c.html",
+        "worker.js"
+      ]
+    }
+  ],
+  "files": [
+    {
+      "path": "assets/logo.png",
+      "reasons": [
+        "asset"
+      ],
+      "parents": [
+        "main.js"
+      ],
+      "parsed": false
+    },
+    {
+      "path": "child.js",
+      "reasons": [
+        "dependency"
+      ],
+      "parents": [
+        "main.js"
+      ],
+      "parsed": true,
+      "lang": "js"
+    },
+    {
+      "path": "data/config.json",
+      "reasons": [
+        "asset"
+      ],
+      "parents": [
+        "lib/helper.js",
+        "main.js"
+      ],
+      "parsed": false
+    },
+    {
+      "path": "data/users.json",
+      "reasons": [
+        "asset"
+      ],
+      "parents": [
+        "lib/helper.js",
+        "main.js"
+      ],
+      "parsed": false
+    },
+    {
+      "path": "impl/fast.js",
+      "reasons": [
+        "dependency"
+      ],
+      "parents": [
+        "main.js"
+      ],
+      "parsed": true,
+      "lang": "js"
+    },
+    {
+      "path": "impl/slow.js",
+      "reasons": [
+        "dependency"
+      ],
+      "parents": [
+        "main.js"
+      ],
+      "parsed": true,
+      "lang": "js"
+    },
+    {
+      "path": "lib/helper.js",
+      "reasons": [
+        "dependency"
+      ],
+      "parents": [
+        "child.js",
+        "main.js"
+      ],
+      "parsed": true,
+      "lang": "js"
+    },
+    {
+      "path": "locales/de.json",
+      "reasons": [
+        "dependency"
+      ],
+      "parents": [
+        "main.js"
+      ],
+      "parsed": false
+    },
+    {
+      "path": "locales/en.json",
+      "reasons": [
+        "dependency"
+      ],
+      "parents": [
+        "main.js"
+      ],
+      "parsed": false
+    },
+    {
+      "path": "locales/sub/fr.json",
+      "reasons": [
+        "dependency"
+      ],
+      "parents": [
+        "main.js"
+      ],
+      "parsed": false
+    },
+    {
+      "path": "main.js",
+      "reasons": [
+        "initial"
+      ],
+      "parents": [],
+      "parsed": true,
+      "lang": "js"
+    },
+    {
+      "path": "package.json",
+      "reasons": [
+        "manifest"
+      ],
+      "parents": [
+        "child.js",
+        "impl/fast.js",
+        "impl/slow.js",
+        "lib/helper.js",
+        "main.js",
+        "plugins/a.js",
+        "plugins/b.js",
+        "plugins/c/index.js",
+        "worker.js"
+      ],
+      "parsed": false
+    },
+    {
+      "path": "plugins/a.js",
+      "reasons": [
+        "dependency"
+      ],
+      "parents": [
+        "main.js"
+      ],
+      "parsed": true,
+      "lang": "js"
+    },
+    {
+      "path": "plugins/b.js",
+      "reasons": [
+        "dependency"
+      ],
+      "parents": [
+        "main.js"
+      ],
+      "parsed": true,
+      "lang": "js"
+    },
+    {
+      "path": "plugins/c/index.js",
+      "reasons": [
+        "dependency"
+      ],
+      "parents": [
+        "main.js"
+      ],
+      "parsed": true,
+      "lang": "js"
+    },
+    {
+      "path": "runtime/conf/dev.yml",
+      "reasons": [
+        "asset"
+      ],
+      "parents": [
+        "main.js"
+      ],
+      "parsed": false
+    },
+    {
+      "path": "runtime/conf/prod.yml",
+      "reasons": [
+        "asset"
+      ],
+      "parents": [
+        "main.js"
+      ],
+      "parsed": false
+    },
+    {
+      "path": "runtime/settings.json",
+      "reasons": [
+        "asset"
+      ],
+      "parents": [
+        "main.js"
+      ],
+      "parsed": false
+    },
+    {
+      "path": "templates/a.html",
+      "reasons": [
+        "asset"
+      ],
+      "parents": [
+        "main.js"
+      ],
+      "parsed": false
+    },
+    {
+      "path": "templates/b.html",
+      "reasons": [
+        "asset"
+      ],
+      "parents": [
+        "main.js"
+      ],
+      "parsed": false
+    },
+    {
+      "path": "templates/partials/c.html",
+      "reasons": [
+        "asset"
+      ],
+      "parents": [
+        "main.js"
+      ],
+      "parsed": false
+    },
+    {
+      "path": "worker.js",
+      "reasons": [
+        "dependency"
+      ],
+      "parents": [
+        "main.js"
+      ],
+      "parsed": true,
+      "lang": "js"
+    }
+  ],
+  "edges": [
+    {
+      "from": "child.js",
+      "kind": "require",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "./lib/helper",
+      "span": [
+        15,
+        38
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "lib/helper.js"
+      }
+    },
+    {
+      "from": "child.js",
+      "kind": "manifest",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "./lib/helper",
+      "span": [
+        15,
+        38
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "package.json"
+      }
+    },
+    {
+      "from": "impl/fast.js",
+      "kind": "manifest",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "package.json scope",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "package.json"
+      }
+    },
+    {
+      "from": "impl/slow.js",
+      "kind": "manifest",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "package.json scope",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "package.json"
+      }
+    },
+    {
+      "from": "lib/helper.js",
+      "kind": "manifest",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "package.json scope",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "package.json"
+      }
+    },
+    {
+      "from": "lib/helper.js",
+      "kind": "fs_read",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "../data/*.json",
+      "span": [
+        83,
+        149
+      ],
+      "line": 3,
+      "target": {
+        "type": "glob",
+        "pattern": "data/*.json",
+        "matches": [
+          "data/config.json",
+          "data/users.json"
+        ],
+        "truncated": false
+      },
+      "uncertainty": "partial_specifier"
+    },
+    {
+      "from": "main.js",
+      "kind": "require",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "path",
+      "span": [
+        13,
+        28
+      ],
+      "line": 1,
+      "target": {
+        "type": "builtin",
+        "name": "node:path"
+      }
+    },
+    {
+      "from": "main.js",
+      "kind": "manifest",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "path",
+      "span": [
+        13,
+        28
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "package.json"
+      }
+    },
+    {
+      "from": "main.js",
+      "kind": "require",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "./lib/helper",
+      "span": [
+        160,
+        183
+      ],
+      "line": 5,
+      "target": {
+        "type": "file",
+        "path": "lib/helper.js"
+      }
+    },
+    {
+      "from": "main.js",
+      "kind": "require",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "./locales/*.json",
+      "span": [
+        241,
+        279
+      ],
+      "line": 8,
+      "target": {
+        "type": "glob",
+        "pattern": "locales/*.json?(ext)",
+        "matches": [
+          "locales/de.json",
+          "locales/en.json",
+          "locales/sub/fr.json"
+        ],
+        "truncated": false
+      },
+      "uncertainty": "partial_specifier"
+    },
+    {
+      "from": "main.js",
+      "kind": "require",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "./plugins/*",
+      "span": [
+        296,
+        324
+      ],
+      "line": 9,
+      "target": {
+        "type": "glob",
+        "pattern": "plugins/*",
+        "matches": [
+          "plugins/a.js",
+          "plugins/b.js",
+          "plugins/c/index.js"
+        ],
+        "truncated": false
+      },
+      "uncertainty": "partial_specifier"
+    },
+    {
+      "from": "main.js",
+      "kind": "require",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "./plugins/*/index",
+      "span": [
+        341,
+        380
+      ],
+      "line": 10,
+      "target": {
+        "type": "glob",
+        "pattern": "plugins/*/index?(ext)",
+        "matches": [
+          "plugins/c/index.js"
+        ],
+        "truncated": false
+      },
+      "uncertainty": "partial_specifier"
+    },
+    {
+      "from": "main.js",
+      "kind": "require",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "./nothing/*.js",
+      "span": [
+        395,
+        431
+      ],
+      "line": 11,
+      "target": {
+        "type": "unresolved"
+      },
+      "uncertainty": "unresolved_specifier"
+    },
+    {
+      "from": "main.js",
+      "kind": "require",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "./impl/fast | ./impl/slow",
+      "span": [
+        463,
+        508
+      ],
+      "line": 14,
+      "target": {
+        "type": "file",
+        "path": "impl/fast.js"
+      }
+    },
+    {
+      "from": "main.js",
+      "kind": "require",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "./impl/fast | ./impl/slow",
+      "span": [
+        463,
+        508
+      ],
+      "line": 14,
+      "target": {
+        "type": "file",
+        "path": "impl/slow.js"
+      }
+    },
+    {
+      "from": "main.js",
+      "kind": "fs_read",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "./data/config.json",
+      "span": [
+        560,
+        617
+      ],
+      "line": 17,
+      "target": {
+        "type": "file",
+        "path": "data/config.json"
+      }
+    },
+    {
+      "from": "main.js",
+      "kind": "fs_read",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "./data/*.json",
+      "span": [
+        633,
+        694
+      ],
+      "line": 18,
+      "target": {
+        "type": "glob",
+        "pattern": "data/*.json",
+        "matches": [
+          "data/config.json",
+          "data/users.json"
+        ],
+        "truncated": false
+      },
+      "uncertainty": "partial_specifier"
+    },
+    {
+      "from": "main.js",
+      "kind": "fs_read_dir",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "./templates",
+      "span": [
+        708,
+        757
+      ],
+      "line": 19,
+      "target": {
+        "type": "glob",
+        "pattern": "templates/**",
+        "matches": [
+          "templates/a.html",
+          "templates/b.html",
+          "templates/partials/c.html"
+        ],
+        "truncated": false
+      }
+    },
+    {
+      "from": "main.js",
+      "kind": "fs_read",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "./data/optional.json",
+      "span": [
+        774,
+        831
+      ],
+      "line": 20,
+      "target": {
+        "type": "unresolved"
+      }
+    },
+    {
+      "from": "main.js",
+      "kind": "fs_read",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "./*",
+      "span": [
+        845,
+        888
+      ],
+      "line": 21,
+      "target": {
+        "type": "unresolved"
+      },
+      "uncertainty": "pattern_too_broad"
+    },
+    {
+      "from": "main.js",
+      "kind": "fs_read",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "settings.json",
+      "span": [
+        924,
+        956
+      ],
+      "line": 24,
+      "target": {
+        "type": "file",
+        "path": "runtime/settings.json"
+      },
+      "uncertainty": "cwd_dependent"
+    },
+    {
+      "from": "main.js",
+      "kind": "fs_read",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "conf/*.yml",
+      "span": [
+        974,
+        1013
+      ],
+      "line": 25,
+      "target": {
+        "type": "glob",
+        "pattern": "runtime/conf/*.yml",
+        "matches": [
+          "runtime/conf/dev.yml",
+          "runtime/conf/prod.yml"
+        ],
+        "truncated": false
+      },
+      "uncertainty": "cwd_dependent"
+    },
+    {
+      "from": "main.js",
+      "kind": "worker",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "./worker.js",
+      "span": [
+        1047,
+        1092
+      ],
+      "line": 28,
+      "target": {
+        "type": "file",
+        "path": "worker.js"
+      }
+    },
+    {
+      "from": "main.js",
+      "kind": "child_process",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "./child",
+      "span": [
+        1094,
+        1129
+      ],
+      "line": 29,
+      "target": {
+        "type": "file",
+        "path": "child.js"
+      }
+    },
+    {
+      "from": "main.js",
+      "kind": "asset",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "./assets/logo.png",
+      "span": [
+        1155,
+        1200
+      ],
+      "line": 32,
+      "target": {
+        "type": "file",
+        "path": "assets/logo.png"
+      }
+    },
+    {
+      "from": "plugins/a.js",
+      "kind": "manifest",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "package.json scope",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "package.json"
+      }
+    },
+    {
+      "from": "plugins/b.js",
+      "kind": "manifest",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "package.json scope",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "package.json"
+      }
+    },
+    {
+      "from": "plugins/c/index.js",
+      "kind": "manifest",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "package.json scope",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "package.json"
+      }
+    },
+    {
+      "from": "worker.js",
+      "kind": "manifest",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "package.json scope",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "package.json"
+      }
+    }
+  ],
+  "uncertainties": [
+    {
+      "file": "lib/helper.js",
+      "kind": "partial_specifier",
+      "detail": "<fixture>/data/*.json: 2 match(es)",
+      "spec": "../data/*.json",
+      "span": [
+        83,
+        149
+      ],
+      "line": 3,
+      "col": 28
+    },
+    {
+      "file": "main.js",
+      "kind": "partial_specifier",
+      "detail": "lang; <fixture>/locales/*.json?(ext): 3 match(es)",
+      "spec": "./locales/*.json",
+      "span": [
+        241,
+        279
+      ],
+      "line": 8,
+      "col": 18
+    },
+    {
+      "file": "main.js",
+      "kind": "partial_specifier",
+      "detail": "<fixture>/plugins/*: 3 match(es)",
+      "spec": "./plugins/*",
+      "span": [
+        296,
+        324
+      ],
+      "line": 9,
+      "col": 16
+    },
+    {
+      "file": "main.js",
+      "kind": "partial_specifier",
+      "detail": "<fixture>/plugins/*/index?(ext): 1 match(es)",
+      "spec": "./plugins/*/index",
+      "span": [
+        341,
+        380
+      ],
+      "line": 10,
+      "col": 16
+    },
+    {
+      "file": "main.js",
+      "kind": "unresolved_specifier",
+      "detail": "no files match <fixture>/nothing/*.js?(ext) from <fixture>/main.js",
+      "spec": "./nothing/*.js",
+      "span": [
+        395,
+        431
+      ],
+      "line": 11,
+      "col": 14
+    },
+    {
+      "file": "main.js",
+      "kind": "partial_specifier",
+      "detail": "kind; <fixture>/data/*.json: 2 match(es)",
+      "spec": "./data/*.json",
+      "span": [
+        633,
+        694
+      ],
+      "line": 18,
+      "col": 15
+    },
+    {
+      "file": "main.js",
+      "kind": "pattern_too_broad",
+      "detail": "./*: . is the referencing file's own directory; not expanded",
+      "spec": "./*",
+      "span": [
+        845,
+        888
+      ],
+      "line": 21,
+      "col": 13
+    },
+    {
+      "file": "main.js",
+      "kind": "cwd_dependent",
+      "detail": "relative to the process cwd",
+      "spec": "settings.json",
+      "span": [
+        924,
+        956
+      ],
+      "line": 24,
+      "col": 18
+    },
+    {
+      "file": "main.js",
+      "kind": "cwd_dependent",
+      "detail": "relative to the process cwd; <fixture>/runtime/conf/*.yml: 2 match(es)",
+      "spec": "conf/*.yml",
+      "span": [
+        974,
+        1013
+      ],
+      "line": 25,
+      "col": 17
+    }
+  ],
+  "symlinks": {},
+  "stats": {
+    "entries": 1,
+    "files": 22,
+    "parsed_files": 9,
+    "edges": 29,
+    "uncertainties": 9
+  }
+}

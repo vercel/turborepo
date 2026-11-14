@@ -745,6 +745,125 @@ fn logout_short_help() {
     assert_snapshot!(Args::render_help(cmd, false).unwrap());
 }
 
+fn get_trace_subcommand(name: &str) -> &'static usage::Command<'static> {
+    get_subcommand("trace")
+        .subcommands
+        .iter()
+        .find(|command| command.name == name)
+        .unwrap_or_else(|| panic!("trace subcommand '{name}' not found"))
+}
+
+#[test]
+fn trace_short_help() {
+    assert_snapshot!(Args::render_help(get_subcommand("trace"), false).unwrap());
+}
+
+#[test]
+fn trace_affected_short_help() {
+    assert_snapshot!(Args::render_help(get_trace_subcommand("affected"), false).unwrap());
+}
+
+#[test]
+fn trace_why_short_help() {
+    assert_snapshot!(Args::render_help(get_trace_subcommand("why"), false).unwrap());
+}
+
+#[test]
+fn trace_lint_short_help() {
+    assert_snapshot!(Args::render_help(get_trace_subcommand("lint"), false).unwrap());
+}
+
+#[test]
+fn trace_is_hidden_from_top_level_help() {
+    for long in [false, true] {
+        let help = Args::render_help(Args::command(), long).unwrap();
+        assert!(
+            !help
+                .lines()
+                .any(|line| line.trim_start().starts_with("trace")),
+            "{help}"
+        );
+    }
+}
+
+#[test]
+fn trace_parses_its_subcommands() {
+    use crate::cli::{TraceAffectedArgs, TraceCommand};
+
+    let trace = |words: &[&str]| {
+        parse_args(["turbo", "trace"].iter().chain(words))
+            .map(|args| args.command)
+            .map_err(|error| error.to_string())
+    };
+    assert_eq!(trace(&[]).unwrap(), Some(Command::Trace { command: None }));
+    assert_eq!(
+        trace(&[
+            "affected",
+            "--base",
+            "main",
+            "--head",
+            "HEAD",
+            "-F",
+            "web",
+            "--tests",
+            "jest",
+            "vitest",
+            "--strict",
+            "--json",
+            "--exit-code",
+        ])
+        .unwrap(),
+        Some(Command::Trace {
+            command: Some(TraceCommand::Affected(TraceAffectedArgs {
+                base: Some("main".into()),
+                head: Some("HEAD".into()),
+                filter: vec!["web".into()],
+                tests: vec!["jest".into(), "vitest".into()],
+                strict: true,
+                json: true,
+                exit_code: true,
+                ..Default::default()
+            })),
+        })
+    );
+    assert_eq!(
+        trace(&["affected", "--changed", "a.ts", "b.ts"]).unwrap(),
+        Some(Command::Trace {
+            command: Some(TraceCommand::Affected(TraceAffectedArgs {
+                changed: vec!["a.ts".into(), "b.ts".into()],
+                ..Default::default()
+            })),
+        })
+    );
+    assert_eq!(
+        trace(&["why", "a.test.ts", "src/a.ts"]).unwrap(),
+        Some(Command::Trace {
+            command: Some(TraceCommand::Why {
+                test: "a.test.ts".into(),
+                file: "src/a.ts".into(),
+            }),
+        })
+    );
+    assert_eq!(
+        trace(&["lint", "--json"]).unwrap(),
+        Some(Command::Trace {
+            command: Some(TraceCommand::Lint { json: true }),
+        })
+    );
+    // The explicit file list replaces git; the explanation replaces the list.
+    assert!(trace(&["affected", "--changed", "a.ts", "--base", "main"]).is_err());
+    assert!(trace(&["affected", "--explain", "a.test.ts", "--json"]).is_err());
+    assert!(trace(&["affected", "--explain", "a.test.ts", "--exit-code"]).is_err());
+    assert!(trace(&["why", "a.test.ts"]).is_err());
+}
+
+#[test]
+fn trace_filter_selects_output_packages() {
+    let args = parse_args(["turbo", "trace", "affected", "-F", "web..."]).unwrap();
+    let (_, execution) = args.selectors();
+    assert_eq!(execution.filter, vec!["web...".to_string()]);
+}
+
 #[test]
 fn devtools_short_help() {
     let cmd = get_subcommand("devtools");

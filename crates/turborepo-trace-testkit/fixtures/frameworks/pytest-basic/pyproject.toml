@@ -1,0 +1,10 @@
+[project]
+name = "demo"
+
+[tool.pytest.ini_options]
+testpaths = [
+    "tests",  # unit and integration
+]
+python_files = ["test_*.py", "check_*.py"]
+pythonpath = ["src"]
+addopts = "-p demo_plugin --import-mode=importlib -p no:cacheprovider --ignore=tests/skipme"

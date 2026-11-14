@@ -1,0 +1,436 @@
+---
+source: crates/turborepo-trace-lang-rust/tests/fixtures.rs
+expression: json
+---
+{
+  "version": 1,
+  "base": "<fixture>",
+  "entries": [
+    {
+      "path": "util/src/lib.rs",
+      "files": [
+        ".cargo/config.toml",
+        "Cargo.lock",
+        "Cargo.toml",
+        "util/Cargo.toml",
+        "util/src/lib.rs",
+        "util/src/snapshots/util__tests__snap.snap",
+        "util/src/strings.rs",
+        "vendor/regdep/Cargo.toml",
+        "vendor/regdep/src/core_impl.rs",
+        "vendor/regdep/src/lib.rs",
+        "vendor/regdep/src/std_impl.rs"
+      ]
+    }
+  ],
+  "files": [
+    {
+      "path": ".cargo/config.toml",
+      "reasons": [
+        "manifest"
+      ],
+      "parents": [
+        "util/src/lib.rs",
+        "util/src/strings.rs"
+      ],
+      "parsed": false
+    },
+    {
+      "path": "Cargo.lock",
+      "reasons": [
+        "manifest"
+      ],
+      "parents": [
+        "util/src/lib.rs",
+        "util/src/strings.rs"
+      ],
+      "parsed": false
+    },
+    {
+      "path": "Cargo.toml",
+      "reasons": [
+        "manifest"
+      ],
+      "parents": [
+        "util/src/lib.rs",
+        "util/src/strings.rs"
+      ],
+      "parsed": false
+    },
+    {
+      "path": "util/Cargo.toml",
+      "reasons": [
+        "manifest"
+      ],
+      "parents": [
+        "util/src/lib.rs",
+        "util/src/strings.rs"
+      ],
+      "parsed": false
+    },
+    {
+      "path": "util/src/lib.rs",
+      "reasons": [
+        "initial"
+      ],
+      "parents": [],
+      "parsed": true,
+      "lang": "rust"
+    },
+    {
+      "path": "util/src/snapshots/util__tests__snap.snap",
+      "reasons": [
+        "asset"
+      ],
+      "parents": [
+        "util/src/lib.rs"
+      ],
+      "parsed": false
+    },
+    {
+      "path": "util/src/strings.rs",
+      "reasons": [
+        "dependency"
+      ],
+      "parents": [
+        "util/src/lib.rs"
+      ],
+      "parsed": true,
+      "lang": "rust"
+    },
+    {
+      "path": "vendor/regdep/Cargo.toml",
+      "reasons": [
+        "manifest"
+      ],
+      "parents": [
+        "vendor/regdep/src/core_impl.rs",
+        "vendor/regdep/src/lib.rs",
+        "vendor/regdep/src/std_impl.rs"
+      ],
+      "parsed": false
+    },
+    {
+      "path": "vendor/regdep/src/core_impl.rs",
+      "reasons": [
+        "dependency"
+      ],
+      "parents": [
+        "vendor/regdep/src/lib.rs"
+      ],
+      "parsed": true,
+      "lang": "rust"
+    },
+    {
+      "path": "vendor/regdep/src/lib.rs",
+      "reasons": [
+        "dependency"
+      ],
+      "parents": [
+        "util/src/lib.rs"
+      ],
+      "parsed": true,
+      "lang": "rust"
+    },
+    {
+      "path": "vendor/regdep/src/std_impl.rs",
+      "reasons": [
+        "dependency"
+      ],
+      "parents": [
+        "vendor/regdep/src/lib.rs"
+      ],
+      "parsed": true,
+      "lang": "rust"
+    }
+  ],
+  "edges": [
+    {
+      "from": "util/src/lib.rs",
+      "kind": "package",
+      "phase": "build",
+      "flags": [],
+      "spec": "crate regdep 1.0.0",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "vendor/regdep/src/lib.rs"
+      }
+    },
+    {
+      "from": "util/src/lib.rs",
+      "kind": "manifest",
+      "phase": "build",
+      "flags": [],
+      "spec": ".cargo/config.toml",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": ".cargo/config.toml"
+      }
+    },
+    {
+      "from": "util/src/lib.rs",
+      "kind": "manifest",
+      "phase": "build",
+      "flags": [],
+      "spec": "Cargo.lock",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "Cargo.lock"
+      }
+    },
+    {
+      "from": "util/src/lib.rs",
+      "kind": "manifest",
+      "phase": "build",
+      "flags": [],
+      "spec": "workspace Cargo.toml",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "Cargo.toml"
+      }
+    },
+    {
+      "from": "util/src/lib.rs",
+      "kind": "manifest",
+      "phase": "build",
+      "flags": [],
+      "spec": "Cargo.toml",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "util/Cargo.toml"
+      }
+    },
+    {
+      "from": "util/src/lib.rs",
+      "kind": "mod",
+      "phase": "build",
+      "flags": [],
+      "spec": "strings",
+      "span": [
+        4,
+        16
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "util/src/strings.rs"
+      }
+    },
+    {
+      "from": "util/src/lib.rs",
+      "kind": "fs_read",
+      "phase": "runtime",
+      "flags": [
+        "conditional"
+      ],
+      "spec": "snapshots/*.snap",
+      "span": [
+        86,
+        107
+      ],
+      "line": 7,
+      "target": {
+        "type": "glob",
+        "pattern": "util/src/snapshots/*.snap",
+        "matches": [
+          "util/src/snapshots/util__tests__snap.snap"
+        ],
+        "truncated": false
+      },
+      "uncertainty": "partial_specifier"
+    },
+    {
+      "from": "util/src/strings.rs",
+      "kind": "manifest",
+      "phase": "build",
+      "flags": [],
+      "spec": ".cargo/config.toml",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": ".cargo/config.toml"
+      }
+    },
+    {
+      "from": "util/src/strings.rs",
+      "kind": "manifest",
+      "phase": "build",
+      "flags": [],
+      "spec": "Cargo.lock",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "Cargo.lock"
+      }
+    },
+    {
+      "from": "util/src/strings.rs",
+      "kind": "manifest",
+      "phase": "build",
+      "flags": [],
+      "spec": "workspace Cargo.toml",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "Cargo.toml"
+      }
+    },
+    {
+      "from": "util/src/strings.rs",
+      "kind": "manifest",
+      "phase": "build",
+      "flags": [],
+      "spec": "Cargo.toml",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "util/Cargo.toml"
+      }
+    },
+    {
+      "from": "vendor/regdep/src/core_impl.rs",
+      "kind": "manifest",
+      "phase": "build",
+      "flags": [],
+      "spec": "Cargo.toml",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "vendor/regdep/Cargo.toml"
+      }
+    },
+    {
+      "from": "vendor/regdep/src/lib.rs",
+      "kind": "manifest",
+      "phase": "build",
+      "flags": [],
+      "spec": "Cargo.toml",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "vendor/regdep/Cargo.toml"
+      }
+    },
+    {
+      "from": "vendor/regdep/src/lib.rs",
+      "kind": "mod",
+      "phase": "build",
+      "flags": [
+        "conditional"
+      ],
+      "spec": "std_impl",
+      "span": [
+        55,
+        68
+      ],
+      "line": 3,
+      "target": {
+        "type": "file",
+        "path": "vendor/regdep/src/std_impl.rs"
+      }
+    },
+    {
+      "from": "vendor/regdep/src/lib.rs",
+      "kind": "mod",
+      "phase": "build",
+      "flags": [],
+      "spec": "core_impl",
+      "span": [
+        69,
+        83
+      ],
+      "line": 4,
+      "target": {
+        "type": "file",
+        "path": "vendor/regdep/src/core_impl.rs"
+      }
+    },
+    {
+      "from": "vendor/regdep/src/std_impl.rs",
+      "kind": "manifest",
+      "phase": "build",
+      "flags": [],
+      "spec": "Cargo.toml",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "vendor/regdep/Cargo.toml"
+      }
+    }
+  ],
+  "uncertainties": [
+    {
+      "file": "util/src/lib.rs",
+      "kind": "partial_specifier",
+      "detail": "<fixture>/util/src/snapshots/*.snap: 1 match(es)",
+      "spec": "snapshots/*.snap",
+      "span": [
+        86,
+        107
+      ],
+      "line": 7,
+      "col": 16
+    }
+  ],
+  "symlinks": {},
+  "stats": {
+    "entries": 1,
+    "files": 11,
+    "parsed_files": 5,
+    "edges": 16,
+    "uncertainties": 1
+  }
+}

@@ -1,0 +1,9 @@
+version: v2
+plugins:
+  - local: protoc-gen-go
+    out: gen/go
+    opt: paths=source_relative
+  - remote: buf.build/connectrpc/es:v1.4.0
+    out: gen/ts
+  - local: protoc-gen-custom
+    out: gen/custom

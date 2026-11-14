@@ -1,0 +1,6 @@
+[alias]
+xtask = "run -p xtask --"
+t = "test --workspace"
+b = ["build", "-p", "app"]
+lint = "clippy --all-targets -- -D warnings"
+gen = "xtask codegen"

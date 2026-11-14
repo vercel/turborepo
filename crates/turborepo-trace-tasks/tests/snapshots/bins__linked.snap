@@ -1,0 +1,653 @@
+---
+source: crates/turborepo-trace-tasks/tests/bins.rs
+expression: "dump(&root, &set)"
+---
+## task:packages/app#build
+{
+  "commands": [
+    "tsc-build --pretty [bin-wrapper] Partial"
+  ],
+  "spec": {
+    "configs": [
+      "packages/app/package.json",
+      "tools/test-dd/package.json"
+    ],
+    "entries": [
+      {
+        "path": "tools/test-dd/bin/tsc-build.mjs",
+        "lang": "js"
+      }
+    ],
+    "memberships": [
+      {
+        "dir": "packages/app",
+        "pattern": "**",
+        "reason": "`tsc-build` not fully recognized"
+      },
+      {
+        "dir": "packages/app",
+        "pattern": "**",
+        "reason": "`tsc` not fully recognized"
+      },
+      {
+        "dir": "packages/app",
+        "pattern": "**",
+        "reason": "tsc without a tsconfig"
+      },
+      {
+        "dir": "packages/app",
+        "pattern": "**",
+        "reason": "uncertain task"
+      }
+    ],
+    "toolchain": [
+      {
+        "ecosystem": "npm",
+        "name": "typescript"
+      }
+    ],
+    "uncertainties": [
+      {
+        "kind": "unknown_command",
+        "detail": "`tsc-build` runs `tsc` (inferred from `tools/test-dd/bin/tsc-build.mjs`, strong evidence)"
+      },
+      {
+        "kind": "unknown_command",
+        "detail": "tsc without a tsconfig"
+      }
+    ]
+  }
+}
+
+## task:packages/app#codegen
+{
+  "commands": [
+    "gen-client schema.json > src/generated/client.js [bin] Full"
+  ],
+  "spec": {
+    "inputs": [
+      "packages/app/schema.json"
+    ],
+    "outputs": [
+      {
+        "path": "packages/app/src/generated/client.js",
+        "kind": "artifact"
+      }
+    ],
+    "configs": [
+      "packages/app/package.json",
+      "tools/gen/package.json"
+    ],
+    "entries": [
+      {
+        "path": "tools/gen/bin/gen-client.js",
+        "lang": "js"
+      }
+    ]
+  }
+}
+
+## task:packages/app#codegen:explicit
+{
+  "commands": [
+    "node_modules/.bin/gen-client schema.json [bin] Full"
+  ],
+  "spec": {
+    "inputs": [
+      "packages/app/schema.json"
+    ],
+    "configs": [
+      "packages/app/package.json",
+      "tools/gen/package.json"
+    ],
+    "entries": [
+      {
+        "path": "tools/gen/bin/gen-client.js",
+        "lang": "js"
+      }
+    ]
+  }
+}
+
+## task:packages/app#codegen:npx
+{
+  "commands": [
+    "npx gen-client schema.json [bin] Full"
+  ],
+  "spec": {
+    "inputs": [
+      "packages/app/schema.json"
+    ],
+    "configs": [
+      "packages/app/package.json",
+      "tools/gen/package.json"
+    ],
+    "entries": [
+      {
+        "path": "tools/gen/bin/gen-client.js",
+        "lang": "js"
+      }
+    ]
+  }
+}
+
+## task:packages/app#codegen:pnpm
+{
+  "commands": [
+    "pnpm exec gen-client schema.json [bin] Full"
+  ],
+  "spec": {
+    "inputs": [
+      "packages/app/schema.json"
+    ],
+    "configs": [
+      "packages/app/package.json",
+      "tools/gen/package.json"
+    ],
+    "entries": [
+      {
+        "path": "tools/gen/bin/gen-client.js",
+        "lang": "js"
+      }
+    ]
+  }
+}
+
+## task:packages/app#codegen:yarn
+{
+  "commands": [
+    "yarn gen-client schema.json [bin] Full"
+  ],
+  "spec": {
+    "inputs": [
+      "packages/app/schema.json"
+    ],
+    "configs": [
+      "packages/app/package.json",
+      "tools/gen/package.json"
+    ],
+    "entries": [
+      {
+        "path": "tools/gen/bin/gen-client.js",
+        "lang": "js"
+      }
+    ]
+  }
+}
+
+## task:packages/app#cwd
+{
+  "commands": [
+    "gen-cwd [bin] Partial"
+  ],
+  "spec": {
+    "configs": [
+      "packages/app/package.json",
+      "tools/gen/package.json"
+    ],
+    "entries": [
+      {
+        "path": "tools/gen/bin/gen-cwd.js",
+        "lang": "js"
+      }
+    ],
+    "memberships": [
+      {
+        "dir": "packages/app",
+        "pattern": "**",
+        "reason": "bin `gen-cwd` reads paths relative to the cwd"
+      }
+    ]
+  }
+}
+
+## task:packages/app#od
+{
+  "commands": [
+    "od-cli [bin-package] Partial"
+  ],
+  "spec": {
+    "configs": [
+      "packages/app/package.json"
+    ],
+    "memberships": [
+      {
+        "dir": "packages/app",
+        "pattern": "**",
+        "reason": "`od-cli` not fully recognized"
+      },
+      {
+        "dir": "packages/app",
+        "pattern": "**",
+        "reason": "uncertain task"
+      }
+    ],
+    "toolchain": [
+      {
+        "ecosystem": "npm",
+        "name": "other-dep"
+      }
+    ],
+    "uncertainties": [
+      {
+        "kind": "unknown_command",
+        "detail": "`od-cli` from third-party package `other-dep`: inputs not modelled"
+      }
+    ]
+  }
+}
+
+## task:packages/app#py
+{
+  "commands": [
+    "gen-py schema.json [bin] Full"
+  ],
+  "spec": {
+    "inputs": [
+      "packages/app/schema.json"
+    ],
+    "configs": [
+      "packages/app/package.json",
+      "tools/gen/package.json"
+    ],
+    "entries": [
+      {
+        "path": "tools/gen/bin/gen-py",
+        "lang": "python"
+      }
+    ]
+  }
+}
+
+## task:packages/app#sh
+{
+  "commands": [
+    "gen-sh [bin] Partial"
+  ],
+  "spec": {
+    "configs": [
+      "packages/app/package.json",
+      "tools/gen/package.json"
+    ],
+    "entries": [
+      {
+        "path": "tools/gen/bin/gen.sh",
+        "lang": "auto"
+      }
+    ],
+    "memberships": [
+      {
+        "dir": "packages/app",
+        "pattern": "**",
+        "reason": "`gen-sh` not fully recognized"
+      },
+      {
+        "dir": "packages/app",
+        "pattern": "**",
+        "reason": "uncertain task"
+      }
+    ],
+    "uncertainties": [
+      {
+        "kind": "unknown_command",
+        "detail": "bin `gen-sh` is a script `tools/gen/bin/gen.sh`"
+      }
+    ]
+  }
+}
+
+## task:packages/app#test
+{
+  "commands": [
+    "jest-dd -c jest.unit.config.js [bin-wrapper] Partial"
+  ],
+  "spec": {
+    "inputs": [
+      "packages/app/jest.config.cjs",
+      "packages/app/jest.config.cts",
+      "packages/app/jest.config.js",
+      "packages/app/jest.config.json",
+      "packages/app/jest.config.mjs",
+      "packages/app/jest.config.mts",
+      "packages/app/jest.config.ts"
+    ],
+    "configs": [
+      "packages/app/jest.unit.config.js",
+      "packages/app/package.json",
+      "tools/test-dd/package.json"
+    ],
+    "entries": [
+      {
+        "path": "packages/app/jest.unit.config.js",
+        "lang": "js"
+      },
+      {
+        "path": "tools/test-dd/bin/jest-dd.js",
+        "lang": "js"
+      }
+    ],
+    "memberships": [
+      {
+        "dir": "packages/app",
+        "pattern": "**",
+        "reason": "`jest-dd` not fully recognized"
+      },
+      {
+        "dir": "packages/app",
+        "pattern": "**",
+        "reason": "uncertain task"
+      },
+      {
+        "dir": "packages/app",
+        "pattern": "**/*.{js,mjs,cjs,jsx,ts,mts,cts,tsx,json,node}",
+        "reason": "jest test files"
+      },
+      {
+        "dir": "packages/app",
+        "pattern": "**/__mocks__/**",
+        "reason": "manual mocks (jest haste map)"
+      }
+    ],
+    "toolchain": [
+      {
+        "ecosystem": "npm",
+        "name": "jest"
+      },
+      {
+        "ecosystem": "npm",
+        "name": "jest-environment-node"
+      }
+    ],
+    "uncertainties": [
+      {
+        "kind": "unknown_command",
+        "detail": "`jest-dd` runs `jest` (inferred from `tools/test-dd/bin/jest-dd.js`, weak evidence)"
+      }
+    ],
+    "runs": [
+      {
+        "kind": "tests",
+        "framework": "jest",
+        "dir": "packages/app"
+      }
+    ],
+    "definition": [
+      "packages/app/jest.unit.config.js"
+    ]
+  }
+}
+
+## task:packages/app#test:vitest
+{
+  "commands": [
+    "vitest-dd run --config vitest.config.ts [bin-wrapper] Partial"
+  ],
+  "spec": {
+    "inputs": [
+      "packages/app/vite.config.cjs",
+      "packages/app/vite.config.cts",
+      "packages/app/vite.config.js",
+      "packages/app/vite.config.mjs",
+      "packages/app/vite.config.mts",
+      "packages/app/vite.config.ts",
+      "packages/app/vitest.config.cjs",
+      "packages/app/vitest.config.cts",
+      "packages/app/vitest.config.js",
+      "packages/app/vitest.config.mjs",
+      "packages/app/vitest.config.mts",
+      "packages/app/vitest.config.ts",
+      "packages/app/vitest.workspace.js",
+      "packages/app/vitest.workspace.json",
+      "packages/app/vitest.workspace.ts"
+    ],
+    "configs": [
+      "packages/app/package.json",
+      "packages/app/vitest.config.ts",
+      "tools/test-dd/package.json"
+    ],
+    "entries": [
+      {
+        "path": "packages/app/vitest.config.ts",
+        "lang": "js"
+      },
+      {
+        "path": "tools/test-dd/bin/vitest-dd.js",
+        "lang": "js"
+      }
+    ],
+    "memberships": [
+      {
+        "dir": "packages/app",
+        "pattern": "**",
+        "reason": "`vitest-dd` not fully recognized"
+      },
+      {
+        "dir": "packages/app",
+        "pattern": "**",
+        "reason": "uncertain task"
+      },
+      {
+        "dir": "packages/app/src",
+        "pattern": "**/*.spec.ts",
+        "reason": "vitest test files"
+      }
+    ],
+    "toolchain": [
+      {
+        "ecosystem": "npm",
+        "name": "vitest"
+      }
+    ],
+    "uncertainties": [
+      {
+        "kind": "unknown_command",
+        "detail": "`vitest-dd` runs `vitest` (inferred from `tools/test-dd/bin/vitest-dd.js`, weak evidence)"
+      }
+    ],
+    "runs": [
+      {
+        "kind": "tests",
+        "framework": "vitest",
+        "dir": "packages/app"
+      }
+    ],
+    "definition": [
+      "packages/app/vitest.config.ts"
+    ]
+  }
+}
+
+## task:packages/app#tp
+{
+  "commands": [
+    "tp-tool schema.json [bin-package] Partial"
+  ],
+  "spec": {
+    "inputs": [
+      "packages/app/schema.json"
+    ],
+    "configs": [
+      "packages/app/package.json"
+    ],
+    "memberships": [
+      {
+        "dir": "packages/app",
+        "pattern": "**",
+        "reason": "`tp-tool` not fully recognized"
+      },
+      {
+        "dir": "packages/app",
+        "pattern": "**",
+        "reason": "uncertain task"
+      }
+    ],
+    "toolchain": [
+      {
+        "ecosystem": "npm",
+        "name": "tp-tool"
+      }
+    ],
+    "uncertainties": [
+      {
+        "kind": "unknown_command",
+        "detail": "`tp-tool` from third-party package `tp-tool`: inputs not modelled"
+      }
+    ]
+  }
+}
+
+## task:packages/app#typecheck
+{
+  "commands": [
+    "tsc6 -p tsconfig.build.json [bin-package] Full"
+  ],
+  "spec": {
+    "outputs": [
+      {
+        "path": "packages/app/dist",
+        "kind": "artifact"
+      }
+    ],
+    "configs": [
+      "packages/app/package.json",
+      "packages/app/tsconfig.build.json"
+    ],
+    "memberships": [
+      {
+        "dir": "packages/app/src",
+        "pattern": "**/*",
+        "reason": "tsconfig include"
+      }
+    ],
+    "toolchain": [
+      {
+        "ecosystem": "npm",
+        "name": "@typescript/typescript6"
+      },
+      {
+        "ecosystem": "npm",
+        "name": "typescript"
+      }
+    ]
+  }
+}
+
+## task:packages/app#unknown
+{
+  "commands": [
+    "no-such-tool --x [-] Unknown"
+  ],
+  "spec": {
+    "configs": [
+      "packages/app/package.json"
+    ],
+    "memberships": [
+      {
+        "dir": "packages/app",
+        "pattern": "**",
+        "reason": "uncertain task"
+      },
+      {
+        "dir": "packages/app",
+        "pattern": "**",
+        "reason": "unknown command `no-such-tool`"
+      }
+    ],
+    "uncertainties": [
+      {
+        "kind": "unknown_command",
+        "detail": "no-such-tool"
+      }
+    ]
+  }
+}
+
+## task:packages/gosvc#cover
+{
+  "commands": [
+    "go tool cover -func=cover.out [go-tool] Partial"
+  ],
+  "spec": {
+    "configs": [
+      "packages/gosvc/go.mod",
+      "packages/gosvc/go.sum",
+      "packages/gosvc/package.json"
+    ],
+    "memberships": [
+      {
+        "dir": "packages/gosvc",
+        "pattern": "**",
+        "reason": "`go` not fully recognized"
+      },
+      {
+        "dir": "packages/gosvc",
+        "pattern": "**",
+        "reason": "go tool `cover`"
+      },
+      {
+        "dir": "packages/gosvc",
+        "pattern": "**",
+        "reason": "uncertain task"
+      }
+    ],
+    "toolchain": [
+      {
+        "ecosystem": "system",
+        "name": "go"
+      }
+    ],
+    "uncertainties": [
+      {
+        "kind": "unknown_command",
+        "detail": "go tool `cover`: inputs not modelled"
+      }
+    ]
+  }
+}
+
+## task:packages/gosvc#lint
+{
+  "commands": [
+    "go tool golangci-lint run ./... [go-tool] Partial"
+  ],
+  "spec": {
+    "configs": [
+      "packages/gosvc/go.mod",
+      "packages/gosvc/go.sum",
+      "packages/gosvc/package.json"
+    ],
+    "memberships": [
+      {
+        "dir": "packages/gosvc",
+        "pattern": "**",
+        "reason": "`go` not fully recognized"
+      },
+      {
+        "dir": "packages/gosvc",
+        "pattern": "**",
+        "reason": "go tool `github.com/golangci/golangci-lint/v2/cmd/golangci-lint`"
+      },
+      {
+        "dir": "packages/gosvc",
+        "pattern": "**",
+        "reason": "uncertain task"
+      }
+    ],
+    "toolchain": [
+      {
+        "ecosystem": "go",
+        "name": "github.com/golangci/golangci-lint/v2/cmd/golangci-lint"
+      },
+      {
+        "ecosystem": "system",
+        "name": "go"
+      }
+    ],
+    "uncertainties": [
+      {
+        "kind": "unknown_command",
+        "detail": "go tool `github.com/golangci/golangci-lint/v2/cmd/golangci-lint`: inputs not modelled"
+      }
+    ]
+  }
+}

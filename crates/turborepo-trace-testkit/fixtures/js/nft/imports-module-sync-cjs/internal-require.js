@@ -1,0 +1,2 @@
+exports.value = 'require';
+

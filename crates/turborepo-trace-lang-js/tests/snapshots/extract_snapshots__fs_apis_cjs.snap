@@ -1,0 +1,38 @@
+---
+source: crates/turborepo-trace-lang-js/tests/extract_snapshots.rs
+expression: "render(\"fs_apis_cjs.cjs\")"
+---
+3:12 require "fs"
+    span: require('fs')
+4:39 require "graceful-fs"
+    span: require('graceful-fs')
+5:13 require "fs"
+    span: require('fs')
+6:14 require "path"
+    span: require('path')
+8:1 fs_read "a.txt"
+    span: r(__dirname + '/a.txt')
+9:1 fs_read "config/app.json" @cwd [optional, names]
+    span: statSync(path.join(process.cwd(), 'config', 'app.json'))
+    uncertainty: cwd_dependent "path.join(process.cwd(), 'config', 'app.json')"
+10:1 fs_read_dir "locales" [names]
+    span: fsp.readdir(path.join(__dirname, 'locales'))
+11:1 fs_read "b.json"
+    span: fs.readFileSync(require.resolve('./b.json'))
+11:17 require "./b.json"
+    span: require.resolve('./b.json')
+12:1 require "fs"
+    span: require('fs')
+12:1 fs_read "fs_apis_cjs.cjs"
+    span: require('fs').readFileSync(__filename
+13:1 require "node:fs"
+    span: require('node:fs')
+13:1 fs_read_dir "plugins" [names]
+    span: require('node:fs').readdirSync(__dirname + '/plugins')
+16:28 require "fs"
+    span: require('fs')
+17:10 fs_read "lazy.txt"
+    span: readFileSync(path.join(__dirname, 'lazy.txt'))
+23:10 fs_read "<unknown>"
+    span: fs.readFileSync(file)
+    uncertainty: computed_specifier "file; parameter module.exports#0"

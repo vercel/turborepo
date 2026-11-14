@@ -1,0 +1,11 @@
+version: v2
+clean: true
+managed:
+  enabled: true
+  override:
+    - file_option: go_package_prefix
+      value: example.test/ops/app/gen
+plugins:
+  - local: protoc-gen-go
+    out: ../../services/ops/app/gen
+    opt: paths=source_relative

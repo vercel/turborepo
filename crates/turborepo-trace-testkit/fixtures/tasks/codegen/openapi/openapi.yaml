@@ -1,0 +1,15 @@
+openapi: 3.0.0
+info: { title: Pets, version: '1' }
+paths:
+  /pets:
+    get:
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                $ref: './schemas/pet.yaml'
+components:
+  schemas:
+    Local:
+      $ref: '#/components/schemas/Other'

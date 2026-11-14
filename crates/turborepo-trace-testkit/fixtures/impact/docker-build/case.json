@@ -1,0 +1,50 @@
+{
+  "description": "Docker builds (§19 M2.9, P1): `npm run build:artifacts` runs `docker build --target artifacts -o build/artifacts .`; the artifacts stage copies dist/ from the build stage, which COPYs package.json, src/ and assets/ (filtered by .dockerignore). build/ is gitignored and loaded by a test; the oracle never runs docker, so the test affected through the image is declared with expect_affected.",
+  "mutations": [
+    {
+      "name": "copy-source",
+      "description": "edit a file COPY src brings into the build stage",
+      "ops": [{ "op": "replace", "path": "src/data.json", "find": "\"b\"", "with": "\"b\", \"c\"" }],
+      "expect_affected": ["test/artifacts.test.js"]
+    },
+    {
+      "name": "copy-source-assets",
+      "description": "edit a file of another COPY'd directory",
+      "ops": [{ "op": "replace", "path": "assets/logo.txt", "find": "(logo)", "with": "(new logo)" }],
+      "expect_affected": ["test/artifacts.test.js"]
+    },
+    {
+      "name": "copy-source-added",
+      "description": "add a file to a COPY'd directory (membership)",
+      "ops": [{ "op": "write", "path": "src/extra.json", "content": "{}\n" }],
+      "expect_affected": ["test/artifacts.test.js"]
+    },
+    {
+      "name": "dockerfile-edit",
+      "description": "the Dockerfile is a config of the image",
+      "ops": [{ "op": "replace", "path": "Dockerfile", "find": "node:20-alpine", "with": "node:22-alpine" }],
+      "expect_affected": ["test/artifacts.test.js"]
+    },
+    {
+      "name": "dockerignore-edit",
+      "description": "un-ignore assets/drafts: the build context changes",
+      "ops": [{ "op": "replace", "path": ".dockerignore", "find": "assets/drafts\n", "with": "" }],
+      "expect_affected": ["test/artifacts.test.js"]
+    },
+    {
+      "name": "dockerignored-file",
+      "description": "control: src/NOTES.md matches **/*.md in .dockerignore, so the image does not change",
+      "ops": [{ "op": "append", "path": "src/NOTES.md", "text": "\nMore notes.\n" }]
+    },
+    {
+      "name": "dockerignored-dir",
+      "description": "control: assets/drafts is ignored as a directory",
+      "ops": [{ "op": "append", "path": "assets/drafts/wip.txt", "text": "more\n" }]
+    },
+    {
+      "name": "lib-edit",
+      "description": "control: a file outside every COPY source",
+      "ops": [{ "op": "append", "path": "lib/util.js", "text": "\n// edited\n" }]
+    }
+  ]
+}

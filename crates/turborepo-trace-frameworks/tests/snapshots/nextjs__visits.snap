@@ -1,0 +1,202 @@
+---
+source: crates/turborepo-trace-frameworks/tests/nextjs.rs
+expression: "redact(serde_json::to_string_pretty(&v).unwrap(), root)"
+---
+[
+  {
+    "spec": "<fixture>/e2e/annotated.spec.ts",
+    "visits": [],
+    "unresolved": [
+      {
+        "kind": "goto",
+        "file": "<fixture>/e2e/annotated.spec.ts",
+        "line": 7,
+        "text": "computeUrl()"
+      }
+    ],
+    "helper_files": [],
+    "annotation": {
+      "routes": [
+        "/dashboard"
+      ],
+      "replace": true,
+      "unreadable": []
+    }
+  },
+  {
+    "spec": "<fixture>/e2e/api.spec.ts",
+    "visits": [
+      {
+        "kind": "request",
+        "file": "<fixture>/e2e/api.spec.ts",
+        "line": 4,
+        "url": "/api/health",
+        "soft": false
+      }
+    ],
+    "unresolved": [],
+    "helper_files": [],
+    "annotation": null
+  },
+  {
+    "spec": "<fixture>/e2e/blog.spec.ts",
+    "visits": [
+      {
+        "kind": "goto",
+        "file": "<fixture>/e2e/blog.spec.ts",
+        "line": 5,
+        "url": "/blog/hello",
+        "soft": false
+      },
+      {
+        "kind": "goto",
+        "file": "<fixture>/e2e/blog.spec.ts",
+        "line": 6,
+        "url": "/blog/new",
+        "soft": false
+      },
+      {
+        "kind": "goto",
+        "file": "<fixture>/e2e/blog.spec.ts",
+        "line": 7,
+        "url": "/old-blog/first",
+        "soft": false
+      },
+      {
+        "kind": "goto",
+        "file": "<fixture>/e2e/helpers.ts",
+        "line": 4,
+        "url": "/pricing",
+        "soft": false
+      }
+    ],
+    "unresolved": [],
+    "helper_files": [
+      "<fixture>/e2e/helpers.ts"
+    ],
+    "annotation": null
+  },
+  {
+    "spec": "<fixture>/e2e/dynamic.spec.ts",
+    "visits": [],
+    "unresolved": [
+      {
+        "kind": "goto",
+        "file": "<fixture>/e2e/dynamic.spec.ts",
+        "line": 4,
+        "text": "url"
+      }
+    ],
+    "helper_files": [],
+    "annotation": null
+  },
+  {
+    "spec": "<fixture>/e2e/home.spec.ts",
+    "visits": [
+      {
+        "kind": "goto",
+        "file": "<fixture>/e2e/home.spec.ts",
+        "line": 4,
+        "url": "/",
+        "soft": false
+      },
+      {
+        "kind": "url_assert",
+        "file": "<fixture>/e2e/home.spec.ts",
+        "line": 5,
+        "url": "/",
+        "soft": true
+      }
+    ],
+    "unresolved": [],
+    "helper_files": [],
+    "annotation": null
+  },
+  {
+    "spec": "<fixture>/e2e/mfe.spec.ts",
+    "visits": [
+      {
+        "kind": "goto",
+        "file": "<fixture>/e2e/mfe.spec.ts",
+        "line": 4,
+        "url": "/guides/intro",
+        "soft": false
+      },
+      {
+        "kind": "goto",
+        "file": "<fixture>/e2e/mfe.spec.ts",
+        "line": 5,
+        "url": "/docs/getting-started",
+        "soft": false
+      },
+      {
+        "kind": "goto",
+        "file": "<fixture>/e2e/mfe.spec.ts",
+        "line": 6,
+        "url": "/help",
+        "soft": false
+      },
+      {
+        "kind": "goto",
+        "file": "<fixture>/e2e/mfe.spec.ts",
+        "line": 7,
+        "url": "/favicon.ico",
+        "soft": false
+      }
+    ],
+    "unresolved": [],
+    "helper_files": [],
+    "annotation": null
+  },
+  {
+    "spec": "<fixture>/e2e/route.spec.ts",
+    "visits": [
+      {
+        "kind": "route",
+        "file": "<fixture>/e2e/route.spec.ts",
+        "line": 4,
+        "url": "<origin>/api/teams/*/members",
+        "soft": false
+      },
+      {
+        "kind": "goto",
+        "file": "<fixture>/e2e/route.spec.ts",
+        "line": 5,
+        "url": "http://localhost:3000/acme",
+        "soft": false
+      },
+      {
+        "kind": "url_assert",
+        "file": "<fixture>/e2e/route.spec.ts",
+        "line": 6,
+        "url": "<origin>/acme/settings",
+        "soft": true
+      }
+    ],
+    "unresolved": [],
+    "helper_files": [],
+    "annotation": null
+  },
+  {
+    "spec": "<fixture>/e2e/team.spec.ts",
+    "visits": [
+      {
+        "kind": "page_object",
+        "file": "<fixture>/e2e/team.spec.ts",
+        "line": 7,
+        "url": "/*/settings",
+        "soft": false
+      },
+      {
+        "kind": "click",
+        "file": "<fixture>/e2e/pages/team-page.ts",
+        "line": 18,
+        "url": "/acme/photo/1",
+        "soft": true
+      }
+    ],
+    "unresolved": [],
+    "helper_files": [],
+    "annotation": null
+  }
+]

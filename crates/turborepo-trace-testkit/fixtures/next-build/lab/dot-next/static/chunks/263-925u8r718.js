@@ -1,0 +1,1 @@
+(globalThis.TURBOPACK||(globalThis.TURBOPACK=[])).push(["object"==typeof document?document.currentScript:void 0,87771,e=>{"use strict";var i=e.i(43476),r=e.i(22016);e.s(["Sidebar",0,function(){return(0,i.jsxs)("aside",{children:[(0,i.jsx)(r.default,{href:"/dashboard",children:"Overview"})," ",(0,i.jsx)(r.default,{href:"/dashboard/settings",children:"Settings"})]})}])}]);

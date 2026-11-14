@@ -1,0 +1,73 @@
+[package]
+name = "turborepo-trace"
+version = "0.1.0"
+edition = { workspace = true }
+license = "MIT"
+description = "The command logic of `turbo trace`: the tests a change affects, why, and the lints"
+publish = false
+
+[lib]
+bench = false
+
+[features]
+default = ["go", "rust"]
+# Go: the language plugin and the `go test` adapter.
+go = ["dep:turborepo-trace-lang-go", "turborepo-trace-frameworks/go"]
+# Rust: the language plugin and the `cargo test` adapter.
+rust = ["dep:turborepo-trace-lang-rust", "turborepo-trace-frameworks/rust"]
+# The `TURBO_TRACE_DEBUG_*` switches (see turborepo-trace-core's README); off by default.
+debug-knobs = ["turborepo-trace-core/debug-knobs"]
+
+[dependencies]
+anyhow = { workspace = true }
+miette = { workspace = true }
+# `affected` barrel pruning: candidates must parse without errors at both revisions.
+oxc_allocator = { workspace = true }
+oxc_parser = { workspace = true }
+oxc_semantic = { workspace = true }
+oxc_span = { workspace = true }
+# `affected` erased-equal changes (crate::erase): compare the JavaScript a transpiler emits
+# for the base and head versions of a modified file.
+oxc_ast = { workspace = true }
+oxc_ast_visit = { workspace = true }
+oxc_codegen = { workspace = true }
+oxc_transformer = { workspace = true }
+rayon = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+# `affected --tests playwright`: the recorder stores the git blob id of each spec file.
+sha1 = { workspace = true }
+thiserror = { workspace = true }
+# `lint`: the `[lint]` table of the configuration file (read by the test harness only).
+toml = { workspace = true }
+# Spans of the API entry points and the graph's transport, as turbo's own.
+tracing = { workspace = true }
+turbopath = { workspace = true }
+turborepo-cache = { workspace = true }
+turborepo-ci = { workspace = true }
+turborepo-dirs = { path = "../turborepo-dirs" }
+turborepo-rayon-compat = { workspace = true }
+turborepo-repository = { workspace = true }
+turborepo-scm = { workspace = true }
+turborepo-trace-core = { workspace = true }
+turborepo-trace-frameworks = { workspace = true, features = ["oxc"] }
+turborepo-trace-graph = { workspace = true }
+turborepo-trace-lang-go = { workspace = true, optional = true }
+turborepo-trace-lang-js = { workspace = true }
+turborepo-trace-lang-rust = { workspace = true, optional = true }
+turborepo-trace-lockfile = { workspace = true }
+turborepo-trace-store = { workspace = true }
+turborepo-trace-tasks = { workspace = true }
+xxhash-rust = { workspace = true }
+
+[dev-dependencies]
+# The tests set debug switches.
+turborepo-trace-core = { workspace = true, features = ["debug-knobs"] }
+# The test harness (`examples/harness.rs`): a command line over the library, for the tests.
+tempfile = { workspace = true }
+usage = { package = "usage-rs", version = "=6.5.0" }
+# The package-root parity test builds turbo's package graph (async).
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+
+[lints]
+workspace = true

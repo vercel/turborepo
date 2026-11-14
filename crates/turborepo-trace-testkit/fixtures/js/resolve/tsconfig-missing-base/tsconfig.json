@@ -1,0 +1,6 @@
+{
+  // The base config lives in a package that is not installed.
+  "extends": ["@tsconfig/node24/tsconfig.json", "./config/paths.json"],
+  "compilerOptions": { "paths": { "@/*": ["./src/*"] } },
+  "include": ["src"]
+}

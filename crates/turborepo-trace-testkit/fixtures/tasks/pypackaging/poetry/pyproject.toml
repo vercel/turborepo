@@ -1,0 +1,10 @@
+[tool.poetry]
+name = "poetpkg"
+version = "0.1.0"
+packages = [{ include = "poetpkg", from = "src" }]
+include = ["CHANGELOG.md", { path = "assets/*.png", format = "wheel" }]
+exclude = ["src/poetpkg/_dev.py"]
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

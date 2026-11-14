@@ -1,0 +1,44 @@
+# sqlc: `sqlc generate|vet|compile|diff|verify [-f config]`. The config is `-f`, else
+# `sqlc.{yaml,yml,json}` in the cwd; paths are relative to it.
+# - v2: `sql[].schema` / `queries` (files, directories of `*.sql`, globs) are inputs;
+#   `sql[].gen.go.out` is the Go files sqlc writes (honouring `output_*_file_name`), other
+#   `gen.<lang>.out` and `codegen[].out` directories are outputs as a whole. Plugins are
+#   toolchain.
+# - v1: `packages[].schema` / `queries` inputs, `packages[].path` Go output.
+# `diff` compares against what `generate` would write, so the outputs are its inputs.
+id = "sqlc"
+programs = ["sqlc"]
+toolchain = ["go:github.com/sqlc-dev/sqlc/cmd/sqlc"]
+flags = ["--file|-f", "--against"]
+ignore = ["", "help", "version", "init", "upload", "push", "completion"]
+
+[config]
+label = "sqlc"
+flag = "--file"
+names = ["sqlc.yaml", "sqlc.yml", "sqlc.json"]
+required = "sqlc without a config"
+unreadable = "sqlc config not readable"
+require_any = ["sql", "packages"]
+
+[values]
+sql = { field = ["sql[].schema", "sql[].queries", "packages[].schema", "packages[].queries"], optional = true }
+go_out = { field = ["sql[].gen.go.out", "packages[].path"] }
+other_out = { field = ["sql[].gen.*!go.out", "sql[].codegen[].out"] }
+plugin_cmd = { field = "plugins[].process.cmd", optional = true }
+plugin_wasm = { field = "plugins[].wasm.url", optional = true }
+
+[groups]
+read = [
+  { input = "sql", glob = "*.sql", reason = "sqlc sql" },
+  { toolchain = "system", on = "plugin_cmd" },
+  { toolchain = "sqlc", on = "plugin_wasm" },
+]
+write = [
+  { output = "go_out", glob = "{${output_db_file_name:-db.go},${output_models_file_name:-models.go},${output_querier_file_name:-querier.go},${output_copyfrom_file_name:-copyfrom.go},${output_batch_file_name:-batch.go},*.sql${output_files_suffix}.go}" },
+  { output = "other_out" },
+]
+
+[sub]
+generate = ["read", "write"]
+diff = ["read", { use = "write", read_outputs = "sqlc generated code" }]
+"vet|compile|verify" = ["read"]

@@ -1,0 +1,11 @@
+{
+  // Like a Next.js app: allowJs, and `include` names `.js`/`.mjs` but not `.jsx`.
+  "compilerOptions": {
+    "allowJs": true,
+    "paths": {
+      "#/lib/*": ["./lib/*"]
+    }
+  },
+  "include": ["**/*.ts", "**/*.tsx", "**/*.js", "**/*.mjs"],
+  "exclude": ["jsapp"]
+}

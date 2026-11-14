@@ -1,0 +1,391 @@
+---
+source: crates/turborepo-trace-tasks/tests/fixtures.rs
+expression: family(stringify! (bundlers))
+---
+$ vite build
+# vite [vite] Full
+{
+  "inputs": [
+    "index.html",
+    "src/style.css"
+  ],
+  "outputs": [
+    {
+      "path": "build",
+      "kind": "artifact"
+    }
+  ],
+  "configs": [
+    "vite.config.ts",
+    "vite.shared.ts"
+  ],
+  "entries": [
+    {
+      "path": "src/main.ts",
+      "lang": "js"
+    },
+    {
+      "path": "vite.config.ts",
+      "lang": "js"
+    },
+    {
+      "path": "vite.shared.ts",
+      "lang": "js"
+    }
+  ],
+  "memberships": [
+    {
+      "dir": ".",
+      "pattern": ".env*",
+      "reason": "vite env files"
+    },
+    {
+      "dir": "public",
+      "pattern": "**",
+      "reason": "vite publicDir"
+    }
+  ],
+  "toolchain": [
+    {
+      "ecosystem": "npm",
+      "name": "vite"
+    }
+  ]
+}
+
+$ vite build --outDir out
+# vite [vite] Full
+{
+  "inputs": [
+    "index.html",
+    "src/style.css"
+  ],
+  "outputs": [
+    {
+      "path": "out",
+      "kind": "artifact"
+    }
+  ],
+  "configs": [
+    "vite.config.ts",
+    "vite.shared.ts"
+  ],
+  "entries": [
+    {
+      "path": "src/main.ts",
+      "lang": "js"
+    },
+    {
+      "path": "vite.config.ts",
+      "lang": "js"
+    },
+    {
+      "path": "vite.shared.ts",
+      "lang": "js"
+    }
+  ],
+  "memberships": [
+    {
+      "dir": ".",
+      "pattern": ".env*",
+      "reason": "vite env files"
+    },
+    {
+      "dir": "public",
+      "pattern": "**",
+      "reason": "vite publicDir"
+    }
+  ],
+  "toolchain": [
+    {
+      "ecosystem": "npm",
+      "name": "vite"
+    }
+  ]
+}
+
+$ vite preview
+# vite [vite] Full
+{
+  "inputs": [
+    "build"
+  ],
+  "configs": [
+    "vite.config.ts",
+    "vite.shared.ts"
+  ],
+  "entries": [
+    {
+      "path": "vite.config.ts",
+      "lang": "js"
+    },
+    {
+      "path": "vite.shared.ts",
+      "lang": "js"
+    }
+  ],
+  "toolchain": [
+    {
+      "ecosystem": "npm",
+      "name": "vite"
+    }
+  ]
+}
+
+$ tsup
+# tsup [tsup] Full
+{
+  "outputs": [
+    {
+      "path": "dist",
+      "kind": "artifact"
+    }
+  ],
+  "entries": [
+    {
+      "path": "src/cli.ts",
+      "lang": "js"
+    }
+  ],
+  "toolchain": [
+    {
+      "ecosystem": "npm",
+      "name": "tsup"
+    }
+  ]
+}
+
+$ tsup src/index.ts --dts -d lib
+# tsup [tsup] Full
+{
+  "outputs": [
+    {
+      "path": "lib",
+      "kind": "artifact"
+    }
+  ],
+  "entries": [
+    {
+      "path": "src/index.ts",
+      "lang": "js"
+    }
+  ],
+  "toolchain": [
+    {
+      "ecosystem": "npm",
+      "name": "tsup"
+    }
+  ]
+}
+
+$ esbuild src/main.ts --bundle --outfile=dist/main.js --tsconfig=tsconfig.json
+# esbuild [esbuild] Full
+{
+  "outputs": [
+    {
+      "path": "dist/main.js",
+      "kind": "artifact"
+    }
+  ],
+  "configs": [
+    "tsconfig.json"
+  ],
+  "entries": [
+    {
+      "path": "src/main.ts",
+      "lang": "js"
+    }
+  ],
+  "toolchain": [
+    {
+      "ecosystem": "npm",
+      "name": "esbuild"
+    }
+  ]
+}
+
+$ esbuild 'src/*.ts' --outdir=dist
+# esbuild [esbuild] Full
+{
+  "outputs": [
+    {
+      "path": "dist",
+      "kind": "artifact"
+    }
+  ],
+  "memberships": [
+    {
+      "dir": "src",
+      "pattern": "*.ts",
+      "reason": "esbuild entry glob"
+    }
+  ],
+  "toolchain": [
+    {
+      "ecosystem": "npm",
+      "name": "esbuild"
+    }
+  ]
+}
+
+$ esbuild
+# esbuild [esbuild] Partial
+{
+  "memberships": [
+    {
+      "dir": ".",
+      "pattern": "**",
+      "reason": "`esbuild` not fully recognized"
+    },
+    {
+      "dir": ".",
+      "pattern": "**",
+      "reason": "esbuild without static entry points"
+    }
+  ],
+  "toolchain": [
+    {
+      "ecosystem": "npm",
+      "name": "esbuild"
+    }
+  ],
+  "uncertainties": [
+    {
+      "kind": "unknown_command",
+      "detail": "esbuild without static entry points"
+    }
+  ]
+}
+
+$ rollup -c
+# rollup [rollup] Full
+{
+  "outputs": [
+    {
+      "path": "dist/index.js",
+      "kind": "artifact"
+    },
+    {
+      "path": "dist/workers",
+      "kind": "artifact"
+    }
+  ],
+  "configs": [
+    "rollup.config.mjs"
+  ],
+  "entries": [
+    {
+      "path": "rollup.config.mjs",
+      "lang": "js"
+    },
+    {
+      "path": "src/index.ts",
+      "lang": "js"
+    },
+    {
+      "path": "src/worker.ts",
+      "lang": "js"
+    }
+  ],
+  "toolchain": [
+    {
+      "ecosystem": "npm",
+      "name": "rollup"
+    }
+  ]
+}
+
+$ rollup -i src/index.ts -o dist/bundle.js
+# rollup [rollup] Full
+{
+  "outputs": [
+    {
+      "path": "dist/bundle.js",
+      "kind": "artifact"
+    }
+  ],
+  "entries": [
+    {
+      "path": "src/index.ts",
+      "lang": "js"
+    }
+  ],
+  "toolchain": [
+    {
+      "ecosystem": "npm",
+      "name": "rollup"
+    }
+  ]
+}
+
+$ webpack
+# webpack [webpack] Full
+{
+  "outputs": [
+    {
+      "path": "webpack-dist",
+      "kind": "artifact"
+    }
+  ],
+  "configs": [
+    "webpack.config.js"
+  ],
+  "entries": [
+    {
+      "path": "src/main.ts",
+      "lang": "js"
+    },
+    {
+      "path": "src/worker.ts",
+      "lang": "js"
+    },
+    {
+      "path": "webpack.config.js",
+      "lang": "js"
+    }
+  ],
+  "toolchain": [
+    {
+      "ecosystem": "npm",
+      "name": "webpack"
+    }
+  ]
+}
+
+$ webpack --config webpack.fn.config.js
+# webpack [webpack] Partial
+{
+  "configs": [
+    "webpack.fn.config.js"
+  ],
+  "entries": [
+    {
+      "path": "webpack.fn.config.js",
+      "lang": "js"
+    }
+  ],
+  "memberships": [
+    {
+      "dir": ".",
+      "pattern": "**",
+      "reason": "`webpack` not fully recognized"
+    },
+    {
+      "dir": ".",
+      "pattern": "**",
+      "reason": "webpack config not fully static"
+    }
+  ],
+  "toolchain": [
+    {
+      "ecosystem": "npm",
+      "name": "webpack"
+    }
+  ],
+  "uncertainties": [
+    {
+      "kind": "parse_incomplete",
+      "detail": "webpack config not fully static"
+    }
+  ]
+}

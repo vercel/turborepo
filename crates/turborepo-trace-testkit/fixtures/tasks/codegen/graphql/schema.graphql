@@ -1,0 +1,10 @@
+#import "./scalars.graphql"
+
+type Query {
+  user: User
+}
+
+type User {
+  id: ID!
+  at: DateTime
+}

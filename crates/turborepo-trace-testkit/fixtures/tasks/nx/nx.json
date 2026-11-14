@@ -1,0 +1,13 @@
+{
+  // nx.json allows comments.
+  "namedInputs": {
+    "default": ["{projectRoot}/**/*", "sharedGlobals"],
+    "production": ["default", "!{projectRoot}/**/*.spec.ts", "!{projectRoot}/jest.config.ts"],
+    "sharedGlobals": ["{workspaceRoot}/babel.config.json"]
+  },
+  "targetDefaults": {
+    "build": { "dependsOn": ["^build"], "inputs": ["production", "^production"], "cache": true },
+    "test": { "inputs": ["default", "^production", "{workspaceRoot}/jest.preset.js", { "env": "CI" }] },
+    "@nx/vite:build": { "options": { "mode": "production" } }
+  }
+}

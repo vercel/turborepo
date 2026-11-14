@@ -1,0 +1,327 @@
+---
+source: crates/turborepo-trace-tasks/tests/p2.rs
+expression: out
+---
+# hatch
+## py-dist:.
+{
+  "sources": [
+    "pypackaging"
+  ],
+  "files": [
+    "pyproject.toml"
+  ],
+  "deps": [],
+  "commands": [],
+  "spec": {
+    "inputs": [
+      "README.md",
+      "shared/data.json"
+    ],
+    "configs": [
+      "pyproject.toml"
+    ],
+    "memberships": [
+      {
+        "dir": ".",
+        "pattern": "AUTHORS*",
+        "reason": "sdist"
+      },
+      {
+        "dir": ".",
+        "pattern": "COPYING*",
+        "reason": "sdist"
+      },
+      {
+        "dir": ".",
+        "pattern": "LICENCE*",
+        "reason": "sdist"
+      },
+      {
+        "dir": ".",
+        "pattern": "LICENSE*",
+        "reason": "sdist"
+      },
+      {
+        "dir": ".",
+        "pattern": "NOTICE*",
+        "reason": "sdist"
+      },
+      {
+        "dir": ".",
+        "pattern": "README*",
+        "reason": "sdist"
+      },
+      {
+        "dir": "src",
+        "pattern": "**",
+        "exclude": [
+          "**/*.tmp",
+          "**/*.tmp/**"
+        ],
+        "reason": "sdist"
+      },
+      {
+        "dir": "src/hatchpkg",
+        "pattern": "**",
+        "reason": "wheel"
+      },
+      {
+        "dir": "tests",
+        "pattern": "**",
+        "exclude": [
+          "**/*.tmp",
+          "**/*.tmp/**"
+        ],
+        "reason": "sdist"
+      }
+    ],
+    "toolchain": [
+      {
+        "ecosystem": "pypi",
+        "name": "hatchling"
+      }
+    ]
+  }
+}
+
+
+# setuptools
+## py-dist:.
+{
+  "sources": [
+    "pypackaging"
+  ],
+  "files": [
+    "MANIFEST.in",
+    "pyproject.toml",
+    "setup.cfg",
+    "setup.py"
+  ],
+  "deps": [],
+  "commands": [],
+  "spec": {
+    "inputs": [
+      "README.rst",
+      "conf/default.cfg",
+      "src/standalone.py"
+    ],
+    "configs": [
+      "MANIFEST.in",
+      "pyproject.toml",
+      "setup.cfg",
+      "setup.py"
+    ],
+    "entries": [
+      {
+        "path": "setup.py",
+        "lang": "python"
+      }
+    ],
+    "memberships": [
+      {
+        "dir": ".",
+        "pattern": "**",
+        "reason": "uncertain task"
+      },
+      {
+        "dir": ".",
+        "pattern": "AUTHORS*",
+        "exclude": [
+          "docs/_build/**",
+          "**/*.pyc",
+          "conf/secret.cfg"
+        ],
+        "reason": "sdist"
+      },
+      {
+        "dir": ".",
+        "pattern": "COPYING*",
+        "exclude": [
+          "docs/_build/**",
+          "**/*.pyc",
+          "conf/secret.cfg"
+        ],
+        "reason": "sdist"
+      },
+      {
+        "dir": ".",
+        "pattern": "LICENCE*",
+        "exclude": [
+          "docs/_build/**",
+          "**/*.pyc",
+          "conf/secret.cfg"
+        ],
+        "reason": "sdist"
+      },
+      {
+        "dir": ".",
+        "pattern": "LICENSE*",
+        "exclude": [
+          "docs/_build/**",
+          "**/*.pyc",
+          "conf/secret.cfg"
+        ],
+        "reason": "sdist"
+      },
+      {
+        "dir": ".",
+        "pattern": "NOTICE*",
+        "exclude": [
+          "docs/_build/**",
+          "**/*.pyc",
+          "conf/secret.cfg"
+        ],
+        "reason": "sdist"
+      },
+      {
+        "dir": ".",
+        "pattern": "README*",
+        "exclude": [
+          "docs/_build/**",
+          "**/*.pyc",
+          "conf/secret.cfg"
+        ],
+        "reason": "sdist"
+      },
+      {
+        "dir": "docs",
+        "pattern": "**/*.rst",
+        "exclude": [
+          "_build/**"
+        ],
+        "reason": "sdist"
+      },
+      {
+        "dir": "docs",
+        "pattern": "**/*.txt",
+        "exclude": [
+          "_build/**"
+        ],
+        "reason": "sdist"
+      },
+      {
+        "dir": "src/stpkg",
+        "pattern": "*.py",
+        "reason": "wheel"
+      },
+      {
+        "dir": "src/stpkg/data",
+        "pattern": "**",
+        "reason": "sdist"
+      },
+      {
+        "dir": "src/stpkg/data",
+        "pattern": "*.json",
+        "reason": "wheel"
+      }
+    ],
+    "toolchain": [
+      {
+        "ecosystem": "pypi",
+        "name": "setuptools"
+      },
+      {
+        "ecosystem": "pypi",
+        "name": "wheel"
+      }
+    ],
+    "uncertainties": [
+      {
+        "kind": "computed_specifier",
+        "detail": "computed `setup()` argument `package_data`"
+      }
+    ]
+  }
+}
+
+
+# poetry
+## py-dist:.
+{
+  "sources": [
+    "pypackaging"
+  ],
+  "files": [
+    "pyproject.toml"
+  ],
+  "deps": [],
+  "commands": [],
+  "spec": {
+    "inputs": [
+      "CHANGELOG.md"
+    ],
+    "configs": [
+      "pyproject.toml"
+    ],
+    "memberships": [
+      {
+        "dir": ".",
+        "pattern": "AUTHORS*",
+        "exclude": [
+          "src/poetpkg/_dev.py"
+        ],
+        "reason": "sdist"
+      },
+      {
+        "dir": ".",
+        "pattern": "COPYING*",
+        "exclude": [
+          "src/poetpkg/_dev.py"
+        ],
+        "reason": "sdist"
+      },
+      {
+        "dir": ".",
+        "pattern": "LICENCE*",
+        "exclude": [
+          "src/poetpkg/_dev.py"
+        ],
+        "reason": "sdist"
+      },
+      {
+        "dir": ".",
+        "pattern": "LICENSE*",
+        "exclude": [
+          "src/poetpkg/_dev.py"
+        ],
+        "reason": "sdist"
+      },
+      {
+        "dir": ".",
+        "pattern": "NOTICE*",
+        "exclude": [
+          "src/poetpkg/_dev.py"
+        ],
+        "reason": "sdist"
+      },
+      {
+        "dir": ".",
+        "pattern": "README*",
+        "exclude": [
+          "src/poetpkg/_dev.py"
+        ],
+        "reason": "sdist"
+      },
+      {
+        "dir": "assets",
+        "pattern": "*.png",
+        "reason": "wheel"
+      },
+      {
+        "dir": "src/poetpkg",
+        "pattern": "**",
+        "exclude": [
+          "_dev.py"
+        ],
+        "reason": "wheel"
+      }
+    ],
+    "toolchain": [
+      {
+        "ecosystem": "pypi",
+        "name": "poetry-core"
+      }
+    ]
+  }
+}

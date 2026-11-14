@@ -244,6 +244,12 @@ impl RunCache {
         self.cache.prefetch_remote(hashes, concurrency);
     }
 
+    /// The cache underneath, for artifacts that are not task outputs (`turbo
+    /// trace` keeps its graph there).
+    pub fn async_cache(&self) -> &AsyncCache {
+        &self.cache
+    }
+
     pub async fn shutdown_cache(
         &self,
     ) -> Result<(Arc<Mutex<UploadMap>>, oneshot::Receiver<()>), CacheError> {

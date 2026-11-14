@@ -1,0 +1,178 @@
+---
+source: crates/turborepo-trace-lang-rust/tests/fixtures.rs
+expression: json
+---
+{
+  "version": 1,
+  "base": "<fixture>",
+  "entries": [
+    {
+      "path": "src/main.rs",
+      "files": [
+        "Cargo.lock",
+        "Cargo.toml",
+        "locales/en.json",
+        "profiles/release.ini",
+        "src/main.rs"
+      ]
+    }
+  ],
+  "files": [
+    {
+      "path": "Cargo.lock",
+      "reasons": [
+        "manifest"
+      ],
+      "parents": [
+        "src/main.rs"
+      ],
+      "parsed": false
+    },
+    {
+      "path": "Cargo.toml",
+      "reasons": [
+        "manifest"
+      ],
+      "parents": [
+        "src/main.rs"
+      ],
+      "parsed": false
+    },
+    {
+      "path": "locales/en.json",
+      "reasons": [
+        "asset"
+      ],
+      "parents": [
+        "src/main.rs"
+      ],
+      "parsed": false
+    },
+    {
+      "path": "profiles/release.ini",
+      "reasons": [
+        "asset"
+      ],
+      "parents": [
+        "src/main.rs"
+      ],
+      "parsed": false
+    },
+    {
+      "path": "src/main.rs",
+      "reasons": [
+        "initial"
+      ],
+      "parents": [],
+      "parsed": true,
+      "lang": "rust"
+    }
+  ],
+  "edges": [
+    {
+      "from": "src/main.rs",
+      "kind": "manifest",
+      "phase": "build",
+      "flags": [],
+      "spec": "Cargo.lock",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "Cargo.lock"
+      }
+    },
+    {
+      "from": "src/main.rs",
+      "kind": "manifest",
+      "phase": "build",
+      "flags": [],
+      "spec": "Cargo.toml",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "Cargo.toml"
+      }
+    },
+    {
+      "from": "src/main.rs",
+      "kind": "asset",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "locales/en.json",
+      "span": [
+        200,
+        241
+      ],
+      "line": 8,
+      "target": {
+        "type": "file",
+        "path": "locales/en.json"
+      }
+    },
+    {
+      "from": "src/main.rs",
+      "kind": "asset",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "profiles/release.ini",
+      "span": [
+        261,
+        317
+      ],
+      "line": 9,
+      "target": {
+        "type": "file",
+        "path": "profiles/release.ini"
+      }
+    },
+    {
+      "from": "src/main.rs",
+      "kind": "fs_read",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "locales/en.json",
+      "span": [
+        340,
+        363
+      ],
+      "line": 10,
+      "target": {
+        "type": "file",
+        "path": "locales/en.json"
+      }
+    },
+    {
+      "from": "src/main.rs",
+      "kind": "fs_read",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "profiles/release.ini",
+      "span": [
+        406,
+        430
+      ],
+      "line": 11,
+      "target": {
+        "type": "file",
+        "path": "profiles/release.ini"
+      }
+    }
+  ],
+  "uncertainties": [],
+  "symlinks": {},
+  "stats": {
+    "entries": 1,
+    "files": 5,
+    "parsed_files": 1,
+    "edges": 6,
+    "uncertainties": 0
+  }
+}

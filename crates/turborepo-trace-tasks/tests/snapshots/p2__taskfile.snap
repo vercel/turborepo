@@ -1,0 +1,368 @@
+---
+source: crates/turborepo-trace-tasks/tests/p2.rs
+expression: "render(&set, &root, &[\"taskfile\"])"
+---
+## taskfile:.:build
+{
+  "sources": [
+    "taskfile"
+  ],
+  "files": [
+    "Taskfile.yml"
+  ],
+  "deps": [
+    "taskfile:.:gen",
+    "taskfile:.:lib:compile"
+  ],
+  "commands": [
+    "tsc -p tsconfig.json --outDir dist [tsc] Full",
+    "echo ${__TASKFILE_UNKNOWN} [noop] Ignored"
+  ],
+  "spec": {
+    "inputs": [
+      ".env"
+    ],
+    "outputs": [
+      {
+        "path": "dist",
+        "kind": "artifact"
+      },
+      {
+        "path": "dist",
+        "pattern": "**",
+        "kind": "declared"
+      }
+    ],
+    "configs": [
+      "Taskfile.yml",
+      "tsconfig.json"
+    ],
+    "memberships": [
+      {
+        "dir": ".",
+        "pattern": "**",
+        "reason": "uncertain task"
+      },
+      {
+        "dir": ".",
+        "pattern": "**",
+        "reason": "unsupported shell syntax"
+      },
+      {
+        "dir": "src",
+        "pattern": "**/*.ts",
+        "reason": "taskfile sources"
+      },
+      {
+        "dir": "src",
+        "pattern": "**/*.ts",
+        "reason": "tsconfig include"
+      }
+    ],
+    "task_deps": [
+      {
+        "target": {
+          "kind": "id",
+          "id": "taskfile:.:gen"
+        },
+        "reason": "taskfile deps"
+      },
+      {
+        "target": {
+          "kind": "id",
+          "id": "taskfile:.:lib:compile"
+        },
+        "reason": "taskfile task call"
+      }
+    ],
+    "toolchain": [
+      {
+        "ecosystem": "npm",
+        "name": "typescript"
+      }
+    ],
+    "uncertainties": [
+      {
+        "kind": "shell_unsupported",
+        "detail": "unknown variable `${__TASKFILE_UNKNOWN}`"
+      }
+    ]
+  }
+}
+
+## taskfile:.:copy
+{
+  "sources": [
+    "taskfile"
+  ],
+  "files": [
+    "Taskfile.yml"
+  ],
+  "deps": [],
+  "commands": [
+    "cp assets/a.txt dist/a.txt [cp] Full",
+    "cp assets/b.txt dist/b.txt [cp] Full"
+  ],
+  "spec": {
+    "inputs": [
+      ".env",
+      "assets/a.txt",
+      "assets/b.txt"
+    ],
+    "outputs": [
+      {
+        "path": "dist/a.txt",
+        "kind": "artifact"
+      },
+      {
+        "path": "dist/b.txt",
+        "kind": "artifact"
+      }
+    ],
+    "configs": [
+      "Taskfile.yml"
+    ]
+  }
+}
+
+## taskfile:.:cp
+{
+  "sources": [
+    "taskfile"
+  ],
+  "files": [
+    "Taskfile.yml"
+  ],
+  "deps": [
+    "taskfile:.:copy"
+  ],
+  "commands": [],
+  "spec": {
+    "configs": [
+      "Taskfile.yml"
+    ],
+    "task_deps": [
+      {
+        "target": {
+          "kind": "id",
+          "id": "taskfile:.:copy"
+        },
+        "reason": "taskfile alias"
+      }
+    ]
+  }
+}
+
+## taskfile:.:default
+{
+  "sources": [
+    "taskfile"
+  ],
+  "files": [
+    "Taskfile.yml"
+  ],
+  "deps": [
+    "taskfile:.:build"
+  ],
+  "commands": [],
+  "spec": {
+    "inputs": [
+      ".env"
+    ],
+    "configs": [
+      "Taskfile.yml"
+    ],
+    "task_deps": [
+      {
+        "target": {
+          "kind": "id",
+          "id": "taskfile:.:build"
+        },
+        "reason": "taskfile deps"
+      }
+    ]
+  }
+}
+
+## taskfile:.:docs:build
+{
+  "sources": [
+    "taskfile"
+  ],
+  "files": [
+    "Taskfile.yml",
+    "docs/Taskfile.yml"
+  ],
+  "deps": [],
+  "commands": [
+    "mkdocs build -f docs/mkdocs.yml [-] Unknown"
+  ],
+  "spec": {
+    "configs": [
+      "Taskfile.yml",
+      "docs/Taskfile.yml"
+    ],
+    "memberships": [
+      {
+        "dir": ".",
+        "pattern": "**",
+        "reason": "uncertain task"
+      },
+      {
+        "dir": ".",
+        "pattern": "**",
+        "reason": "unknown command `mkdocs`"
+      },
+      {
+        "dir": "docs",
+        "pattern": "**/*.md",
+        "reason": "taskfile sources"
+      }
+    ],
+    "uncertainties": [
+      {
+        "kind": "unknown_command",
+        "detail": "mkdocs"
+      }
+    ]
+  }
+}
+
+## taskfile:.:fmt
+{
+  "sources": [
+    "taskfile"
+  ],
+  "files": [
+    "Taskfile.yml"
+  ],
+  "deps": [],
+  "commands": [
+    "prettier --write src [lint] Full"
+  ],
+  "spec": {
+    "inputs": [
+      ".env",
+      "package.json"
+    ],
+    "outputs": [
+      {
+        "path": "src",
+        "kind": "in_place"
+      }
+    ],
+    "configs": [
+      "Taskfile.yml"
+    ],
+    "memberships": [
+      {
+        "dir": "src",
+        "pattern": "**",
+        "reason": "prettier files",
+        "data": true
+      }
+    ],
+    "toolchain": [
+      {
+        "ecosystem": "npm",
+        "name": "prettier"
+      }
+    ]
+  }
+}
+
+## taskfile:.:gen
+{
+  "sources": [
+    "taskfile"
+  ],
+  "files": [
+    "Taskfile.yml"
+  ],
+  "deps": [],
+  "commands": [
+    "node scripts/gen.js schema/api.json > src/generated/client.js [node] Full"
+  ],
+  "spec": {
+    "inputs": [
+      ".env",
+      "schema/api.json",
+      "scripts/gen.js"
+    ],
+    "outputs": [
+      {
+        "path": "src/generated/client.js",
+        "kind": "generated"
+      }
+    ],
+    "configs": [
+      "Taskfile.yml"
+    ],
+    "entries": [
+      {
+        "path": "scripts/gen.js",
+        "lang": "js"
+      }
+    ],
+    "memberships": [
+      {
+        "dir": "schema",
+        "pattern": "*.json",
+        "exclude": [
+          "draft.json"
+        ],
+        "reason": "taskfile sources"
+      }
+    ],
+    "definition": [
+      "scripts/gen.js"
+    ]
+  }
+}
+
+## taskfile:.:lib:compile
+{
+  "sources": [
+    "taskfile"
+  ],
+  "files": [
+    "Taskfile.yml",
+    "lib/Tasks.yml"
+  ],
+  "deps": [],
+  "commands": [
+    "tsc -p tsconfig.json [tsc] Full"
+  ],
+  "spec": {
+    "outputs": [
+      {
+        "path": "lib/out",
+        "pattern": "*.js",
+        "kind": "declared"
+      }
+    ],
+    "configs": [
+      "Taskfile.yml",
+      "lib/Tasks.yml",
+      "lib/tsconfig.json"
+    ],
+    "memberships": [
+      {
+        "dir": "lib/src",
+        "pattern": "*.ts",
+        "reason": "taskfile sources"
+      },
+      {
+        "dir": "lib/src",
+        "pattern": "*.ts",
+        "reason": "tsconfig include"
+      }
+    ],
+    "toolchain": [
+      {
+        "ecosystem": "npm",
+        "name": "typescript"
+      }
+    ]
+  }
+}

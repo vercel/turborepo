@@ -169,7 +169,10 @@ fn tag_filter_matches_composed_task_tags_without_matching_the_extends_marker() {
             ("fresh", "fresh", vec!["app"]),
             ("fresh", "inherited-fresh", vec!["plain", "shared"]),
         ] {
-            let expected = packages
+            // Named, not inferred from `assert_eq!`: rkyv (a dependency of the
+            // trace crates) implements `PartialEq` between `HashSet` and its
+            // archived sets, so the comparison alone leaves the type ambiguous.
+            let expected: HashSet<String> = packages
                 .into_iter()
                 .map(|package| format!("{package}#{task}"))
                 .collect();

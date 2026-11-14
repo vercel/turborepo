@@ -1,0 +1,16 @@
+{
+  "name": "@acme/assets",
+  "version": "1.0.0",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "type-check": "tsc -b",
+    "icons:visual-tests": "node scripts/visual/extract.mjs",
+    "upload": "node tools/upload.ts"
+  }
+}

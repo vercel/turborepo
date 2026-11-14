@@ -1,0 +1,31 @@
+1:"$Sreact.fragment"
+2:"/_next/static/chunks/3vl0xogptndf0.js"
+3:I[42724,["$2"],"Nav"]
+4:I[39756,["$2"],"default"]
+5:I[37457,["$2"],"default"]
+e:"/_next/static/chunks/3g41m-r57glsj.js"
+f:I[79970,["$2","$e"],"PricingClient"]
+10:I[97367,["$2"],"OutletBoundary"]
+11:"$Sreact.suspense"
+14:"ViewportBoundary"
+15:I[97367,["$2"],"$14"]
+16:"MetadataBoundary"
+17:I[97367,["$2"],"$16"]
+:HL["/_next/static/chunks/2l6y9owjqp9fj.css","style"]
+7:X
+a:X
+a:C
+d:[["children",{"s":"__PAGE__","h":160,"d":{"r":["$","$1","c",{"children":[["$","div",null,{"children":[["$","h1",null,{"className":"text-xl","children":"Pricing"}],["$","$Lf",null,{}]]}],[["$","script","script-0",{"src":"/_next/static/chunks/3g41m-r57glsj.js","async":true}]],["$","$L10",null,{"children":["$","$11",null,{"name":"Next.MetadataOutlet","children":"$@12"}]}]]}],"p":"$@13","v":null,"s":"$7"}}]]
+b:[["children",{"s":"pricing","h":96,"d":{"r":["$","$1","c",{"children":[null,["$","$L4",null,{"parallelRouterKey":"children","template":["$","$L5",null,{}]}]]}],"p":"$@c","v":"$a","s":"$7"},"c":"$Qd"}]]
+8:[["children",{"s":"(marketing)","h":96,"d":{"r":["$","$1","c",{"children":[null,["$","$L4",null,{"parallelRouterKey":"children","template":["$","$L5",null,{}],"notFound":[["$","h1",null,{"children":"Lab 404"}],[]]}]]}],"p":"$@9","v":"$a","s":"$7"},"c":"$Qb"}]]
+0:{"t":{"t":{"s":"","h":80,"d":{"r":["$","$1","c",{"children":[[["$","link","0",{"rel":"stylesheet","href":"/_next/static/chunks/2l6y9owjqp9fj.css","precedence":"next"}],["$","script","script-0",{"src":"/_next/static/chunks/3vl0xogptndf0.js","async":true}]],["$","html",null,{"lang":"en","children":["$","body",null,{"className":"p-4","children":[["$","$L3",null,{}],["$","main",null,{"children":["$","$L4",null,{"parallelRouterKey":"children","template":["$","$L5",null,{}],"notFound":[["$","h1",null,{"children":"Lab 404"}],[]]}]}]]}]}]]}],"p":"$@6","v":null,"s":"$7"},"c":"$Q8"},"h":{"r":["$","$1","h",{"children":[null,["$","$L15",null,{"children":[["$","meta","0",{"charSet":"utf-8"}],["$","meta","1",{"name":"viewport","content":"width=device-width, initial-scale=1"}]]}],["$","$L17",null,{"children":[["$","div",null,{"hidden":true,"children":["$","$11",null,{"name":"Next.Metadata","children":[["$","title","0",{"children":"Lab"}]]}]}],null]}],null]}],"p":"$@18","v":null,"s":"$7"}},"a":"$@19","u":"$@1a","b":"Al-SShdjXUxDRuupQCSZm"}
+12:null
+7:300
+1a:true
+7:C
+19:0
+c:"$undefined"
+9:"$undefined"
+6:"$undefined"
+18:"$undefined"
+13:"$undefined"

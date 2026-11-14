@@ -1,0 +1,25 @@
+# openapi-typescript: `openapi-typescript <spec>… [-o out]`, else the APIs of a Redocly config
+# (`--redocly`, `redocly.yaml`): `apis.*.root` specs, `apis.*.x-openapi-ts.output` outputs.
+# Every local spec is an input with the files its `$ref`s reach; URLs are uncertain.
+id = "openapi-typescript"
+programs = ["openapi-typescript"]
+toolchain = ["npm:openapi-typescript"]
+flags = ["--output|-o", "--redocly", "--auth", "--alphabetize", "--enum-values", "--root-types-no-schema-prefix"]
+
+[config]
+label = "redocly"
+flag = "--redocly"
+names = ["redocly.yaml", "redocly.yml", ".redocly.yaml", ".redocly.yml"]
+required = "openapi-typescript without a spec or redocly config"
+
+[values]
+roots = { field = "apis.*.root", required = true }
+api_out = { flag = "--output", field = "apis.*.x-openapi-ts.output", optional = true }
+
+[[variant]]
+when = ["@args"]
+config = false
+rules = [{ scan = "refs", on = "@args" }, { output = "--output" }]
+
+[[variant]]
+rules = [{ scan = "refs", on = "roots" }, { output = "api_out" }]

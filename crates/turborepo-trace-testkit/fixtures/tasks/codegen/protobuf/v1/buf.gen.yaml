@@ -1,0 +1,6 @@
+version: v1
+plugins:
+  - name: python
+    out: gen/py
+  - plugin: buf.build/grpc/python
+    out: gen/py

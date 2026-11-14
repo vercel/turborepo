@@ -1,0 +1,115 @@
+---
+source: crates/turborepo-trace-tasks/tests/codegen.rs
+expression: out
+---
+## e2e-js: task:.#codegen
+{
+  "commands": [
+    "graphql-codegen --config codegen.yml [graphql-codegen] Full"
+  ],
+  "inputs": [
+    "schema.graphql"
+  ],
+  "outputs": [
+    {
+      "path": "src/gql/graphql.js",
+      "kind": "generated"
+    }
+  ],
+  "uncertainties": []
+}
+
+## e2e-js: task:.#db:generate
+{
+  "commands": [
+    "prisma generate [prisma] Full"
+  ],
+  "inputs": [
+    "prisma/schema.prisma"
+  ],
+  "outputs": [],
+  "uncertainties": [],
+  "output_packages": [
+    {
+      "ecosystem": "npm",
+      "name": ".prisma/client"
+    },
+    {
+      "ecosystem": "npm",
+      "name": "@prisma/client"
+    }
+  ]
+}
+
+## e2e-js: task:.#test
+{
+  "commands": [
+    "jest [jest] Full"
+  ],
+  "inputs": [
+    "jest.config.cjs",
+    "jest.config.cts",
+    "jest.config.json",
+    "jest.config.mjs",
+    "jest.config.mts",
+    "jest.config.ts"
+  ],
+  "outputs": [],
+  "uncertainties": []
+}
+
+## e2e-go: gogenerate:color/color.go:3
+{
+  "commands": [
+    "stringer -type=Color [stringer] Full"
+  ],
+  "inputs": [],
+  "outputs": [
+    {
+      "path": "color/color_string.go",
+      "kind": "generated"
+    }
+  ],
+  "uncertainties": []
+}
+
+## e2e-go: gogenerate:store/store.go:4
+{
+  "commands": [
+    "mockgen -source=store.go -destination=../mocks/mock_store.go -package=mocks [mockgen] Full"
+  ],
+  "inputs": [
+    "store/store.go"
+  ],
+  "outputs": [
+    {
+      "path": "mocks/mock_store.go",
+      "kind": "generated"
+    }
+  ],
+  "uncertainties": []
+}
+
+## e2e-python: task:.#proto
+{
+  "commands": [
+    "python -m grpc_tools.protoc -I protos --python_out=app/gen --grpc_python_out=app/gen protos/greeter.proto [python] Full"
+  ],
+  "inputs": [
+    "protos/common.proto",
+    "protos/greeter.proto"
+  ],
+  "outputs": [
+    {
+      "path": "app/gen",
+      "pattern": "**/*_pb2.py",
+      "kind": "generated"
+    },
+    {
+      "path": "app/gen",
+      "pattern": "**/*_pb2_grpc.py",
+      "kind": "generated"
+    }
+  ],
+  "uncertainties": []
+}

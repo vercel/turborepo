@@ -1,0 +1,18 @@
+# A monorepo's job that made every change select every test (backtest): `jq` is unknown,
+# so the job depends on the whole repo, and `mv … package.json` writes the root manifest.
+name: Update turbo
+on:
+  schedule:
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+jobs:
+  update-turbo:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - name: Bump turbo
+        run: |
+          jq --arg v "$VERSION" '.devDependencies.turbo = $v' package.json > package.json.tmp
+          mv package.json.tmp package.json
+          pnpm install --no-frozen-lockfile --lockfile-only

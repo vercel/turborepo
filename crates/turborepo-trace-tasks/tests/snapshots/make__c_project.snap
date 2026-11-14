@@ -1,0 +1,468 @@
+---
+source: crates/turborepo-trace-tasks/tests/make.rs
+expression: s
+---
+## make:.:all
+{
+  "sources": [
+    "make"
+  ],
+  "deps": [
+    "make:.:app"
+  ],
+  "lines": [],
+  "commands": [],
+  "spec": {
+    "configs": [
+      "Makefile",
+      "build/main.d",
+      "build/util.d"
+    ],
+    "memberships": [
+      {
+        "dir": "src",
+        "pattern": "*.c",
+        "reason": "make $(wildcard)"
+      }
+    ],
+    "task_deps": [
+      {
+        "target": {
+          "kind": "id",
+          "id": "make:.:app"
+        },
+        "reason": "make prerequisite"
+      }
+    ]
+  }
+}
+
+## make:.:app
+{
+  "sources": [
+    "make"
+  ],
+  "deps": [
+    "make:.:build/main.o",
+    "make:.:build/util.o"
+  ],
+  "lines": [
+    "gcc -o app build/main.o build/util.o -lm"
+  ],
+  "commands": [
+    "gcc -o app build/main.o build/util.o -lm [cc] Full"
+  ],
+  "spec": {
+    "inputs": [
+      "build/main.o",
+      "build/util.o"
+    ],
+    "outputs": [
+      {
+        "path": "app",
+        "kind": "artifact"
+      }
+    ],
+    "configs": [
+      "Makefile",
+      "build/main.d",
+      "build/util.d"
+    ],
+    "memberships": [
+      {
+        "dir": "src",
+        "pattern": "*.c",
+        "reason": "make $(wildcard)"
+      }
+    ],
+    "task_deps": [
+      {
+        "target": {
+          "kind": "id",
+          "id": "make:.:build/main.o"
+        },
+        "reason": "make prerequisite"
+      },
+      {
+        "target": {
+          "kind": "id",
+          "id": "make:.:build/util.o"
+        },
+        "reason": "make prerequisite"
+      }
+    ],
+    "toolchain": [
+      {
+        "ecosystem": "system",
+        "name": "gcc"
+      }
+    ]
+  }
+}
+
+## make:.:build
+{
+  "sources": [
+    "make"
+  ],
+  "deps": [],
+  "lines": [
+    "mkdir -p build"
+  ],
+  "commands": [
+    "mkdir -p build [touch] Ignored"
+  ],
+  "spec": {
+    "configs": [
+      "Makefile",
+      "build/main.d",
+      "build/util.d"
+    ],
+    "memberships": [
+      {
+        "dir": "src",
+        "pattern": "*.c",
+        "reason": "make $(wildcard)"
+      }
+    ]
+  }
+}
+
+## make:.:build/main.o
+{
+  "sources": [
+    "make"
+  ],
+  "deps": [
+    "make:.:build"
+  ],
+  "lines": [
+    "gcc -Wall -O2 -Iinclude -MMD -MF build/main.d -c src/main.c -o build/main.o"
+  ],
+  "commands": [
+    "gcc -Wall -O2 -Iinclude -MMD -MF build/main.d -c src/main.c -o build/main.o [cc] Full"
+  ],
+  "spec": {
+    "inputs": [
+      "include/config.h",
+      "include/util.h",
+      "src/main.c"
+    ],
+    "outputs": [
+      {
+        "path": "build/main.d",
+        "kind": "artifact"
+      },
+      {
+        "path": "build/main.o",
+        "kind": "declared"
+      }
+    ],
+    "configs": [
+      "Makefile",
+      "build/main.d",
+      "build/util.d"
+    ],
+    "memberships": [
+      {
+        "dir": "src",
+        "pattern": "*.c",
+        "reason": "make $(wildcard)"
+      }
+    ],
+    "task_deps": [
+      {
+        "target": {
+          "kind": "id",
+          "id": "make:.:build"
+        },
+        "reason": "make order-only prerequisite"
+      }
+    ],
+    "toolchain": [
+      {
+        "ecosystem": "system",
+        "name": "gcc"
+      }
+    ]
+  }
+}
+
+## make:.:build/util.o
+{
+  "sources": [
+    "make"
+  ],
+  "deps": [
+    "make:.:build"
+  ],
+  "lines": [
+    "gcc -Wall -O2 -Iinclude -MMD -MF build/util.d -c src/util.c -o build/util.o"
+  ],
+  "commands": [
+    "gcc -Wall -O2 -Iinclude -MMD -MF build/util.d -c src/util.c -o build/util.o [cc] Full"
+  ],
+  "spec": {
+    "inputs": [
+      "include/config.h",
+      "include/util.h",
+      "src/local.h",
+      "src/util.c"
+    ],
+    "outputs": [
+      {
+        "path": "build/util.d",
+        "kind": "artifact"
+      },
+      {
+        "path": "build/util.o",
+        "kind": "declared"
+      }
+    ],
+    "configs": [
+      "Makefile",
+      "build/main.d",
+      "build/util.d"
+    ],
+    "memberships": [
+      {
+        "dir": "src",
+        "pattern": "*.c",
+        "reason": "make $(wildcard)"
+      }
+    ],
+    "task_deps": [
+      {
+        "target": {
+          "kind": "id",
+          "id": "make:.:build"
+        },
+        "reason": "make order-only prerequisite"
+      }
+    ],
+    "toolchain": [
+      {
+        "ecosystem": "system",
+        "name": "gcc"
+      }
+    ]
+  }
+}
+
+## make:.:check
+{
+  "sources": [
+    "make"
+  ],
+  "deps": [
+    "make:.:app"
+  ],
+  "lines": [
+    "./app"
+  ],
+  "commands": [
+    "./app [script-file] Partial"
+  ],
+  "spec": {
+    "configs": [
+      "Makefile",
+      "build/main.d",
+      "build/util.d"
+    ],
+    "entries": [
+      {
+        "path": "app",
+        "lang": "auto"
+      }
+    ],
+    "memberships": [
+      {
+        "dir": ".",
+        "pattern": "**",
+        "reason": "uncertain task"
+      },
+      {
+        "dir": ".",
+        "pattern": "**",
+        "reason": "unknown command `app`"
+      },
+      {
+        "dir": "src",
+        "pattern": "*.c",
+        "reason": "make $(wildcard)"
+      }
+    ],
+    "task_deps": [
+      {
+        "target": {
+          "kind": "id",
+          "id": "make:.:app"
+        },
+        "reason": "make prerequisite"
+      }
+    ],
+    "uncertainties": [
+      {
+        "kind": "unknown_command",
+        "detail": "script `./app`"
+      }
+    ],
+    "definition": [
+      "app"
+    ]
+  }
+}
+
+## make:.:clean
+{
+  "sources": [
+    "make"
+  ],
+  "deps": [],
+  "lines": [
+    "rm -f -r build app libutil.a"
+  ],
+  "commands": [
+    "rm -f -r build app libutil.a [noop] Ignored"
+  ],
+  "spec": {
+    "configs": [
+      "Makefile",
+      "build/main.d",
+      "build/util.d"
+    ],
+    "memberships": [
+      {
+        "dir": "src",
+        "pattern": "*.c",
+        "reason": "make $(wildcard)"
+      }
+    ]
+  }
+}
+
+## make:.:docs
+{
+  "sources": [
+    "make"
+  ],
+  "deps": [
+    "make:.:notes.html"
+  ],
+  "lines": [],
+  "commands": [],
+  "spec": {
+    "configs": [
+      "Makefile",
+      "build/main.d",
+      "build/util.d"
+    ],
+    "memberships": [
+      {
+        "dir": "src",
+        "pattern": "*.c",
+        "reason": "make $(wildcard)"
+      }
+    ],
+    "task_deps": [
+      {
+        "target": {
+          "kind": "id",
+          "id": "make:.:notes.html"
+        },
+        "reason": "make prerequisite"
+      }
+    ]
+  }
+}
+
+## make:.:libutil.a
+{
+  "sources": [
+    "make"
+  ],
+  "deps": [
+    "make:.:build/util.o"
+  ],
+  "lines": [
+    "ar rcs libutil.a build/util.o"
+  ],
+  "commands": [
+    "ar rcs libutil.a build/util.o [ar] Full"
+  ],
+  "spec": {
+    "inputs": [
+      "build/util.o"
+    ],
+    "outputs": [
+      {
+        "path": "libutil.a",
+        "kind": "declared"
+      }
+    ],
+    "configs": [
+      "Makefile",
+      "build/main.d",
+      "build/util.d"
+    ],
+    "memberships": [
+      {
+        "dir": "src",
+        "pattern": "*.c",
+        "reason": "make $(wildcard)"
+      }
+    ],
+    "task_deps": [
+      {
+        "target": {
+          "kind": "id",
+          "id": "make:.:build/util.o"
+        },
+        "reason": "make prerequisite"
+      }
+    ],
+    "toolchain": [
+      {
+        "ecosystem": "system",
+        "name": "ar"
+      }
+    ]
+  }
+}
+
+## make:.:notes.html
+{
+  "sources": [
+    "make"
+  ],
+  "deps": [],
+  "lines": [
+    "cp notes.txt notes.html"
+  ],
+  "commands": [
+    "cp notes.txt notes.html [cp] Full"
+  ],
+  "spec": {
+    "inputs": [
+      "notes.txt"
+    ],
+    "outputs": [
+      {
+        "path": "notes.html",
+        "kind": "declared"
+      }
+    ],
+    "configs": [
+      "Makefile",
+      "build/main.d",
+      "build/util.d"
+    ],
+    "memberships": [
+      {
+        "dir": "src",
+        "pattern": "*.c",
+        "reason": "make $(wildcard)"
+      }
+    ]
+  }
+}

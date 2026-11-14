@@ -1,0 +1,386 @@
+---
+source: crates/turborepo-trace-tasks/tests/p2.rs
+expression: "render(&set, &root, &[\"gha\"])"
+---
+## gha:.github/workflows/ci.yml#build
+{
+  "sources": [
+    "gha"
+  ],
+  "files": [
+    ".github/workflows/ci.yml"
+  ],
+  "deps": [
+    "task:.#build",
+    "gha:.github/workflows/ci.yml#setup"
+  ],
+  "commands": [
+    "pnpm turbo run build [turbo] Full",
+    "node scripts/check.js [node] Full"
+  ],
+  "spec": {
+    "configs": [
+      ".github/workflows/ci.yml"
+    ],
+    "entries": [
+      {
+        "path": "tools/scripts/check.js",
+        "lang": "js"
+      }
+    ],
+    "memberships": [
+      {
+        "dir": ".",
+        "pattern": "**",
+        "exclude": [
+          "docs/**"
+        ],
+        "reason": "gha paths-ignore"
+      },
+      {
+        "dir": ".",
+        "pattern": "**/pnpm-lock.yaml",
+        "reason": "gha hashFiles"
+      },
+      {
+        "dir": ".",
+        "pattern": "package.json",
+        "exclude": [
+          "src/**/*.md"
+        ],
+        "reason": "gha paths filter"
+      },
+      {
+        "dir": "src",
+        "pattern": "**",
+        "exclude": [
+          "**/*.md"
+        ],
+        "reason": "gha paths filter"
+      }
+    ],
+    "task_deps": [
+      {
+        "target": {
+          "kind": "all",
+          "name": "build"
+        },
+        "reason": "turbo run"
+      },
+      {
+        "target": {
+          "kind": "id",
+          "id": "gha:.github/workflows/ci.yml#setup"
+        },
+        "reason": "gha needs"
+      }
+    ],
+    "toolchain": [
+      {
+        "ecosystem": "gha",
+        "name": "actions/cache@v4"
+      },
+      {
+        "ecosystem": "npm",
+        "name": "turbo"
+      }
+    ],
+    "runs": [
+      {
+        "kind": "task",
+        "target": {
+          "kind": "all",
+          "name": "build"
+        }
+      }
+    ],
+    "definition": [
+      "tools/scripts/check.js"
+    ]
+  }
+}
+
+## gha:.github/workflows/ci.yml#reuse
+{
+  "sources": [
+    "gha"
+  ],
+  "files": [
+    ".github/workflows/ci.yml"
+  ],
+  "deps": [
+    "gha:.github/workflows/release.yml#publish"
+  ],
+  "commands": [],
+  "spec": {
+    "configs": [
+      ".github/workflows/ci.yml"
+    ],
+    "memberships": [
+      {
+        "dir": ".",
+        "pattern": "**",
+        "exclude": [
+          "docs/**"
+        ],
+        "reason": "gha paths-ignore"
+      },
+      {
+        "dir": ".",
+        "pattern": "package.json",
+        "exclude": [
+          "src/**/*.md"
+        ],
+        "reason": "gha paths filter"
+      },
+      {
+        "dir": "src",
+        "pattern": "**",
+        "exclude": [
+          "**/*.md"
+        ],
+        "reason": "gha paths filter"
+      }
+    ],
+    "task_deps": [
+      {
+        "target": {
+          "kind": "id",
+          "id": "gha:.github/workflows/release.yml#publish"
+        },
+        "reason": "gha reusable workflow"
+      }
+    ],
+    "runs": [
+      {
+        "kind": "task",
+        "target": {
+          "kind": "id",
+          "id": "gha:.github/workflows/release.yml#publish"
+        }
+      }
+    ]
+  }
+}
+
+## gha:.github/workflows/ci.yml#setup
+{
+  "sources": [
+    "gha"
+  ],
+  "files": [
+    ".github/actions/js-action/action.yml",
+    ".github/actions/setup/action.yml",
+    ".github/workflows/ci.yml"
+  ],
+  "deps": [],
+  "commands": [
+    "node install.js [node] Full"
+  ],
+  "spec": {
+    "inputs": [
+      ".nvmrc",
+      "pnpm-lock.yaml"
+    ],
+    "configs": [
+      ".github/actions/js-action/action.yml",
+      ".github/actions/setup/action.yml",
+      ".github/workflows/ci.yml"
+    ],
+    "entries": [
+      {
+        "path": ".github/actions/js-action/dist/index.js",
+        "lang": "js"
+      },
+      {
+        "path": "tools/install.js",
+        "lang": "js"
+      }
+    ],
+    "memberships": [
+      {
+        "dir": ".",
+        "pattern": "**",
+        "exclude": [
+          "docs/**"
+        ],
+        "reason": "gha paths-ignore"
+      },
+      {
+        "dir": ".",
+        "pattern": "package.json",
+        "exclude": [
+          "src/**/*.md"
+        ],
+        "reason": "gha paths filter"
+      },
+      {
+        "dir": "src",
+        "pattern": "**",
+        "exclude": [
+          "**/*.md"
+        ],
+        "reason": "gha paths filter"
+      }
+    ],
+    "toolchain": [
+      {
+        "ecosystem": "gha",
+        "name": "actions/checkout@v4"
+      },
+      {
+        "ecosystem": "gha",
+        "name": "actions/setup-node@v4"
+      }
+    ],
+    "definition": [
+      ".github/actions/js-action/dist/index.js",
+      ".nvmrc",
+      "pnpm-lock.yaml",
+      "tools/install.js"
+    ]
+  }
+}
+
+## gha:.github/workflows/ci.yml#test
+{
+  "sources": [
+    "gha"
+  ],
+  "files": [
+    ".github/workflows/ci.yml"
+  ],
+  "deps": [
+    "gha:.github/workflows/ci.yml#build"
+  ],
+  "commands": [
+    "echo \"GHA_VALUE\" [noop] Ignored",
+    "./run-tests.sh 1 [shell-script] Partial",
+    "echo ${__GHA_EXPR} [noop] Ignored"
+  ],
+  "spec": {
+    "configs": [
+      ".github/workflows/ci.yml"
+    ],
+    "entries": [
+      {
+        "path": "tools/lib.sh",
+        "lang": "auto"
+      },
+      {
+        "path": "tools/run-tests.sh",
+        "lang": "auto"
+      },
+      {
+        "path": "tools/scripts/check.js",
+        "lang": "js"
+      }
+    ],
+    "memberships": [
+      {
+        "dir": ".",
+        "pattern": "**",
+        "reason": "`run-tests.sh` not fully recognized"
+      },
+      {
+        "dir": ".",
+        "pattern": "**",
+        "reason": "computed arguments to `node`"
+      },
+      {
+        "dir": ".",
+        "pattern": "**",
+        "reason": "uncertain task"
+      },
+      {
+        "dir": ".",
+        "pattern": "**",
+        "reason": "unsupported shell syntax"
+      },
+      {
+        "dir": ".",
+        "pattern": "**",
+        "exclude": [
+          "docs/**"
+        ],
+        "reason": "gha paths-ignore"
+      },
+      {
+        "dir": ".",
+        "pattern": "package.json",
+        "exclude": [
+          "src/**/*.md"
+        ],
+        "reason": "gha paths filter"
+      },
+      {
+        "dir": "src",
+        "pattern": "**",
+        "exclude": [
+          "**/*.md"
+        ],
+        "reason": "gha paths filter"
+      }
+    ],
+    "task_deps": [
+      {
+        "target": {
+          "kind": "id",
+          "id": "gha:.github/workflows/ci.yml#build"
+        },
+        "reason": "gha needs"
+      }
+    ],
+    "uncertainties": [
+      {
+        "kind": "unknown_command",
+        "detail": "run step with shell `python`"
+      },
+      {
+        "kind": "shell_unsupported",
+        "detail": "special parameter `$@`"
+      },
+      {
+        "kind": "shell_unsupported",
+        "detail": "unknown variable `${__GHA_EXPR}`"
+      }
+    ],
+    "definition": [
+      "tools/lib.sh",
+      "tools/run-tests.sh",
+      "tools/scripts/check.js"
+    ]
+  }
+}
+
+## gha:.github/workflows/release.yml#publish
+{
+  "sources": [
+    "gha"
+  ],
+  "files": [
+    ".github/workflows/release.yml"
+  ],
+  "deps": [],
+  "commands": [
+    "npm publish [package-manager] Partial"
+  ],
+  "spec": {
+    "configs": [
+      ".github/workflows/release.yml"
+    ],
+    "memberships": [
+      {
+        "dir": ".",
+        "pattern": "**",
+        "reason": "npm publish"
+      }
+    ],
+    "toolchain": [
+      {
+        "ecosystem": "docker",
+        "name": "alpine:3.20"
+      }
+    ]
+  }
+}

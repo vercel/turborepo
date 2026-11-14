@@ -1,0 +1,71 @@
+---
+source: crates/turborepo-trace-lang-js/tests/extract_snapshots.rs
+expression: "render(\"dynamic.js\")"
+---
+3:14 require "path"
+    span: require('path')
+4:18 require "node:path"
+    span: require('node:path')
+7:1 require "url"
+    span: require('u' + 'rl')
+8:1 require "./tpl/fixed.js"
+    span: require(`./tpl/${'fixed'}.js`)
+9:1 require "./raw/file.js"
+    span: require(String.raw`./raw/file.js`)
+10:1 require "./plugins/*"
+    span: require('./plugins/' + name)
+    uncertainty: partial_specifier "name"
+11:1 require "./locales/*/index.json"
+    span: require(`./locales/${lang}/index.json`)
+    uncertainty: partial_specifier "lang"
+12:1 require "./a/*/b/*.js"
+    span: require('./a/' + kind + '/b/' + sub + '.js')
+    uncertainty: partial_specifier "kind, sub"
+15:1 require "./prod | ./dev" [conditional]
+    span: require(isProd ? './prod' : './dev')
+16:1 require "./one | ./two | ./three" [conditional]
+    span: require(a ? './one' : b ? './two' : './three')
+17:1 require "./fallback" [conditional]
+    span: require(override || './fallback')
+17:1 require "<unknown>" [conditional]
+    span: require(override || './fallback')
+    uncertainty: computed_specifier "override || './fallback'"
+18:1 dynamic_import "./lazy-default" [conditional, lazy]
+    span: import(mode ?? './lazy-default')
+18:1 dynamic_import "<unknown>" [conditional, lazy]
+    span: import(mode ?? './lazy-default')
+    uncertainty: computed_specifier "mode ?? './lazy-default'"
+23:14 asset "../shared"
+    span: path.join(__dirname, '..', 'shared')
+24:1 require "./lib/x"
+    span: require(BASE + '/x')
+25:1 require "./lib/y.node"
+    span: require(`${BASE}/y${SUFFIX}`)
+26:1 require "../shared/z.js"
+    span: require(path.join(ROOT, 'z.js'))
+29:1 require "./sibling.js"
+    span: require(__dirname + '/sibling.js')
+30:1 require "./up.js"
+    span: require(path.resolve(__dirname, 'deep', '../up.js'))
+31:1 require "./j/*.js"
+    span: require(join(__dirname, 'j', name + '.js'))
+    uncertainty: partial_specifier "name"
+32:1 require "./d.js"
+    span: require(path.dirname(__filename) + '/d.js')
+33:1 require "./r.json"
+    span: require.resolve(path.join(__dirname, 'r.json'))
+36:1 require "<unknown>"
+    span: require(process.env.PLUGIN_PATH)
+    uncertainty: env_dependent "process.env.PLUGIN_PATH; env PLUGIN_PATH"
+37:1 require "./env/*.js"
+    span: require('./env/' + process.env.NODE_ENV + '.js')
+    uncertainty: partial_specifier "process.env.NODE_ENV"
+38:1 require "<unknown>"
+    span: require(name + '.js')
+    uncertainty: computed_specifier "name + '.js'"
+39:1 require "<unknown>"
+    span: require(getPath())
+    uncertainty: computed_specifier "getPath()"
+40:1 require "<unknown>"
+    span: require(path.join(cwd, 'x'))
+    uncertainty: computed_specifier "path.join(cwd, 'x')"

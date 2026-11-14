@@ -1,0 +1,126 @@
+---
+source: crates/turborepo-trace-lang-go/tests/fixtures.rs
+expression: json
+---
+{
+  "version": 1,
+  "base": "<fixture>",
+  "entries": [
+    {
+      "path": "main.go",
+      "files": [
+        "go.mod",
+        "main.go"
+      ]
+    }
+  ],
+  "files": [
+    {
+      "path": "go.mod",
+      "reasons": [
+        "manifest"
+      ],
+      "parents": [
+        "main.go"
+      ],
+      "parsed": false
+    },
+    {
+      "path": "main.go",
+      "reasons": [
+        "initial"
+      ],
+      "parents": [],
+      "parsed": true,
+      "lang": "go"
+    }
+  ],
+  "edges": [
+    {
+      "from": "main.go",
+      "kind": "manifest",
+      "phase": "build",
+      "flags": [],
+      "spec": "go.mod",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "go.mod"
+      }
+    },
+    {
+      "from": "main.go",
+      "kind": "import",
+      "phase": "build",
+      "flags": [],
+      "spec": "fmt",
+      "span": [
+        95,
+        100
+      ],
+      "line": 5,
+      "target": {
+        "type": "builtin",
+        "name": "fmt"
+      }
+    },
+    {
+      "from": "main.go",
+      "kind": "import",
+      "phase": "build",
+      "flags": [],
+      "spec": "plugin",
+      "span": [
+        102,
+        110
+      ],
+      "line": 6,
+      "target": {
+        "type": "builtin",
+        "name": "plugin"
+      }
+    },
+    {
+      "from": "main.go",
+      "kind": "shared_lib",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "plugins/greeter.so",
+      "span": [
+        151,
+        171
+      ],
+      "line": 10,
+      "target": {
+        "type": "unresolved"
+      },
+      "uncertainty": "cwd_dependent"
+    }
+  ],
+  "uncertainties": [
+    {
+      "file": "main.go",
+      "kind": "cwd_dependent",
+      "detail": "plugins/greeter.so is relative to the working directory; not found",
+      "spec": "plugins/greeter.so",
+      "span": [
+        151,
+        171
+      ],
+      "line": 10,
+      "col": 24
+    }
+  ],
+  "symlinks": {},
+  "stats": {
+    "entries": 1,
+    "files": 2,
+    "parsed_files": 1,
+    "edges": 4,
+    "uncertainties": 1
+  }
+}

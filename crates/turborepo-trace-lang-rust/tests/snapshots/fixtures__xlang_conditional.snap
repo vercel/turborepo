@@ -1,0 +1,135 @@
+---
+source: crates/turborepo-trace-lang-rust/tests/fixtures.rs
+expression: json
+---
+{
+  "version": 1,
+  "base": "<fixture>",
+  "entries": [
+    {
+      "path": "src/main.rs",
+      "files": [
+        "Cargo.lock",
+        "Cargo.toml",
+        "conf/linux.conf",
+        "src/main.rs"
+      ]
+    }
+  ],
+  "files": [
+    {
+      "path": "Cargo.lock",
+      "reasons": [
+        "manifest"
+      ],
+      "parents": [
+        "src/main.rs"
+      ],
+      "parsed": false
+    },
+    {
+      "path": "Cargo.toml",
+      "reasons": [
+        "manifest"
+      ],
+      "parents": [
+        "src/main.rs"
+      ],
+      "parsed": false
+    },
+    {
+      "path": "conf/linux.conf",
+      "reasons": [
+        "asset"
+      ],
+      "parents": [
+        "src/main.rs"
+      ],
+      "parsed": false
+    },
+    {
+      "path": "src/main.rs",
+      "reasons": [
+        "initial"
+      ],
+      "parents": [],
+      "parsed": true,
+      "lang": "rust"
+    }
+  ],
+  "edges": [
+    {
+      "from": "src/main.rs",
+      "kind": "manifest",
+      "phase": "build",
+      "flags": [],
+      "spec": "Cargo.lock",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "Cargo.lock"
+      }
+    },
+    {
+      "from": "src/main.rs",
+      "kind": "manifest",
+      "phase": "build",
+      "flags": [],
+      "spec": "Cargo.toml",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "Cargo.toml"
+      }
+    },
+    {
+      "from": "src/main.rs",
+      "kind": "asset",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "conf/linux.conf",
+      "span": [
+        110,
+        165
+      ],
+      "line": 3,
+      "target": {
+        "type": "file",
+        "path": "conf/linux.conf"
+      }
+    },
+    {
+      "from": "src/main.rs",
+      "kind": "fs_read",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "conf/linux.conf",
+      "span": [
+        317,
+        337
+      ],
+      "line": 8,
+      "target": {
+        "type": "file",
+        "path": "conf/linux.conf"
+      }
+    }
+  ],
+  "uncertainties": [],
+  "symlinks": {},
+  "stats": {
+    "entries": 1,
+    "files": 4,
+    "parsed_files": 1,
+    "edges": 4,
+    "uncertainties": 0
+  }
+}

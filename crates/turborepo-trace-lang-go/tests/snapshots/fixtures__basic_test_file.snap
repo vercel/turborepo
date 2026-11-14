@@ -1,0 +1,625 @@
+---
+source: crates/turborepo-trace-lang-go/tests/fixtures.rs
+expression: json
+---
+{
+  "version": 1,
+  "base": "<fixture>",
+  "entries": [
+    {
+      "path": "internal/util/export_test.go",
+      "files": [
+        "go.mod",
+        "go.sum",
+        "internal/util/asm_amd64.s",
+        "internal/util/export_test.go",
+        "internal/util/testdata/golden.txt",
+        "internal/util/util.go",
+        "internal/util/util_linux.go",
+        "internal/util/util_test.go",
+        "lib/go.mod"
+      ]
+    }
+  ],
+  "files": [
+    {
+      "path": "go.mod",
+      "reasons": [
+        "manifest"
+      ],
+      "parents": [
+        "internal/util/export_test.go",
+        "internal/util/util.go",
+        "internal/util/util_linux.go",
+        "internal/util/util_test.go"
+      ],
+      "parsed": false
+    },
+    {
+      "path": "go.sum",
+      "reasons": [
+        "manifest"
+      ],
+      "parents": [
+        "internal/util/export_test.go",
+        "internal/util/util.go",
+        "internal/util/util_linux.go",
+        "internal/util/util_test.go"
+      ],
+      "parsed": false
+    },
+    {
+      "path": "internal/util/asm_amd64.s",
+      "reasons": [
+        "dependency"
+      ],
+      "parents": [
+        "internal/util/export_test.go",
+        "internal/util/util.go",
+        "internal/util/util_linux.go",
+        "internal/util/util_test.go"
+      ],
+      "parsed": false
+    },
+    {
+      "path": "internal/util/export_test.go",
+      "reasons": [
+        "initial",
+        "dependency"
+      ],
+      "parents": [
+        "internal/util/util_test.go"
+      ],
+      "parsed": true,
+      "lang": "go"
+    },
+    {
+      "path": "internal/util/testdata/golden.txt",
+      "reasons": [
+        "asset"
+      ],
+      "parents": [
+        "internal/util/export_test.go"
+      ],
+      "parsed": false
+    },
+    {
+      "path": "internal/util/util.go",
+      "reasons": [
+        "dependency"
+      ],
+      "parents": [
+        "internal/util/export_test.go",
+        "internal/util/util_linux.go",
+        "internal/util/util_test.go"
+      ],
+      "parsed": true,
+      "lang": "go"
+    },
+    {
+      "path": "internal/util/util_linux.go",
+      "reasons": [
+        "dependency"
+      ],
+      "parents": [
+        "internal/util/export_test.go",
+        "internal/util/util.go",
+        "internal/util/util_test.go"
+      ],
+      "parsed": true,
+      "lang": "go"
+    },
+    {
+      "path": "internal/util/util_test.go",
+      "reasons": [
+        "dependency"
+      ],
+      "parents": [
+        "internal/util/export_test.go"
+      ],
+      "parsed": true,
+      "lang": "go"
+    },
+    {
+      "path": "lib/go.mod",
+      "reasons": [
+        "manifest"
+      ],
+      "parents": [
+        "internal/util/export_test.go",
+        "internal/util/util.go",
+        "internal/util/util_linux.go",
+        "internal/util/util_test.go"
+      ],
+      "parsed": false
+    }
+  ],
+  "edges": [
+    {
+      "from": "internal/util/export_test.go",
+      "kind": "package",
+      "phase": "build",
+      "flags": [],
+      "spec": "package (cgo, assembly and object files)",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "glob",
+        "pattern": "internal/util/*.[chsS]*",
+        "matches": [
+          "internal/util/asm_amd64.s"
+        ],
+        "truncated": false
+      }
+    },
+    {
+      "from": "internal/util/export_test.go",
+      "kind": "package",
+      "phase": "build",
+      "flags": [],
+      "spec": "package",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "glob",
+        "pattern": "internal/util/*.go",
+        "matches": [
+          "internal/util/util.go",
+          "internal/util/util_linux.go",
+          "internal/util/util_test.go"
+        ],
+        "truncated": false
+      }
+    },
+    {
+      "from": "internal/util/export_test.go",
+      "kind": "import",
+      "phase": "build",
+      "flags": [],
+      "spec": "os",
+      "span": [
+        29,
+        33
+      ],
+      "line": 4,
+      "target": {
+        "type": "builtin",
+        "name": "os"
+      }
+    },
+    {
+      "from": "internal/util/export_test.go",
+      "kind": "import",
+      "phase": "build",
+      "flags": [],
+      "spec": "testing",
+      "span": [
+        35,
+        44
+      ],
+      "line": 5,
+      "target": {
+        "type": "builtin",
+        "name": "testing"
+      }
+    },
+    {
+      "from": "internal/util/export_test.go",
+      "kind": "import",
+      "phase": "build",
+      "flags": [],
+      "spec": "example.com/basic/internal/util",
+      "span": [
+        47,
+        80
+      ],
+      "line": 7,
+      "target": {
+        "type": "glob",
+        "pattern": "internal/util/*.go",
+        "matches": [
+          "internal/util/util.go",
+          "internal/util/util_linux.go"
+        ],
+        "truncated": false
+      }
+    },
+    {
+      "from": "internal/util/export_test.go",
+      "kind": "package",
+      "phase": "build",
+      "flags": [],
+      "spec": "package (cgo, assembly and object files)",
+      "span": [
+        47,
+        80
+      ],
+      "line": 7,
+      "target": {
+        "type": "glob",
+        "pattern": "internal/util/*.[chsS]*",
+        "matches": [
+          "internal/util/asm_amd64.s"
+        ],
+        "truncated": false
+      }
+    },
+    {
+      "from": "internal/util/export_test.go",
+      "kind": "manifest",
+      "phase": "build",
+      "flags": [],
+      "spec": "go.mod",
+      "span": [
+        47,
+        80
+      ],
+      "line": 7,
+      "target": {
+        "type": "file",
+        "path": "go.mod"
+      }
+    },
+    {
+      "from": "internal/util/export_test.go",
+      "kind": "manifest",
+      "phase": "build",
+      "flags": [],
+      "spec": "go.sum",
+      "span": [
+        47,
+        80
+      ],
+      "line": 7,
+      "target": {
+        "type": "file",
+        "path": "go.sum"
+      }
+    },
+    {
+      "from": "internal/util/export_test.go",
+      "kind": "manifest",
+      "phase": "build",
+      "flags": [],
+      "spec": "go.mod",
+      "span": [
+        47,
+        80
+      ],
+      "line": 7,
+      "target": {
+        "type": "file",
+        "path": "lib/go.mod"
+      }
+    },
+    {
+      "from": "internal/util/export_test.go",
+      "kind": "fs_read",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "testdata/golden.txt",
+      "span": [
+        129,
+        150
+      ],
+      "line": 11,
+      "target": {
+        "type": "file",
+        "path": "internal/util/testdata/golden.txt"
+      }
+    },
+    {
+      "from": "internal/util/util.go",
+      "kind": "package",
+      "phase": "build",
+      "flags": [],
+      "spec": "package (cgo, assembly and object files)",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "glob",
+        "pattern": "internal/util/*.[chsS]*",
+        "matches": [
+          "internal/util/asm_amd64.s"
+        ],
+        "truncated": false
+      }
+    },
+    {
+      "from": "internal/util/util.go",
+      "kind": "package",
+      "phase": "build",
+      "flags": [],
+      "spec": "package",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "glob",
+        "pattern": "internal/util/*.go",
+        "matches": [
+          "internal/util/util_linux.go"
+        ],
+        "truncated": false
+      }
+    },
+    {
+      "from": "internal/util/util.go",
+      "kind": "manifest",
+      "phase": "build",
+      "flags": [],
+      "spec": "go.mod",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "go.mod"
+      }
+    },
+    {
+      "from": "internal/util/util.go",
+      "kind": "manifest",
+      "phase": "build",
+      "flags": [],
+      "spec": "go.sum",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "go.sum"
+      }
+    },
+    {
+      "from": "internal/util/util.go",
+      "kind": "manifest",
+      "phase": "build",
+      "flags": [],
+      "spec": "go.mod",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "lib/go.mod"
+      }
+    },
+    {
+      "from": "internal/util/util.go",
+      "kind": "import",
+      "phase": "build",
+      "flags": [],
+      "spec": "strings",
+      "span": [
+        21,
+        30
+      ],
+      "line": 3,
+      "target": {
+        "type": "builtin",
+        "name": "strings"
+      }
+    },
+    {
+      "from": "internal/util/util_linux.go",
+      "kind": "package",
+      "phase": "build",
+      "flags": [],
+      "spec": "package (cgo, assembly and object files)",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "glob",
+        "pattern": "internal/util/*.[chsS]*",
+        "matches": [
+          "internal/util/asm_amd64.s"
+        ],
+        "truncated": false
+      }
+    },
+    {
+      "from": "internal/util/util_linux.go",
+      "kind": "package",
+      "phase": "build",
+      "flags": [],
+      "spec": "package",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "glob",
+        "pattern": "internal/util/*.go",
+        "matches": [
+          "internal/util/util.go"
+        ],
+        "truncated": false
+      }
+    },
+    {
+      "from": "internal/util/util_linux.go",
+      "kind": "manifest",
+      "phase": "build",
+      "flags": [],
+      "spec": "go.mod",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "go.mod"
+      }
+    },
+    {
+      "from": "internal/util/util_linux.go",
+      "kind": "manifest",
+      "phase": "build",
+      "flags": [],
+      "spec": "go.sum",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "go.sum"
+      }
+    },
+    {
+      "from": "internal/util/util_linux.go",
+      "kind": "manifest",
+      "phase": "build",
+      "flags": [],
+      "spec": "go.mod",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "lib/go.mod"
+      }
+    },
+    {
+      "from": "internal/util/util_test.go",
+      "kind": "package",
+      "phase": "build",
+      "flags": [],
+      "spec": "package (cgo, assembly and object files)",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "glob",
+        "pattern": "internal/util/*.[chsS]*",
+        "matches": [
+          "internal/util/asm_amd64.s"
+        ],
+        "truncated": false
+      }
+    },
+    {
+      "from": "internal/util/util_test.go",
+      "kind": "package",
+      "phase": "build",
+      "flags": [],
+      "spec": "package",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "glob",
+        "pattern": "internal/util/*.go",
+        "matches": [
+          "internal/util/export_test.go",
+          "internal/util/util.go",
+          "internal/util/util_linux.go"
+        ],
+        "truncated": false
+      }
+    },
+    {
+      "from": "internal/util/util_test.go",
+      "kind": "manifest",
+      "phase": "build",
+      "flags": [],
+      "spec": "go.mod",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "go.mod"
+      }
+    },
+    {
+      "from": "internal/util/util_test.go",
+      "kind": "manifest",
+      "phase": "build",
+      "flags": [],
+      "spec": "go.sum",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "go.sum"
+      }
+    },
+    {
+      "from": "internal/util/util_test.go",
+      "kind": "manifest",
+      "phase": "build",
+      "flags": [],
+      "spec": "go.mod",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "lib/go.mod"
+      }
+    },
+    {
+      "from": "internal/util/util_test.go",
+      "kind": "import",
+      "phase": "build",
+      "flags": [],
+      "spec": "testing",
+      "span": [
+        21,
+        30
+      ],
+      "line": 3,
+      "target": {
+        "type": "builtin",
+        "name": "testing"
+      }
+    }
+  ],
+  "uncertainties": [],
+  "symlinks": {},
+  "stats": {
+    "entries": 1,
+    "files": 9,
+    "parsed_files": 4,
+    "edges": 27,
+    "uncertainties": 0
+  }
+}

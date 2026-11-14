@@ -1,0 +1,24 @@
+{
+  "name": "@acme/playwright",
+  "version": "0.0.0",
+  "private": true,
+  "exports": {
+    "./config": {
+      "types": "./src/config/index.ts",
+      "import": "./dist/config/index.js",
+      "default": "./dist/config/index.cjs"
+    },
+    "./opaque": {
+      "import": "./dist/config/opaque.js",
+      "default": "./dist/config/opaque.cjs"
+    },
+    "./project": {
+      "types": "./dist/config/project.d.ts",
+      "default": "./dist/config/project.js"
+    }
+  },
+  "dependencies": {
+    "@playwright/test": "^1.50.0",
+    "@some/env": "^1.0.0"
+  }
+}

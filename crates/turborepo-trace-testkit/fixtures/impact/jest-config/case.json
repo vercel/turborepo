@@ -1,0 +1,105 @@
+{
+  "description": "jest adapter inputs (\u00a717 table): setupFiles, moduleNameMapper, manual mocks next to modules and at the root (node modules), and snapshots.",
+  "mutations": [
+    {
+      "name": "edit-setup",
+      "description": "modify the setupFiles entry",
+      "ops": [
+        {
+          "op": "append",
+          "path": "test/setup.ts",
+          "text": "\n// edited\n"
+        }
+      ]
+    },
+    {
+      "name": "repoint-mapper",
+      "description": "point the ~/config mapper at config.prod.ts",
+      "ops": [
+        {
+          "op": "replace",
+          "path": "jest.config.js",
+          "find": "config.dev.ts",
+          "with": "config.prod.ts"
+        }
+      ]
+    },
+    {
+      "name": "edit-manual-mock",
+      "description": "modify src/__mocks__/clock.ts",
+      "ops": [
+        {
+          "op": "append",
+          "path": "src/__mocks__/clock.ts",
+          "text": "\n// edited\n"
+        }
+      ]
+    },
+    {
+      "name": "edit-mocked-module",
+      "description": "modify src/clock.ts, which is replaced by its manual mock",
+      "ops": [
+        {
+          "op": "append",
+          "path": "src/clock.ts",
+          "text": "\n// edited\n"
+        }
+      ]
+    },
+    {
+      "name": "edit-root-mock",
+      "description": "modify the root mock of node module fake-http",
+      "ops": [
+        {
+          "op": "append",
+          "path": "__mocks__/fake-http.js",
+          "text": "\n// edited\n"
+        }
+      ]
+    },
+    {
+      "name": "add-root-mock",
+      "description": "add a root mock for node module left-pad-lite",
+      "ops": [
+        {
+          "op": "write",
+          "path": "__mocks__/left-pad-lite.js",
+          "content": "module.exports = (s) => s;\n"
+        }
+      ]
+    },
+    {
+      "name": "edit-snapshot",
+      "description": "modify a snapshot file",
+      "ops": [
+        {
+          "op": "replace",
+          "path": "test/__snapshots__/snap.test.ts.snap",
+          "find": "\"a\": 1",
+          "with": "\"a\": 2"
+        }
+      ]
+    },
+    {
+      "name": "delete-snapshot",
+      "description": "delete a snapshot file",
+      "ops": [
+        {
+          "op": "delete",
+          "path": "test/__snapshots__/snap.test.ts.snap"
+        }
+      ]
+    },
+    {
+      "name": "add-snapshot",
+      "description": "add a snapshot file for a test without one",
+      "ops": [
+        {
+          "op": "write",
+          "path": "test/__snapshots__/nosnap.test.ts.snap",
+          "content": "// Jest Snapshot v1, https://jestjs.io/docs/snapshot-testing\n"
+        }
+      ]
+    }
+  ]
+}

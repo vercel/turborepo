@@ -1,0 +1,327 @@
+---
+source: crates/turborepo-trace-tasks/tests/codegen.rs
+expression: family(stringify! (graphql))
+---
+$ graphql-codegen
+# graphql-codegen [graphql-codegen] Full
+{
+  "inputs": [
+    "scalars.graphql",
+    "schema.graphql"
+  ],
+  "outputs": [
+    {
+      "path": "src/gql",
+      "kind": "generated"
+    },
+    {
+      "path": "src/types.ts",
+      "kind": "generated"
+    }
+  ],
+  "configs": [
+    "codegen.ts"
+  ],
+  "entries": [
+    {
+      "path": "codegen.ts",
+      "lang": "js"
+    }
+  ],
+  "memberships": [
+    {
+      "dir": "src",
+      "pattern": "**/*.graphql",
+      "exclude": [
+        "legacy/**"
+      ],
+      "reason": "graphql documents"
+    }
+  ],
+  "toolchain": [
+    {
+      "ecosystem": "npm",
+      "name": "@graphql-codegen/cli"
+    },
+    {
+      "ecosystem": "npm",
+      "name": "@graphql-codegen/preset-client"
+    },
+    {
+      "ecosystem": "npm",
+      "name": "@graphql-codegen/typescript"
+    },
+    {
+      "ecosystem": "npm",
+      "name": "@graphql-codegen/typescript-operations"
+    }
+  ]
+}
+
+$ graphql-codegen --config codegen.alt.yml
+# graphql-codegen [graphql-codegen] Partial
+{
+  "inputs": [
+    "src/types.ts"
+  ],
+  "outputs": [
+    {
+      "path": "src",
+      "pattern": "**/*.generated.tsx",
+      "kind": "generated"
+    },
+    {
+      "path": "src/types.ts",
+      "kind": "generated"
+    }
+  ],
+  "configs": [
+    "codegen.alt.yml"
+  ],
+  "memberships": [
+    {
+      "dir": ".",
+      "pattern": "**",
+      "reason": "`graphql-codegen` not fully recognized"
+    },
+    {
+      "dir": ".",
+      "pattern": "**",
+      "reason": "code generator config not fully known"
+    },
+    {
+      "dir": "extra",
+      "pattern": "*.graphql",
+      "reason": "graphql schema"
+    },
+    {
+      "dir": "src",
+      "pattern": "**/*.tsx",
+      "reason": "graphql documents"
+    }
+  ],
+  "toolchain": [
+    {
+      "ecosystem": "npm",
+      "name": "@graphql-codegen/cli"
+    },
+    {
+      "ecosystem": "npm",
+      "name": "@graphql-codegen/preset-near-operation-file"
+    },
+    {
+      "ecosystem": "npm",
+      "name": "@graphql-codegen/typescript"
+    },
+    {
+      "ecosystem": "npm",
+      "name": "@graphql-codegen/typescript-operations"
+    },
+    {
+      "ecosystem": "npm",
+      "name": "@graphql-codegen/typescript-react-apollo"
+    }
+  ],
+  "uncertainties": [
+    {
+      "kind": "env_dependent",
+      "detail": "remote graphql schema `http://localhost:4000/graphql`"
+    }
+  ]
+}
+
+$ gql-gen -c codegen.alt.yml --watch
+# gql-gen [graphql-codegen] Partial
+{
+  "inputs": [
+    "src/types.ts"
+  ],
+  "outputs": [
+    {
+      "path": "src",
+      "pattern": "**/*.generated.tsx",
+      "kind": "generated"
+    },
+    {
+      "path": "src/types.ts",
+      "kind": "generated"
+    }
+  ],
+  "configs": [
+    "codegen.alt.yml"
+  ],
+  "memberships": [
+    {
+      "dir": ".",
+      "pattern": "**",
+      "reason": "`gql-gen` not fully recognized"
+    },
+    {
+      "dir": ".",
+      "pattern": "**",
+      "reason": "code generator config not fully known"
+    },
+    {
+      "dir": "extra",
+      "pattern": "*.graphql",
+      "reason": "graphql schema"
+    },
+    {
+      "dir": "src",
+      "pattern": "**/*.tsx",
+      "reason": "graphql documents"
+    }
+  ],
+  "toolchain": [
+    {
+      "ecosystem": "npm",
+      "name": "@graphql-codegen/cli"
+    },
+    {
+      "ecosystem": "npm",
+      "name": "@graphql-codegen/preset-near-operation-file"
+    },
+    {
+      "ecosystem": "npm",
+      "name": "@graphql-codegen/typescript"
+    },
+    {
+      "ecosystem": "npm",
+      "name": "@graphql-codegen/typescript-operations"
+    },
+    {
+      "ecosystem": "npm",
+      "name": "@graphql-codegen/typescript-react-apollo"
+    }
+  ],
+  "uncertainties": [
+    {
+      "kind": "env_dependent",
+      "detail": "remote graphql schema `http://localhost:4000/graphql`"
+    }
+  ]
+}
+
+$ cd gqlconfig && graphql-codegen
+# graphql-codegen [graphql-codegen] Full
+{
+  "inputs": [
+    "gqlconfig/schema.graphql"
+  ],
+  "outputs": [
+    {
+      "path": "gqlconfig/src/graphql.ts",
+      "kind": "generated"
+    }
+  ],
+  "configs": [
+    "gqlconfig/.graphqlrc.yml",
+    "gqlconfig/codegen.js",
+    "gqlconfig/codegen.json",
+    "gqlconfig/codegen.ts",
+    "gqlconfig/codegen.yaml",
+    "gqlconfig/codegen.yml",
+    "gqlconfig/package.json"
+  ],
+  "memberships": [
+    {
+      "dir": "gqlconfig/src",
+      "pattern": "**/*.graphql",
+      "reason": "graphql documents"
+    }
+  ],
+  "toolchain": [
+    {
+      "ecosystem": "npm",
+      "name": "@graphql-codegen/cli"
+    },
+    {
+      "ecosystem": "npm",
+      "name": "@graphql-codegen/typescript"
+    }
+  ]
+}
+
+$ cd pkgjson && graphql-codegen-esm
+# graphql-codegen-esm [graphql-codegen] Full
+{
+  "inputs": [
+    "pkgjson/schema.ts"
+  ],
+  "outputs": [
+    {
+      "path": "pkgjson/dist/schema.graphql",
+      "kind": "generated"
+    }
+  ],
+  "configs": [
+    "pkgjson/codegen.js",
+    "pkgjson/codegen.json",
+    "pkgjson/codegen.ts",
+    "pkgjson/codegen.yaml",
+    "pkgjson/codegen.yml",
+    "pkgjson/package.json"
+  ],
+  "entries": [
+    {
+      "path": "pkgjson/codegen-setup.js",
+      "lang": "js"
+    },
+    {
+      "path": "pkgjson/schema.ts",
+      "lang": "js"
+    }
+  ],
+  "toolchain": [
+    {
+      "ecosystem": "npm",
+      "name": "@graphql-codegen/cli"
+    },
+    {
+      "ecosystem": "npm",
+      "name": "@graphql-codegen/schema-ast"
+    },
+    {
+      "ecosystem": "npm",
+      "name": "ts-node"
+    }
+  ]
+}
+
+$ cd empty && graphql-codegen
+# graphql-codegen [graphql-codegen] Partial
+{
+  "configs": [
+    "empty/.graphqlrc.yml",
+    "empty/codegen.js",
+    "empty/codegen.json",
+    "empty/codegen.ts",
+    "empty/codegen.yaml",
+    "empty/codegen.yml",
+    "empty/package.json"
+  ],
+  "memberships": [
+    {
+      "dir": ".",
+      "pattern": "**",
+      "reason": "`graphql-codegen` not fully recognized"
+    },
+    {
+      "dir": "empty",
+      "pattern": "**",
+      "reason": "code generator config not fully known"
+    }
+  ],
+  "toolchain": [
+    {
+      "ecosystem": "npm",
+      "name": "@graphql-codegen/cli"
+    }
+  ],
+  "uncertainties": [
+    {
+      "kind": "parse_incomplete",
+      "detail": "no graphql-codegen config found"
+    }
+  ]
+}

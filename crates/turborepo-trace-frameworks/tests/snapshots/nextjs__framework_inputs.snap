@@ -1,0 +1,101 @@
+---
+source: crates/turborepo-trace-frameworks/tests/nextjs.rs
+expression: "redact(serde_json::to_string_pretty(&v).unwrap(), root)"
+---
+{
+  "framework": "nextjs",
+  "config_file": "<fixture>/next.config.ts",
+  "projects": [
+    {
+      "name": "next-app",
+      "config_file": "<fixture>/next.config.ts",
+      "root_dir": "<fixture>",
+      "global": {
+        "config_files": [
+          "<fixture>/next.config.ts",
+          "<fixture>/redirects.mjs",
+          "<fixture>/middleware.ts",
+          "<fixture>/microfrontends.json",
+          "<fixture>/instrumentation.ts",
+          "<fixture>/app/layout.tsx",
+          "<fixture>/app/global-error.tsx",
+          "<fixture>/app/not-found.tsx",
+          "<fixture>/pages/_app.tsx",
+          "<fixture>/app/globals.css",
+          "<fixture>/postcss.config.mjs",
+          "<fixture>/package.json",
+          "<fixture>/tsconfig.json"
+        ],
+        "js_entries": [
+          "<fixture>/next.config.ts",
+          "<fixture>/redirects.mjs",
+          "<fixture>/middleware.ts",
+          "<fixture>/instrumentation.ts",
+          "<fixture>/app/layout.tsx",
+          "<fixture>/app/global-error.tsx",
+          "<fixture>/app/not-found.tsx",
+          "<fixture>/pages/_app.tsx",
+          "<fixture>/postcss.config.mjs"
+        ],
+        "entries": [],
+        "edges": [],
+        "probes": 32,
+        "memberships": [
+          {
+            "dir": "<fixture>/public",
+            "pattern": "**",
+            "reason": "public/ assets are served by URL"
+          },
+          {
+            "dir": "<fixture>",
+            "pattern": ".env*",
+            "reason": "env files (listed, never read)"
+          },
+          {
+            "dir": "<fixture>/app",
+            "pattern": "**/{page,route,layout,template,loading,error,not-found,forbidden,unauthorized,default,global-error,global-not-found}.{tsx,ts}",
+            "reason": "App Router special files (the route table)"
+          },
+          {
+            "dir": "<fixture>/pages",
+            "pattern": "**/*.{tsx,ts}",
+            "reason": "Pages Router files (the route table)"
+          }
+        ]
+      },
+      "resolution": {
+        "aliases": [],
+        "roots": [],
+        "module_paths": [],
+        "module_directories": [],
+        "module_path_ignore_patterns": [],
+        "extensions": []
+      },
+      "discovery": {
+        "roots": [],
+        "include": [],
+        "exclude": [],
+        "glob_base": null,
+        "extensions": []
+      },
+      "mocks": {
+        "root_mock_dirs": [],
+        "haste_mocks": [],
+        "implicit_package_mocks": false,
+        "automock": false,
+        "extensions": []
+      },
+      "snapshots": "default",
+      "uncertainties": []
+    }
+  ],
+  "uncertainties": [
+    {
+      "kind": "unsupported_syntax",
+      "file": "<fixture>/next.config.ts",
+      "line": 0,
+      "field": null,
+      "detail": "the exported config is wrapped by plugin calls; read `nextConfig` and assumed the wrappers keep basePath, i18n, redirects and rewrites"
+    }
+  ]
+}

@@ -1,0 +1,401 @@
+---
+source: crates/turborepo-trace-frameworks/tests/fixtures.rs
+expression: r.json()
+---
+{
+  "inputs": {
+    "framework": "vitest",
+    "config_file": "<fixture>/vitest.workspace.ts",
+    "projects": [
+      {
+        "name": "<fixture>/packages/core",
+        "config_file": null,
+        "root_dir": "<fixture>/packages/core",
+        "global": {
+          "config_files": [
+            "<fixture>/vitest.workspace.ts"
+          ],
+          "js_entries": [
+            "<fixture>/vitest.workspace.ts"
+          ],
+          "entries": [
+            {
+              "role": "runner",
+              "target": {
+                "module": {
+                  "request": "vitest",
+                  "from_dir": "<fixture>/packages/core"
+                }
+              }
+            }
+          ],
+          "edges": [],
+          "probes": [],
+          "memberships": []
+        },
+        "resolution": {
+          "aliases": [],
+          "roots": [
+            "<fixture>/packages/core"
+          ],
+          "module_paths": [],
+          "module_directories": [
+            "node_modules"
+          ],
+          "module_path_ignore_patterns": [],
+          "extensions": [
+            "mjs",
+            "js",
+            "mts",
+            "ts",
+            "jsx",
+            "tsx",
+            "json"
+          ]
+        },
+        "discovery": {
+          "roots": [
+            "<fixture>/packages/core"
+          ],
+          "include": [
+            {
+              "glob": "**/*.{test,spec}.?(c|m)[jt]s?(x)"
+            }
+          ],
+          "exclude": [
+            {
+              "glob": "**/node_modules/**"
+            },
+            {
+              "glob": "**/dist/**"
+            },
+            {
+              "glob": "**/cypress/**"
+            },
+            {
+              "glob": "**/.{idea,git,cache,output,temp}/**"
+            },
+            {
+              "glob": "**/{karma,rollup,webpack,vite,vitest,jest,ava,babel,nyc,cypress,tsup,build,eslint,prettier}.config.*"
+            }
+          ],
+          "glob_base": "<fixture>/packages/core",
+          "extensions": []
+        },
+        "mocks": {
+          "root_mock_dirs": [
+            "<fixture>/packages/core"
+          ],
+          "haste_mocks": [],
+          "implicit_package_mocks": false,
+          "automock": false,
+          "extensions": [
+            "mjs",
+            "js",
+            "mts",
+            "ts",
+            "jsx",
+            "tsx",
+            "json"
+          ]
+        },
+        "snapshots": "default",
+        "uncertainties": []
+      },
+      {
+        "name": "web",
+        "config_file": "<fixture>/packages/web/vitest.config.mts",
+        "root_dir": "<fixture>/packages/web",
+        "global": {
+          "config_files": [
+            "<fixture>/vitest.workspace.ts",
+            "<fixture>/packages/web/vitest.config.mts"
+          ],
+          "js_entries": [
+            "<fixture>/vitest.workspace.ts",
+            "<fixture>/packages/web/vitest.config.mts"
+          ],
+          "entries": [
+            {
+              "role": "setup_file",
+              "target": {
+                "path": "<fixture>/packages/web/src/setup.ts"
+              }
+            },
+            {
+              "role": "test_environment",
+              "target": {
+                "module": {
+                  "request": "jsdom",
+                  "from_dir": "<fixture>/packages/web"
+                }
+              }
+            },
+            {
+              "role": "runner",
+              "target": {
+                "module": {
+                  "request": "vitest",
+                  "from_dir": "<fixture>/packages/web"
+                }
+              }
+            }
+          ],
+          "edges": [],
+          "probes": [
+            "<fixture>/packages/web/vitest.config.ts",
+            "<fixture>/packages/web/vitest.config.cts",
+            "<fixture>/packages/web/vitest.config.js",
+            "<fixture>/packages/web/vitest.config.mjs",
+            "<fixture>/packages/web/vitest.config.cjs",
+            "<fixture>/packages/web/vite.config.ts",
+            "<fixture>/packages/web/vite.config.mts",
+            "<fixture>/packages/web/vite.config.cts",
+            "<fixture>/packages/web/vite.config.js",
+            "<fixture>/packages/web/vite.config.mjs",
+            "<fixture>/packages/web/vite.config.cjs"
+          ],
+          "memberships": []
+        },
+        "resolution": {
+          "aliases": [],
+          "roots": [
+            "<fixture>/packages/web"
+          ],
+          "module_paths": [],
+          "module_directories": [
+            "node_modules"
+          ],
+          "module_path_ignore_patterns": [],
+          "extensions": [
+            "mjs",
+            "js",
+            "mts",
+            "ts",
+            "jsx",
+            "tsx",
+            "json"
+          ]
+        },
+        "discovery": {
+          "roots": [
+            "<fixture>/packages/web"
+          ],
+          "include": [
+            {
+              "glob": "**/*.{test,spec}.?(c|m)[jt]s?(x)"
+            }
+          ],
+          "exclude": [
+            {
+              "glob": "**/node_modules/**"
+            },
+            {
+              "glob": "**/dist/**"
+            },
+            {
+              "glob": "**/cypress/**"
+            },
+            {
+              "glob": "**/.{idea,git,cache,output,temp}/**"
+            },
+            {
+              "glob": "**/{karma,rollup,webpack,vite,vitest,jest,ava,babel,nyc,cypress,tsup,build,eslint,prettier}.config.*"
+            }
+          ],
+          "glob_base": "<fixture>/packages/web",
+          "extensions": []
+        },
+        "mocks": {
+          "root_mock_dirs": [
+            "<fixture>/packages/web"
+          ],
+          "haste_mocks": [],
+          "implicit_package_mocks": false,
+          "automock": false,
+          "extensions": [
+            "mjs",
+            "js",
+            "mts",
+            "ts",
+            "jsx",
+            "tsx",
+            "json"
+          ]
+        },
+        "snapshots": "default",
+        "uncertainties": []
+      },
+      {
+        "name": "scripts",
+        "config_file": "<fixture>/vitest.workspace.ts",
+        "root_dir": "<fixture>",
+        "global": {
+          "config_files": [
+            "<fixture>/vitest.workspace.ts",
+            "<fixture>/vitest.shared.ts"
+          ],
+          "js_entries": [
+            "<fixture>/vitest.workspace.ts",
+            "<fixture>/vitest.shared.ts"
+          ],
+          "entries": [
+            {
+              "role": "setup_file",
+              "target": {
+                "path": "<fixture>/vitest.setup.ts"
+              }
+            },
+            {
+              "role": "runner",
+              "target": {
+                "module": {
+                  "request": "vitest",
+                  "from_dir": "<fixture>"
+                }
+              }
+            }
+          ],
+          "edges": [],
+          "probes": [],
+          "memberships": []
+        },
+        "resolution": {
+          "aliases": [
+            {
+              "matcher": {
+                "prefix": "#root"
+              },
+              "replacements": [
+                "/abs/root"
+              ],
+              "source": "resolve.alias"
+            }
+          ],
+          "roots": [
+            "<fixture>"
+          ],
+          "module_paths": [],
+          "module_directories": [
+            "node_modules"
+          ],
+          "module_path_ignore_patterns": [],
+          "extensions": [
+            "mjs",
+            "js",
+            "mts",
+            "ts",
+            "jsx",
+            "tsx",
+            "json"
+          ]
+        },
+        "discovery": {
+          "roots": [
+            "<fixture>"
+          ],
+          "include": [
+            {
+              "glob": "scripts/**/*.test.ts"
+            }
+          ],
+          "exclude": [
+            {
+              "glob": "**/node_modules/**"
+            },
+            {
+              "glob": "**/dist/**"
+            },
+            {
+              "glob": "**/cypress/**"
+            },
+            {
+              "glob": "**/.{idea,git,cache,output,temp}/**"
+            },
+            {
+              "glob": "**/{karma,rollup,webpack,vite,vitest,jest,ava,babel,nyc,cypress,tsup,build,eslint,prettier}.config.*"
+            }
+          ],
+          "glob_base": "<fixture>",
+          "extensions": []
+        },
+        "mocks": {
+          "root_mock_dirs": [
+            "<fixture>"
+          ],
+          "haste_mocks": [],
+          "implicit_package_mocks": false,
+          "automock": false,
+          "extensions": [
+            "mjs",
+            "js",
+            "mts",
+            "ts",
+            "jsx",
+            "tsx",
+            "json"
+          ]
+        },
+        "snapshots": "default",
+        "uncertainties": []
+      }
+    ],
+    "uncertainties": []
+  },
+  "tests": [
+    {
+      "project": "<fixture>/packages/core",
+      "inputs": {
+        "test": "<fixture>/packages/core/src/core.spec.ts",
+        "entries": [],
+        "edges": [],
+        "probes": [],
+        "memberships": [
+          {
+            "dir": "<fixture>/packages/core/src/__snapshots__",
+            "pattern": "core.spec.ts.snap",
+            "reason": "default snapshot path"
+          }
+        ],
+        "mocks": [],
+        "uncertainties": []
+      }
+    },
+    {
+      "project": "web",
+      "inputs": {
+        "test": "<fixture>/packages/web/src/page.test.ts",
+        "entries": [],
+        "edges": [],
+        "probes": [],
+        "memberships": [
+          {
+            "dir": "<fixture>/packages/web/src/__snapshots__",
+            "pattern": "page.test.ts.snap",
+            "reason": "default snapshot path"
+          }
+        ],
+        "mocks": [],
+        "uncertainties": []
+      }
+    },
+    {
+      "project": "scripts",
+      "inputs": {
+        "test": "<fixture>/scripts/build.test.ts",
+        "entries": [],
+        "edges": [],
+        "probes": [],
+        "memberships": [
+          {
+            "dir": "<fixture>/scripts/__snapshots__",
+            "pattern": "build.test.ts.snap",
+            "reason": "default snapshot path"
+          }
+        ],
+        "mocks": [],
+        "uncertainties": []
+      }
+    }
+  ]
+}

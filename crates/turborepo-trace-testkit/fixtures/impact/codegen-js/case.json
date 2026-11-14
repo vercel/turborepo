@@ -1,0 +1,115 @@
+{
+  "description": "code generators (\u00a719, M2.9): Prisma (`prisma generate`, default client output in node_modules/.prisma/client and node_modules/@prisma/client) and graphql-codegen (codegen.yml: schema, documents, a gitignored src/gql/graphql.js), run from package scripts. The generated files are vendored stand-ins; the oracle never runs generators, so tests affected through generator inputs are declared with expect_affected.",
+  "mutations": [
+    {
+      "name": "prisma-schema",
+      "description": "add a field to the Prisma schema; db.test loads the generated client",
+      "ops": [
+        {
+          "op": "replace",
+          "path": "prisma/schema.prisma",
+          "find": "id Int @id",
+          "with": "id    Int    @id\n  email String"
+        }
+      ],
+      "expect_affected": [
+        "test/db.test.js"
+      ]
+    },
+    {
+      "name": "prisma-config-added",
+      "description": "add a prisma.config.ts (a probe of `prisma generate`) that moves the schema",
+      "ops": [
+        {
+          "op": "write",
+          "path": "prisma.config.ts",
+          "content": "import { defineConfig } from 'prisma/config';\n\nexport default defineConfig({ schema: 'db/schema.prisma' });\n"
+        }
+      ],
+      "expect_affected": [
+        "test/db.test.js"
+      ]
+    },
+    {
+      "name": "graphql-schema",
+      "description": "edit the GraphQL schema read by graphql-codegen",
+      "ops": [
+        {
+          "op": "replace",
+          "path": "schema.graphql",
+          "find": "user: String",
+          "with": "user: String\n  users: [String]"
+        }
+      ],
+      "expect_affected": [
+        "test/api.test.js"
+      ]
+    },
+    {
+      "name": "graphql-document",
+      "description": "edit a document matched by codegen.yml `documents`",
+      "ops": [
+        {
+          "op": "replace",
+          "path": "src/queries/user.graphql",
+          "find": "  user\n",
+          "with": "  user\n  __typename\n"
+        }
+      ],
+      "expect_affected": [
+        "test/api.test.js"
+      ]
+    },
+    {
+      "name": "graphql-document-added",
+      "description": "add a document matching the `documents` glob",
+      "ops": [
+        {
+          "op": "write",
+          "path": "src/queries/users.graphql",
+          "content": "query Users {\n  user\n}\n"
+        }
+      ],
+      "expect_affected": [
+        "test/api.test.js"
+      ]
+    },
+    {
+      "name": "codegen-config",
+      "description": "edit codegen.yml",
+      "ops": [
+        {
+          "op": "replace",
+          "path": "codegen.yml",
+          "find": "schema: schema.graphql",
+          "with": "overwrite: true\nschema: schema.graphql"
+        }
+      ],
+      "expect_affected": [
+        "test/api.test.js"
+      ]
+    },
+    {
+      "name": "edit-other",
+      "description": "control: edit a module only other.test loads",
+      "ops": [
+        {
+          "op": "append",
+          "path": "src/other.js",
+          "text": "\n// edited\n"
+        }
+      ]
+    },
+    {
+      "name": "add-readme",
+      "description": "control: add an unrelated file",
+      "ops": [
+        {
+          "op": "write",
+          "path": "README.md",
+          "content": "# codegen-js\n"
+        }
+      ]
+    }
+  ]
+}

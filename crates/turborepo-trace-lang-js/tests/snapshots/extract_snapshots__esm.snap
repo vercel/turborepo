@@ -1,0 +1,48 @@
+---
+source: crates/turborepo-trace-lang-js/tests/extract_snapshots.rs
+expression: "render(\"esm.mjs\")"
+---
+2:1 import "./default.js"
+    span: import defaultExport from './default.js'
+3:1 import "./named.js"
+    span: import { named, other as renamed } from "./named.js"
+4:1 import "./namespace.js"
+    span: import * as namespace from './namespace.js'
+5:1 import "./side-effect.js"
+    span: import './side-effect.js'
+6:1 import "./mixed.js"
+    span: import def, { a, b } from './mixed.js'
+7:1 import "./mixed-ns.js"
+    span: import def2, * as ns2 from './mixed-ns.js'
+8:1 import "./empty-braces.js"
+    span: import {} from './empty-braces.js'
+9:1 import "./string-names.js"
+    span: import { default as d, 'string-name' as s } from './string-names.js'
+10:1 import "./data.json"
+    span: import json from './data.json'
+11:1 import "./legacy.json"
+    span: import legacy from './legacy.json'
+12:1 import "./template-no-subst.js"
+    span: import `./template-no-subst.js`
+14:1 re_export "./star.js"
+    span: export * from './star.js'
+15:1 re_export "./star-ns.js"
+    span: export * as starNs from './star-ns.js'
+16:1 re_export "./reexport.js"
+    span: export { x, y as z } from './reexport.js'
+17:1 re_export "./reexport-default.js"
+    span: export { default } from './reexport-default.js'
+18:1 re_export "./reexport-default-named.js"
+    span: export { default as named2 } from './reexport-default-named.js'
+25:23 dynamic_import "./nope.js" @Language("module_string") [optional, lazy]
+    span: './nope.js'
+29:20 dynamic_import "./lazy.js" [lazy]
+    span: import('./lazy.js')
+30:27 dynamic_import "./with-options.json" [lazy]
+    span: import('./with-options.json'
+31:24 dynamic_import "./locales/*.js" [lazy]
+    span: import(`./locales/${lang}.js`)
+    uncertainty: computed_specifier "lang (not checked by the value-flow engine)"
+32:16 dynamic_import "./pages/*" [lazy]
+    span: import('./pages/' + page)
+    uncertainty: computed_specifier "page (not checked by the value-flow engine)"

@@ -1,0 +1,149 @@
+---
+source: crates/turborepo-trace-lang-rust/tests/fixtures.rs
+expression: json
+---
+{
+  "version": 1,
+  "base": "<fixture>",
+  "entries": [
+    {
+      "path": "src/main.rs",
+      "files": [
+        "Cargo.lock",
+        "Cargo.toml",
+        "src/main.rs"
+      ]
+    }
+  ],
+  "files": [
+    {
+      "path": "Cargo.lock",
+      "reasons": [
+        "manifest"
+      ],
+      "parents": [
+        "src/main.rs"
+      ],
+      "parsed": false
+    },
+    {
+      "path": "Cargo.toml",
+      "reasons": [
+        "manifest"
+      ],
+      "parents": [
+        "src/main.rs"
+      ],
+      "parsed": false
+    },
+    {
+      "path": "src/main.rs",
+      "reasons": [
+        "initial"
+      ],
+      "parents": [],
+      "parsed": true,
+      "lang": "rust"
+    }
+  ],
+  "edges": [
+    {
+      "from": "src/main.rs",
+      "kind": "manifest",
+      "phase": "build",
+      "flags": [],
+      "spec": "Cargo.lock",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "Cargo.lock"
+      }
+    },
+    {
+      "from": "src/main.rs",
+      "kind": "manifest",
+      "phase": "build",
+      "flags": [],
+      "spec": "Cargo.toml",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "Cargo.toml"
+      }
+    },
+    {
+      "from": "src/main.rs",
+      "kind": "shared_lib",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "plugins/libgreeter.so",
+      "span": [
+        146,
+        174
+      ],
+      "line": 3,
+      "target": {
+        "type": "unresolved"
+      },
+      "uncertainty": "cwd_dependent"
+    },
+    {
+      "from": "src/main.rs",
+      "kind": "shared_lib",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "libz.so.1",
+      "span": [
+        222,
+        238
+      ],
+      "line": 4,
+      "target": {
+        "type": "unresolved"
+      },
+      "uncertainty": "env_dependent"
+    }
+  ],
+  "uncertainties": [
+    {
+      "file": "src/main.rs",
+      "kind": "cwd_dependent",
+      "detail": "plugins/libgreeter.so is relative to the working directory; not found",
+      "spec": "plugins/libgreeter.so",
+      "span": [
+        146,
+        174
+      ],
+      "line": 3,
+      "col": 45
+    },
+    {
+      "file": "src/main.rs",
+      "kind": "env_dependent",
+      "detail": "libz.so.1 is a bare library name: the dynamic loader searches LD_LIBRARY_PATH and system paths, not the working directory; not found",
+      "spec": "libz.so.1",
+      "span": [
+        222,
+        238
+      ],
+      "line": 4,
+      "col": 45
+    }
+  ],
+  "symlinks": {},
+  "stats": {
+    "entries": 1,
+    "files": 3,
+    "parsed_files": 1,
+    "edges": 4,
+    "uncertainties": 2
+  }
+}

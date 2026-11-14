@@ -1,0 +1,62 @@
+---
+source: crates/turborepo-trace-lang-js/tests/resolve_dynamic.rs
+expression: run.summary(&run.root)
+---
+turbo trace summary
+base: <fixture>
+entries: 1, files: 57 (parsed 19), edges: 78, uncertainties: 5
+
+files by reason:
+  initial     1
+  dependency  19
+  asset       18
+  sharedlib   2
+  manifest    17
+
+special cases (16):
+  @mapbox/node-pre-gyp: lib/binding/*-linux-x64/abi.node  [2 file(s), from node_modules/abi-pkg/index.js]
+  @mapbox/node-pre-gyp: lib/binding/napi-v6-linux-x64/addon.node  [1 file(s), from node_modules/pregyp-pkg/lib/index.js]
+  better-sqlite3: ../build/Release/better_sqlite3.node  [1 file(s), from node_modules/better-sqlite3/lib/binding.js]
+  better-sqlite3: ../prebuilds/linux-x64.node  [1 file(s), from node_modules/better-sqlite3/lib/binding.js]
+  bindings: build/Release/*.node  [1 file(s), from node_modules/better-sqlite3/lib/index.js]
+  bindings: native addon  [0 file(s), from node_modules/nobin-pkg/index.js]
+  esbuild: optional dependency @esbuild/linux-x64  [2 file(s), from node_modules/esbuild/lib/main.js]
+  node-gyp-build-optional-packages: optional package @msgpackr-extract/msgpackr-extract-linux-x64  [2 file(s), from node_modules/msgpackr-extract/index.js]
+  node-gyp-build: prebuilds/linux-x64/*.node  [1 file(s), from node_modules/gyp-pkg/index.js]
+  prisma: libquery_engine-debian-openssl-3.0.x.so.node  [1 file(s), from node_modules/.prisma/client/index.js]
+  prisma: schema.prisma  [1 file(s), from node_modules/.prisma/client/index.js]
+  semver: preload.js  [1 file(s), from node_modules/semver/index.js]
+  sharedlib: better-sqlite3  [1 file(s), from node_modules/better-sqlite3/lib/binding.js]
+  sharedlib: direct-addon  [1 file(s), from node_modules/direct-addon/index.js]
+  sharp: optional dependency @img/sharp-libvips-linux-x64  [3 file(s), from node_modules/sharp/lib/index.js]
+  sharp: optional dependency @img/sharp-linux-x64  [2 file(s), from node_modules/sharp/lib/index.js]
+
+uncertainties (5):
+
+computed_specifier (2)
+  better-sqlite3 (1)
+    node_modules/better-sqlite3/lib/binding.js
+      3:18  <unknown>: computed specifier <unknown>
+        | module.exports = require(filename);
+  pregyp-pkg (1)
+    node_modules/pregyp-pkg/lib/index.js
+      3:18  <unknown>: computed specifier <unknown>
+        | module.exports = require(p);
+
+partial_specifier (1)
+  abi-pkg (1)
+    node_modules/abi-pkg/index.js
+      1:16  special-case @mapbox/node-pre-gyp: lib/binding/*-linux-x64/abi.node: @mapbox/node-pre-gyp: binary.module_path placeholders not known statically: node_abi
+        | const binary = require('@mapbox/node-pre-gyp');
+
+pattern_too_broad (1)
+  sharp (1)
+    node_modules/sharp/lib/sharp.js
+      1:18  @img/sharp-*/sharp.node: runtimePlatform; pattern @img/sharp-*/sharp.node: package name not known statically; not expanded
+        | module.exports = require(`@img/sharp-${runtimePlatform}/sharp.node`);
+
+unresolved_specifier (1)
+  nobin-pkg (1)
+    node_modules/nobin-pkg/index.js
+      1:18  special-case bindings: native addon: bindings: no native addon for linux-x64 found in <fixture>/node_modules/nobin-pkg (searched build/*.node, build/Debug/*.node, build/Release/*.node, out/Debug/*.node, Debug/*.node, out/Release/*.node, Release/*.node, build/default/*.node, compiled/*/linux/x64/*.node, addon-build/release/install-root/*.node, addon-build/debug/install-root/*.node, addon-build/default/install-root/*.node, lib/binding/node-v*-linux-x64/*.node)
+        | module.exports = require('bindings')('nobin.node');
