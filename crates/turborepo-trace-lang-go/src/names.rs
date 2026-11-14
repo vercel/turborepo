@@ -28,27 +28,37 @@
 //! (`os.ReadFile("../../../package.json")`, `filepath.Join("..", "..",
 //! "shared")`) names its rest at the directories `1..=k` above the working
 //! directory, or below it when it is joined onto a deeper base: not its shape
-//! anywhere in the repository. The name is marked with that `k`, raised by the
-//! file's `filepath.Dir` calls
-//! ([`Name::climbs_from_cwd`](turborepo_trace_core::names::Name::climbs_from_cwd));
-//! the query names the rest at those directories, whatever package they are
-//! in, and the shape inside the package like any other string
+//! anywhere in the repository. The name is marked with how far it can climb
+//! ([`Name::climbs_from_cwd`](turborepo_trace_core::names::Name::climbs_from_cwd)):
+//! its own steps plus every other parent step of the file (its other `..`
+//! segments and its `filepath.Dir` calls), which can raise the base it is
+//! joined onto. The query names the rest at those directories, in whatever
+//! package they are, the rest completed with an extension there too
+//! (`"../../shared/golden" + ".json"`), and the shape anywhere below the
+//! working directory and inside the package like any other string
 //! (`turborepo_trace_graph::names`, "Strings that climb from the working
 //! directory"). This assumes:
 //!
-//! > A Go string that climbs with parent steps is not joined onto another path
-//! > that climbs above the working directory or leads elsewhere, except for the
-//! > consecutive literal arguments of one `filepath.Join` call (which are one
-//! > string) and the file's own location, and the process does not change its
-//! > working directory before it uses the string.
+//! > A Go string that climbs with parent steps is taken from the working
+//! > directory the test starts in, or from a directory below it: it is not
+//! > joined onto another path that climbs above the working directory or leads
+//! > elsewhere (a directory that another package finds from its own location,
+//! > the value of an environment variable), and the process does not change its
+//! > working directory (`os.Chdir`, also in the `init` of an imported package).
 //!
-//! The file's own location names its own places ([`crate::anchors`]). A string
-//! whose rest is not its shape keeps the plain climbing mark, whose shape names
-//! anywhere: a named segment left before a later parent step (`"../a/b/../c"`)
-//! or a hole before the name (`"../%s/data"`). So does every string of a file
-//! that calls `Chdir` (`os.Chdir`, `t.Chdir`): its working directory can be
-//! another one. A `Chdir` in another file is part of the assumption: the
-//! process keeps the working directory it was started in.
+//! The file's own location names its own places ([`crate::anchors`]), and the
+//! consecutive literal arguments of one `filepath.Join` call are one string.
+//! What the analysis can see of a further climb keeps the plain climbing mark,
+//! whose shape names anywhere:
+//!
+//! - a string whose rest is not its shape: a named segment left before a later
+//!   parent step (`"../a/b/../c"`) or a hole before the name (`"../%s/data"`);
+//! - every climbing string of a file that calls `filepath.Dir` in a loop;
+//! - every climbing string of a package (the files of one directory) in which a
+//!   file calls `Chdir` (`os.Chdir`, `t.Chdir`, a `TestMain` that moves) or
+//!   holds a string that only climbs (`"../.."`, `const Root = "../.."`,
+//!   `filepath.Join("..", "..")`): such a string can be the base of the others
+//!   ([`Names::moves_base`](turborepo_trace_core::names::Names::moves_base)).
 //!
 //! What is left out, because the string never becomes a path:
 //!
@@ -108,6 +118,10 @@ pub struct Strings {
     /// The file calls a function called `Chdir` (`os.Chdir`, `t.Chdir`): its
     /// relative paths may be taken from another working directory.
     pub chdir: bool,
+    /// A counted `filepath.Dir` / `path.Dir` call is inside a `for` loop: it
+    /// can run any number of times, so [`Strings::parents`] does not bound
+    /// how far it climbs.
+    pub dir_in_loop: bool,
 }
 
 /// Functions whose string arguments are pieces of a path (matched by name on
@@ -290,6 +304,9 @@ struct Group {
     /// The last literal collected directly in this group: its token (an index
     /// into the significant tokens) and its place in [`Strings::literals`].
     last: Option<(usize, usize)>,
+    /// `{` opened after a `for` keyword: the loop's body (or a composite
+    /// literal of its header, which is taken as part of it).
+    looped: bool,
 }
 
 /// The variables that hold the caller file: the second target of every
@@ -402,6 +419,8 @@ fn scan(src: &[u8], followed: Option<&Followed>) -> Strings {
     // The closing parenthesis of the literal location path the scan is inside of.
     let mut literal_until: Option<usize> = None;
     let mut groups: Vec<Group> = Vec::new();
+    // A `for` keyword whose body has not been opened yet.
+    let mut for_pending = false;
     let mut line = 1u32;
     let mut line_at = 0usize;
     let mut k = 0;
@@ -458,9 +477,27 @@ fn scan(src: &[u8], followed: Option<&Followed>) -> Strings {
                         probe: callee.is_some() && probe_fn(name, receiver),
                         commas: 0,
                         last: None,
+                        looped: false,
                     });
                 }
-                b'[' | b'{' => groups.push(Group::default()),
+                b'{' => {
+                    let looped = for_pending;
+                    // The body of a loop ends its line (gofmt); a composite literal of the
+                    // header does not, and the body is still to come.
+                    if for_pending
+                        && next(1).is_none_or(|n| {
+                            n.is_punct(src, b'}')
+                                || memchr::memchr(b'\n', &src[at..n.span.start as usize]).is_some()
+                        })
+                    {
+                        for_pending = false;
+                    }
+                    groups.push(Group {
+                        looped,
+                        ..Group::default()
+                    });
+                }
+                b'[' => groups.push(Group::default()),
                 b')' | b']' | b'}' => {
                     let g = groups.pop();
                     // The literal location path is complete: it names what is below its
@@ -501,6 +538,9 @@ fn scan(src: &[u8], followed: Option<&Followed>) -> Strings {
                     b"Chdir" if next(1).is_some_and(|n| n.is_punct(src, b'(')) => {
                         out.chdir = true;
                     }
+                    b"for" if !prev(1).is_some_and(|p| p.is_punct(src, b'.')) => {
+                        for_pending = true;
+                    }
                     b"Dir"
                         if !in_literal
                             && !followed.is_some_and(|f| part(&f.dirs, at))
@@ -508,6 +548,9 @@ fn scan(src: &[u8], followed: Option<&Followed>) -> Strings {
                             && next(1).is_some_and(|n| n.is_punct(src, b'(')) =>
                     {
                         out.parents = (out.parents + 1).min(MAX_PARENTS);
+                        if groups.iter().any(|g| g.looped) {
+                            out.dir_in_loop = true;
+                        }
                     }
                     // A use of the caller file outside a literal path from it (and not its
                     // declaration, a field or a method of that name).
@@ -585,50 +628,67 @@ fn scan(src: &[u8], followed: Option<&Followed>) -> Strings {
 
 /// Adds the names of the literal `l` to `c`, as
 /// [`Collector::string`](turborepo_trace_core::names::Collector::string)
-/// does, with what a string that climbs says about where it goes. `parents`:
-/// the file's `filepath.Dir` calls; `chdir`: the file changes its working
-/// directory ([`Strings::chdir`]), so a string that climbs keeps the plain
-/// climbing mark.
+/// does, with what a string that climbs says about where it goes.
 ///
 /// A relative path in Go is relative to the working directory of the process
 /// (`go test` runs a package's tests in the package directory). A string that
-/// climbs `k` directories (`"../../shared/a.json"`, consecutive literal
-/// arguments of `filepath.Join` merged) names its rest `R` at the directories
-/// `1..=k` above the working directory, and below it when it is joined onto a
-/// deeper base (`filepath.Join("a/b", "../../../x")`): the name is marked
-/// with that `k`, raised by the file's `filepath.Dir` calls, which can raise
-/// the base a string is joined onto
+/// climbs (`"../../shared/a.json"`, consecutive literal arguments of
+/// `filepath.Join` merged) names its rest `R` at the directories `1..=k` above
+/// the working directory, and below it when it is joined onto a deeper base
+/// (`filepath.Join("a/b", "../../../x")`): the name is marked with that `k`
 /// ([`Name::climbs_from_cwd`](turborepo_trace_core::names::Name::climbs_from_cwd)).
-/// Assumed: such a string is not joined onto another path that climbs above
-/// the working directory, or leads elsewhere (a directory that another file
-/// computes, the environment), other than the file's own location, which
-/// names its own places ([`crate::anchors`]). A string whose rest is not its
-/// name keeps the plain climbing mark (its shape names anywhere): one with a
-/// named segment left before a later parent step (`"../a/b/../c"` is `c` by
-/// shape, `a/c` by place) or a hole before its name (`"../%s/data"`).
-fn collect(c: &mut turborepo_trace_core::names::Collector, l: &Literal, parents: u32, chdir: bool) {
+/// `k` is the string's own climb plus every other parent step the file has
+/// (`raise`: its other `..` segments and its `filepath.Dir` calls), which can
+/// raise the base the string is joined onto.
+///
+/// A string whose rest is not its name keeps the plain climbing mark (its shape
+/// names anywhere): one with a named segment left before a later parent step
+/// (`"../a/b/../c"` is `c` by shape, `a/c` by place) or a hole before its name
+/// (`"../%s/data"`). So does every climbing string of a file whose base can
+/// climb further than its parent steps say (`plain`: it changes its working
+/// directory, or calls `filepath.Dir` in a loop). A string that only climbs
+/// (`"../.."`) can be the base of another one: it marks the file
+/// ([`Names::moves_base`](turborepo_trace_core::names::Names::moves_base)), and
+/// the query then keeps the plain mark for the whole package.
+fn collect(c: &mut turborepo_trace_core::names::Collector, l: &Literal, raise: u32, plain: bool) {
     use turborepo_trace_core::names::{MAX_STRING, MAX_UPS, climb_of, separates, ups_of, words};
     if l.value.len() > MAX_STRING {
         return;
     }
     let whole = !l.value.chars().any(separates);
     for w in words(&l.value) {
-        c.names.ups = (c.names.ups + ups_of(w)).min(MAX_UPS);
+        let own = ups_of(w);
+        c.names.ups = (c.names.ups + own).min(MAX_UPS);
+        let (up, down) = climb_of(w);
+        if up > 0 && down.is_empty() {
+            c.names.moves_base = true;
+        }
         let Some(i) = c.word_at(w, l.path_arg && whole, l.line) else {
             continue;
         };
-        let (up, down) = climb_of(w);
         if up == 0 {
             continue;
         }
         let shape = &c.names.names[i].shape;
         let n = shape.split('/').count();
-        if !chdir && down.len() >= n && shape.split('/').zip(&down).all(|(a, b)| a == *b) {
-            c.mark_climbs_from_cwd(i, up.saturating_add(parents));
+        if !plain && down.len() >= n && shape.split('/').zip(&down).all(|(a, b)| a == *b) {
+            c.mark_climbs_from_cwd(i, up.saturating_add(raise.saturating_sub(own)));
         } else {
             c.mark_climbs(i);
         }
     }
+}
+
+/// The parent steps of the strings of `literals` (`..` segments of the words
+/// [`collect`] looks at).
+fn dots(literals: &[Literal]) -> u32 {
+    use turborepo_trace_core::names::{MAX_STRING, ups_of, words};
+    literals
+        .iter()
+        .filter(|l| l.value.len() <= MAX_STRING)
+        .flat_map(|l| words(&l.value))
+        .map(ups_of)
+        .fold(0u32, u32::saturating_add)
 }
 
 /// The names of the Go file `src` (`turborepo_trace_core::names`): its strings
@@ -671,9 +731,13 @@ pub fn names_with(src: &[u8], test_file: bool, follow: bool) -> turborepo_trace_
         followed = Some(f);
     }
     let mut c = Collector::new();
+    // Every parent step of the file, for the strings that climb: each one's own
+    // steps are taken off again.
+    let raise = dots(&s.literals).saturating_add(s.parents);
     for l in &s.literals {
-        collect(&mut c, l, s.parents, s.chdir);
+        collect(&mut c, l, raise, s.chdir || s.dir_in_loop);
     }
+    c.names.moves_base |= s.chdir;
     let mut names = c.finish();
     names.ups = (names.ups + s.parents).min(MAX_UPS);
     match followed {
@@ -780,13 +844,14 @@ func load(dir string) {
             [own("package.json", 4)]
         );
         // Consecutive literal arguments of `Join` are one string; a base below the
-        // working directory spelled in the same call takes steps back.
+        // working directory spelled in the same call takes steps back. Each string
+        // can also climb by the file's other parent steps.
         assert_eq!(
             climbing(
                 "package p\nvar a = filepath.Join(\"..\", \"..\", \"shared\", name)\nvar b = \
                  filepath.Join(\"a/b\", \"../../../x/y.json\")\n"
             ),
-            [own("shared", 2), own("x/y.json", 1)]
+            [own("shared", 5), own("x/y.json", 3)]
         );
         // A base in a variable: the string climbs as far as it says.
         assert_eq!(
@@ -804,13 +869,14 @@ func load(dir string) {
             ),
             [own("x/y.json", 2)]
         );
-        // The same shape without parent steps is one name; the largest climb is kept.
+        // The same shape without parent steps is one name; the largest climb is kept
+        // (each string's own steps plus the file's others).
         assert_eq!(
             climbing(
                 "package p\nvar a = []string{\"./services\", \"../services\"}\nvar b = \
                  filepath.Join(\"../../../services\")\n"
             ),
-            [own("services", 3)]
+            [own("services", 4)]
         );
         // A rest that is not the shape keeps the plain mark: a step back after a named
         // segment, a hole before the name.
@@ -819,7 +885,7 @@ func load(dir string) {
                 "package p\nvar a = \"../a/b/../c.json\"\nvar b = \
                  fmt.Sprintf(\"../%s/data/x.json\", n)\nvar c = \"../a/../d.json\"\n"
             ),
-            [free("c.json"), free("data/x.json"), own("d.json", 1)]
+            [free("c.json"), free("data/x.json"), own("d.json", 4)]
         );
         // A plain mark wins over the working directory's.
         assert_eq!(
@@ -834,6 +900,42 @@ func load(dir string) {
             ),
             [free("x/y.json")]
         );
+        // The other parent steps of the file raise how far a string can climb.
+        assert_eq!(
+            climbing(
+                "package p\nvar root = filepath.Join(\"..\", \"..\", name)\nvar a = \
+                 filepath.Join(root, \"../x/y.json\")\n"
+            ),
+            [own("x/y.json", 3)]
+        );
+        // `filepath.Dir` in a loop: the plain mark.
+        assert_eq!(
+            climbing(
+                "package p\nfunc f(d string) string {\n\tfor i := 0; i < n; i++ {\n\t\td = \
+                 filepath.Dir(d)\n\t}\n\treturn filepath.Join(d, \"../x/y.json\")\n}\n"
+            ),
+            [free("x/y.json")]
+        );
+        // A loop whose header has a composite literal: its body is still the loop.
+        let s = strings(
+            b"package p\nfunc f(d string) {\n\tfor _, x := range []string{\"a\"} {\n\t\td = \
+              filepath.Dir(d)\n\t}\n}\nfunc g(d string) string {\n\treturn filepath.Dir(d)\n}\n",
+        );
+        assert!(s.dir_in_loop);
+        let s = strings(b"package p\nfunc g(d string) string {\n\treturn filepath.Dir(d)\n}\n");
+        assert!(!s.dir_in_loop);
+        // A string that only climbs, or a `Chdir`, marks the file for its package.
+        for src in [
+            "package p\nconst Root = \"../..\"\n",
+            "package p\nvar r = filepath.Join(\"..\", \"..\")\n",
+            "package p\nvar r, _ = filepath.Abs(\"../..\")\n",
+            "package p\nfunc TestMain(m *testing.M) {\n\tos.Chdir(dir)\n}\n",
+        ] {
+            let n = names(src.as_bytes(), false);
+            assert!(n.moves_base, "{src}");
+            assert!(!n.is_empty(), "{src}");
+        }
+        assert!(!names(b"package p\nvar a = \"../x/y.json\"\n", false).moves_base);
         // No parent steps, no mark; a literal path from the location is no climb.
         assert_eq!(
             climbing(

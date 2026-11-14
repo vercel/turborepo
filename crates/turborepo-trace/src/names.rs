@@ -201,6 +201,13 @@ struct FileNames {
     /// then the shape), with the line
     /// (`turborepo_trace_core::names::Name::climbs_from_cwd`).
     cwd_climbs: Vec<(String, u32)>,
+    /// The indices in `shapes` of the names that count inside the package only
+    /// because their strings climb from the working directory: with
+    /// `cwd_climbs`, what [`unanchor`] takes back.
+    cwd_shapes: Vec<usize>,
+    /// The file can move the base of its package's relative paths
+    /// (`turborepo_trace_core::names::Names::moves_base`).
+    moves_base: bool,
     cwd: Option<u32>,
     test_path: Option<u32>,
     ups: u32,
@@ -231,6 +238,8 @@ fn file_names(
         paths: Vec::new(),
         cwd_dirs: Vec::new(),
         cwd_climbs: Vec::new(),
+        cwd_shapes: Vec::new(),
+        moves_base: d.moves_base,
         cwd: None,
         test_path: None,
         ups: 0,
@@ -255,6 +264,10 @@ fn file_names(
             // A changed path that the string can climb to ends with its shape: only a name
             // of a changed path needs its places.
             if from_cwd > 0 && climb_cwd && !data && !climbs {
+                out.cwd_shapes.push(out.shapes.len() - 1);
+                // Below the working directory, whatever package that is (a base below it
+                // in a nested package), and at the directories it climbs to.
+                out.cwd_climbs.push((format!("**/{shape}"), line));
                 for j in 1..=from_cwd {
                     out.cwd_climbs
                         .push((format!("{}{shape}", "../".repeat(j as usize)), line));
@@ -317,6 +330,37 @@ fn file_names(
         }
     }
     out
+}
+
+/// Takes back the working-directory anchoring of the climbing strings of the
+/// Go files in a directory where some Go file can move the base
+/// (`turborepo_trace_core::names::Names::moves_base`: a `Chdir`, a string
+/// that only climbs): their shapes name anywhere again, as a string that climbs
+/// from where nothing says.
+fn unanchor(g: &Graph, files: &mut [FileNames]) {
+    let dir = |n: NodeId| {
+        let p = g.path(n);
+        p.ends_with(".go")
+            .then(|| p.rsplit_once('/').map_or("", |x| x.0))
+    };
+    let moved: HashSet<&str> = files
+        .iter()
+        .filter(|f| f.moves_base)
+        .filter_map(|f| dir(f.node))
+        .collect();
+    if moved.is_empty() {
+        return;
+    }
+    for f in files.iter_mut() {
+        if f.cwd_shapes.is_empty() || !dir(f.node).is_some_and(|d| moved.contains(d)) {
+            continue;
+        }
+        for &i in &f.cwd_shapes {
+            f.shapes[i].3 = true;
+        }
+        f.cwd_shapes.clear();
+        f.cwd_climbs.clear();
+    }
 }
 
 /// Whether the environment registry owns the record `u` (it resolved what it
@@ -595,12 +639,13 @@ pub(crate) fn build<V: GraphView>(
     let t = Instant::now();
     let keys = Keys::of(changes);
     let mut index = NameIndex::new();
-    let per_file = g.map_facts(facts::TAG, &|n, fact| {
+    let mut per_file = g.map_facts(facts::TAG, &|n, fact| {
         facts::decode(fact).map(|d| {
             let mine: Vec<ClosedSpan> = closed.iter().filter(|c| c.node == n).copied().collect();
             file_names(&keys, n, g.path(n), &d, false, &mine, climb_cwd)
         })
     });
+    unanchor(g, &mut per_file);
     let files = per_file.len();
     let mut names = 0;
     for f in &per_file {
@@ -942,6 +987,7 @@ mod tests {
         assert_eq!(
             f.cwd_climbs,
             [
+                ("**/package.json".to_owned(), 4),
                 ("../package.json".to_owned(), 4),
                 ("../../package.json".to_owned(), 4),
                 ("../../../package.json".to_owned(), 4)

@@ -708,7 +708,43 @@ fn a_string_that_climbs_from_the_working_directory_names_where_it_climbs_to() {
     );
     // The file's other parent steps do not raise the places: no other file of the
     // module, nor of the root package.
-    for path in ["svc/a/zz.txt", "svc/zz.txt", "svc/package.json.bak"] {
+    for path in ["svc/a/zz.txt", "svc/zz.txt"] {
         assert!(named(path, true).is_empty(), "{path}");
     }
+    // The place completed with an extension, as a shape names a file by its stem.
+    assert_eq!(named("svc/package.json.bak", true), at(3));
+}
+
+#[test]
+fn the_place_of_a_climbing_string_takes_an_extension_and_its_shape_counts_below() {
+    use turborepo_trace_graph::names::{at_place, shape_names};
+    // At the place, below it, and the place completed with an extension.
+    for path in [
+        "shared/golden",
+        "shared/golden/a.json",
+        "shared/golden.json",
+        "shared/golden.test.json",
+    ] {
+        assert!(at_place(path, "shared/golden"), "{path}");
+    }
+    for path in [
+        "shared/goldenx.json",
+        "shared/golden.d/a.json",
+        "shared/other.json",
+    ] {
+        assert!(!at_place(path, "shared/golden"), "{path}");
+    }
+    // The shape anywhere, as the index names a path: a suffix of the path or of an
+    // ancestor directory, or of the path up to an extension.
+    for rel in [
+        "apps/web/settings.json",
+        "settings.json",
+        "x/settings.json/y",
+        "web/settings.json.bak",
+    ] {
+        assert!(shape_names(rel, "settings.json"), "{rel}");
+    }
+    assert!(shape_names("apps/web/golden.json", "web/golden"));
+    assert!(!shape_names("apps/web/settings.yaml", "settings.json"));
+    assert!(!shape_names("apps/web/golden.json", "app/golden"));
 }

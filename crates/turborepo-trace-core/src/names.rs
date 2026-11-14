@@ -62,7 +62,8 @@
 //!
 //! # The fact
 //!
-//! `names:<anchor>,<cwd>,<test_path>,<ups>,<overflow>` followed by one
+//! `names:<anchor>,<cwd>,<test_path>,<ups>,<overflow>[,1]` (the `,1` when
+//! [`Names::moves_base`] is set) followed by one
 //! `\n<line>\t<shape>` per name, or `\n<line>\t<shape>\t<rest>` for a name with
 //! a rest; lines are 1-based, `0` is "none". Shapes and rests contain no
 //! control characters. When the plugin knows where the strings are, `<line>` is
@@ -208,6 +209,13 @@ pub struct Names {
     pub ups: u32,
     /// More than [`MAX_NAMES`] names: the file is taken to name every path.
     pub overflow: bool,
+    /// The file can move a relative path away from the working directory the
+    /// process started in, for the files of its directory (a Go package): it
+    /// changes the working directory (`os.Chdir`), or it holds a string that
+    /// only climbs (`"../.."`), which can be the base of another string. A
+    /// consumer then does not take the climbing strings of that directory's
+    /// files from the working directory ([`Name::climbs_from_cwd`]).
+    pub moves_base: bool,
     /// Where the file's location and the working directory go, when the plugin
     /// followed every use of them ([`Anchored`]).
     pub anchored: Vec<Anchored>,
@@ -222,6 +230,7 @@ impl Names {
             && self.cwd.is_none()
             && self.test_path.is_none()
             && !self.overflow
+            && !self.moves_base
     }
 
     /// The fact for [`RefSink::fact`](crate::RefSink::fact).
@@ -236,6 +245,9 @@ impl Names {
             self.ups,
             u8::from(self.overflow)
         ));
+        if self.moves_base {
+            out.push_str(",1");
+        }
         for n in &self.names {
             out.push('\n');
             out.push_str(&n.line.to_string());
@@ -287,6 +299,8 @@ pub struct Encoded<'a> {
     pub ups: u32,
     /// See [`Names::overflow`].
     pub overflow: bool,
+    /// See [`Names::moves_base`].
+    pub moves_base: bool,
     body: &'a str,
 }
 
@@ -336,6 +350,7 @@ impl<'a> Encoded<'a> {
             && self.cwd.is_none()
             && self.test_path.is_none()
             && !self.overflow
+            && !self.moves_base
     }
 }
 
@@ -421,6 +436,7 @@ pub fn decode(fact: &str) -> Option<Encoded<'_>> {
         test_path: line(it.next()?),
         ups: it.next()?,
         overflow: it.next()? != 0,
+        moves_base: it.next().is_some_and(|x| x != 0),
         body,
     })
 }
@@ -892,6 +908,14 @@ mod tests {
                 ((7, Some((60, 60))), true, 0, "c/d")
             ]
         );
+        let moved = Names {
+            moves_base: true,
+            ..Names::default()
+        };
+        assert!(!moved.is_empty());
+        assert_eq!(moved.encode(), "names:0,0,0,0,0,1");
+        assert!(decode("names:0,0,0,0,0,1").unwrap().moves_base);
+        assert!(!decode("names:0,0,0,0,0").unwrap().moves_base);
         assert_eq!(climbs_from_cwd("12"), 0);
         assert_eq!(climbs_from_cwd("12>3"), 3);
         assert_eq!(line_and_span("12>3"), (12, None));

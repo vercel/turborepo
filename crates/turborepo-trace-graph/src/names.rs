@@ -124,25 +124,31 @@
 //! In some languages a relative path is relative to the working directory of
 //! the process, and a plugin can say so for the strings that climb
 //! (`turborepo_trace_core::names::Name::climbs_from_cwd`; the Go plugin does,
-//! `turborepo_trace_lang_go::names`). Such a string with `k` parent steps
-//! and the rest `R` goes to `R` at one of the directories `1..=k` above the
-//! directory the process runs in, or below that directory when it is joined
-//! onto a deeper base. So it names `R` at those directories, whatever package
-//! they are in ([`NameIndex::add_cwd_climb`], with the directories of "Who runs
-//! a process"), and its shape inside the package like any other string,
-//! instead of its shape anywhere. This is a second assumption about where a
-//! path goes, made only together with the package assumption
+//! `turborepo_trace_lang_go::names`). Such a string with `k` parent steps (its
+//! own and the others the plugin sees) and the rest `R` goes to `R` at one of
+//! the directories `1..=k` above the directory the process runs in, or below
+//! that directory when it is joined onto a deeper base. So it names `R` at
+//! those directories, whatever package they are in, and `R` completed with an
+//! extension there (`R.json`, as a shape names a file by its stem); its shape
+//! anywhere below the directory the process runs in, whatever package that is;
+//! and its shape inside the package like any other string, instead of its
+//! shape anywhere ([`NameIndex::add_cwd_climb`], with the directories of "Who
+//! runs a process"). This is a second assumption about where a path goes, made
+//! only together with the package assumption
 //! (`TURBO_TRACE_DEBUG_NAMES_CLIMB_CWD=0` turns it off for A/B measurements;
 //! `--strict` opens the reads altogether):
 //!
-//! > A string that climbs from the working directory is not joined onto
-//! > another path that climbs above the working directory or leads elsewhere,
-//! > except the file's own location, and the process does not change its
-//! > working directory before it uses the string.
+//! > A string that climbs from the working directory is taken from the
+//! > working directory the process starts in, or from a directory below it: it
+//! > is not joined onto another path that climbs above the working directory or
+//! > leads elsewhere (a directory that another package finds from its own
+//! > location, the value of an environment variable), and the process does not
+//! > change its working directory (also not in the initialization of a package
+//! > it imports).
 //!
 //! The file's own location names its own places; a string joined onto a path
-//! that the same call spells with literals is one string. The file's other
-//! parent steps (the Go plugin counts `filepath.Dir` calls) raise `k`.
+//! that the same call spells with literals is one string. What the plugin sees
+//! of a further climb it does not mark this way (see its documentation).
 //!
 //! # Who runs a process
 //!
@@ -182,7 +188,8 @@
 //!
 //! Under the package assumption, a path into another package that nothing in
 //! the code locates (see above), and a string that climbs from the working
-//! directory joined onto a base that leads above it or elsewhere.
+//! directory joined onto a base that leads above it or elsewhere, or used
+//! after the process changed its working directory.
 //!
 //! A path whose pieces are in none of the indexed files: strings of third-party
 //! packages and of generated files that were not on disk, text from the
@@ -417,10 +424,12 @@ impl NameIndex {
     /// `node` has a string at `line` that climbs from the working directory to
     /// the path `rel` (leading `..`, then the string's shape): it names
     /// everything at or below `rel` taken from the directories an entry runs
-    /// in, whatever package that is in. Unlike [`NameIndex::add_cwd_dir`], the
-    /// parent steps elsewhere in the file do not raise it: the string's own
-    /// steps are in `rel` ("Strings that climb from the working directory" in
-    /// the module documentation).
+    /// in, and `rel` completed with an extension ([`at_place`]), whatever
+    /// package that is in. `rel` = `**/<shape>` names the shape anywhere below
+    /// those directories ([`shape_names`]). Unlike [`NameIndex::add_cwd_dir`],
+    /// the parent steps elsewhere in the file do not raise it: they are in
+    /// `rel` already ("Strings that climb from the working directory" in the
+    /// module documentation).
     pub fn add_cwd_climb(&mut self, node: NodeId, rel: &str, line: u32) {
         self.cwd_dirs
             .push((NameRef::at(node, line), rel.into(), "**".into(), false));
@@ -641,6 +650,49 @@ fn below(path: &str, dir: &str) -> bool {
         || path
             .strip_prefix(dir)
             .is_some_and(|rest| rest.is_empty() || rest.starts_with('/'))
+}
+
+/// The base of a part built on the working directory `d`
+/// ([`NameIndex::add_cwd_climb`]): the directory for a place (`../x`), `d`
+/// itself for a shape anywhere below it (`**/x`).
+fn part_base(d: &str, rel: &str) -> String {
+    if rel.starts_with("**/") {
+        d.to_owned()
+    } else {
+        join_rel(d, rel)
+    }
+}
+
+/// Whether `path` is at the place `base` of a string that climbs: `base` or
+/// below it, or `base` completed with an extension (`base.json`,
+/// `base.test.json`), as a shape names a file by its stem.
+pub fn at_place(path: &str, base: &str) -> bool {
+    below(path, base)
+        || (!base.is_empty()
+            && path
+                .strip_prefix(base)
+                .is_some_and(|r| r.len() > 1 && r.starts_with('.') && !r.contains('/')))
+}
+
+/// Whether `shape` names the path `rel` (relative to some directory) as the
+/// index does ([`NameIndex::named`]): the path or one of its ancestor
+/// directories ends with the shape at a segment boundary, or the path does so
+/// up to an extension of its last segment.
+pub fn shape_names(rel: &str, shape: &str) -> bool {
+    let segs: Vec<&str> = rel.split('/').filter(|s| !s.is_empty()).collect();
+    let sh: Vec<&str> = shape.split('/').filter(|s| !s.is_empty()).collect();
+    let (n, m) = (segs.len(), sh.len());
+    if m == 0 || n < m {
+        return false;
+    }
+    if (m - 1..n).any(|end| segs[end + 1 - m..=end] == sh[..]) {
+        return true;
+    }
+    let last = segs[n - 1];
+    segs[n - m..n - 1] == sh[..m - 1]
+        && last
+            .match_indices('.')
+            .any(|(i, _)| i > 0 && last[..i] == *sh[m - 1])
 }
 
 /// The directory `rel` (segments, `..` for the parent) taken from the directory
@@ -1455,6 +1507,17 @@ impl<G: GraphView> Engine<'_, G> {
         // it is in; the parent steps elsewhere in the file raise it only inside
         // the package.
         if !index.cwd_dirs.is_empty() {
+            // The changed paths without an extension of their last segment: the places of
+            // strings that climb name those too ([`at_place`]).
+            let mut stems: HashSet<&str> = HashSet::new();
+            for c in changes {
+                let last = c.path.rfind('/').map_or(0, |i| i + 1);
+                for (i, _) in c.path[last..].match_indices('.') {
+                    if i > 0 {
+                        stems.insert(&c.path[..last + i]);
+                    }
+                }
+            }
             // The relative part, the pattern, and whether the file's parent steps raise it.
             type Parts<'x> = Vec<(&'x str, &'x str, bool)>;
             let mut per_file: std::collections::BTreeMap<u32, (u32, Parts<'_>)> =
@@ -1532,8 +1595,9 @@ impl<G: GraphView> Engine<'_, G> {
                         &|dirs, home| {
                             dirs.iter().any(|d| {
                                 parts.iter().any(|(rel, _, _)| {
-                                    let base = join_rel(d, rel);
+                                    let base = part_base(d, rel);
                                     changed_below.any(&base)
+                                        || stems.contains(base.as_str())
                                         || (1..=max_ups)
                                             .any(|k| near_in(home, round, ancestor(&base, k)))
                                 })
@@ -1553,16 +1617,21 @@ impl<G: GraphView> Engine<'_, G> {
                             // The directories the parts are built on, per directory of the
                             // runner and part, with the directory and the part.
                             type Base<'x> = (String, &'x str, &'x str, &'x str, bool);
-                            let bases: Vec<Base<'_>> = dirs
+                            let mut bases: Vec<Base<'_>> = dirs
                                 .iter()
                                 .flat_map(|d| {
                                     parts.iter().map(move |(rel, pattern, raise)| {
-                                        (join_rel(d, rel), *pattern, d.as_str(), *rel, *raise)
+                                        (part_base(d, rel), *pattern, d.as_str(), *rel, *raise)
                                     })
                                 })
                                 .collect();
+                            // The places of a climbing string nearest the working directory
+                            // first: the reason names the fewest steps that reach the path.
+                            bases.sort_by_key(|b| if b.4 { 0 } else { b.3.len() });
                             let near = bases.iter().any(|(base, ..)| {
-                                changed_below.any(base) || changed_below.any(ancestor(base, ups))
+                                changed_below.any(base)
+                                    || stems.contains(base.as_str())
+                                    || changed_below.any(ancestor(base, ups))
                             });
                             if !near {
                                 return None;
@@ -1572,13 +1641,34 @@ impl<G: GraphView> Engine<'_, G> {
                                     .iter()
                                     .find_map(|(base, pattern, d, rel, raise)| {
                                         if !*raise {
-                                            // A string that climbs: where it goes, and no further.
-                                            return below(&c.path, base).then(|| {
-                                                let d = if d.is_empty() {
-                                                    "the repository root".to_owned()
+                                            let at = if d.is_empty() {
+                                                "the repository root".to_owned()
+                                            } else {
+                                                format!("{d}/")
+                                            };
+                                            // A string that climbs, joined onto a base below the
+                                            // working directory: its shape anywhere below it.
+                                            if let Some(shape) = rel.strip_prefix("**/") {
+                                                let sub = if d.is_empty() {
+                                                    Some(c.path.as_str())
                                                 } else {
-                                                    format!("{d}/")
+                                                    c.path
+                                                        .strip_prefix(*d)
+                                                        .and_then(|r| r.strip_prefix('/'))
                                                 };
+                                                return sub
+                                                    .is_some_and(|r| shape_names(r, shape))
+                                                    .then(|| {
+                                                        format!(
+                                                            "the string '{shape}' with parent \
+                                                             steps, below the working \
+                                                             directory{of} ({at})"
+                                                        )
+                                                    });
+                                            }
+                                            // A string that climbs: where it goes, and no further.
+                                            return at_place(&c.path, base).then(|| {
+                                                let d = at;
                                                 let shape = rel.trim_start_matches("../");
                                                 let up = (rel.len() - shape.len()) / 3;
                                                 format!(

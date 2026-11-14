@@ -113,8 +113,10 @@ pub enum GoRoot {
 /// Version of what the Go extractor records about a file beyond its references
 /// (the names fact, `names::names`). Part of [`Language::config_key`], so a
 /// change to it extracts every file again. (2: a string that climbs from the
-/// working directory is marked with how far it climbs.)
-const FACTS_VERSION: u32 = 2;
+/// working directory is marked with how far it climbs; 3: also with the other
+/// parent steps of the file, and a file that can move the base of its package
+/// is marked.)
+const FACTS_VERSION: u32 = 3;
 
 /// Go-specific options (the `go` command's flags and environment). Including
 /// files for every target is the shared
