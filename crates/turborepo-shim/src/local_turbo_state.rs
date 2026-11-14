@@ -201,7 +201,22 @@ impl LocalTurboState {
     //
     // In spite of that, the only known unsupported local invocation is
     // Yarn/Berry < 2.1 PnP
+    /// Resolve a local `turbo` binary the way Node resolves modules: first in
+    /// `root_path`, then in each ancestor directory. This finds a workspace
+    /// hoisted install when the repository is a nested Git clone inside an
+    /// npm/yarn/bun workspace.
     pub fn infer(root_path: &AbsoluteSystemPath) -> Option<Self> {
+        let mut current = Some(root_path);
+        while let Some(dir) = current {
+            if let Some(state) = Self::infer_in(dir) {
+                return Some(state);
+            }
+            current = dir.parent();
+        }
+        None
+    }
+
+    fn infer_in(root_path: &AbsoluteSystemPath) -> Option<Self> {
         let binary_name = TurboState::binary_name();
 
         // Prefer scoped `@turbo/{platform}` over legacy `turbo-{platform}`.
@@ -509,6 +524,48 @@ mod test {
             panic!("local turbo state should be inferred");
         };
         assert_eq!(result.version(), "2.1.0");
+        Ok(())
+    }
+
+    #[test]
+    fn test_infer_hoisted_in_ancestor_workspace() -> Result<(), Box<dyn std::error::Error>> {
+        let tmpdir = TempDir::with_prefix("turbo_infer")?;
+        let workspace = AbsoluteSystemPath::from_std_path(tmpdir.path())?;
+        let repo = workspace.join_components(&["workspaces", "repo-a"]);
+        repo.create_dir_all()?;
+
+        let nm = workspace.join_component("node_modules");
+        create_mock_turbo_install(&nm, &scoped_path(), "2.11.10")?;
+
+        let Some(result) = LocalTurboState::infer(&repo) else {
+            panic!("local turbo state should be inferred from a hoisted workspace install");
+        };
+        assert_eq!(result.version(), "2.11.10");
+        Ok(())
+    }
+
+    #[test]
+    fn test_infer_prefers_closer_install_over_ancestor() -> Result<(), Box<dyn std::error::Error>> {
+        let tmpdir = TempDir::with_prefix("turbo_infer")?;
+        let workspace = AbsoluteSystemPath::from_std_path(tmpdir.path())?;
+        let repo = workspace.join_components(&["workspaces", "repo-a"]);
+        repo.create_dir_all()?;
+
+        create_mock_turbo_install(
+            &workspace.join_component("node_modules"),
+            &scoped_path(),
+            "2.0.0",
+        )?;
+        create_mock_turbo_install(
+            &repo.join_component("node_modules"),
+            &scoped_path(),
+            "2.11.10",
+        )?;
+
+        let Some(result) = LocalTurboState::infer(&repo) else {
+            panic!("local turbo state should be inferred");
+        };
+        assert_eq!(result.version(), "2.11.10");
         Ok(())
     }
 
