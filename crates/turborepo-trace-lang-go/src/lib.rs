@@ -110,6 +110,12 @@ pub enum GoRoot {
     None,
 }
 
+/// Version of what the Go extractor records about a file beyond its references
+/// (the names fact, `names::names`). Part of [`Language::config_key`], so a
+/// change to it extracts every file again. (2: a string that climbs from the
+/// working directory is marked with how far it climbs.)
+const FACTS_VERSION: u32 = 2;
+
 /// Go-specific options (the `go` command's flags and environment). Including
 /// files for every target is the shared
 /// [`turborepo_trace_core::TraceOptions::all_targets`] (`--all-targets`). Unset
@@ -186,7 +192,7 @@ impl Language for GoLanguage {
     }
 
     fn config_key(&self) -> String {
-        format!("{:?}", self.opts)
+        format!("facts-{FACTS_VERSION}/{:?}", self.opts)
     }
 
     fn resolver(&self, project: &ProjectCx<'_>) -> Box<dyn Resolver> {

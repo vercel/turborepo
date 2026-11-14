@@ -684,7 +684,22 @@ pub fn write_names_assumption<G: GraphView>(
         "  assumed: a read with a computed path reads only files of the package of this entry \
          ({package}) or of the package of the file that holds the read, unless the code says \
          where the path goes (--strict does not assume it)"
-    )
+    )?;
+    // Go code with such a read: its strings that climb are taken from the working
+    // directory (`crate::names`, "Strings that climb from the working directory").
+    if opts.named_climbs_from_cwd
+        && notes
+            .iter()
+            .any(|n| named(n) && g.lang(n.node) == Some("go"))
+    {
+        writeln!(
+            w,
+            "  assumed: a Go string with parent steps (\"../x\") climbs from the working \
+             directory the test starts in or a directory below it, not from another path that \
+             leads above it or elsewhere (--strict does not assume it)"
+        )?;
+    }
+    Ok(())
 }
 
 /// The assumption of [`crate::loads`], stated for `entry` when one of its

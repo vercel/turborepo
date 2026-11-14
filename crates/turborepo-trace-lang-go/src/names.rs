@@ -20,6 +20,36 @@
 //! | [`Strings::getwd`] | `os.Getwd` |
 //! | [`Strings::parents`] | `filepath.Dir` / `path.Dir` calls: steps toward the root (`..` segments are counted from the strings) |
 //!
+//! # Strings that climb
+//!
+//! A relative path in Go is relative to the working directory of the process,
+//! and `go test` runs a package's tests in the package directory. So a string
+//! that climbs `k` directories with leading parent steps
+//! (`os.ReadFile("../../../package.json")`, `filepath.Join("..", "..",
+//! "shared")`) names its rest at the directories `1..=k` above the working
+//! directory, or below it when it is joined onto a deeper base: not its shape
+//! anywhere in the repository. The name is marked with that `k`, raised by the
+//! file's `filepath.Dir` calls
+//! ([`Name::climbs_from_cwd`](turborepo_trace_core::names::Name::climbs_from_cwd));
+//! the query names the rest at those directories, whatever package they are
+//! in, and the shape inside the package like any other string
+//! (`turborepo_trace_graph::names`, "Strings that climb from the working
+//! directory"). This assumes:
+//!
+//! > A Go string that climbs with parent steps is not joined onto another path
+//! > that climbs above the working directory or leads elsewhere, except for the
+//! > consecutive literal arguments of one `filepath.Join` call (which are one
+//! > string) and the file's own location, and the process does not change its
+//! > working directory before it uses the string.
+//!
+//! The file's own location names its own places ([`crate::anchors`]). A string
+//! whose rest is not its shape keeps the plain climbing mark, whose shape names
+//! anywhere: a named segment left before a later parent step (`"../a/b/../c"`)
+//! or a hole before the name (`"../%s/data"`). So does every string of a file
+//! that calls `Chdir` (`os.Chdir`, `t.Chdir`): its working directory can be
+//! another one. A `Chdir` in another file is part of the assumption: the
+//! process keeps the working directory it was started in.
+//!
 //! What is left out, because the string never becomes a path:
 //!
 //! - the arguments after the first of a `strings` / `bytes` function that only
@@ -75,6 +105,9 @@ pub struct Strings {
     pub getwd: Option<u32>,
     /// Number of `filepath.Dir` / `path.Dir` calls, at most 64.
     pub parents: u32,
+    /// The file calls a function called `Chdir` (`os.Chdir`, `t.Chdir`): its
+    /// relative paths may be taken from another working directory.
+    pub chdir: bool,
 }
 
 /// Functions whose string arguments are pieces of a path (matched by name on
@@ -465,6 +498,9 @@ fn scan(src: &[u8], followed: Option<&Followed>) -> Strings {
                     b"Getwd" if after(b"os") => {
                         out.getwd.get_or_insert(line);
                     }
+                    b"Chdir" if next(1).is_some_and(|n| n.is_punct(src, b'(')) => {
+                        out.chdir = true;
+                    }
                     b"Dir"
                         if !in_literal
                             && !followed.is_some_and(|f| part(&f.dirs, at))
@@ -547,6 +583,54 @@ fn scan(src: &[u8], followed: Option<&Followed>) -> Strings {
     out
 }
 
+/// Adds the names of the literal `l` to `c`, as
+/// [`Collector::string`](turborepo_trace_core::names::Collector::string)
+/// does, with what a string that climbs says about where it goes. `parents`:
+/// the file's `filepath.Dir` calls; `chdir`: the file changes its working
+/// directory ([`Strings::chdir`]), so a string that climbs keeps the plain
+/// climbing mark.
+///
+/// A relative path in Go is relative to the working directory of the process
+/// (`go test` runs a package's tests in the package directory). A string that
+/// climbs `k` directories (`"../../shared/a.json"`, consecutive literal
+/// arguments of `filepath.Join` merged) names its rest `R` at the directories
+/// `1..=k` above the working directory, and below it when it is joined onto a
+/// deeper base (`filepath.Join("a/b", "../../../x")`): the name is marked
+/// with that `k`, raised by the file's `filepath.Dir` calls, which can raise
+/// the base a string is joined onto
+/// ([`Name::climbs_from_cwd`](turborepo_trace_core::names::Name::climbs_from_cwd)).
+/// Assumed: such a string is not joined onto another path that climbs above
+/// the working directory, or leads elsewhere (a directory that another file
+/// computes, the environment), other than the file's own location, which
+/// names its own places ([`crate::anchors`]). A string whose rest is not its
+/// name keeps the plain climbing mark (its shape names anywhere): one with a
+/// named segment left before a later parent step (`"../a/b/../c"` is `c` by
+/// shape, `a/c` by place) or a hole before its name (`"../%s/data"`).
+fn collect(c: &mut turborepo_trace_core::names::Collector, l: &Literal, parents: u32, chdir: bool) {
+    use turborepo_trace_core::names::{MAX_STRING, MAX_UPS, climb_of, separates, ups_of, words};
+    if l.value.len() > MAX_STRING {
+        return;
+    }
+    let whole = !l.value.chars().any(separates);
+    for w in words(&l.value) {
+        c.names.ups = (c.names.ups + ups_of(w)).min(MAX_UPS);
+        let Some(i) = c.word_at(w, l.path_arg && whole, l.line) else {
+            continue;
+        };
+        let (up, down) = climb_of(w);
+        if up == 0 {
+            continue;
+        }
+        let shape = &c.names.names[i].shape;
+        let n = shape.split('/').count();
+        if !chdir && down.len() >= n && shape.split('/').zip(&down).all(|(a, b)| a == *b) {
+            c.mark_climbs_from_cwd(i, up.saturating_add(parents));
+        } else {
+            c.mark_climbs(i);
+        }
+    }
+}
+
 /// The names of the Go file `src` (`turborepo_trace_core::names`): its strings
 /// by the predicate every language shares, and its anchors.
 ///
@@ -561,7 +645,10 @@ fn scan(src: &[u8], followed: Option<&Followed>) -> Strings {
 ///   evaluated is taken to read anything below its package directory. Its own
 ///   package files and `testdata` are inputs of the test anyway; what this adds
 ///   are the other files and sub-directories of the package directory;
-/// - any Go file that calls `os.Getwd` uses the working directory too.
+/// - any Go file that calls `os.Getwd` uses the working directory too;
+/// - a string that climbs names its rest at the directories above the working
+///   directory it climbs to (see "Strings that climb" in the module
+///   documentation).
 ///
 /// The location is followed through the file ([`crate::anchors`]): the names
 /// then say where it goes instead of everything below it.
@@ -585,7 +672,7 @@ pub fn names_with(src: &[u8], test_file: bool, follow: bool) -> turborepo_trace_
     }
     let mut c = Collector::new();
     for l in &s.literals {
-        c.string(&l.value, l.path_arg, l.line);
+        collect(&mut c, l, s.parents, s.chdir);
     }
     let mut names = c.finish();
     names.ups = (names.ups + s.parents).min(MAX_UPS);
@@ -670,6 +757,95 @@ func load(dir string) {
                 "100%".to_owned(),
                 format!("{HOLE}%"),
             ]
+        );
+    }
+
+    /// The names of `src` (a test file) by shape: whether the plain climbing
+    /// mark is set and how far they climb from the working directory.
+    fn climbing(src: &str) -> Vec<(String, bool, u32)> {
+        names(src.as_bytes(), true)
+            .names
+            .into_iter()
+            .map(|n| (n.shape.into_string(), n.climbs, n.climbs_from_cwd))
+            .collect()
+    }
+
+    #[test]
+    fn strings_that_climb_are_marked_with_how_far_they_climb() {
+        let own = |s: &str, k: u32| (s.to_owned(), false, k);
+        let free = |s: &str| (s.to_owned(), true, 0);
+        // A literal that climbs four directories to a file.
+        assert_eq!(
+            climbing("package p\nvar a, _ = os.ReadFile(\"../../../../package.json\")\n"),
+            [own("package.json", 4)]
+        );
+        // Consecutive literal arguments of `Join` are one string; a base below the
+        // working directory spelled in the same call takes steps back.
+        assert_eq!(
+            climbing(
+                "package p\nvar a = filepath.Join(\"..\", \"..\", \"shared\", name)\nvar b = \
+                 filepath.Join(\"a/b\", \"../../../x/y.json\")\n"
+            ),
+            [own("shared", 2), own("x/y.json", 1)]
+        );
+        // A base in a variable: the string climbs as far as it says.
+        assert_eq!(
+            climbing(
+                "package p\nvar a = filepath.Join(dir, \"../../../x/y.json\")\nvar dir = \
+                 \"testdata/golden\"\n"
+            ),
+            [own("x/y.json", 3), own("testdata/golden", 0)]
+        );
+        // The file's `filepath.Dir` calls can raise the base: they count.
+        assert_eq!(
+            climbing(
+                "package p\nfunc f(wd string) string {\n\treturn filepath.Join(filepath.Dir(wd), \
+                 \"../x/y.json\")\n}\n"
+            ),
+            [own("x/y.json", 2)]
+        );
+        // The same shape without parent steps is one name; the largest climb is kept.
+        assert_eq!(
+            climbing(
+                "package p\nvar a = []string{\"./services\", \"../services\"}\nvar b = \
+                 filepath.Join(\"../../../services\")\n"
+            ),
+            [own("services", 3)]
+        );
+        // A rest that is not the shape keeps the plain mark: a step back after a named
+        // segment, a hole before the name.
+        assert_eq!(
+            climbing(
+                "package p\nvar a = \"../a/b/../c.json\"\nvar b = \
+                 fmt.Sprintf(\"../%s/data/x.json\", n)\nvar c = \"../a/../d.json\"\n"
+            ),
+            [free("c.json"), free("data/x.json"), own("d.json", 1)]
+        );
+        // A plain mark wins over the working directory's.
+        assert_eq!(
+            climbing("package p\nvar a = []string{\"../d/e.json\", \"../z/y/../d/e.json\"}\n"),
+            [free("d/e.json")]
+        );
+        // A file that changes its working directory: the plain mark.
+        assert_eq!(
+            climbing(
+                "package p\nfunc TestX(t *testing.T) {\n\tt.Chdir(dir)\n\t_, _ = \
+                 os.ReadFile(\"../../x/y.json\")\n}\n"
+            ),
+            [free("x/y.json")]
+        );
+        // No parent steps, no mark; a literal path from the location is no climb.
+        assert_eq!(
+            climbing(
+                r#"package p
+func schemaPath() string {
+	_, thisFile, _, _ := runtime.Caller(0)
+	return filepath.Join(filepath.Dir(thisFile), "..", "..", "schemas", "job.schema.json")
+}
+var x = "fixtures/a.json"
+"#
+            ),
+            [own("schemas/job.schema.json", 0), own("fixtures/a.json", 0)]
         );
     }
 

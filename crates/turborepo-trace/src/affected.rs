@@ -501,6 +501,17 @@ pub(crate) fn names_in_package() -> bool {
     turborepo_trace_core::debug::var_os("NAMES_PACKAGE").is_none_or(|v| v != "0")
 }
 
+/// Whether a string that climbs from the working directory (a Go string with
+/// parent steps) names its rest at the directories it climbs to, and its shape
+/// only inside the package (`turborepo_trace_graph::names`, "Strings that
+/// climb from the working directory"); only with the package assumption.
+/// `TURBO_TRACE_DEBUG_NAMES_CLIMB_CWD=0` turns it off for A/B measurements:
+/// such a string then names its shape anywhere in the repository.
+pub(crate) fn names_climb_cwd() -> bool {
+    names_in_package()
+        && turborepo_trace_core::debug::var_os("NAMES_CLIMB_CWD").is_none_or(|v| v != "0")
+}
+
 /// Whether a process that an entry reaches only through a build task takes its
 /// working directory and package from that task
 /// (`turborepo_trace_graph::names`, "Who runs a process").
@@ -570,6 +581,7 @@ pub(crate) fn selection_options(root: &Path, runtime_only: bool, policy: Policy)
         .affected
         .named(names_enabled())
         .named_in_package(names_in_package())
+        .named_climbs_from_cwd(names_climb_cwd())
         .named_by_runner(names_by_runner())
         .loads_declared(crate::loads::enabled(root))
         .loads_step(crate::loads::step())
@@ -1212,6 +1224,7 @@ fn affected(cmd: AffectedCmd, out: &mut dyn Write, host: Option<&Host>) -> Resul
             &cache_dir,
             &named_changes,
             &crate::xfile::closed_spans(),
+            aopts.named_in_package && aopts.named_climbs_from_cwd,
         );
         let t = Instant::now();
         // The entries the engine evaluated without type-only edges.

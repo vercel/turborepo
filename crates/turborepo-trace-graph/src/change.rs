@@ -313,6 +313,15 @@ pub struct AffectedOptions {
     /// path anywhere in the repository. [`strict`](AffectedOptions::strict)
     /// opens these reads altogether, so it assumes nothing.
     pub named_in_package: bool,
+    /// With [`named_in_package`](AffectedOptions::named_in_package): a string
+    /// that climbs from the working directory
+    /// (`turborepo_trace_core::names::Name::climbs_from_cwd`, Go) names its
+    /// rest at the directories above the working directory it climbs to, and
+    /// its shape inside the package, instead of its shape anywhere
+    /// ([`crate::names`], "Strings that climb from the working directory").
+    /// On by default. The caller that builds the name index applies it; this
+    /// flag is what `--explain` states.
+    pub named_climbs_from_cwd: bool,
     /// With [`named`](AffectedOptions::named): a process that an entry reaches
     /// only through a build task (a script the task runs, consumed through
     /// the task's output) takes the names that depend on who runs it (the
@@ -378,6 +387,7 @@ impl Default for AffectedOptions {
             after_change: false,
             named: false,
             named_in_package: true,
+            named_climbs_from_cwd: true,
             named_by_runner: true,
             loads_declared: false,
             loads_step: true,
@@ -440,6 +450,12 @@ impl AffectedOptions {
     /// Sets [`named_in_package`](AffectedOptions::named_in_package).
     pub fn named_in_package(mut self, on: bool) -> Self {
         self.named_in_package = on;
+        self
+    }
+
+    /// Sets [`named_climbs_from_cwd`](AffectedOptions::named_climbs_from_cwd).
+    pub fn named_climbs_from_cwd(mut self, on: bool) -> Self {
+        self.named_climbs_from_cwd = on;
         self
     }
 

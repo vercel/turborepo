@@ -70,7 +70,9 @@
 //! and the last string with that name ([`line_and_span`]), so that a
 //! consumer can leave out the names inside a region of the file (a table whose
 //! values an analysis resolved). A `^` at the end of the field marks a name
-//! whose string climbs ([`Name::climbs`], [`climbs`]).
+//! whose string climbs ([`Name::climbs`], [`climbs`]); `>k` instead marks a
+//! name whose strings climb at most `k` directories from the working
+//! directory ([`Name::climbs_from_cwd`], [`climbs_from_cwd`]).
 //!
 //! A rest is a list of elements joined with `/`: a literal segment; `text*`, a
 //! segment that starts with the text, followed by any number of segments;
@@ -147,6 +149,17 @@ pub struct Name {
     /// it. Not set for a literal path from the file's own location: where that
     /// goes is an [`Anchored`] entry.
     pub climbs: bool,
+    /// Every string with this name that climbs (when [`Name::climbs`] is not
+    /// set) climbs from the working directory of the process, or from a
+    /// directory below it, by at most this many directories (`0`: none climbs).
+    /// A plugin sets it for a language whose relative paths are relative to
+    /// the working directory and whose strings it does not see joined onto
+    /// another base that leads above it (the Go plugin:
+    /// `turborepo_trace_lang_go::names`). A consumer that keeps a name inside a
+    /// package can then name `R` at the `1..=k` directories above the working
+    /// directory, instead of `R` anywhere (`turborepo_trace_graph::names`,
+    /// "Strings that climb from the working directory").
+    pub climbs_from_cwd: u32,
 }
 
 /// One place where a base that is not a string leaves what the plugin evaluates
@@ -236,6 +249,9 @@ impl Names {
             }
             if n.climbs {
                 out.push('^');
+            } else if n.climbs_from_cwd > 0 {
+                out.push('>');
+                out.push_str(&n.climbs_from_cwd.to_string());
             }
             out.push('\t');
             out.push_str(&n.shape);
@@ -328,6 +344,38 @@ pub fn climbs(field: &str) -> bool {
     field.ends_with('^')
 }
 
+/// How many directories the strings of a name climb from the working directory,
+/// by the first field of the name ([`Name::climbs_from_cwd`]); `0`: not
+/// marked.
+pub fn climbs_from_cwd(field: &str) -> u32 {
+    field
+        .rsplit_once('>')
+        .and_then(|(_, k)| k.parse().ok())
+        .unwrap_or(0)
+}
+
+/// How a word climbs out of the directory it starts from: the number of
+/// directories it climbs above it (`0`: it does not, [`climbs_out`]) and the
+/// segments that are left below the highest of them, after each `..` took
+/// back the segment before it (`a/b/../../../x/y` climbs 1 and leaves
+/// `x/y`). `.` and empty segments are skipped; a hole is a segment.
+pub fn climb_of(word: &str) -> (u32, Vec<&str>) {
+    let mut up = 0u32;
+    let mut down: Vec<&str> = Vec::new();
+    for s in word.split('/') {
+        match s {
+            "" | "." => {}
+            ".." => {
+                if down.pop().is_none() {
+                    up += 1;
+                }
+            }
+            s => down.push(s),
+        }
+    }
+    (up, down)
+}
+
 /// Whether the path `word` leads out of the directory it starts from: a `..`
 /// segment with no named segment before it left to remove (`../a`, `a/../../b`;
 /// not `a/../b`). A hole counts as a segment.
@@ -346,9 +394,10 @@ pub fn climbs_out(word: &str) -> bool {
 
 /// The line and the offsets of the first and last occurrence in the first field
 /// of a name (`<line>`, `<line>@<first>`, `<line>@<first>-<last>`, each with an
-/// optional `^`).
+/// optional `^` or `>k`).
 pub fn line_and_span(field: &str) -> (u32, Option<(u32, u32)>) {
     let field = field.strip_suffix('^').unwrap_or(field);
+    let field = field.split_once('>').map_or(field, |(f, _)| f);
     let Some((line, span)) = field.split_once('@') else {
         return (field.parse().unwrap_or(0), None);
     };
@@ -614,6 +663,7 @@ impl Collector {
                     line,
                     span: self.at.map(|at| (at, at)),
                     climbs: false,
+                    climbs_from_cwd: 0,
                 });
                 Some(next)
             }
@@ -625,6 +675,20 @@ impl Collector {
     pub fn mark_climbs(&mut self, i: usize) {
         if let Some(n) = self.names.names.get_mut(i) {
             n.climbs = true;
+            n.climbs_from_cwd = 0;
+        }
+    }
+
+    /// Marks the name at index `i` ([`Collector::word_at`]) as one whose
+    /// string climbs `k` directories from the working directory
+    /// ([`Name::climbs_from_cwd`]); the largest `k` of its strings is kept. A
+    /// name marked as climbing from anywhere ([`Collector::mark_climbs`]) stays
+    /// so.
+    pub fn mark_climbs_from_cwd(&mut self, i: usize, k: u32) {
+        if let Some(n) = self.names.names.get_mut(i)
+            && !n.climbs
+        {
+            n.climbs_from_cwd = n.climbs_from_cwd.max(k.min(MAX_UPS));
         }
     }
 
@@ -798,6 +862,43 @@ mod tests {
         let none = Names::default().encode();
         let empty = decode(&none).unwrap();
         assert!(empty.is_empty() && empty.names().next().is_none());
+    }
+
+    #[test]
+    fn names_that_climb_from_the_working_directory_round_trip() {
+        let mut c = Collector::new();
+        c.at = Some(30);
+        let a = c.word_at("../../a/b.json", false, 2).unwrap();
+        c.mark_climbs_from_cwd(a, 2);
+        // The largest climb of the strings with this name is kept.
+        c.at = Some(60);
+        let again = c.word_at("../../../../a/b.json", false, 5).unwrap();
+        assert_eq!(again, a);
+        c.mark_climbs_from_cwd(a, 4);
+        c.mark_climbs_from_cwd(a, 1);
+        // A name that also climbs from somewhere else is marked that way only.
+        let b = c.word_at("../c/d", false, 7).unwrap();
+        c.mark_climbs_from_cwd(b, 1);
+        c.mark_climbs(b);
+        let fact = c.finish().encode();
+        assert_eq!(fact, "names:0,0,0,0,0\n2@30-60>4\ta/b.json\n7@60^\tc/d");
+        let d = decode(&fact).unwrap();
+        assert_eq!(
+            d.shapes()
+                .map(|(l, s, _)| (line_and_span(l), climbs(l), climbs_from_cwd(l), s))
+                .collect::<Vec<_>>(),
+            [
+                ((2, Some((30, 60))), false, 4, "a/b.json"),
+                ((7, Some((60, 60))), true, 0, "c/d")
+            ]
+        );
+        assert_eq!(climbs_from_cwd("12"), 0);
+        assert_eq!(climbs_from_cwd("12>3"), 3);
+        assert_eq!(line_and_span("12>3"), (12, None));
+        assert_eq!(climb_of("../../a/b"), (2, vec!["a", "b"]));
+        assert_eq!(climb_of("a/b/../../../x/y"), (1, vec!["x", "y"]));
+        assert_eq!(climb_of("./../x/y/../z"), (1, vec!["x", "z"]));
+        assert_eq!(climb_of("a/../b"), (0, vec!["b"]));
     }
 
     #[test]

@@ -197,13 +197,22 @@ struct FileNames {
     /// Directories built on the working directory: relative part, pattern,
     /// line, conditional.
     cwd_dirs: Vec<(String, String, u32, bool)>,
+    /// Paths that a string climbs to from the working directory (leading `..`,
+    /// then the shape), with the line
+    /// (`turborepo_trace_core::names::Name::climbs_from_cwd`).
+    cwd_climbs: Vec<(String, u32)>,
     cwd: Option<u32>,
     test_path: Option<u32>,
     ups: u32,
 }
 
 /// The names of the fact `d` of the file `n` (at `path`) that can name a
-/// changed path. `None`: nothing of it matters for this query.
+/// changed path. `None`: nothing of it matters for this query. `climb_cwd`: a
+/// string that climbs from the working directory names its rest at the
+/// directories it climbs to, and its shape only inside the package
+/// (`turborepo_trace_graph::names`, "Strings that climb from the working
+/// directory"); otherwise its shape anywhere, as a string that climbs from
+/// where nothing says.
 fn file_names(
     keys: &Keys<'_>,
     n: NodeId,
@@ -211,6 +220,7 @@ fn file_names(
     d: &Encoded<'_>,
     data: bool,
     closed: &[ClosedSpan],
+    climb_cwd: bool,
 ) -> FileNames {
     let mut out = FileNames {
         node: n,
@@ -220,6 +230,7 @@ fn file_names(
         locations: Vec::new(),
         paths: Vec::new(),
         cwd_dirs: Vec::new(),
+        cwd_climbs: Vec::new(),
         cwd: None,
         test_path: None,
         ups: 0,
@@ -230,7 +241,8 @@ fn file_names(
             // A parent step in the file (`..`, `dirname`) can cut the spelled path back to
             // the shape: the rest then says nothing.
             let rest = rest.filter(|_| d.ups == 0 || data);
-            let climbs = facts::climbs(line);
+            let from_cwd = facts::climbs_from_cwd(line);
+            let climbs = facts::climbs(line) || (from_cwd > 0 && !climb_cwd);
             let (line, span) = facts::line_and_span(line);
             // Every string with this name lies inside one closed region: not a name.
             if let Some((first, last)) = span
@@ -240,6 +252,14 @@ fn file_names(
             }
             out.shapes
                 .push((shape.to_owned(), rest.map(str::to_owned), line, climbs));
+            // A changed path that the string can climb to ends with its shape: only a name
+            // of a changed path needs its places.
+            if from_cwd > 0 && climb_cwd && !data && !climbs {
+                for j in 1..=from_cwd {
+                    out.cwd_climbs
+                        .push((format!("{}{shape}", "../".repeat(j as usize)), line));
+                }
+            }
         }
     }
     // A data file has no location of its own.
@@ -338,6 +358,9 @@ fn add_names(index: &mut NameIndex, f: &FileNames, data: bool, live: &dyn Fn(u32
         if !*conditional || live(*line) {
             index.add_cwd_dir(f.node, rel, pattern, *line);
         }
+    }
+    for (rel, line) in &f.cwd_climbs {
+        index.add_cwd_climb(f.node, rel, *line);
     }
     if let Some(line) = f.cwd {
         index.add_cwd_user(f.node, line);
@@ -567,6 +590,7 @@ pub(crate) fn build<V: GraphView>(
     cache_dir: &Path,
     changes: &[Change],
     closed: &[ClosedSpan],
+    climb_cwd: bool,
 ) -> Layer {
     let t = Instant::now();
     let keys = Keys::of(changes);
@@ -574,7 +598,7 @@ pub(crate) fn build<V: GraphView>(
     let per_file = g.map_facts(facts::TAG, &|n, fact| {
         facts::decode(fact).map(|d| {
             let mine: Vec<ClosedSpan> = closed.iter().filter(|c| c.node == n).copied().collect();
-            file_names(&keys, n, g.path(n), &d, false, &mine)
+            file_names(&keys, n, g.path(n), &d, false, &mine, climb_cwd)
         })
     });
     let files = per_file.len();
@@ -597,7 +621,7 @@ pub(crate) fn build<V: GraphView>(
         if let Some(d) = facts::decode(&e.fact) {
             data_files += 1;
             let n = NodeId(e.node);
-            let f = file_names(&keys, n, g.path(n), &d, true, &[]);
+            let f = file_names(&keys, n, g.path(n), &d, true, &[], climb_cwd);
             names += f.seen;
             add_names(&mut index, &f, true, &|_| true);
         }
@@ -871,7 +895,7 @@ mod tests {
         let d = facts::decode(fact).unwrap();
         let n = NodeId(4);
         let shapes = |closed: &[ClosedSpan]| -> Vec<String> {
-            file_names(&keys, n, "lib/table.ts", &d, false, closed)
+            file_names(&keys, n, "lib/table.ts", &d, false, closed, true)
                 .shapes
                 .into_iter()
                 .map(|s| s.0)
@@ -892,6 +916,41 @@ mod tests {
             end: 400,
         };
         assert!(shapes(&[all]).is_empty());
+    }
+
+    #[test]
+    fn a_string_that_climbs_from_the_working_directory_names_its_places() {
+        let fact = "names:0,1,0,5,0\n4>3\tpackage.json\n6^\tshared/a.json\n8>2\tother.json";
+        let d = facts::decode(fact).unwrap();
+        let n = NodeId(4);
+        let changes = [
+            Change::new(ChangeKind::Modified, "web/package.json"),
+            Change::new(ChangeKind::Modified, "x/shared/a.json"),
+        ];
+        let keys = Keys::of(&changes);
+        let f = file_names(&keys, n, "svc/a/x_test.go", &d, false, &[], true);
+        // The shape counts inside the package; the places are the directories it
+        // climbs to. A plain climbing mark stays; a name of no changed path is left
+        // out.
+        assert_eq!(
+            f.shapes,
+            [
+                ("package.json".to_owned(), None, 4, false),
+                ("shared/a.json".to_owned(), None, 6, true)
+            ]
+        );
+        assert_eq!(
+            f.cwd_climbs,
+            [
+                ("../package.json".to_owned(), 4),
+                ("../../package.json".to_owned(), 4),
+                ("../../../package.json".to_owned(), 4)
+            ]
+        );
+        // Off (A/B, or without the package assumption): the shape anywhere, as before.
+        let f = file_names(&keys, n, "svc/a/x_test.go", &d, false, &[], false);
+        assert_eq!(f.shapes[0], ("package.json".to_owned(), None, 4, true));
+        assert!(f.cwd_climbs.is_empty());
     }
 
     #[test]

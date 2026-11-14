@@ -616,3 +616,99 @@ fn names_that_say_where_they_go_are_not_bounded_by_the_package() {
     assert_eq!(named_in(&f, "zz/x.bin", false), w);
     assert_eq!(named_in(&f, "pkg/c/zz/x.bin", false), w);
 }
+
+/// ```text
+/// svc/a/pkg/x/reader.go        os.ReadFile(p), p a parameter (line 7): the only named read
+/// svc/a/pkg/x/x_test.go → reader   the string '../../../package.json' (line 5): it climbs
+///                                  from the working directory (svc/a/pkg/x) three directories,
+///                                  and the file has two more parent steps elsewhere
+/// ```
+/// Packages: the Go module `svc/a`, `svc/b`, `web`, and the root.
+fn climb_fixture() -> (Fixture, NodeId) {
+    let mut b = MemGraph::builder();
+    b.package(".", None, "");
+    let pa = b.package("a", None, "svc/a");
+    b.package("b", None, "svc/b");
+    b.package("web", None, "web");
+    let go = Some("go");
+    let reader = b.add_file("svc/a/pkg/x/reader.go", pa, go, false);
+    b.uncertainty(reader, UncertaintyKind::ComputedSpecifier, 7, "p")
+        .uncertainty_class(Effect::Read, Origin::Param);
+    let test = b.add_file("svc/a/pkg/x/x_test.go", pa, go, false);
+    b.edge(test, reader, RefKind::Import);
+    let g = b.build().unwrap();
+    let mut ix = NameIndex::new();
+    // What the caller adds for a name marked as climbing three directories from the
+    // working directory: the shape, bounded by the package, and the places.
+    ix.add_shape(test, "package.json", 5);
+    for rel in [
+        "../package.json",
+        "../../package.json",
+        "../../../package.json",
+    ] {
+        ix.add_cwd_climb(test, rel, 5);
+    }
+    ix.set_ups(test, 5);
+    (Fixture { g, ix }, test)
+}
+
+#[test]
+fn a_string_that_climbs_from_the_working_directory_names_where_it_climbs_to() {
+    let (f, _) = climb_fixture();
+    let g = &f.g;
+    let e = Engine::new(g);
+    let entries = Engine::new(g).query("**/*_test.go").unwrap().nodes;
+    // `go test` runs a package's tests in the package directory.
+    let cwds = |n: NodeId| vec![g.path(n).rsplit_once('/').map_or("", |x| x.0).to_owned()];
+    let named = |path: &str, assume: bool| -> Vec<String> {
+        e.named_affected(
+            &f.ix,
+            &[Change::new(ChangeKind::Modified, path)],
+            &entries,
+            None,
+            &opts().named_in_package(assume),
+            &cwds,
+            &|_| None,
+        )
+        .iter()
+        .map(|r| match &r.cause {
+            Cause::Named { by, .. } => by.clone(),
+            other => format!("{other:?}"),
+        })
+        .collect()
+    };
+    let at = |up: u32| {
+        vec![format!(
+            "the string 'package.json' with parent steps, {up} up from the working directory \
+             (svc/a/pkg/x/)"
+        )]
+    };
+    // The directories above the working directory, whatever package they are in:
+    // svc (the root package) is the third.
+    assert_eq!(named("svc/package.json", true), at(3));
+    // Below the working directory, and anywhere in the package (the first two
+    // directories above it too): the shape.
+    for path in [
+        "svc/a/pkg/x/sub/package.json",
+        "svc/a/other/package.json",
+        "svc/a/pkg/package.json",
+        "svc/a/package.json",
+    ] {
+        assert_eq!(named(path, true), ["the string 'package.json'"], "{path}");
+    }
+    // Not above the third directory, and not in another package.
+    for path in ["package.json", "svc/b/package.json", "web/package.json"] {
+        assert!(named(path, true).is_empty(), "{path}");
+    }
+    // Without the package assumption the shape names anywhere (the caller then
+    // adds no places: the string climbs from where nothing says).
+    assert_eq!(
+        named("web/package.json", false),
+        ["the string 'package.json'"]
+    );
+    // The file's other parent steps do not raise the places: no other file of the
+    // module, nor of the root package.
+    for path in ["svc/a/zz.txt", "svc/zz.txt", "svc/package.json.bak"] {
+        assert!(named(path, true).is_empty(), "{path}");
+    }
+}

@@ -872,6 +872,126 @@ fn polyglot_unrelated_change_selects_nothing() {
 }
 
 // ---------------------------------------------------------------------------
+// Gate on: Go strings that climb out of the test's directory
+// (`trace_go_climb`).
+//
+// `services/billing` is a Go module. `config.Load(path)` reads a path it is
+// given, so a test that calls it is bounded by the path-like strings of the
+// code it loads. `go test` runs a package's tests in the package directory, so
+// a relative string that climbs names its rest at the directories it climbs
+// to, not its shape anywhere: `config_test.go` (in `services/billing/config`)
+// reads `../../../package.json` and `../../../shared/defaults.json` (and has
+// the string `shared/defaults.json` without parent steps too), `store_test.go`
+// joins `../../../../../apps/admin/settings.json` onto a base below its
+// package directory, and `harness_test.go` reads below the repository root,
+// which it finds from its own location (`runtime.Caller`).
+
+#[cfg(unix)]
+const CLIMB_CONFIG: &str = "services/billing/config/config_test.go";
+#[cfg(unix)]
+const CLIMB_STORE: &str = "services/billing/store/store_test.go";
+#[cfg(unix)]
+const CLIMB_HARNESS: &str = "services/billing/harness/harness_test.go";
+
+/// A climbing string names the file it climbs to, and the same name elsewhere
+/// no longer selects the test.
+#[cfg(unix)]
+#[test]
+fn go_climbing_string_names_only_where_it_climbs_to() {
+    let dir = fixture("trace_go_climb");
+    // Another package's manifest of the same name as the root one.
+    let selected = affected(dir.path(), &["--changed", "apps/admin/package.json"]);
+    assert_selects(&selected, &[CLIMB_HARNESS], &[CLIMB_CONFIG, CLIMB_STORE]);
+    // The root manifest it climbs to.
+    let selected = affected(dir.path(), &["--changed", "package.json"]);
+    assert_selects(&selected, &[CLIMB_CONFIG], &[]);
+    // The data file it climbs to, and the reason.
+    let selected = affected(dir.path(), &["--changed", "shared/defaults.json"]);
+    assert_selects(&selected, &[CLIMB_CONFIG, CLIMB_HARNESS], &[CLIMB_STORE]);
+    let output = trace(
+        dir.path(),
+        &[
+            "affected",
+            "--changed",
+            "shared/defaults.json",
+            "--explain",
+            CLIMB_CONFIG,
+        ],
+    );
+    assert!(output.status.success(), "{}", stderr(&output));
+    let text = stdout(&output);
+    assert!(
+        text.contains(
+            "the string 'shared/defaults.json' with parent steps, 3 up from the working directory \
+             (services/billing/config/)"
+        ),
+        "{text}"
+    );
+    // A file of that shape in another directory is not where it climbs to.
+    let selected = affected(
+        dir.path(),
+        &["--changed", "services/legacy/shared/defaults.json"],
+    );
+    assert_selects(&selected, &[CLIMB_HARNESS], &[CLIMB_CONFIG, CLIMB_STORE]);
+}
+
+/// The same name without parent steps still names it inside the package; a
+/// base below the package directory and the file's own location are still
+/// covered.
+#[cfg(unix)]
+#[test]
+fn go_climbing_string_keeps_its_package_name_deeper_bases_and_locations() {
+    let dir = fixture("trace_go_climb");
+    let selected = affected(
+        dir.path(),
+        &[
+            "--changed",
+            "services/billing/config/testdata/shared/defaults.json",
+        ],
+    );
+    // (`store_test.go` too: a test file with parent steps names everything in its
+    // package from its working directory.)
+    assert_selects(&selected, &[CLIMB_CONFIG, CLIMB_HARNESS, CLIMB_STORE], &[]);
+    // `filepath.Join("testdata/golden", "../../../../../apps/admin/settings.json")`
+    // from `services/billing/store` is `apps/admin/settings.json`.
+    let selected = affected(dir.path(), &["--changed", "apps/admin/settings.json"]);
+    assert_selects(&selected, &[CLIMB_STORE, CLIMB_HARNESS], &[CLIMB_CONFIG]);
+    let selected = affected(dir.path(), &["--changed", "apps/web/settings.json"]);
+    assert_selects(&selected, &[CLIMB_HARNESS], &[CLIMB_CONFIG, CLIMB_STORE]);
+    let output = trace(
+        dir.path(),
+        &[
+            "affected",
+            "--changed",
+            "apps/admin/settings.json",
+            "--explain",
+            CLIMB_STORE,
+        ],
+    );
+    assert!(output.status.success(), "{}", stderr(&output));
+    let text = stdout(&output);
+    assert!(
+        text.contains("assumed: a Go string with parent steps"),
+        "{text}"
+    );
+}
+
+/// `--strict` opens a read with a computed path: every test that has one is
+/// selected, whatever its strings say.
+#[cfg(unix)]
+#[test]
+fn go_climbing_strings_assume_nothing_under_strict() {
+    let dir = fixture("trace_go_climb");
+    for path in [
+        "apps/admin/package.json",
+        "services/legacy/shared/defaults.json",
+    ] {
+        let selected = affected(dir.path(), &["--changed", path, "--strict"]);
+        assert_selects(&selected, &[CLIMB_CONFIG, CLIMB_STORE, CLIMB_HARNESS], &[]);
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Selection: the base, unknown tests, the gate, file names.
 
 /// The branch edits `add.js`; `main` later gets the same edit (a cherry-pick,
