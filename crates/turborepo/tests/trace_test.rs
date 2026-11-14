@@ -1,6 +1,7 @@
 #![cfg_attr(test, allow(clippy::expect_used, clippy::unwrap_used))]
 //! `turbo trace`: hidden, gated by `TURBO_EXPERIMENTAL_TRACE`, and the tests
-//! it selects on two small monorepos (`trace_jest`, `trace_vitest`).
+//! it selects on small monorepos (`trace_jest`, `trace_vitest`, and
+//! `trace_polyglot` with TypeScript, Go and Rust packages).
 
 mod common;
 
@@ -387,7 +388,7 @@ fn jest_explain_says_why() {
 #[cfg(unix)]
 #[test]
 fn lint_is_clean_on_the_fixtures() {
-    for name in ["trace_jest", "trace_vitest"] {
+    for name in ["trace_jest", "trace_vitest", "trace_polyglot"] {
         let dir = fixture(name);
         let output = trace(dir.path(), &["lint"]);
         assert_eq!(output.status.code(), Some(0), "{name}: {}", stderr(&output));
@@ -599,6 +600,275 @@ fn vitest_json_is_byte_stable() {
     assert_eq!(stdout(&first), stdout(&second));
     let json: serde_json::Value = serde_json::from_slice(&first.stdout).unwrap();
     assert!(json["affectedTests"]["items"].is_array(), "{json}");
+}
+
+// ---------------------------------------------------------------------------
+// Gate on: selection across languages (`trace_polyglot`).
+//
+// `apps/web` is TypeScript with vitest: `price.test.ts` imports `src/price.ts`,
+// `greeting.test.ts` imports `src/greeting.ts`, and `rates.test.ts` reads
+// `shared/rates.json` with `fs.readFileSync(path.join(__dirname, ...))`.
+// `services/ledger` is a Go module (`go test ./...`): package `book` imports
+// package `money`, and `book_test.go` reads `shared/rates.json` with
+// `os.ReadFile`. `crates/rates` is a Rust crate (`cargo test`) whose `lib.rs`
+// has `include_str!("../../../shared/rates.json")`; its unit tests are listed
+// by the crate root (`src/lib.rs`, which also stands for those in
+// `src/convert.rs`), its integration test is `tests/convert.rs`.
+
+#[cfg(unix)]
+const POLY_PRICE: &str = "apps/web/test/price.test.ts";
+#[cfg(unix)]
+const POLY_GREETING: &str = "apps/web/test/greeting.test.ts";
+#[cfg(unix)]
+const POLY_JS_RATES: &str = "apps/web/test/rates.test.ts";
+#[cfg(unix)]
+const POLY_MONEY: &str = "services/ledger/money/money_test.go";
+#[cfg(unix)]
+const POLY_BOOK: &str = "services/ledger/book/book_test.go";
+#[cfg(unix)]
+const POLY_RUST_UNIT: &str = "crates/rates/src/lib.rs";
+#[cfg(unix)]
+const POLY_RUST_INTEGRATION: &str = "crates/rates/tests/convert.rs";
+
+/// What `turbo trace affected --json <args>` reports: each selected test with
+/// its task, and the tasks that run whole.
+#[cfg(unix)]
+struct JsonSelection {
+    tests: BTreeMap<String, String>,
+    uncovered: Vec<String>,
+}
+
+#[cfg(unix)]
+fn affected_json(dir: &Path, args: &[&str]) -> JsonSelection {
+    let mut words = vec!["affected", "--json"];
+    words.extend_from_slice(args);
+    let output = trace(dir, &words);
+    assert!(
+        output.status.success(),
+        "turbo trace {words:?} failed\nstdout:\n{}\nstderr:\n{}",
+        stdout(&output),
+        stderr(&output)
+    );
+    let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    let tests = json["affectedTests"]["items"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|item| {
+            (
+                item["path"].as_str().unwrap().to_owned(),
+                item["task"].as_str().unwrap_or_default().to_owned(),
+            )
+        })
+        .collect();
+    let uncovered = json["uncoveredTasks"]["items"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|item| item["task"].as_str().unwrap().to_owned())
+        .collect();
+    JsonSelection { tests, uncovered }
+}
+
+#[cfg(unix)]
+fn test_paths(selection: &JsonSelection) -> BTreeSet<&str> {
+    selection.tests.keys().map(String::as_str).collect()
+}
+
+/// A Go source file selects the tests of its package and of the packages that
+/// import it, and no test of another language.
+#[cfg(unix)]
+#[test]
+fn polyglot_go_change_selects_its_package_and_importers() {
+    let dir = fixture("trace_polyglot");
+    let selection = affected_json(dir.path(), &["--changed", "services/ledger/money/money.go"]);
+    assert_eq!(
+        test_paths(&selection),
+        BTreeSet::from([POLY_MONEY, POLY_BOOK])
+    );
+    assert!(
+        selection.tests.values().all(|task| task == "ledger#test"),
+        "{:?}",
+        selection.tests
+    );
+    assert_eq!(selection.uncovered, Vec::<String>::new());
+
+    // The importing package does not select the imported one's tests.
+    let selected = affected(dir.path(), &["--changed", "services/ledger/book/book.go"]);
+    assert_eq!(selected, BTreeSet::from([POLY_BOOK.to_owned()]));
+
+    // `--explain` gives the chain through the importing package's source.
+    let output = trace(
+        dir.path(),
+        &[
+            "affected",
+            "--changed",
+            "services/ledger/money/money.go",
+            "--explain",
+            POLY_BOOK,
+            POLY_PRICE,
+            POLY_RUST_UNIT,
+        ],
+    );
+    assert!(output.status.success(), "{}", stderr(&output));
+    let text = stdout(&output);
+    assert!(
+        text.contains(&format!(
+            "affected {POLY_BOOK}: modified services/ledger/money/money.go → \
+             services/ledger/book/book.go → {POLY_BOOK}"
+        )),
+        "{text}"
+    );
+    assert!(text.contains(&format!("unaffected {POLY_PRICE}")), "{text}");
+    assert!(
+        text.contains(&format!("unaffected {POLY_RUST_UNIT}")),
+        "{text}"
+    );
+
+    // Only Go tests asked for: the same tests, and the other languages' test
+    // tasks are not covered by the selection, so they run whole.
+    let selection = affected_json(
+        dir.path(),
+        &[
+            "--changed",
+            "services/ledger/money/money.go",
+            "--tests",
+            "gotest",
+        ],
+    );
+    assert_eq!(
+        test_paths(&selection),
+        BTreeSet::from([POLY_MONEY, POLY_BOOK])
+    );
+    assert_eq!(selection.uncovered, ["rates#test", "web#test"]);
+}
+
+/// A Rust source file selects the crate's unit and integration tests, and
+/// nothing else.
+#[cfg(unix)]
+#[test]
+fn polyglot_rust_change_selects_the_crate_tests() {
+    let dir = fixture("trace_polyglot");
+    let selection = affected_json(dir.path(), &["--changed", "crates/rates/src/convert.rs"]);
+    assert_eq!(
+        test_paths(&selection),
+        BTreeSet::from([POLY_RUST_UNIT, POLY_RUST_INTEGRATION])
+    );
+    assert!(
+        selection.tests.values().all(|task| task == "rates#test"),
+        "{:?}",
+        selection.tests
+    );
+    assert_eq!(selection.uncovered, Vec::<String>::new());
+
+    let selected = affected(
+        dir.path(),
+        &[
+            "--changed",
+            "crates/rates/src/convert.rs",
+            "--tests",
+            "cargo-test",
+        ],
+    );
+    assert_eq!(
+        selected,
+        BTreeSet::from([POLY_RUST_UNIT.to_owned(), POLY_RUST_INTEGRATION.to_owned()])
+    );
+
+    // An integration test that changed selects itself only.
+    let selected = affected(dir.path(), &["--changed", POLY_RUST_INTEGRATION]);
+    assert_eq!(selected, BTreeSet::from([POLY_RUST_INTEGRATION.to_owned()]));
+}
+
+/// A TypeScript source file selects the tests that import it, and no Go or
+/// Rust test.
+#[cfg(unix)]
+#[test]
+fn polyglot_ts_change_selects_the_tests_that_import_it() {
+    let dir = fixture("trace_polyglot");
+    let selection = affected_json(dir.path(), &["--changed", "apps/web/src/price.ts"]);
+    assert_eq!(test_paths(&selection), BTreeSet::from([POLY_PRICE]));
+    assert_eq!(selection.tests[POLY_PRICE], "web#test");
+    assert_eq!(selection.uncovered, Vec::<String>::new());
+
+    let selected = affected(dir.path(), &["--changed", "apps/web/src/greeting.ts"]);
+    assert_eq!(selected, BTreeSet::from([POLY_GREETING.to_owned()]));
+}
+
+/// A data file read by a JavaScript test (`fs.readFileSync`), a Go test
+/// (`os.ReadFile`) and a Rust crate (`include_str!`) selects the tests of all
+/// three, and only those.
+#[cfg(unix)]
+#[test]
+fn polyglot_shared_file_selects_every_test_that_reads_it() {
+    let dir = fixture("trace_polyglot");
+    let readers = BTreeSet::from([
+        POLY_JS_RATES,
+        POLY_BOOK,
+        POLY_RUST_UNIT,
+        POLY_RUST_INTEGRATION,
+    ]);
+    let selection = affected_json(dir.path(), &["--changed", "shared/rates.json"]);
+    assert_eq!(test_paths(&selection), readers);
+    assert_eq!(selection.tests[POLY_JS_RATES], "web#test");
+    assert_eq!(selection.tests[POLY_BOOK], "ledger#test");
+    assert_eq!(selection.tests[POLY_RUST_UNIT], "rates#test");
+    assert_eq!(selection.tests[POLY_RUST_INTEGRATION], "rates#test");
+    assert_eq!(selection.uncovered, Vec::<String>::new());
+
+    let output = trace(
+        dir.path(),
+        &[
+            "affected",
+            "--changed",
+            "shared/rates.json",
+            "--explain",
+            POLY_BOOK,
+            POLY_RUST_INTEGRATION,
+            POLY_MONEY,
+        ],
+    );
+    assert!(output.status.success(), "{}", stderr(&output));
+    let text = stdout(&output);
+    assert!(
+        text.contains(&format!(
+            "affected {POLY_BOOK}: modified shared/rates.json → {POLY_BOOK}"
+        )),
+        "{text}"
+    );
+    assert!(
+        text.contains(&format!(
+            "affected {POLY_RUST_INTEGRATION}: modified shared/rates.json → {POLY_RUST_UNIT} → \
+             {POLY_RUST_INTEGRATION}"
+        )),
+        "{text}"
+    );
+    assert!(text.contains(&format!("unaffected {POLY_MONEY}")), "{text}");
+
+    // The same from a working tree edit.
+    fs::write(
+        dir.path().join("shared/rates.json"),
+        "{\n  \"EUR\": 109,\n  \"GBP\": 127\n}\n",
+    )
+    .unwrap();
+    let selected = affected(dir.path(), &["--base", "HEAD"]);
+    let selected: BTreeSet<&str> = selected.iter().map(String::as_str).collect();
+    assert_eq!(selected, readers);
+}
+
+/// A file no test reads selects nothing, and no task runs whole.
+#[cfg(unix)]
+#[test]
+fn polyglot_unrelated_change_selects_nothing() {
+    let dir = fixture("trace_polyglot");
+    let selection = affected_json(dir.path(), &["--changed", "README.md"]);
+    assert_eq!(selection.tests, BTreeMap::new());
+    assert_eq!(selection.uncovered, Vec::<String>::new());
+    let output = trace(
+        dir.path(),
+        &["affected", "--changed", "README.md", "--exit-code"],
+    );
+    assert_eq!(output.status.code(), Some(0), "{}", stderr(&output));
 }
 
 // ---------------------------------------------------------------------------
