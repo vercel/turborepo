@@ -1,9 +1,11 @@
-use std::{collections::HashSet, io::ErrorKind};
+use std::{collections::HashSet, io::ErrorKind, path::PathBuf, sync::Mutex};
 
 use globwalk::{PackageInput, fix_glob_pattern};
 use ignore::WalkBuilder;
 use tracing::info;
-use turbopath::{AbsoluteSystemPath, AnchoredSystemPath, AnchoredSystemPathBuf, IntoUnix};
+use turbopath::{
+    AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPath, AnchoredSystemPathBuf, IntoUnix,
+};
 use wax::{Glob, Program, any};
 
 use crate::{Error, GitHashes, OidHash, package_deps::InputSelection};
@@ -119,6 +121,81 @@ pub(crate) fn hash_discovered_files(
         }
     }
     Ok(hashes)
+}
+
+/// Entry filter for the manual `ignore` walkers that bounds directory links
+/// the same way `globwalk::Settings::follow_links_within_base` does.
+///
+/// A directory link below the walk root is entered only when its logical path
+/// has no `node_modules` component (package managers own those links, and the
+/// lockfile and package graph already capture them), when it resolves inside
+/// the repository and outside Git metadata, and when the walk hasn't already
+/// entered the same target. Without this, pnpm's workspace links make the walk
+/// revisit each dependency once per path through the package graph.
+///
+/// `skipped_dir` is pruned along with its contents.
+fn bounded_entry_filter(
+    walk_root: &AbsoluteSystemPath,
+    repo_root: &AbsoluteSystemPath,
+    skipped_dir: Option<AbsoluteSystemPathBuf>,
+) -> impl Fn(&ignore::DirEntry) -> bool + Send + Sync + 'static {
+    let walk_root = walk_root.as_std_path().to_owned();
+    let repo_root = std::fs::canonicalize(repo_root.as_std_path())
+        .unwrap_or_else(|_| repo_root.as_std_path().to_owned());
+    let entered = Mutex::new(HashSet::<PathBuf>::new());
+    move |entry| {
+        let path = entry.path();
+        if skipped_dir
+            .as_ref()
+            .is_some_and(|dir| path == dir.as_std_path())
+        {
+            return false;
+        }
+        let is_dir_link = entry.depth() > 0
+            && entry.path_is_symlink()
+            && entry
+                .file_type()
+                .is_some_and(|file_type| file_type.is_dir());
+        if !is_dir_link {
+            return true;
+        }
+        let in_node_modules = path.strip_prefix(&walk_root).is_ok_and(|relative| {
+            relative
+                .components()
+                .any(|component| component.as_os_str() == "node_modules")
+        });
+        if in_node_modules {
+            return false;
+        }
+        let Ok(target) = std::fs::canonicalize(path) else {
+            return false;
+        };
+        let inside_repo = target.strip_prefix(&repo_root).is_ok_and(|relative| {
+            !relative.components().any(|component| {
+                component
+                    .as_os_str()
+                    .to_str()
+                    .is_some_and(turbopath::is_git_metadata_component)
+            })
+        });
+        inside_repo
+            && entered
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner())
+                .insert(target)
+    }
+}
+
+/// Whether a walk error is a directory link back to one of its ancestors.
+/// The bounded walk skips those links instead of failing.
+fn is_link_cycle(error: &ignore::Error) -> bool {
+    match error {
+        ignore::Error::Loop { .. } => true,
+        ignore::Error::WithPath { err, .. }
+        | ignore::Error::WithDepth { err, .. }
+        | ignore::Error::WithLineNumber { err, .. } => is_link_cycle(err),
+        _ => false,
+    }
 }
 
 #[cfg(test)]
@@ -259,14 +336,15 @@ pub(crate) fn get_input_file_hashes_without_git<S: AsRef<str>>(
         Some(any(excludes)?)
     };
 
-    if !has_local_inclusions {
-        let git_metadata_path = git_metadata_path.clone();
-        walker_builder.filter_entry(move |entry| entry.path() != git_metadata_path.as_std_path());
-    }
-
+    walker_builder.filter_entry(bounded_entry_filter(
+        &full_package_path,
+        turbo_root,
+        (!has_local_inclusions).then(|| git_metadata_path.clone()),
+    ));
     let walker = (!has_inclusions).then(|| {
         walker_builder
             .follow_links(true)
+            .sort_by_file_name(|a, b| a.cmp(b))
             // if inputs have been provided manually, we shouldn't skip ignored files to mimic the
             // regular behavior
             .git_ignore(!has_local_inputs && external_inclusions.is_empty())
@@ -276,7 +354,10 @@ pub(crate) fn get_input_file_hashes_without_git<S: AsRef<str>>(
     });
 
     for dirent in walker.into_iter().flatten() {
-        let dirent = dirent?;
+        let dirent = match dirent {
+            Err(error) if is_link_cycle(&error) => continue,
+            dirent => dirent?,
+        };
         let metadata = match dirent.metadata() {
             Ok(metadata) => metadata,
             Err(error)
@@ -326,16 +407,24 @@ pub(crate) fn get_input_file_hashes_without_git<S: AsRef<str>>(
     // If we're including default files, we need to walk again, but this time with
     // git_ignore enabled
     if include_default_files {
-        walker_builder.filter_entry(move |entry| entry.path() != git_metadata_path.as_std_path());
+        walker_builder.filter_entry(bounded_entry_filter(
+            &full_package_path,
+            turbo_root,
+            Some(git_metadata_path),
+        ));
         let walker = walker_builder
             .follow_links(true)
+            .sort_by_file_name(|a, b| a.cmp(b))
             .git_ignore(true)
             .require_git(false)
             .hidden(false) // this results in yielding hidden files (e.g. .gitignore)
             .build();
 
         for dirent in walker {
-            let dirent = dirent?;
+            let dirent = match dirent {
+                Err(error) if is_link_cycle(&error) => continue,
+                dirent => dirent?,
+            };
             let metadata = match dirent.metadata() {
                 Ok(metadata) => metadata,
                 Err(error)
@@ -1129,6 +1218,161 @@ mod tests {
             "input referencing a parent directory should be hashed, got keys: {:?}",
             hashes.keys().collect::<Vec<_>>()
         );
+    }
+
+    /// Regression test for https://github.com/vercel/turborepo/issues/15025
+    ///
+    /// A package-manager link must not be followed. A workspace where every
+    /// package links to all of its dependencies is a DAG of links, so following
+    /// them revisits each dependency once per path through the graph, which is
+    /// exponential in the number of packages.
+    #[cfg(unix)]
+    #[test]
+    fn test_package_manager_links_are_not_walked() {
+        let (_tmp, turbo_root) = tmp_dir();
+        let package_count = 10;
+        for i in 0..package_count {
+            let package = turbo_root.join_components(&["packages", &format!("p{i}")]);
+            let index = package.join_components(&["src", "index.js"]);
+            index.ensure_dir().unwrap();
+            index
+                .create_with_contents(format!("export const x = {i};"))
+                .unwrap();
+            package
+                .join_component("package.json")
+                .create_with_contents("{}")
+                .unwrap();
+            package
+                .join_component("node_modules")
+                .create_dir_all()
+                .unwrap();
+        }
+        for i in 1..package_count {
+            for j in 0..i {
+                std::os::unix::fs::symlink(
+                    format!("../../p{j}"),
+                    turbo_root
+                        .join_components(&["packages", &format!("p{i}"), "node_modules"])
+                        .join_component(&format!("p{j}")),
+                )
+                .unwrap();
+            }
+        }
+        turbo_root
+            .join_component(".gitignore")
+            .create_with_contents("node_modules\n")
+            .unwrap();
+
+        let last =
+            AnchoredSystemPathBuf::from_raw(format!("packages/p{}", package_count - 1)).unwrap();
+        let hashes = get_package_file_hashes_without_git(
+            &turbo_root,
+            &last,
+            &["!**/*.md"],
+            true,
+            None,
+            None,
+        )
+        .unwrap();
+
+        let mut keys = hashes.keys().collect::<Vec<_>>();
+        keys.sort();
+        assert_eq!(
+            keys,
+            vec![
+                &RelativeUnixPathBuf::new("package.json").unwrap(),
+                &RelativeUnixPathBuf::new("src/index.js").unwrap(),
+            ],
+            "only the package's own files are inputs"
+        );
+    }
+
+    /// Directory links inside the repository are still followed (the behavior
+    /// #14825 introduced), but each target is entered at most once per walk,
+    /// and links that leave the repository are pruned.
+    #[cfg(unix)]
+    #[test]
+    fn test_in_repo_directory_links_are_followed_once() {
+        let (_tmp, turbo_root) = tmp_dir();
+        let (_outside, outside_root) = tmp_dir();
+        let package = turbo_root.join_components(&["packages", "a"]);
+        for (file, contents) in [
+            (package.join_component("package.json"), "{}"),
+            (
+                turbo_root.join_components(&["shared", "file.txt"]),
+                "shared",
+            ),
+            (
+                outside_root.join_components(&["outside", "file.txt"]),
+                "outside",
+            ),
+        ] {
+            file.ensure_dir().unwrap();
+            file.create_with_contents(contents).unwrap();
+        }
+        let src = package.join_component("src");
+        src.create_dir_all().unwrap();
+        std::os::unix::fs::symlink("../../../shared", src.join_component("first")).unwrap();
+        std::os::unix::fs::symlink("../../../shared", src.join_component("second")).unwrap();
+        std::os::unix::fs::symlink(outside_root.as_std_path(), src.join_component("outside"))
+            .unwrap();
+
+        let hashes = get_package_file_hashes_without_git(
+            &turbo_root,
+            &AnchoredSystemPathBuf::from_raw("packages/a").unwrap(),
+            &["!**/*.md"],
+            false,
+            None,
+            None,
+        )
+        .unwrap();
+
+        let followed: Vec<_> = ["src/first/file.txt", "src/second/file.txt"]
+            .into_iter()
+            .filter(|key| hashes.keys().any(|hashed| hashed.as_str() == *key))
+            .collect();
+        assert_eq!(
+            followed.len(),
+            1,
+            "a link target is entered once per walk, got keys: {:?}",
+            hashes.keys().collect::<Vec<_>>()
+        );
+        assert!(
+            hashes
+                .keys()
+                .all(|key| !key.as_str().starts_with("src/outside")),
+            "links that leave the repository are pruned, got keys: {:?}",
+            hashes.keys().collect::<Vec<_>>()
+        );
+    }
+
+    /// A directory link back to an ancestor is skipped instead of failing the
+    /// walk.
+    #[cfg(unix)]
+    #[test]
+    fn test_directory_link_cycles_are_skipped() {
+        let (_tmp, turbo_root) = tmp_dir();
+        let package = turbo_root.join_components(&["packages", "a"]);
+        let index = package.join_components(&["src", "index.js"]);
+        index.ensure_dir().unwrap();
+        index.create_with_contents("export {};").unwrap();
+        std::os::unix::fs::symlink("..", package.join_components(&["src", "parent"])).unwrap();
+
+        for include_default_files in [false, true] {
+            let hashes = get_package_file_hashes_without_git(
+                &turbo_root,
+                &AnchoredSystemPathBuf::from_raw("packages/a").unwrap(),
+                &["!**/*.md"],
+                include_default_files,
+                None,
+                None,
+            )
+            .unwrap();
+            assert_eq!(
+                hashes.keys().collect::<Vec<_>>(),
+                vec![&RelativeUnixPathBuf::new("src/index.js").unwrap()],
+            );
+        }
     }
 
     // Regression test for https://github.com/vercel/turborepo/issues/10485
