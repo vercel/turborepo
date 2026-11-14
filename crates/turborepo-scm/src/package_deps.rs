@@ -225,7 +225,7 @@ impl SCM {
             };
             glob.parse::<ValidatedGlob>()
         };
-        let inclusions = inclusions
+        let mut resolved_inclusions = inclusions
             .iter()
             .map(resolve)
             .collect::<Result<Vec<_>, _>>()?;
@@ -233,9 +233,34 @@ impl SCM {
             .iter()
             .map(resolve)
             .collect::<Result<Vec<_>, _>>()?;
+        if let Some(index) = repo_index
+            && exclusions
+                .iter()
+                .all(|glob| globwalk::literal_tree_prefix(glob.as_str()).is_some())
+        {
+            // Complex exclusions still need the normal compiler's diagnostics.
+            // Classify the resolved glob so metacharacters in package paths also
+            // prevent pruning. Literal trees are valid without compiling wax.
+            resolved_inclusions.retain(|glob| {
+                let Some(prefix) = globwalk::literal_tree_prefix(glob.as_str()) else {
+                    return true;
+                };
+                let Ok(relative) = turbopath::RelativeUnixPath::new(prefix) else {
+                    return true;
+                };
+                let tree = turbo_root.join_unix_path(relative);
+                let Ok(path) = git.root.anchor(&tree) else {
+                    return true;
+                };
+                index.may_have_tracked_in_tree(&path.to_unix())
+            });
+            if resolved_inclusions.is_empty() {
+                return Ok(GitHashes::new());
+            }
+        }
         let files = globwalk::globwalk_with_settings(
             turbo_root,
-            &inclusions,
+            &resolved_inclusions,
             &exclusions,
             globwalk::WalkType::Files,
             globwalk::Settings::default().follow_links_within_base(),
@@ -995,6 +1020,224 @@ mod tests {
                 .unwrap();
             assert_eq!(hashes.len(), 1);
             assert!(hashes.contains_key(&RelativeUnixPathBuf::new("dist/LICENSE").unwrap()));
+        }
+    }
+
+    #[test]
+    fn test_tracked_output_tree_pruning_matches_fallback() {
+        for turbo_prefix in ["", "project"] {
+            for state in [
+                "generated-only",
+                "unchanged",
+                "changed",
+                "deleted",
+                "staged",
+            ] {
+                let (_tmp, root) = tmp_dir();
+                setup_repository(&root);
+                let turbo_root = if turbo_prefix.is_empty() {
+                    root.clone()
+                } else {
+                    root.join_component(turbo_prefix)
+                };
+                let package = AnchoredSystemPath::new("packages/app").unwrap();
+                let package_root = turbo_root.resolve(package);
+                for path in [
+                    "dist-other/tracked.txt",
+                    "build-release/asset.txt",
+                    "build-release/excluded.txt",
+                ] {
+                    let file = package_root
+                        .join_unix_path(turbopath::RelativeUnixPath::new(path).unwrap());
+                    file.ensure_dir().unwrap();
+                    file.create_with_contents(path).unwrap();
+                }
+                let tracked = package_root.join_components(&["dist", "nested", "tracked.txt"]);
+                if matches!(state, "unchanged" | "changed" | "deleted") {
+                    tracked.ensure_dir().unwrap();
+                    tracked.create_with_contents("original").unwrap();
+                }
+                root.join_component(".gitignore")
+                    .create_with_contents("**/dist/generated.txt\n")
+                    .unwrap();
+                commit_all(&root);
+                let generated = package_root.join_components(&["dist", "generated.txt"]);
+                generated.ensure_dir().unwrap();
+                generated.create_with_contents("generated output").unwrap();
+                match state {
+                    "changed" => tracked.create_with_contents("changed").unwrap(),
+                    "deleted" => std::fs::remove_file(&tracked).unwrap(),
+                    "staged" => {
+                        tracked.ensure_dir().unwrap();
+                        tracked.create_with_contents("newly staged").unwrap();
+                        require_git_cmd(&package_root, &["add", "dist/nested/tracked.txt"]);
+                    }
+                    _ => {}
+                }
+                let expected_dist = if matches!(state, "unchanged" | "changed" | "staged") {
+                    vec!["dist/nested/tracked.txt"]
+                } else {
+                    vec![]
+                };
+                let scm = SCM::new(&turbo_root);
+                let index = scm.build_repo_index_eager().unwrap();
+                if state == "generated-only" {
+                    let dist = root
+                        .anchor(package_root.join_component("dist"))
+                        .unwrap()
+                        .to_unix();
+                    assert!(!index.may_have_tracked_in_tree(&dist));
+                }
+                for (inclusions, exclusions, mut expected) in [
+                    (vec!["dist/**"], vec![], expected_dist.clone()),
+                    (vec!["./dist/**"], vec![], expected_dist.clone()),
+                    (
+                        vec!["dist-other/**"],
+                        vec![],
+                        vec!["dist-other/tracked.txt"],
+                    ),
+                    (vec!["dist/**", "build-*/**"], vec!["**/excluded.txt"], {
+                        let mut expected = expected_dist.clone();
+                        expected.push("build-release/asset.txt");
+                        expected
+                    }),
+                    (
+                        vec!["dist/**", "build-*/**"],
+                        vec!["dist/**", "**/excluded.txt"],
+                        vec!["build-release/asset.txt"],
+                    ),
+                ] {
+                    let inclusions: Vec<_> = inclusions.into_iter().map(str::to_owned).collect();
+                    let exclusions: Vec<_> = exclusions.into_iter().map(str::to_owned).collect();
+                    let fallback = scm
+                        .get_tracked_output_hashes(
+                            &turbo_root,
+                            package,
+                            &inclusions,
+                            &exclusions,
+                            None,
+                        )
+                        .unwrap();
+                    let indexed = scm
+                        .get_tracked_output_hashes(
+                            &turbo_root,
+                            package,
+                            &inclusions,
+                            &exclusions,
+                            Some(&index),
+                        )
+                        .unwrap();
+                    assert_eq!(
+                        indexed, fallback,
+                        "root={turbo_prefix:?}, state={state}, outputs={inclusions:?}, \
+                         exclusions={exclusions:?}"
+                    );
+                    let mut actual: Vec<_> = indexed.keys().map(|path| path.as_str()).collect();
+                    actual.sort();
+                    expected.sort();
+                    assert_eq!(
+                        actual, expected,
+                        "root={turbo_prefix:?}, state={state}, outputs={inclusions:?}"
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn test_tracked_output_tree_pruning_preserves_glob_compilation() {
+        let (_tmp, root) = tmp_dir();
+        setup_repository(&root);
+        for path in ["packages/[ab]/package.json", "packages/a/dist/tracked.txt"] {
+            let file = root.join_unix_path(turbopath::RelativeUnixPath::new(path).unwrap());
+            file.ensure_dir().unwrap();
+            file.create_with_contents("tracked").unwrap();
+        }
+        commit_all(&root);
+        let scm = SCM::new(&root);
+        let index = scm.build_repo_index_eager().unwrap();
+        // Package paths participate in the resolved glob's syntax too.
+        let package = AnchoredSystemPath::new("packages/[ab]").unwrap();
+        let inclusions = vec!["dist/**".to_owned()];
+        let fallback = scm
+            .get_tracked_output_hashes(&root, package, &inclusions, &[], None)
+            .unwrap();
+        assert_eq!(fallback.len(), 1);
+        assert_eq!(
+            fallback,
+            scm.get_tracked_output_hashes(&root, package, &inclusions, &[], Some(&index))
+                .unwrap()
+        );
+        // An empty tracked output tree must not hide invalid exclusions.
+        let package = AnchoredSystemPath::new("packages/empty").unwrap();
+        for indexed in [false, true] {
+            assert!(
+                scm.get_tracked_output_hashes(
+                    &root,
+                    package,
+                    &inclusions,
+                    &["[".to_owned()],
+                    indexed.then_some(&index),
+                )
+                .is_err()
+            );
+        }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn test_tracked_output_tree_pruning_preserves_symlink_ancestors() {
+        for state in ["committed", "staged", "untracked"] {
+            let (_tmp, root) = tmp_dir();
+            setup_repository(&root);
+            let turbo_root = root.join_component("project");
+            let package = AnchoredSystemPath::new("packages/app").unwrap();
+            let package_root = turbo_root.resolve(package);
+            let referent = package_root.join_components(&["target", "sub", "deep", "tracked.txt"]);
+            referent.ensure_dir().unwrap();
+            referent.create_with_contents("tracked referent").unwrap();
+            let link = package_root.join_component("linked");
+            if state == "committed" {
+                link.symlink_to_dir("target").unwrap();
+            }
+            commit_all(&root);
+            if state != "committed" {
+                link.symlink_to_dir("target").unwrap();
+                if state == "staged" {
+                    require_git_cmd(&package_root, &["add", "linked"]);
+                }
+            }
+            referent.create_with_contents("changed referent").unwrap();
+            package_root
+                .join_components(&["target", "sub", "deep", "generated.txt"])
+                .create_with_contents("untracked referent")
+                .unwrap();
+            let scm = SCM::new(&turbo_root);
+            let index = scm.build_repo_index_eager().unwrap();
+            for output in [
+                "linked/**",
+                "./linked/**",
+                "linked/sub/**",
+                "./linked/sub/**",
+                "linked/sub/deep/**",
+            ] {
+                let inclusions = vec![output.to_owned()];
+                let fallback = scm
+                    .get_tracked_output_hashes(&turbo_root, package, &inclusions, &[], None)
+                    .unwrap();
+                let indexed = scm
+                    .get_tracked_output_hashes(&turbo_root, package, &inclusions, &[], Some(&index))
+                    .unwrap();
+                assert_eq!(indexed, fallback, "state={state}, output={output}");
+                if state == "untracked" {
+                    assert!(indexed.is_empty(), "output={output}");
+                } else {
+                    assert_eq!(indexed.len(), 1, "state={state}, output={output}");
+                    assert!(indexed.contains_key(
+                        &RelativeUnixPathBuf::new("linked/sub/deep/tracked.txt").unwrap()
+                    ));
+                }
+            }
         }
     }
 

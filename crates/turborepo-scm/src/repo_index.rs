@@ -723,6 +723,54 @@ impl RepoGitIndex {
             .is_ok()
     }
 
+    /// Conservatively check whether an output tree could contain tracked files.
+    /// Tracked ancestors may be directory symlinks, so they also prevent
+    /// skipping the filesystem walk. Deleted and untracked status entries
+    /// are harmless false positives; unsupported paths require the normal
+    /// walk.
+    pub(crate) fn may_have_tracked_in_tree(&self, path: &RelativeUnixPathBuf) -> bool {
+        if !self.unsupported_paths.is_empty() {
+            return true;
+        }
+        let prefix = format!("{path}/");
+        let tree_start = self
+            .ls_tree_hashes
+            .partition_point(|(entry, _)| entry.as_str() < prefix.as_str());
+        if self.ls_tree_hashes[tree_start..]
+            .first()
+            .is_some_and(|(entry, _)| entry.as_str().starts_with(&prefix))
+        {
+            return true;
+        }
+        let status_start = self
+            .status_entries
+            .partition_point(|entry| entry.path.as_str() < prefix.as_str());
+        if self.status_entries[status_start..]
+            .first()
+            .is_some_and(|entry| entry.path.as_str().starts_with(&prefix))
+        {
+            return true;
+        }
+        let mut ancestor = path.as_str();
+        loop {
+            if self
+                .ls_tree_hashes
+                .binary_search_by(|(entry, _)| entry.as_str().cmp(ancestor))
+                .is_ok()
+                || self
+                    .status_entries
+                    .binary_search_by(|entry| entry.path.as_str().cmp(ancestor))
+                    .is_ok()
+            {
+                return true;
+            }
+            let Some((parent, _)) = ancestor.rsplit_once('/') else {
+                return false;
+            };
+            ancestor = parent;
+        }
+    }
+
     /// Partition a set of existing git-root-relative file paths into:
     /// - clean tracked files whose blob OIDs can be reused immediately
     /// - files that still need content hashing because they are dirty,
