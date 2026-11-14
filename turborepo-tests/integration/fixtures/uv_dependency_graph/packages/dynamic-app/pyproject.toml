@@ -1,0 +1,12 @@
+[project]
+name = "dynamic-app"
+version = "0.1.0"
+requires-python = ">=3.9"
+dynamic = ["dependencies", "optional-dependencies"]
+
+[build-system]
+requires = ["hatchling==1.27.0"]
+build-backend = "hatchling.build"
+
+[tool.hatch.metadata.hooks.custom]
+path = "hatch_build.py"

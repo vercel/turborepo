@@ -1,0 +1,10 @@
+[tool.turbo]
+name = "acme"
+
+[tool.uv.workspace]
+members = ["packages/*"]
+
+[tool.uv.sources]
+py-lib = { workspace = true }
+feature-lib = { workspace = true }
+leaf-lib = { workspace = true }
