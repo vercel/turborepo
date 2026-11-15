@@ -326,6 +326,44 @@ Enabling this flag changes all task hashes. Existing cache entries are not reuse
 }
 ```
 
+#### `hashDependencyOutputs`
+
+Default: `false`
+
+Hash tasks by the contents of their dependencies' outputs instead of by their dependencies' task hashes. When a dependency reruns because one of its inputs changed (a comment, a README, a test file) but writes byte-identical outputs, its dependents keep their hashes and stay cached.
+
+```jsonc title="./turbo.json"
+{
+  "futureFlags": {
+    "hashDependencyOutputs": true,
+  },
+}
+```
+
+A dependency contributes its outputs when it runs a command and declares [`outputs`](#outputs). Turborepo hashes its output files after it runs or is restored from the cache, with paths relative to the repository root and the same file hashes as task inputs, so the result is identical on every machine. The dependency's log file is excluded. The dependency's contribution also includes:
+
+- Its package's `package.json` and `turbo.json`, which decide how consumers resolve its outputs.
+- Its package's external dependencies, which consumers load through its outputs.
+- The contributions of its own dependencies. A change to a dependency further down still reruns a task when the outputs in between are unchanged, since those outputs can load the changed files.
+
+Other dependencies keep contributing their task hash, which includes their inputs:
+
+- Tasks without `outputs`, like `transit` tasks or `lint` and `typecheck` tasks. Depend on one of these when a task reads a dependency's source files, for example to compile an [Internal Package](/docs/core-concepts/internal-packages) that has no build step.
+- Tasks without a command in their package.
+
+If a task reads files from a dependency that are neither part of the dependency's `outputs` nor its package configuration, it can be restored from the cache after those files change. Add those files to the dependency's `outputs`, or depend on a task without `outputs` instead.
+
+Tasks that use [`dependencyOutputs` inputs](#mode-dependencyoutputs) keep hashing their dependencies as configured.
+
+Trade-offs:
+
+- A task's hash is only known once its dependencies with outputs have finished. `--dry` and `turbo query` report these tasks with `hash: null` and a `hashReason`, as they do for `dependencyOutputs` inputs. In a typical build graph, every task above the first dependency with outputs is affected.
+- Remote Cache artifacts are prefetched at the start of a run only for tasks whose hashes are known then. Affected tasks download their artifact when they're ready to run.
+- Run summaries (`--summarize`) record the final hashes.
+- Selecting tasks with `--affected` and `--filter` doesn't depend on hashes and is unchanged. `turbo watch` reruns the same tasks as before; with caching, a dependent whose dependency produced identical outputs is restored instead of executed.
+
+Enabling this flag changes the hashes of tasks that depend on tasks with outputs, so their existing cache entries are not reused.
+
 #### `errorsOnlyShowHash`
 
 Default: `false`
