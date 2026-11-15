@@ -245,6 +245,7 @@ impl RunHashInputs {
         order.reverse();
 
         let global_env_mode = run.execution.opts.run_opts.env_mode;
+        let hash_dependency_outputs = run.execution.opts.run_opts.hash_dependency_outputs;
         let mut hashes = HashMap::with_capacity(order.len());
         let mut deferred = HashSet::new();
         for node in order {
@@ -270,11 +271,29 @@ impl RunHashInputs {
                 && dependency_set.iter().any(|dependency| {
                     matches!(dependency, TaskNode::Task(task_id) if deferred.contains(task_id))
                 });
-            let hash = if definition.inputs.has_deferred_inputs() || waits_on_dependency {
+            // With `futureFlags.hashDependencyOutputs`, a task that depends on
+            // tasks with outputs is hashed by the contents of those outputs.
+            let waits_on_dependency_outputs = hash_dependency_outputs
+                && !turborepo_task_hash::output_fingerprint_dependencies(
+                    engine,
+                    task_id,
+                    run.pkg_dep_graph(),
+                )
+                .is_empty();
+            let hash = if definition.inputs.has_deferred_inputs()
+                || waits_on_dependency
+                || waits_on_dependency_outputs
+            {
                 deferred.insert(task_id.clone());
+                let hash_reason =
+                    if hash_dependency_outputs && !definition.inputs.has_deferred_inputs() {
+                        turborepo_task_hash::OUTPUT_FINGERPRINT_DEFERRED_TASK_HASH_MESSAGE
+                    } else {
+                        deferred_task_hash_message(&definition.inputs)
+                    };
                 QueryTaskHash {
                     hash: None,
-                    hash_reason: Some(deferred_task_hash_message(&definition.inputs).to_string()),
+                    hash_reason: Some(hash_reason.to_string()),
                 }
             } else {
                 let telemetry = PackageTaskEventBuilder::new(task_id.package(), task_id.task())

@@ -799,6 +799,23 @@ export interface FutureFlags {
    */
   hashFilePermissions?: boolean;
   /**
+   * Hash tasks by the contents of their dependencies' outputs instead of
+   * their dependencies' task hashes. A dependency that runs a command and
+   * declares `outputs` contributes the hashes of its output files read after
+   * it runs or is restored, excluding its log file, together with its package
+   * configuration files, its external dependency fingerprint, and the same
+   * contribution from its own dependencies. When a dependency reruns and
+   * produces identical outputs, its dependents stay cached. Dependencies
+   * without `outputs` keep contributing their task hash. Tasks with explicit
+   * `dependencyOutputs` inputs are unchanged. Affected task hashes are
+   * computed once their dependencies finish, so dry runs report them as
+   * deferred and they are not prefetched from the Remote Cache. Enabling this
+   * flag changes task hashes.
+   *
+   * @defaultValue `false`
+   */
+  hashDependencyOutputs?: boolean;
+  /**
    * When using `outputLogs: "errors-only"`, show task hashes when tasks
    * complete successfully. This provides visibility into which tasks are
    * running without showing full output logs.
@@ -1337,6 +1354,21 @@ mod cli_tests {
                 .is_none_or(|fields| !fields.contains(&serde_json::json!("hashFilePermissions")))
         );
         assert!(super::generate_typescript().contains("hashFilePermissions?: boolean;"));
+    }
+
+    #[test]
+    fn hash_dependency_outputs_is_an_optional_boolean_future_flag() {
+        let schema = serde_json::to_value(super::generate_schema()).unwrap();
+        let flags = &schema["definitions"]["FutureFlags"];
+        let flag = &flags["properties"]["hashDependencyOutputs"];
+        assert_eq!(flag["type"], "boolean");
+        assert_eq!(flag["default"], false);
+        assert!(
+            flags["required"]
+                .as_array()
+                .is_none_or(|fields| !fields.contains(&serde_json::json!("hashDependencyOutputs")))
+        );
+        assert!(super::generate_typescript().contains("hashDependencyOutputs?: boolean;"));
     }
 
     #[test]

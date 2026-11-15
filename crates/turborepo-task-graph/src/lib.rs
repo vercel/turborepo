@@ -24,6 +24,9 @@ pub trait TaskGraphRunOpts: RunOptsHashInfo + RunOptsInfo + Sync {
     fn single_package(&self) -> bool;
     fn is_github_actions(&self) -> bool;
     fn ui_mode(&self) -> UIMode;
+    /// Whether `futureFlags.hashDependencyOutputs` is enabled: dependents are
+    /// hashed by the contents of their dependencies' outputs.
+    fn hash_dependency_outputs(&self) -> bool;
 }
 
 #[cfg(test)]

@@ -98,6 +98,7 @@ fn consumer_hash_with_outputs(
                 repo_index: None,
                 dependency_output_hashes: Some(dependency_outputs),
                 dependency_output_producers: &selected_producers,
+                dependency_output_fingerprints: None,
             },
         )
         .unwrap()

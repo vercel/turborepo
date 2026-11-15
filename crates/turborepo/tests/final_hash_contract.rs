@@ -242,6 +242,56 @@ fn turbo_lock_without_setup_flag_keeps_hashes_and_flagged_runs_require_setup() {
 }
 
 #[test]
+fn hash_dependency_outputs_flag_keeps_hashes_when_off() {
+    let tempdir = tempfile::tempdir().unwrap();
+    let dir = tempdir.path();
+    setup::setup_integration_test(dir, "basic_monorepo", "npm@10.5.0", false).unwrap();
+    let config_path = dir.join("turbo.json");
+    // `my-app#build` depends on `util#build`, which declares outputs.
+    let mut config = serde_json::json!({
+        "tasks": { "build": { "dependsOn": ["^build"], "outputs": ["dist/**"] } }
+    });
+    fs::write(&config_path, serde_json::to_string(&config).unwrap()).unwrap();
+    let baseline = dry_json(dir, &["run", "build", "--dry=json"]);
+    let baseline_task_hashes = task_hash_contract(&baseline);
+
+    config["futureFlags"] = serde_json::json!({ "hashDependencyOutputs": false });
+    fs::write(&config_path, serde_json::to_string(&config).unwrap()).unwrap();
+    let disabled = dry_json(dir, &["run", "build", "--dry=json"]);
+    assert_eq!(baseline_task_hashes, task_hash_contract(&disabled));
+    assert_eq!(
+        global_cache_inputs_contract(&baseline),
+        global_cache_inputs_contract(&disabled)
+    );
+
+    // Enabled, only the dependent's hash changes: it is deferred until its
+    // dependency's outputs exist.
+    config["futureFlags"] = serde_json::json!({ "hashDependencyOutputs": true });
+    fs::write(&config_path, serde_json::to_string(&config).unwrap()).unwrap();
+    let enabled = dry_json(dir, &["run", "build", "--dry=json"]);
+    let hashes = |json: &Value| {
+        json["tasks"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|task| {
+                let hash = task["hash"].as_str().or(task["hashReason"].as_str());
+                (
+                    task["taskId"].as_str().unwrap().to_string(),
+                    hash.unwrap().to_string(),
+                )
+            })
+            .collect::<std::collections::BTreeMap<_, _>>()
+    };
+    let (baseline, enabled) = (hashes(&baseline), hashes(&enabled));
+    assert_eq!(baseline["util#build"], enabled["util#build"]);
+    assert_eq!(
+        enabled["my-app#build"],
+        "Deferred because hashDependencyOutputs hashes dependency outputs after they are built."
+    );
+}
+
+#[test]
 fn single_package_hashes() {
     let tempdir = tempfile::tempdir().unwrap();
     setup::setup_integration_test(tempdir.path(), "single_package", "npm@10.5.0", false).unwrap();

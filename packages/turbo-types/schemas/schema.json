@@ -444,6 +444,11 @@
           "default": false,
           "type": "boolean"
         },
+        "hashDependencyOutputs": {
+          "description": "Hash tasks by the contents of their dependencies' outputs instead of their dependencies' task hashes. A dependency that runs a command and declares `outputs` contributes the hashes of its output files read after it runs or is restored, excluding its log file, together with its package configuration files, its external dependency fingerprint, and the same contribution from its own dependencies. When a dependency reruns and produces identical outputs, its dependents stay cached. Dependencies without `outputs` keep contributing their task hash. Tasks with explicit `dependencyOutputs` inputs are unchanged. Affected task hashes are computed once their dependencies finish, so dry runs report them as deferred and they are not prefetched from the Remote Cache. Enabling this flag changes task hashes.",
+          "default": false,
+          "type": "boolean"
+        },
         "hashFilePermissions": {
           "description": "Include file executable permissions in task hashes. Disabled by default. Enabling this flag changes all task hashes. On Unix, any executable bit marks a regular file as executable. On Windows, files are non-executable. Symlink permissions and other permission bits do not affect hashes.",
           "default": false,

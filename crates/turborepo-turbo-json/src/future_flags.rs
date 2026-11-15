@@ -37,6 +37,21 @@ pub struct FutureFlags {
     /// affect hashes.
     #[serde(default)]
     pub hash_file_permissions: bool,
+    /// Hash tasks by the contents of their dependencies' outputs instead of
+    /// their dependencies' task hashes. A dependency that runs a command and
+    /// declares `outputs` contributes the hashes of its output files read
+    /// after it runs or is restored, excluding its log file, together with
+    /// its package configuration files, its external dependency
+    /// fingerprint, and the same contribution from its own dependencies.
+    /// When a dependency reruns and produces identical outputs, its
+    /// dependents stay cached. Dependencies without `outputs` keep
+    /// contributing their task hash. Tasks with explicit `dependencyOutputs`
+    /// inputs are unchanged. Affected task hashes are computed once their
+    /// dependencies finish, so dry runs report them as deferred and they are
+    /// not prefetched from the Remote Cache. Enabling this flag changes task
+    /// hashes.
+    #[serde(default)]
+    pub hash_dependency_outputs: bool,
     /// When using `outputLogs: "errors-only"`, show task hashes when tasks
     /// complete successfully. This provides visibility into which tasks are
     /// running without showing full output logs.
@@ -181,7 +196,8 @@ impl TS for FutureFlags {
          boolean, strictTaskEntrypointSelection?: boolean, globalConfiguration?: boolean, \
          experimentalCargoWorkspaces?: boolean, experimentalPythonWorkspaces?: boolean, \
          experimentalGoWorkspaces?: boolean, experimentalTaskCommand?: boolean, \
-         experimentalSetup?: boolean, hashFilePermissions?: boolean }"
+         experimentalSetup?: boolean, hashFilePermissions?: boolean, hashDependencyOutputs?: \
+         boolean }"
             .to_string()
     }
 
@@ -192,7 +208,8 @@ impl TS for FutureFlags {
          boolean, strictTaskEntrypointSelection?: boolean, globalConfiguration?: boolean, \
          experimentalCargoWorkspaces?: boolean, experimentalPythonWorkspaces?: boolean, \
          experimentalGoWorkspaces?: boolean, experimentalTaskCommand?: boolean, \
-         experimentalSetup?: boolean, hashFilePermissions?: boolean }"
+         experimentalSetup?: boolean, hashFilePermissions?: boolean, hashDependencyOutputs?: \
+         boolean }"
             .to_string()
     }
 
@@ -204,7 +221,7 @@ impl TS for FutureFlags {
          globalConfiguration?: boolean, experimentalCargoWorkspaces?: boolean, \
          experimentalPythonWorkspaces?: boolean, experimentalGoWorkspaces?: boolean, \
          experimentalTaskCommand?: boolean, experimentalSetup?: boolean, hashFilePermissions?: \
-         boolean };"
+         boolean, hashDependencyOutputs?: boolean };"
             .to_string()
     }
 
@@ -216,7 +233,7 @@ impl TS for FutureFlags {
          globalConfiguration?: boolean, experimentalCargoWorkspaces?: boolean, \
          experimentalPythonWorkspaces?: boolean, experimentalGoWorkspaces?: boolean, \
          experimentalTaskCommand?: boolean, experimentalSetup?: boolean, hashFilePermissions?: \
-         boolean };"
+         boolean, hashDependencyOutputs?: boolean };"
             .to_string()
     }
 
@@ -255,6 +272,29 @@ mod tests {
     }
 
     #[test]
+    fn hash_dependency_outputs_defaults_to_false_and_parses() {
+        assert!(!FutureFlags::default().hash_dependency_outputs);
+        for (json, expected) in [
+            (r#"{}"#, false),
+            (r#"{"futureFlags":{}}"#, false),
+            (r#"{"futureFlags":{"hashDependencyOutputs":false}}"#, false),
+            (r#"{"futureFlags":{"hashDependencyOutputs":true}}"#, true),
+        ] {
+            let raw = crate::RawRootTurboJson::parse(json, "turbo.json").unwrap();
+            assert_eq!(
+                raw.future_flags
+                    .as_ref()
+                    .map(|flags| flags.as_inner().hash_dependency_outputs)
+                    .unwrap_or_default(),
+                expected
+            );
+            let raw: crate::RawTurboJson = raw.try_into().unwrap();
+            let config = crate::TurboJson::try_from(raw).unwrap();
+            assert_eq!(config.future_flags.hash_dependency_outputs, expected);
+        }
+    }
+
+    #[test]
     fn future_flags_are_optional_in_all_typescript_forms() {
         for typescript in [
             FutureFlags::inline(),
@@ -264,6 +304,7 @@ mod tests {
         ] {
             assert!(typescript.contains("experimentalSetup?: boolean"));
             assert!(typescript.contains("hashFilePermissions?: boolean"));
+            assert!(typescript.contains("hashDependencyOutputs?: boolean"));
         }
     }
 }

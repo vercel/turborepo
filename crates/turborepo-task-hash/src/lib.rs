@@ -7,6 +7,7 @@
 #![cfg_attr(test, allow(clippy::expect_used, clippy::unwrap_used))]
 
 pub mod global_hash;
+mod output_fingerprint;
 
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
@@ -88,6 +89,12 @@ pub enum Error {
     #[error(transparent)]
     Hash(#[from] turborepo_hash::Error),
 }
+
+pub use output_fingerprint::{
+    OUTPUT_FINGERPRINT_DEFERRED_TASK_HASH_MESSAGE, OutputFingerprints,
+    contributes_output_fingerprint, output_file_hashes, output_fingerprint_dependencies,
+    output_fingerprint_globs,
+};
 
 #[derive(Debug, Default, Clone)]
 pub struct PackageInputsHashes {
@@ -355,6 +362,21 @@ pub struct DeferredHashInputs<'a> {
     pub repo_index: Option<&'a RepoGitIndex>,
     pub dependency_output_hashes: Option<Arc<FileHashes>>,
     pub dependency_output_producers: &'a HashSet<TaskId<'static>>,
+    /// With `futureFlags.hashDependencyOutputs`, output fingerprints that
+    /// replace the task hashes of the listed dependencies.
+    pub dependency_output_fingerprints: Option<&'a OutputFingerprints>,
+}
+
+/// How a task's dependencies contribute to its hash. By default each
+/// dependency contributes its task hash.
+#[derive(Clone, Copy, Default)]
+struct DependencyHashSelection<'a> {
+    /// Dependencies left out entirely, because explicit `dependencyOutputs`
+    /// inputs already hash their outputs as files.
+    excluded: Option<&'a HashSet<TaskId<'static>>>,
+    /// Dependencies that contribute an output fingerprint instead of their
+    /// task hash.
+    output_fingerprints: Option<&'a OutputFingerprints>,
 }
 
 /// Caches package-inputs hashes, and package-task hashes.
@@ -484,8 +506,72 @@ impl<'a, R: RunOptsHashInfo> TaskHasher<'a, R> {
                 telemetry,
             },
             hash_of_files,
-            None,
+            DependencyHashSelection::default(),
         )
+    }
+
+    /// Like [`Self::calculate_task_hash`], but the dependencies listed in
+    /// `output_fingerprints` contribute their output fingerprint instead of
+    /// their task hash.
+    pub fn calculate_task_hash_with_output_fingerprints<T: TaskDefinitionHashInfo>(
+        &self,
+        task: TaskHashRequest<'_, '_, '_, T>,
+        output_fingerprints: &OutputFingerprints,
+    ) -> Result<String, Error> {
+        self.validate_package_context(task.task_id, task.package_context)?;
+        let hash_of_files = self
+            .hashes
+            .get(task.task_id)
+            .ok_or_else(|| Error::MissingPackageFileHash(task.task_id.to_string()))?;
+        self.calculate_task_hash_with_file_hash(
+            task,
+            hash_of_files,
+            DependencyHashSelection {
+                excluded: None,
+                output_fingerprints: Some(output_fingerprints),
+            },
+        )
+    }
+
+    /// The output fingerprint `task_id` contributes to its dependents' hashes
+    /// in place of its task hash. `output_hashes` are the task's output files
+    /// as read from disk after it ran or was restored, keyed by
+    /// repository-relative path (see [`output_file_hashes`]).
+    /// `dependency_fingerprints` must hold the fingerprint of every
+    /// dependency in `dependency_set` that contributes one; the rest
+    /// contribute their task hash.
+    pub fn output_fingerprint(
+        &self,
+        task_id: &TaskId<'static>,
+        output_hashes: &FileHashes,
+        dependency_set: &[&TaskNode],
+        dependency_fingerprints: &OutputFingerprints,
+    ) -> Result<Arc<str>, Error> {
+        let external_deps_hash = if self.run_opts.single_package() {
+            None
+        } else {
+            Some(
+                self.external_deps_hash_cache
+                    .get(task_id.package())
+                    .ok_or_else(|| {
+                        Error::MissingExternalDependencyHash(PackageName::from(task_id.package()))
+                    })?
+                    .as_str(),
+            )
+        };
+        let dependency_hashes = self.calculate_dependency_hashes(
+            dependency_set,
+            DependencyHashSelection {
+                excluded: None,
+                output_fingerprints: Some(dependency_fingerprints),
+            },
+        )?;
+        Ok(Arc::from(output_fingerprint::fingerprint(
+            task_id,
+            external_deps_hash,
+            output_hashes,
+            &dependency_hashes,
+        )))
     }
 
     #[tracing::instrument(
@@ -517,6 +603,7 @@ impl<'a, R: RunOptsHashInfo> TaskHasher<'a, R> {
             repo_index,
             dependency_output_hashes,
             dependency_output_producers,
+            dependency_output_fingerprints,
         } = inputs;
         validate_task_context(task_id, package_context, repo_root)?;
         self.validate_package_context(task_id, package_context)?;
@@ -567,7 +654,10 @@ impl<'a, R: RunOptsHashInfo> TaskHasher<'a, R> {
                 telemetry,
             },
             &hash_of_files,
-            Some(dependency_output_producers),
+            DependencyHashSelection {
+                excluded: Some(dependency_output_producers),
+                output_fingerprints: dependency_output_fingerprints,
+            },
         )
     }
 
@@ -577,6 +667,25 @@ impl<'a, R: RunOptsHashInfo> TaskHasher<'a, R> {
         task_definition: &T,
         task_env_mode: EnvMode,
         package_context: &PackageTaskContext<'_>,
+    ) -> Result<(), Error> {
+        self.insert_deferred_hash_with_message(
+            task_id,
+            task_definition,
+            task_env_mode,
+            package_context,
+            deferred_task_hash_message(task_definition.inputs()),
+        )
+    }
+
+    /// Records a deferred task for a dry run, reporting `message` in place of
+    /// its hash.
+    pub fn insert_deferred_hash_with_message<T: TaskDefinitionHashInfo>(
+        &self,
+        task_id: &TaskId<'static>,
+        task_definition: &T,
+        task_env_mode: EnvMode,
+        package_context: &PackageTaskContext<'_>,
+        message: &'static str,
     ) -> Result<(), Error> {
         self.validate_package_context(task_id, package_context)?;
         // Report the same framework and inferred env vars that the hash will
@@ -588,7 +697,7 @@ impl<'a, R: RunOptsHashInfo> TaskHasher<'a, R> {
         self.task_hash_tracker.insert_hash(
             task_id.clone(),
             env_vars,
-            Arc::from(deferred_task_hash_message(task_definition.inputs())),
+            Arc::from(message),
             framework.map(|f| f.slug()),
         );
         Ok(())
@@ -621,7 +730,7 @@ impl<'a, R: RunOptsHashInfo> TaskHasher<'a, R> {
         &self,
         task: TaskHashRequest<'_, '_, '_, T>,
         hash_of_files: &str,
-        excluded_dependency_hashes: Option<&HashSet<TaskId<'static>>>,
+        dependency_hash_selection: DependencyHashSelection<'_>,
     ) -> Result<String, Error> {
         let TaskHashRequest {
             task_id,
@@ -650,7 +759,7 @@ impl<'a, R: RunOptsHashInfo> TaskHasher<'a, R> {
 
         let outputs = task_definition.hashable_outputs(task_id, package_context.log_namespace());
         let task_dependency_hashes =
-            self.calculate_dependency_hashes(dependency_set, excluded_dependency_hashes)?;
+            self.calculate_dependency_hashes(dependency_set, dependency_hash_selection)?;
         let external_deps_hash: Option<&str> = if !is_monorepo {
             None
         } else {
@@ -797,7 +906,7 @@ impl<'a, R: RunOptsHashInfo> TaskHasher<'a, R> {
     fn calculate_dependency_hashes(
         &self,
         dependency_set: &[&TaskNode],
-        excluded_dependency_hashes: Option<&HashSet<TaskId<'static>>>,
+        selection: DependencyHashSelection<'_>,
     ) -> Result<Vec<Arc<str>>, Error> {
         let mut dependency_hash_list = self.task_hash_tracker.with_state(|state| {
             let mut dependency_hash_list: Vec<Arc<str>> = Vec::with_capacity(dependency_set.len());
@@ -805,9 +914,17 @@ impl<'a, R: RunOptsHashInfo> TaskHasher<'a, R> {
                 let TaskNode::Task(dependency_task_id) = dependency_task else {
                     continue;
                 };
-                if excluded_dependency_hashes
+                if selection
+                    .excluded
                     .is_some_and(|excluded| excluded.contains(dependency_task_id))
                 {
+                    continue;
+                }
+                if let Some(fingerprint) = selection
+                    .output_fingerprints
+                    .and_then(|fingerprints| fingerprints.get(dependency_task_id))
+                {
+                    dependency_hash_list.push(Arc::clone(fingerprint));
                     continue;
                 }
 
@@ -1164,6 +1281,8 @@ mod test {
     mod dependency_outputs;
     #[path = "jit_inputs_test.rs"]
     mod jit_inputs;
+    #[path = "output_fingerprint_test.rs"]
+    mod output_fingerprint;
     #[path = "structured_inputs_test.rs"]
     mod structured_inputs;
     #[path = "tracked_outputs_test.rs"]
@@ -2135,6 +2254,7 @@ mod test {
                     repo_index: None,
                     dependency_output_hashes: None,
                     dependency_output_producers: &HashSet::new(),
+                    dependency_output_fingerprints: None,
                 },
             )
             .unwrap_err();

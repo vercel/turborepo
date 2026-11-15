@@ -9,11 +9,13 @@ description = "Task hashing utilities for Turborepo cache invalidation"
 dashmap = { workspace = true }
 either = { workspace = true }
 globwalk = { version = "0.1.0", path = "../turborepo-globwalk" }
+hex = { workspace = true }
 itertools = { workspace = true }
 rayon = "1.7.0"
 serde = { workspace = true, features = ["derive", "rc"] }
 thiserror = { workspace = true }
 tracing = { workspace = true }
+xxhash-rust = { version = "0.8", features = ["xxh64"] }
 
 turbopath = { workspace = true }
 turborepo-cache = { workspace = true }

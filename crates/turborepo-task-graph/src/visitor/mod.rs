@@ -33,14 +33,14 @@ use turborepo_task_executor::{
     InternalError as TaskInternalError, TaskOutput, command_invokes_turbo,
 };
 use turborepo_task_hash::{
-    DeferredHashInputs, Error as TaskHashError, GlobalHashableInputs, PackageInputsHashes,
-    TaskHashRequest, TaskHasher,
+    DeferredHashInputs, Error as TaskHashError, GlobalHashableInputs, OutputFingerprints,
+    PackageInputsHashes, TaskHashRequest, TaskHasher,
 };
 use turborepo_task_id::TaskId;
 use turborepo_telemetry::events::{
     EventBuilder, TrackedErrors, generic::GenericEventBuilder, task::PackageTaskEventBuilder,
 };
-use turborepo_types::{EnvMode, ResolvedLogOrder, ResolvedLogPrefix};
+use turborepo_types::{EnvMode, ResolvedLogOrder, ResolvedLogPrefix, TaskDefinition};
 use turborepo_ui::{ColorSelector, sender::UISender};
 use wax::Program;
 
@@ -65,6 +65,9 @@ pub struct Visitor<'a, R: TaskGraphRunOpts> {
     warnings: Arc<Mutex<Vec<TaskWarning>>>,
     micro_frontends_configs: Option<&'a MicrofrontendsConfigs>,
     managed_environment: Option<Arc<dyn turborepo_task_executor::ManagedEnvironment>>,
+    /// Output fingerprints of finished tasks, computed on first use by a
+    /// dependent under `futureFlags.hashDependencyOutputs`.
+    output_fingerprints: Mutex<OutputFingerprints>,
 }
 
 #[derive(Debug, thiserror::Error, Diagnostic)]
@@ -127,7 +130,18 @@ enum PrecomputedTask {
         task_hash: String,
         execution_env: EnvironmentVariableMap,
     },
-    Deferred,
+    Deferred(DeferredHash),
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum DeferredHash {
+    /// The hash reads files that only exist once the task's dependencies have
+    /// run (JIT inputs, `dependencyOutputs` inputs, or dependency output
+    /// fingerprints), so it is computed when the task is dispatched.
+    AtDispatch,
+    /// The hash itself is computable up front, but a dependency's hash is
+    /// deferred. It is computed as soon as that dependency is hashed.
+    OnDependencies,
 }
 
 #[derive(Debug, thiserror::Error, Diagnostic)]
@@ -320,6 +334,7 @@ impl<'a, R: TaskGraphRunOpts> Visitor<'a, R> {
             warnings: Default::default(),
             managed_environment: None,
             micro_frontends_configs,
+            output_fingerprints: Default::default(),
         })
     }
 
@@ -485,6 +500,105 @@ impl<'a, R: TaskGraphRunOpts> Visitor<'a, R> {
         }
     }
 
+    /// The dependencies of `task_id` that contribute an output fingerprint to
+    /// its hash instead of their task hash. Always empty unless
+    /// `futureFlags.hashDependencyOutputs` is enabled.
+    fn output_fingerprint_dependencies(
+        &self,
+        engine: &Engine,
+        task_id: &TaskId<'static>,
+    ) -> Vec<TaskId<'static>> {
+        if !self.run_opts.hash_dependency_outputs() {
+            return Vec::new();
+        }
+        turborepo_task_hash::output_fingerprint_dependencies(
+            engine,
+            task_id,
+            &self.repo.pkg_dep_graph,
+        )
+    }
+
+    /// What a dry run reports in place of a deferred task's hash.
+    fn deferred_hash_message(&self, task_definition: &TaskDefinition) -> &'static str {
+        // With the flag, a task without deferred inputs of its own is deferred
+        // by dependency output fingerprints, directly or through a deferred
+        // dependency.
+        if !task_definition.inputs.has_deferred_inputs() && self.run_opts.hash_dependency_outputs()
+        {
+            turborepo_task_hash::OUTPUT_FINGERPRINT_DEFERRED_TASK_HASH_MESSAGE
+        } else {
+            turborepo_task_hash::deferred_task_hash_message(&task_definition.inputs)
+        }
+    }
+
+    /// Output fingerprints for `producers`, which must have finished.
+    fn dependency_output_fingerprints(
+        &self,
+        engine: &Engine,
+        producers: &[TaskId<'static>],
+    ) -> Result<OutputFingerprints, Error> {
+        producers
+            .iter()
+            .map(|producer| Ok((producer.clone(), self.output_fingerprint(engine, producer)?)))
+            .collect()
+    }
+
+    fn locked_output_fingerprints(&self) -> std::sync::MutexGuard<'_, OutputFingerprints> {
+        self.output_fingerprints
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+    }
+
+    /// The output fingerprint of a finished task, read from its outputs on
+    /// disk. Memoized: a task's outputs don't change once its dependents
+    /// start.
+    fn output_fingerprint(
+        &self,
+        engine: &Engine,
+        task_id: &TaskId<'static>,
+    ) -> Result<Arc<str>, Error> {
+        if let Some(fingerprint) = self.locked_output_fingerprints().get(task_id) {
+            return Ok(fingerprint.clone());
+        }
+
+        let definition = engine
+            .task_definition(task_id)
+            .ok_or(Error::MissingDefinition)?;
+        let package_name = PackageName::from(task_id.package());
+        let package_context = self
+            .repo
+            .pkg_dep_graph
+            .package_task_context(&package_name)
+            .ok_or_else(|| Error::MissingPackage {
+                package_name,
+                task_id: task_id.clone(),
+            })?;
+        let output_hashes = turborepo_task_hash::output_file_hashes(
+            &self.repo.scm,
+            &self.repo.repo_root,
+            task_id,
+            definition,
+            &package_context,
+        )?;
+        let dependency_set = engine
+            .dependencies(task_id)
+            .ok_or(Error::MissingDefinition)?;
+        // This task's own qualifying dependencies finished before it did, so
+        // their fingerprints are either memoized or computable now.
+        let producers = self.output_fingerprint_dependencies(engine, task_id);
+        let dependency_fingerprints = self.dependency_output_fingerprints(engine, &producers)?;
+        let fingerprint = self.task_hasher.output_fingerprint(
+            task_id,
+            &output_hashes,
+            &dependency_set,
+            &dependency_fingerprints,
+        )?;
+        debug!("task {} output fingerprint is {}", task_id, fingerprint);
+        self.locked_output_fingerprints()
+            .insert(task_id.clone(), fingerprint.clone());
+        Ok(fingerprint)
+    }
+
     fn precompute_unblocked_deferred_hashes(
         &self,
         engine: &Engine,
@@ -504,14 +618,10 @@ impl<'a, R: TaskGraphRunOpts> Visitor<'a, R> {
         let mut ready: Vec<TaskId<'static>> = Vec::new();
 
         for (task_id, precomputed_task) in precomputed.iter() {
-            if !matches!(precomputed_task, PrecomputedTask::Deferred) {
-                continue;
-            }
-
-            let Some(task_definition) = engine.task_definition(task_id) else {
-                return Err(Error::MissingDefinition);
-            };
-            if task_definition.inputs.has_deferred_inputs() {
+            if !matches!(
+                precomputed_task,
+                PrecomputedTask::Deferred(DeferredHash::OnDependencies)
+            ) {
                 continue;
             }
 
@@ -668,7 +778,16 @@ impl<'a, R: TaskGraphRunOpts> Visitor<'a, R> {
                         deferred.contains(dependency_task_id)
                     });
 
-                if task_definition.inputs.has_deferred_inputs() || has_deferred_dependency {
+                let hashes_at_dispatch = task_definition.inputs.has_deferred_inputs()
+                    || !self
+                        .output_fingerprint_dependencies(engine, task_id)
+                        .is_empty();
+                if hashes_at_dispatch || has_deferred_dependency {
+                    let deferred_hash = if hashes_at_dispatch {
+                        DeferredHash::AtDispatch
+                    } else {
+                        DeferredHash::OnDependencies
+                    };
                     if self.dry {
                         let package_name = PackageName::from(task_id.package());
                         let package_context = self
@@ -679,14 +798,18 @@ impl<'a, R: TaskGraphRunOpts> Visitor<'a, R> {
                                 package_name,
                                 task_id: task_id.clone(),
                             })?;
-                        self.task_hasher.insert_deferred_hash(
+                        self.task_hasher.insert_deferred_hash_with_message(
                             task_id,
                             task_definition,
                             task_env_mode,
                             &package_context,
+                            self.deferred_hash_message(task_definition),
                         )?;
                     }
-                    return Ok(Some((task_id.clone(), PrecomputedTask::Deferred)));
+                    return Ok(Some((
+                        task_id.clone(),
+                        PrecomputedTask::Deferred(deferred_hash),
+                    )));
                 }
 
                 self.precompute_ready_task_hash(engine, telemetry, task_id)
@@ -701,7 +824,7 @@ impl<'a, R: TaskGraphRunOpts> Visitor<'a, R> {
 
             for result in wave_results {
                 if let Some((task_id, precomputed)) = result? {
-                    if matches!(precomputed, PrecomputedTask::Deferred) {
+                    if matches!(precomputed, PrecomputedTask::Deferred(_)) {
                         deferred.insert(task_id.clone());
                     }
                     if !self.dry {
@@ -825,13 +948,10 @@ impl<'a, R: TaskGraphRunOpts> Visitor<'a, R> {
                     task_hash,
                     execution_env,
                 } => (task_hash, execution_env),
-                PrecomputedTask::Deferred => {
+                PrecomputedTask::Deferred(_) => {
                     if self.dry {
                         (
-                            turborepo_task_hash::deferred_task_hash_message(
-                                &task_definition.inputs,
-                            )
-                            .to_string(),
+                            self.deferred_hash_message(task_definition).to_string(),
                             EnvironmentVariableMap::default(),
                         )
                     } else {
@@ -848,6 +968,27 @@ impl<'a, R: TaskGraphRunOpts> Visitor<'a, R> {
                             PackageTaskEventBuilder::new(info.package(), info.task())
                                 .with_parent(telemetry);
                         let task_hash_telemetry = package_task_event.child();
+                        // Every dependency has finished, so the outputs of
+                        // those that contribute a fingerprint are on disk.
+                        let fingerprint_producers =
+                            self.output_fingerprint_dependencies(&engine, &info);
+                        let dependency_output_fingerprints = match self
+                            .dependency_output_fingerprints(&engine, &fingerprint_producers)
+                        {
+                            Ok(fingerprints) => fingerprints,
+                            Err(err) => {
+                                dispatch_error = Some(err);
+                                break;
+                            }
+                        };
+                        let task_request = TaskHashRequest {
+                            task_id: &info,
+                            task_definition,
+                            task_env_mode,
+                            package_context: &package_context,
+                            dependency_set: &dependency_set,
+                            telemetry: task_hash_telemetry,
+                        };
                         let task_hash = if task_definition.inputs.has_deferred_inputs() {
                             let (dependency_output_hashes, dependency_output_producers) =
                                 match self.dependency_output_hashes(&engine, &info) {
@@ -858,14 +999,7 @@ impl<'a, R: TaskGraphRunOpts> Visitor<'a, R> {
                                     }
                                 };
                             match self.task_hasher.calculate_task_hash_with_deferred_inputs(
-                                TaskHashRequest {
-                                    task_id: &info,
-                                    task_definition,
-                                    task_env_mode,
-                                    package_context: &package_context,
-                                    dependency_set: &dependency_set,
-                                    telemetry: task_hash_telemetry,
-                                },
+                                task_request,
                                 DeferredHashInputs {
                                     scm: &self.repo.scm,
                                     repo_root: &self.repo.repo_root,
@@ -874,8 +1008,24 @@ impl<'a, R: TaskGraphRunOpts> Visitor<'a, R> {
                                     repo_index: None,
                                     dependency_output_hashes,
                                     dependency_output_producers: &dependency_output_producers,
+                                    dependency_output_fingerprints: (!fingerprint_producers
+                                        .is_empty())
+                                    .then_some(&dependency_output_fingerprints),
                                 },
                             ) {
+                                Ok(hash) => hash,
+                                Err(err) => {
+                                    dispatch_error = Some(Error::TaskHash(err));
+                                    break;
+                                }
+                            }
+                        } else if !fingerprint_producers.is_empty() {
+                            match self
+                                .task_hasher
+                                .calculate_task_hash_with_output_fingerprints(
+                                    task_request,
+                                    &dependency_output_fingerprints,
+                                ) {
                                 Ok(hash) => hash,
                                 Err(err) => {
                                     dispatch_error = Some(Error::TaskHash(err));
@@ -889,7 +1039,7 @@ impl<'a, R: TaskGraphRunOpts> Visitor<'a, R> {
                                 task_env_mode,
                                 &package_context,
                                 &dependency_set,
-                                task_hash_telemetry,
+                                task_request.telemetry,
                             ) {
                                 Ok(hash) => hash,
                                 Err(err) => {

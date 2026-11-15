@@ -106,6 +106,7 @@ fn deferred_task_hash(
                 repo_index: None,
                 dependency_output_hashes: None,
                 dependency_output_producers: &HashSet::new(),
+                dependency_output_fingerprints: None,
             },
         )
         .unwrap()

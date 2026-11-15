@@ -123,6 +123,8 @@ where
             hash.as_ref(),
             "Deferred because JIT hashing mode was used."
                 | "Deferred because dependencyOutputs hashing mode was used."
+                | "Deferred because hashDependencyOutputs hashes dependency outputs after they \
+                   are built."
         );
         let hash_reason = hash_is_deferred.then(|| hash.to_string());
         let hash = (!hash_is_deferred).then_some(hash);
@@ -828,6 +830,20 @@ mod tests {
         assert_eq!(
             deferred["hashReason"],
             "Deferred because dependencyOutputs hashing mode was used."
+        );
+        hashes.hashes.insert(
+            task.to_string(),
+            Arc::from(
+                "Deferred because hashDependencyOutputs hashes dependency outputs after they are \
+                 built.",
+            ),
+        );
+        let deferred = serde_json::to_value(plan(&hashes).unwrap()).unwrap();
+        assert!(deferred["hash"].is_null());
+        assert_eq!(
+            deferred["hashReason"],
+            "Deferred because hashDependencyOutputs hashes dependency outputs after they are \
+             built."
         );
         hashes.hashes.remove(&task.to_string());
         assert!(matches!(plan(&hashes), Err(Error::MissingHash(id)) if id == task));

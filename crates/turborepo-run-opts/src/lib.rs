@@ -412,6 +412,9 @@ pub struct RunOpts {
     pub summarize: bool,
     pub is_github_actions: bool,
     pub ui_mode: UIMode,
+    /// `futureFlags.hashDependencyOutputs`: hash dependents by the contents
+    /// of their dependencies' outputs.
+    pub hash_dependency_outputs: bool,
 }
 
 impl RunOpts {
@@ -455,6 +458,10 @@ impl turborepo_task_graph::TaskGraphRunOpts for RunOpts {
 
     fn ui_mode(&self) -> UIMode {
         self.ui_mode
+    }
+
+    fn hash_dependency_outputs(&self) -> bool {
+        self.hash_dependency_outputs
     }
 }
 
@@ -554,6 +561,7 @@ impl<'a> TryFrom<OptsInputs<'a>> for RunOpts {
             } else {
                 inputs.config.ui()
             },
+            hash_dependency_outputs: inputs.config.future_flags().hash_dependency_outputs,
         })
     }
 }
@@ -987,6 +995,7 @@ mod test {
             summarize: false,
             is_github_actions: false,
             daemon: None,
+            hash_dependency_outputs: false,
         };
         let cache_opts = CacheOpts {
             cache_dir: ".turbo/cache".into(),
