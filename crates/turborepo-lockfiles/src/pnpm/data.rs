@@ -323,6 +323,19 @@ struct LockfileSettings {
     other: Map<String, serde_yaml_ng::Value>,
 }
 
+/// Reads only `lockfileVersion` from the last YAML document, the one that holds
+/// the lockfile. Used to explain a failed parse, so any error here is ignored.
+fn last_document_version(bytes: &[u8]) -> Option<LockfileVersion> {
+    #[derive(Deserialize)]
+    struct VersionOnly {
+        #[serde(rename = "lockfileVersion")]
+        lockfile_version: Option<LockfileVersion>,
+    }
+
+    let document = serde_yaml_ng::Deserializer::from_slice(bytes).last()?;
+    VersionOnly::deserialize(document).ok()?.lockfile_version
+}
+
 impl PnpmLockfile {
     pub fn from_bytes(bytes: &[u8]) -> Result<Self, crate::Error> {
         // Machine-generated pnpm lockfiles parse on a fast event-driven path
@@ -331,6 +344,7 @@ impl PnpmLockfile {
         // take the serde path below, which either handles them (e.g. multi-
         // document lockfiles) or reports a proper error.
         if let Some(mut this) = fast_parse::parse(bytes) {
+            this.lockfile_version.ensure_supported()?;
             this.cached_version = this.compute_version();
             this.build_dependency_index();
             return Ok(this);
@@ -354,7 +368,18 @@ impl PnpmLockfile {
                 continue;
             }
 
-            let mut this: Self = Self::deserialize(document)?;
+            let mut this: Self = match Self::deserialize(document) {
+                Ok(this) => this,
+                Err(err) => {
+                    // A newer lockfile layout fails here with an error about some
+                    // field it no longer has. Report the version instead.
+                    if let Some(version) = last_document_version(bytes) {
+                        version.ensure_supported()?;
+                    }
+                    return Err(err.into());
+                }
+            };
+            this.lockfile_version.ensure_supported()?;
             this.leading_documents = leading_documents;
             this.normalize_single_project_lockfile()?;
             this.cached_version = this.compute_version();
@@ -363,6 +388,7 @@ impl PnpmLockfile {
         }
 
         let mut this: Self = serde_yaml_ng::from_slice(bytes)?;
+        this.lockfile_version.ensure_supported()?;
         this.normalize_single_project_lockfile()?;
         this.cached_version = this.compute_version();
         this.build_dependency_index();
@@ -1645,6 +1671,7 @@ mod tests {
     use std::collections::HashMap;
 
     use pretty_assertions::assert_eq;
+    use test_case::test_case;
 
     use super::*;
     use crate::Lockfile;
@@ -2151,6 +2178,109 @@ snapshots:
             .expect("apps/web dependency should resolve from the final document");
         assert_eq!(package.key, "is-odd@3.0.1");
         assert_eq!(package.version, "3.0.1");
+    }
+
+    // Shape of a pnpm 12.20 lockfile written with the experimental
+    // `lockfile.format: v13`: the v9 env document, then the lockfile itself as
+    // tab-indented flow YAML with `projects` and merged `packages`.
+    const PNPM_V13_LOCKFILE: &str = r#"---
+lockfileVersion: '9.0'
+
+importers:
+
+  .:
+    configDependencies: {}
+    packageManagerDependencies:
+      pnpm:
+        specifier: 12.20.0
+        version: 12.20.0
+
+packages:
+
+  pnpm@12.20.0:
+    resolution: {integrity: sha512-AAAA}
+    hasBin: true
+
+snapshots:
+
+  pnpm@12.20.0: {}
+
+---
+{
+	"lockfileVersion": "13.0",
+
+	"settings": {
+		"autoInstallPeers": true,
+		"excludeLinksFromLockfile": false,
+	},
+
+	"projects": {
+		"packages/a": {
+			"name": "a",
+			"dependencies": {
+				"is-number": "7.0.0",
+			},
+		},
+	},
+
+	"packages": {
+		"is-number@7.0.0": {
+			"integrity": "sha512-BBBB",
+			"engines": {"node": ">=0.12.0"},
+		},
+	},
+}
+"#;
+
+    fn unsupported_version(result: Result<PnpmLockfile, crate::Error>) -> Option<String> {
+        match result {
+            Err(crate::Error::Pnpm(Error::UnsupportedVersion(version))) => Some(version),
+            _ => None,
+        }
+    }
+
+    #[test]
+    fn test_from_bytes_reports_pnpm_v13_lockfile_as_unsupported_version() {
+        let result = PnpmLockfile::from_bytes(PNPM_V13_LOCKFILE.as_bytes());
+        let err = result.as_ref().err().map(ToString::to_string);
+
+        assert_eq!(
+            unsupported_version(result).as_deref(),
+            Some("13.0"),
+            "{err:?}"
+        );
+        let message = err.unwrap();
+        assert!(message.contains("lockfile.format: v13"), "{message}");
+        assert!(message.contains("pnpm install --fix-lockfile"), "{message}");
+    }
+
+    #[test]
+    fn test_from_bytes_rejects_newer_lockfile_version_that_parses() {
+        // Parses with the v6 layout, so only the version gate stops it.
+        let yaml = "lockfileVersion: '10.0'\n\nimporters:\n\n  .: {}\n";
+
+        assert_eq!(
+            unsupported_version(PnpmLockfile::from_bytes(yaml.as_bytes())).as_deref(),
+            Some("10.0")
+        );
+        assert_eq!(
+            unsupported_version(PnpmLockfile::from_bytes_via_serde(yaml.as_bytes())).as_deref(),
+            Some("10.0")
+        );
+    }
+
+    #[test_case("5.4" ; "v5 float")]
+    #[test_case("'6.0'" ; "v6")]
+    #[test_case("'6.1'" ; "v6 minor")]
+    #[test_case("'7.0'" ; "v7")]
+    #[test_case("'9.0'" ; "v9")]
+    fn test_from_bytes_accepts_known_lockfile_versions(version: &str) {
+        let yaml = format!("lockfileVersion: {version}\n\nimporters:\n\n  .: {{}}\n");
+
+        assert!(
+            PnpmLockfile::from_bytes(yaml.as_bytes()).is_ok(),
+            "{version}"
+        );
     }
 
     #[test]

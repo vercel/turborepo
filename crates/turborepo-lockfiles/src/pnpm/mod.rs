@@ -13,7 +13,11 @@ pub enum Error {
     DependencyPath(#[from] dep_path::Error),
     #[error("Unable to find '{0}' other than reference in `dependenciesMeta`")]
     MissingInjectedPackage(String),
-    #[error("Unsupported lockfile version: {0}")]
+    #[error(
+        "Unsupported pnpm lockfile version {0}. Turborepo reads pnpm lockfiles up to version 9.0. \
+         If you enabled pnpm's experimental `lockfile.format: v13`, remove it (or set it to `v9`) \
+         and run `pnpm install --fix-lockfile`."
+    )]
     UnsupportedVersion(String),
     #[error(
         "Root `{section}.{name}` entry does not match the dependency format of lockfileVersion \
@@ -36,6 +40,32 @@ struct LockfileVersion {
 enum VersionFormat {
     String,
     Float,
+}
+
+/// The newest lockfile major version this parser understands. pnpm 9 through
+/// 12 write `9.0` by default; pnpm 12.20's experimental `lockfile.format: v13`
+/// writes `13.0` with a different layout. Reading a newer version with the v6
+/// layout (the fallback for unknown string versions) would only fail with an
+/// unrelated serde error, or worse, succeed with a wrong graph.
+const NEWEST_SUPPORTED_MAJOR: u32 = 9;
+
+impl LockfileVersion {
+    fn ensure_supported(&self) -> Result<(), Error> {
+        if !matches!(self.format, VersionFormat::String) {
+            return Ok(());
+        }
+        let major = self
+            .version
+            .split('.')
+            .next()
+            .and_then(|major| major.parse::<u32>().ok());
+        match major {
+            Some(major) if major > NEWEST_SUPPORTED_MAJOR => {
+                Err(Error::UnsupportedVersion(self.version.clone()))
+            }
+            _ => Ok(()),
+        }
+    }
 }
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
