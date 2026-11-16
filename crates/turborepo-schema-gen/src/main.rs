@@ -957,6 +957,16 @@ export interface FutureFlags {
    * @defaultValue `false`
    */
   experimentalSetup?: boolean;
+  /**
+   * Skip restoring the cached outputs of dependency-only tasks when no task
+   * that runs in this invocation needs them. Applies to filtered and
+   * `--affected` runs: selected tasks and the dependencies of tasks that
+   * execute are still restored, while other dependency cache hits are only
+   * reported. Disabled by default.
+   *
+   * @defaultValue `false`
+   */
+  skipUnusedRestores?: boolean;
 }
 
 "#
@@ -1337,6 +1347,21 @@ mod cli_tests {
                 .is_none_or(|fields| !fields.contains(&serde_json::json!("hashFilePermissions")))
         );
         assert!(super::generate_typescript().contains("hashFilePermissions?: boolean;"));
+    }
+
+    #[test]
+    fn skip_unused_restores_is_an_optional_boolean_future_flag() {
+        let schema = serde_json::to_value(super::generate_schema()).unwrap();
+        let flags = &schema["definitions"]["FutureFlags"];
+        let flag = &flags["properties"]["skipUnusedRestores"];
+        assert_eq!(flag["type"], "boolean");
+        assert_eq!(flag["default"], false);
+        assert!(
+            flags["required"]
+                .as_array()
+                .is_none_or(|fields| !fields.contains(&serde_json::json!("skipUnusedRestores")))
+        );
+        assert!(super::generate_typescript().contains("skipUnusedRestores?: boolean;"));
     }
 
     #[test]

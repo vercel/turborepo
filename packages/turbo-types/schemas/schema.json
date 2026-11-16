@@ -459,6 +459,11 @@
           "default": false,
           "type": "boolean"
         },
+        "skipUnusedRestores": {
+          "description": "Skip restoring the cached outputs of dependency-only tasks when no task that runs in this invocation needs them. Applies to filtered and `--affected` runs: selected tasks and the dependencies of tasks that execute are still restored, while other dependency cache hits are only reported. Disabled by default.",
+          "default": false,
+          "type": "boolean"
+        },
         "strictTaskEntrypointSelection": {
           "description": "Select requested task entrypoints according to whether the task resolves a command in the repository. When any package can run a requested task, packages without a command are not used as entrypoints. Tasks with no command anywhere remain available for graph-only orchestration, and missing tasks reached as dependencies remain in the Task Graph.",
           "default": false,

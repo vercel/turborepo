@@ -327,6 +327,11 @@
           "default": false,
           "type": "boolean"
         },
+        "skipUnusedRestores": {
+          "description": "Skip restoring the cached outputs of dependency-only tasks when no task that runs in this invocation needs them. Applies to filtered and `--affected` runs: selected tasks and the dependencies of tasks that execute are still restored, while other dependency cache hits are only reported. Disabled by default.",
+          "default": false,
+          "type": "boolean"
+        },
         "watchUsingTaskInputs": {
           "description": "Use task-level `inputs` globs to determine which tasks to re-run when files change in `turbo watch`. When enabled, only tasks whose declared inputs match the changed files are re-executed, rather than re-running all tasks in changed packages.",
           "default": false,

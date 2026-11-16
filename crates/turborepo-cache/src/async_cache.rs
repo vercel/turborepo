@@ -205,8 +205,9 @@ impl AsyncCache {
         self.real_cache.exists(key).await
     }
 
-    /// Only dry runs use the query endpoint; ordinary cache reads retain their
-    /// existing HEAD/GET behavior.
+    /// Dry runs share the query endpoint through a batching worker; ordinary
+    /// cache reads retain their existing HEAD/GET behavior. Real runs only
+    /// query existence in bulk through [`Self::batch_exists`].
     pub async fn dry_run_exists(&self, key: &str) -> Result<Option<CacheHitMetadata>, CacheError> {
         // Batching only helps share a remote query. Without a remote cache the
         // batch is a sequence of local lookups, and joining it would only add
@@ -219,6 +220,61 @@ impl AsyncCache {
             .send((key.to_owned(), sender))
             .map_err(|_| CacheError::CacheShuttingDown)?;
         receiver.await.map_err(|_| CacheError::CacheShuttingDown)
+    }
+
+    /// Checks many keys at once, returning one result per key in order. Used
+    /// to learn which tasks are cache hits before any of them run, without
+    /// downloading or restoring artifacts. Local entries take precedence;
+    /// the remaining keys share batched remote queries, and a server
+    /// without the query endpoint is asked through individual HEADs.
+    #[tracing::instrument(skip_all, fields(keys = keys.len()))]
+    pub async fn batch_exists(&self, keys: &[String]) -> Vec<Option<CacheHitMetadata>> {
+        // Bounds one query's request body; a few queries run at once.
+        const KEYS_PER_QUERY: usize = 100;
+        const CONCURRENT_QUERIES: usize = 4;
+        // Each local lookup reads one small file. Spread them over the
+        // blocking pool: they run before any task starts.
+        const KEYS_PER_LOCAL_LOOKUP: usize = 32;
+
+        let local_lookups = keys.chunks(KEYS_PER_LOCAL_LOOKUP).map(|chunk| {
+            let cache = self.real_cache.clone();
+            let chunk = chunk.to_vec();
+            tokio::task::spawn_blocking(move || {
+                chunk
+                    .iter()
+                    .map(|key| cache.local_exists(key))
+                    .collect::<Vec<_>>()
+            })
+        });
+        let mut hits = Vec::with_capacity(keys.len());
+        for (lookup, chunk) in futures::future::join_all(local_lookups)
+            .await
+            .into_iter()
+            .zip(keys.chunks(KEYS_PER_LOCAL_LOOKUP))
+        {
+            hits.extend(lookup.unwrap_or_else(|_| vec![None; chunk.len()]));
+        }
+        if !self.real_cache.may_read_remote() {
+            return hits;
+        }
+
+        let misses: Vec<usize> = (0..keys.len()).filter(|&i| hits[i].is_none()).collect();
+        let queries: Vec<_> = misses
+            .chunks(KEYS_PER_QUERY)
+            .map(|indices| {
+                let cache = self.real_cache.clone();
+                let chunk: Vec<String> = indices.iter().map(|&i| keys[i].clone()).collect();
+                async move { cache.remote_batch_exists(&chunk).await }
+            })
+            .collect();
+        let results: Vec<Vec<_>> = futures::stream::iter(queries)
+            .buffered(CONCURRENT_QUERIES)
+            .collect()
+            .await;
+        for (index, hit) in misses.into_iter().zip(results.into_iter().flatten()) {
+            hits[index] = hit;
+        }
+        hits
     }
 
     #[tracing::instrument(skip_all)]
@@ -357,6 +413,79 @@ mod tests {
         );
         query.assert_calls_async(1).await;
         head.assert_calls_async(1).await;
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn batch_exists_splits_remote_queries_and_keeps_key_order() -> Result<()> {
+        let keys: Vec<_> = (0..250).map(|index| format!("key-{index}")).collect();
+        // Every third key is a hit whose duration identifies it.
+        let body: serde_json::Map<_, _> = keys
+            .iter()
+            .enumerate()
+            .map(|(index, key)| {
+                let hit = (index % 3 == 0)
+                    .then(|| serde_json::json!({ "size": 1, "taskDurationMs": index }));
+                (key.clone(), hit.unwrap_or(serde_json::Value::Null))
+            })
+            .collect();
+        let server = httpmock::MockServer::start_async().await;
+        let query = server
+            .mock_async(|when, then| {
+                when.method(httpmock::Method::POST).path("/v8/artifacts");
+                then.status(200).json_body(serde_json::Value::Object(body));
+            })
+            .await;
+        let head = server
+            .mock_async(|when, then| {
+                when.method(httpmock::Method::HEAD);
+                then.status(404);
+            })
+            .await;
+        let root = tempdir()?;
+        let root = AbsoluteSystemPathBuf::try_from(root.path())?;
+        let opts = CacheOpts {
+            cache_dir: ".turbo/cache".into(),
+            cache: CacheConfig::remote_only(),
+            workers: 1,
+            remote_cache_opts: None,
+            cache_max_age: None,
+            cache_max_size: None,
+        };
+        let cache = AsyncCache::new(
+            &opts,
+            &root,
+            Some(APIClient::new(
+                server.base_url(),
+                None,
+                None,
+                "2.0.0",
+                false,
+            )?),
+            Some(APIAuth {
+                team_id: None,
+                team_slug: None,
+                token: Credential::from("test-token"),
+            }),
+            None,
+            LazyScmState::resolved(None),
+        )?;
+
+        let hits = cache.batch_exists(&keys).await;
+        assert_eq!(hits.len(), keys.len());
+        for (index, hit) in hits.iter().enumerate() {
+            match hit {
+                Some(hit) => {
+                    assert_eq!(index % 3, 0, "key-{index}");
+                    assert_eq!(hit.time_saved, index as u64);
+                    assert_eq!(hit.source, CacheSource::Remote);
+                }
+                None => assert_ne!(index % 3, 0, "key-{index}"),
+            }
+        }
+        // 250 keys take three queries and no per-key requests.
+        query.assert_calls_async(3).await;
+        head.assert_calls_async(0).await;
         Ok(())
     }
 

@@ -1499,6 +1499,11 @@ pub trait HashTrackerInfo {
     fn framework(&self, task_id: &TaskId) -> Option<String>;
     /// Returns the expanded input file hashes for a task, sorted by path.
     fn expanded_inputs(&self, task_id: &TaskId) -> Option<Vec<(RelativeUnixPathBuf, String)>>;
+    /// Whether a cache hit's outputs were restored to disk. Hits are restored
+    /// unless the run determined that nothing reads their outputs.
+    fn outputs_restored(&self, _task_id: &TaskId) -> bool {
+        true
+    }
 }
 
 /// Detailed environment variable map for hash tracking.

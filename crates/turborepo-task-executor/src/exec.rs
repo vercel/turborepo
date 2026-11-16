@@ -11,6 +11,7 @@ use std::{
     collections::HashMap,
     future::Future,
     io::Write,
+    pin::Pin,
     sync::{Arc, Mutex, OnceLock},
     time::{Duration, Instant},
 };
@@ -187,12 +188,27 @@ pub trait HashTrackerProvider: Clone + Send {
     /// Record the cache status for a task.
     fn insert_cache_status(&self, task_id: TaskId<'static>, status: CacheHitMetadata);
 
+    /// Record whether a cache hit's outputs were restored to disk.
+    fn set_outputs_restored(&self, _task_id: TaskId<'static>, _restored: bool) {}
+
     /// Record the expanded outputs for a task.
     fn insert_expanded_outputs(
         &self,
         task_id: TaskId<'static>,
         outputs: Vec<AnchoredSystemPathBuf>,
     );
+}
+
+/// Restores the outputs of a task's dependencies that a run decided not to
+/// restore when they were visited, because it expected nothing to read them.
+pub trait DependencyOutputs: Send + Sync {
+    /// Ensures the outputs of every transitive dependency of `task_id` are on
+    /// disk. Returns a description of the failure when some could not be
+    /// restored.
+    fn restore_for<'a>(
+        &'a self,
+        task_id: &'a TaskId<'static>,
+    ) -> Pin<Box<dyn Future<Output = Result<(), String>> + Send + 'a>>;
 }
 
 /// Provider trait for collecting task errors.
@@ -245,6 +261,13 @@ pub struct TaskExecutor<H, E, W, A> {
 
     // Cache
     pub task_cache: TaskCache,
+    /// A cache hit found when the run was planned, for a task whose outputs
+    /// no running task reads: the hit is reported without restoring outputs
+    /// or replaying logs.
+    pub unrestored_hit: Option<CacheHitMetadata>,
+    /// Restores dependency outputs that were skipped, in case this task has
+    /// to execute after all.
+    pub dependency_outputs: Option<Arc<dyn DependencyOutputs>>,
 
     // Providers
     pub hash_tracker: H,
@@ -394,6 +417,15 @@ where
         }
 
         let tui_sender = task_output.sender();
+        if let Some(status) = self.unrestored_hit.take() {
+            self.task_cache
+                .report_unrestored_hit(task_handle, tui_sender);
+            self.hash_tracker
+                .insert_cache_status(self.task_id.clone(), status);
+            self.hash_tracker
+                .set_outputs_restored(self.task_id.clone(), false);
+            return Ok(ExecOutcome::Success(SuccessOutcome::CacheHit));
+        }
         let cache_result = validated_restore(
             self.task_cache
                 .restore_outputs(task_handle, tui_sender, telemetry)
@@ -420,6 +452,26 @@ where
                     format!("error fetching from cache: {e}"),
                 ));
             }
+        }
+
+        // Everything this task depends on must be on disk before it runs,
+        // including outputs whose restore was skipped while planning.
+        if let Some(dependency_outputs) = &self.dependency_outputs
+            && let Err(message) = dependency_outputs.restore_for(&self.task_id).await
+        {
+            task_handle.emit(turborepo_log::LogEvent::new(
+                turborepo_log::Level::Error,
+                turborepo_log::Source::task(&self.task_id_for_display),
+                message.clone(),
+            ));
+            self.errors.push_spawn_error(
+                self.task_id_for_display.clone(),
+                std::io::Error::other(message.clone()),
+            );
+            return Ok(ExecOutcome::Task {
+                exit_code: None,
+                message,
+            });
         }
 
         // Commands in a serial group run one at a time: their tools hold

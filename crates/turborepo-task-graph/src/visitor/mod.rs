@@ -1,5 +1,6 @@
 mod command;
 mod exec;
+mod restore_plan;
 
 use std::{
     borrow::Cow,
@@ -65,6 +66,22 @@ pub struct Visitor<'a, R: TaskGraphRunOpts> {
     warnings: Arc<Mutex<Vec<TaskWarning>>>,
     micro_frontends_configs: Option<&'a MicrofrontendsConfigs>,
     managed_environment: Option<Arc<dyn turborepo_task_executor::ManagedEnvironment>>,
+    skip_unused_restores: bool,
+}
+
+/// Tasks to plan restores for, before any cache lookup.
+struct RestoreCandidates {
+    expectations: HashMap<TaskId<'static>, restore_plan::Expectation>,
+    /// Cacheable tasks with known hashes, whose status is looked up.
+    lookups: Vec<(TaskId<'static>, String)>,
+}
+
+/// Cache hits this run will not restore, decided before dispatch.
+struct RestorePlan {
+    unrestored: HashMap<TaskId<'static>, turborepo_cache::CacheHitMetadata>,
+    /// Tasks expected to execute. Their dependencies are restored as usual.
+    executing: HashSet<TaskId<'static>>,
+    skipped_outputs: Arc<restore_plan::SkippedOutputs>,
 }
 
 #[derive(Debug, thiserror::Error, Diagnostic)]
@@ -320,6 +337,122 @@ impl<'a, R: TaskGraphRunOpts> Visitor<'a, R> {
             warnings: Default::default(),
             managed_environment: None,
             micro_frontends_configs,
+            skip_unused_restores: false,
+        })
+    }
+
+    /// Skip restoring cache hits of tasks that were not selected when no task
+    /// that executes depends on them. Has no effect on dry runs or watch mode.
+    pub fn with_skip_unused_restores(mut self, enabled: bool) -> Self {
+        self.skip_unused_restores = enabled;
+        self
+    }
+
+    /// Classifies tasks for restore planning without touching the cache:
+    /// tasks without a command or that will execute regardless, plus the
+    /// tasks (and hashes) whose cache status must be looked up. Returns
+    /// `None` when this run restores every hit as usual.
+    fn restore_candidates(
+        &self,
+        engine: &Engine,
+        precomputed: &HashMap<TaskId<'static>, PrecomputedTask>,
+        hash_order: &[TaskId<'static>],
+        factory: &ExecContextFactory<'_, R>,
+    ) -> Option<RestoreCandidates> {
+        if !self.skip_unused_restores || self.dry || self.is_watch {
+            return None;
+        }
+        // Only a run with unselected dependencies can skip anything.
+        if hash_order
+            .iter()
+            .all(|task_id| engine.is_entrypoint(task_id))
+        {
+            return None;
+        }
+
+        let mut expectations = HashMap::with_capacity(hash_order.len());
+        let mut lookups = Vec::new();
+        for task_id in hash_order {
+            let expectation = if !factory.has_command(task_id) {
+                restore_plan::Expectation::NoCommand
+            } else {
+                match (precomputed.get(task_id), engine.task_definition(task_id)) {
+                    (Some(PrecomputedTask::Ready { task_hash, .. }), Some(definition))
+                        if definition.cache =>
+                    {
+                        lookups.push((task_id.clone(), task_hash.clone()));
+                        continue;
+                    }
+                    // Uncacheable, or hashed only after its dependencies run.
+                    _ => restore_plan::Expectation::Executes,
+                }
+            };
+            expectations.insert(task_id.clone(), expectation);
+        }
+        Some(RestoreCandidates {
+            expectations,
+            lookups,
+        })
+    }
+
+    /// Learns the cache status of every candidate up front, then picks the
+    /// hits whose outputs no executing task can read. Returns `None` when
+    /// every hit is restored as usual.
+    async fn plan_restores(
+        &self,
+        engine: &Arc<Engine>,
+        candidates: RestoreCandidates,
+    ) -> Option<RestorePlan> {
+        let RestoreCandidates {
+            mut expectations,
+            lookups,
+        } = candidates;
+        let hashes: Vec<String> = lookups.iter().map(|(_, hash)| hash.clone()).collect();
+        let statuses = self
+            .run_cache
+            .batch_exists(&hashes)
+            .instrument(tracing::info_span!("plan_restores", tasks = hashes.len()))
+            .await;
+        let mut task_hashes = HashMap::with_capacity(lookups.len());
+        for ((task_id, hash), status) in lookups.into_iter().zip(statuses) {
+            let expectation = match status {
+                Some(status) => restore_plan::Expectation::Hit(status),
+                None => restore_plan::Expectation::Executes,
+            };
+            expectations.insert(task_id.clone(), expectation);
+            task_hashes.insert(task_id, hash);
+        }
+
+        let unrestored = restore_plan::unread_hits(
+            &expectations,
+            |task_id| engine.is_entrypoint(task_id),
+            |task_id| restore_plan::task_dependencies(engine, task_id),
+        );
+        debug!(
+            "skipping restores for {} of {} tasks whose outputs are unused",
+            unrestored.len(),
+            expectations.len()
+        );
+        if unrestored.is_empty() {
+            return None;
+        }
+        let executing = expectations
+            .into_iter()
+            .filter(|(_, expectation)| matches!(expectation, restore_plan::Expectation::Executes))
+            .map(|(task_id, _)| task_id)
+            .collect();
+        let skipped_outputs = Arc::new(restore_plan::SkippedOutputs::new(
+            engine.clone(),
+            self.run_cache.clone(),
+            self.task_hasher.task_hash_tracker(),
+            unrestored
+                .keys()
+                .filter_map(|task_id| Some((task_id.clone(), task_hashes.get(task_id)?.clone()))),
+        ));
+        Some(RestorePlan {
+            unrestored,
+            executing,
+            skipped_outputs,
         })
     }
 
@@ -748,10 +881,20 @@ impl<'a, R: TaskGraphRunOpts> Visitor<'a, R> {
 
         let factory = ExecContextFactory::new(self, errors.clone(), self.manager.clone(), &engine)?;
 
+        // Classify before awaiting: the factory must not be held across the
+        // cache lookup.
+        let restore_candidates =
+            self.restore_candidates(&engine, &precomputed, &hash_order, &factory);
+        let restore_plan = match restore_candidates {
+            Some(candidates) => self.plan_restores(&engine, candidates).await,
+            None => None,
+        };
+
         // Every hash that isn't deferred is known now, so start downloading
         // remote artifacts instead of waiting for each task's dependencies to
         // finish. Only tasks that will try a cache restore when dispatched are
-        // included: caching enabled and a command to run.
+        // included: caching enabled, a command to run, and not a hit this run
+        // leaves unrestored.
         if !self.dry {
             self.run_cache.prefetch_remote(
                 || {
@@ -764,7 +907,11 @@ impl<'a, R: TaskGraphRunOpts> Visitor<'a, R> {
                                 return None;
                             };
                             let caches = engine.task_definition(task_id)?.cache;
-                            (caches && factory.has_command(task_id)).then(|| task_hash.clone())
+                            let restores = restore_plan
+                                .as_ref()
+                                .is_none_or(|plan| !plan.unrestored.contains_key(task_id));
+                            (caches && restores && factory.has_command(task_id))
+                                .then(|| task_hash.clone())
                         })
                         .collect()
                 },
@@ -984,6 +1131,15 @@ impl<'a, R: TaskGraphRunOpts> Visitor<'a, R> {
                     let Some(mut exec_context) = exec_context else {
                         continue;
                     };
+                    if let Some(plan) = &restore_plan {
+                        exec_context.unrestored_hit = plan.unrestored.get(&info).cloned();
+                        // A task expected to execute has its dependencies
+                        // restored already; any other task might still miss.
+                        if exec_context.unrestored_hit.is_none() && !plan.executing.contains(&info)
+                        {
+                            exec_context.dependency_outputs = Some(plan.skipped_outputs.clone());
+                        }
+                    }
 
                     let task_id_str = info.to_string();
                     let task_prefix = self.prefix(&info);

@@ -244,6 +244,34 @@ impl RunCache {
         self.cache.prefetch_remote(hashes, concurrency);
     }
 
+    /// Checks which of `hashes` are cache hits without restoring anything,
+    /// returning one result per hash in order. Every result is `None` where
+    /// `restore_outputs` would not read the cache: with reads disabled, in dry
+    /// runs, or with an output watcher.
+    pub async fn batch_exists(&self, hashes: &[String]) -> Vec<Option<CacheHitMetadata>> {
+        if self.reads_disabled || self.is_dry_run || self.output_watcher.is_some() {
+            return vec![None; hashes.len()];
+        }
+        self.cache.batch_exists(hashes).await
+    }
+
+    /// Restores the outputs cached under `hash` without replaying logs,
+    /// returning the restored files, or `None` if there is no cache entry.
+    /// Used when outputs whose restore was skipped turn out to be needed.
+    pub async fn restore_outputs_for_hash(
+        &self,
+        hash: &str,
+    ) -> Result<Option<Vec<AnchoredSystemPathBuf>>, Error> {
+        if self.reads_disabled {
+            return Ok(None);
+        }
+        Ok(self
+            .cache
+            .fetch(&self.repo_root, hash)
+            .await?
+            .map(|(_, files)| files))
+    }
+
     pub async fn shutdown_cache(
         &self,
     ) -> Result<(Arc<Mutex<UploadMap>>, oneshot::Receiver<()>), CacheError> {
@@ -563,6 +591,28 @@ impl TaskCache {
         } else {
             self.run_cache.cache.exists(&self.hash).await
         }
+    }
+
+    /// Reports a cache hit whose outputs are deliberately not restored
+    /// because nothing in this run reads them. Unlike `restore_outputs`, this
+    /// touches neither the cache nor the task's log file.
+    pub fn report_unrestored_hit(
+        &self,
+        task_handle: &mut turborepo_log::grouping::TaskHandle,
+        tui_sender: Option<&turborepo_ui::sender::TaskSender>,
+    ) {
+        let hash = color!(self.ui, GREY, "{}", self.hash);
+        let message = match self.task_output_logs {
+            OutputLogsMode::Full | OutputLogsMode::HashOnly | OutputLogsMode::NewOnly => {
+                format!("cache hit, outputs not restored (unused by this run) {hash}")
+            }
+            OutputLogsMode::ErrorsOnly if self.errors_only_show_hash => format!(
+                "cache hit, outputs not restored (unused by this run) {hash} {}",
+                color!(self.ui, GREY, "(only logging errors)")
+            ),
+            OutputLogsMode::ErrorsOnly | OutputLogsMode::None => String::new(),
+        };
+        self.write_status(task_handle, tui_sender, &message, CacheResult::Hit);
     }
 
     pub async fn restore_outputs(
@@ -1863,6 +1913,108 @@ mod test {
                 "{mode:?}: {output}"
             );
         }
+    }
+
+    #[tokio::test]
+    async fn unrestored_hits_report_status_without_restoring() {
+        let temp = tempdir().unwrap();
+        let repo_root = AbsoluteSystemPathBuf::try_from(temp.path()).unwrap();
+        let output = repo_root.join_components(&["pkg", "dist", "out.txt"]);
+        output.ensure_dir().unwrap();
+        output.create_with_contents("built\n").unwrap();
+        let log_file = repo_root.join_components(&["pkg", ".turbo", "turbo-build.log"]);
+        log_file.ensure_dir().unwrap();
+        log_file.create_with_contents("cached-output\n").unwrap();
+
+        let telemetry = PackageTaskEventBuilder::new("pkg", "build");
+        let outputs = vec![
+            "pkg/dist/**".to_string(),
+            "pkg/.turbo/turbo-build.log".to_string(),
+        ];
+        let mut warmer = task_cache_for_outputs_with_mode(
+            &repo_root,
+            outputs.clone(),
+            OutputLogsMode::Full,
+            false,
+        );
+        warmer
+            .save_outputs(Duration::from_millis(10), &telemetry)
+            .await
+            .unwrap();
+        warmer.run_cache.cache.wait().await.unwrap();
+        output.remove_file().unwrap();
+        log_file.remove_file().unwrap();
+
+        // Planning sees the hit without restoring it.
+        let hits = warmer
+            .run_cache
+            .batch_exists(&["test-hash".to_string(), "missing-hash".to_string()])
+            .await;
+        assert!(hits[0].is_some());
+        assert!(hits[1].is_none());
+
+        for (mode, errors_only_show_hash, expected) in [
+            (
+                OutputLogsMode::Full,
+                false,
+                Some("cache hit, outputs not restored (unused by this run) test-hash"),
+            ),
+            (
+                OutputLogsMode::NewOnly,
+                false,
+                Some("cache hit, outputs not restored (unused by this run) test-hash"),
+            ),
+            (
+                OutputLogsMode::HashOnly,
+                false,
+                Some("cache hit, outputs not restored (unused by this run) test-hash"),
+            ),
+            (OutputLogsMode::None, false, None),
+            (OutputLogsMode::ErrorsOnly, false, None),
+            (
+                OutputLogsMode::ErrorsOnly,
+                true,
+                Some("cache hit, outputs not restored (unused by this run) test-hash"),
+            ),
+        ] {
+            let task_cache = task_cache_for_outputs_with_mode(
+                &repo_root,
+                outputs.clone(),
+                mode,
+                errors_only_show_hash,
+            );
+            let (sink, mut handle) = recording_task_handle();
+            task_cache.report_unrestored_hit(&mut handle, None);
+            let printed = sink.output_string();
+            match expected {
+                Some(expected) => assert!(printed.contains(expected), "{mode:?}: {printed}"),
+                None => assert!(printed.is_empty(), "{mode:?}: {printed}"),
+            }
+            assert!(!printed.contains("cached-output"), "{mode:?}: {printed}");
+            assert!(!output.exists(), "{mode:?}: outputs were restored");
+        }
+
+        // Restoring later, when the outputs turn out to be needed, writes them.
+        let restored = warmer
+            .run_cache
+            .restore_outputs_for_hash("test-hash")
+            .await
+            .unwrap()
+            .unwrap();
+        assert!(output.exists());
+        assert!(
+            restored
+                .iter()
+                .any(|path| path.as_str().ends_with("out.txt"))
+        );
+        assert!(
+            warmer
+                .run_cache
+                .restore_outputs_for_hash("missing-hash")
+                .await
+                .unwrap()
+                .is_none()
+        );
     }
 
     #[tokio::test]

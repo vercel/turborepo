@@ -480,6 +480,11 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
         // Entry points are a floor for the final task count; doubling covers
         // dependency tasks in the common case so the maps allocate once.
         engine.reserve(traversal_queue.len() * 2);
+        engine.set_entrypoints(
+            traversal_queue
+                .iter()
+                .map(|task_id| task_id.as_inner().clone().into_owned()),
+        );
         let mut turbo_json_chain_cache: HashMap<PackageName, Vec<&TurboJson>> = HashMap::new();
         let mut task_def_memo: HashMap<definitions::TaskDefMemoKey, TaskDefinition> =
             HashMap::new();

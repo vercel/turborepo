@@ -32,8 +32,8 @@ pub use command::{
     ToolchainCommandProvider,
 };
 pub use exec::{
-    DryRunExecutor, ExecOutcome, HashTrackerProvider, InternalError, SuccessOutcome,
-    TaskErrorCollector, TaskExecutor, TaskWarningCollector,
+    DependencyOutputs, DryRunExecutor, ExecOutcome, HashTrackerProvider, InternalError,
+    SuccessOutcome, TaskErrorCollector, TaskExecutor, TaskWarningCollector,
 };
 pub use output::{StdWriter, TaskOutput};
 use serde::Serialize;

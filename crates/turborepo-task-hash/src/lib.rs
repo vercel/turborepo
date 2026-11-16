@@ -336,6 +336,9 @@ pub struct TaskHashTrackerState {
     package_task_cache: HashMap<TaskId<'static>, CacheHitMetadata>,
     #[serde(skip)]
     package_task_inputs_expanded_hashes: HashMap<TaskId<'static>, Arc<FileHashes>>,
+    /// Cache hits whose outputs were deliberately left unrestored.
+    #[serde(skip)]
+    package_task_unrestored: HashSet<TaskId<'static>>,
 }
 
 /// Information shared by eager and deferred hashing of one task.
@@ -1060,6 +1063,21 @@ impl TaskHashTracker {
         });
     }
 
+    /// Records whether a cache hit's outputs were restored to disk.
+    pub fn set_outputs_restored(&self, task_id: TaskId<'static>, restored: bool) {
+        self.with_state_mut(|state| {
+            if restored {
+                state.package_task_unrestored.remove(&task_id);
+            } else {
+                state.package_task_unrestored.insert(task_id);
+            }
+        });
+    }
+
+    pub fn outputs_restored(&self, task_id: &TaskId) -> bool {
+        self.with_state(|state| !state.package_task_unrestored.contains(task_id))
+    }
+
     pub fn get_expanded_inputs(&self, task_id: &TaskId) -> Option<Arc<FileHashes>> {
         self.with_state(|state| {
             state
@@ -1109,6 +1127,10 @@ impl HashTrackerInfo for TaskHashTracker {
         TaskHashTracker::framework(self, task_id).map(|f| f.to_string())
     }
 
+    fn outputs_restored(&self, task_id: &TaskId) -> bool {
+        TaskHashTracker::outputs_restored(self, task_id)
+    }
+
     fn expanded_inputs(&self, task_id: &TaskId) -> Option<Vec<(RelativeUnixPathBuf, String)>> {
         TaskHashTracker::get_expanded_inputs(self, task_id).map(|file_hashes| {
             file_hashes
@@ -1125,6 +1147,10 @@ impl HashTrackerInfo for TaskHashTracker {
 impl turborepo_task_executor::HashTrackerProvider for TaskHashTracker {
     fn insert_cache_status(&self, task_id: TaskId<'static>, status: CacheHitMetadata) {
         TaskHashTracker::insert_cache_status(self, task_id, status)
+    }
+
+    fn set_outputs_restored(&self, task_id: TaskId<'static>, restored: bool) {
+        TaskHashTracker::set_outputs_restored(self, task_id, restored)
     }
 
     fn insert_expanded_outputs(
