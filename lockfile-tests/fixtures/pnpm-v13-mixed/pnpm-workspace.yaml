@@ -1,7 +1,5 @@
 packages:
   - "packages/*"
-lockfile:
-  format: v13
 catalog:
   lodash: ^4.17.21
 catalogs:
@@ -11,3 +9,6 @@ overrides:
   semver: 7.6.0
 patchedDependencies:
   is-even@1.0.0: patches/is-even@1.0.0.patch
+
+lockfile:
+  format: v13
