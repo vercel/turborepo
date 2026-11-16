@@ -2,12 +2,6 @@
 //! `read/scope.rs`: matching every reference to one snapshot, every peer
 //! binding to its provider, and rebuilding each snapshot's peer-suffixed key.
 //! Function names and tie-breaks follow pnpm so the two can be diffed.
-//!
-//! Snapshot ids (sids) follow the document's `packages` order and each
-//! entry's `snapshots` order. pnpm indexes a hash map instead; every
-//! tie-break that compares sids compares them within one package, and the
-//! unreached walk sorts by key, so the order across packages does not change
-//! any result.
 
 mod keys;
 mod unbound;
@@ -35,11 +29,9 @@ pub(super) enum Referrer<'a> {
 pub(super) enum Provider {
     Snapshot(Sid),
     Link(String),
-    /// The lockfile has no snapshot of the provider.
     Missing(String),
 }
 
-/// A project dependency with its version written out.
 pub(super) struct ResolvedDep<'a> {
     pub specifier: &'a str,
     pub version: String,
@@ -59,8 +51,6 @@ impl<'a> Importer<'a> {
     }
 }
 
-/// Every project with the versions its specifiers imply written out (pnpm
-/// `resolve_importers`).
 fn resolve_importers<'a>(doc: &Document<'a>) -> Result<Vec<Importer<'a>>, NextFormatError> {
     let implied = Implied::of(doc.settings.catalogs.as_ref(), &doc.packages, &doc.projects);
     doc.projects
@@ -104,22 +94,16 @@ fn resolve_importers<'a>(doc: &Document<'a>) -> Result<Vec<Importer<'a>>, NextFo
         .collect()
 }
 
-/// The reference graph of a document: what pnpm's reader decides about it.
 pub(super) struct Graph<'g, 'a> {
     pub doc: &'g Document<'a>,
-    /// The package key of each snapshot.
     pub keys: Vec<&'a str>,
     pub names: Vec<&'a str>,
-    /// `(package index, element index)` of each snapshot in the document.
     pub slots: Vec<(usize, usize)>,
-    /// Each package's first snapshot and its count.
     pub by_package: HashMap<&'a str, (Sid, usize)>,
     pub importers: Vec<Importer<'a>>,
     importer_index: HashMap<&'a str, usize>,
-    /// Each snapshot's chosen children, sorted by name.
     pub children: Vec<Vec<(&'a str, Sid)>>,
     pub importer_children: HashMap<&'a str, Vec<(&'a str, Sid)>>,
-    /// The referrer that first reaches each snapshot.
     pub parent: Vec<Option<Referrer<'a>>>,
     pub providers: Vec<Vec<(&'a str, Provider)>>,
 }
@@ -191,8 +175,6 @@ impl<'g, 'a> Graph<'g, 'a> {
         &self.importers[self.importer_index[id]]
     }
 
-    // read/choose.rs
-
     fn choose_children(&self, sid: Sid) -> Vec<(&'a str, Sid)> {
         let entry = self.entry(sid);
         let mut children: Vec<(&'a str, Sid)> = entry
@@ -227,8 +209,6 @@ impl<'g, 'a> Graph<'g, 'a> {
         children
     }
 
-    /// The snapshot `key` names from `referrer`, or `None` when the lockfile
-    /// has no snapshot of the package.
     fn choose(
         &self,
         key: &str,
@@ -247,7 +227,6 @@ impl<'g, 'a> Graph<'g, 'a> {
         Some(self.snapshot_in_scope(start, count, referrer))
     }
 
-    /// The snapshot that binds every named peer, with the fewest bindings.
     pub fn snapshot_with_bindings(
         &self,
         start: Sid,
@@ -265,9 +244,6 @@ impl<'g, 'a> Graph<'g, 'a> {
             .min_by_key(|&sid| self.entry(sid).bindings().count())
     }
 
-    /// The snapshot none of whose bindings disagrees with the referrer's
-    /// scope, agreeing on the most names, then binding the fewest names the
-    /// scope lacks. The first snapshot when every one disagrees.
     fn snapshot_in_scope(&self, start: Sid, count: usize, referrer: Referrer<'a>) -> Sid {
         (start..start + count)
             .filter_map(|sid| Some((sid, self.agreement(sid, referrer)?)))
@@ -318,7 +294,6 @@ impl<'g, 'a> Graph<'g, 'a> {
         }
     }
 
-    /// Whether `reference` names the snapshot `sid` itself.
     fn is_itself(&self, sid: Sid, name: &str, reference: &NextRef<'a>) -> bool {
         self.names[sid] == name
             && reference
@@ -326,10 +301,6 @@ impl<'g, 'a> Graph<'g, 'a> {
                 .is_some_and(|key| key::package_key(&key) == self.keys[sid])
     }
 
-    // read/scope.rs
-
-    /// The first referrer of every snapshot, in a walk from the importers in
-    /// order. A snapshot no importer reaches starts a walk of its own.
     fn parents(&self) -> Vec<Option<Referrer<'a>>> {
         let mut walk = Walk {
             graph: self,
@@ -387,9 +358,6 @@ impl<'g, 'a> Graph<'g, 'a> {
         }
     }
 
-    /// The snapshot among `start..start + count` linked as `name` in the scope
-    /// `sid` was reached in: under its parent, its parent's parent, and so on
-    /// up to an importer.
     fn linked_above(&self, sid: Sid, name: &str, start: Sid, count: usize) -> Option<Sid> {
         let is_candidate = |found: Sid| (start..start + count).contains(&found);
         let mut referrer = self.parent[sid];

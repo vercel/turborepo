@@ -1,7 +1,6 @@
 //! Port of pnpm `yaml_emit/flow.rs` and `yaml_emit/nesting.rs`: the v13 main
 //! document as tab-indented JSON with a trailing comma after every entry of a
-//! multi-line collection. Keys are written in the tree's order, which is the
-//! order pnpm wrote them in, so a read document encodes to its own bytes.
+//! multi-line collection.
 
 use serde_yaml_ng::{Mapping, Value};
 
@@ -13,7 +12,6 @@ enum Layout {
     OneLine,
 }
 
-/// `---\n` + env + `\n---\n` + main, or the main document alone.
 pub(super) fn encode(env: Option<&str>, tree: &Value) -> String {
     let mut out = String::new();
     if let Some(env) = env {
@@ -117,8 +115,6 @@ fn is_single_line_key(key: &str) -> bool {
     SINGLE_LINE_KEYS.contains(&key)
 }
 
-/// `resolution` is one line except the nested `variations` and `binary`
-/// shapes.
 fn is_single_line_map(key: Option<&str>, map: &Mapping) -> bool {
     match key {
         Some(key) if is_single_line_key(key) => true,
@@ -135,7 +131,6 @@ fn next_line(out: &mut String, level: usize) {
     out.extend(std::iter::repeat_n('\t', level));
 }
 
-/// `text` as a JSON string.
 fn push_string(out: &mut String, text: &str) {
     out.push('"');
     for character in text.chars() {

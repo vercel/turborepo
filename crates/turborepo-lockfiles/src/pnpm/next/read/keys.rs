@@ -9,7 +9,6 @@ use super::{
 };
 
 impl Graph<'_, '_> {
-    /// `name@version` plus the patch group of each snapshot.
     pub fn base_keys(&self) -> Vec<String> {
         let patches = Patches::of(self);
         (0..self.keys.len())
@@ -37,9 +36,6 @@ impl Graph<'_, '_> {
             order: self.providers_first(),
             cyclic_names: self.cyclic_peer_names(),
         };
-        // A snapshot without bindings has its base key. Every other key is
-        // written once its level comes; a provider read before then is in the
-        // reader's own component, where it collapses to `name@version`.
         let mut keys: Vec<String> = base_keys.to_vec();
         for level in self.levels(&nesting.order) {
             let level_keys: Vec<(Sid, String)> = level
@@ -64,8 +60,6 @@ impl Graph<'_, '_> {
         keys
     }
 
-    /// The key of `sid`, with `segment` giving each provider snapshot's peer
-    /// group. The patch group goes before every peer group.
     fn key_of(
         &self,
         sid: Sid,
@@ -93,8 +87,6 @@ impl Graph<'_, '_> {
         )
     }
 
-    /// The components of `order` grouped so that every provider of a group's
-    /// members is in an earlier group or in the member's own component.
     fn levels(&self, order: &tarjan::Components) -> Vec<Vec<usize>> {
         let mut level_of = vec![0; order.components.len()];
         let mut levels: Vec<Vec<usize>> = Vec::new();
@@ -119,8 +111,6 @@ impl Graph<'_, '_> {
         levels
     }
 
-    /// Snapshots grouped by peer cycle, each group after the groups of its
-    /// providers. Only snapshots with bindings form cycles.
     pub fn providers_first(&self) -> tarjan::Components {
         tarjan::components(
             self.keys.len(),
@@ -137,8 +127,6 @@ impl Graph<'_, '_> {
         )
     }
 
-    /// Peer names on a cycle of the graph from a package's name to the names
-    /// of the peers it binds.
     pub fn cyclic_peer_names(&self) -> HashSet<String> {
         let mut names: Vec<String> = Vec::new();
         let mut index: HashMap<String, usize> = HashMap::new();
@@ -178,16 +166,12 @@ impl Graph<'_, '_> {
     }
 }
 
-/// What decides whether a provider's group nests its key.
 struct Nesting {
     order: tarjan::Components,
     cyclic_names: HashSet<String>,
 }
 
 impl Nesting {
-    /// Whether the provider `sid` binds as `name` is written as
-    /// `name@version`: the two are in one peer cycle, or `name` is on a cycle
-    /// of peer names.
     fn collapses(&self, sid: Sid, provider: Sid, name: &str) -> bool {
         let component = self.order.component_of.get(&sid);
         let in_cycle = component.is_some() && component == self.order.component_of.get(&provider);
@@ -195,9 +179,7 @@ impl Nesting {
     }
 }
 
-/// The patch group each package's key gets, from `patchedDependencies`,
-/// matched the way pnpm's resolver matches its keys to packages
-/// (`patch_groups_from_hashes` + `get_patch_info`).
+/// Port of pnpm `patch_groups_from_hashes` and `get_patch_info`.
 struct Patches<'a> {
     groups: Option<HashMap<&'a str, PatchGroup<'a>>>,
 }
@@ -234,8 +216,7 @@ impl<'a> Patches<'a> {
     }
 }
 
-/// pnpm `name_version_from_package_key`: the `version` the entry records,
-/// else the semver in the key's version slot, else the slot verbatim.
+/// Port of pnpm `name_version_from_package_key`.
 fn recorded_version(graph: &Graph<'_, '_>, sid: Sid) -> String {
     let (package, _) = graph.slots[sid];
     let slot = key::split(graph.keys[sid]).map_or("", |(_, suffix)| suffix);

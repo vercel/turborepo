@@ -1,17 +1,3 @@
-//! Pruning a v13 document to what the v9 subgraph retained.
-//!
-//! The v9 `subgraph` decides what is retained. The document is filtered to
-//! the retained projects, packages and snapshots, and nothing is re-derived.
-//! Filtering removes candidates and referrers that pnpm's reader consults,
-//! so the filtered document is read again and every decision is compared,
-//! by the snapshot it came from, with the original's. Child choices only
-//! depend on the referrer and the candidates, which survive, so they cannot
-//! change. A peer provider found by `linked_above` depends on the walk from
-//! the importers, which can reach a snapshot through another parent once one
-//! is removed: such a binding is pinned with an explicit `with`. Any other
-//! difference fails the prune instead of writing a lockfile that installs a
-//! different graph.
-
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 use serde_yaml_ng::{Mapping, Value};
@@ -25,9 +11,7 @@ use super::{
 };
 use crate::pnpm::NextFormatError;
 
-/// Pins can change which snapshot another `with` names, so the document is
-/// re-read after each round of pins until nothing drifts.
-const MAX_ROUNDS: usize = 4;
+const MAX_PIN_ROUNDS: usize = 4;
 
 pub(super) fn prune(tree: &Value, kept: &PnpmLockfile) -> Result<Value, NextFormatError> {
     let doc = Document::parse(tree)?;
@@ -48,12 +32,12 @@ pub(super) fn prune(tree: &Value, kept: &PnpmLockfile) -> Result<Value, NextForm
 
     let mut pruned = filter(tree, &original, &retained, kept);
     write_unimplied_versions(&mut pruned, &original)?;
-    for _ in 0..MAX_ROUNDS {
+    for _ in 0..MAX_PIN_ROUNDS {
         let pins = {
             let filtered_doc = Document::parse(&pruned)?;
             let filtered = Resolved::of(&filtered_doc)?;
             let origin = origins(&original, &filtered, &retained);
-            drift(&original, &filtered, &origin)?
+            pins_for_drift(&original, &filtered, &origin)?
         };
         if pins.is_empty() {
             return Ok(pruned);
@@ -73,9 +57,6 @@ fn not_representable(detail: impl Into<String>) -> NextFormatError {
     }
 }
 
-/// The document with only the retained projects, packages and snapshots,
-/// and the catalog entries and patches the v9 subgraph kept. `time` is
-/// dropped like the v9 subgraph drops it. Everything else is kept verbatim.
 fn filter(
     tree: &Value,
     original: &Resolved<'_, '_>,
@@ -118,8 +99,6 @@ fn filter(
     Value::Mapping(out)
 }
 
-/// The retained projects in input order, with a `{}` for every retained
-/// workspace the input has no project for, like the v9 subgraph backfills.
 fn filter_projects(projects: &Mapping, kept: &PnpmLockfile) -> Mapping {
     let mut out: Vec<(Value, Value)> = projects
         .iter()
@@ -211,11 +190,6 @@ fn filter_settings(settings: &Mapping, kept: &PnpmLockfile) -> Mapping {
     out
 }
 
-/// A project dependency written as its specifier alone implies its version
-/// through other entries: a `workspace:` link through the linked project's
-/// `name`, an injected package through its `name@file:` entry. Filtering can
-/// remove those, so every version the filtered document no longer implies is
-/// written out, as pnpm writes a version that does not follow.
 fn write_unimplied_versions(
     pruned: &mut Value,
     original: &Resolved<'_, '_>,
@@ -284,8 +258,6 @@ fn write_unimplied_versions(
     Ok(())
 }
 
-/// The original snapshot each filtered snapshot came from: a filtered
-/// package's elements are its retained original elements, in order.
 fn origins(
     original: &Resolved<'_, '_>,
     filtered: &Resolved<'_, '_>,
@@ -302,8 +274,7 @@ fn origins(
     origin
 }
 
-/// The bindings to pin, or why the filtered document cannot be written.
-fn drift(
+fn pins_for_drift(
     original: &Resolved<'_, '_>,
     filtered: &Resolved<'_, '_>,
     origin: &[Sid],
@@ -315,7 +286,7 @@ fn drift(
         .collect();
     let original_key = |sid: Sid| original.keys[sid].as_str();
     let mut pins = Vec::new();
-    let mut dropped_provider = false;
+    let mut providers = Providers::AllKept;
 
     for (sid, &was) in origin.iter().enumerate() {
         if original.base_keys[was] != filtered.base_keys[sid] {
@@ -352,14 +323,10 @@ fn drift(
                     };
                     pins.push(Pin::of(filtered, sid, name, want)?);
                 }
-                // A provider the v9 subgraph does not retain, because only a
-                // `transitivePeerDependencies` entry names it. The v9 prune
-                // keeps the key that names it; the keys check below proves
-                // the same key is read back.
                 (Some(Provider::Snapshot(before)), Provider::Missing(_))
                     if !inverse.contains_key(before) =>
                 {
-                    dropped_provider = true;
+                    providers = Providers::SomeDropped;
                 }
                 (Some(before), now) if before == now => {}
                 _ => {
@@ -391,19 +358,25 @@ fn drift(
     }
 
     if pins.is_empty() {
-        check_keys(original, filtered, origin, dropped_provider)?;
+        check_keys(original, filtered, origin, providers)?;
     }
     Ok(pins)
 }
 
-/// With every choice the same, a key can only differ through a peer-name
-/// cycle that ran through a removed snapshot: the same key a fresh resolve of
-/// the pruned workspace would write. Any other difference is an error.
+/// Whether every provider the original bound is still in the pruned
+/// lockfile. A provider that only `transitivePeerDependencies` names can be
+/// pruned without changing what is installed.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Providers {
+    AllKept,
+    SomeDropped,
+}
+
 fn check_keys(
     original: &Resolved<'_, '_>,
     filtered: &Resolved<'_, '_>,
     origin: &[Sid],
-    dropped_provider: bool,
+    providers: Providers,
 ) -> Result<(), NextFormatError> {
     let changed: Vec<(Sid, Sid)> = origin
         .iter()
@@ -415,7 +388,7 @@ fn check_keys(
         return Ok(());
     };
     let cycles_changed = original.graph.cyclic_peer_names() != filtered.graph.cyclic_peer_names();
-    if cycles_changed && !dropped_provider {
+    if cycles_changed && providers == Providers::AllKept {
         tracing::debug!(
             "pruned pnpm v13 lockfile renames {} snapshots after a peer cycle was removed",
             changed.len()
@@ -428,14 +401,11 @@ fn check_keys(
     )))
 }
 
-/// A peer binding to name explicitly: `with` lists the bindings that tell
-/// the wanted provider apart from the package's other snapshots, written as
-/// that provider writes them, because pnpm compares them literally.
+/// `with` is written as the provider writes its bindings because pnpm
+/// compares them literally.
 struct Pin {
     package: String,
-    /// The binding snapshot's index in the package's `snapshots`, when it has
-    /// that list.
-    element: Option<usize>,
+    target: PinTarget,
     name: String,
     with: Value,
 }
@@ -482,7 +452,11 @@ impl Pin {
             .is_some_and(|list| !list.is_empty());
         Ok(Pin {
             package: package.key.to_string(),
-            element: has_list.then_some(element),
+            target: if has_list {
+                PinTarget::Element(element)
+            } else {
+                PinTarget::Entry
+            },
             name: name.to_string(),
             with: wire::bindings_value(&with),
         })
@@ -494,7 +468,7 @@ impl Pin {
             .and_then(|packages| packages.get_mut(self.package.as_str()))
             .and_then(Value::as_mapping_mut)
             .ok_or_else(|| wire::syntax(format!("packages[{}] is missing", self.package)))?;
-        let Some(element) = self.element else {
+        let PinTarget::Element(element) = self.target else {
             return set_with(package, &self.name, &self.with);
         };
         if !binds(element_of(package, element)?, &self.name) {
@@ -502,6 +476,13 @@ impl Pin {
         }
         set_with(element_of(package, element)?, &self.name, &self.with)
     }
+}
+
+enum PinTarget {
+    /// The package has one snapshot, written on the package entry.
+    Entry,
+    /// An element of the package's `snapshots` list.
+    Element(usize),
 }
 
 fn element_of(package: &mut Mapping, element: usize) -> Result<&mut Mapping, NextFormatError> {
@@ -522,7 +503,6 @@ fn binds(map: &Mapping, name: &str) -> bool {
 /// The order pnpm writes a peer entry's fields in.
 const PEER_FIELDS: [&str; 5] = ["specifier", "version", "with", "optional", "below"];
 
-/// Set `with` on the binding `name` of a package entry or snapshot.
 fn set_with(map: &mut Mapping, name: &str, with: &Value) -> Result<(), NextFormatError> {
     let entry = map
         .get_mut("peerDependencies")
@@ -535,9 +515,6 @@ fn set_with(map: &mut Mapping, name: &str, with: &Value) -> Result<(), NextForma
     Ok(())
 }
 
-/// Move the binding `name` from the package entry, where every snapshot
-/// shares it, into each snapshot, so one snapshot's binding can be pinned
-/// alone. A snapshot is its fields over the entry's, so it reads the same.
 fn dehoist(package: &mut Mapping, name: &str) -> Result<(), NextFormatError> {
     let peers = package
         .get_mut("peerDependencies")
@@ -604,8 +581,6 @@ const PACKAGE_FIELDS: [&str; 17] = [
     "snapshots",
 ];
 
-/// `map` with the `priority` fields first, in that order, then the rest as
-/// they were.
 fn ordered(map: Mapping, priority: &[&str]) -> Mapping {
     let rank = |key: &Value| {
         key.as_str()

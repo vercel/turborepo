@@ -6,7 +6,6 @@ use std::collections::{BTreeSet, HashSet};
 
 use super::{super::tarjan, Graph, Sid};
 
-/// For every snapshot, the unbound peers it and everything below it declare.
 pub(in crate::pnpm::data::next) struct UnboundPeers<'a> {
     below: Vec<HashSet<&'a str>>,
 }
@@ -43,7 +42,6 @@ impl<'a> Graph<'_, 'a> {
         UnboundPeers { below }
     }
 
-    /// The unbound peers below `sid`, less the peers `sid` declares itself.
     pub fn unbound_below(&self, sid: Sid, unbound: &UnboundPeers<'a>) -> BTreeSet<&'a str> {
         let declared = &self.doc.packages[self.slots[sid].0].peer_ranges;
         unbound.below[sid]
@@ -53,8 +51,6 @@ impl<'a> Graph<'_, 'a> {
             .collect()
     }
 
-    /// The peers the package declares that the snapshot neither binds nor
-    /// installs as a dependency of its own.
     fn own_unbound_peers(&self, sid: Sid) -> Vec<&'a str> {
         let declared = &self.doc.packages[self.slots[sid].0].peer_ranges;
         let entry = self.entry(sid);

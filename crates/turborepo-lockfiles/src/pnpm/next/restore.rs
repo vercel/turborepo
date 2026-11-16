@@ -18,12 +18,8 @@ use super::{
 };
 use crate::pnpm::NextFormatError;
 
-/// What pnpm's reader decides about a document, with each snapshot's
-/// restored key. Built once per document; the model and prune's drift
-/// check both read it.
 pub(super) struct Resolved<'g, 'a> {
     pub graph: Graph<'g, 'a>,
-    /// `name@version` plus the patch group of each snapshot.
     pub base_keys: Vec<String>,
     pub keys: Vec<String>,
 }
@@ -41,7 +37,6 @@ impl<'g, 'a> Resolved<'g, 'a> {
     }
 }
 
-/// The restored v9 sections and settings, in turbo's model.
 pub(super) struct Sections {
     pub importers: BTreeMap<String, ProjectSnapshot>,
     pub packages: Option<BTreeMap<String, PackageSnapshot>>,
@@ -258,7 +253,6 @@ fn restored_peer(
     }
 }
 
-/// A project as the v9 `importers` entry it restores to.
 fn restore_importer(
     resolved: &Resolved<'_, '_>,
     project: &wire::Project<'_>,

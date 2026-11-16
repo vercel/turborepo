@@ -8,14 +8,9 @@ use super::{
     wire::{CatalogEntry, Package, Project},
 };
 
-/// What a specifier can imply a version through.
 pub(super) struct Implied<'a> {
     pub catalogs: Option<&'a BTreeMap<String, BTreeMap<String, CatalogEntry>>>,
-    /// `name -> <path>` of every package with exactly one `name@file:<path>`
-    /// entry: an injected workspace package.
     pub injected: HashMap<&'a str, &'a str>,
-    /// `name -> project id` of every project whose `name` is recorded, and
-    /// recorded by no other project.
     pub linked: HashMap<&'a str, &'a str>,
 }
 
@@ -127,8 +122,6 @@ fn implied_version<'p>(
     )
 }
 
-/// The version a catalog entry's specifier implies: the bare version of an
-/// `npm:` alias, or the specifier itself.
 pub(super) fn catalog_implied_version(specifier: &str) -> Option<&str> {
     let Some(target) = specifier.strip_prefix("npm:") else {
         return Some(specifier);
@@ -169,7 +162,6 @@ fn workspace_name(target: &str) -> Option<&str> {
     Some(&target[..at])
 }
 
-/// The relative path from project `id` to project `target`.
 fn link_path(id: &str, target: &str) -> String {
     let from: Vec<&str> = segments(id).collect();
     let to: Vec<&str> = segments(target).collect();

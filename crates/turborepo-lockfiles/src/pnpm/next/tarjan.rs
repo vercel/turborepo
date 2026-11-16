@@ -3,16 +3,11 @@
 
 use std::collections::HashMap;
 
-/// Every node in a component, ordered so that a component comes after every
-/// component it has an edge to. Nodes that don't participate come first, each
-/// on its own, and have no entry in `component_of`.
 pub(super) struct Components {
     pub components: Vec<Vec<usize>>,
     pub component_of: HashMap<usize, usize>,
 }
 
-/// Iterative Tarjan over the participating nodes of `0..count`. Edges to
-/// non-participating nodes are ignored.
 pub(super) fn components(
     count: usize,
     neighbors: impl Fn(usize) -> Vec<usize>,
@@ -96,8 +91,6 @@ impl Tarjan {
         });
     }
 
-    /// Finishes the node on top of the frames, emitting its component when it
-    /// is the component's root.
     fn leave(&mut self) {
         let Some(Frame { node, .. }) = self.frames.pop() else {
             return;

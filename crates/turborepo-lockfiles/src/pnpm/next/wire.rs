@@ -1,7 +1,3 @@
-//! The v13 main document as one order-preserving tree, and read-only views of
-//! the parts pnpm's reader interprets. The tree is what `encode` writes and
-//! what `prune` filters, so fields no view models pass through untouched.
-
 use std::collections::BTreeMap;
 
 use serde_yaml_ng::{Mapping, Value};
@@ -11,8 +7,6 @@ use super::{super::super::NextFormatError, key};
 pub(super) const DOCUMENT_START: &str = "---\n";
 pub(super) const DOCUMENT_SEPARATOR: &str = "\n---\n";
 
-/// The text of a lockfile split into its env document and main document,
-/// after stripping a BOM and normalizing CRLF the way pnpm does.
 pub(super) struct Split {
     pub env: Option<String>,
     pub main: String,
@@ -41,9 +35,6 @@ pub(super) fn split(bytes: &[u8]) -> Result<Split, NextFormatError> {
     }
 }
 
-/// Whether the main document declares `lockfileVersion` 13.x. Reads only
-/// the root mapping's `lockfileVersion`, so it also works when the rest of the
-/// document would not parse.
 pub(in crate::pnpm::data) fn declares_next_format(bytes: &[u8]) -> bool {
     let Ok(split) = split(bytes) else {
         return false;
@@ -63,8 +54,7 @@ pub(in crate::pnpm::data) fn declares_next_format(bytes: &[u8]) -> bool {
     })
 }
 
-/// Port of pnpm `json_lockfile_version`: the root `lockfileVersion` string of
-/// a JSON document, found without parsing it.
+/// Port of pnpm `json_lockfile_version`.
 fn json_lockfile_version(document: &str) -> Option<&str> {
     let mut depth = 0usize;
     let mut expecting_key = false;
@@ -124,8 +114,8 @@ fn yaml_version_value(line: &str) -> Option<&str> {
     Some(value.trim().trim_matches(['\'', '"']))
 }
 
-/// The main document as a tree. pnpm writes JSON with tabs and trailing
-/// commas, which is YAML flow syntax; older 12.x builds wrote block YAML.
+/// pnpm writes JSON with tabs and trailing commas, which is YAML flow syntax;
+/// older 12.x builds wrote block YAML.
 pub(super) fn parse_main(main: &str) -> Result<Value, NextFormatError> {
     let value: Value = serde_yaml_ng::from_str(main)
         .map_err(|error| NextFormatError::Syntax(error.to_string()))?;
@@ -167,7 +157,6 @@ fn opt_bool(map: &Mapping, key: &str) -> bool {
     get(map, key).and_then(Value::as_bool).unwrap_or(false)
 }
 
-/// Iterate a map's entries as `(&str, &Value)`.
 pub(super) fn entries<'a>(
     map: &'a Mapping,
     what: &str,
@@ -177,7 +166,6 @@ pub(super) fn entries<'a>(
         .collect()
 }
 
-/// `with`: the bindings that name a snapshot.
 pub(super) type Bindings<'a> = BTreeMap<&'a str, NextRef<'a>>;
 
 /// A reference: `"1.0.0"`, `"name@1.0.0"` (alias), `"link:..."`, or
@@ -213,7 +201,6 @@ impl<'a> NextRef<'a> {
         self.with.as_ref()
     }
 
-    /// The package key the reference names, without groups.
     pub fn resolve(&self, alias: &str) -> Option<String> {
         key::resolve(alias, self.version)
     }
@@ -222,7 +209,6 @@ impl<'a> NextRef<'a> {
         key::as_link_target(self.version)
     }
 
-    /// The reference as written: its version, or `{version, with}`.
     pub fn to_value(&self) -> Value {
         match &self.with {
             None => Value::from(self.version),
@@ -262,8 +248,7 @@ fn parse_refs<'a>(
         .transpose()
 }
 
-/// Port of pnpm `names_binding`: whether the binding `binding` satisfies the
-/// `with` entry `wanted`.
+/// Port of pnpm `names_binding`.
 pub(super) fn names_binding(wanted: &NextRef<'_>, binding: &NextRef<'_>) -> bool {
     wanted.version == key::without_groups(binding.version)
         && wanted.peers().is_none_or(|wanted| match binding.peers() {
@@ -272,24 +257,18 @@ pub(super) fn names_binding(wanted: &NextRef<'_>, binding: &NextRef<'_>) -> bool
         })
 }
 
-/// One peer snapshot of a package: its own fields over the entry's shared
-/// ones. `own` and `below` are the two kinds of binding pnpm's in-memory
-/// snapshot keeps apart.
 #[derive(Debug, Clone, Default)]
 pub(super) struct SnapshotEntry<'a> {
     pub id: Option<&'a str>,
     pub dependencies: Option<BTreeMap<&'a str, NextRef<'a>>>,
     pub optional_dependencies: Option<BTreeMap<&'a str, NextRef<'a>>>,
-    /// The package's own bound peers.
     pub peer_dependencies: Option<BTreeMap<&'a str, NextRef<'a>>>,
-    /// Peers bound for a dependency below (`below: true`).
     pub transitive_peer_dependencies: Option<BTreeMap<&'a str, NextRef<'a>>>,
     pub unbound_peer_dependencies: Option<Vec<&'a str>>,
     pub optional: bool,
 }
 
 impl<'a> SnapshotEntry<'a> {
-    /// Every peer binding: the package's own, then those from below.
     pub fn bindings(&self) -> impl Iterator<Item = (&'a str, &NextRef<'a>)> {
         self.peer_dependencies
             .iter()
@@ -339,8 +318,6 @@ impl<'a> SnapshotEntry<'a> {
         self
     }
 
-    /// The graph fields of a map: a `packages` entry or one element of its
-    /// `snapshots`.
     fn parse(map: &'a Mapping, what: &str) -> Result<Self, NextFormatError> {
         let mut own = None;
         let mut below = None;
@@ -378,8 +355,6 @@ impl<'a> SnapshotEntry<'a> {
     }
 }
 
-/// One entry of `peerDependencies`: the declared range, `optional` from
-/// `peerDependenciesMeta`, and the binding when there is one.
 pub(super) struct PeerEntry<'a> {
     pub specifier: Option<&'a str>,
     pub optional: Option<bool>,
@@ -429,15 +404,11 @@ impl<'a> PeerEntry<'a> {
     }
 }
 
-/// A `packages` entry: the package's metadata, and every peer snapshot with
-/// the shared graph fields applied.
 pub(super) struct Package<'a> {
     pub key: &'a str,
     pub name: &'a str,
     pub map: &'a Mapping,
-    /// Declared peer ranges, as v9 `peerDependencies`.
     pub peer_ranges: BTreeMap<&'a str, &'a str>,
-    /// `peerDependenciesMeta.<name>.optional`.
     pub peer_optional: BTreeMap<&'a str, bool>,
     pub snapshots: Vec<SnapshotEntry<'a>>,
 }
@@ -507,8 +478,6 @@ impl Section {
     }
 }
 
-/// A project dependency as written: the specifier alone, with `with`, or
-/// with an explicit `version`.
 pub(super) struct ProjectDep<'a> {
     pub specifier: &'a str,
     pub version: Option<&'a str>,
@@ -573,8 +542,6 @@ pub(super) struct CatalogEntry {
     pub version: String,
 }
 
-/// The `settings` the reader interprets. Everything else in `settings` maps
-/// to turbo's `LockfileSettings`.
 pub(super) struct Settings<'a> {
     pub map: Option<&'a Mapping>,
     pub catalogs: Option<BTreeMap<String, BTreeMap<String, CatalogEntry>>>,
@@ -641,7 +608,7 @@ impl<'a> Settings<'a> {
     }
 }
 
-/// Port of pnpm `catalogs::resolve`: a bare specifier implies its version.
+/// Port of pnpm `catalogs::resolve`.
 fn catalog_entry(
     catalog: &str,
     name: &str,
@@ -679,7 +646,6 @@ fn catalog_entry(
     }
 }
 
-/// The views the reader works from, borrowed from the tree.
 pub(super) struct Document<'a> {
     pub root: &'a Mapping,
     pub settings: Settings<'a>,

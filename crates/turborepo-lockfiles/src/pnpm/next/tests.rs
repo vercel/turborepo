@@ -5,9 +5,6 @@ use pretty_assertions::assert_eq;
 use super::super::{Format, PnpmLockfile};
 use crate::Lockfile;
 
-/// The v13 lockfile's restored model next to its v9 twin's parsed model,
-/// with what v13 does not carry (`deprecated`) and the format markers
-/// normalized away.
 fn normalized_pair(v9: &[u8], v13: &[u8]) -> (PnpmLockfile, PnpmLockfile) {
     let mut v9 = PnpmLockfile::from_bytes(v9).expect("v9 twin parses");
     let mut v13 = PnpmLockfile::from_bytes(v13).expect("v13 parses");
@@ -36,9 +33,6 @@ fn normalized_pair(v9: &[u8], v13: &[u8]) -> (PnpmLockfile, PnpmLockfile) {
     (v9, v13)
 }
 
-/// Paired oracle: pnpm 12.20.0 locked the same graph as v9 and as v13, so the
-/// v13 restore must equal the v9 parse, and every query turbo makes must
-/// agree.
 pub(super) fn assert_paired(v9_bytes: &[u8], v13_bytes: &[u8], label: &str) {
     let (v9, mut v13) = normalized_pair(v9_bytes, v13_bytes);
     if let Some((_, reason)) = KNOWN_CATALOG_DIVERGENCE
@@ -88,8 +82,6 @@ pub(super) fn assert_paired(v9_bytes: &[u8], v13_bytes: &[u8], label: &str) {
     );
 }
 
-/// Pairs whose v9 and v13 files pnpm wrote with different catalog versions,
-/// so the catalogs of the two cannot agree.
 const KNOWN_CATALOG_DIVERGENCE: &[(&str, &str)] = &[(
     "/catalogs",
     "pnpm 12.20.0 records the npm: alias entry lodash-compat as 4.17.21 in v13 and 4.18.1 in v9",
@@ -111,9 +103,6 @@ fn corpus_pairs(root: &Path) -> Vec<(String, Vec<u8>, Vec<u8>)> {
     pairs
 }
 
-/// The full generated corpus, outside the repository. Run with
-/// `V13_CORPUS=/tmp/v13-corpus/out cargo test -p turborepo-lockfiles --
-/// --ignored`.
 #[test]
 #[ignore]
 fn paired_oracle_on_external_corpus() {
@@ -131,7 +120,6 @@ fn paired_oracle_on_external_corpus() {
     );
 }
 
-/// `lockfile-tests/fixtures/pnpm-v13-*`, each with its v9 twin.
 pub(super) fn fixture_pairs() -> Vec<(String, Vec<u8>, Vec<u8>)> {
     let fixtures = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../lockfile-tests/fixtures");
     let mut pairs: Vec<_> = std::fs::read_dir(&fixtures)
@@ -155,7 +143,6 @@ fn paired_oracle_on_fixtures() {
     }
 }
 
-/// Canonical layout: a pnpm-written v13 lockfile encodes to its own bytes.
 fn assert_round_trip(v13: &[u8], label: &str) {
     let lockfile = PnpmLockfile::from_bytes(v13).unwrap();
     let encoded = lockfile.encode().unwrap();
@@ -194,8 +181,6 @@ fn detects_v13_documents() {
     }
 }
 
-/// What `turbo prune <target>` passes to `subgraph`: the target and the
-/// workspaces it depends on, and the closure of their external packages.
 fn prune_inputs(lockfile: &PnpmLockfile, target: &str) -> (Vec<String>, Vec<String>) {
     let mut workspaces = std::collections::BTreeSet::from([target.to_string()]);
     let mut queue = vec![target.to_string()];
@@ -259,9 +244,6 @@ fn pruned(lockfile: &PnpmLockfile, workspaces: &[String], packages: &[String]) -
         .clone()
 }
 
-/// Prune parity: pruning the v13 lockfile reads back as pruning its v9 twin,
-/// for every workspace; a pruned v13 lockfile encodes stably and prunes to
-/// itself again.
 pub(super) fn assert_prune_parity(v9_bytes: &[u8], v13_bytes: &[u8], label: &str) {
     let v9 = PnpmLockfile::from_bytes(v9_bytes).unwrap();
     let v13 = PnpmLockfile::from_bytes(v13_bytes).unwrap();
@@ -310,8 +292,6 @@ fn normalized_models(mut v9: PnpmLockfile, mut v13: PnpmLockfile) -> (PnpmLockfi
             package.resolution.integrity = None;
         }
     }
-    // The v9 subgraph keeps an empty `snapshots` map that a parse reads as
-    // absent.
     if v9
         .snapshots
         .as_ref()
@@ -352,7 +332,6 @@ fn prune_parity_on_external_corpus() {
     assert!(failures.is_empty(), "prune parity failed for {failures:#?}");
 }
 
-/// Pruning to every workspace keeps the whole document.
 #[test]
 fn prune_to_every_workspace_is_identity() {
     for (label, _, v13) in fixture_pairs() {
@@ -381,10 +360,6 @@ fn prune_to_every_workspace_is_identity() {
     }
 }
 
-/// `p` binds its peer `x` to whichever snapshot of `x` the scope it is first
-/// reached from links: importer `a`, the first in order. Pruning `a` away
-/// leaves `b` as `p`'s first referrer, which links the other `x`, so the
-/// binding must be pinned to keep its provider.
 fn linked_above_drift_document(p: &str, b_p: &str) -> String {
     format!(
         r#"{{
@@ -472,9 +447,6 @@ fn pins_a_binding_whose_provider_drifts() {
     assert_pins_linked_above_drift(&document, "p@1.0.0(x@1.0.0(y@1.0.0))");
 }
 
-/// The drifting binding is shared by both snapshots of `p`, so it moves
-/// into each snapshot before one of them is pinned. `b` names the snapshot
-/// `a` reaches first.
 #[test]
 fn dehoists_a_shared_binding_to_pin_it() {
     let document = linked_above_drift_document(
@@ -491,9 +463,6 @@ fn dehoists_a_shared_binding_to_pin_it() {
     assert_pins_linked_above_drift(&document, "p@1.0.0(x@1.0.0(y@1.0.0))(z@1.0.0)");
 }
 
-/// A v13 lockfile merged with per-project lockfiles answers queries and
-/// prunes, since prune copies per-project lockfiles, but has no document to
-/// encode.
 #[test]
 fn merged_lockfiles_refuse_to_encode() {
     let (_, _, v13) = fixture_pairs().remove(0);

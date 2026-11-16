@@ -28,9 +28,7 @@ pub enum Error {
     NextFormat(#[from] NextFormatError),
 }
 
-/// Why a pnpm v13 (`lockfileVersion: '13.0'`) lockfile could not be read,
-/// pruned, or written. Mirrors pnpm's `NextFormatError` where the cause is
-/// the same.
+/// Mirrors pnpm's `NextFormatError` where the cause is the same.
 #[derive(Debug, thiserror::Error)]
 pub enum NextFormatError {
     #[error("Unable to parse pnpm v13 lockfile: {0}")]

@@ -82,18 +82,11 @@ pub struct PnpmLockfile {
     format: Format,
 }
 
-/// The on-disk format a lockfile was read from, which decides how it encodes
-/// and prunes.
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
 enum Format {
-    /// v5 to v9: the fields are the lockfile.
     #[default]
     Suffixed,
-    /// v13: every field is derived from the document by pnpm's reader, and
-    /// only `next` builds a lockfile in this format.
     Next(std::sync::Arc<next::NextLockfile>),
-    /// A v13 lockfile merged with per-project lockfiles. No document
-    /// represents the merged model, so it neither encodes nor prunes.
     MergedNext,
 }
 
@@ -606,7 +599,6 @@ impl PnpmLockfile {
             snapshots,
             dependency_index: _,
             time,
-            // `encode` writes a v13 lockfile from its document.
             format: _,
         } = self;
 
@@ -765,7 +757,6 @@ impl PnpmLockfile {
     }
 
     fn compute_version(&self) -> SupportedLockfileVersion {
-        // A v13 model holds the v9 sections pnpm's reader restores.
         if !matches!(self.format, Format::Suffixed) {
             return SupportedLockfileVersion::V7AndV9;
         }
@@ -1029,7 +1020,6 @@ impl PnpmLockfile {
         }
     }
 
-    /// The v9 subgraph: what is retained, for every format.
     fn subgraph_suffixed(
         &self,
         workspace_packages: &[String],
@@ -1420,8 +1410,6 @@ impl crate::Lockfile for PnpmLockfile {
         match &self.format {
             Format::Suffixed => Ok(Box::new(kept)),
             Format::Next(next) => Ok(Box::new(next.prune(&kept)?)),
-            // Prune copies per-project lockfiles instead of encoding them, so
-            // the subgraph only has to answer queries; `encode` refuses it.
             Format::MergedNext => Ok(Box::new(Self {
                 format: Format::MergedNext,
                 ..kept
@@ -1734,7 +1722,6 @@ mod tests {
                 continue;
             };
             let lockfile = PnpmLockfile::from_bytes(&contents).unwrap();
-            // v13 lockfiles encode from their document (next/tests.rs).
             if !matches!(lockfile.format, Format::Suffixed) {
                 continue;
             }

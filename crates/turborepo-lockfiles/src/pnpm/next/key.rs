@@ -5,7 +5,6 @@
 
 use std::cmp::Ordering;
 
-/// `name` and the rest of `name@suffix`, the `@` of a scope skipped.
 pub(super) fn split(key: &str) -> Option<(&str, &str)> {
     let at = if let Some(scoped) = key.strip_prefix('@') {
         scoped.find('@')? + 1
@@ -16,7 +15,6 @@ pub(super) fn split(key: &str) -> Option<(&str, &str)> {
     (!name.is_empty() && name != "@" && !suffix.is_empty()).then_some((name, suffix))
 }
 
-/// The version part of a suffix, peer and patch groups dropped.
 pub(super) fn without_peer(suffix: &str) -> &str {
     if suffix.ends_with(')')
         && let Some(open) = suffix.find('(')
@@ -26,7 +24,6 @@ pub(super) fn without_peer(suffix: &str) -> &str {
     suffix
 }
 
-/// A key with its peer and patch groups dropped: the `packages` key.
 pub(super) fn package_key(key: &str) -> &str {
     match split(key) {
         Some((name, suffix)) => &key[..name.len() + 1 + without_peer(suffix).len()],
@@ -57,8 +54,6 @@ pub(super) fn looks_like_alias(value: &str) -> bool {
     value.find('(').is_none_or(|paren| at < paren) && value.find(':').is_none_or(|colon| at < colon)
 }
 
-/// The key a reference names from `alias`: the alias target itself, or
-/// `alias@version`; `None` for a link.
 pub(super) fn resolve(alias: &str, reference: &str) -> Option<String> {
     if reference.starts_with("link:") {
         return None;
@@ -69,8 +64,7 @@ pub(super) fn resolve(alias: &str, reference: &str) -> Option<String> {
     Some(format!("{alias}@{reference}"))
 }
 
-/// `reference` pointing at `key`, in the same shape (pnpm `with_key` and
-/// `importer_version_with_key`).
+/// Port of pnpm `with_key` and `importer_version_with_key`.
 pub(super) fn with_key(reference: &str, key: &str) -> String {
     if reference.starts_with("link:") {
         return reference.to_string();
@@ -84,7 +78,7 @@ pub(super) fn with_key(reference: &str, key: &str) -> String {
     }
 }
 
-/// pnpm `compare_names`: by scope, then bare name; unscoped names first.
+/// Port of pnpm `compare_names`.
 pub(super) fn compare_names(left: &str, right: &str) -> Ordering {
     name_parts(left).cmp(&name_parts(right))
 }
@@ -129,8 +123,7 @@ pub(super) fn link_path_to_peer_version(rel_path: &str) -> String {
     }
 }
 
-/// Port of pnpm `create_peer_dep_graph_hash`: segments sorted bytewise and
-/// joined, hashed to 32 hex characters when longer than `max_length`.
+/// Port of pnpm `create_peer_dep_graph_hash`.
 pub(super) fn create_peer_dep_graph_hash(mut segments: Vec<String>, max_length: usize) -> String {
     use sha2::{Digest, Sha256};
     segments.sort();

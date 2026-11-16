@@ -1,8 +1,4 @@
 //! pnpm lockfile v13 (`lockfileVersion: '13.0'`, pnpm/rfcs#72).
-//!
-//! The env document's text and the main document's tree are the only v13
-//! state. Everything turbo queries is the v9-shaped `PnpmLockfile` pnpm's
-//! reader restores from them.
 
 mod emit;
 mod implied_version;
@@ -21,14 +17,10 @@ pub(super) use wire::declares_next_format;
 use super::{Format, PnpmLockfile};
 use crate::pnpm::{LockfileVersion, NextFormatError, VersionFormat};
 
-/// A v13 lockfile as read: what `encode` writes and what `prune` filters.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(super) struct NextLockfile {
-    /// The env document between the leading `---\n` and the `\n---\n`
-    /// separator, kept as text: pnpm copies it verbatim, and frozen installs
-    /// fail without it when `packageManager` is pinned.
+    /// Kept as text because pnpm copies the env document verbatim.
     env: Option<String>,
-    /// The main document, in input order.
     tree: Value,
 }
 
@@ -50,7 +42,6 @@ impl NextLockfile {
         .model(leading_documents)
     }
 
-    /// This lockfile pruned to what `kept`, its v9 subgraph, retained.
     pub(super) fn prune(&self, kept: &PnpmLockfile) -> Result<PnpmLockfile, crate::Error> {
         NextLockfile {
             env: self.env.clone(),
@@ -59,7 +50,6 @@ impl NextLockfile {
         .model(kept.leading_documents.clone())
     }
 
-    /// The env document verbatim, then the main document in pnpm's layout.
     pub(super) fn encode(&self) -> Vec<u8> {
         emit::encode(self.env.as_deref(), &self.tree).into_bytes()
     }
