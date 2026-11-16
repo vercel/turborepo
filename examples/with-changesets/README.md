@@ -10,7 +10,7 @@ Run the following command:
 npx create-turbo@latest -e with-changesets
 ```
 
-Use Node.js 26.11.1 or newer and pnpm 12.11.2, as pinned in `package.json`. Install dependencies with `pnpm install`.
+Use Node.js 26.13.1 or newer and pnpm 12.18.0, as pinned in `package.json`. Install dependencies with `pnpm install`.
 
 ## What's inside?
 
