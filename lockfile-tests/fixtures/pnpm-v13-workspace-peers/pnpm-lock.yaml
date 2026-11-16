@@ -1,0 +1,209 @@
+{
+	"lockfileVersion": "13.0",
+
+	"settings": {
+		"autoInstallPeers": true,
+		"excludeLinksFromLockfile": false,
+	},
+
+	"projects": {
+		".": {},
+
+		"apps/a": {
+			"dependencies": {
+				"@repo/hooks": "workspace:*",
+				"@repo/ui": "workspace:*",
+				"react": "18.3.1",
+				"react-dom": "18.3.1",
+			},
+			"dependenciesMeta": {
+				"@repo/hooks": {
+					"injected": true,
+				},
+			},
+		},
+
+		"apps/b": {
+			"dependencies": {
+				"@repo/hooks": "workspace:*",
+				"@repo/ui": "workspace:*",
+				"react": "19.1.0",
+				"react-dom": "19.1.0",
+			},
+			"dependenciesMeta": {
+				"@repo/hooks": {
+					"injected": true,
+				},
+			},
+		},
+
+		"apps/c": {
+			"dependencies": {
+				"@repo/ui": "workspace:*",
+				"react": "18.2.0",
+				"react-dom": "18.2.0",
+			},
+		},
+
+		"packages/hooks": {
+			"dependencies": {
+				"@repo/ui": "workspace:*",
+				"use-sync-external-store": "1.5.0",
+			},
+			"devDependencies": {
+				"react": "19.1.0",
+			},
+		},
+
+		"packages/ui": {
+			"name": "@repo/ui",
+			"devDependencies": {
+				"react": "19.1.0",
+				"react-dom": "19.1.0",
+			},
+		},
+	},
+
+	"packages": {
+		"@repo/hooks@file:packages/hooks": {
+			"peerDependencies": {
+				"react": "^18.0.0 || ^19.0.0",
+			},
+			"specifiers": {
+				"dependencies": {
+					"@repo/ui": "workspace:*",
+					"use-sync-external-store": "1.5.0",
+				},
+				"manifestSource": "workspace",
+			},
+			"dependencies": {
+				"@repo/ui": "link:packages/ui",
+				"use-sync-external-store": "1.5.0",
+			},
+			"snapshots": [
+				{
+					"peerDependencies": {
+						"react": {
+							"version": "18.3.1",
+						},
+					},
+				},
+				{
+					"peerDependencies": {
+						"react": {
+							"version": "19.1.0",
+						},
+					},
+				},
+			],
+		},
+
+		"js-tokens@4.0.0": {
+			"integrity": "sha512-RdJUflcE3cUzKiMqQgsCu06FPu9UdIJO0beYbPhHN4k6apgJtifcoCtT9bcxOpYBtpD2kCM6Sbzg4CausW/PKQ==",
+		},
+
+		"loose-envify@1.4.0": {
+			"integrity": "sha512-lyuxPGr/Wfhrlem2CL/UcnUc1zcqKAImBDzukY7Y5F/yQiNdko6+fRLevlw1HgMySw7f611UIY408EtxRSoK3Q==",
+			"hasBin": true,
+			"dependencies": {
+				"js-tokens": "4.0.0",
+			},
+		},
+
+		"react-dom@18.2.0": {
+			"integrity": "sha512-6IMTriUmvsjHUjNtEDudZfuDQUoWXVxKHhlEGSk81n4YFS+r/Kl99wXiwlVXtPBtJenozv2P+hxDsw9eA7Xo6g==",
+			"peerDependencies": {
+				"react": {
+					"specifier": "^18.2.0",
+					"version": "18.2.0",
+				},
+			},
+			"dependencies": {
+				"loose-envify": "1.4.0",
+				"scheduler": "0.23.2",
+			},
+		},
+
+		"react-dom@18.3.1": {
+			"integrity": "sha512-5m4nQKp+rZRb09LNH59GM4BxTh9251/ylbKIbpe7TpGxfJ+9kv6BLkLBXIjjspbgbnIBNqlI23tRnTWT0snUIw==",
+			"peerDependencies": {
+				"react": {
+					"specifier": "^18.3.1",
+					"version": "18.3.1",
+				},
+			},
+			"dependencies": {
+				"loose-envify": "1.4.0",
+				"scheduler": "0.23.2",
+			},
+		},
+
+		"react-dom@19.1.0": {
+			"integrity": "sha512-Xs1hdnE+DyKgeHJeJznQmYMIBG3TKIHJJT95Q58nHLSrElKlGQqDTR2HQ9fx5CN/Gk6Vh/kupBTDLU11/nDk/g==",
+			"peerDependencies": {
+				"react": {
+					"specifier": "^19.1.0",
+					"version": "19.1.0",
+				},
+			},
+			"dependencies": {
+				"scheduler": "0.26.0",
+			},
+		},
+
+		"react@18.2.0": {
+			"integrity": "sha512-/3IjMdb2L9QbBdWiW5e3P2/npwMBaU9mHCSCUzNln0ZCYbcfTsGbTJrU/kGemdH2IWmB2ioZ+zkxtmq6g09fGQ==",
+			"engines": {"node": ">=0.10.0"},
+			"dependencies": {
+				"loose-envify": "1.4.0",
+			},
+		},
+
+		"react@18.3.1": {
+			"integrity": "sha512-wS+hAgJShR0KhEvPJArfuPVN1+Hz1t0Y6n5jLrGQbkb4urgPE/0Rve+1kMB1v/oWgHgm4WIcV+i7F2pTVj+2iQ==",
+			"engines": {"node": ">=0.10.0"},
+			"dependencies": {
+				"loose-envify": "1.4.0",
+			},
+		},
+
+		"react@19.1.0": {
+			"integrity": "sha512-FS+XFBNvn3GTAWq26joslQgWNoFu08F4kl0J4CgdNKADkdSGXQyTCnKteIAJy96Br6YbpEU1LSzV5dYtjMkMDg==",
+			"engines": {"node": ">=0.10.0"},
+		},
+
+		"scheduler@0.23.2": {
+			"integrity": "sha512-UOShsPwz7NrMUqhR6t0hWjFduvOzbtv7toDH1/hIrfRNIDBnnBWd0CwJTGvTpngVlmwGCdP9/Zl/tVrDqcuYzQ==",
+			"dependencies": {
+				"loose-envify": "1.4.0",
+			},
+		},
+
+		"scheduler@0.26.0": {
+			"integrity": "sha512-NlHwttCI/l5gCPR3D1nNXtWABUmBwvZpEQiD4IXSbIDq8BzLIK/7Ir5gTFSGZDUu37K5cMNp0hFtzO38sC7gWA==",
+		},
+
+		"use-sync-external-store@1.5.0": {
+			"integrity": "sha512-Rb46I4cGGVBmjamjphe8L/UnvJD+uPPtTkNvX5mZgqdbavhI4EbgIWJiIHXJ8bc/i9EQGPRh4DwEURJ552Do0A==",
+			"peerDependencies": {
+				"react": "^16.8.0 || ^17.0.0 || ^18.0.0 || ^19.0.0",
+			},
+			"snapshots": [
+				{
+					"peerDependencies": {
+						"react": {
+							"version": "18.3.1",
+						},
+					},
+				},
+				{
+					"peerDependencies": {
+						"react": {
+							"version": "19.1.0",
+						},
+					},
+				},
+			],
+		},
+	},
+}

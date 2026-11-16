@@ -1253,6 +1253,7 @@ impl TopLevelFields {
             snapshots: self.snapshots,
             dependency_index: rustc_hash::FxHashMap::default(),
             time: self.time,
+            format: super::Format::Suffixed,
         })
     }
 }

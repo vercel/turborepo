@@ -24,6 +24,48 @@ pub enum Error {
         name: String,
         version: String,
     },
+    #[error(transparent)]
+    NextFormat(#[from] NextFormatError),
+}
+
+/// Why a pnpm v13 (`lockfileVersion: '13.0'`) lockfile could not be read,
+/// pruned, or written. Mirrors pnpm's `NextFormatError` where the cause is
+/// the same.
+#[derive(Debug, thiserror::Error)]
+pub enum NextFormatError {
+    #[error("Unable to parse pnpm v13 lockfile: {0}")]
+    Syntax(String),
+    #[error(
+        "The lockfile does not say which version {name} resolves to in {importer}: nothing \
+         follows from the specifier {specifier}"
+    )]
+    UnderivableVersion {
+        importer: String,
+        name: String,
+        specifier: String,
+    },
+    #[error(
+        "The lockfile does not say which version {name} resolves to in the catalog {catalog}: \
+         nothing follows from the specifier {specifier}"
+    )]
+    UnderivableCatalogVersion {
+        catalog: String,
+        name: String,
+        specifier: String,
+    },
+    #[error("The lockfile records no resolution for {key}")]
+    MissingResolution { key: String },
+    #[error("Two snapshots of the pnpm v13 lockfile restore to the same key {key}")]
+    DuplicateKey { key: String },
+    #[error("Pruning retained {key}, which no snapshot of the pnpm v13 lockfile restores to")]
+    UnknownRetainedKey { key: String },
+    #[error("Unable to write the pruned pnpm v13 lockfile: {detail}")]
+    NotRepresentable { detail: String },
+    #[error(
+        "Unable to prune a pnpm v13 lockfile merged from per-project lockfiles \
+         (shared-workspace-lockfile=false)"
+    )]
+    Merged,
 }
 
 #[derive(Debug, PartialEq, Eq, Clone)]

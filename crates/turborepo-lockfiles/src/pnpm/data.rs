@@ -17,6 +17,8 @@ use super::{Error, LockfileVersion, SupportedLockfileVersion, dep_path::DepPath}
 // segment named `data`.
 #[path = "data_fast_parse.rs"]
 mod fast_parse;
+#[path = "next/mod.rs"]
+mod next;
 
 type Map<K, V> = std::collections::BTreeMap<K, V>;
 
@@ -76,6 +78,23 @@ pub struct PnpmLockfile {
     dependency_index: FxHashMap<String, DepIndexEntry>,
     #[serde(skip_serializing_if = "Option::is_none")]
     time: Option<Map<String, String>>,
+    #[serde(skip)]
+    format: Format,
+}
+
+/// The on-disk format a lockfile was read from, which decides how it encodes
+/// and prunes.
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+enum Format {
+    /// v5 to v9: the fields are the lockfile.
+    #[default]
+    Suffixed,
+    /// v13: every field is derived from the document by pnpm's reader, and
+    /// only `next` builds a lockfile in this format.
+    Next(std::sync::Arc<next::NextLockfile>),
+    /// A v13 lockfile merged with per-project lockfiles. No document
+    /// represents the merged model, so it neither encodes nor prunes.
+    MergedNext,
 }
 
 /// Per-key lookup entry built once after parse so the hot resolution paths
@@ -325,6 +344,9 @@ struct LockfileSettings {
 
 impl PnpmLockfile {
     pub fn from_bytes(bytes: &[u8]) -> Result<Self, crate::Error> {
+        if next::declares_next_format(bytes) {
+            return next::NextLockfile::read(bytes);
+        }
         // Machine-generated pnpm lockfiles parse on a fast event-driven path
         // (~2x the scanner throughput of the serde path). Inputs outside its
         // supported YAML subset — and malformed inputs — return `None` and
@@ -470,6 +492,9 @@ impl PnpmLockfile {
         workspace_lockfiles.sort_unstable_by(|a, b| a.0.cmp(b.0).then_with(|| a.1.cmp(b.1)));
         for (workspace_path, bytes) in workspace_lockfiles {
             let ws_lockfile = PnpmLockfile::from_bytes(bytes)?;
+            if !matches!(ws_lockfile.format, Format::Suffixed) {
+                self.format = Format::MergedNext;
+            }
 
             // Re-key the "." importer to the workspace's relative path
             for (key, snapshot) in ws_lockfile.importers {
@@ -498,6 +523,9 @@ impl PnpmLockfile {
             }
         }
 
+        if !matches!(self.format, Format::Suffixed) {
+            self.format = Format::MergedNext;
+        }
         // Rebuild the dependency index after merging
         self.build_dependency_index();
 
@@ -578,6 +606,8 @@ impl PnpmLockfile {
             snapshots,
             dependency_index: _,
             time,
+            // `encode` writes a v13 lockfile from its document.
+            format: _,
         } = self;
 
         let head = Head {
@@ -735,6 +765,10 @@ impl PnpmLockfile {
     }
 
     fn compute_version(&self) -> SupportedLockfileVersion {
+        // A v13 model holds the v9 sections pnpm's reader restores.
+        if !matches!(self.format, Format::Suffixed) {
+            return SupportedLockfileVersion::V7AndV9;
+        }
         if matches!(self.lockfile_version.format, super::VersionFormat::Float) {
             return SupportedLockfileVersion::V5;
         }
@@ -995,6 +1029,162 @@ impl PnpmLockfile {
         }
     }
 
+    /// The v9 subgraph: what is retained, for every format.
+    fn subgraph_suffixed(
+        &self,
+        workspace_packages: &[String],
+        packages: &[String],
+    ) -> Result<Self, crate::Error> {
+        let mut importers: BTreeMap<_, _> = self
+            .importers
+            .iter()
+            .filter(|(key, _)| key.as_str() == "." || workspace_packages.contains(key))
+            .map(|(k, v)| (k.clone(), v.clone()))
+            .collect();
+
+        // Workspace packages with no dependencies may be absent from the
+        // original lockfile's importers. pnpm requires every workspace package
+        // to have an importer entry (even if empty) for --frozen-lockfile to
+        // succeed, so we backfill any that are missing.
+        let empty_snapshot = ProjectSnapshot::empty(self.is_v6());
+        for pkg in workspace_packages {
+            importers
+                .entry(pkg.clone())
+                .or_insert_with(|| empty_snapshot.clone());
+        }
+
+        let (mut pruned_packages, mut pruned_snapshots) =
+            self.pruned_packages_and_snapshots(packages)?;
+
+        let inject_all = self
+            .settings
+            .as_ref()
+            .and_then(|s| s.inject_workspace_packages)
+            .unwrap_or(false);
+
+        // Importers are preserved verbatim, so their full dependency closures must be
+        // retained to keep the pruned lockfile valid for frozen installs.
+        for importer in importers.values() {
+            for dependency in importer.dependencies.all_dependency_names() {
+                let Some((_, version)) = importer.dependencies.find_resolution(dependency) else {
+                    continue;
+                };
+
+                let key = self.format_key(dependency, version);
+                self.retain_package(&key, &mut pruned_packages, &mut pruned_snapshots)?;
+            }
+
+            let injected_deps: Vec<_> = importer
+                .dependencies
+                .all_dependency_names()
+                .filter(|dep| {
+                    let per_dep_injected = importer
+                        .dependencies_meta
+                        .as_ref()
+                        .and_then(|meta| meta.get(*dep))
+                        .and_then(|m| m.injected)
+                        .unwrap_or(false);
+                    per_dep_injected || inject_all
+                })
+                .collect();
+
+            for dependency in injected_deps {
+                let Some((_, version)) = importer.dependencies.find_resolution(dependency) else {
+                    continue;
+                };
+
+                // Injected workspace deps with file: protocol have entries in
+                // packages/snapshots. link: deps do not.
+                if !version.starts_with("file:") {
+                    continue;
+                }
+
+                let key = self.format_key(dependency, version);
+                let package_key = if self.snapshots.is_some() {
+                    self.package_key_for_snapshot(&key)?
+                } else {
+                    key.clone()
+                };
+
+                if let Some(entry) = self.get_packages(&package_key) {
+                    pruned_packages.insert(package_key, entry.clone());
+                }
+
+                if let Some(snapshots) = self.snapshots.as_ref()
+                    && let Some(snapshot) = snapshots.get(&key)
+                {
+                    if let Some(ref mut pruned_snaps) = pruned_snapshots {
+                        pruned_snaps.insert(key.clone(), snapshot.clone());
+                    }
+
+                    // Include transitive deps of the injected package.
+                    // dependencies() returns (name, version) pairs where
+                    // version is the bare resolved version (e.g. "3.0.1"),
+                    // so we must construct the full key via format_key.
+                    for (dep_name, dep_version) in snapshot.dependencies() {
+                        let dep_key = self.format_key(&dep_name, &dep_version);
+                        if let Some(snap) = snapshots.get(&dep_key)
+                            && let Some(ref mut pruned_snaps) = pruned_snapshots
+                        {
+                            pruned_snaps
+                                .entry(dep_key.clone())
+                                .or_insert_with(|| snap.clone());
+                        }
+                        let dp = DepPath::parse(self.version(), &dep_key).ok();
+                        let pkg_key = dp
+                            .map(|dp| self.format_key(dp.name, dp.version))
+                            .unwrap_or(dep_key);
+                        if let Some(pkg) = self.get_packages(&pkg_key) {
+                            pruned_packages
+                                .entry(pkg_key)
+                                .or_insert_with(|| pkg.clone());
+                        }
+                    }
+                }
+            }
+        }
+
+        let patches = self
+            .patched_dependencies
+            .as_ref()
+            .map(|patches| self.prune_patches(patches, &pruned_packages))
+            .transpose()?;
+
+        let catalogs = self.prune_catalogs(&importers);
+        let mut pruned = Self {
+            leading_documents: self.leading_documents.clone(),
+            importers,
+            packages: match pruned_packages.is_empty() {
+                false => Some(pruned_packages),
+                true => None,
+            },
+            lockfile_version: self.lockfile_version.clone(),
+            cached_version: self.cached_version,
+            never_built_dependencies: self.never_built_dependencies.clone(),
+            only_built_dependencies: self.only_built_dependencies.clone(),
+            ignored_optional_dependencies: self.ignored_optional_dependencies.clone(),
+            overrides: self.overrides.clone(),
+            package_extensions_checksum: self.package_extensions_checksum.clone(),
+            patched_dependencies: patches,
+            specifiers: None,
+            dependencies: None,
+            optional_dependencies: None,
+            dev_dependencies: None,
+            root_dependencies_meta: None,
+            snapshots: pruned_snapshots,
+            dependency_index: FxHashMap::default(),
+            time: None,
+            settings: self.settings.clone(),
+            pnpmfile_checksum: self.pnpmfile_checksum.clone(),
+            catalogs,
+            format: Format::Suffixed,
+        };
+        // The pruned lockfile must be queryable like a parsed one
+        // (has_package/all_dependencies consult the index).
+        pruned.build_dependency_index();
+        Ok(pruned)
+    }
+
     fn pruned_packages_and_snapshots(
         &self,
         packages: &[String],
@@ -1226,156 +1416,28 @@ impl crate::Lockfile for PnpmLockfile {
         workspace_packages: &[String],
         packages: &[String],
     ) -> Result<Box<dyn crate::Lockfile>, crate::Error> {
-        let mut importers: BTreeMap<_, _> = self
-            .importers
-            .iter()
-            .filter(|(key, _)| key.as_str() == "." || workspace_packages.contains(key))
-            .map(|(k, v)| (k.clone(), v.clone()))
-            .collect();
-
-        // Workspace packages with no dependencies may be absent from the
-        // original lockfile's importers. pnpm requires every workspace package
-        // to have an importer entry (even if empty) for --frozen-lockfile to
-        // succeed, so we backfill any that are missing.
-        let empty_snapshot = ProjectSnapshot::empty(self.is_v6());
-        for pkg in workspace_packages {
-            importers
-                .entry(pkg.clone())
-                .or_insert_with(|| empty_snapshot.clone());
-        }
-
-        let (mut pruned_packages, mut pruned_snapshots) =
-            self.pruned_packages_and_snapshots(packages)?;
-
-        let inject_all = self
-            .settings
-            .as_ref()
-            .and_then(|s| s.inject_workspace_packages)
-            .unwrap_or(false);
-
-        // Importers are preserved verbatim, so their full dependency closures must be
-        // retained to keep the pruned lockfile valid for frozen installs.
-        for importer in importers.values() {
-            for dependency in importer.dependencies.all_dependency_names() {
-                let Some((_, version)) = importer.dependencies.find_resolution(dependency) else {
-                    continue;
-                };
-
-                let key = self.format_key(dependency, version);
-                self.retain_package(&key, &mut pruned_packages, &mut pruned_snapshots)?;
+        let kept = self.subgraph_suffixed(workspace_packages, packages)?;
+        match &self.format {
+            Format::Suffixed => Ok(Box::new(kept)),
+            Format::Next(_) => Err(super::NextFormatError::NotRepresentable {
+                detail: "pruning is not supported yet".to_string(),
             }
-
-            let injected_deps: Vec<_> = importer
-                .dependencies
-                .all_dependency_names()
-                .filter(|dep| {
-                    let per_dep_injected = importer
-                        .dependencies_meta
-                        .as_ref()
-                        .and_then(|meta| meta.get(*dep))
-                        .and_then(|m| m.injected)
-                        .unwrap_or(false);
-                    per_dep_injected || inject_all
-                })
-                .collect();
-
-            for dependency in injected_deps {
-                let Some((_, version)) = importer.dependencies.find_resolution(dependency) else {
-                    continue;
-                };
-
-                // Injected workspace deps with file: protocol have entries in
-                // packages/snapshots. link: deps do not.
-                if !version.starts_with("file:") {
-                    continue;
-                }
-
-                let key = self.format_key(dependency, version);
-                let package_key = if self.snapshots.is_some() {
-                    self.package_key_for_snapshot(&key)?
-                } else {
-                    key.clone()
-                };
-
-                if let Some(entry) = self.get_packages(&package_key) {
-                    pruned_packages.insert(package_key, entry.clone());
-                }
-
-                if let Some(snapshots) = self.snapshots.as_ref()
-                    && let Some(snapshot) = snapshots.get(&key)
-                {
-                    if let Some(ref mut pruned_snaps) = pruned_snapshots {
-                        pruned_snaps.insert(key.clone(), snapshot.clone());
-                    }
-
-                    // Include transitive deps of the injected package.
-                    // dependencies() returns (name, version) pairs where
-                    // version is the bare resolved version (e.g. "3.0.1"),
-                    // so we must construct the full key via format_key.
-                    for (dep_name, dep_version) in snapshot.dependencies() {
-                        let dep_key = self.format_key(&dep_name, &dep_version);
-                        if let Some(snap) = snapshots.get(&dep_key)
-                            && let Some(ref mut pruned_snaps) = pruned_snapshots
-                        {
-                            pruned_snaps
-                                .entry(dep_key.clone())
-                                .or_insert_with(|| snap.clone());
-                        }
-                        let dp = DepPath::parse(self.version(), &dep_key).ok();
-                        let pkg_key = dp
-                            .map(|dp| self.format_key(dp.name, dp.version))
-                            .unwrap_or(dep_key);
-                        if let Some(pkg) = self.get_packages(&pkg_key) {
-                            pruned_packages
-                                .entry(pkg_key)
-                                .or_insert_with(|| pkg.clone());
-                        }
-                    }
-                }
-            }
+            .into()),
+            Format::MergedNext => Err(super::NextFormatError::Merged.into()),
         }
-
-        let patches = self
-            .patched_dependencies
-            .as_ref()
-            .map(|patches| self.prune_patches(patches, &pruned_packages))
-            .transpose()?;
-
-        let catalogs = self.prune_catalogs(&importers);
-        let mut pruned = Self {
-            leading_documents: self.leading_documents.clone(),
-            importers,
-            packages: match pruned_packages.is_empty() {
-                false => Some(pruned_packages),
-                true => None,
-            },
-            lockfile_version: self.lockfile_version.clone(),
-            cached_version: self.cached_version,
-            never_built_dependencies: self.never_built_dependencies.clone(),
-            only_built_dependencies: self.only_built_dependencies.clone(),
-            ignored_optional_dependencies: self.ignored_optional_dependencies.clone(),
-            overrides: self.overrides.clone(),
-            package_extensions_checksum: self.package_extensions_checksum.clone(),
-            patched_dependencies: patches,
-            specifiers: None,
-            dependencies: None,
-            optional_dependencies: None,
-            dev_dependencies: None,
-            root_dependencies_meta: None,
-            snapshots: pruned_snapshots,
-            dependency_index: FxHashMap::default(),
-            time: None,
-            settings: self.settings.clone(),
-            pnpmfile_checksum: self.pnpmfile_checksum.clone(),
-            catalogs,
-        };
-        // The pruned lockfile must be queryable like a parsed one
-        // (has_package/all_dependencies consult the index).
-        pruned.build_dependency_index();
-        Ok(Box::new(pruned))
     }
 
     fn encode(&self) -> Result<Vec<u8>, crate::Error> {
+        match &self.format {
+            Format::Suffixed => {}
+            Format::Next(_) => {
+                return Err(super::NextFormatError::NotRepresentable {
+                    detail: "encoding is not supported yet".to_string(),
+                }
+                .into());
+            }
+            Format::MergedNext => return Err(super::NextFormatError::Merged.into()),
+        }
         if self.leading_documents.is_empty() {
             return Ok(self.to_yaml()?.into_bytes());
         }
@@ -1675,6 +1737,10 @@ mod tests {
                 continue;
             };
             let lockfile = PnpmLockfile::from_bytes(&contents).unwrap();
+            // v13 lockfiles encode from their document (next/tests.rs).
+            if !matches!(lockfile.format, Format::Suffixed) {
+                continue;
+            }
             assert_to_yaml_matches_serde(&lockfile, &path.display().to_string());
 
             // Pruned lockfiles take the same path through `encode`.
