@@ -1430,12 +1430,7 @@ impl crate::Lockfile for PnpmLockfile {
     fn encode(&self) -> Result<Vec<u8>, crate::Error> {
         match &self.format {
             Format::Suffixed => {}
-            Format::Next(_) => {
-                return Err(super::NextFormatError::NotRepresentable {
-                    detail: "encoding is not supported yet".to_string(),
-                }
-                .into());
-            }
+            Format::Next(next) => return Ok(next.encode()),
             Format::MergedNext => return Err(super::NextFormatError::Merged.into()),
         }
         if self.leading_documents.is_empty() {

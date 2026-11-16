@@ -155,6 +155,37 @@ fn paired_oracle_on_fixtures() {
     }
 }
 
+/// Canonical layout: a pnpm-written v13 lockfile encodes to its own bytes.
+fn assert_round_trip(v13: &[u8], label: &str) {
+    let lockfile = PnpmLockfile::from_bytes(v13).unwrap();
+    let encoded = lockfile.encode().unwrap();
+    assert_eq!(
+        String::from_utf8_lossy(&encoded),
+        String::from_utf8_lossy(v13),
+        "{label}: encode(read(x)) != x"
+    );
+}
+
+#[test]
+fn round_trips_fixtures() {
+    for (label, _, v13) in fixture_pairs() {
+        assert_round_trip(&v13, &label);
+    }
+}
+
+#[test]
+#[ignore]
+fn round_trips_external_corpus() {
+    let root = std::env::var("V13_CORPUS").expect("V13_CORPUS names a corpus directory");
+    let mut failures = Vec::new();
+    for (label, _, v13) in corpus_pairs(Path::new(&root)) {
+        if std::panic::catch_unwind(|| assert_round_trip(&v13, &label)).is_err() {
+            failures.push(label);
+        }
+    }
+    assert!(failures.is_empty(), "round trip failed for {failures:#?}");
+}
+
 #[test]
 fn detects_v13_documents() {
     for (label, v9, v13) in fixture_pairs() {

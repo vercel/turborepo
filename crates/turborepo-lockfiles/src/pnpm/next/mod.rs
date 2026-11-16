@@ -4,6 +4,7 @@
 //! state. Everything turbo queries is the v9-shaped `PnpmLockfile` pnpm's
 //! reader restores from them.
 
+mod emit;
 mod implied_version;
 mod key;
 mod read;
@@ -46,6 +47,11 @@ impl NextLockfile {
             tree,
         }
         .model(leading_documents)
+    }
+
+    /// The env document verbatim, then the main document in pnpm's layout.
+    pub(super) fn encode(&self) -> Vec<u8> {
+        emit::encode(self.env.as_deref(), &self.tree).into_bytes()
     }
 
     fn model(self, leading_documents: Vec<Value>) -> Result<PnpmLockfile, crate::Error> {
