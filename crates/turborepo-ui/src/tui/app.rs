@@ -1610,7 +1610,7 @@ pub fn terminal_big_enough() -> Result<bool, Error> {
 /// hotkey is always catchable.
 #[tracing::instrument(skip(terminal_sink))]
 fn enable_input(color_config: ColorConfig, terminal_sink: &TerminalSink) -> io::Result<()> {
-    if color_config.should_strip_ansi {
+    if color_config.should_strip_ansi() {
         crossterm::style::force_color_output(false);
     }
     crossterm::terminal::enable_raw_mode()?;

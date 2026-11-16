@@ -207,7 +207,7 @@ where
 {
     let color_config = args.color_config();
 
-    if color_config.should_strip_ansi {
+    if color_config.should_strip_ansi() {
         // Let's not crash just because we failed to set up the hook
         let _ = miette::set_hook(Box::new(|_| {
             Box::new(
