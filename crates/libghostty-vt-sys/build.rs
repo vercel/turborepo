@@ -174,8 +174,7 @@ fn build_vendored(link_mode: LinkMode) {
         build
             .arg("--system")
             .arg(&zig_system_dir)
-            .arg("--global-cache-dir")
-            .arg(&zig_global_cache_dir);
+            .env("ZIG_GLOBAL_CACHE_DIR", &zig_global_cache_dir);
     }
 
     // Always pass an explicit macOS target so Zig uses the same deployment
