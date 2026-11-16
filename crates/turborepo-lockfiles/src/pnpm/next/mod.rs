@@ -7,6 +7,7 @@
 mod emit;
 mod implied_version;
 mod key;
+mod prune;
 mod read;
 mod restore;
 mod tarjan;
@@ -47,6 +48,15 @@ impl NextLockfile {
             tree,
         }
         .model(leading_documents)
+    }
+
+    /// This lockfile pruned to what `kept`, its v9 subgraph, retained.
+    pub(super) fn prune(&self, kept: &PnpmLockfile) -> Result<PnpmLockfile, crate::Error> {
+        NextLockfile {
+            env: self.env.clone(),
+            tree: prune::prune(&self.tree, kept)?,
+        }
+        .model(kept.leading_documents.clone())
     }
 
     /// The env document verbatim, then the main document in pnpm's layout.

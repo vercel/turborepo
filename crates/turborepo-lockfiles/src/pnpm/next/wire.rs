@@ -221,6 +221,28 @@ impl<'a> NextRef<'a> {
     pub fn as_link_target(&self) -> Option<&'a str> {
         key::as_link_target(self.version)
     }
+
+    /// The reference as written: its version, or `{version, with}`.
+    pub fn to_value(&self) -> Value {
+        match &self.with {
+            None => Value::from(self.version),
+            Some(with) => {
+                let mut map = Mapping::new();
+                map.insert("version".into(), self.version.into());
+                map.insert("with".into(), bindings_value(with));
+                Value::Mapping(map)
+            }
+        }
+    }
+}
+
+pub(super) fn bindings_value(bindings: &Bindings<'_>) -> Value {
+    Value::Mapping(
+        bindings
+            .iter()
+            .map(|(name, reference)| (Value::from(*name), reference.to_value()))
+            .collect(),
+    )
 }
 
 fn parse_bindings<'a>(value: &'a Value, what: &str) -> Result<Bindings<'a>, NextFormatError> {

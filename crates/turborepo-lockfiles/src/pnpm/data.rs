@@ -1419,11 +1419,13 @@ impl crate::Lockfile for PnpmLockfile {
         let kept = self.subgraph_suffixed(workspace_packages, packages)?;
         match &self.format {
             Format::Suffixed => Ok(Box::new(kept)),
-            Format::Next(_) => Err(super::NextFormatError::NotRepresentable {
-                detail: "pruning is not supported yet".to_string(),
-            }
-            .into()),
-            Format::MergedNext => Err(super::NextFormatError::Merged.into()),
+            Format::Next(next) => Ok(Box::new(next.prune(&kept)?)),
+            // Prune copies per-project lockfiles instead of encoding them, so
+            // the subgraph only has to answer queries; `encode` refuses it.
+            Format::MergedNext => Ok(Box::new(Self {
+                format: Format::MergedNext,
+                ..kept
+            })),
         }
     }
 

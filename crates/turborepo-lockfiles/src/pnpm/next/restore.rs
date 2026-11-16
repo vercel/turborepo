@@ -23,14 +23,21 @@ use crate::pnpm::NextFormatError;
 /// check both read it.
 pub(super) struct Resolved<'g, 'a> {
     pub graph: Graph<'g, 'a>,
+    /// `name@version` plus the patch group of each snapshot.
+    pub base_keys: Vec<String>,
     pub keys: Vec<String>,
 }
 
 impl<'g, 'a> Resolved<'g, 'a> {
     pub fn of(doc: &'g wire::Document<'a>) -> Result<Self, NextFormatError> {
         let graph = Graph::new(doc)?;
-        let keys = graph.keys(&graph.base_keys());
-        Ok(Resolved { graph, keys })
+        let base_keys = graph.base_keys();
+        let keys = graph.keys(&base_keys);
+        Ok(Resolved {
+            graph,
+            base_keys,
+            keys,
+        })
     }
 }
 
