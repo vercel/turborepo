@@ -93,6 +93,10 @@ function lockfileValidationCommand(
       return {
         command:
           "pnpm install --frozen-lockfile --ignore-scripts --offline --store-dir ./.pnpm-validation-store",
+        // pnpm 12 checks every locked version against `minimumReleaseAge`
+        // using registry metadata, which fails offline before the tarball
+        // fetch this validation relies on.
+        env: { pnpm_config_minimum_release_age: "0" },
         acceptsFailure(result) {
           const output = combinedOutput(result);
           return (
