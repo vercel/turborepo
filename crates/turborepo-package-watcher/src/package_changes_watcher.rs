@@ -2288,6 +2288,96 @@ mod test {
         );
     }
 
+    /// Send the event a backend emits when it dropped events, as FSEvents does
+    /// under a burst of writes.
+    fn send_rescan(hash_events_tx: &WatchEventSender, file_events_tx: &WatchEventSender) {
+        let rescan = notify::Event::new(EventKind::Other).set_flag(notify::event::Flag::Rescan);
+        hash_events_tx.send(Ok(rescan.clone())).unwrap();
+        file_events_tx.send(Ok(rescan)).unwrap();
+    }
+
+    #[tokio::test]
+    async fn rescan_after_ignored_burst_does_not_rerun() {
+        let (_tmp, repo_root) = setup_git_repo();
+        let mut handle = create_test_watcher(&repo_root);
+        let rx = &mut handle.watcher.package_change_events_rx;
+        assert!(matches!(
+            recv_event(rx, Duration::from_secs(5)).await,
+            Some(PackageChangeEvent::Rediscover)
+        ));
+
+        let cache = repo_root.join_components(&["packages", "a", ".cache"]);
+        cache.create_dir_all().unwrap();
+        for i in 0..50 {
+            cache
+                .join_component(&format!("{i}.bin"))
+                .create_with_contents(b"ignored")
+                .unwrap();
+        }
+        send_rescan(&handle.hash_events_tx, &handle.file_events_tx);
+        send_rescan(&handle.hash_events_tx, &handle.file_events_tx);
+
+        let event = recv_event(rx, Duration::from_millis(500)).await;
+        assert!(event.is_none(), "expected no rerun, got {event:?}");
+    }
+
+    #[tokio::test]
+    async fn rescan_reports_tracked_change_for_its_package() {
+        let (_tmp, repo_root) = setup_git_repo();
+        let mut handle = create_test_watcher(&repo_root);
+        let rx = &mut handle.watcher.package_change_events_rx;
+        assert!(matches!(
+            recv_event(rx, Duration::from_secs(5)).await,
+            Some(PackageChangeEvent::Rediscover)
+        ));
+
+        repo_root
+            .join_components(&["packages", "a", "index.ts"])
+            .create_with_contents(b"export const a = 2;")
+            .unwrap();
+        send_rescan(&handle.hash_events_tx, &handle.file_events_tx);
+
+        let event = recv_event(rx, Duration::from_secs(5)).await;
+        match event {
+            Some(PackageChangeEvent::Package {
+                name,
+                changed_files,
+            }) => {
+                assert_eq!(name.to_string(), "a");
+                assert_eq!(
+                    *changed_files,
+                    HashSet::from([anchored("packages/a/index.ts")])
+                );
+            }
+            other => panic!("expected package a to change, got {other:?}"),
+        }
+        let event = recv_event(rx, Duration::from_millis(500)).await;
+        assert!(event.is_none(), "expected only package a, got {event:?}");
+    }
+
+    #[tokio::test]
+    async fn rescan_after_turbo_json_change_rediscovers() {
+        let (_tmp, repo_root) = setup_git_repo();
+        let mut handle = create_test_watcher(&repo_root);
+        let rx = &mut handle.watcher.package_change_events_rx;
+        assert!(matches!(
+            recv_event(rx, Duration::from_secs(5)).await,
+            Some(PackageChangeEvent::Rediscover)
+        ));
+
+        repo_root
+            .join_component(CONFIG_FILE)
+            .create_with_contents(br#"{"tasks":{"build":{},"lint":{}}}"#)
+            .unwrap();
+        send_rescan(&handle.hash_events_tx, &handle.file_events_tx);
+
+        let event = recv_event(rx, Duration::from_secs(5)).await;
+        assert!(
+            matches!(event, Some(PackageChangeEvent::Rediscover)),
+            "expected Rediscover, got {event:?}"
+        );
+    }
+
     fn discovery_for(repo_root: &AbsoluteSystemPathBuf, packages: &[&str]) -> DiscoveryResponse {
         use turborepo_repository::{discovery::WorkspaceData, package_manager::PackageManager};
 
