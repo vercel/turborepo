@@ -1,0 +1,30 @@
+{
+  "name": "storybook",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "storybook dev -p 6006",
+    "build": "storybook build",
+    "check-types": "svelte-check --tsconfig ./tsconfig.json",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix"
+  },
+  "dependencies": {
+    "@repo/ui": "workspace:*"
+  },
+  "devDependencies": {
+    "@repo/eslint-config": "workspace:*",
+    "@repo/typescript-config": "workspace:*",
+    "@storybook/addon-svelte-csf": "5.1.6",
+    "@storybook/svelte-vite": "10.6.7",
+    "@sveltejs/vite-plugin-svelte": "catalog:sveltejs",
+    "@types/node": "24.19.2",
+    "eslint": "10.15.0",
+    "svelte": "catalog:sveltejs",
+    "svelte-check": "catalog:sveltejs",
+    "storybook": "10.6.7",
+    "typescript": "6.0.3",
+    "vite": "8.3.8"
+  }
+}

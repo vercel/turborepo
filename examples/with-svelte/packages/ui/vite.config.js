@@ -1,6 +1,6 @@
+import { svelte, vitePreprocess } from '@sveltejs/vite-plugin-svelte';
 import { defineConfig } from 'vitest/config';
-import { svelte } from '@sveltejs/vite-plugin-svelte';
 
 export default defineConfig({
-	plugins: [svelte()]
+	plugins: [svelte({ configFile: false, preprocess: vitePreprocess() })]
 });

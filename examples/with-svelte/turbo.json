@@ -3,6 +3,7 @@
   "ui": "tui",
   "globalDependencies": [
     ".gitignore",
+    ".prettierignore",
     ".prettierrc",
     "eslint.config.js",
     "eslint.config.mjs",
@@ -12,7 +13,7 @@
     "build": {
       "dependsOn": ["^build"],
       "inputs": ["$TURBO_DEFAULT$", ".env*"],
-      "outputs": [".svelte-kit/**", ".turbo/**", ".vercel/**", "dist/**"]
+      "outputs": [".svelte-kit/**", ".turbo/**", ".vercel/**", "dist/**", "storybook-static/**"]
     },
     "check-types": {
       "dependsOn": ["build", "^check-types"]
@@ -21,8 +22,11 @@
       "cache": false,
       "persistent": true
     },
+    "//#format:check": {
+      "outputs": []
+    },
     "lint": {
-      "dependsOn": ["^lint"],
+      "dependsOn": ["^lint", "//#format:check"],
       "inputs": ["$TURBO_DEFAULT$", "eslint.config.js", "eslint.config.mjs"],
       "outputs": []
     },

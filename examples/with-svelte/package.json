@@ -6,16 +6,17 @@
     "check-types": "turbo run check-types",
     "dev": "turbo run dev",
     "lint": "turbo run lint",
+    "test:unit": "turbo run test:unit",
     "format": "prettier --write .",
     "format:check": "prettier --check ."
   },
   "devDependencies": {
-    "prettier": "3.9.6",
+    "prettier": "3.10.1",
     "prettier-plugin-svelte": "catalog:sveltejs",
-    "turbo": "2.10.10"
+    "turbo": "2.11.11"
   },
-  "packageManager": "pnpm@11.22.0",
+  "packageManager": "pnpm@12.18.0",
   "engines": {
-    "node": ">=24.19.0"
+    "node": "24.x"
   }
 }

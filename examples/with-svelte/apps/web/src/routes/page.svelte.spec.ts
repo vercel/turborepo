@@ -13,7 +13,7 @@ describe('+page.svelte', () => {
 	it('renders CounterView from @repo/ui', async () => {
 		await render(Page);
 
-		await expect.element(page.getByText('Current count: 0')).toBeInTheDocument();
+		await expect.element(page.getByText(/Current count: 0/)).toBeInTheDocument();
 		await expect.element(page.getByRole('button', { name: '+' })).toBeInTheDocument();
 		await expect.element(page.getByRole('button', { name: '-' })).toBeInTheDocument();
 	});
