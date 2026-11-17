@@ -1045,6 +1045,27 @@ mod tests {
     }
 
     #[test]
+    fn test_tracked_outputs_are_empty_when_git_is_unusable() {
+        let (_tmp, root) = tmp_dir();
+        let stale = root.join_components(&["packages", "app", "dist", "stale.js"]);
+        stale.ensure_dir().unwrap();
+        stale.create_with_contents("stale output").unwrap();
+        let scm = SCM::new_with_git_root(&root, root.clone());
+        assert!(!scm.is_manual());
+        assert!(
+            scm.get_tracked_output_hashes(
+                &root,
+                AnchoredSystemPath::new("packages/app").unwrap(),
+                &["dist/**".to_owned()],
+                &[],
+                None,
+            )
+            .unwrap()
+            .is_empty()
+        );
+    }
+
+    #[test]
     fn exact_inputs_do_not_inject_configs_or_defaults() {
         let (_tmp, root) = tmp_dir();
         setup_repository(&root);
