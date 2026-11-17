@@ -10,19 +10,19 @@
   "scripts": {
     "build": "tsc",
     "dev": "tsc --watch",
-    "lint": "eslint src/",
+    "lint": "oxlint src/",
     "check-types": "tsc --noEmit",
     "test": "node --test dist/server.test.js"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "1.30.0",
-    "zod": "4.6.2"
+    "@modelcontextprotocol/sdk": "1.32.2",
+    "zod": "4.6.7"
   },
   "devDependencies": {
-    "@repo/eslint-config": "workspace:*",
+    "@repo/oxlint-config": "workspace:*",
     "@repo/typescript-config": "workspace:*",
-    "@types/node": "22.20.2",
-    "eslint": "10.10.0",
+    "@types/node": "26.6.6",
+    "oxlint": "1.94.0",
     "typescript": "7.0.2"
   }
 }
