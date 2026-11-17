@@ -764,7 +764,11 @@ impl Subscriber {
         if config_paths
             .iter()
             .chain(self.custom_turbo_json_path.iter())
-            .any(|path| !self.repository_ignore.is_relevant(path.as_std_path(), false))
+            .any(|path| {
+                !self
+                    .repository_ignore
+                    .is_relevant(path.as_std_path(), false)
+            })
         {
             return RescanDiff::Unknown;
         }
