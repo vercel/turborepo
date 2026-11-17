@@ -124,9 +124,12 @@ impl RepositoryQuery {
             }
             PackageInclusionReason::All(AllPackageChangeReason::RootInternalDepChanged {
                 root_internal_dep,
-            }) => PackageChangeReason::RootInternalDepChanged(RootInternalDepChanged {
-                root_internal_dep: root_internal_dep.to_string(),
-            }),
+            })
+            | PackageInclusionReason::RootInternalDepChanged { root_internal_dep } => {
+                PackageChangeReason::RootInternalDepChanged(RootInternalDepChanged {
+                    root_internal_dep: root_internal_dep.to_string(),
+                })
+            }
             PackageInclusionReason::All(AllPackageChangeReason::GitRefNotFound {
                 from_ref,
                 to_ref,
@@ -554,8 +557,15 @@ fn project_affected_task_packages(
     tasks.sort_by(|a, b| a.task_id.cmp(&b.task_id));
     let mut packages = HashMap::new();
     for task in tasks {
+        let package = PackageName::from(task.task_id.package.as_str());
+        let root_dependency_reason = legacy_packages.get(&package).filter(|reason| {
+            matches!(
+                reason,
+                PackageInclusionReason::RootInternalDepChanged { .. }
+            )
+        });
         packages
-            .entry(PackageName::from(task.task_id.package.as_str()))
+            .entry(package)
             .or_insert_with(|| match task.reason {
                 TaskChangeReason::FileChanged { file_path } => {
                     PackageChangeReason::FileChanged(FileChanged { file_path })
@@ -593,6 +603,7 @@ fn project_affected_task_packages(
                     // absent from the legacy package map. With no global reason,
                     // this is the input matcher's conservative fallback.
                     global_reason
+                        .or(root_dependency_reason)
                         .cloned()
                         .map(&convert_reason)
                         .unwrap_or_else(|| {

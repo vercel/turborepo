@@ -107,6 +107,26 @@ impl fmt::Display for ToolchainId {
     }
 }
 
+/// Whether a task namespace inherits the root JavaScript package's dependency
+/// closure (its internal packages and its external lockfile closure) as
+/// implied dependencies.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum RootDependencyInputs {
+    Inherited,
+    NotInherited,
+}
+
+impl RootDependencyInputs {
+    pub fn for_namespace(is_root_namespace: bool, toolchain: Option<&ToolchainId>) -> Self {
+        match toolchain {
+            _ if is_root_namespace => Self::Inherited,
+            None => Self::Inherited,
+            Some(id) if *id == ToolchainId::JAVASCRIPT => Self::Inherited,
+            Some(_) => Self::NotInherited,
+        }
+    }
+}
+
 /// Output from native package discovery.
 ///
 /// Identity and source facts feed [`crate::knowledge::RepositoryKnowledge`].

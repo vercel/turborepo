@@ -153,12 +153,12 @@ pub fn affected_task_ids_with_managed_setup(
     managed_setup: bool,
     lockfile_contents: impl FnOnce() -> LockfileContents,
 ) -> HashSet<TaskId<'static>> {
-    if is_global_change(
-        &changed_files.files,
-        global_deps,
-        pkg_dep_graph,
-        managed_setup,
-    ) {
+    if is_global_change(&changed_files.files, global_deps, managed_setup) {
+        return engine.task_ids().cloned().collect();
+    }
+    let root_dependency_changed =
+        touches_root_internal_dependency(&changed_files.files, pkg_dep_graph);
+    if root_dependency_changed && pkg_dep_graph.every_package_inherits_root_dependencies() {
         return engine.task_ids().cloned().collect();
     }
 
@@ -182,7 +182,26 @@ pub fn affected_task_ids_with_managed_setup(
         }
     }
 
+    if root_dependency_changed {
+        let packages = pkg_dep_graph
+            .packages_with_root_dependency_inputs()
+            .collect();
+        affected.extend(engine.task_ids_for_packages(&packages));
+    }
+
     affected
+}
+
+fn touches_root_internal_dependency(
+    changed_files: &HashSet<AnchoredSystemPathBuf>,
+    pkg_dep_graph: &PackageGraph,
+) -> bool {
+    let root_internal_dep_dirs = pkg_dep_graph.root_internal_package_dependencies_paths();
+    changed_files.iter().any(|file| {
+        root_internal_dep_dirs
+            .iter()
+            .any(|dir| file.as_path().starts_with(dir.as_path()))
+    })
 }
 
 fn package_manager_lockfile_changed(
@@ -195,12 +214,6 @@ fn package_manager_lockfile_changed(
         .is_some_and(|lockfile| changed_files.iter().any(|file| file.as_str() == lockfile))
 }
 
-/// Resolves the packages invalidated by a lockfile change with the
-/// package-level change mapper, so lockfile scoping (resolution comparison,
-/// root dependency changes invalidating every package, relationship
-/// projections) matches `ScopeChangeDetector` exactly. Changed files are
-/// deliberately not passed: they are matched against task inputs instead.
-///
 /// Returns `None` when every package must be treated as changed.
 fn lockfile_changed_packages(
     pkg_dep_graph: &PackageGraph,
@@ -242,15 +255,9 @@ fn lockfile_changed_packages(
 /// Global changes include:
 /// - Root config files: `turbo.json`, `turbo.jsonc`
 /// - Files matching user-configured `globalDependencies` globs
-/// - Files inside a package the root package depends on, directly or
-///   transitively. Those files feed `hashOfInternalDependencies`, which is part
-///   of the global hash, so they change every task's hash. This mirrors
-///   `AllPackageChangeReason::RootInternalDepChanged` in the package-level
-///   change mapper.
 fn is_global_change(
     changed_files: &HashSet<AnchoredSystemPathBuf>,
     global_deps: &[String],
-    pkg_dep_graph: &PackageGraph,
     managed_setup: bool,
 ) -> bool {
     let global_deps_matcher = GlobalDepsMatcher::new_ignoring_invalid(
@@ -263,11 +270,6 @@ fn is_global_change(
             );
         },
     );
-    // The global hash walks these directories wholesale, so a prefix match
-    // covers exactly the files that feed `hashOfInternalDependencies`,
-    // nested packages included.
-    let root_internal_dep_dirs = pkg_dep_graph.root_internal_package_dependencies_paths();
-
     for file in changed_files {
         let file_str = file.as_str();
 
@@ -279,13 +281,6 @@ fn is_global_change(
         if global_deps_matcher
             .as_ref()
             .map_or(true, |matcher| matcher.is_match(file_str))
-        {
-            return true;
-        }
-
-        if root_internal_dep_dirs
-            .iter()
-            .any(|dir| file.as_path().starts_with(dir.as_path()))
         {
             return true;
         }

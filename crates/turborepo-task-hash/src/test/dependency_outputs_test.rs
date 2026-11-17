@@ -58,7 +58,7 @@ fn consumer_hash_with_outputs(
         },
         &run_opts,
         &env,
-        "global-hash",
+        &crate::global_hash::TEST_GLOBAL_HASHES,
         repo_root,
         EnvironmentVariableMap::default(),
         &[],

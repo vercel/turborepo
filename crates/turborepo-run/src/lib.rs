@@ -63,9 +63,9 @@ use turborepo_signals::{ShutdownReason, SignalHandler};
 use turborepo_task_access::TaskAccess;
 use turborepo_task_graph::Visitor;
 use turborepo_task_hash::{
-    GlobalHashableInputs, PackageInputsHashes, TaskHasher, collect_global_file_hash_inputs,
-    compute_external_deps_hashes, deferred_task_hash_message, get_internal_deps_hash,
-    global_hash::GLOBAL_CACHE_KEY,
+    GlobalHashableInputs, GlobalHashes, PackageInputsHashes, TaskHasher,
+    collect_global_file_hash_inputs, compute_external_deps_hashes, deferred_task_hash_message,
+    get_internal_deps_hash, global_hash::GLOBAL_CACHE_KEY,
 };
 use turborepo_telemetry::events::{
     EventBuilder, generic::GenericEventBuilder, task::PackageTaskEventBuilder,
@@ -203,7 +203,7 @@ pub(crate) struct RunHashInputs {
     root_external_dependencies_hash: Option<String>,
     external_deps_hashes: Option<HashMap<String, String>>,
     global_cache_key: String,
-    global_hash: String,
+    global_hashes: GlobalHashes,
     global_env: EnvironmentVariableMap,
     /// Task hashes derived from the inputs above, computed on first request.
     task_hashes: OnceLock<Arc<TaskHashes>>,
@@ -229,7 +229,7 @@ impl RunHashInputs {
             self.package_inputs_hashes.clone(),
             &run.execution.opts.run_opts,
             &run.execution.env_at_execution_start,
-            &self.global_hash,
+            &self.global_hashes,
             run.repo_root(),
             self.global_env.clone(),
             &run.root_turbo_json().global_env,
@@ -1353,13 +1353,13 @@ impl Run {
                     root_external_dependencies_hash,
                     external_deps_hashes,
                     global_cache_key,
-                    global_hash: String::new(),
+                    global_hashes: GlobalHashes::default(),
                     global_env: EnvironmentVariableMap::default(),
                     task_hashes: OnceLock::new(),
                 };
-                let (global_hash, global_env) = {
+                let (global_hashes, global_env) = {
                     let global_hash_inputs = self.global_hashable_inputs(&inputs);
-                    let global_hash = global_hash_inputs.calculate_global_hash();
+                    let global_hashes = global_hash_inputs.calculate_global_hashes();
                     let global_env = {
                         let mut env = self
                             .execution
@@ -1371,9 +1371,9 @@ impl Run {
                         }
                         env
                     };
-                    (global_hash, global_env)
+                    (global_hashes, global_env)
                 };
-                inputs.global_hash = global_hash;
+                inputs.global_hashes = global_hashes;
                 inputs.global_env = global_env;
 
                 Ok(inputs)
@@ -1467,7 +1467,7 @@ impl Run {
             &self.execution.opts.run_opts,
             hash_inputs.package_inputs_hashes.clone(),
             &self.execution.env_at_execution_start,
-            &hash_inputs.global_hash,
+            &hash_inputs.global_hashes,
             self.services.processes.clone(),
             repo_index,
             hash_inputs.global_env.clone(),

@@ -33,8 +33,8 @@ use turborepo_task_executor::{
     InternalError as TaskInternalError, TaskOutput, command_invokes_turbo,
 };
 use turborepo_task_hash::{
-    DeferredHashInputs, Error as TaskHashError, GlobalHashableInputs, PackageInputsHashes,
-    TaskHashRequest, TaskHasher,
+    DeferredHashInputs, Error as TaskHashError, GlobalHashableInputs, GlobalHashes,
+    PackageInputsHashes, TaskHashRequest, TaskHasher,
 };
 use turborepo_task_id::TaskId;
 use turborepo_telemetry::events::{
@@ -247,7 +247,7 @@ impl<'a, R: TaskGraphRunOpts> Visitor<'a, R> {
         run_opts: &'a R,
         package_inputs_hashes: PackageInputsHashes,
         env_at_execution_start: &'a EnvironmentVariableMap,
-        global_hash: &'a str,
+        global_hashes: &'a GlobalHashes,
         manager: ProcessManager,
         repo_index: Option<&'a RepoGitIndex>,
         global_env: EnvironmentVariableMap,
@@ -263,7 +263,7 @@ impl<'a, R: TaskGraphRunOpts> Visitor<'a, R> {
                 package_inputs_hashes,
                 run_opts,
                 env_at_execution_start,
-                global_hash,
+                global_hashes,
                 &repo.repo_root,
                 global_env,
                 global_env_patterns,
