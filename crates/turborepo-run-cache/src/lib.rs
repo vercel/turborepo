@@ -32,7 +32,9 @@ use turborepo_telemetry::events::{TrackedErrors, task::PackageTaskEventBuilder};
 use turborepo_types::{
     OutputLogsMode, RunCacheOpts, TaskDefinition, TaskDefinitionExt, TaskOutputs, TaskOutputsExt,
 };
-use turborepo_ui::{ColorConfig, GREY, LogWriter, color, tui::event::CacheResult};
+use turborepo_ui::{
+    ColorConfig, ColorStripWriter, GREY, LogWriter, color, tui::event::CacheResult,
+};
 
 /// Errors that can occur during cache operations.
 #[derive(Debug, thiserror::Error)]
@@ -430,8 +432,9 @@ impl TaskCache {
         task_handle: &mut turborepo_log::grouping::TaskHandle,
     ) -> Result<(), Error> {
         if self.log_file_path.exists() {
-            let mut writer = task_handle.writer(turborepo_log::OutputChannel::Stdout);
-            turborepo_ui::replay_logs(&mut writer, &self.log_file_path)?;
+            let writer =
+                self.display_writer(task_handle.writer(turborepo_log::OutputChannel::Stdout));
+            turborepo_ui::replay_logs(writer, &self.log_file_path)?;
         }
 
         Ok(())
@@ -481,7 +484,16 @@ impl TaskCache {
         }
     }
 
-    pub fn output_writer<W: Write>(&self, writer: W) -> Result<LogWriter<W>, Error> {
+    /// Wrap a writer that displays task output, live or replayed, so both
+    /// honor a user's request for no color. The log file keeps the raw bytes.
+    fn display_writer<W: Write>(&self, writer: W) -> ColorStripWriter<W> {
+        ColorStripWriter::new(writer, self.ui.color_disabled_by_user())
+    }
+
+    pub fn output_writer<W: Write>(
+        &self,
+        writer: W,
+    ) -> Result<LogWriter<ColorStripWriter<W>>, Error> {
         let mut log_writer = LogWriter::default();
 
         let cache_enabled = !self.caching_disabled && !self.run_cache.writes_disabled;
@@ -497,7 +509,7 @@ impl TaskCache {
         match self.task_output_logs {
             OutputLogsMode::None | OutputLogsMode::HashOnly | OutputLogsMode::ErrorsOnly => {}
             OutputLogsMode::Full | OutputLogsMode::NewOnly => {
-                log_writer.with_writer(writer);
+                log_writer.with_writer(self.display_writer(writer));
             }
         }
 
@@ -1886,6 +1898,47 @@ mod test {
         let output = sink.output_string();
         assert!(output.contains("cache miss, executing test-hash"));
         assert!(output.contains("error-output"));
+    }
+
+    #[tokio::test]
+    async fn user_disabled_color_strips_displayed_task_output() {
+        const COLORED: &[u8] = b"color=\x1b[31mred\x1b[39m\n";
+        let temp = tempdir().unwrap();
+        let repo_root = AbsoluteSystemPathBuf::try_from(temp.path()).unwrap();
+
+        for (ui, expected) in [
+            (ColorConfig::disabled_by_user(), "color=red\n"),
+            (ColorConfig::new(true), "color=\x1b[31mred\x1b[39m\n"),
+        ] {
+            let mut task_cache = task_cache_for_outputs_with_mode(
+                &repo_root,
+                Vec::new(),
+                OutputLogsMode::Full,
+                false,
+            );
+            task_cache.ui = ui;
+
+            let mut live = Vec::new();
+            {
+                let mut writer = task_cache.output_writer(&mut live).unwrap();
+                // Split inside the escape code, as chunked child output can.
+                writer.write_all(&COLORED[..9]).unwrap();
+                writer.write_all(&COLORED[9..]).unwrap();
+                writer.flush().unwrap();
+            }
+            assert_eq!(String::from_utf8_lossy(&live), expected, "{ui:?} live");
+            assert_eq!(
+                task_cache.log_file_path.read().unwrap(),
+                COLORED,
+                "{ui:?} log file keeps raw output"
+            );
+
+            task_cache.task_output_logs = OutputLogsMode::ErrorsOnly;
+            task_cache.errors_only_show_hash = true;
+            let (sink, mut handle) = recording_task_handle();
+            task_cache.on_error(&mut handle, None).unwrap();
+            assert_eq!(sink.output_string(), expected, "{ui:?} replay");
+        }
     }
 
     #[tokio::test]

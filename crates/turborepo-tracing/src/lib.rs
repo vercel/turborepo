@@ -290,7 +290,7 @@ impl TurboSubscriber {
         let stderr = fmt::layer()
             .with_writer(switchable)
             .event_format(TurboFormatter::new(
-                !color_config.should_strip_ansi,
+                !color_config.should_strip_ansi(),
                 stderr_handle.clone(),
             ))
             .with_filter(build_env_filter(LevelFilter::WARN, level_override));

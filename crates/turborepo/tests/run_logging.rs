@@ -2,7 +2,9 @@
 
 mod common;
 
-use common::{run_turbo, run_turbo_with_env, setup};
+use common::{
+    git, git_commit_staged_if_changed, run_turbo, run_turbo_with_env, setup, turbo_command,
+};
 
 #[test]
 fn test_github_actions_grouped_logging_smoke() {
@@ -61,4 +63,61 @@ fn test_log_prefix_modes() {
     assert!(stdout.contains("cache hit, replaying logs"));
     assert!(stdout.contains("FULL TURBO"));
     assert!(!stdout.contains("app-a:build:"));
+}
+
+// --- https://github.com/vercel/turborepo/issues/15033 ---
+
+#[test]
+fn test_no_color_strips_task_output_live_and_replayed() {
+    let tempdir = tempfile::tempdir().unwrap();
+    let dir = tempdir.path();
+    setup::setup_integration_test(dir, "run_logging", "npm@10.5.0", false).unwrap();
+    let paint = "node -e \"process.stdout.write('color=' + (process.env.FORCE_COLOR ? \
+                 '\\x1b[31mred\\x1b[39m' : 'plain') + '\\n')\"";
+    std::fs::write(
+        dir.join("app-a/package.json"),
+        serde_json::json!({ "name": "app-a", "scripts": { "paint": paint } }).to_string(),
+    )
+    .unwrap();
+    std::fs::write(dir.join("turbo.json"), r#"{ "tasks": { "paint": {} } }"#).unwrap();
+    git(dir, &["add", "."]);
+    git_commit_staged_if_changed(dir, "add paint task");
+
+    let paint_line = |extra_args: &[&str], env: &[(&str, &str)]| {
+        let mut cmd = turbo_command(dir);
+        cmd.env_remove("FORCE_COLOR").env_remove("NO_COLOR");
+        cmd.args(["run", "paint", "--filter=app-a", "--ui=stream"]);
+        cmd.args(extra_args).envs(env.iter().copied());
+        let output = cmd.output().unwrap();
+        assert!(output.status.success(), "{output:?}");
+        let stdout = String::from_utf8_lossy(&output.stdout).into_owned();
+        let line = stdout
+            .lines()
+            .find(|line| line.contains("color=") && !line.contains("node -e"))
+            .unwrap_or_else(|| panic!("no color= line in {stdout}"))
+            .to_owned();
+        (stdout.contains("cache hit, replaying logs"), line)
+    };
+
+    let (hit, line) = paint_line(&[], &[("FORCE_COLOR", "3")]);
+    assert!(!hit);
+    assert!(line.ends_with("color=\x1b[31mred\x1b[39m"), "{line:?}");
+
+    let (hit, line) = paint_line(&["--no-color"], &[]);
+    assert!(hit);
+    assert_eq!(line, "app-a:paint: color=red");
+
+    let (hit, line) = paint_line(&[], &[("NO_COLOR", "1")]);
+    assert!(hit);
+    assert_eq!(line, "app-a:paint: color=red");
+
+    // Without a request for no color, the replay keeps the recorded codes.
+    let (hit, line) = paint_line(&[], &[]);
+    assert!(hit);
+    assert!(line.ends_with("color=\x1b[31mred\x1b[39m"), "{line:?}");
+
+    // Live output is stripped too, even when the task emits color.
+    let (hit, line) = paint_line(&["--no-color", "--force"], &[("FORCE_COLOR", "3")]);
+    assert!(!hit);
+    assert_eq!(line, "app-a:paint: color=red");
 }

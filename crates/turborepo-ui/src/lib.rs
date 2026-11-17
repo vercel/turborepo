@@ -3,6 +3,7 @@
 //! concurrent resources get an assigned color.
 
 mod color_selector;
+mod color_strip_writer;
 #[cfg(feature = "tui")]
 mod log_sinks;
 mod logs;
@@ -22,6 +23,7 @@ use thiserror::Error;
 
 pub use crate::{
     color_selector::ColorSelector,
+    color_strip_writer::ColorStripWriter,
     logs::{LogWriter, replay_logs},
     terminal_sink::TerminalSink,
 };
@@ -168,27 +170,71 @@ macro_rules! ceprint {
 /// Helper struct to apply any necessary formatting to UI output
 #[derive(Debug, Clone, Copy)]
 pub struct ColorConfig {
-    pub should_strip_ansi: bool,
+    mode: ColorMode,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ColorMode {
+    On,
+    /// Off because of the environment, e.g. stdout isn't a TTY.
+    Off,
+    /// Off because the user asked (`--no-color`, `NO_COLOR`, `FORCE_COLOR=0`).
+    /// Only this mode strips color from task output, so a non-TTY run (e.g.
+    /// CI) shows task logs the way the task wrote them.
+    OffByUser,
 }
 
 impl ColorConfig {
     pub fn new(should_strip_ansi: bool) -> Self {
-        Self { should_strip_ansi }
+        let mode = if should_strip_ansi {
+            ColorMode::Off
+        } else {
+            ColorMode::On
+        };
+        Self { mode }
     }
 
-    /// Infer the color choice from environment variables and checking if stdout
-    /// is a tty
-    pub fn infer() -> Self {
-        let env_setting =
-            std::env::var("FORCE_COLOR")
-                .ok()
-                .and_then(|force_color| match force_color.as_str() {
-                    "false" | "0" => Some(true),
-                    "true" | "1" | "2" | "3" => Some(false),
-                    _ => None,
-                });
-        let should_strip_ansi = env_setting.unwrap_or_else(|| !std::io::stdout().is_terminal());
-        Self { should_strip_ansi }
+    pub fn disabled_by_user() -> Self {
+        Self {
+            mode: ColorMode::OffByUser,
+        }
+    }
+
+    /// Whether turbo's own output should omit ANSI styling.
+    pub fn should_strip_ansi(&self) -> bool {
+        self.mode != ColorMode::On
+    }
+
+    /// Whether color codes should be stripped from task output too.
+    pub fn color_disabled_by_user(&self) -> bool {
+        self.mode == ColorMode::OffByUser
+    }
+
+    /// Infer the color choice from environment variables and whether stdout is
+    /// a terminal that supports ANSI codes.
+    pub fn infer(supports_ansi: bool) -> Self {
+        Self::infer_from(
+            std::env::var("FORCE_COLOR").ok().as_deref(),
+            env::var_os("NO_COLOR").is_some_and(|value| !value.is_empty()),
+            std::io::stdout().is_terminal(),
+            supports_ansi,
+        )
+    }
+
+    /// `FORCE_COLOR` takes precedence over `NO_COLOR`, matching Node.js.
+    /// `NO_COLOR` counts when set to any non-empty value (https://no-color.org).
+    fn infer_from(
+        force_color: Option<&str>,
+        no_color: bool,
+        is_terminal: bool,
+        supports_ansi: bool,
+    ) -> Self {
+        match force_color {
+            Some("false" | "0") => Self::disabled_by_user(),
+            Some("true" | "1" | "2" | "3") => Self::new(!supports_ansi),
+            _ if no_color => Self::disabled_by_user(),
+            _ => Self::new(!(supports_ansi && is_terminal)),
+        }
     }
 
     /// Apply the UI color mode to the given styled object
@@ -198,7 +244,7 @@ impl ColorConfig {
     pub fn apply<D>(&self, obj: StyledObject<D>) -> StyledObject<D> {
         // Setting this to false will skip emitting any ansi codes associated
         // with the style when the object is displayed.
-        obj.force_styling(!self.should_strip_ansi)
+        obj.force_styling(!self.should_strip_ansi())
     }
 
     // Ported from Go code. Converts an index to a color along the rainbow
@@ -212,7 +258,7 @@ impl ColorConfig {
     }
 
     pub fn rainbow<'a>(&self, text: &'a str) -> Cow<'a, str> {
-        if self.should_strip_ansi {
+        if self.should_strip_ansi() {
             return Cow::Borrowed(text);
         }
 
@@ -270,5 +316,46 @@ mod test {
             format!("{}", color_config.apply(grey_str)),
             "\u{1b}[2mgray\u{1b}[0m"
         );
+    }
+
+    #[test]
+    fn test_infer_color_precedence() {
+        let off_by_user = |c: ColorConfig| c.should_strip_ansi() && c.color_disabled_by_user();
+        let off_inferred = |c: ColorConfig| c.should_strip_ansi() && !c.color_disabled_by_user();
+        let on = |c: ColorConfig| !c.should_strip_ansi();
+
+        assert!(off_by_user(ColorConfig::infer_from(None, true, true, true)));
+        assert!(off_by_user(ColorConfig::infer_from(
+            Some("0"),
+            false,
+            true,
+            true
+        )));
+        assert!(off_by_user(ColorConfig::infer_from(
+            Some("0"),
+            true,
+            true,
+            true
+        )));
+        // FORCE_COLOR turning color on wins over NO_COLOR, on any console.
+        assert!(on(ColorConfig::infer_from(Some("3"), true, false, true)));
+        assert!(off_inferred(ColorConfig::infer_from(
+            Some("3"),
+            true,
+            true,
+            false
+        )));
+        // NO_COLOR is a user request even where ANSI isn't supported.
+        assert!(off_by_user(ColorConfig::infer_from(
+            None, true, true, false
+        )));
+        // A non-TTY or a console without ANSI support isn't a user request.
+        assert!(off_inferred(ColorConfig::infer_from(
+            None, false, false, true
+        )));
+        assert!(off_inferred(ColorConfig::infer_from(
+            None, false, true, false
+        )));
+        assert!(on(ColorConfig::infer_from(None, false, true, true)));
     }
 }
