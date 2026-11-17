@@ -399,7 +399,7 @@ fn find_dynamic_imports(module_record: &ModuleRecord, source: &str) -> Vec<Impor
             let literal = &parsed.program.directives.first()?.expression;
 
             Some(ImportResult {
-                specifier: literal.value.to_string(),
+                specifier: literal.value.display().to_string(),
                 span: Span::new(
                     request_span.start + literal.span.start,
                     request_span.start + literal.span.end,
@@ -428,12 +428,12 @@ fn parse_with_comments(
         source_type = source_type.with_jsx(true);
     }
     let ret = oxc_parser::Parser::new(&allocator, source, source_type).parse();
-    if ret.panicked {
+    if ret.fatal_error {
         return None;
     }
     let mut imports = find_imports(&ret.module_record, &ret.program.body, ImportTraceType::All);
     imports.extend(find_dynamic_imports(&ret.module_record, source));
-    let comments: Vec<Comment> = ret.program.comments.iter().copied().collect();
+    let comments: Vec<Comment> = ret.program.comments.iter().cloned().collect();
     Some((imports, comments))
 }
 

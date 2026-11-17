@@ -1,0 +1,37 @@
+# Drizzle Kit: `drizzle-kit generate|push|migrate|pull|introspect|check|up|drop|export|studio`.
+# The config is `--config`, else `drizzle.config.*` in the cwd. `schema` (paths, directories,
+# globs; TS modules are entries) and `out` (default `./drizzle`) resolve against the cwd, like
+# drizzle-kit does; `--schema` and `--out` override them.
+id = "drizzle-kit"
+programs = ["drizzle-kit"]
+toolchain = ["npm:drizzle-kit"]
+flags = ["--config", "--schema", "--out", "--dialect", "--driver", "--name", "--prefix", "--url", "--host", "--port", "--user", "--password", "--database", "--tablesFilter", "--schemaFilters", "--extensionsFilters", "--casing", "--custom"]
+subcommand_split = ":" # drizzle-kit 0.20: `generate:pg`
+ignore = ["", "studio", "--version", "help"]
+
+[config]
+label = "drizzle"
+flag = "--config"
+names = ["drizzle.config.ts", "drizzle.config.mts", "drizzle.config.cts", "drizzle.config.js", "drizzle.config.mjs", "drizzle.config.cjs", "drizzle.config.json"]
+probe_all = true
+unreadable = "drizzle config could not be evaluated"
+
+[values]
+schema = { flag = "--schema", field = "schema", base = "cwd", required = true }
+out = { flag = "--out", field = "out", base = "cwd", default = "drizzle" }
+# Credentials come from the environment; the database is not a file.
+db_env = { field = "dbCredentials", env_refs = true }
+
+[groups]
+schema = [{ input = "schema", code = true, glob = "**/*.{ts,tsx,js,mjs,cjs,mts,cts}", reason = "drizzle schema" }]
+migrations = [{ membership = "out", reason = "drizzle migrations" }]
+db = [{ env = "db_env" }]
+
+[sub]
+generate = ["schema", { membership = "out", join = "meta", reason = "drizzle snapshots" }, { output = "out" }]
+push = ["schema", "db"]
+migrate = ["migrations", "db"]
+"pull|introspect" = ["db", { output = "out" }, { uncertain = "env_dependent", detail = "`drizzle-kit {sub}` reads the database schema" }]
+check = ["migrations"]
+"up|drop" = ["migrations", { output = "out" }]
+export = ["schema"]

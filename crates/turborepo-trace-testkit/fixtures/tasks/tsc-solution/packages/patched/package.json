@@ -1,0 +1,10 @@
+{
+  "name": "@acme/patched",
+  "version": "1.0.0",
+  "exports": {
+    ".": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc -b && node scripts/patch-dist.js"
+  }
+}

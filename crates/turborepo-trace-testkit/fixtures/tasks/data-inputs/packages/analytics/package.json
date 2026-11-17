@@ -1,0 +1,13 @@
+{
+  "name": "@acme/analytics",
+  "version": "1.0.0",
+  "exports": {
+    ".": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc --build --force"
+  },
+  "dependencies": {
+    "@acme/gen": "workspace:*"
+  }
+}

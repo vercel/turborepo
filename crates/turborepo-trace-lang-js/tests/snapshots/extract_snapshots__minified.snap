@@ -1,0 +1,14 @@
+---
+source: crates/turborepo-trace-lang-js/tests/extract_snapshots.rs
+expression: "render(\"minified.js\")"
+---
+1:20 require "./a"
+    span: require("./a")
+1:37 require "./b"
+    span: require("./b")
+1:167 require "optional" [optional]
+    span: require("optional")
+1:214 require "./c"
+    span: require.resolve("./c")
+1:330 dynamic_import "./d" [lazy]
+    span: import("./d")

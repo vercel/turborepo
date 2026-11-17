@@ -1,0 +1,50 @@
+---
+source: crates/turborepo-trace-lang-js/tests/extract_snapshots.rs
+expression: "render(\"ts_type_positions.ts\")"
+---
+2:37 dynamic_import "../node_modules/node-fetch" [lazy, type_only]
+    span: import('../node_modules/node-fetch')
+2:96 dynamic_import "../../node_modules/node-fetch" [lazy, type_only]
+    span: import('../../node_modules/node-fetch')
+4:19 dynamic_import "./typeof-mod" [lazy, type_only]
+    span: import('./typeof-mod')
+5:13 dynamic_import "./bare-type" [lazy, type_only]
+    span: import('./bare-type')
+7:5 dynamic_import "./union-a" [lazy, type_only]
+    span: import('./union-a')
+8:5 dynamic_import "./union-b" [lazy, type_only]
+    span: import('./union-b')
+10:16 dynamic_import "./annotated" [lazy, type_only]
+    span: import('./annotated')
+11:20 dynamic_import "./param" [lazy, type_only]
+    span: import('./param')
+11:42 dynamic_import "./ret" [lazy, type_only]
+    span: import('./ret')
+15:10 dynamic_import "./interface-field" [lazy, type_only]
+    span: import('./interface-field')
+16:13 dynamic_import "./interface-method" [lazy, type_only]
+    span: import('./interface-method')
+18:25 dynamic_import "./declared" [lazy, type_only]
+    span: import('./declared')
+19:28 dynamic_import "./generic" [lazy, type_only]
+    span: import('./generic')
+21:9 dynamic_import "./class-prop" [lazy, type_only]
+    span: import('./class-prop')
+25:14 dynamic_import "./runtime-lazy" [lazy]
+    span: import('./runtime-lazy')
+26:19 dynamic_import "./runtime-await" [lazy]
+    span: import('./runtime-await')
+27:18 dynamic_import "./runtime-object" [lazy]
+    span: import('./runtime-object')
+28:21 dynamic_import "./runtime-then" [lazy]
+    span: import('./runtime-then')
+28:48 dynamic_import "./runtime-else" [lazy]
+    span: import('./runtime-else')
+30:13 dynamic_import "./runtime-case" [lazy]
+    span: import('./runtime-case')
+31:12 dynamic_import "./runtime-default" [lazy]
+    span: import('./runtime-default')
+33:1 dynamic_import "./runtime-chain" [lazy]
+    span: import('./runtime-chain')
+34:33 dynamic_import "./runtime-typed-var" [lazy]
+    span: import('./runtime-typed-var')

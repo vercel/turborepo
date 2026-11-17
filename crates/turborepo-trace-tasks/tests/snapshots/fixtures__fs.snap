@@ -1,0 +1,461 @@
+---
+source: crates/turborepo-trace-tasks/tests/fixtures.rs
+expression: family(stringify! (fs))
+---
+$ cp -r assets dist/assets
+# cp [cp] Full
+{
+  "outputs": [
+    {
+      "path": "dist/assets",
+      "kind": "artifact"
+    }
+  ],
+  "memberships": [
+    {
+      "dir": "assets",
+      "pattern": "**",
+      "reason": "cp source"
+    }
+  ]
+}
+
+$ cat header.txt src/body.txt > dist/out.txt
+# cat [cat] Full
+{
+  "inputs": [
+    "header.txt",
+    "src/body.txt"
+  ],
+  "outputs": [
+    {
+      "path": "dist/out.txt",
+      "kind": "artifact"
+    }
+  ]
+}
+
+$ rsync -av --exclude=node_modules assets/ dist/
+# rsync [cp] Full
+{
+  "outputs": [
+    {
+      "path": "dist",
+      "kind": "artifact"
+    }
+  ],
+  "memberships": [
+    {
+      "dir": "assets",
+      "pattern": "**",
+      "reason": "rsync source"
+    }
+  ]
+}
+
+$ mkdir -p dist && rm -rf build
+# mkdir [touch] Ignored | rm [noop] Ignored
+{}
+
+$ shx cp header.txt dist/
+# shx [cp] Full
+{
+  "inputs": [
+    "header.txt"
+  ],
+  "outputs": [
+    {
+      "path": "dist",
+      "kind": "artifact"
+    }
+  ]
+}
+
+$ tar czf dist/a.tgz assets
+# tar [tar] Full
+{
+  "outputs": [
+    {
+      "path": "dist/a.tgz",
+      "kind": "artifact"
+    }
+  ],
+  "memberships": [
+    {
+      "dir": "assets",
+      "pattern": "**",
+      "reason": "archived"
+    }
+  ]
+}
+
+$ echo done && sleep 1
+# echo [noop] Ignored | sleep [noop] Ignored
+{}
+
+$ eslint src --max-warnings 0
+# eslint [lint] Full
+{
+  "inputs": [
+    "package.json"
+  ],
+  "configs": [
+    "eslint.config.js"
+  ],
+  "entries": [
+    {
+      "path": "eslint.config.js",
+      "lang": "js"
+    }
+  ],
+  "memberships": [
+    {
+      "dir": "src",
+      "pattern": "**",
+      "reason": "eslint files",
+      "data": true
+    }
+  ],
+  "toolchain": [
+    {
+      "ecosystem": "npm",
+      "name": "eslint"
+    }
+  ]
+}
+
+$ prettier --check .
+# prettier [lint] Full
+{
+  "inputs": [
+    "package.json"
+  ],
+  "memberships": [
+    {
+      "dir": ".",
+      "pattern": "**",
+      "reason": "prettier files",
+      "data": true
+    }
+  ],
+  "toolchain": [
+    {
+      "ecosystem": "npm",
+      "name": "prettier"
+    }
+  ]
+}
+
+$ cross-env NODE_ENV=production dotenv -e .env.prod -- node build.js
+# node [node] Full
+{
+  "inputs": [
+    ".env.prod"
+  ],
+  "entries": [
+    {
+      "path": "build.js",
+      "lang": "js"
+    }
+  ],
+  "toolchain": [
+    {
+      "ecosystem": "npm",
+      "name": "cross-env"
+    },
+    {
+      "ecosystem": "npm",
+      "name": "dotenv-cli"
+    }
+  ],
+  "definition": [
+    "build.js"
+  ]
+}
+
+$ FOO=bar some-unknown-tool --flag
+# some-unknown-tool [-] Unknown
+{
+  "memberships": [
+    {
+      "dir": ".",
+      "pattern": "**",
+      "reason": "unknown command `some-unknown-tool`"
+    }
+  ],
+  "uncertainties": [
+    {
+      "kind": "unknown_command",
+      "detail": "some-unknown-tool"
+    }
+  ]
+}
+
+$ npm run lint && pnpm --filter @acme/web run build && yarn workspace web test
+# npm [package-manager] Full | pnpm [package-manager] Full | yarn [package-manager] Full
+{
+  "task_deps": [
+    {
+      "target": {
+        "kind": "local",
+        "name": "lint"
+      },
+      "reason": "npm run"
+    },
+    {
+      "target": {
+        "kind": "package",
+        "package": "@acme/web",
+        "name": "build"
+      },
+      "reason": "pnpm run"
+    },
+    {
+      "target": {
+        "kind": "package",
+        "package": "web",
+        "name": "test"
+      },
+      "reason": "yarn run"
+    }
+  ],
+  "runs": [
+    {
+      "kind": "task",
+      "target": {
+        "kind": "local",
+        "name": "lint"
+      }
+    },
+    {
+      "kind": "task",
+      "target": {
+        "kind": "package",
+        "package": "@acme/web",
+        "name": "build"
+      }
+    },
+    {
+      "kind": "task",
+      "target": {
+        "kind": "package",
+        "package": "web",
+        "name": "test"
+      }
+    }
+  ]
+}
+
+$ run-s 'x' lint
+# run-s [npm-run-all] Full
+{
+  "task_deps": [
+    {
+      "target": {
+        "kind": "local",
+        "name": "lint"
+      },
+      "reason": "npm-run-all"
+    },
+    {
+      "target": {
+        "kind": "local",
+        "name": "x"
+      },
+      "reason": "npm-run-all"
+    }
+  ],
+  "toolchain": [
+    {
+      "ecosystem": "npm",
+      "name": "npm-run-all"
+    }
+  ],
+  "runs": [
+    {
+      "kind": "task",
+      "target": {
+        "kind": "local",
+        "name": "lint"
+      }
+    },
+    {
+      "kind": "task",
+      "target": {
+        "kind": "local",
+        "name": "x"
+      }
+    }
+  ]
+}
+
+$ concurrently "npm:x" "tsc -w" "unknown-dev-server"
+# concurrently [concurrently] Unknown
+{
+  "memberships": [
+    {
+      "dir": ".",
+      "pattern": "**",
+      "reason": "`concurrently` not fully recognized"
+    },
+    {
+      "dir": ".",
+      "pattern": "**",
+      "reason": "`tsc` not fully recognized"
+    },
+    {
+      "dir": ".",
+      "pattern": "**",
+      "reason": "tsc without a tsconfig"
+    },
+    {
+      "dir": ".",
+      "pattern": "**",
+      "reason": "unknown command `unknown-dev-server`"
+    }
+  ],
+  "task_deps": [
+    {
+      "target": {
+        "kind": "local",
+        "name": "x"
+      },
+      "reason": "concurrently"
+    }
+  ],
+  "toolchain": [
+    {
+      "ecosystem": "npm",
+      "name": "concurrently"
+    },
+    {
+      "ecosystem": "npm",
+      "name": "typescript"
+    }
+  ],
+  "uncertainties": [
+    {
+      "kind": "unknown_command",
+      "detail": "tsc without a tsconfig"
+    },
+    {
+      "kind": "unknown_command",
+      "detail": "unknown-dev-server"
+    }
+  ],
+  "runs": [
+    {
+      "kind": "task",
+      "target": {
+        "kind": "local",
+        "name": "x"
+      }
+    }
+  ]
+}
+
+$ turbo run build --filter=./apps/*
+# turbo [turbo] Full
+{
+  "task_deps": [
+    {
+      "target": {
+        "kind": "package",
+        "package": "./apps/*",
+        "name": "build"
+      },
+      "reason": "turbo run"
+    }
+  ],
+  "toolchain": [
+    {
+      "ecosystem": "npm",
+      "name": "turbo"
+    }
+  ],
+  "runs": [
+    {
+      "kind": "task",
+      "target": {
+        "kind": "package",
+        "package": "./apps/*",
+        "name": "build"
+      }
+    }
+  ]
+}
+
+$ for f in *.txt; do cat $f; done
+# cat [cat] Partial
+{
+  "memberships": [
+    {
+      "dir": ".",
+      "pattern": "**",
+      "reason": "computed arguments to `cat`"
+    }
+  ],
+  "uncertainties": [
+    {
+      "kind": "shell_unsupported",
+      "detail": "loop `for`"
+    },
+    {
+      "kind": "shell_unsupported",
+      "detail": "unknown variable `$f`"
+    }
+  ]
+}
+
+$ echo $(git rev-parse HEAD) > version.txt
+# echo [noop] Ignored
+{
+  "outputs": [
+    {
+      "path": "version.txt",
+      "kind": "artifact"
+    }
+  ],
+  "uncertainties": [
+    {
+      "kind": "shell_unsupported",
+      "detail": "command substitution `$(…)`"
+    }
+  ]
+}
+
+$ pnpm build && yarn lint
+# build [-] Unknown | yarn [package-manager] Full
+{
+  "memberships": [
+    {
+      "dir": ".",
+      "pattern": "**",
+      "reason": "unknown command `build`"
+    }
+  ],
+  "task_deps": [
+    {
+      "target": {
+        "kind": "local",
+        "name": "lint"
+      },
+      "reason": "yarn run"
+    }
+  ],
+  "uncertainties": [
+    {
+      "kind": "unknown_command",
+      "detail": "build"
+    }
+  ],
+  "runs": [
+    {
+      "kind": "task",
+      "target": {
+        "kind": "local",
+        "name": "lint"
+      }
+    }
+  ]
+}

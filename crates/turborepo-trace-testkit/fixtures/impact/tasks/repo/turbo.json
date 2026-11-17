@@ -1,0 +1,8 @@
+{
+  "tasks": {
+    "build": { "dependsOn": ["^build"], "outputs": ["dist/**"] },
+    "@t/ui#build": { "inputs": ["src/**", "tsconfig.build.json", "build-info.json"] },
+    "codegen": { "outputs": ["src/generated/**"] },
+    "test": { "dependsOn": ["build", "codegen"] }
+  }
+}

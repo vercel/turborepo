@@ -1,0 +1,1198 @@
+---
+source: crates/turborepo-trace-frameworks/tests/next_invoke.rs
+expression: "serde_json::to_string_pretty(&s.rel).unwrap()"
+---
+{
+  "version": 1,
+  "app": "",
+  "routes": {
+    "app/api/dash/route": [],
+    "app/api/health/route": [],
+    "app/api/jobs/route": [],
+    "app/api/teams/[teamId]/members/route": [],
+    "app/api/teams/[teamId]/route": [],
+    "app/api/trpc/[trpc]/route": [],
+    "app/api/v1/items/[id]/route": [],
+    "app/login/page": [
+      {
+        "kind": "redirect",
+        "target": {
+          "route": "app/teams/[teamId]/page"
+        },
+        "url": "/teams/*",
+        "file": "app/login/page.tsx",
+        "line": 8,
+        "via": [
+          "next/navigation:redirect"
+        ],
+        "sites": 1
+      },
+      {
+        "kind": "redirect",
+        "target": {
+          "route": "app/teams/new/page"
+        },
+        "url": "/teams/*",
+        "file": "app/login/page.tsx",
+        "line": 8,
+        "via": [
+          "next/navigation:redirect"
+        ],
+        "sites": 1
+      },
+      {
+        "kind": "navigation",
+        "target": {
+          "route": "app/settings/page"
+        },
+        "url": "/settings",
+        "file": "app/login/page.tsx",
+        "line": 10,
+        "via": [
+          "<Link href>"
+        ],
+        "sites": 1
+      }
+    ],
+    "app/page": [
+      {
+        "kind": "fetch",
+        "target": {
+          "route": "app/api/health/route"
+        },
+        "method": "GET",
+        "url": "<origin>/api/health",
+        "file": "components/items.tsx",
+        "line": 22,
+        "via": [
+          "apiFetch",
+          "apiFetchInternal",
+          "fetch"
+        ],
+        "sites": 1
+      },
+      {
+        "kind": "fetch",
+        "target": {
+          "route": "app/api/v1/items/[id]/route"
+        },
+        "url": "<origin>/api/v1/items/*",
+        "file": "components/items.tsx",
+        "line": 12,
+        "via": [
+          "typedFetch",
+          "apiFetch",
+          "apiFetchInternal",
+          "fetch"
+        ],
+        "sites": 2
+      },
+      {
+        "kind": "fetch",
+        "target": {
+          "external": {
+            "origin": "",
+            "pattern": "/health"
+          }
+        },
+        "method": "GET",
+        "url": "/health",
+        "file": "components/items.tsx",
+        "line": 22,
+        "via": [
+          "apiFetch",
+          "apiFetchInternal",
+          "fetch"
+        ],
+        "sites": 1
+      },
+      {
+        "kind": "fetch",
+        "target": {
+          "external": {
+            "origin": "",
+            "pattern": "/v1/items/*"
+          }
+        },
+        "url": "/v1/items/*",
+        "file": "components/items.tsx",
+        "line": 12,
+        "via": [
+          "typedFetch",
+          "apiFetch",
+          "apiFetchInternal",
+          "fetch"
+        ],
+        "sites": 2
+      },
+      {
+        "kind": "fetch",
+        "target": {
+          "external": {
+            "origin": "<origin>",
+            "pattern": "/api/health"
+          }
+        },
+        "method": "GET",
+        "url": "<origin>/api/health",
+        "file": "components/items.tsx",
+        "line": 22,
+        "via": [
+          "apiFetch",
+          "apiFetchInternal",
+          "fetch"
+        ],
+        "sites": 1
+      },
+      {
+        "kind": "fetch",
+        "target": {
+          "external": {
+            "origin": "<origin>",
+            "pattern": "/api/v1/items/*"
+          }
+        },
+        "url": "<origin>/api/v1/items/*",
+        "file": "components/items.tsx",
+        "line": 12,
+        "via": [
+          "typedFetch",
+          "apiFetch",
+          "apiFetchInternal",
+          "fetch"
+        ],
+        "sites": 2
+      },
+      {
+        "kind": "fetch",
+        "target": {
+          "external": {
+            "origin": "<origin>",
+            "pattern": "/health"
+          }
+        },
+        "method": "GET",
+        "url": "<origin>/health",
+        "file": "components/items.tsx",
+        "line": 22,
+        "via": [
+          "apiFetch",
+          "apiFetchInternal",
+          "fetch"
+        ],
+        "sites": 1
+      },
+      {
+        "kind": "fetch",
+        "target": {
+          "external": {
+            "origin": "<origin>",
+            "pattern": "/v1/items/*"
+          }
+        },
+        "url": "<origin>/v1/items/*",
+        "file": "components/items.tsx",
+        "line": 12,
+        "via": [
+          "typedFetch",
+          "apiFetch",
+          "apiFetchInternal",
+          "fetch"
+        ],
+        "sites": 2
+      },
+      {
+        "kind": "fetch",
+        "target": {
+          "external": {
+            "origin": "https://app.example.com",
+            "pattern": "/api/health"
+          }
+        },
+        "method": "GET",
+        "url": "https://app.example.com/api/health",
+        "file": "components/items.tsx",
+        "line": 22,
+        "via": [
+          "apiFetch",
+          "apiFetchInternal",
+          "fetch"
+        ],
+        "sites": 1
+      },
+      {
+        "kind": "fetch",
+        "target": {
+          "external": {
+            "origin": "https://app.example.com",
+            "pattern": "/api/v1/items/*"
+          }
+        },
+        "url": "https://app.example.com/api/v1/items/*",
+        "file": "components/items.tsx",
+        "line": 12,
+        "via": [
+          "typedFetch",
+          "apiFetch",
+          "apiFetchInternal",
+          "fetch"
+        ],
+        "sites": 2
+      },
+      {
+        "kind": "fetch",
+        "target": {
+          "external": {
+            "origin": "https://app.example.com",
+            "pattern": "/health"
+          }
+        },
+        "method": "GET",
+        "url": "https://app.example.com/health",
+        "file": "components/items.tsx",
+        "line": 22,
+        "via": [
+          "apiFetch",
+          "apiFetchInternal",
+          "fetch"
+        ],
+        "sites": 1
+      },
+      {
+        "kind": "fetch",
+        "target": {
+          "external": {
+            "origin": "https://app.example.com",
+            "pattern": "/v1/items/*"
+          }
+        },
+        "url": "https://app.example.com/v1/items/*",
+        "file": "components/items.tsx",
+        "line": 12,
+        "via": [
+          "typedFetch",
+          "apiFetch",
+          "apiFetchInternal",
+          "fetch"
+        ],
+        "sites": 2
+      },
+      {
+        "kind": "swr",
+        "target": {
+          "route": "app/api/dash/route"
+        },
+        "method": "GET",
+        "url": "<origin>/api/dash",
+        "file": "components/dash.tsx",
+        "line": 11,
+        "via": [
+          "apiFetch",
+          "apiFetchInternal",
+          "fetch"
+        ],
+        "sites": 1
+      },
+      {
+        "kind": "swr",
+        "target": {
+          "route": "app/api/jobs/route"
+        },
+        "method": "GET",
+        "url": "/api/jobs",
+        "file": "components/jobs.tsx",
+        "line": 19,
+        "via": [
+          "useLazySWR → fetchJobsPage",
+          "fetch"
+        ],
+        "sites": 1
+      },
+      {
+        "kind": "swr",
+        "target": {
+          "route": "app/api/v1/items/[id]/route"
+        },
+        "method": "GET",
+        "url": "<origin>/api/v1/items/*",
+        "file": "components/items.tsx",
+        "line": 9,
+        "via": [
+          "useTypedSWR",
+          "apiFetch",
+          "apiFetchInternal",
+          "fetch"
+        ],
+        "sites": 1
+      },
+      {
+        "kind": "swr",
+        "target": {
+          "external": {
+            "origin": "",
+            "pattern": "/dash"
+          }
+        },
+        "method": "GET",
+        "url": "/dash",
+        "file": "components/dash.tsx",
+        "line": 11,
+        "via": [
+          "apiFetch",
+          "apiFetchInternal",
+          "fetch"
+        ],
+        "sites": 1
+      },
+      {
+        "kind": "swr",
+        "target": {
+          "external": {
+            "origin": "",
+            "pattern": "/v1/items/*"
+          }
+        },
+        "method": "GET",
+        "url": "/v1/items/*",
+        "file": "components/items.tsx",
+        "line": 9,
+        "via": [
+          "useTypedSWR",
+          "apiFetch",
+          "apiFetchInternal",
+          "fetch"
+        ],
+        "sites": 1
+      },
+      {
+        "kind": "swr",
+        "target": {
+          "external": {
+            "origin": "<origin>",
+            "pattern": "/api/dash"
+          }
+        },
+        "method": "GET",
+        "url": "<origin>/api/dash",
+        "file": "components/dash.tsx",
+        "line": 11,
+        "via": [
+          "apiFetch",
+          "apiFetchInternal",
+          "fetch"
+        ],
+        "sites": 1
+      },
+      {
+        "kind": "swr",
+        "target": {
+          "external": {
+            "origin": "<origin>",
+            "pattern": "/api/v1/items/*"
+          }
+        },
+        "method": "GET",
+        "url": "<origin>/api/v1/items/*",
+        "file": "components/items.tsx",
+        "line": 9,
+        "via": [
+          "useTypedSWR",
+          "apiFetch",
+          "apiFetchInternal",
+          "fetch"
+        ],
+        "sites": 1
+      },
+      {
+        "kind": "swr",
+        "target": {
+          "external": {
+            "origin": "<origin>",
+            "pattern": "/dash"
+          }
+        },
+        "method": "GET",
+        "url": "<origin>/dash",
+        "file": "components/dash.tsx",
+        "line": 11,
+        "via": [
+          "apiFetch",
+          "apiFetchInternal",
+          "fetch"
+        ],
+        "sites": 1
+      },
+      {
+        "kind": "swr",
+        "target": {
+          "external": {
+            "origin": "<origin>",
+            "pattern": "/v1/items/*"
+          }
+        },
+        "method": "GET",
+        "url": "<origin>/v1/items/*",
+        "file": "components/items.tsx",
+        "line": 9,
+        "via": [
+          "useTypedSWR",
+          "apiFetch",
+          "apiFetchInternal",
+          "fetch"
+        ],
+        "sites": 1
+      },
+      {
+        "kind": "swr",
+        "target": {
+          "external": {
+            "origin": "https://app.example.com",
+            "pattern": "/api/dash"
+          }
+        },
+        "method": "GET",
+        "url": "https://app.example.com/api/dash",
+        "file": "components/dash.tsx",
+        "line": 11,
+        "via": [
+          "apiFetch",
+          "apiFetchInternal",
+          "fetch"
+        ],
+        "sites": 1
+      },
+      {
+        "kind": "swr",
+        "target": {
+          "external": {
+            "origin": "https://app.example.com",
+            "pattern": "/api/v1/items/*"
+          }
+        },
+        "method": "GET",
+        "url": "https://app.example.com/api/v1/items/*",
+        "file": "components/items.tsx",
+        "line": 9,
+        "via": [
+          "useTypedSWR",
+          "apiFetch",
+          "apiFetchInternal",
+          "fetch"
+        ],
+        "sites": 1
+      },
+      {
+        "kind": "swr",
+        "target": {
+          "external": {
+            "origin": "https://app.example.com",
+            "pattern": "/dash"
+          }
+        },
+        "method": "GET",
+        "url": "https://app.example.com/dash",
+        "file": "components/dash.tsx",
+        "line": 11,
+        "via": [
+          "apiFetch",
+          "apiFetchInternal",
+          "fetch"
+        ],
+        "sites": 1
+      },
+      {
+        "kind": "swr",
+        "target": {
+          "external": {
+            "origin": "https://app.example.com",
+            "pattern": "/v1/items/*"
+          }
+        },
+        "method": "GET",
+        "url": "https://app.example.com/v1/items/*",
+        "file": "components/items.tsx",
+        "line": 9,
+        "via": [
+          "useTypedSWR",
+          "apiFetch",
+          "apiFetchInternal",
+          "fetch"
+        ],
+        "sites": 1
+      }
+    ],
+    "app/queries/page": [
+      {
+        "kind": "query",
+        "target": {
+          "route": "app/api/health/route"
+        },
+        "method": "GET",
+        "url": "/api/health",
+        "file": "lib/use-jobs-query.ts",
+        "line": 16,
+        "via": [
+          "fetch"
+        ],
+        "sites": 1
+      },
+      {
+        "kind": "query",
+        "target": {
+          "route": "app/api/jobs/route"
+        },
+        "method": "GET",
+        "url": "<origin>/api/jobs",
+        "file": "lib/use-jobs-query.ts",
+        "line": 8,
+        "via": [
+          "apiFetch",
+          "apiFetchInternal",
+          "fetch"
+        ],
+        "sites": 1
+      },
+      {
+        "kind": "query",
+        "target": {
+          "route": "app/api/v1/items/[id]/route"
+        },
+        "method": "DELETE",
+        "url": "/api/v1/items/*",
+        "file": "lib/use-jobs-query.ts",
+        "line": 24,
+        "via": [
+          "fetch"
+        ],
+        "sites": 1
+      },
+      {
+        "kind": "query",
+        "target": {
+          "external": {
+            "origin": "",
+            "pattern": "/jobs"
+          }
+        },
+        "method": "GET",
+        "url": "/jobs",
+        "file": "lib/use-jobs-query.ts",
+        "line": 8,
+        "via": [
+          "apiFetch",
+          "apiFetchInternal",
+          "fetch"
+        ],
+        "sites": 1
+      },
+      {
+        "kind": "query",
+        "target": {
+          "external": {
+            "origin": "<origin>",
+            "pattern": "/api/jobs"
+          }
+        },
+        "method": "GET",
+        "url": "<origin>/api/jobs",
+        "file": "lib/use-jobs-query.ts",
+        "line": 8,
+        "via": [
+          "apiFetch",
+          "apiFetchInternal",
+          "fetch"
+        ],
+        "sites": 1
+      },
+      {
+        "kind": "query",
+        "target": {
+          "external": {
+            "origin": "<origin>",
+            "pattern": "/jobs"
+          }
+        },
+        "method": "GET",
+        "url": "<origin>/jobs",
+        "file": "lib/use-jobs-query.ts",
+        "line": 8,
+        "via": [
+          "apiFetch",
+          "apiFetchInternal",
+          "fetch"
+        ],
+        "sites": 1
+      },
+      {
+        "kind": "query",
+        "target": {
+          "external": {
+            "origin": "https://app.example.com",
+            "pattern": "/api/jobs"
+          }
+        },
+        "method": "GET",
+        "url": "https://app.example.com/api/jobs",
+        "file": "lib/use-jobs-query.ts",
+        "line": 8,
+        "via": [
+          "apiFetch",
+          "apiFetchInternal",
+          "fetch"
+        ],
+        "sites": 1
+      },
+      {
+        "kind": "query",
+        "target": {
+          "external": {
+            "origin": "https://app.example.com",
+            "pattern": "/jobs"
+          }
+        },
+        "method": "GET",
+        "url": "https://app.example.com/jobs",
+        "file": "lib/use-jobs-query.ts",
+        "line": 8,
+        "via": [
+          "apiFetch",
+          "apiFetchInternal",
+          "fetch"
+        ],
+        "sites": 1
+      }
+    ],
+    "app/settings/page": [
+      {
+        "kind": "fetch",
+        "target": {
+          "external": {
+            "origin": "",
+            "pattern": "/api/v9/projects"
+          }
+        },
+        "method": "GET",
+        "url": "/api/v9/projects",
+        "file": "components/backend.tsx",
+        "line": 8,
+        "via": [
+          "apiFetch",
+          "apiFetchInternal",
+          "fetch"
+        ],
+        "sites": 1
+      },
+      {
+        "kind": "fetch",
+        "target": {
+          "external": {
+            "origin": "",
+            "pattern": "/v9/projects"
+          }
+        },
+        "method": "GET",
+        "url": "/v9/projects",
+        "file": "components/backend.tsx",
+        "line": 8,
+        "via": [
+          "apiFetch",
+          "apiFetchInternal",
+          "fetch"
+        ],
+        "sites": 1
+      },
+      {
+        "kind": "fetch",
+        "target": {
+          "external": {
+            "origin": "<origin>",
+            "pattern": "/api/v9/projects"
+          }
+        },
+        "method": "GET",
+        "url": "<origin>/api/v9/projects",
+        "file": "components/backend.tsx",
+        "line": 8,
+        "via": [
+          "apiFetch",
+          "apiFetchInternal",
+          "fetch"
+        ],
+        "sites": 1
+      },
+      {
+        "kind": "fetch",
+        "target": {
+          "external": {
+            "origin": "<origin>",
+            "pattern": "/v9/projects"
+          }
+        },
+        "method": "GET",
+        "url": "<origin>/v9/projects",
+        "file": "components/backend.tsx",
+        "line": 8,
+        "via": [
+          "apiFetch",
+          "apiFetchInternal",
+          "fetch"
+        ],
+        "sites": 1
+      },
+      {
+        "kind": "fetch",
+        "target": {
+          "external": {
+            "origin": "https://app.example.com",
+            "pattern": "/api/v9/projects"
+          }
+        },
+        "method": "GET",
+        "url": "https://app.example.com/api/v9/projects",
+        "file": "components/backend.tsx",
+        "line": 8,
+        "via": [
+          "apiFetch",
+          "apiFetchInternal",
+          "fetch"
+        ],
+        "sites": 1
+      },
+      {
+        "kind": "fetch",
+        "target": {
+          "external": {
+            "origin": "https://app.example.com",
+            "pattern": "/v9/projects"
+          }
+        },
+        "method": "GET",
+        "url": "https://app.example.com/v9/projects",
+        "file": "components/backend.tsx",
+        "line": 8,
+        "via": [
+          "apiFetch",
+          "apiFetchInternal",
+          "fetch"
+        ],
+        "sites": 1
+      },
+      {
+        "kind": "fetch",
+        "target": {
+          "external": {
+            "origin": "https://status.example.com",
+            "pattern": "/api/v2/status.json"
+          }
+        },
+        "method": "GET",
+        "url": "https://status.example.com/api/v2/status.json",
+        "file": "components/backend.tsx",
+        "line": 9,
+        "via": [
+          "fetch"
+        ],
+        "sites": 1
+      },
+      {
+        "kind": "fetch",
+        "target": {
+          "unknown": "call: computeUrl(props.kind)"
+        },
+        "file": "components/unknown.tsx",
+        "line": 10,
+        "via": [
+          "apiFetch"
+        ],
+        "sites": 1
+      },
+      {
+        "kind": "fetch",
+        "target": {
+          "unknown": "call: localStorage.getItem('endpoint') [storage]"
+        },
+        "method": "GET",
+        "file": "components/unknown.tsx",
+        "line": 9,
+        "via": [
+          "fetch"
+        ],
+        "sites": 1
+      },
+      {
+        "kind": "swr",
+        "target": {
+          "route": "app/api/health/route"
+        },
+        "method": "GET",
+        "url": "/api/health",
+        "file": "app/settings/page.tsx",
+        "line": 11,
+        "via": [
+          "Feed",
+          "fetch"
+        ],
+        "sites": 1
+      }
+    ],
+    "app/sources/page": [
+      {
+        "kind": "fetch",
+        "target": {
+          "unknown": "call: params.get('next') [request]"
+        },
+        "method": "GET",
+        "file": "components/sources.tsx",
+        "line": 12,
+        "via": [
+          "fetch"
+        ],
+        "sites": 1
+      },
+      {
+        "kind": "fetch",
+        "target": {
+          "unknown": "call: pick('a')"
+        },
+        "file": "app/sources/page.tsx",
+        "line": 13,
+        "via": [
+          "Computed"
+        ],
+        "sites": 1
+      },
+      {
+        "kind": "fetch",
+        "target": {
+          "unknown": "call: sessionStorage.getItem('last') [storage]"
+        },
+        "file": "components/sources.tsx",
+        "line": 32,
+        "via": [
+          "apiFetch"
+        ],
+        "sites": 1
+      },
+      {
+        "kind": "fetch",
+        "target": {
+          "unknown": "expression: useState('').0 [input]"
+        },
+        "method": "GET",
+        "file": "components/sources.tsx",
+        "line": 19,
+        "via": [
+          "fetch"
+        ],
+        "sites": 1
+      },
+      {
+        "kind": "fetch",
+        "target": {
+          "unknown": "member: searchParams.u [request]"
+        },
+        "method": "GET",
+        "file": "app/sources/page.tsx",
+        "line": 8,
+        "via": [
+          "fetch"
+        ],
+        "sites": 1
+      }
+    ],
+    "app/teams/[teamId]/page": [
+      {
+        "kind": "swr",
+        "target": {
+          "route": "app/api/teams/[teamId]/members/route"
+        },
+        "method": "GET",
+        "url": "/api/teams/*/members",
+        "file": "components/members.tsx",
+        "line": 16,
+        "via": [
+          "fetch"
+        ],
+        "sites": 1
+      },
+      {
+        "kind": "swr",
+        "target": {
+          "route": "app/api/teams/[teamId]/route"
+        },
+        "method": "GET",
+        "url": "/api/teams/*",
+        "file": "components/team-card.tsx",
+        "line": 21,
+        "via": [
+          "fetch"
+        ],
+        "sites": 1
+      }
+    ],
+    "app/teams/new/page": [
+      {
+        "kind": "action",
+        "target": {
+          "action": "app/actions.ts#createTeam"
+        },
+        "method": "POST",
+        "file": "components/team-form.tsx",
+        "line": 9,
+        "via": [
+          "hook:useActionState"
+        ],
+        "sites": 1
+      },
+      {
+        "kind": "action",
+        "target": {
+          "action": "app/actions.ts#deleteTeam"
+        },
+        "method": "POST",
+        "file": "components/team-form.tsx",
+        "line": 24,
+        "via": [
+          "call"
+        ],
+        "sites": 1
+      },
+      {
+        "kind": "action",
+        "target": {
+          "action": "app/actions.ts#inviteMember"
+        },
+        "method": "POST",
+        "file": "components/team-form.tsx",
+        "line": 12,
+        "via": [
+          "hook:useAction"
+        ],
+        "sites": 1
+      },
+      {
+        "kind": "action",
+        "target": {
+          "action": "app/actions.ts#renameTeam"
+        },
+        "method": "POST",
+        "file": "components/team-form.tsx",
+        "line": 10,
+        "via": [
+          "bind"
+        ],
+        "sites": 1
+      },
+      {
+        "kind": "action",
+        "target": {
+          "action": "app/teams/new/page.tsx#<inline:subscribe>"
+        },
+        "method": "POST",
+        "file": "app/teams/new/page.tsx",
+        "line": 4,
+        "via": [
+          "inline"
+        ],
+        "sites": 1
+      }
+    ],
+    "app/users/[id]/page": [
+      {
+        "kind": "trpc",
+        "target": {
+          "procedure": "greeting",
+          "file": "server/root.ts",
+          "serving": "app/api/trpc/[trpc]/route"
+        },
+        "file": "app/users/[id]/page.tsx",
+        "line": 7,
+        "via": [
+          "caller.caller"
+        ],
+        "sites": 1
+      },
+      {
+        "kind": "trpc",
+        "target": {
+          "procedure": "post.all",
+          "file": "server/routers/post.ts",
+          "serving": "app/api/trpc/[trpc]/route"
+        },
+        "file": "components/user-panel.tsx",
+        "line": 8,
+        "via": [
+          "api.useSuspenseQuery"
+        ],
+        "sites": 1
+      },
+      {
+        "kind": "trpc",
+        "target": {
+          "procedure": "post.comments.add",
+          "file": "server/routers/post.ts",
+          "serving": "app/api/trpc/[trpc]/route"
+        },
+        "file": "components/user-panel.tsx",
+        "line": 12,
+        "via": [
+          "api.useMutation"
+        ],
+        "sites": 1
+      },
+      {
+        "kind": "trpc",
+        "target": {
+          "procedure": "user.byId",
+          "file": "server/routers/user.ts",
+          "serving": "app/api/trpc/[trpc]/route"
+        },
+        "file": "components/user-panel.tsx",
+        "line": 7,
+        "via": [
+          "api.useQuery"
+        ],
+        "sites": 1
+      },
+      {
+        "kind": "trpc",
+        "target": {
+          "procedure": "user.create",
+          "file": "server/routers/user.ts",
+          "serving": "app/api/trpc/[trpc]/route"
+        },
+        "file": "components/user-panel.tsx",
+        "line": 9,
+        "via": [
+          "api.useMutation"
+        ],
+        "sites": 1
+      },
+      {
+        "kind": "trpc",
+        "target": {
+          "procedure": "user.list",
+          "file": "server/routers/user.ts",
+          "serving": "app/api/trpc/[trpc]/route"
+        },
+        "file": "components/user-panel.tsx",
+        "line": 10,
+        "via": [
+          "utils.invalidate"
+        ],
+        "sites": 1
+      }
+    ]
+  },
+  "procedures": [
+    {
+      "path": "greeting",
+      "kind": "query",
+      "file": "server/root.ts",
+      "line": 8
+    },
+    {
+      "path": "post.all",
+      "kind": "query",
+      "file": "server/routers/post.ts",
+      "line": 4
+    },
+    {
+      "path": "post.comments.add",
+      "kind": "mutation",
+      "file": "server/routers/post.ts",
+      "line": 6
+    },
+    {
+      "path": "user.byId",
+      "kind": "query",
+      "file": "server/routers/user.ts",
+      "line": 4
+    },
+    {
+      "path": "user.create",
+      "kind": "mutation",
+      "file": "server/routers/user.ts",
+      "line": 8
+    },
+    {
+      "path": "user.list",
+      "kind": "query",
+      "file": "server/routers/user.ts",
+      "line": 7
+    }
+  ],
+  "trpc_handlers": [
+    "app/api/trpc/[trpc]/route"
+  ],
+  "stats": {
+    "files": 0,
+    "sites": {
+      "action": 5,
+      "fetch": 12,
+      "navigation": 1,
+      "query": 3,
+      "redirect": 1,
+      "swr": 6,
+      "trpc": 6
+    },
+    "dependency_sites": 33,
+    "to_route": 13,
+    "to_handler": 12,
+    "to_action": 5,
+    "to_procedure": 6,
+    "external": 8,
+    "unknown": 7,
+    "unknown_classes": {
+      "call": 5,
+      "expression": 1,
+      "member": 1
+    },
+    "unknown_sources": {
+      "code": 2,
+      "input": 1,
+      "request": 2,
+      "storage": 2
+    },
+    "external_origins": {
+      "": 7,
+      "<origin>": 7,
+      "https://app.example.com": 7,
+      "https://status.example.com": 1
+    },
+    "wrappers": 0,
+    "routes": 15,
+    "routes_with_unknown": 2,
+    "pages": 8,
+    "pages_with_unknown": 2,
+    "page_invoked_routes": [
+      0,
+      0,
+      2,
+      2,
+      3,
+      4
+    ],
+    "handlers": 7,
+    "bounded": false,
+    "pages_unbounded": 2,
+    "unbounded_sites": 5,
+    "widest_sites": [],
+    "bound_added": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "bound_total": [
+      0,
+      0,
+      1,
+      1,
+      1,
+      1
+    ]
+  }
+}

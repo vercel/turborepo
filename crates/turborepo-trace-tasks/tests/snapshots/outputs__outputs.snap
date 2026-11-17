@@ -1,0 +1,22 @@
+---
+source: crates/turborepo-trace-tasks/tests/outputs.rs
+expression: out
+---
+task:.#build
+  dist/**  declared  (links)
+task:.#bump
+  package.json  in_place  (no link)
+  package.json.tmp  artifact  (links)
+task:.#copy-assets
+  dist/logo.svg  artifact  (links)
+task:.#format
+  src  in_place  (no link)
+task:.#gen
+  src/generated/api.ts  generated  (links)
+task:.#gen-stdout
+  src/generated/api-stdout.ts  generated  (links)
+task:.#image
+  image.id  ci_side_effect  (no link)
+gha:.github/workflows/cron-update-turbo.yml#update-turbo
+  package.json  ci_side_effect  (no link)
+  package.json.tmp  ci_side_effect  (no link)

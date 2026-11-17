@@ -1,0 +1,573 @@
+---
+source: crates/turborepo-trace-tasks/tests/make.rs
+expression: s
+---
+## make:.:all
+{
+  "sources": [
+    "make"
+  ],
+  "deps": [
+    "make:.:app",
+    "make:.:lib"
+  ],
+  "lines": [],
+  "commands": [],
+  "spec": {
+    "configs": [
+      "Makefile"
+    ],
+    "task_deps": [
+      {
+        "target": {
+          "kind": "id",
+          "id": "make:.:app"
+        },
+        "reason": "make prerequisite"
+      },
+      {
+        "target": {
+          "kind": "id",
+          "id": "make:.:lib"
+        },
+        "reason": "make prerequisite"
+      }
+    ]
+  }
+}
+
+## make:.:app
+{
+  "sources": [
+    "make"
+  ],
+  "deps": [
+    "make:.:lib",
+    "make:app:all"
+  ],
+  "lines": [
+    "make -C app"
+  ],
+  "commands": [
+    "make -C app [make] Full"
+  ],
+  "spec": {
+    "configs": [
+      "Makefile"
+    ],
+    "task_deps": [
+      {
+        "target": {
+          "kind": "id",
+          "id": "make:.:lib"
+        },
+        "reason": "make prerequisite"
+      },
+      {
+        "target": {
+          "kind": "id",
+          "id": "make:app:all"
+        },
+        "reason": "make"
+      }
+    ],
+    "toolchain": [
+      {
+        "ecosystem": "system",
+        "name": "make"
+      }
+    ],
+    "runs": [
+      {
+        "kind": "task",
+        "target": {
+          "kind": "id",
+          "id": "make:app:all"
+        }
+      }
+    ]
+  }
+}
+
+## make:.:clean
+{
+  "sources": [
+    "make"
+  ],
+  "deps": [],
+  "lines": [
+    "for d in lib app; do make -C $d clean; done"
+  ],
+  "commands": [
+    "make -C $d clean [make] Partial"
+  ],
+  "spec": {
+    "configs": [
+      "Makefile"
+    ],
+    "memberships": [
+      {
+        "dir": ".",
+        "pattern": "**",
+        "reason": "`make` not fully recognized"
+      },
+      {
+        "dir": ".",
+        "pattern": "**",
+        "reason": "computed arguments to `make`"
+      },
+      {
+        "dir": ".",
+        "pattern": "**",
+        "reason": "make with computed arguments"
+      },
+      {
+        "dir": ".",
+        "pattern": "**",
+        "reason": "uncertain task"
+      },
+      {
+        "dir": ".",
+        "pattern": "**",
+        "reason": "unsupported shell syntax"
+      }
+    ],
+    "toolchain": [
+      {
+        "ecosystem": "system",
+        "name": "make"
+      }
+    ],
+    "uncertainties": [
+      {
+        "kind": "unknown_command",
+        "detail": "make with computed arguments"
+      },
+      {
+        "kind": "shell_unsupported",
+        "detail": "loop `for`"
+      },
+      {
+        "kind": "shell_unsupported",
+        "detail": "unknown variable `$d`"
+      }
+    ]
+  }
+}
+
+## make:.:lib
+{
+  "sources": [
+    "make"
+  ],
+  "deps": [
+    "make:lib:all"
+  ],
+  "lines": [
+    "make -C lib"
+  ],
+  "commands": [
+    "make -C lib [make] Full"
+  ],
+  "spec": {
+    "configs": [
+      "Makefile"
+    ],
+    "task_deps": [
+      {
+        "target": {
+          "kind": "id",
+          "id": "make:lib:all"
+        },
+        "reason": "make"
+      }
+    ],
+    "toolchain": [
+      {
+        "ecosystem": "system",
+        "name": "make"
+      }
+    ],
+    "runs": [
+      {
+        "kind": "task",
+        "target": {
+          "kind": "id",
+          "id": "make:lib:all"
+        }
+      }
+    ]
+  }
+}
+
+## make:.:test
+{
+  "sources": [
+    "make"
+  ],
+  "deps": [
+    "make:.:all",
+    "make:app:test"
+  ],
+  "lines": [
+    "make -C app test"
+  ],
+  "commands": [
+    "make -C app test [make] Full"
+  ],
+  "spec": {
+    "configs": [
+      "Makefile"
+    ],
+    "task_deps": [
+      {
+        "target": {
+          "kind": "id",
+          "id": "make:.:all"
+        },
+        "reason": "make prerequisite"
+      },
+      {
+        "target": {
+          "kind": "id",
+          "id": "make:app:test"
+        },
+        "reason": "make"
+      }
+    ],
+    "toolchain": [
+      {
+        "ecosystem": "system",
+        "name": "make"
+      }
+    ],
+    "runs": [
+      {
+        "kind": "task",
+        "target": {
+          "kind": "id",
+          "id": "make:app:test"
+        }
+      }
+    ]
+  }
+}
+
+## make:app:all
+{
+  "sources": [
+    "make"
+  ],
+  "deps": [
+    "make:app:app"
+  ],
+  "lines": [],
+  "commands": [],
+  "spec": {
+    "configs": [
+      "app/Makefile",
+      "mk/common.mk"
+    ],
+    "task_deps": [
+      {
+        "target": {
+          "kind": "id",
+          "id": "make:app:app"
+        },
+        "reason": "make prerequisite"
+      }
+    ]
+  }
+}
+
+## make:app:app
+{
+  "sources": [
+    "make"
+  ],
+  "deps": [
+    "make:app:main.o"
+  ],
+  "lines": [
+    "cc -o app main.o -L../lib -llib"
+  ],
+  "commands": [
+    "cc -o app main.o -L../lib -llib [cc] Full"
+  ],
+  "spec": {
+    "inputs": [
+      "app/main.o",
+      "lib/liblib.a"
+    ],
+    "outputs": [
+      {
+        "path": "app/app",
+        "kind": "artifact"
+      }
+    ],
+    "configs": [
+      "app/Makefile",
+      "mk/common.mk"
+    ],
+    "task_deps": [
+      {
+        "target": {
+          "kind": "id",
+          "id": "make:app:main.o"
+        },
+        "reason": "make prerequisite"
+      }
+    ],
+    "toolchain": [
+      {
+        "ecosystem": "system",
+        "name": "cc"
+      }
+    ]
+  }
+}
+
+## make:app:clean
+{
+  "sources": [
+    "make"
+  ],
+  "deps": [],
+  "lines": [
+    "rm -f app main.o"
+  ],
+  "commands": [
+    "rm -f app main.o [noop] Ignored"
+  ],
+  "spec": {
+    "configs": [
+      "app/Makefile",
+      "mk/common.mk"
+    ]
+  }
+}
+
+## make:app:main.o
+{
+  "sources": [
+    "make"
+  ],
+  "deps": [],
+  "lines": [
+    "cc -Wall   -c -o main.o main.c"
+  ],
+  "commands": [
+    "cc -Wall   -c -o main.o main.c [cc] Full"
+  ],
+  "spec": {
+    "inputs": [
+      "app/main.c"
+    ],
+    "outputs": [
+      {
+        "path": "app/main.o",
+        "kind": "declared"
+      }
+    ],
+    "configs": [
+      "app/Makefile",
+      "mk/common.mk"
+    ],
+    "toolchain": [
+      {
+        "ecosystem": "system",
+        "name": "cc"
+      }
+    ]
+  }
+}
+
+## make:app:test
+{
+  "sources": [
+    "make"
+  ],
+  "deps": [
+    "make:app:app"
+  ],
+  "lines": [
+    "./app --self-test"
+  ],
+  "commands": [
+    "./app --self-test [script-file] Partial"
+  ],
+  "spec": {
+    "configs": [
+      "app/Makefile",
+      "mk/common.mk"
+    ],
+    "entries": [
+      {
+        "path": "app/app",
+        "lang": "auto"
+      }
+    ],
+    "memberships": [
+      {
+        "dir": ".",
+        "pattern": "**",
+        "reason": "uncertain task"
+      },
+      {
+        "dir": ".",
+        "pattern": "**",
+        "reason": "unknown command `app`"
+      }
+    ],
+    "task_deps": [
+      {
+        "target": {
+          "kind": "id",
+          "id": "make:app:app"
+        },
+        "reason": "make prerequisite"
+      }
+    ],
+    "uncertainties": [
+      {
+        "kind": "unknown_command",
+        "detail": "script `./app`"
+      }
+    ],
+    "definition": [
+      "app/app"
+    ]
+  }
+}
+
+## make:lib:all
+{
+  "sources": [
+    "make"
+  ],
+  "deps": [
+    "make:lib:liblib.a"
+  ],
+  "lines": [],
+  "commands": [],
+  "spec": {
+    "configs": [
+      "lib/Makefile",
+      "lib/local.mk",
+      "mk/common.mk"
+    ],
+    "task_deps": [
+      {
+        "target": {
+          "kind": "id",
+          "id": "make:lib:liblib.a"
+        },
+        "reason": "make prerequisite"
+      }
+    ]
+  }
+}
+
+## make:lib:clean
+{
+  "sources": [
+    "make"
+  ],
+  "deps": [],
+  "lines": [
+    "rm -f liblib.a lib.o"
+  ],
+  "commands": [
+    "rm -f liblib.a lib.o [noop] Ignored"
+  ],
+  "spec": {
+    "configs": [
+      "lib/Makefile",
+      "lib/local.mk",
+      "mk/common.mk"
+    ]
+  }
+}
+
+## make:lib:lib.o
+{
+  "sources": [
+    "make"
+  ],
+  "deps": [],
+  "lines": [
+    "cc -Wall   -c -o lib.o lib.c"
+  ],
+  "commands": [
+    "cc -Wall   -c -o lib.o lib.c [cc] Full"
+  ],
+  "spec": {
+    "inputs": [
+      "lib/lib.c"
+    ],
+    "outputs": [
+      {
+        "path": "lib/lib.o",
+        "kind": "declared"
+      }
+    ],
+    "configs": [
+      "lib/Makefile",
+      "lib/local.mk",
+      "mk/common.mk"
+    ],
+    "toolchain": [
+      {
+        "ecosystem": "system",
+        "name": "cc"
+      }
+    ]
+  }
+}
+
+## make:lib:liblib.a
+{
+  "sources": [
+    "make"
+  ],
+  "deps": [
+    "make:lib:lib.o"
+  ],
+  "lines": [
+    "ar rcs liblib.a lib.o"
+  ],
+  "commands": [
+    "ar rcs liblib.a lib.o [ar] Full"
+  ],
+  "spec": {
+    "inputs": [
+      "lib/lib.o"
+    ],
+    "outputs": [
+      {
+        "path": "lib/liblib.a",
+        "kind": "declared"
+      }
+    ],
+    "configs": [
+      "lib/Makefile",
+      "lib/local.mk",
+      "mk/common.mk"
+    ],
+    "task_deps": [
+      {
+        "target": {
+          "kind": "id",
+          "id": "make:lib:lib.o"
+        },
+        "reason": "make prerequisite"
+      }
+    ],
+    "toolchain": [
+      {
+        "ecosystem": "system",
+        "name": "ar"
+      }
+    ]
+  }
+}

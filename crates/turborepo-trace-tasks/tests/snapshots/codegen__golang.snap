@@ -1,0 +1,860 @@
+---
+source: crates/turborepo-trace-tasks/tests/codegen.rs
+expression: family(stringify! (golang))
+---
+$ cd color && stringer -type=Color,Shade
+# stringer [stringer] Full
+{
+  "outputs": [
+    {
+      "path": "color/color_string.go",
+      "kind": "generated"
+    }
+  ],
+  "configs": [
+    "go.mod",
+    "go.sum"
+  ],
+  "entries": [
+    {
+      "path": "color",
+      "lang": "go"
+    }
+  ],
+  "memberships": [
+    {
+      "dir": "color",
+      "pattern": "*.go",
+      "exclude": [
+        "color_string.go"
+      ],
+      "reason": "go package"
+    }
+  ],
+  "toolchain": [
+    {
+      "ecosystem": "go",
+      "name": "golang.org/x/tools/cmd/stringer"
+    }
+  ]
+}
+
+$ cd color && go tool stringer -type Color -output color_names.go
+# go [go-run-tool] Full
+{
+  "outputs": [
+    {
+      "path": "color/color_names.go",
+      "kind": "generated"
+    }
+  ],
+  "configs": [
+    "go.mod",
+    "go.sum"
+  ],
+  "entries": [
+    {
+      "path": "color",
+      "lang": "go"
+    }
+  ],
+  "memberships": [
+    {
+      "dir": "color",
+      "pattern": "*.go",
+      "exclude": [
+        "color_names.go"
+      ],
+      "reason": "go package"
+    }
+  ],
+  "toolchain": [
+    {
+      "ecosystem": "go",
+      "name": "golang.org/x/tools/cmd/stringer"
+    },
+    {
+      "ecosystem": "system",
+      "name": "go"
+    }
+  ]
+}
+
+$ cd color && enumer -type=Color
+# enumer [stringer] Full
+{
+  "outputs": [
+    {
+      "path": "color/color_enumer.go",
+      "kind": "generated"
+    }
+  ],
+  "configs": [
+    "go.mod",
+    "go.sum"
+  ],
+  "entries": [
+    {
+      "path": "color",
+      "lang": "go"
+    }
+  ],
+  "memberships": [
+    {
+      "dir": "color",
+      "pattern": "*.go",
+      "exclude": [
+        "color_enumer.go"
+      ],
+      "reason": "go package"
+    }
+  ],
+  "toolchain": [
+    {
+      "ecosystem": "go",
+      "name": "github.com/dmarkham/enumer"
+    }
+  ]
+}
+
+$ cd store && mockgen -source=store.go -destination=../mocks/mock_store.go -package=mocks
+# mockgen [mockgen] Full
+{
+  "inputs": [
+    "store/store.go"
+  ],
+  "outputs": [
+    {
+      "path": "mocks/mock_store.go",
+      "kind": "generated"
+    }
+  ],
+  "configs": [
+    "go.mod",
+    "go.sum"
+  ],
+  "entries": [
+    {
+      "path": "store/store.go",
+      "lang": "go"
+    }
+  ],
+  "toolchain": [
+    {
+      "ecosystem": "go",
+      "name": "go.uber.org/mock/mockgen"
+    }
+  ]
+}
+
+$ mockgen -destination=mocks/mock_reflect.go example.com/gen/store Store
+# mockgen [mockgen] Full
+{
+  "outputs": [
+    {
+      "path": "mocks/mock_reflect.go",
+      "kind": "generated"
+    }
+  ],
+  "configs": [
+    "go.mod",
+    "go.sum"
+  ],
+  "entries": [
+    {
+      "path": "store",
+      "lang": "go"
+    }
+  ],
+  "memberships": [
+    {
+      "dir": "store",
+      "pattern": "*.go",
+      "reason": "go package"
+    }
+  ],
+  "toolchain": [
+    {
+      "ecosystem": "go",
+      "name": "go.uber.org/mock/mockgen"
+    }
+  ]
+}
+
+$ mockgen -destination=mocks/ext.go github.com/aws/aws-sdk-go/service/s3/s3iface S3API
+# mockgen [mockgen] Full
+{
+  "outputs": [
+    {
+      "path": "mocks/ext.go",
+      "kind": "generated"
+    }
+  ],
+  "configs": [
+    "go.mod",
+    "go.sum"
+  ],
+  "toolchain": [
+    {
+      "ecosystem": "go",
+      "name": "github.com/aws/aws-sdk-go/service/s3/s3iface"
+    },
+    {
+      "ecosystem": "go",
+      "name": "go.uber.org/mock/mockgen"
+    }
+  ]
+}
+
+$ cd api && oapi-codegen -config oapi.yaml spec.yaml
+# oapi-codegen [oapi-codegen] Full
+{
+  "inputs": [
+    "api/shared.yaml",
+    "api/spec.yaml",
+    "api/templates/client.tmpl"
+  ],
+  "outputs": [
+    {
+      "path": "api/api.gen.go",
+      "kind": "generated"
+    }
+  ],
+  "configs": [
+    "api/oapi.yaml",
+    "go.mod",
+    "go.sum"
+  ],
+  "toolchain": [
+    {
+      "ecosystem": "go",
+      "name": "github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen"
+    }
+  ]
+}
+
+$ cd api && go run github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen@v2.4.1 -generate types -package api -o types.gen.go spec.yaml
+# go [go-run-tool] Full
+{
+  "inputs": [
+    "api/shared.yaml",
+    "api/spec.yaml"
+  ],
+  "outputs": [
+    {
+      "path": "api/types.gen.go",
+      "kind": "generated"
+    }
+  ],
+  "configs": [
+    "go.mod",
+    "go.sum"
+  ],
+  "toolchain": [
+    {
+      "ecosystem": "go",
+      "name": "github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen"
+    },
+    {
+      "ecosystem": "system",
+      "name": "go"
+    }
+  ]
+}
+
+$ cd ent && go run -mod=mod entgo.io/ent/cmd/ent generate ./schema
+# go [go-run-tool] Full
+{
+  "outputs": [
+    {
+      "path": "ent",
+      "pattern": "**",
+      "exclude": [
+        "generate.go",
+        "entc.go",
+        "schema/**"
+      ],
+      "kind": "generated"
+    }
+  ],
+  "configs": [
+    "go.mod",
+    "go.sum"
+  ],
+  "entries": [
+    {
+      "path": "ent/schema",
+      "lang": "go"
+    }
+  ],
+  "memberships": [
+    {
+      "dir": "ent/schema",
+      "pattern": "*.go",
+      "reason": "go package"
+    }
+  ],
+  "toolchain": [
+    {
+      "ecosystem": "go",
+      "name": "entgo.io/ent/cmd/ent"
+    },
+    {
+      "ecosystem": "system",
+      "name": "go"
+    }
+  ]
+}
+
+$ cd di && wire
+# wire [wire] Full
+{
+  "outputs": [
+    {
+      "path": "di/wire_gen.go",
+      "kind": "generated"
+    }
+  ],
+  "configs": [
+    "go.mod",
+    "go.sum"
+  ],
+  "entries": [
+    {
+      "path": "di",
+      "lang": "go"
+    }
+  ],
+  "memberships": [
+    {
+      "dir": "di",
+      "pattern": "*.go",
+      "exclude": [
+        "wire_gen.go"
+      ],
+      "reason": "go package"
+    }
+  ],
+  "toolchain": [
+    {
+      "ecosystem": "go",
+      "name": "github.com/google/wire/cmd/wire"
+    }
+  ]
+}
+
+$ cd graph && go run github.com/99designs/gqlgen generate
+# go [go-run-tool] Full
+{
+  "outputs": [
+    {
+      "path": "graph/generated/generated.go",
+      "kind": "generated"
+    },
+    {
+      "path": "graph/model/models_gen.go",
+      "kind": "generated"
+    },
+    {
+      "path": "graph/resolvers",
+      "pattern": "*.resolvers.go",
+      "kind": "generated"
+    }
+  ],
+  "configs": [
+    "go.mod",
+    "go.sum",
+    "graph/gqlgen.yml"
+  ],
+  "entries": [
+    {
+      "path": "store",
+      "lang": "go"
+    }
+  ],
+  "memberships": [
+    {
+      "dir": "graph/schema",
+      "pattern": "*.graphqls",
+      "reason": "gqlgen schema"
+    },
+    {
+      "dir": "store",
+      "pattern": "*.go",
+      "reason": "go package"
+    }
+  ],
+  "toolchain": [
+    {
+      "ecosystem": "go",
+      "name": "github.com/99designs/gqlgen"
+    },
+    {
+      "ecosystem": "go",
+      "name": "github.com/acme/types"
+    },
+    {
+      "ecosystem": "system",
+      "name": "go"
+    }
+  ]
+}
+
+$ cd ej && easyjson -all model.go
+# easyjson [easyjson] Full
+{
+  "outputs": [
+    {
+      "path": "ej/model_easyjson.go",
+      "kind": "generated"
+    }
+  ],
+  "configs": [
+    "go.mod",
+    "go.sum"
+  ],
+  "entries": [
+    {
+      "path": "ej",
+      "lang": "go"
+    }
+  ],
+  "memberships": [
+    {
+      "dir": "ej",
+      "pattern": "*.go",
+      "exclude": [
+        "model_easyjson.go"
+      ],
+      "reason": "go package"
+    }
+  ],
+  "toolchain": [
+    {
+      "ecosystem": "go",
+      "name": "github.com/mailru/easyjson/easyjson"
+    }
+  ]
+}
+
+$ go generate ./color
+# go [go-generate] Full
+{
+  "inputs": [
+    "color/color.go"
+  ],
+  "outputs": [
+    {
+      "path": "color/color_string.go",
+      "kind": "generated"
+    }
+  ],
+  "configs": [
+    "go.mod",
+    "go.sum"
+  ],
+  "entries": [
+    {
+      "path": "color",
+      "lang": "go"
+    }
+  ],
+  "memberships": [
+    {
+      "dir": "color",
+      "pattern": "*.go",
+      "reason": "go generate package"
+    },
+    {
+      "dir": "color",
+      "pattern": "*.go",
+      "exclude": [
+        "color_string.go"
+      ],
+      "reason": "go package"
+    }
+  ],
+  "toolchain": [
+    {
+      "ecosystem": "go",
+      "name": "golang.org/x/tools/cmd/stringer"
+    },
+    {
+      "ecosystem": "system",
+      "name": "go"
+    }
+  ]
+}
+
+$ go generate ./...
+# go [go-generate] Partial
+{
+  "inputs": [
+    "api/api.go",
+    "api/shared.yaml",
+    "api/spec.yaml",
+    "api/templates/client.tmpl",
+    "color/color.go",
+    "di/wire.go",
+    "ej/model.go",
+    "ent/generate.go",
+    "graph/resolver.go",
+    "store/store.go",
+    "tools/tools.go"
+  ],
+  "outputs": [
+    {
+      "path": "api/api.gen.go",
+      "kind": "generated"
+    },
+    {
+      "path": "color/color_string.go",
+      "kind": "generated"
+    },
+    {
+      "path": "data/table.go",
+      "kind": "generated"
+    },
+    {
+      "path": "di/wire_gen.go",
+      "kind": "generated"
+    },
+    {
+      "path": "ej/model_easyjson.go",
+      "kind": "generated"
+    },
+    {
+      "path": "ent",
+      "pattern": "**",
+      "exclude": [
+        "generate.go",
+        "entc.go",
+        "schema/**"
+      ],
+      "kind": "generated"
+    },
+    {
+      "path": "graph/generated/generated.go",
+      "kind": "generated"
+    },
+    {
+      "path": "graph/model/models_gen.go",
+      "kind": "generated"
+    },
+    {
+      "path": "graph/resolvers",
+      "pattern": "*.resolvers.go",
+      "kind": "generated"
+    },
+    {
+      "path": "mocks/mock_store.go",
+      "kind": "generated"
+    }
+  ],
+  "configs": [
+    "api/oapi.yaml",
+    "go.mod",
+    "go.sum",
+    "graph/gqlgen.yml"
+  ],
+  "entries": [
+    {
+      "path": "color",
+      "lang": "go"
+    },
+    {
+      "path": "di",
+      "lang": "go"
+    },
+    {
+      "path": "ej",
+      "lang": "go"
+    },
+    {
+      "path": "ent/schema",
+      "lang": "go"
+    },
+    {
+      "path": "store",
+      "lang": "go"
+    },
+    {
+      "path": "store/store.go",
+      "lang": "go"
+    },
+    {
+      "path": "tools/gen",
+      "lang": "go"
+    }
+  ],
+  "memberships": [
+    {
+      "dir": ".",
+      "pattern": "**",
+      "reason": "`go` not fully recognized"
+    },
+    {
+      "dir": ".",
+      "pattern": "**",
+      "reason": "unknown command `unknown-generator`"
+    },
+    {
+      "dir": ".",
+      "pattern": "**/*.go",
+      "reason": "go generate packages"
+    },
+    {
+      "dir": "color",
+      "pattern": "*.go",
+      "exclude": [
+        "color_string.go"
+      ],
+      "reason": "go package"
+    },
+    {
+      "dir": "di",
+      "pattern": "*.go",
+      "exclude": [
+        "wire_gen.go"
+      ],
+      "reason": "go package"
+    },
+    {
+      "dir": "ej",
+      "pattern": "*.go",
+      "exclude": [
+        "model_easyjson.go"
+      ],
+      "reason": "go package"
+    },
+    {
+      "dir": "ent/schema",
+      "pattern": "*.go",
+      "reason": "go package"
+    },
+    {
+      "dir": "graph/schema",
+      "pattern": "*.graphqls",
+      "reason": "gqlgen schema"
+    },
+    {
+      "dir": "store",
+      "pattern": "*.go",
+      "reason": "go package"
+    },
+    {
+      "dir": "tools/gen",
+      "pattern": "*.go",
+      "reason": "go package"
+    }
+  ],
+  "toolchain": [
+    {
+      "ecosystem": "go",
+      "name": "entgo.io/ent/cmd/ent"
+    },
+    {
+      "ecosystem": "go",
+      "name": "github.com/99designs/gqlgen"
+    },
+    {
+      "ecosystem": "go",
+      "name": "github.com/acme/types"
+    },
+    {
+      "ecosystem": "go",
+      "name": "github.com/google/wire/cmd/wire"
+    },
+    {
+      "ecosystem": "go",
+      "name": "github.com/mailru/easyjson/easyjson"
+    },
+    {
+      "ecosystem": "go",
+      "name": "github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen"
+    },
+    {
+      "ecosystem": "go",
+      "name": "go.uber.org/mock/mockgen"
+    },
+    {
+      "ecosystem": "go",
+      "name": "golang.org/x/tools/cmd/stringer"
+    },
+    {
+      "ecosystem": "system",
+      "name": "go"
+    }
+  ],
+  "uncertainties": [
+    {
+      "kind": "unknown_command",
+      "detail": "unknown-generator"
+    }
+  ]
+}
+
+$ go run github.com/vektra/mockery/v2
+# go [go-run-tool] Partial
+{
+  "configs": [
+    "go.mod",
+    "go.sum"
+  ],
+  "memberships": [
+    {
+      "dir": ".",
+      "pattern": "**",
+      "reason": "`go` not fully recognized"
+    },
+    {
+      "dir": ".",
+      "pattern": "**",
+      "reason": "unknown go generator `mockery`"
+    }
+  ],
+  "toolchain": [
+    {
+      "ecosystem": "go",
+      "name": "github.com/vektra/mockery/v2"
+    },
+    {
+      "ecosystem": "system",
+      "name": "go"
+    }
+  ],
+  "uncertainties": [
+    {
+      "kind": "unknown_command",
+      "detail": "go generator `mockery`"
+    }
+  ]
+}
+
+$ cd api && go run ../tools/gen -schema spec.yaml -output=schema.gen.go -package api
+# go [go-run-generator] Full
+{
+  "inputs": [
+    "api/shared.yaml",
+    "api/spec.yaml"
+  ],
+  "outputs": [
+    {
+      "path": "api/schema.gen.go",
+      "kind": "generated"
+    }
+  ],
+  "configs": [
+    "go.mod",
+    "go.sum"
+  ],
+  "entries": [
+    {
+      "path": "tools/gen",
+      "lang": "go"
+    }
+  ],
+  "memberships": [
+    {
+      "dir": "tools/gen",
+      "pattern": "*.go",
+      "reason": "go package"
+    }
+  ],
+  "toolchain": [
+    {
+      "ecosystem": "system",
+      "name": "go"
+    }
+  ]
+}
+
+$ go run example.com/gen/tools/gen -o data/table.go
+# go [go-run-generator] Full
+{
+  "outputs": [
+    {
+      "path": "data/table.go",
+      "kind": "generated"
+    }
+  ],
+  "configs": [
+    "go.mod",
+    "go.sum"
+  ],
+  "entries": [
+    {
+      "path": "tools/gen",
+      "lang": "go"
+    }
+  ],
+  "memberships": [
+    {
+      "dir": "tools/gen",
+      "pattern": "*.go",
+      "reason": "go package"
+    }
+  ],
+  "toolchain": [
+    {
+      "ecosystem": "system",
+      "name": "go"
+    }
+  ]
+}
+
+$ cd tools && go run ./gen
+# go [go] Full
+{
+  "configs": [
+    "go.mod",
+    "go.sum"
+  ],
+  "entries": [
+    {
+      "path": "tools/gen",
+      "lang": "go"
+    }
+  ],
+  "memberships": [
+    {
+      "dir": "tools/gen",
+      "pattern": "*.go",
+      "reason": "go package directory"
+    }
+  ],
+  "toolchain": [
+    {
+      "ecosystem": "system",
+      "name": "go"
+    }
+  ],
+  "definition": [
+    "tools/gen"
+  ]
+}
+
+$ cd api && go-jsonschema --only-models -p api spec.yaml -o models.gen.go
+# go-jsonschema [go-jsonschema] Full
+{
+  "inputs": [
+    "api/shared.yaml",
+    "api/spec.yaml"
+  ],
+  "outputs": [
+    {
+      "path": "api/models.gen.go",
+      "kind": "generated"
+    }
+  ],
+  "configs": [
+    "go.mod",
+    "go.sum"
+  ],
+  "toolchain": [
+    {
+      "ecosystem": "go",
+      "name": "github.com/omissis/go-jsonschema"
+    }
+  ]
+}

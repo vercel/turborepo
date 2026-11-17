@@ -1,0 +1,522 @@
+---
+source: crates/turborepo-trace-tasks/tests/p2.rs
+expression: "render(&set, &root, &[\"tox\", \"nox\"])"
+---
+## nox:.:docs
+{
+  "sources": [
+    "nox"
+  ],
+  "files": [
+    "noxfile.py"
+  ],
+  "deps": [],
+  "commands": [
+    "sphinx-build docs ${__NOX_DYNAMIC} [-] Unknown"
+  ],
+  "spec": {
+    "configs": [
+      "noxfile.py"
+    ],
+    "entries": [
+      {
+        "path": "noxfile.py",
+        "lang": "python"
+      }
+    ],
+    "memberships": [
+      {
+        "dir": ".",
+        "pattern": "**",
+        "reason": "uncertain task"
+      },
+      {
+        "dir": ".",
+        "pattern": "**",
+        "reason": "unknown command `sphinx-build`"
+      },
+      {
+        "dir": ".",
+        "pattern": "**",
+        "reason": "unsupported shell syntax"
+      }
+    ],
+    "toolchain": [
+      {
+        "ecosystem": "pypi",
+        "name": "nox"
+      }
+    ],
+    "uncertainties": [
+      {
+        "kind": "unknown_command",
+        "detail": "nox session `docs` calls `_build_docs(session, …)`"
+      },
+      {
+        "kind": "unknown_command",
+        "detail": "sphinx-build"
+      },
+      {
+        "kind": "shell_unsupported",
+        "detail": "unknown variable `${__NOX_DYNAMIC}`"
+      }
+    ]
+  }
+}
+
+## nox:.:lint
+{
+  "sources": [
+    "nox"
+  ],
+  "files": [
+    "noxfile.py"
+  ],
+  "deps": [],
+  "commands": [
+    "ruff check . [-] Unknown"
+  ],
+  "spec": {
+    "configs": [
+      "noxfile.py"
+    ],
+    "entries": [
+      {
+        "path": "noxfile.py",
+        "lang": "python"
+      }
+    ],
+    "memberships": [
+      {
+        "dir": ".",
+        "pattern": "**",
+        "reason": "uncertain task"
+      },
+      {
+        "dir": ".",
+        "pattern": "**",
+        "reason": "unknown command `ruff`"
+      }
+    ],
+    "toolchain": [
+      {
+        "ecosystem": "pypi",
+        "name": "nox"
+      },
+      {
+        "ecosystem": "pypi",
+        "name": "ruff"
+      }
+    ],
+    "uncertainties": [
+      {
+        "kind": "unknown_command",
+        "detail": "ruff"
+      }
+    ]
+  }
+}
+
+## nox:.:tests
+{
+  "sources": [
+    "nox"
+  ],
+  "files": [
+    "noxfile.py"
+  ],
+  "deps": [
+    "nox:.:lint"
+  ],
+  "commands": [
+    "pytest tests [pytest] Full"
+  ],
+  "spec": {
+    "inputs": [
+      ".pytest.ini",
+      "pyproject.toml",
+      "pytest.ini",
+      "requirements-test.txt",
+      "setup.cfg",
+      "tox.ini"
+    ],
+    "configs": [
+      "noxfile.py",
+      "pyproject.toml"
+    ],
+    "entries": [
+      {
+        "path": "noxfile.py",
+        "lang": "python"
+      }
+    ],
+    "memberships": [
+      {
+        "dir": ".",
+        "pattern": "**/*_test.py",
+        "reason": "pytest test files"
+      },
+      {
+        "dir": ".",
+        "pattern": "**/test_*.py",
+        "reason": "pytest test files"
+      },
+      {
+        "dir": "tests",
+        "pattern": "**/*.py",
+        "reason": "pytest paths"
+      }
+    ],
+    "task_deps": [
+      {
+        "target": {
+          "kind": "id",
+          "id": "nox:.:lint"
+        },
+        "reason": "nox notify"
+      }
+    ],
+    "toolchain": [
+      {
+        "ecosystem": "pypi",
+        "name": "nox"
+      },
+      {
+        "ecosystem": "pypi",
+        "name": "pytest"
+      }
+    ],
+    "runs": [
+      {
+        "kind": "tests",
+        "framework": "pytest",
+        "dir": "."
+      },
+      {
+        "kind": "tests",
+        "framework": "pytest",
+        "dir": "tests"
+      }
+    ],
+    "definition": [
+      "pyproject.toml"
+    ]
+  }
+}
+
+## tox:.:lint
+{
+  "sources": [
+    "tox"
+  ],
+  "files": [
+    "tox.ini"
+  ],
+  "deps": [],
+  "commands": [
+    "python -c \"import toxpkg\" [python] Partial",
+    "ruff check src tests [-] Unknown"
+  ],
+  "spec": {
+    "inputs": [
+      ".env.test"
+    ],
+    "configs": [
+      "tox.ini"
+    ],
+    "memberships": [
+      {
+        "dir": ".",
+        "pattern": "**",
+        "reason": "`python -c` inline code"
+      },
+      {
+        "dir": ".",
+        "pattern": "**",
+        "reason": "`python` not fully recognized"
+      },
+      {
+        "dir": ".",
+        "pattern": "**",
+        "reason": "uncertain task"
+      },
+      {
+        "dir": ".",
+        "pattern": "**",
+        "reason": "unknown command `ruff`"
+      }
+    ],
+    "toolchain": [
+      {
+        "ecosystem": "pypi",
+        "name": "ruff"
+      },
+      {
+        "ecosystem": "pypi",
+        "name": "tox"
+      },
+      {
+        "ecosystem": "system",
+        "name": "python"
+      }
+    ],
+    "env": [
+      "CI",
+      "HOME"
+    ],
+    "uncertainties": [
+      {
+        "kind": "eval_like",
+        "detail": "`python -c` inline code"
+      },
+      {
+        "kind": "unknown_command",
+        "detail": "ruff"
+      }
+    ]
+  }
+}
+
+## tox:.:py311
+{
+  "sources": [
+    "tox"
+  ],
+  "files": [
+    "tox.ini"
+  ],
+  "deps": [],
+  "commands": [
+    "python -c \"import toxpkg\" [python] Partial",
+    "python scripts/check_py311.py [python] Full",
+    "pytest . --data data [pytest] Full"
+  ],
+  "spec": {
+    "inputs": [
+      ".env.test",
+      ".pytest.ini",
+      "constraints.txt",
+      "pytest.ini",
+      "requirements-test.txt",
+      "tests/.pytest.ini",
+      "tests/pyproject.toml",
+      "tests/pytest.ini",
+      "tests/setup.cfg",
+      "tests/tox.ini"
+    ],
+    "configs": [
+      "pyproject.toml",
+      "tox.ini"
+    ],
+    "entries": [
+      {
+        "path": "scripts/check_py311.py",
+        "lang": "python"
+      }
+    ],
+    "memberships": [
+      {
+        "dir": ".",
+        "pattern": "**",
+        "reason": "`python -c` inline code"
+      },
+      {
+        "dir": ".",
+        "pattern": "**",
+        "reason": "`python` not fully recognized"
+      },
+      {
+        "dir": ".",
+        "pattern": "**",
+        "reason": "uncertain task"
+      },
+      {
+        "dir": ".",
+        "pattern": "**/*_test.py",
+        "reason": "pytest test files"
+      },
+      {
+        "dir": ".",
+        "pattern": "**/test_*.py",
+        "reason": "pytest test files"
+      },
+      {
+        "dir": "data",
+        "pattern": "**/*.py",
+        "reason": "pytest paths"
+      },
+      {
+        "dir": "tests",
+        "pattern": "**/*.py",
+        "reason": "pytest paths"
+      }
+    ],
+    "toolchain": [
+      {
+        "ecosystem": "pypi",
+        "name": "pytest"
+      },
+      {
+        "ecosystem": "pypi",
+        "name": "pytest-cov"
+      },
+      {
+        "ecosystem": "pypi",
+        "name": "tox"
+      },
+      {
+        "ecosystem": "system",
+        "name": "python"
+      }
+    ],
+    "env": [
+      "CI",
+      "HOME"
+    ],
+    "uncertainties": [
+      {
+        "kind": "eval_like",
+        "detail": "`python -c` inline code"
+      }
+    ],
+    "runs": [
+      {
+        "kind": "tests",
+        "framework": "pytest",
+        "dir": "."
+      },
+      {
+        "kind": "tests",
+        "framework": "pytest",
+        "dir": "data"
+      },
+      {
+        "kind": "tests",
+        "framework": "pytest",
+        "dir": "tests"
+      }
+    ],
+    "definition": [
+      "pyproject.toml",
+      "scripts/check_py311.py"
+    ]
+  }
+}
+
+## tox:.:py312
+{
+  "sources": [
+    "tox"
+  ],
+  "files": [
+    "tox.ini"
+  ],
+  "deps": [],
+  "commands": [
+    "python -c \"import toxpkg\" [python] Partial",
+    "pytest . --data data [pytest] Full"
+  ],
+  "spec": {
+    "inputs": [
+      ".env.test",
+      ".pytest.ini",
+      "constraints.txt",
+      "pytest.ini",
+      "requirements-test.txt",
+      "tests/.pytest.ini",
+      "tests/pyproject.toml",
+      "tests/pytest.ini",
+      "tests/setup.cfg",
+      "tests/tox.ini"
+    ],
+    "configs": [
+      "pyproject.toml",
+      "tox.ini"
+    ],
+    "memberships": [
+      {
+        "dir": ".",
+        "pattern": "**",
+        "reason": "`python -c` inline code"
+      },
+      {
+        "dir": ".",
+        "pattern": "**",
+        "reason": "`python` not fully recognized"
+      },
+      {
+        "dir": ".",
+        "pattern": "**",
+        "reason": "uncertain task"
+      },
+      {
+        "dir": ".",
+        "pattern": "**/*_test.py",
+        "reason": "pytest test files"
+      },
+      {
+        "dir": ".",
+        "pattern": "**/test_*.py",
+        "reason": "pytest test files"
+      },
+      {
+        "dir": "data",
+        "pattern": "**/*.py",
+        "reason": "pytest paths"
+      },
+      {
+        "dir": "tests",
+        "pattern": "**/*.py",
+        "reason": "pytest paths"
+      }
+    ],
+    "toolchain": [
+      {
+        "ecosystem": "pypi",
+        "name": "pytest"
+      },
+      {
+        "ecosystem": "pypi",
+        "name": "pytest-cov"
+      },
+      {
+        "ecosystem": "pypi",
+        "name": "tox"
+      },
+      {
+        "ecosystem": "system",
+        "name": "python"
+      }
+    ],
+    "env": [
+      "CI",
+      "HOME"
+    ],
+    "uncertainties": [
+      {
+        "kind": "eval_like",
+        "detail": "`python -c` inline code"
+      }
+    ],
+    "runs": [
+      {
+        "kind": "tests",
+        "framework": "pytest",
+        "dir": "."
+      },
+      {
+        "kind": "tests",
+        "framework": "pytest",
+        "dir": "data"
+      },
+      {
+        "kind": "tests",
+        "framework": "pytest",
+        "dir": "tests"
+      }
+    ],
+    "definition": [
+      "pyproject.toml"
+    ]
+  }
+}

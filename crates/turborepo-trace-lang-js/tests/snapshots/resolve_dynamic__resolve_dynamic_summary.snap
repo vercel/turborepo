@@ -1,0 +1,53 @@
+---
+source: crates/turborepo-trace-lang-js/tests/resolve_dynamic.rs
+expression: run.summary(&run.root)
+---
+turbo trace summary
+base: <fixture>
+entries: 1, files: 22 (parsed 9), edges: 29, uncertainties: 9
+
+files by reason:
+  initial     1
+  dependency  11
+  asset       9
+  manifest    1
+
+references to missing or skipped paths, not uncertain (1):
+  main.js:20:16  ./data/optional.json
+
+uncertainties (9):
+
+cwd_dependent (2)
+  (project) (2)
+    main.js
+      24:18  settings.json: relative to the process cwd
+        | const settings = fs.readFileSync('settings.json');
+      25:17  conf/*.yml: relative to the process cwd; <fixture>/runtime/conf/*.yml: 2 match(es)
+        | const cwdGlob = fs.readFileSync('conf/' + env + '.yml');
+
+partial_specifier (5)
+  (project) (5)
+    lib/helper.js
+      3:28  ../data/*.json: <fixture>/data/*.json: 2 match(es)
+        | module.exports = (name) => fs.readFileSync(path.join(__dirname, '../data/' + name + '.json'));
+    main.js
+      8:18  ./locales/*.json: lang; <fixture>/locales/*.json?(ext): 3 match(es)
+        | const messages = require('./locales/' + lang + '.json');
+      9:16  ./plugins/*: <fixture>/plugins/*: 3 match(es)
+        | const plugin = require('./plugins/' + name);
+      10:16  ./plugins/*/index: <fixture>/plugins/*/index?(ext): 1 match(es)
+        | const nested = require('./plugins/' + name + '/index');
+      18:15  ./data/*.json: kind; <fixture>/data/*.json: 2 match(es)
+        | const datas = fs.readFileSync(path.join(__dirname, 'data', kind + '.json'));
+
+pattern_too_broad (1)
+  (project) (1)
+    main.js
+      21:13  ./*: . is the referencing file's own directory; not expanded
+        | const own = fs.readFileSync(path.join(__dirname, name));
+
+unresolved_specifier (1)
+  (project) (1)
+    main.js
+      11:14  ./nothing/*.js: no files match <fixture>/nothing/*.js?(ext) from <fixture>/main.js
+        | const none = require('./nothing/' + name + '.js');

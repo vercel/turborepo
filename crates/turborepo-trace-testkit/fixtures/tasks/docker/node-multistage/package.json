@@ -1,0 +1,9 @@
+{
+  "name": "mono",
+  "private": true,
+  "scripts": {
+    "docker:web": "docker build -f apps/web/Dockerfile -t web .",
+    "docker:web:build-stage": "docker build -f apps/web/Dockerfile --target build .",
+    "docker:web:other-context": "docker build -f apps/web/Dockerfile apps/web"
+  }
+}

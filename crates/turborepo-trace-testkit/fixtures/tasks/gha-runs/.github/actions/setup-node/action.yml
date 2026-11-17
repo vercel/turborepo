@@ -1,0 +1,13 @@
+name: Set up Node
+description: Node from the input or .nvmrc
+inputs:
+  node-version:
+    description: Node version
+    default: ''
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-node@v4
+      with:
+        node-version: ${{ inputs.node-version }}
+        node-version-file: .nvmrc

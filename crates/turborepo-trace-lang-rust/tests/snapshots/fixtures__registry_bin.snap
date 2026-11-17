@@ -1,0 +1,521 @@
+---
+source: crates/turborepo-trace-lang-rust/tests/fixtures.rs
+expression: json
+---
+{
+  "version": 1,
+  "base": "<fixture>",
+  "entries": [
+    {
+      "path": "src/cli.rs",
+      "files": [
+        "Cargo.lock",
+        "Cargo.toml",
+        "cargo-home/git/checkouts/gitws-0f1e2d3c4b5a6978/abcdef0/crates/gitdep/Cargo.toml",
+        "cargo-home/git/checkouts/gitws-0f1e2d3c4b5a6978/abcdef0/crates/gitdep/src/lib.rs",
+        "cargo-home/registry/src/index.crates.io-1949cf8c6b5b557f/dep-a-0.2.0/Cargo.toml",
+        "cargo-home/registry/src/index.crates.io-1949cf8c6b5b557f/dep-a-0.2.0/src/data.txt",
+        "cargo-home/registry/src/index.crates.io-1949cf8c6b5b557f/dep-a-0.2.0/src/inner.rs",
+        "cargo-home/registry/src/index.crates.io-1949cf8c6b5b557f/dep-a-0.2.0/src/lib.rs",
+        "cargo-home/registry/src/index.crates.io-1949cf8c6b5b557f/dep-b-3.1.4/Cargo.toml",
+        "cargo-home/registry/src/index.crates.io-1949cf8c6b5b557f/dep-b-3.1.4/src/lib.rs",
+        "src/api.rs",
+        "src/cli.rs",
+        "src/lib.rs"
+      ]
+    }
+  ],
+  "files": [
+    {
+      "path": "Cargo.lock",
+      "reasons": [
+        "manifest"
+      ],
+      "parents": [
+        "src/api.rs",
+        "src/cli.rs",
+        "src/lib.rs"
+      ],
+      "parsed": false
+    },
+    {
+      "path": "Cargo.toml",
+      "reasons": [
+        "manifest"
+      ],
+      "parents": [
+        "src/api.rs",
+        "src/cli.rs",
+        "src/lib.rs"
+      ],
+      "parsed": false
+    },
+    {
+      "path": "cargo-home/git/checkouts/gitws-0f1e2d3c4b5a6978/abcdef0/crates/gitdep/Cargo.toml",
+      "reasons": [
+        "manifest"
+      ],
+      "parents": [
+        "cargo-home/git/checkouts/gitws-0f1e2d3c4b5a6978/abcdef0/crates/gitdep/src/lib.rs"
+      ],
+      "parsed": false
+    },
+    {
+      "path": "cargo-home/git/checkouts/gitws-0f1e2d3c4b5a6978/abcdef0/crates/gitdep/src/lib.rs",
+      "reasons": [
+        "dependency"
+      ],
+      "parents": [
+        "src/cli.rs",
+        "src/lib.rs"
+      ],
+      "parsed": true,
+      "lang": "rust"
+    },
+    {
+      "path": "cargo-home/registry/src/index.crates.io-1949cf8c6b5b557f/dep-a-0.2.0/Cargo.toml",
+      "reasons": [
+        "manifest"
+      ],
+      "parents": [
+        "cargo-home/registry/src/index.crates.io-1949cf8c6b5b557f/dep-a-0.2.0/src/inner.rs",
+        "cargo-home/registry/src/index.crates.io-1949cf8c6b5b557f/dep-a-0.2.0/src/lib.rs"
+      ],
+      "parsed": false
+    },
+    {
+      "path": "cargo-home/registry/src/index.crates.io-1949cf8c6b5b557f/dep-a-0.2.0/src/data.txt",
+      "reasons": [
+        "asset"
+      ],
+      "parents": [
+        "cargo-home/registry/src/index.crates.io-1949cf8c6b5b557f/dep-a-0.2.0/src/lib.rs"
+      ],
+      "parsed": false
+    },
+    {
+      "path": "cargo-home/registry/src/index.crates.io-1949cf8c6b5b557f/dep-a-0.2.0/src/inner.rs",
+      "reasons": [
+        "dependency"
+      ],
+      "parents": [
+        "cargo-home/registry/src/index.crates.io-1949cf8c6b5b557f/dep-a-0.2.0/src/lib.rs"
+      ],
+      "parsed": true,
+      "lang": "rust"
+    },
+    {
+      "path": "cargo-home/registry/src/index.crates.io-1949cf8c6b5b557f/dep-a-0.2.0/src/lib.rs",
+      "reasons": [
+        "dependency"
+      ],
+      "parents": [
+        "cargo-home/registry/src/index.crates.io-1949cf8c6b5b557f/dep-b-3.1.4/src/lib.rs",
+        "src/cli.rs",
+        "src/lib.rs"
+      ],
+      "parsed": true,
+      "lang": "rust"
+    },
+    {
+      "path": "cargo-home/registry/src/index.crates.io-1949cf8c6b5b557f/dep-b-3.1.4/Cargo.toml",
+      "reasons": [
+        "manifest"
+      ],
+      "parents": [
+        "cargo-home/registry/src/index.crates.io-1949cf8c6b5b557f/dep-b-3.1.4/src/lib.rs"
+      ],
+      "parsed": false
+    },
+    {
+      "path": "cargo-home/registry/src/index.crates.io-1949cf8c6b5b557f/dep-b-3.1.4/src/lib.rs",
+      "reasons": [
+        "dependency"
+      ],
+      "parents": [
+        "src/cli.rs",
+        "src/lib.rs"
+      ],
+      "parsed": true,
+      "lang": "rust"
+    },
+    {
+      "path": "src/api.rs",
+      "reasons": [
+        "dependency"
+      ],
+      "parents": [
+        "src/lib.rs"
+      ],
+      "parsed": true,
+      "lang": "rust"
+    },
+    {
+      "path": "src/cli.rs",
+      "reasons": [
+        "initial"
+      ],
+      "parents": [],
+      "parsed": true,
+      "lang": "rust"
+    },
+    {
+      "path": "src/lib.rs",
+      "reasons": [
+        "dependency"
+      ],
+      "parents": [
+        "src/cli.rs"
+      ],
+      "parsed": true,
+      "lang": "rust"
+    }
+  ],
+  "edges": [
+    {
+      "from": "cargo-home/git/checkouts/gitws-0f1e2d3c4b5a6978/abcdef0/crates/gitdep/src/lib.rs",
+      "kind": "manifest",
+      "phase": "build",
+      "flags": [],
+      "spec": "Cargo.toml",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "cargo-home/git/checkouts/gitws-0f1e2d3c4b5a6978/abcdef0/crates/gitdep/Cargo.toml"
+      }
+    },
+    {
+      "from": "cargo-home/registry/src/index.crates.io-1949cf8c6b5b557f/dep-a-0.2.0/src/inner.rs",
+      "kind": "manifest",
+      "phase": "build",
+      "flags": [],
+      "spec": "Cargo.toml",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "cargo-home/registry/src/index.crates.io-1949cf8c6b5b557f/dep-a-0.2.0/Cargo.toml"
+      }
+    },
+    {
+      "from": "cargo-home/registry/src/index.crates.io-1949cf8c6b5b557f/dep-a-0.2.0/src/lib.rs",
+      "kind": "manifest",
+      "phase": "build",
+      "flags": [],
+      "spec": "Cargo.toml",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "cargo-home/registry/src/index.crates.io-1949cf8c6b5b557f/dep-a-0.2.0/Cargo.toml"
+      }
+    },
+    {
+      "from": "cargo-home/registry/src/index.crates.io-1949cf8c6b5b557f/dep-a-0.2.0/src/lib.rs",
+      "kind": "mod",
+      "phase": "build",
+      "flags": [],
+      "spec": "inner",
+      "span": [
+        0,
+        10
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "cargo-home/registry/src/index.crates.io-1949cf8c6b5b557f/dep-a-0.2.0/src/inner.rs"
+      }
+    },
+    {
+      "from": "cargo-home/registry/src/index.crates.io-1949cf8c6b5b557f/dep-a-0.2.0/src/lib.rs",
+      "kind": "embed",
+      "phase": "build",
+      "flags": [],
+      "spec": "data.txt",
+      "span": [
+        30,
+        54
+      ],
+      "line": 2,
+      "target": {
+        "type": "file",
+        "path": "cargo-home/registry/src/index.crates.io-1949cf8c6b5b557f/dep-a-0.2.0/src/data.txt"
+      }
+    },
+    {
+      "from": "cargo-home/registry/src/index.crates.io-1949cf8c6b5b557f/dep-b-3.1.4/src/lib.rs",
+      "kind": "package",
+      "phase": "build",
+      "flags": [],
+      "spec": "crate dep-a 0.2.0",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "cargo-home/registry/src/index.crates.io-1949cf8c6b5b557f/dep-a-0.2.0/src/lib.rs"
+      }
+    },
+    {
+      "from": "cargo-home/registry/src/index.crates.io-1949cf8c6b5b557f/dep-b-3.1.4/src/lib.rs",
+      "kind": "manifest",
+      "phase": "build",
+      "flags": [],
+      "spec": "Cargo.toml",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "cargo-home/registry/src/index.crates.io-1949cf8c6b5b557f/dep-b-3.1.4/Cargo.toml"
+      }
+    },
+    {
+      "from": "src/api.rs",
+      "kind": "manifest",
+      "phase": "build",
+      "flags": [],
+      "spec": "Cargo.lock",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "Cargo.lock"
+      }
+    },
+    {
+      "from": "src/api.rs",
+      "kind": "manifest",
+      "phase": "build",
+      "flags": [],
+      "spec": "Cargo.toml",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "Cargo.toml"
+      }
+    },
+    {
+      "from": "src/cli.rs",
+      "kind": "package",
+      "phase": "build",
+      "flags": [],
+      "spec": "crate gitdep 0.1.0",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "cargo-home/git/checkouts/gitws-0f1e2d3c4b5a6978/abcdef0/crates/gitdep/src/lib.rs"
+      }
+    },
+    {
+      "from": "src/cli.rs",
+      "kind": "package",
+      "phase": "build",
+      "flags": [],
+      "spec": "crate dep-a 0.2.0",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "cargo-home/registry/src/index.crates.io-1949cf8c6b5b557f/dep-a-0.2.0/src/lib.rs"
+      }
+    },
+    {
+      "from": "src/cli.rs",
+      "kind": "package",
+      "phase": "build",
+      "flags": [],
+      "spec": "crate renamed 3.1.4",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "cargo-home/registry/src/index.crates.io-1949cf8c6b5b557f/dep-b-3.1.4/src/lib.rs"
+      }
+    },
+    {
+      "from": "src/cli.rs",
+      "kind": "package",
+      "phase": "build",
+      "flags": [],
+      "spec": "lib regapp",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "src/lib.rs"
+      }
+    },
+    {
+      "from": "src/cli.rs",
+      "kind": "manifest",
+      "phase": "build",
+      "flags": [],
+      "spec": "Cargo.lock",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "Cargo.lock"
+      }
+    },
+    {
+      "from": "src/cli.rs",
+      "kind": "manifest",
+      "phase": "build",
+      "flags": [],
+      "spec": "Cargo.toml",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "Cargo.toml"
+      }
+    },
+    {
+      "from": "src/lib.rs",
+      "kind": "package",
+      "phase": "build",
+      "flags": [],
+      "spec": "crate gitdep 0.1.0",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "cargo-home/git/checkouts/gitws-0f1e2d3c4b5a6978/abcdef0/crates/gitdep/src/lib.rs"
+      }
+    },
+    {
+      "from": "src/lib.rs",
+      "kind": "package",
+      "phase": "build",
+      "flags": [],
+      "spec": "crate dep-a 0.2.0",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "cargo-home/registry/src/index.crates.io-1949cf8c6b5b557f/dep-a-0.2.0/src/lib.rs"
+      }
+    },
+    {
+      "from": "src/lib.rs",
+      "kind": "package",
+      "phase": "build",
+      "flags": [],
+      "spec": "crate renamed 3.1.4",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "cargo-home/registry/src/index.crates.io-1949cf8c6b5b557f/dep-b-3.1.4/src/lib.rs"
+      }
+    },
+    {
+      "from": "src/lib.rs",
+      "kind": "manifest",
+      "phase": "build",
+      "flags": [],
+      "spec": "Cargo.lock",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "Cargo.lock"
+      }
+    },
+    {
+      "from": "src/lib.rs",
+      "kind": "manifest",
+      "phase": "build",
+      "flags": [],
+      "spec": "Cargo.toml",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "Cargo.toml"
+      }
+    },
+    {
+      "from": "src/lib.rs",
+      "kind": "mod",
+      "phase": "build",
+      "flags": [],
+      "spec": "api",
+      "span": [
+        4,
+        12
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "src/api.rs"
+      }
+    }
+  ],
+  "uncertainties": [],
+  "symlinks": {},
+  "stats": {
+    "entries": 1,
+    "files": 13,
+    "parsed_files": 7,
+    "edges": 21,
+    "uncertainties": 0
+  }
+}

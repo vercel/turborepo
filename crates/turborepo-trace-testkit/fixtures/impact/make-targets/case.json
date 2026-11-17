@@ -1,0 +1,39 @@
+{
+  "description": "Makefile targets (§19 M2.9, P1): src/generated/{schema,version}.js are file targets built by node scripts from their prerequisites, and src/generated/index.js is a target that depends on both. The generated files are gitignored and loaded by tests; the oracle never runs make, so tests affected through the targets are declared with expect_affected.",
+  "mutations": [
+    {
+      "name": "prereq-schema",
+      "description": "edit a prerequisite of the schema.js target: affects it and the dependent index.js target, not version.js",
+      "ops": [{ "op": "replace", "path": "schema/schema.json", "find": "[\"users\"]", "with": "[\"users\", \"posts\"]" }],
+      "expect_affected": ["test/schema.test.js", "test/index.test.js"]
+    },
+    {
+      "name": "prereq-version",
+      "description": "edit a prerequisite of the version.js target: affects it and index.js, not schema.js",
+      "ops": [{ "op": "replace", "path": "version.txt", "find": "1.0.0", "with": "1.1.0" }],
+      "expect_affected": ["test/version.test.js", "test/index.test.js"]
+    },
+    {
+      "name": "generator-script",
+      "description": "edit the recipe's script of the index.js target only",
+      "ops": [{ "op": "append", "path": "scripts/gen-index.js", "text": "\n// edited\n" }],
+      "expect_affected": ["test/index.test.js"]
+    },
+    {
+      "name": "makefile-edit",
+      "description": "the Makefile is a config of every target",
+      "ops": [{ "op": "replace", "path": "Makefile", "find": "NODE ?= node", "with": "NODE ?= node --no-warnings" }],
+      "expect_affected": ["test/schema.test.js", "test/version.test.js", "test/index.test.js"]
+    },
+    {
+      "name": "docs-edit",
+      "description": "control: a prerequisite of an unrelated target (docs/index.html)",
+      "ops": [{ "op": "append", "path": "docs/src/index.md", "text": "\nMore.\n" }]
+    },
+    {
+      "name": "other-edit",
+      "description": "control: a plain source file",
+      "ops": [{ "op": "append", "path": "src/other.js", "text": "\n// edited\n" }]
+    }
+  ]
+}

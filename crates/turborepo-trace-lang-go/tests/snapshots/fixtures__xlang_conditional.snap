@@ -1,0 +1,214 @@
+---
+source: crates/turborepo-trace-lang-go/tests/fixtures.rs
+expression: json
+---
+{
+  "version": 1,
+  "base": "<fixture>",
+  "entries": [
+    {
+      "path": "main.go",
+      "files": [
+        "conf/linux.conf",
+        "conf_linux.go",
+        "go.mod",
+        "main.go"
+      ]
+    }
+  ],
+  "files": [
+    {
+      "path": "conf/linux.conf",
+      "reasons": [
+        "asset"
+      ],
+      "parents": [
+        "conf_linux.go"
+      ],
+      "parsed": false
+    },
+    {
+      "path": "conf_linux.go",
+      "reasons": [
+        "dependency"
+      ],
+      "parents": [
+        "main.go"
+      ],
+      "parsed": true,
+      "lang": "go"
+    },
+    {
+      "path": "go.mod",
+      "reasons": [
+        "manifest"
+      ],
+      "parents": [
+        "conf_linux.go",
+        "main.go"
+      ],
+      "parsed": false
+    },
+    {
+      "path": "main.go",
+      "reasons": [
+        "initial",
+        "dependency"
+      ],
+      "parents": [
+        "conf_linux.go"
+      ],
+      "parsed": true,
+      "lang": "go"
+    }
+  ],
+  "edges": [
+    {
+      "from": "conf_linux.go",
+      "kind": "package",
+      "phase": "build",
+      "flags": [],
+      "spec": "package",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "glob",
+        "pattern": "*.go",
+        "matches": [
+          "main.go"
+        ],
+        "truncated": false
+      }
+    },
+    {
+      "from": "conf_linux.go",
+      "kind": "manifest",
+      "phase": "build",
+      "flags": [],
+      "spec": "go.mod",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "go.mod"
+      }
+    },
+    {
+      "from": "conf_linux.go",
+      "kind": "import",
+      "phase": "build",
+      "flags": [
+        "conditional"
+      ],
+      "spec": "os",
+      "span": [
+        39,
+        43
+      ],
+      "line": 5,
+      "target": {
+        "type": "builtin",
+        "name": "os"
+      }
+    },
+    {
+      "from": "conf_linux.go",
+      "kind": "fs_read",
+      "phase": "runtime",
+      "flags": [
+        "conditional"
+      ],
+      "spec": "conf/linux.conf",
+      "span": [
+        91,
+        108
+      ],
+      "line": 8,
+      "target": {
+        "type": "file",
+        "path": "conf/linux.conf"
+      },
+      "uncertainty": "cwd_dependent"
+    },
+    {
+      "from": "main.go",
+      "kind": "package",
+      "phase": "build",
+      "flags": [],
+      "spec": "package",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "glob",
+        "pattern": "*.go",
+        "matches": [
+          "conf_linux.go"
+        ],
+        "truncated": false
+      }
+    },
+    {
+      "from": "main.go",
+      "kind": "manifest",
+      "phase": "build",
+      "flags": [],
+      "spec": "go.mod",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "go.mod"
+      }
+    },
+    {
+      "from": "main.go",
+      "kind": "import",
+      "phase": "build",
+      "flags": [],
+      "spec": "fmt",
+      "span": [
+        81,
+        86
+      ],
+      "line": 4,
+      "target": {
+        "type": "builtin",
+        "name": "fmt"
+      }
+    }
+  ],
+  "uncertainties": [
+    {
+      "file": "conf_linux.go",
+      "kind": "cwd_dependent",
+      "detail": "conf/linux.conf is relative to the working directory",
+      "spec": "conf/linux.conf",
+      "span": [
+        91,
+        108
+      ],
+      "line": 8,
+      "col": 22
+    }
+  ],
+  "symlinks": {},
+  "stats": {
+    "entries": 1,
+    "files": 4,
+    "parsed_files": 2,
+    "edges": 7,
+    "uncertainties": 1
+  }
+}

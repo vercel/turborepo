@@ -1,0 +1,54 @@
+name: Quality
+on:
+  pull_request:
+    paths:
+      - 'packages/**'
+  workflow_call:
+
+env:
+  CI: true
+
+jobs:
+  metadata:
+    name: Compute shards
+    runs-on: ubuntu-latest
+    outputs:
+      shards: ${{ steps.shards.outputs.shards }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: shards
+        run: node .github/scripts/shards.mjs >> "$GITHUB_OUTPUT"
+
+  # The unit tests: a reusable workflow called once per shard computed by `metadata`.
+  test-packages:
+    name: Test packages
+    needs: [metadata]
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: ${{ fromJson(needs.metadata.outputs.shards) }}
+    uses: ./.github/workflows/checks.yml
+    with:
+      shard: ${{ toJson(matrix.shard) }}
+    secrets: inherit
+
+  e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/install
+      - run: pnpm --filter @acme/e2e test
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/install
+      - run: pnpm check-format
+
+  summary:
+    if: always()
+    needs: [test-packages, e2e, lint]
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "done"

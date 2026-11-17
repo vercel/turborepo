@@ -1,0 +1,39 @@
+{
+  "description": "package.json `exports` of a workspace package decides which file a subpath import loads.",
+  "mutations": [
+    {
+      "name": "repoint-export",
+      "description": "point ./feature at feature-v2.js",
+      "ops": [
+        {
+          "op": "replace",
+          "path": "packages/lib/package.json",
+          "find": "./src/feature-v1.js",
+          "with": "./src/feature-v2.js"
+        }
+      ]
+    },
+    {
+      "name": "edit-v1",
+      "description": "modify the exported file",
+      "ops": [
+        {
+          "op": "append",
+          "path": "packages/lib/src/feature-v1.js",
+          "text": "\n// edited\n"
+        }
+      ]
+    },
+    {
+      "name": "edit-v2",
+      "description": "modify the file not (yet) exported",
+      "ops": [
+        {
+          "op": "append",
+          "path": "packages/lib/src/feature-v2.js",
+          "text": "\n// edited\n"
+        }
+      ]
+    }
+  ]
+}

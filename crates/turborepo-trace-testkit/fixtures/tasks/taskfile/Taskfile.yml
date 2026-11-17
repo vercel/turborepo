@@ -1,0 +1,49 @@
+version: '3'
+
+vars:
+  OUT: dist
+  GIT_SHA:
+    sh: git rev-parse HEAD
+
+env:
+  NODE_ENV: production
+
+dotenv: ['.env']
+
+includes:
+  docs: ./docs
+  lib:
+    taskfile: ./lib/Tasks.yml
+    dir: ./lib
+
+tasks:
+  default:
+    deps: [build]
+
+  gen:
+    desc: Generate the API client.
+    cmds:
+      - node scripts/gen.js schema/api.json > src/generated/client.js
+    sources:
+      - schema/*.json
+      - scripts/gen.js
+      - exclude: schema/draft.json
+    generates:
+      - src/generated/client.js
+
+  build:
+    deps: [gen]
+    cmds:
+      - task: lib:compile
+      - cmd: tsc -p tsconfig.json --outDir {{.OUT}}
+      - echo {{.GIT_SHA}}
+    sources: ['src/**/*.ts']
+    generates: ['{{.OUT}}/**']
+
+  copy:
+    aliases: [cp]
+    cmds:
+      - for: [a.txt, b.txt]
+        cmd: cp assets/{{.ITEM}} {{.OUT}}/{{.ITEM}}
+
+  fmt: prettier --write src

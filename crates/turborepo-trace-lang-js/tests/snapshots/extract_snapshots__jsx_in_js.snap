@@ -1,0 +1,8 @@
+---
+source: crates/turborepo-trace-lang-js/tests/extract_snapshots.rs
+expression: "render(\"jsx_in_js.js\")"
+---
+2:1 import "react"
+    span: import React from 'react'
+6:25 require "./helper"
+    span: require('./helper')

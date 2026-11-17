@@ -1,0 +1,176 @@
+---
+source: crates/turborepo-trace-tasks/tests/codegen.rs
+expression: family(stringify! (python))
+---
+$ datamodel-codegen
+# datamodel-codegen [datamodel-codegen] Full
+{
+  "inputs": [
+    "schemas/address.json",
+    "schemas/user.json"
+  ],
+  "outputs": [
+    {
+      "path": "app/models.py",
+      "kind": "generated"
+    }
+  ],
+  "configs": [
+    "pyproject.toml"
+  ],
+  "memberships": [
+    {
+      "dir": "templates",
+      "pattern": "**",
+      "reason": "datamodel-codegen templates"
+    }
+  ],
+  "toolchain": [
+    {
+      "ecosystem": "pypi",
+      "name": "datamodel-code-generator"
+    }
+  ]
+}
+
+$ datamodel-codegen --input schemas/user.json --input-file-type jsonschema --output app/user.py
+# datamodel-codegen [datamodel-codegen] Full
+{
+  "inputs": [
+    "schemas/address.json",
+    "schemas/user.json"
+  ],
+  "outputs": [
+    {
+      "path": "app/user.py",
+      "kind": "generated"
+    }
+  ],
+  "toolchain": [
+    {
+      "ecosystem": "pypi",
+      "name": "datamodel-code-generator"
+    }
+  ]
+}
+
+$ uv run datamodel-codegen --url https://example.com/schema.json --output remote.py
+# datamodel-codegen [datamodel-codegen] Partial
+{
+  "outputs": [
+    {
+      "path": "remote.py",
+      "kind": "generated"
+    }
+  ],
+  "configs": [
+    "pyproject.toml"
+  ],
+  "memberships": [
+    {
+      "dir": ".",
+      "pattern": "**",
+      "reason": "`datamodel-codegen` not fully recognized"
+    },
+    {
+      "dir": ".",
+      "pattern": "**",
+      "reason": "code generator config not fully known"
+    }
+  ],
+  "toolchain": [
+    {
+      "ecosystem": "pypi",
+      "name": "datamodel-code-generator"
+    },
+    {
+      "ecosystem": "pypi",
+      "name": "uv"
+    }
+  ],
+  "uncertainties": [
+    {
+      "kind": "env_dependent",
+      "detail": "datamodel-codegen remote input `https://example.com/schema.json`"
+    }
+  ]
+}
+
+$ strawberry export-schema app.schema:schema --output schema.graphql
+# strawberry [strawberry] Full
+{
+  "outputs": [
+    {
+      "path": "schema.graphql",
+      "kind": "generated"
+    }
+  ],
+  "entries": [
+    {
+      "path": "app/schema.py",
+      "lang": "python"
+    }
+  ],
+  "toolchain": [
+    {
+      "ecosystem": "pypi",
+      "name": "strawberry-graphql"
+    }
+  ]
+}
+
+$ strawberry codegen --schema app.schema -o gen -p typescript queries/q.graphql
+# strawberry [strawberry] Full
+{
+  "inputs": [
+    "queries/q.graphql"
+  ],
+  "outputs": [
+    {
+      "path": "gen",
+      "kind": "generated"
+    }
+  ],
+  "entries": [
+    {
+      "path": "app/schema.py",
+      "lang": "python"
+    }
+  ],
+  "toolchain": [
+    {
+      "ecosystem": "pypi",
+      "name": "strawberry-graphql"
+    }
+  ]
+}
+
+$ python -m grpc_tools.protoc -I protos --python_out=app/gen --grpc_python_out=app/gen protos/svc.proto
+# python [python] Full
+{
+  "inputs": [
+    "protos/svc.proto"
+  ],
+  "outputs": [
+    {
+      "path": "app/gen",
+      "pattern": "**/*_pb2.py",
+      "kind": "generated"
+    },
+    {
+      "path": "app/gen",
+      "pattern": "**/*_pb2_grpc.py",
+      "kind": "generated"
+    }
+  ],
+  "toolchain": [
+    {
+      "ecosystem": "pypi",
+      "name": "grpcio-tools"
+    },
+    {
+      "ecosystem": "system",
+      "name": "python"
+    }
+  ]
+}

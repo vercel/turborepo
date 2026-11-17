@@ -25,7 +25,9 @@ pub(crate) fn cli_overrides_from_args(args: &Args) -> Result<ConfigurationOption
             .and_then(|execution_args| execution_args.env_mode.map(Into::into)),
         cache_dir: args
             .execution_args()
-            .and_then(|execution_args| execution_args.cache_dir.clone().map(Into::into)),
+            .and_then(|execution_args| execution_args.cache_dir.clone())
+            .or_else(|| args.trace_affected_args()?.cache_dir.clone())
+            .map(Into::into),
         root_turbo_json_path: args
             .root_turbo_json
             .clone()
@@ -44,6 +46,7 @@ pub(crate) fn cli_overrides_from_args(args: &Args) -> Result<ConfigurationOption
         cache: args
             .run_args()
             .and_then(|run_args| run_args.cache.as_deref())
+            .or_else(|| args.trace_affected_args()?.cache.as_deref())
             .map(|cache| cache.parse())
             .transpose()?,
         run_summary: args.run_args().and_then(|run_args| run_args.summarize()),

@@ -1,0 +1,12 @@
+{
+  "name": "format-deps",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "fmt-select": "oxfmt --write --ignore-path .gitignore --no-error-on-unmatched-pattern",
+    "fmt": "oxfmt .",
+    "fmt:all": "pnpm fmt-select \"**/*.{js,ts,json}\"",
+    "fmt:check": "oxfmt --check .",
+    "lint:fix": "oxlint --fix"
+  }
+}

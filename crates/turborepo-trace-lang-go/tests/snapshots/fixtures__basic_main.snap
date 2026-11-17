@@ -1,0 +1,1193 @@
+---
+source: crates/turborepo-trace-lang-go/tests/fixtures.rs
+expression: json
+---
+{
+  "version": 1,
+  "base": "<fixture>",
+  "entries": [
+    {
+      "path": "main.go",
+      "files": [
+        "config.json",
+        "go.mod",
+        "go.sum",
+        "internal/cgo/cgo.go",
+        "internal/cgo/native.c",
+        "internal/cgo/native.h",
+        "internal/util/asm_amd64.s",
+        "internal/util/util.go",
+        "internal/util/util_linux.go",
+        "lib/go.mod",
+        "lib/lib.go",
+        "main.go",
+        "modcache/github.com/!upper/dep@v1.2.0/go.mod",
+        "modcache/github.com/!upper/dep@v1.2.0/sub/sub.go",
+        "modcache/golang.org/x/old@v0.1.0/go.mod",
+        "modcache/golang.org/x/old@v0.1.0/thing/thing.go",
+        "static/.keep",
+        "static/a.txt",
+        "tmpl/page.tmpl",
+        "version.go"
+      ]
+    }
+  ],
+  "files": [
+    {
+      "path": "config.json",
+      "reasons": [
+        "asset"
+      ],
+      "parents": [
+        "main.go"
+      ],
+      "parsed": false
+    },
+    {
+      "path": "go.mod",
+      "reasons": [
+        "manifest"
+      ],
+      "parents": [
+        "internal/cgo/cgo.go",
+        "internal/util/util.go",
+        "internal/util/util_linux.go",
+        "main.go",
+        "version.go"
+      ],
+      "parsed": false
+    },
+    {
+      "path": "go.sum",
+      "reasons": [
+        "manifest"
+      ],
+      "parents": [
+        "internal/cgo/cgo.go",
+        "internal/util/util.go",
+        "internal/util/util_linux.go",
+        "lib/lib.go",
+        "main.go",
+        "modcache/github.com/!upper/dep@v1.2.0/sub/sub.go",
+        "modcache/golang.org/x/old@v0.1.0/thing/thing.go",
+        "version.go"
+      ],
+      "parsed": false
+    },
+    {
+      "path": "internal/cgo/cgo.go",
+      "reasons": [
+        "dependency"
+      ],
+      "parents": [
+        "main.go"
+      ],
+      "parsed": true,
+      "lang": "go"
+    },
+    {
+      "path": "internal/cgo/native.c",
+      "reasons": [
+        "dependency"
+      ],
+      "parents": [
+        "internal/cgo/cgo.go",
+        "main.go"
+      ],
+      "parsed": false
+    },
+    {
+      "path": "internal/cgo/native.h",
+      "reasons": [
+        "dependency"
+      ],
+      "parents": [
+        "internal/cgo/cgo.go",
+        "main.go"
+      ],
+      "parsed": false
+    },
+    {
+      "path": "internal/util/asm_amd64.s",
+      "reasons": [
+        "dependency"
+      ],
+      "parents": [
+        "internal/util/util.go",
+        "internal/util/util_linux.go",
+        "main.go"
+      ],
+      "parsed": false
+    },
+    {
+      "path": "internal/util/util.go",
+      "reasons": [
+        "dependency"
+      ],
+      "parents": [
+        "internal/util/util_linux.go",
+        "main.go"
+      ],
+      "parsed": true,
+      "lang": "go"
+    },
+    {
+      "path": "internal/util/util_linux.go",
+      "reasons": [
+        "dependency"
+      ],
+      "parents": [
+        "internal/util/util.go",
+        "main.go"
+      ],
+      "parsed": true,
+      "lang": "go"
+    },
+    {
+      "path": "lib/go.mod",
+      "reasons": [
+        "manifest"
+      ],
+      "parents": [
+        "internal/cgo/cgo.go",
+        "internal/util/util.go",
+        "internal/util/util_linux.go",
+        "lib/lib.go",
+        "main.go",
+        "modcache/github.com/!upper/dep@v1.2.0/sub/sub.go",
+        "modcache/golang.org/x/old@v0.1.0/thing/thing.go",
+        "version.go"
+      ],
+      "parsed": false
+    },
+    {
+      "path": "lib/lib.go",
+      "reasons": [
+        "dependency"
+      ],
+      "parents": [
+        "main.go"
+      ],
+      "parsed": true,
+      "lang": "go"
+    },
+    {
+      "path": "main.go",
+      "reasons": [
+        "initial",
+        "dependency"
+      ],
+      "parents": [
+        "version.go"
+      ],
+      "parsed": true,
+      "lang": "go"
+    },
+    {
+      "path": "modcache/github.com/!upper/dep@v1.2.0/go.mod",
+      "reasons": [
+        "manifest"
+      ],
+      "parents": [
+        "main.go",
+        "modcache/github.com/!upper/dep@v1.2.0/sub/sub.go"
+      ],
+      "parsed": false
+    },
+    {
+      "path": "modcache/github.com/!upper/dep@v1.2.0/sub/sub.go",
+      "reasons": [
+        "dependency"
+      ],
+      "parents": [
+        "main.go"
+      ],
+      "parsed": true,
+      "lang": "go"
+    },
+    {
+      "path": "modcache/golang.org/x/old@v0.1.0/go.mod",
+      "reasons": [
+        "manifest"
+      ],
+      "parents": [
+        "modcache/github.com/!upper/dep@v1.2.0/sub/sub.go",
+        "modcache/golang.org/x/old@v0.1.0/thing/thing.go"
+      ],
+      "parsed": false
+    },
+    {
+      "path": "modcache/golang.org/x/old@v0.1.0/thing/thing.go",
+      "reasons": [
+        "dependency"
+      ],
+      "parents": [
+        "modcache/github.com/!upper/dep@v1.2.0/sub/sub.go"
+      ],
+      "parsed": true,
+      "lang": "go"
+    },
+    {
+      "path": "static/.keep",
+      "reasons": [
+        "asset"
+      ],
+      "parents": [
+        "main.go"
+      ],
+      "parsed": false
+    },
+    {
+      "path": "static/a.txt",
+      "reasons": [
+        "asset"
+      ],
+      "parents": [
+        "main.go"
+      ],
+      "parsed": false
+    },
+    {
+      "path": "tmpl/page.tmpl",
+      "reasons": [
+        "asset"
+      ],
+      "parents": [
+        "main.go"
+      ],
+      "parsed": false
+    },
+    {
+      "path": "version.go",
+      "reasons": [
+        "dependency"
+      ],
+      "parents": [
+        "main.go"
+      ],
+      "parsed": true,
+      "lang": "go"
+    }
+  ],
+  "edges": [
+    {
+      "from": "internal/cgo/cgo.go",
+      "kind": "package",
+      "phase": "build",
+      "flags": [],
+      "spec": "package (cgo, assembly and object files)",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "glob",
+        "pattern": "internal/cgo/*.[chsS]*",
+        "matches": [
+          "internal/cgo/native.c",
+          "internal/cgo/native.h"
+        ],
+        "truncated": false
+      }
+    },
+    {
+      "from": "internal/cgo/cgo.go",
+      "kind": "manifest",
+      "phase": "build",
+      "flags": [],
+      "spec": "go.mod",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "go.mod"
+      }
+    },
+    {
+      "from": "internal/cgo/cgo.go",
+      "kind": "manifest",
+      "phase": "build",
+      "flags": [],
+      "spec": "go.sum",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "go.sum"
+      }
+    },
+    {
+      "from": "internal/cgo/cgo.go",
+      "kind": "manifest",
+      "phase": "build",
+      "flags": [],
+      "spec": "go.mod",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "lib/go.mod"
+      }
+    },
+    {
+      "from": "internal/cgo/cgo.go",
+      "kind": "import",
+      "phase": "build",
+      "flags": [],
+      "spec": "stdlib.h",
+      "span": [
+        46,
+        54
+      ],
+      "line": 4,
+      "target": {
+        "type": "builtin",
+        "name": "<stdlib.h>"
+      }
+    },
+    {
+      "from": "internal/cgo/cgo.go",
+      "kind": "import",
+      "phase": "build",
+      "flags": [],
+      "spec": "native.h",
+      "span": [
+        69,
+        77
+      ],
+      "line": 5,
+      "target": {
+        "type": "file",
+        "path": "internal/cgo/native.h"
+      }
+    },
+    {
+      "from": "internal/cgo/cgo.go",
+      "kind": "import",
+      "phase": "build",
+      "flags": [],
+      "spec": "C",
+      "span": [
+        86,
+        89
+      ],
+      "line": 6,
+      "target": {
+        "type": "builtin",
+        "name": "C"
+      }
+    },
+    {
+      "from": "internal/util/util.go",
+      "kind": "package",
+      "phase": "build",
+      "flags": [],
+      "spec": "package (cgo, assembly and object files)",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "glob",
+        "pattern": "internal/util/*.[chsS]*",
+        "matches": [
+          "internal/util/asm_amd64.s"
+        ],
+        "truncated": false
+      }
+    },
+    {
+      "from": "internal/util/util.go",
+      "kind": "package",
+      "phase": "build",
+      "flags": [],
+      "spec": "package",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "glob",
+        "pattern": "internal/util/*.go",
+        "matches": [
+          "internal/util/util_linux.go"
+        ],
+        "truncated": false
+      }
+    },
+    {
+      "from": "internal/util/util.go",
+      "kind": "manifest",
+      "phase": "build",
+      "flags": [],
+      "spec": "go.mod",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "go.mod"
+      }
+    },
+    {
+      "from": "internal/util/util.go",
+      "kind": "manifest",
+      "phase": "build",
+      "flags": [],
+      "spec": "go.sum",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "go.sum"
+      }
+    },
+    {
+      "from": "internal/util/util.go",
+      "kind": "manifest",
+      "phase": "build",
+      "flags": [],
+      "spec": "go.mod",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "lib/go.mod"
+      }
+    },
+    {
+      "from": "internal/util/util.go",
+      "kind": "import",
+      "phase": "build",
+      "flags": [],
+      "spec": "strings",
+      "span": [
+        21,
+        30
+      ],
+      "line": 3,
+      "target": {
+        "type": "builtin",
+        "name": "strings"
+      }
+    },
+    {
+      "from": "internal/util/util_linux.go",
+      "kind": "package",
+      "phase": "build",
+      "flags": [],
+      "spec": "package (cgo, assembly and object files)",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "glob",
+        "pattern": "internal/util/*.[chsS]*",
+        "matches": [
+          "internal/util/asm_amd64.s"
+        ],
+        "truncated": false
+      }
+    },
+    {
+      "from": "internal/util/util_linux.go",
+      "kind": "package",
+      "phase": "build",
+      "flags": [],
+      "spec": "package",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "glob",
+        "pattern": "internal/util/*.go",
+        "matches": [
+          "internal/util/util.go"
+        ],
+        "truncated": false
+      }
+    },
+    {
+      "from": "internal/util/util_linux.go",
+      "kind": "manifest",
+      "phase": "build",
+      "flags": [],
+      "spec": "go.mod",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "go.mod"
+      }
+    },
+    {
+      "from": "internal/util/util_linux.go",
+      "kind": "manifest",
+      "phase": "build",
+      "flags": [],
+      "spec": "go.sum",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "go.sum"
+      }
+    },
+    {
+      "from": "internal/util/util_linux.go",
+      "kind": "manifest",
+      "phase": "build",
+      "flags": [],
+      "spec": "go.mod",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "lib/go.mod"
+      }
+    },
+    {
+      "from": "lib/lib.go",
+      "kind": "manifest",
+      "phase": "build",
+      "flags": [],
+      "spec": "go.sum",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "go.sum"
+      }
+    },
+    {
+      "from": "lib/lib.go",
+      "kind": "manifest",
+      "phase": "build",
+      "flags": [],
+      "spec": "go.mod",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "lib/go.mod"
+      }
+    },
+    {
+      "from": "main.go",
+      "kind": "package",
+      "phase": "build",
+      "flags": [],
+      "spec": "package",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "glob",
+        "pattern": "*.go",
+        "matches": [
+          "version.go"
+        ],
+        "truncated": false
+      }
+    },
+    {
+      "from": "main.go",
+      "kind": "import",
+      "phase": "build",
+      "flags": [],
+      "spec": "embed",
+      "span": [
+        114,
+        121
+      ],
+      "line": 5,
+      "target": {
+        "type": "builtin",
+        "name": "embed"
+      }
+    },
+    {
+      "from": "main.go",
+      "kind": "import",
+      "phase": "build",
+      "flags": [],
+      "spec": "fmt",
+      "span": [
+        123,
+        128
+      ],
+      "line": 6,
+      "target": {
+        "type": "builtin",
+        "name": "fmt"
+      }
+    },
+    {
+      "from": "main.go",
+      "kind": "import",
+      "phase": "build",
+      "flags": [],
+      "spec": "os",
+      "span": [
+        130,
+        134
+      ],
+      "line": 7,
+      "target": {
+        "type": "builtin",
+        "name": "os"
+      }
+    },
+    {
+      "from": "main.go",
+      "kind": "import",
+      "phase": "build",
+      "flags": [],
+      "spec": "example.com/basic/internal/cgo",
+      "span": [
+        137,
+        169
+      ],
+      "line": 9,
+      "target": {
+        "type": "glob",
+        "pattern": "internal/cgo/*.go",
+        "matches": [
+          "internal/cgo/cgo.go"
+        ],
+        "truncated": false
+      }
+    },
+    {
+      "from": "main.go",
+      "kind": "package",
+      "phase": "build",
+      "flags": [],
+      "spec": "package (cgo, assembly and object files)",
+      "span": [
+        137,
+        169
+      ],
+      "line": 9,
+      "target": {
+        "type": "glob",
+        "pattern": "internal/cgo/*.[chsS]*",
+        "matches": [
+          "internal/cgo/native.c",
+          "internal/cgo/native.h"
+        ],
+        "truncated": false
+      }
+    },
+    {
+      "from": "main.go",
+      "kind": "manifest",
+      "phase": "build",
+      "flags": [],
+      "spec": "go.mod",
+      "span": [
+        137,
+        169
+      ],
+      "line": 9,
+      "target": {
+        "type": "file",
+        "path": "go.mod"
+      }
+    },
+    {
+      "from": "main.go",
+      "kind": "manifest",
+      "phase": "build",
+      "flags": [],
+      "spec": "go.sum",
+      "span": [
+        137,
+        169
+      ],
+      "line": 9,
+      "target": {
+        "type": "file",
+        "path": "go.sum"
+      }
+    },
+    {
+      "from": "main.go",
+      "kind": "manifest",
+      "phase": "build",
+      "flags": [],
+      "spec": "go.mod",
+      "span": [
+        137,
+        169
+      ],
+      "line": 9,
+      "target": {
+        "type": "file",
+        "path": "lib/go.mod"
+      }
+    },
+    {
+      "from": "main.go",
+      "kind": "import",
+      "phase": "build",
+      "flags": [],
+      "spec": "example.com/basic/internal/util",
+      "span": [
+        171,
+        204
+      ],
+      "line": 10,
+      "target": {
+        "type": "glob",
+        "pattern": "internal/util/*.go",
+        "matches": [
+          "internal/util/util.go",
+          "internal/util/util_linux.go"
+        ],
+        "truncated": false
+      }
+    },
+    {
+      "from": "main.go",
+      "kind": "package",
+      "phase": "build",
+      "flags": [],
+      "spec": "package (cgo, assembly and object files)",
+      "span": [
+        171,
+        204
+      ],
+      "line": 10,
+      "target": {
+        "type": "glob",
+        "pattern": "internal/util/*.[chsS]*",
+        "matches": [
+          "internal/util/asm_amd64.s"
+        ],
+        "truncated": false
+      }
+    },
+    {
+      "from": "main.go",
+      "kind": "import",
+      "phase": "build",
+      "flags": [],
+      "spec": "example.com/lib",
+      "span": [
+        206,
+        223
+      ],
+      "line": 11,
+      "target": {
+        "type": "glob",
+        "pattern": "lib/*.go",
+        "matches": [
+          "lib/lib.go"
+        ],
+        "truncated": false
+      }
+    },
+    {
+      "from": "main.go",
+      "kind": "import",
+      "phase": "build",
+      "flags": [],
+      "spec": "github.com/Upper/dep/sub",
+      "span": [
+        229,
+        255
+      ],
+      "line": 12,
+      "target": {
+        "type": "glob",
+        "pattern": "modcache/github.com/!upper/dep@v1.2.0/sub/*.go",
+        "matches": [
+          "modcache/github.com/!upper/dep@v1.2.0/sub/sub.go"
+        ],
+        "truncated": false
+      }
+    },
+    {
+      "from": "main.go",
+      "kind": "manifest",
+      "phase": "build",
+      "flags": [],
+      "spec": "go.mod",
+      "span": [
+        229,
+        255
+      ],
+      "line": 12,
+      "target": {
+        "type": "file",
+        "path": "modcache/github.com/!upper/dep@v1.2.0/go.mod"
+      }
+    },
+    {
+      "from": "main.go",
+      "kind": "embed",
+      "phase": "build",
+      "flags": [],
+      "spec": "static/*",
+      "span": [
+        270,
+        278
+      ],
+      "line": 15,
+      "target": {
+        "type": "glob",
+        "pattern": "static/*",
+        "matches": [
+          "static/.keep",
+          "static/a.txt"
+        ],
+        "truncated": false
+      }
+    },
+    {
+      "from": "main.go",
+      "kind": "embed",
+      "phase": "build",
+      "flags": [],
+      "spec": "tmpl",
+      "span": [
+        309,
+        313
+      ],
+      "line": 18,
+      "target": {
+        "type": "glob",
+        "pattern": "tmpl",
+        "matches": [
+          "tmpl/page.tmpl"
+        ],
+        "truncated": false
+      }
+    },
+    {
+      "from": "main.go",
+      "kind": "embed",
+      "phase": "build",
+      "flags": [],
+      "spec": "missing/*.txt",
+      "span": [
+        347,
+        360
+      ],
+      "line": 21,
+      "target": {
+        "type": "unresolved"
+      },
+      "uncertainty": "unresolved_specifier"
+    },
+    {
+      "from": "main.go",
+      "kind": "fs_read",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "config.json",
+      "span": [
+        419,
+        432
+      ],
+      "line": 25,
+      "target": {
+        "type": "file",
+        "path": "config.json"
+      },
+      "uncertainty": "cwd_dependent"
+    },
+    {
+      "from": "modcache/github.com/!upper/dep@v1.2.0/sub/sub.go",
+      "kind": "import",
+      "phase": "build",
+      "flags": [],
+      "spec": "strings",
+      "span": [
+        23,
+        32
+      ],
+      "line": 4,
+      "target": {
+        "type": "builtin",
+        "name": "strings"
+      }
+    },
+    {
+      "from": "modcache/github.com/!upper/dep@v1.2.0/sub/sub.go",
+      "kind": "import",
+      "phase": "build",
+      "flags": [],
+      "spec": "golang.org/x/old/thing",
+      "span": [
+        35,
+        59
+      ],
+      "line": 6,
+      "target": {
+        "type": "glob",
+        "pattern": "modcache/golang.org/x/old@v0.1.0/thing/*.go",
+        "matches": [
+          "modcache/golang.org/x/old@v0.1.0/thing/thing.go"
+        ],
+        "truncated": false
+      }
+    },
+    {
+      "from": "modcache/github.com/!upper/dep@v1.2.0/sub/sub.go",
+      "kind": "manifest",
+      "phase": "build",
+      "flags": [],
+      "spec": "go.sum",
+      "span": [
+        35,
+        59
+      ],
+      "line": 6,
+      "target": {
+        "type": "file",
+        "path": "go.sum"
+      }
+    },
+    {
+      "from": "modcache/github.com/!upper/dep@v1.2.0/sub/sub.go",
+      "kind": "manifest",
+      "phase": "build",
+      "flags": [],
+      "spec": "go.mod",
+      "span": [
+        35,
+        59
+      ],
+      "line": 6,
+      "target": {
+        "type": "file",
+        "path": "lib/go.mod"
+      }
+    },
+    {
+      "from": "modcache/github.com/!upper/dep@v1.2.0/sub/sub.go",
+      "kind": "manifest",
+      "phase": "build",
+      "flags": [],
+      "spec": "go.mod",
+      "span": [
+        35,
+        59
+      ],
+      "line": 6,
+      "target": {
+        "type": "file",
+        "path": "modcache/github.com/!upper/dep@v1.2.0/go.mod"
+      }
+    },
+    {
+      "from": "modcache/github.com/!upper/dep@v1.2.0/sub/sub.go",
+      "kind": "manifest",
+      "phase": "build",
+      "flags": [],
+      "spec": "go.mod",
+      "span": [
+        35,
+        59
+      ],
+      "line": 6,
+      "target": {
+        "type": "file",
+        "path": "modcache/golang.org/x/old@v0.1.0/go.mod"
+      }
+    },
+    {
+      "from": "modcache/golang.org/x/old@v0.1.0/thing/thing.go",
+      "kind": "manifest",
+      "phase": "build",
+      "flags": [],
+      "spec": "go.sum",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "go.sum"
+      }
+    },
+    {
+      "from": "modcache/golang.org/x/old@v0.1.0/thing/thing.go",
+      "kind": "manifest",
+      "phase": "build",
+      "flags": [],
+      "spec": "go.mod",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "lib/go.mod"
+      }
+    },
+    {
+      "from": "modcache/golang.org/x/old@v0.1.0/thing/thing.go",
+      "kind": "manifest",
+      "phase": "build",
+      "flags": [],
+      "spec": "go.mod",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "modcache/golang.org/x/old@v0.1.0/go.mod"
+      }
+    },
+    {
+      "from": "version.go",
+      "kind": "package",
+      "phase": "build",
+      "flags": [],
+      "spec": "package",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "glob",
+        "pattern": "*.go",
+        "matches": [
+          "main.go"
+        ],
+        "truncated": false
+      }
+    },
+    {
+      "from": "version.go",
+      "kind": "manifest",
+      "phase": "build",
+      "flags": [],
+      "spec": "go.mod",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "go.mod"
+      }
+    },
+    {
+      "from": "version.go",
+      "kind": "manifest",
+      "phase": "build",
+      "flags": [],
+      "spec": "go.sum",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "go.sum"
+      }
+    },
+    {
+      "from": "version.go",
+      "kind": "manifest",
+      "phase": "build",
+      "flags": [],
+      "spec": "go.mod",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "lib/go.mod"
+      }
+    }
+  ],
+  "uncertainties": [
+    {
+      "file": "main.go",
+      "kind": "unresolved_specifier",
+      "detail": "//go:embed missing/*.txt: no matching files found",
+      "spec": "missing/*.txt",
+      "span": [
+        347,
+        360
+      ],
+      "line": 21,
+      "col": 12
+    },
+    {
+      "file": "main.go",
+      "kind": "cwd_dependent",
+      "detail": "config.json is relative to the working directory",
+      "spec": "config.json",
+      "span": [
+        419,
+        432
+      ],
+      "line": 25,
+      "col": 25
+    }
+  ],
+  "symlinks": {},
+  "stats": {
+    "entries": 1,
+    "files": 20,
+    "parsed_files": 8,
+    "edges": 51,
+    "uncertainties": 2
+  }
+}

@@ -1,0 +1,37 @@
+---
+source: crates/turborepo-trace-lang-js/tests/extract_snapshots.rs
+expression: "render(\"cjs.cjs\")"
+---
+3:12 require "fs"
+    span: require('fs')
+4:40 require "node:path"
+    span: require('node:path')
+5:15 require "./local"
+    span: require('./local')
+6:16 require "../parent/index.js"
+    span: require("../parent/index.js")
+7:13 require "./template"
+    span: require(`./template`)
+8:18 require "./resolved"
+    span: require.resolve('./resolved')
+9:19 require "./via-module"
+    span: module.require('./via-module')
+10:17 require "./chained"
+    span: require('./chained')
+11:15 require "./parenthesized"
+    span: require(('./parenthesized'))
+14:3 require "optional-dep" [optional]
+    span: require('optional-dep')
+15:39 require "optional-nested" [optional]
+    span: require('optional-nested')
+17:3 require "in-catch-not-optional"
+    span: require('in-catch-not-optional')
+21:13 require "<unknown>"
+    span: require(name)
+    uncertainty: computed_specifier "name"
+22:17 require "./plugins/*"
+    span: require('./plugins/' + plugin)
+    uncertainty: partial_specifier "plugin"
+23:15 require "./locale/*.json"
+    span: require(`./locale/${lang}.json`)
+    uncertainty: partial_specifier "lang"

@@ -1,0 +1,3 @@
+import strawberry
+
+schema = None

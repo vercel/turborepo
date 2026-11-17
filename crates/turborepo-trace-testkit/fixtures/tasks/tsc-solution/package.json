@@ -1,0 +1,15 @@
+{
+  "name": "tsc-solution",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "build:ts-debug": "tsc -b"
+  },
+  "devDependencies": {
+    "turbo": "2.0.0",
+    "typescript": "5.9.0"
+  }
+}

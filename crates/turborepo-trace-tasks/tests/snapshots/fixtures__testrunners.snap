@@ -1,0 +1,566 @@
+---
+source: crates/turborepo-trace-tasks/tests/fixtures.rs
+expression: family(stringify! (testrunners))
+---
+$ jest -c jest.unit.config.js
+# jest [jest] Full
+{
+  "inputs": [
+    "jest.config.cjs",
+    "jest.config.cts",
+    "jest.config.js",
+    "jest.config.json",
+    "jest.config.mjs",
+    "jest.config.mts",
+    "jest.config.ts"
+  ],
+  "configs": [
+    "jest.unit.config.js"
+  ],
+  "entries": [
+    {
+      "path": "jest.unit.config.js",
+      "lang": "js"
+    },
+    {
+      "path": "test/setup.ts",
+      "lang": "js"
+    }
+  ],
+  "memberships": [
+    {
+      "dir": "src",
+      "pattern": "**/*.{js,mjs,cjs,jsx,ts,mts,cts,tsx,json,node}",
+      "reason": "jest test files"
+    },
+    {
+      "dir": "src",
+      "pattern": "**/__mocks__/**",
+      "reason": "manual mocks (jest haste map)"
+    }
+  ],
+  "toolchain": [
+    {
+      "ecosystem": "npm",
+      "name": "jest"
+    },
+    {
+      "ecosystem": "npm",
+      "name": "jest-environment-node"
+    }
+  ],
+  "runs": [
+    {
+      "kind": "tests",
+      "framework": "jest",
+      "dir": "src"
+    }
+  ],
+  "definition": [
+    "jest.unit.config.js"
+  ]
+}
+
+$ jest --config '{"rootDir":"."}'
+# jest [jest] Partial
+{
+  "memberships": [
+    {
+      "dir": ".",
+      "pattern": "**",
+      "reason": "`jest` not fully recognized"
+    },
+    {
+      "dir": ".",
+      "pattern": "**",
+      "reason": "jest inline config"
+    }
+  ],
+  "toolchain": [
+    {
+      "ecosystem": "npm",
+      "name": "jest"
+    }
+  ],
+  "uncertainties": [
+    {
+      "kind": "parse_incomplete",
+      "detail": "jest --config with inline JSON"
+    }
+  ],
+  "runs": [
+    {
+      "kind": "tests",
+      "framework": "jest",
+      "dir": "."
+    }
+  ]
+}
+
+$ vitest run
+# vitest [vitest] Full
+{
+  "inputs": [
+    "vite.config.cjs",
+    "vite.config.cts",
+    "vite.config.js",
+    "vite.config.mjs",
+    "vite.config.mts",
+    "vite.config.ts",
+    "vitest.config.cjs",
+    "vitest.config.cts",
+    "vitest.config.js",
+    "vitest.config.mjs",
+    "vitest.config.mts",
+    "vitest.config.ts",
+    "vitest.workspace.js",
+    "vitest.workspace.json",
+    "vitest.workspace.ts"
+  ],
+  "configs": [
+    "vitest.config.ts"
+  ],
+  "entries": [
+    {
+      "path": "test/setup.ts",
+      "lang": "js"
+    },
+    {
+      "path": "vitest.config.ts",
+      "lang": "js"
+    }
+  ],
+  "memberships": [
+    {
+      "dir": "src",
+      "pattern": "**/*.spec.ts",
+      "reason": "vitest test files"
+    }
+  ],
+  "toolchain": [
+    {
+      "ecosystem": "npm",
+      "name": "vitest"
+    }
+  ],
+  "runs": [
+    {
+      "kind": "tests",
+      "framework": "vitest",
+      "dir": "."
+    }
+  ],
+  "definition": [
+    "vitest.config.ts"
+  ]
+}
+
+$ vitest --config vitest.config.ts --dir src
+# vitest [vitest] Full
+{
+  "inputs": [
+    "vite.config.cjs",
+    "vite.config.cts",
+    "vite.config.js",
+    "vite.config.mjs",
+    "vite.config.mts",
+    "vite.config.ts",
+    "vitest.config.cjs",
+    "vitest.config.cts",
+    "vitest.config.js",
+    "vitest.config.mjs",
+    "vitest.config.mts",
+    "vitest.config.ts",
+    "vitest.workspace.js",
+    "vitest.workspace.json",
+    "vitest.workspace.ts"
+  ],
+  "configs": [
+    "vitest.config.ts"
+  ],
+  "entries": [
+    {
+      "path": "test/setup.ts",
+      "lang": "js"
+    },
+    {
+      "path": "vitest.config.ts",
+      "lang": "js"
+    }
+  ],
+  "memberships": [
+    {
+      "dir": "src",
+      "pattern": "**",
+      "reason": "vitest --dir"
+    },
+    {
+      "dir": "src",
+      "pattern": "**/*.spec.ts",
+      "reason": "vitest test files"
+    }
+  ],
+  "toolchain": [
+    {
+      "ecosystem": "npm",
+      "name": "vitest"
+    }
+  ],
+  "runs": [
+    {
+      "kind": "tests",
+      "framework": "vitest",
+      "dir": "."
+    },
+    {
+      "kind": "tests",
+      "framework": "vitest",
+      "dir": "src"
+    }
+  ],
+  "definition": [
+    "vitest.config.ts"
+  ]
+}
+
+$ pytest -c pytest.ini tests/test_a.py::test_x
+# pytest [pytest] Full
+{
+  "inputs": [
+    ".pytest.ini",
+    "pyproject.toml",
+    "pytest.ini",
+    "setup.cfg",
+    "tox.ini"
+  ],
+  "configs": [
+    "pytest.ini"
+  ],
+  "entries": [
+    {
+      "path": "tests/test_a.py",
+      "lang": "python"
+    }
+  ],
+  "memberships": [
+    {
+      "dir": ".",
+      "pattern": "**/*_test.py",
+      "reason": "pytest test files"
+    },
+    {
+      "dir": ".",
+      "pattern": "**/test_*.py",
+      "reason": "pytest test files"
+    }
+  ],
+  "toolchain": [
+    {
+      "ecosystem": "pypi",
+      "name": "pytest"
+    }
+  ],
+  "runs": [
+    {
+      "kind": "tests",
+      "framework": "pytest",
+      "dir": "tests"
+    },
+    {
+      "kind": "tests",
+      "framework": "pytest",
+      "dir": "tests/test_a.py"
+    }
+  ],
+  "definition": [
+    "pytest.ini"
+  ]
+}
+
+$ go test ./...
+# go [gotest] Full
+{
+  "configs": [
+    "go.mod",
+    "go.sum"
+  ],
+  "memberships": [
+    {
+      "dir": ".",
+      "pattern": "**/*.go",
+      "reason": "go packages (./...)"
+    },
+    {
+      "dir": ".",
+      "pattern": "**/*.{c,h,s,S,cc,cpp,hpp,m,swig,syso}",
+      "reason": "go package sources"
+    },
+    {
+      "dir": ".",
+      "pattern": "**/testdata/**",
+      "reason": "go test testdata"
+    }
+  ],
+  "toolchain": [
+    {
+      "ecosystem": "system",
+      "name": "go"
+    }
+  ],
+  "runs": [
+    {
+      "kind": "tests",
+      "framework": "gotest",
+      "dir": "."
+    }
+  ]
+}
+
+$ go test -run TestX ./pkg -coverprofile=cover.out
+# go [gotest] Full
+{
+  "outputs": [
+    {
+      "path": "cover.out",
+      "kind": "artifact"
+    }
+  ],
+  "configs": [
+    "go.mod",
+    "go.sum"
+  ],
+  "entries": [
+    {
+      "path": "pkg",
+      "lang": "go"
+    }
+  ],
+  "memberships": [
+    {
+      "dir": "pkg",
+      "pattern": "*.go",
+      "reason": "go package directory"
+    },
+    {
+      "dir": "pkg/testdata",
+      "pattern": "**",
+      "reason": "go test testdata"
+    }
+  ],
+  "toolchain": [
+    {
+      "ecosystem": "system",
+      "name": "go"
+    }
+  ],
+  "runs": [
+    {
+      "kind": "tests",
+      "framework": "gotest",
+      "dir": "pkg"
+    }
+  ]
+}
+
+$ cargo test --manifest-path crate/Cargo.toml
+# cargo [cargo] Full
+{
+  "inputs": [
+    "crate/.cargo/config",
+    "crate/.cargo/config.toml",
+    "crate/.clippy.toml",
+    "crate/.rustfmt.toml",
+    "crate/clippy.toml",
+    "crate/rust-toolchain",
+    "crate/rust-toolchain.toml",
+    "crate/rustfmt.toml"
+  ],
+  "configs": [
+    "crate/Cargo.lock",
+    "crate/Cargo.toml"
+  ],
+  "memberships": [
+    {
+      "dir": "crate",
+      "pattern": "**/*.rs",
+      "reason": "cargo workspace sources"
+    },
+    {
+      "dir": "crate",
+      "pattern": "**/Cargo.toml",
+      "reason": "cargo workspace manifests"
+    },
+    {
+      "dir": "crate",
+      "pattern": "**/{build.rs,*.proto,*.c,*.h}",
+      "reason": "cargo build inputs"
+    },
+    {
+      "dir": "crate",
+      "pattern": "**/{tests,benches,fixtures,testdata,snapshots}/**",
+      "reason": "cargo test data"
+    }
+  ],
+  "toolchain": [
+    {
+      "ecosystem": "system",
+      "name": "cargo"
+    }
+  ],
+  "runs": [
+    {
+      "kind": "tests",
+      "framework": "cargo-test",
+      "dir": "crate"
+    }
+  ]
+}
+
+$ mocha 'test/**/*.spec.js' -r ./test/setup.ts
+# mocha [test-runner] Full
+{
+  "entries": [
+    {
+      "path": "test/setup.ts",
+      "lang": "js"
+    }
+  ],
+  "memberships": [
+    {
+      "dir": "test",
+      "pattern": "**/*.spec.js",
+      "reason": "mocha test files"
+    }
+  ],
+  "toolchain": [
+    {
+      "ecosystem": "npm",
+      "name": "mocha"
+    }
+  ],
+  "runs": [
+    {
+      "kind": "tests",
+      "framework": "mocha",
+      "dir": "."
+    }
+  ]
+}
+
+$ c8 --reporter=lcov vitest run
+# c8 [coverage] Full
+{
+  "inputs": [
+    ".c8rc",
+    ".c8rc.json",
+    ".nycrc",
+    ".nycrc.json",
+    ".nycrc.yml",
+    "vite.config.cjs",
+    "vite.config.cts",
+    "vite.config.js",
+    "vite.config.mjs",
+    "vite.config.mts",
+    "vite.config.ts",
+    "vitest.config.cjs",
+    "vitest.config.cts",
+    "vitest.config.js",
+    "vitest.config.mjs",
+    "vitest.config.mts",
+    "vitest.config.ts",
+    "vitest.workspace.js",
+    "vitest.workspace.json",
+    "vitest.workspace.ts"
+  ],
+  "outputs": [
+    {
+      "path": ".nyc_output",
+      "kind": "artifact"
+    },
+    {
+      "path": "coverage",
+      "kind": "artifact"
+    }
+  ],
+  "configs": [
+    "vitest.config.ts"
+  ],
+  "entries": [
+    {
+      "path": "test/setup.ts",
+      "lang": "js"
+    },
+    {
+      "path": "vitest.config.ts",
+      "lang": "js"
+    }
+  ],
+  "memberships": [
+    {
+      "dir": "src",
+      "pattern": "**/*.spec.ts",
+      "reason": "vitest test files"
+    }
+  ],
+  "toolchain": [
+    {
+      "ecosystem": "npm",
+      "name": "c8"
+    },
+    {
+      "ecosystem": "npm",
+      "name": "vitest"
+    }
+  ],
+  "runs": [
+    {
+      "kind": "tests",
+      "framework": "vitest",
+      "dir": "."
+    }
+  ],
+  "definition": [
+    "vitest.config.ts"
+  ]
+}
+
+$ playwright test
+# playwright [playwright] Partial
+{
+  "memberships": [
+    {
+      "dir": ".",
+      "pattern": "**",
+      "reason": "`playwright` not fully recognized"
+    },
+    {
+      "dir": ".",
+      "pattern": "**",
+      "reason": "playwright tests reach the app over HTTP"
+    },
+    {
+      "dir": ".",
+      "pattern": "**/*.{spec,test}.{js,ts,mjs,mts}",
+      "reason": "playwright default tests"
+    }
+  ],
+  "toolchain": [
+    {
+      "ecosystem": "npm",
+      "name": "@playwright/test"
+    }
+  ],
+  "uncertainties": [
+    {
+      "kind": "unknown_command",
+      "detail": "playwright tests reach the app over HTTP"
+    }
+  ],
+  "runs": [
+    {
+      "kind": "tests",
+      "framework": "playwright",
+      "dir": "."
+    }
+  ]
+}

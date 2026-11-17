@@ -1,0 +1,3 @@
+module.exports=[46927,a=>{"use strict";var b=a.i(7997),c=a.i(78562);a.s(["default",0,function({children:a}){return(0,b.jsxs)("div",{className:"flex gap-4",children:[(0,b.jsx)(c.Sidebar,{}),(0,b.jsx)("section",{children:a})]})}])},22882,function(a){a.n(a.i(46927))},56312,a=>{"use strict";let b=(0,a.i(11857).registerClientReference)(function(){throw Error("Attempted to call Sidebar() from the server but Sidebar is on the client. It's not possible to invoke a client function from the server, it can only be rendered as a Component or passed to props of a Client Component.")},"[project]/components/Sidebar.tsx","Sidebar");a.s(["Sidebar",0,b])},78562,a=>{"use strict";var b=a.i(56312);a.n(b)}];
+
+//# sourceMappingURL=_0r-n3hylxnh_0._.js.map

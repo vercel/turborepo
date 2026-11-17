@@ -1,0 +1,231 @@
+---
+source: crates/turborepo-trace-lang-go/tests/fixtures.rs
+expression: json
+---
+{
+  "version": 1,
+  "base": "<fixture>",
+  "entries": [
+    {
+      "path": "main.go",
+      "files": [
+        "go.mod",
+        "go.sum",
+        "main.go",
+        "vendor/github.com/v/dep/pkg/pkg.go",
+        "vendor/modules.txt"
+      ]
+    }
+  ],
+  "files": [
+    {
+      "path": "go.mod",
+      "reasons": [
+        "manifest"
+      ],
+      "parents": [
+        "main.go",
+        "vendor/github.com/v/dep/pkg/pkg.go"
+      ],
+      "parsed": false
+    },
+    {
+      "path": "go.sum",
+      "reasons": [
+        "manifest"
+      ],
+      "parents": [
+        "main.go",
+        "vendor/github.com/v/dep/pkg/pkg.go"
+      ],
+      "parsed": false
+    },
+    {
+      "path": "main.go",
+      "reasons": [
+        "initial"
+      ],
+      "parents": [],
+      "parsed": true,
+      "lang": "go"
+    },
+    {
+      "path": "vendor/github.com/v/dep/pkg/pkg.go",
+      "reasons": [
+        "dependency"
+      ],
+      "parents": [
+        "main.go"
+      ],
+      "parsed": true,
+      "lang": "go"
+    },
+    {
+      "path": "vendor/modules.txt",
+      "reasons": [
+        "manifest"
+      ],
+      "parents": [
+        "main.go",
+        "vendor/github.com/v/dep/pkg/pkg.go"
+      ],
+      "parsed": false
+    }
+  ],
+  "edges": [
+    {
+      "from": "main.go",
+      "kind": "import",
+      "phase": "build",
+      "flags": [],
+      "spec": "github.com/v/dep/pkg",
+      "span": [
+        21,
+        43
+      ],
+      "line": 3,
+      "target": {
+        "type": "glob",
+        "pattern": "vendor/github.com/v/dep/pkg/*.go",
+        "matches": [
+          "vendor/github.com/v/dep/pkg/pkg.go"
+        ],
+        "truncated": false
+      }
+    },
+    {
+      "from": "main.go",
+      "kind": "manifest",
+      "phase": "build",
+      "flags": [],
+      "spec": "go.mod",
+      "span": [
+        21,
+        43
+      ],
+      "line": 3,
+      "target": {
+        "type": "file",
+        "path": "go.mod"
+      }
+    },
+    {
+      "from": "main.go",
+      "kind": "manifest",
+      "phase": "build",
+      "flags": [],
+      "spec": "go.sum",
+      "span": [
+        21,
+        43
+      ],
+      "line": 3,
+      "target": {
+        "type": "file",
+        "path": "go.sum"
+      }
+    },
+    {
+      "from": "main.go",
+      "kind": "manifest",
+      "phase": "build",
+      "flags": [],
+      "spec": "modules.txt",
+      "span": [
+        21,
+        43
+      ],
+      "line": 3,
+      "target": {
+        "type": "file",
+        "path": "vendor/modules.txt"
+      }
+    },
+    {
+      "from": "vendor/github.com/v/dep/pkg/pkg.go",
+      "kind": "manifest",
+      "phase": "build",
+      "flags": [],
+      "spec": "go.mod",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "go.mod"
+      }
+    },
+    {
+      "from": "vendor/github.com/v/dep/pkg/pkg.go",
+      "kind": "manifest",
+      "phase": "build",
+      "flags": [],
+      "spec": "go.sum",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "go.sum"
+      }
+    },
+    {
+      "from": "vendor/github.com/v/dep/pkg/pkg.go",
+      "kind": "manifest",
+      "phase": "build",
+      "flags": [],
+      "spec": "modules.txt",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "vendor/modules.txt"
+      }
+    },
+    {
+      "from": "vendor/github.com/v/dep/pkg/pkg.go",
+      "kind": "import",
+      "phase": "build",
+      "flags": [],
+      "spec": "github.com/v/dep/internal/missing",
+      "span": [
+        20,
+        55
+      ],
+      "line": 3,
+      "target": {
+        "type": "unresolved"
+      },
+      "uncertainty": "unresolved_specifier"
+    }
+  ],
+  "uncertainties": [
+    {
+      "file": "vendor/github.com/v/dep/pkg/pkg.go",
+      "kind": "unresolved_specifier",
+      "detail": "package github.com/v/dep/internal/missing is not in <fixture>/vendor/modules.txt",
+      "spec": "github.com/v/dep/internal/missing",
+      "span": [
+        20,
+        55
+      ],
+      "line": 3,
+      "col": 8
+    }
+  ],
+  "symlinks": {},
+  "stats": {
+    "entries": 1,
+    "files": 5,
+    "parsed_files": 2,
+    "edges": 8,
+    "uncertainties": 1
+  }
+}

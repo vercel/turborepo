@@ -1,0 +1,344 @@
+---
+source: crates/turborepo-trace-tasks/tests/docker.rs
+expression: s
+---
+## docker:api/Dockerfile
+{
+  "sources": [
+    "docker"
+  ],
+  "deps": [
+    "docker:api/Dockerfile#runtime"
+  ],
+  "commands": [],
+  "spec": {
+    "configs": [
+      ".dockerignore",
+      "api/Dockerfile",
+      "api/Dockerfile.dockerignore"
+    ],
+    "task_deps": [
+      {
+        "target": {
+          "kind": "id",
+          "id": "docker:api/Dockerfile#runtime"
+        },
+        "reason": "final stage"
+      }
+    ]
+  }
+}
+
+## docker:api/Dockerfile#build
+{
+  "sources": [
+    "docker"
+  ],
+  "deps": [],
+  "commands": [],
+  "spec": {
+    "configs": [
+      ".dockerignore",
+      "api/Dockerfile",
+      "api/Dockerfile.dockerignore"
+    ],
+    "memberships": [
+      {
+        "dir": ".",
+        "pattern": "**",
+        "reason": "Dockerfile not fully understood"
+      },
+      {
+        "dir": ".",
+        "pattern": "**",
+        "reason": "computed COPY source"
+      },
+      {
+        "dir": ".",
+        "pattern": "**",
+        "reason": "uncertain task"
+      },
+      {
+        "dir": ".",
+        "pattern": "{shared,shared/**}",
+        "reason": "COPY shared"
+      }
+    ],
+    "toolchain": [
+      {
+        "ecosystem": "docker",
+        "name": "node:20"
+      }
+    ],
+    "uncertainties": [
+      {
+        "kind": "computed_specifier",
+        "detail": "COPY source `${APP}/package.json` uses unknown APP (line 6)"
+      },
+      {
+        "kind": "computed_specifier",
+        "detail": "COPY source `${APP}/src` uses unknown APP (line 7)"
+      }
+    ]
+  }
+}
+
+## docker:api/Dockerfile#runtime
+{
+  "sources": [
+    "docker"
+  ],
+  "deps": [
+    "docker:api/Dockerfile#build"
+  ],
+  "commands": [],
+  "spec": {
+    "configs": [
+      ".dockerignore",
+      "api/Dockerfile",
+      "api/Dockerfile.dockerignore"
+    ],
+    "task_deps": [
+      {
+        "target": {
+          "kind": "id",
+          "id": "docker:api/Dockerfile#build"
+        },
+        "reason": "docker stage"
+      }
+    ],
+    "toolchain": [
+      {
+        "ecosystem": "docker",
+        "name": "node:20-slim"
+      }
+    ]
+  }
+}
+
+## docker:api/Dockerfile#test
+{
+  "sources": [
+    "docker"
+  ],
+  "deps": [
+    "docker:api/Dockerfile#build"
+  ],
+  "commands": [],
+  "spec": {
+    "configs": [
+      ".dockerignore",
+      "api/Dockerfile",
+      "api/Dockerfile.dockerignore"
+    ],
+    "task_deps": [
+      {
+        "target": {
+          "kind": "package",
+          "package": "api",
+          "name": "test"
+        },
+        "reason": "RUN: npm run"
+      },
+      {
+        "target": {
+          "kind": "id",
+          "id": "docker:api/Dockerfile#build"
+        },
+        "reason": "docker stage"
+      }
+    ]
+  }
+}
+
+## docker:compose.yaml
+{
+  "sources": [
+    "docker"
+  ],
+  "deps": [
+    "docker:compose.yaml#api",
+    "docker:compose.yaml#worker"
+  ],
+  "commands": [],
+  "spec": {
+    "configs": [
+      ".env",
+      "compose.yaml"
+    ],
+    "task_deps": [
+      {
+        "target": {
+          "kind": "id",
+          "id": "docker:compose.yaml#api"
+        },
+        "reason": "compose service"
+      },
+      {
+        "target": {
+          "kind": "id",
+          "id": "docker:compose.yaml#worker"
+        },
+        "reason": "compose service"
+      }
+    ]
+  }
+}
+
+## docker:compose.yaml#api
+{
+  "sources": [
+    "docker"
+  ],
+  "deps": [],
+  "commands": [],
+  "spec": {
+    "configs": [
+      ".dockerignore",
+      ".env",
+      "api/Dockerfile",
+      "api/Dockerfile.dockerignore",
+      "compose.yaml"
+    ],
+    "memberships": [
+      {
+        "dir": ".",
+        "pattern": "{api/package.json,api/package.json/**}",
+        "reason": "COPY api/package.json"
+      },
+      {
+        "dir": ".",
+        "pattern": "{api/src,api/src/**}",
+        "reason": "COPY api/src"
+      },
+      {
+        "dir": ".",
+        "pattern": "{shared,shared/**}",
+        "reason": "COPY shared"
+      }
+    ],
+    "toolchain": [
+      {
+        "ecosystem": "docker",
+        "name": "node:22"
+      },
+      {
+        "ecosystem": "docker",
+        "name": "node:22-slim"
+      }
+    ]
+  }
+}
+
+## docker:compose.yaml#worker
+{
+  "sources": [
+    "docker"
+  ],
+  "deps": [],
+  "commands": [],
+  "spec": {
+    "configs": [
+      ".env",
+      "compose.yaml",
+      "worker/.dockerignore",
+      "worker/Dockerfile",
+      "worker/Dockerfile.dockerignore"
+    ],
+    "memberships": [
+      {
+        "dir": "worker",
+        "pattern": "{requirements.txt,requirements.txt/**}",
+        "exclude": [
+          "{**/__pycache__,**/__pycache__/**}",
+          "{*.pyc,*.pyc/**}"
+        ],
+        "reason": "COPY requirements.txt"
+      },
+      {
+        "dir": "worker",
+        "pattern": "{src,src/**}",
+        "exclude": [
+          "{**/__pycache__,**/__pycache__/**}",
+          "{*.pyc,*.pyc/**}"
+        ],
+        "reason": "COPY src"
+      }
+    ],
+    "toolchain": [
+      {
+        "ecosystem": "docker",
+        "name": "python:3.12-slim"
+      }
+    ]
+  }
+}
+
+## docker:worker/Dockerfile
+{
+  "sources": [
+    "docker"
+  ],
+  "deps": [
+    "docker:worker/Dockerfile#0"
+  ],
+  "commands": [],
+  "spec": {
+    "configs": [
+      "worker/.dockerignore",
+      "worker/Dockerfile",
+      "worker/Dockerfile.dockerignore"
+    ],
+    "task_deps": [
+      {
+        "target": {
+          "kind": "id",
+          "id": "docker:worker/Dockerfile#0"
+        },
+        "reason": "final stage"
+      }
+    ]
+  }
+}
+
+## docker:worker/Dockerfile#0
+{
+  "sources": [
+    "docker"
+  ],
+  "deps": [],
+  "commands": [],
+  "spec": {
+    "configs": [
+      "worker/.dockerignore",
+      "worker/Dockerfile",
+      "worker/Dockerfile.dockerignore"
+    ],
+    "memberships": [
+      {
+        "dir": "worker",
+        "pattern": "{requirements.txt,requirements.txt/**}",
+        "exclude": [
+          "{**/__pycache__,**/__pycache__/**}",
+          "{*.pyc,*.pyc/**}"
+        ],
+        "reason": "COPY requirements.txt"
+      },
+      {
+        "dir": "worker",
+        "pattern": "{src,src/**}",
+        "exclude": [
+          "{**/__pycache__,**/__pycache__/**}",
+          "{*.pyc,*.pyc/**}"
+        ],
+        "reason": "COPY src"
+      }
+    ],
+    "toolchain": [
+      {
+        "ecosystem": "docker",
+        "name": "python:3.12-slim"
+      }
+    ]
+  }
+}

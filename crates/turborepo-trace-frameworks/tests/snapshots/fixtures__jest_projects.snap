@@ -1,0 +1,591 @@
+---
+source: crates/turborepo-trace-frameworks/tests/fixtures.rs
+expression: r.json()
+---
+{
+  "inputs": {
+    "framework": "jest",
+    "config_file": "<fixture>/jest.config.js",
+    "projects": [
+      {
+        "name": "a",
+        "config_file": "<fixture>/packages/a/jest.config.ts",
+        "root_dir": "<fixture>/packages/a",
+        "global": {
+          "config_files": [
+            "<fixture>/jest.config.js",
+            "<fixture>/packages/a/jest.config.ts"
+          ],
+          "js_entries": [
+            "<fixture>/jest.config.js",
+            "<fixture>/packages/a/jest.config.ts"
+          ],
+          "entries": [
+            {
+              "role": "setup_file",
+              "target": {
+                "path": "<fixture>/packages/a/setup-a.ts"
+              }
+            },
+            {
+              "role": "test_environment",
+              "target": {
+                "module": {
+                  "request": "jest-environment-node",
+                  "from_dir": "<fixture>/packages/a"
+                }
+              }
+            },
+            {
+              "role": "runner",
+              "target": {
+                "module": {
+                  "request": "jest",
+                  "from_dir": "<fixture>/packages/a"
+                }
+              }
+            }
+          ],
+          "edges": [],
+          "probes": [
+            "<fixture>/packages/a/jest.config.js",
+            "<fixture>/packages/a/jest.config.mjs",
+            "<fixture>/packages/a/jest.config.cjs",
+            "<fixture>/packages/a/jest.config.mts",
+            "<fixture>/packages/a/jest.config.cts",
+            "<fixture>/packages/a/jest.config.json"
+          ],
+          "memberships": [
+            {
+              "dir": "<fixture>/packages/a",
+              "pattern": "**/__mocks__/**",
+              "reason": "manual mocks (jest haste map)"
+            }
+          ]
+        },
+        "resolution": {
+          "aliases": [
+            {
+              "matcher": {
+                "regex": "^~/(.*)$"
+              },
+              "replacements": [
+                "<fixture>/packages/a/src/$1"
+              ],
+              "source": "moduleNameMapper"
+            }
+          ],
+          "roots": [
+            "<fixture>/packages/a"
+          ],
+          "module_paths": [],
+          "module_directories": [
+            "node_modules"
+          ],
+          "module_path_ignore_patterns": [],
+          "extensions": [
+            "js",
+            "mjs",
+            "cjs",
+            "jsx",
+            "ts",
+            "mts",
+            "cts",
+            "tsx",
+            "json",
+            "node"
+          ]
+        },
+        "discovery": {
+          "roots": [
+            "<fixture>/packages/a"
+          ],
+          "include": [
+            {
+              "glob": "**/__tests__/**/*.?([mc])[jt]s?(x)"
+            },
+            {
+              "glob": "**/?(*.)+(spec|test).?([mc])[jt]s?(x)"
+            }
+          ],
+          "exclude": [
+            {
+              "regex": "/node_modules/"
+            }
+          ],
+          "glob_base": null,
+          "extensions": [
+            "js",
+            "mjs",
+            "cjs",
+            "jsx",
+            "ts",
+            "mts",
+            "cts",
+            "tsx",
+            "json",
+            "node"
+          ]
+        },
+        "mocks": {
+          "root_mock_dirs": [
+            "<fixture>/packages/a"
+          ],
+          "haste_mocks": [],
+          "implicit_package_mocks": true,
+          "automock": false,
+          "extensions": [
+            "js",
+            "mjs",
+            "cjs",
+            "jsx",
+            "ts",
+            "mts",
+            "cts",
+            "tsx",
+            "json",
+            "node"
+          ]
+        },
+        "snapshots": "default",
+        "uncertainties": []
+      },
+      {
+        "name": "b",
+        "config_file": "<fixture>/packages/b/package.json",
+        "root_dir": "<fixture>/packages/b",
+        "global": {
+          "config_files": [
+            "<fixture>/jest.config.js",
+            "<fixture>/packages/b/package.json"
+          ],
+          "js_entries": [
+            "<fixture>/jest.config.js"
+          ],
+          "entries": [
+            {
+              "role": "test_environment",
+              "target": {
+                "path": "<fixture>/packages/b/custom-env.js"
+              }
+            },
+            {
+              "role": "runner",
+              "target": {
+                "module": {
+                  "request": "jest",
+                  "from_dir": "<fixture>/packages/b"
+                }
+              }
+            }
+          ],
+          "edges": [],
+          "probes": [
+            "<fixture>/packages/b/jest.config.js",
+            "<fixture>/packages/b/jest.config.ts",
+            "<fixture>/packages/b/jest.config.mjs",
+            "<fixture>/packages/b/jest.config.cjs",
+            "<fixture>/packages/b/jest.config.mts",
+            "<fixture>/packages/b/jest.config.cts",
+            "<fixture>/packages/b/jest.config.json"
+          ],
+          "memberships": [
+            {
+              "dir": "<fixture>/packages/b",
+              "pattern": "**/__mocks__/**",
+              "reason": "manual mocks (jest haste map)"
+            }
+          ]
+        },
+        "resolution": {
+          "aliases": [],
+          "roots": [
+            "<fixture>/packages/b"
+          ],
+          "module_paths": [],
+          "module_directories": [
+            "node_modules"
+          ],
+          "module_path_ignore_patterns": [],
+          "extensions": [
+            "js",
+            "mjs",
+            "cjs",
+            "jsx",
+            "ts",
+            "mts",
+            "cts",
+            "tsx",
+            "json",
+            "node"
+          ]
+        },
+        "discovery": {
+          "roots": [
+            "<fixture>/packages/b"
+          ],
+          "include": [
+            {
+              "regex": "lib/.*\\.spec\\.js$"
+            }
+          ],
+          "exclude": [
+            {
+              "regex": "/node_modules/"
+            }
+          ],
+          "glob_base": null,
+          "extensions": [
+            "js",
+            "mjs",
+            "cjs",
+            "jsx",
+            "ts",
+            "mts",
+            "cts",
+            "tsx",
+            "json",
+            "node"
+          ]
+        },
+        "mocks": {
+          "root_mock_dirs": [
+            "<fixture>/packages/b"
+          ],
+          "haste_mocks": [],
+          "implicit_package_mocks": true,
+          "automock": false,
+          "extensions": [
+            "js",
+            "mjs",
+            "cjs",
+            "jsx",
+            "ts",
+            "mts",
+            "cts",
+            "tsx",
+            "json",
+            "node"
+          ]
+        },
+        "snapshots": "default",
+        "uncertainties": []
+      },
+      {
+        "name": "<fixture>/packages/c",
+        "config_file": null,
+        "root_dir": "<fixture>/packages/c",
+        "global": {
+          "config_files": [
+            "<fixture>/jest.config.js"
+          ],
+          "js_entries": [
+            "<fixture>/jest.config.js"
+          ],
+          "entries": [
+            {
+              "role": "test_environment",
+              "target": {
+                "module": {
+                  "request": "jest-environment-node",
+                  "from_dir": "<fixture>/packages/c"
+                }
+              }
+            },
+            {
+              "role": "runner",
+              "target": {
+                "module": {
+                  "request": "jest",
+                  "from_dir": "<fixture>/packages/c"
+                }
+              }
+            }
+          ],
+          "edges": [],
+          "probes": [],
+          "memberships": [
+            {
+              "dir": "<fixture>/packages/c",
+              "pattern": "**/__mocks__/**",
+              "reason": "manual mocks (jest haste map)"
+            }
+          ]
+        },
+        "resolution": {
+          "aliases": [],
+          "roots": [
+            "<fixture>/packages/c"
+          ],
+          "module_paths": [],
+          "module_directories": [
+            "node_modules"
+          ],
+          "module_path_ignore_patterns": [],
+          "extensions": [
+            "js",
+            "mjs",
+            "cjs",
+            "jsx",
+            "ts",
+            "mts",
+            "cts",
+            "tsx",
+            "json",
+            "node"
+          ]
+        },
+        "discovery": {
+          "roots": [
+            "<fixture>/packages/c"
+          ],
+          "include": [
+            {
+              "glob": "**/__tests__/**/*.?([mc])[jt]s?(x)"
+            },
+            {
+              "glob": "**/?(*.)+(spec|test).?([mc])[jt]s?(x)"
+            }
+          ],
+          "exclude": [
+            {
+              "regex": "/node_modules/"
+            }
+          ],
+          "glob_base": null,
+          "extensions": [
+            "js",
+            "mjs",
+            "cjs",
+            "jsx",
+            "ts",
+            "mts",
+            "cts",
+            "tsx",
+            "json",
+            "node"
+          ]
+        },
+        "mocks": {
+          "root_mock_dirs": [
+            "<fixture>/packages/c"
+          ],
+          "haste_mocks": [],
+          "implicit_package_mocks": true,
+          "automock": false,
+          "extensions": [
+            "js",
+            "mjs",
+            "cjs",
+            "jsx",
+            "ts",
+            "mts",
+            "cts",
+            "tsx",
+            "json",
+            "node"
+          ]
+        },
+        "snapshots": "default",
+        "uncertainties": []
+      },
+      {
+        "name": "tools",
+        "config_file": "<fixture>/jest.config.js",
+        "root_dir": "<fixture>/tools",
+        "global": {
+          "config_files": [
+            "<fixture>/jest.config.js"
+          ],
+          "js_entries": [
+            "<fixture>/jest.config.js"
+          ],
+          "entries": [
+            {
+              "role": "test_environment",
+              "target": {
+                "module": {
+                  "request": "jest-environment-node",
+                  "from_dir": "<fixture>/tools"
+                }
+              }
+            },
+            {
+              "role": "runner",
+              "target": {
+                "module": {
+                  "request": "jest",
+                  "from_dir": "<fixture>/tools"
+                }
+              }
+            }
+          ],
+          "edges": [],
+          "probes": [
+            "<fixture>/jest.config.ts",
+            "<fixture>/jest.config.mjs",
+            "<fixture>/jest.config.cjs",
+            "<fixture>/jest.config.mts",
+            "<fixture>/jest.config.cts",
+            "<fixture>/jest.config.json"
+          ],
+          "memberships": [
+            {
+              "dir": "<fixture>/tools",
+              "pattern": "**/__mocks__/**",
+              "reason": "manual mocks (jest haste map)"
+            }
+          ]
+        },
+        "resolution": {
+          "aliases": [],
+          "roots": [
+            "<fixture>/tools"
+          ],
+          "module_paths": [],
+          "module_directories": [
+            "node_modules"
+          ],
+          "module_path_ignore_patterns": [],
+          "extensions": [
+            "js",
+            "mjs",
+            "cjs",
+            "jsx",
+            "ts",
+            "mts",
+            "cts",
+            "tsx",
+            "json",
+            "node"
+          ]
+        },
+        "discovery": {
+          "roots": [
+            "<fixture>/tools"
+          ],
+          "include": [
+            {
+              "glob": "<fixture>/tools/**/*.check.js"
+            }
+          ],
+          "exclude": [
+            {
+              "regex": "/node_modules/"
+            }
+          ],
+          "glob_base": null,
+          "extensions": [
+            "js",
+            "mjs",
+            "cjs",
+            "jsx",
+            "ts",
+            "mts",
+            "cts",
+            "tsx",
+            "json",
+            "node"
+          ]
+        },
+        "mocks": {
+          "root_mock_dirs": [
+            "<fixture>/tools"
+          ],
+          "haste_mocks": [],
+          "implicit_package_mocks": true,
+          "automock": false,
+          "extensions": [
+            "js",
+            "mjs",
+            "cjs",
+            "jsx",
+            "ts",
+            "mts",
+            "cts",
+            "tsx",
+            "json",
+            "node"
+          ]
+        },
+        "snapshots": "default",
+        "uncertainties": []
+      }
+    ],
+    "uncertainties": []
+  },
+  "tests": [
+    {
+      "project": "a",
+      "inputs": {
+        "test": "<fixture>/packages/a/src/a.test.ts",
+        "entries": [],
+        "edges": [],
+        "probes": [],
+        "memberships": [
+          {
+            "dir": "<fixture>/packages/a/src/__snapshots__",
+            "pattern": "a.test.ts.snap",
+            "reason": "default snapshot path"
+          }
+        ],
+        "mocks": [],
+        "uncertainties": []
+      }
+    },
+    {
+      "project": "b",
+      "inputs": {
+        "test": "<fixture>/packages/b/lib/b.spec.js",
+        "entries": [],
+        "edges": [],
+        "probes": [],
+        "memberships": [
+          {
+            "dir": "<fixture>/packages/b/lib/__snapshots__",
+            "pattern": "b.spec.js.snap",
+            "reason": "default snapshot path"
+          }
+        ],
+        "mocks": [],
+        "uncertainties": []
+      }
+    },
+    {
+      "project": "<fixture>/packages/c",
+      "inputs": {
+        "test": "<fixture>/packages/c/test/c.test.js",
+        "entries": [],
+        "edges": [],
+        "probes": [],
+        "memberships": [
+          {
+            "dir": "<fixture>/packages/c/test/__snapshots__",
+            "pattern": "c.test.js.snap",
+            "reason": "default snapshot path"
+          }
+        ],
+        "mocks": [],
+        "uncertainties": []
+      }
+    },
+    {
+      "project": "tools",
+      "inputs": {
+        "test": "<fixture>/tools/lint.check.js",
+        "entries": [],
+        "edges": [],
+        "probes": [],
+        "memberships": [
+          {
+            "dir": "<fixture>/tools/__snapshots__",
+            "pattern": "lint.check.js.snap",
+            "reason": "default snapshot path"
+          }
+        ],
+        "mocks": [],
+        "uncertainties": []
+      }
+    }
+  ]
+}

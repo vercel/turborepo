@@ -170,7 +170,7 @@ pub(crate) fn render(
 /// The program runs in `--cwd`, else where the user invoked turbo. Global
 /// turbo consumes `--cwd` and starts a local CLI (`--skip-infer`) at the
 /// repository root, passing both directories through the environment.
-fn invocation_cwd(
+pub(crate) fn invocation_cwd(
     args: &Args,
     var: impl Fn(&str) -> Option<OsString>,
 ) -> Result<AbsoluteSystemPathBuf, Error> {

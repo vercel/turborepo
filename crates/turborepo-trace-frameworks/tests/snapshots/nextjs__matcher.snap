@@ -1,0 +1,412 @@
+---
+source: crates/turborepo-trace-frameworks/tests/nextjs.rs
+expression: "redact(serde_json::to_string_pretty(&v).unwrap(), root)"
+---
+[
+  {
+    "url": "/",
+    "outcome": {
+      "kind": "routes"
+    },
+    "target": "/",
+    "routes": [
+      "page:app/page.tsx"
+    ],
+    "candidates": [
+      "page:app/page.tsx"
+    ],
+    "ambiguities": [],
+    "via": []
+  },
+  {
+    "url": "/about",
+    "outcome": {
+      "kind": "routes"
+    },
+    "target": "/about",
+    "routes": [
+      "page:app/(marketing)/about/page.tsx",
+      "pages:pages/about.tsx"
+    ],
+    "candidates": [
+      "page:app/(marketing)/about/page.tsx",
+      "pages:pages/about.tsx"
+    ],
+    "ambiguities": [
+      {
+        "kind": "router_conflict"
+      }
+    ],
+    "via": []
+  },
+  {
+    "url": "/pricing?x=1",
+    "outcome": {
+      "kind": "routes"
+    },
+    "target": "/pricing",
+    "routes": [
+      "page:app/(marketing)/pricing/page.tsx"
+    ],
+    "candidates": [
+      "page:app/(marketing)/pricing/page.tsx"
+    ],
+    "ambiguities": [],
+    "via": []
+  },
+  {
+    "url": "/blog/new",
+    "outcome": {
+      "kind": "routes"
+    },
+    "target": "/blog/new",
+    "routes": [
+      "page:app/blog/new/page.tsx"
+    ],
+    "candidates": [
+      "page:app/blog/new/page.tsx"
+    ],
+    "ambiguities": [],
+    "via": []
+  },
+  {
+    "url": "/blog/hello",
+    "outcome": {
+      "kind": "routes"
+    },
+    "target": "/blog/hello",
+    "routes": [
+      "page:app/blog/[slug]/page.tsx"
+    ],
+    "candidates": [
+      "page:app/blog/[slug]/page.tsx"
+    ],
+    "ambiguities": [],
+    "via": []
+  },
+  {
+    "url": "/docs-local/a/b",
+    "outcome": {
+      "kind": "routes"
+    },
+    "target": "/docs-local/a/b",
+    "routes": [
+      "page:app/docs-local/[...path]/page.tsx"
+    ],
+    "candidates": [
+      "page:app/docs-local/[...path]/page.tsx"
+    ],
+    "ambiguities": [],
+    "via": []
+  },
+  {
+    "url": "/shop",
+    "outcome": {
+      "kind": "routes"
+    },
+    "target": "/shop",
+    "routes": [
+      "page:app/shop/[[...filters]]/page.tsx"
+    ],
+    "candidates": [
+      "page:app/shop/[[...filters]]/page.tsx"
+    ],
+    "ambiguities": [],
+    "via": []
+  },
+  {
+    "url": "/shop/red/xl",
+    "outcome": {
+      "kind": "routes"
+    },
+    "target": "/shop/red/xl",
+    "routes": [
+      "page:app/shop/[[...filters]]/page.tsx"
+    ],
+    "candidates": [
+      "page:app/shop/[[...filters]]/page.tsx"
+    ],
+    "ambiguities": [],
+    "via": []
+  },
+  {
+    "url": "/acme",
+    "outcome": {
+      "kind": "routes"
+    },
+    "target": "/acme",
+    "routes": [
+      "page:app/[team]/page.tsx"
+    ],
+    "candidates": [
+      "page:app/[team]/page.tsx"
+    ],
+    "ambiguities": [],
+    "via": []
+  },
+  {
+    "url": "/acme/settings",
+    "outcome": {
+      "kind": "routes"
+    },
+    "target": "/acme/settings",
+    "routes": [
+      "page:app/[team]/settings/page.tsx"
+    ],
+    "candidates": [
+      "page:app/[team]/settings/page.tsx"
+    ],
+    "ambiguities": [],
+    "via": []
+  },
+  {
+    "url": "/dashboard/settings",
+    "outcome": {
+      "kind": "routes"
+    },
+    "target": "/dashboard/settings",
+    "routes": [
+      "page:app/dashboard/settings/page.tsx"
+    ],
+    "candidates": [
+      "page:app/dashboard/settings/page.tsx"
+    ],
+    "ambiguities": [
+      {
+        "kind": "middleware"
+      }
+    ],
+    "via": []
+  },
+  {
+    "url": "/home",
+    "outcome": {
+      "kind": "routes"
+    },
+    "target": "/",
+    "routes": [
+      "page:app/page.tsx"
+    ],
+    "candidates": [
+      "page:app/page.tsx"
+    ],
+    "ambiguities": [],
+    "via": [
+      "redirect:/home"
+    ]
+  },
+  {
+    "url": "/old-blog/first",
+    "outcome": {
+      "kind": "routes"
+    },
+    "target": "/blog/first",
+    "routes": [
+      "page:app/blog/[slug]/page.tsx"
+    ],
+    "candidates": [
+      "page:app/blog/[slug]/page.tsx"
+    ],
+    "ambiguities": [],
+    "via": [
+      "redirect:/old-blog/:slug"
+    ]
+  },
+  {
+    "url": "/beta",
+    "outcome": {
+      "kind": "routes"
+    },
+    "target": "/beta",
+    "routes": [
+      "page:app/[team]/page.tsx"
+    ],
+    "candidates": [
+      "page:app/[team]/page.tsx",
+      "page:app/dashboard/page.tsx"
+    ],
+    "ambiguities": [
+      {
+        "kind": "conditional_rule",
+        "phase": "redirect",
+        "source": "/beta"
+      }
+    ],
+    "via": []
+  },
+  {
+    "url": "/docs/intro",
+    "outcome": {
+      "kind": "external",
+      "detail": "https://docs.example.com"
+    },
+    "target": "/docs/intro",
+    "routes": [],
+    "candidates": [],
+    "ambiguities": [],
+    "via": [
+      "rewrite:beforeFiles:/docs/:path*"
+    ]
+  },
+  {
+    "url": "/team-alias/acme",
+    "outcome": {
+      "kind": "routes"
+    },
+    "target": "/acme",
+    "routes": [
+      "page:app/[team]/page.tsx"
+    ],
+    "candidates": [
+      "page:app/[team]/page.tsx"
+    ],
+    "ambiguities": [],
+    "via": [
+      "rewrite:afterFiles:/team-alias/:team"
+    ]
+  },
+  {
+    "url": "/guides/intro",
+    "outcome": {
+      "kind": "microfrontend",
+      "detail": "docs-app"
+    },
+    "target": "/guides/intro",
+    "routes": [],
+    "candidates": [],
+    "ambiguities": [],
+    "via": [
+      "microfrontend:/guides/:path*"
+    ]
+  },
+  {
+    "url": "/help",
+    "outcome": {
+      "kind": "routes"
+    },
+    "target": "/help",
+    "routes": [
+      "page:app/[team]/page.tsx"
+    ],
+    "candidates": [
+      "page:app/[team]/page.tsx"
+    ],
+    "ambiguities": [
+      {
+        "kind": "microfrontend_flag",
+        "app": "docs-app",
+        "flag": "new-help"
+      }
+    ],
+    "via": []
+  },
+  {
+    "url": "/favicon.ico",
+    "outcome": {
+      "kind": "public",
+      "detail": "/favicon.ico"
+    },
+    "target": "/favicon.ico",
+    "routes": [],
+    "candidates": [],
+    "ambiguities": [],
+    "via": []
+  },
+  {
+    "url": "/api/teams/t1/members",
+    "outcome": {
+      "kind": "routes"
+    },
+    "target": "/api/teams/t1/members",
+    "routes": [
+      "route:app/api/teams/[teamId]/members/route.ts"
+    ],
+    "candidates": [
+      "route:app/api/teams/[teamId]/members/route.ts"
+    ],
+    "ambiguities": [],
+    "via": []
+  },
+  {
+    "url": "/api/v1/projects",
+    "outcome": {
+      "kind": "external",
+      "detail": "https://api.example.com"
+    },
+    "target": "/api/v1/projects",
+    "routes": [],
+    "candidates": [],
+    "ambiguities": [],
+    "via": [
+      "rewrite:afterFiles:/api/v1/:path*"
+    ]
+  },
+  {
+    "url": "/sitemap.xml",
+    "outcome": {
+      "kind": "routes"
+    },
+    "target": "/sitemap.xml",
+    "routes": [
+      "metadata:app/sitemap.ts"
+    ],
+    "candidates": [
+      "metadata:app/sitemap.ts"
+    ],
+    "ambiguities": [],
+    "via": []
+  },
+  {
+    "url": "/legacy",
+    "outcome": {
+      "kind": "routes"
+    },
+    "target": "/legacy",
+    "routes": [
+      "pages:pages/legacy.tsx"
+    ],
+    "candidates": [
+      "pages:pages/legacy.tsx"
+    ],
+    "ambiguities": [],
+    "via": []
+  },
+  {
+    "url": "/api/hello",
+    "outcome": {
+      "kind": "routes"
+    },
+    "target": "/api/hello",
+    "routes": [
+      "pages-api:pages/api/hello.ts"
+    ],
+    "candidates": [
+      "pages-api:pages/api/hello.ts"
+    ],
+    "ambiguities": [],
+    "via": []
+  },
+  {
+    "url": "https://example.com/x",
+    "outcome": {
+      "kind": "external",
+      "detail": "https://example.com"
+    },
+    "target": "/x",
+    "routes": [],
+    "candidates": [],
+    "ambiguities": [],
+    "via": []
+  },
+  {
+    "url": "/nope/deep/path",
+    "outcome": {
+      "kind": "not_found"
+    },
+    "target": "/nope/deep/path",
+    "routes": [],
+    "candidates": [],
+    "ambiguities": [],
+    "via": []
+  }
+]

@@ -1,0 +1,20 @@
+{
+  "$schema": "https://turbo.build/schema.json",
+  "globalDependencies": [".env", "tsconfig.base.json"],
+  "globalEnv": ["CI"],
+  "tasks": {
+    "build": {
+      "dependsOn": ["^build", "codegen"],
+      "outputs": ["dist/**", ".next/**", "!.next/cache/**"]
+    },
+    "codegen": { "outputs": ["src/generated/**"] },
+    "test": {
+      "dependsOn": ["build"],
+      "inputs": ["$TURBO_DEFAULT$", "!README.md", "test/**"],
+      "env": ["TEST_SHARD"]
+    },
+    "lint": { "inputs": ["src/**/*.ts", "eslint.config.js"] },
+    "web#build": { "env": ["NEXT_PUBLIC_API_URL"] },
+    "//#format": { "cache": false }
+  }
+}

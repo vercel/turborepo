@@ -1,0 +1,17 @@
+{
+  "name": "outputs-fixture",
+  "private": true,
+  "scripts": {
+    "bump": "jq '.version = \"2.0.0\"' package.json > package.json.tmp && mv package.json.tmp package.json",
+    "copy-assets": "cp assets/logo.svg dist/logo.svg",
+    "gen": "openapi-typescript openapi.yaml -o src/generated/api.ts",
+    "gen-stdout": "openapi-typescript openapi.yaml > src/generated/api-stdout.ts",
+    "format": "prettier --write src",
+    "build": "node build.js",
+    "image": "docker build --iidfile image.id .",
+    "test": "jest"
+  },
+  "devDependencies": {
+    "turbo": "2.0.0"
+  }
+}

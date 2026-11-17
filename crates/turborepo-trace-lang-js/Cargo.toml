@@ -1,0 +1,36 @@
+[package]
+name = "turborepo-trace-lang-js"
+version = "0.1.0"
+edition = { workspace = true }
+license = "MIT"
+description = "Js language plugin for `turbo trace`"
+publish = false
+
+[dependencies]
+dashmap = { workspace = true }
+memchr = { workspace = true }
+oxc_resolver = { workspace = true }
+smallvec = { workspace = true }
+turborepo-trace-core = { workspace = true }
+# Digests of the answers a binding run got (src/xfile/trace.rs).
+xxhash-rust = { workspace = true }
+# package.json fields read by special cases and --all-conditions.
+serde_json = { workspace = true }
+# The value-flow engine (src/flow): a real AST and scope analysis for files with dynamic
+# sites. Also the differential oracle for extraction (tests/oxc_diff.rs).
+oxc_allocator = { workspace = true }
+oxc_ast = { workspace = true }
+# Definition-level facts of a module (src/symbols.rs): visitors over the AST.
+oxc_ast_visit = { workspace = true }
+oxc_parser = { workspace = true }
+oxc_semantic = { workspace = true }
+oxc_span = { workspace = true }
+
+[dev-dependencies]
+insta = { workspace = true }
+serde_json = { workspace = true }
+tempfile = { workspace = true }
+turborepo-trace-testkit = { workspace = true }
+
+[lints]
+workspace = true

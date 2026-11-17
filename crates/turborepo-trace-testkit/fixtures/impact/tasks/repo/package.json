@@ -1,0 +1,10 @@
+{
+  "name": "tasks-root",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": ["packages/*"],
+  "scripts": {
+    "build": "turbo run build",
+    "test": "turbo run test"
+  }
+}

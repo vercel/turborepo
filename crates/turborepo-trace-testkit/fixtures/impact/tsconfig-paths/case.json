@@ -1,0 +1,39 @@
+{
+  "description": "tsconfig paths drive jest's moduleNameMapper; ts-jest also reads tsconfig.json.",
+  "mutations": [
+    {
+      "name": "repoint-paths",
+      "description": "point @lib/* at src/lib2/*",
+      "ops": [
+        {
+          "op": "replace",
+          "path": "tsconfig.json",
+          "find": "src/lib/*",
+          "with": "src/lib2/*"
+        }
+      ]
+    },
+    {
+      "name": "edit-lib",
+      "description": "modify the mapped module",
+      "ops": [
+        {
+          "op": "append",
+          "path": "src/lib/math.ts",
+          "text": "\n// edited\n"
+        }
+      ]
+    },
+    {
+      "name": "edit-lib2",
+      "description": "modify the unmapped alternative",
+      "ops": [
+        {
+          "op": "append",
+          "path": "src/lib2/math.ts",
+          "text": "\n// edited\n"
+        }
+      ]
+    }
+  ]
+}

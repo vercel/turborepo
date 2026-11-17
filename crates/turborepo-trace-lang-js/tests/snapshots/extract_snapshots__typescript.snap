@@ -1,0 +1,42 @@
+---
+source: crates/turborepo-trace-lang-js/tests/extract_snapshots.rs
+expression: "render(\"typescript.ts\")"
+---
+1:21 import "./globals.d.ts" [type_only]
+    span: "./globals.d.ts"
+2:21 import "./relative-without-dot.d.ts" [type_only]
+    span: "relative-without-dot.d.ts"
+3:22 import "node" [type_only]
+    span: "node"
+5:1 import "./config" [type_only]
+    span: import type { Config } from './config'
+6:1 import "./types" [type_only]
+    span: import type * as Types from './types'
+7:1 import "./default-type" [type_only]
+    span: import type DefaultType from './default-type'
+8:1 import "./inline-type"
+    span: import { type Inline, value } from './inline-type'
+9:1 import "./only-inline"
+    span: import { type OnlyInlineTypes } from './only-inline'
+10:1 import "./default-named-type"
+    span: import type from './default-named-type'
+11:1 require "fs"
+    span: import fs = require('fs')
+12:1 require "./type-eq" [type_only]
+    span: import type TypeEq = require('./type-eq')
+13:8 require "./export-import"
+    span: import Reexported = require('./export-import')
+15:1 re_export "./exported-types" [type_only]
+    span: export type { Exported } from './exported-types'
+16:1 re_export "./exported-star-types" [type_only]
+    span: export type * from './exported-star-types'
+17:1 re_export "./mixed-export"
+    span: export { type Mixed, runtime } from './mixed-export'
+30:25 require "./type-assertion"
+    span: require('./type-assertion')
+32:10 dynamic_import "./lazy-module" [lazy]
+    span: import('./lazy-module')
+35:51 dynamic_import "./type-query" [lazy, type_only]
+    span: import('./type-query')
+36:17 dynamic_import "./runtime-dynamic" [lazy]
+    span: import('./runtime-dynamic')

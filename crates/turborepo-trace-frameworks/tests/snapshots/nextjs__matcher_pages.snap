@@ -1,0 +1,111 @@
+---
+source: crates/turborepo-trace-frameworks/tests/nextjs.rs
+expression: "redact(serde_json::to_string_pretty(&v).unwrap(), root)"
+---
+[
+  {
+    "url": "/shop",
+    "outcome": {
+      "kind": "routes"
+    },
+    "target": "/",
+    "routes": [
+      "pages:pages/index.tsx"
+    ],
+    "candidates": [
+      "pages:pages/index.tsx"
+    ],
+    "ambiguities": [],
+    "via": []
+  },
+  {
+    "url": "/shop/de/product/1",
+    "outcome": {
+      "kind": "routes"
+    },
+    "target": "/product/1",
+    "routes": [
+      "pages:pages/product/[id].tsx"
+    ],
+    "candidates": [
+      "pages:pages/product/[id].tsx"
+    ],
+    "ambiguities": [],
+    "via": []
+  },
+  {
+    "url": "/shop/product/new",
+    "outcome": {
+      "kind": "routes"
+    },
+    "target": "/product/new",
+    "routes": [
+      "pages:pages/product/new.tsx"
+    ],
+    "candidates": [
+      "pages:pages/product/new.tsx"
+    ],
+    "ambiguities": [],
+    "via": []
+  },
+  {
+    "url": "/shop/p/7",
+    "outcome": {
+      "kind": "routes"
+    },
+    "target": "/product/7",
+    "routes": [
+      "pages:pages/product/[id].tsx"
+    ],
+    "candidates": [
+      "pages:pages/product/[id].tsx"
+    ],
+    "ambiguities": [],
+    "via": [
+      "rewrite:afterFiles:/p/:id"
+    ]
+  },
+  {
+    "url": "/shop/a/b/c",
+    "outcome": {
+      "kind": "routes"
+    },
+    "target": "/a/b/c",
+    "routes": [
+      "pages:pages/[...slug].tsx"
+    ],
+    "candidates": [
+      "pages:pages/[...slug].tsx"
+    ],
+    "ambiguities": [],
+    "via": []
+  },
+  {
+    "url": "/shop/api/cart",
+    "outcome": {
+      "kind": "routes"
+    },
+    "target": "/api/cart",
+    "routes": [
+      "pages-api:pages/api/cart.ts"
+    ],
+    "candidates": [
+      "pages-api:pages/api/cart.ts"
+    ],
+    "ambiguities": [],
+    "via": []
+  },
+  {
+    "url": "/product/1",
+    "outcome": {
+      "kind": "not_found"
+    },
+    "target": "/product/1",
+    "routes": [],
+    "candidates": [],
+    "ambiguities": [],
+    "via": [
+      "outside-basePath"
+    ]
+  }
+]

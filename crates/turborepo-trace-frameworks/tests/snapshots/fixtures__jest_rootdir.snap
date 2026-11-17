@@ -1,0 +1,176 @@
+---
+source: crates/turborepo-trace-frameworks/tests/fixtures.rs
+expression: r.json()
+---
+{
+  "inputs": {
+    "framework": "jest",
+    "config_file": "<fixture>/config/jest.config.mjs",
+    "projects": [
+      {
+        "name": "<fixture>",
+        "config_file": "<fixture>/config/jest.config.mjs",
+        "root_dir": "<fixture>",
+        "global": {
+          "config_files": [
+            "<fixture>/config/jest.config.mjs",
+            "<fixture>/config/preset.json"
+          ],
+          "js_entries": [
+            "<fixture>/config/jest.config.mjs"
+          ],
+          "entries": [
+            {
+              "role": "setup_file",
+              "target": {
+                "path": "<fixture>/config/preset-setup.js"
+              }
+            },
+            {
+              "role": "snapshot_resolver",
+              "target": {
+                "path": "<fixture>/config/snapshot-resolver.cjs"
+              }
+            },
+            {
+              "role": "test_environment",
+              "target": {
+                "module": {
+                  "request": "jest-environment-node",
+                  "from_dir": "<fixture>"
+                }
+              }
+            },
+            {
+              "role": "runner",
+              "target": {
+                "module": {
+                  "request": "jest",
+                  "from_dir": "<fixture>"
+                }
+              }
+            }
+          ],
+          "edges": [],
+          "probes": [
+            "<fixture>/config/jest.config.js",
+            "<fixture>/config/jest.config.ts",
+            "<fixture>/config/jest.config.cjs",
+            "<fixture>/config/jest.config.mts",
+            "<fixture>/config/jest.config.cts",
+            "<fixture>/config/jest.config.json"
+          ],
+          "memberships": [
+            {
+              "dir": "<fixture>/src",
+              "pattern": "**/__mocks__/**",
+              "reason": "manual mocks (jest haste map)"
+            }
+          ]
+        },
+        "resolution": {
+          "aliases": [
+            {
+              "matcher": {
+                "regex": "^#shared/(.*)$"
+              },
+              "replacements": [
+                "<fixture>/shared/$1"
+              ],
+              "source": "moduleNameMapper"
+            }
+          ],
+          "roots": [
+            "<fixture>/src"
+          ],
+          "module_paths": [
+            "<fixture>/shared"
+          ],
+          "module_directories": [
+            "node_modules",
+            "<fixture>"
+          ],
+          "module_path_ignore_patterns": [
+            "<fixture>/src/.*/__fixtures__"
+          ],
+          "extensions": [
+            "ts",
+            "js"
+          ]
+        },
+        "discovery": {
+          "roots": [
+            "<fixture>/src"
+          ],
+          "include": [
+            {
+              "regex": "\\.unit\\.[jt]s$"
+            }
+          ],
+          "exclude": [
+            {
+              "regex": "<fixture>/src/skip/"
+            },
+            {
+              "regex": "<fixture>/src/.*/__fixtures__"
+            }
+          ],
+          "glob_base": null,
+          "extensions": [
+            "ts",
+            "js"
+          ]
+        },
+        "mocks": {
+          "root_mock_dirs": [
+            "<fixture>/src"
+          ],
+          "haste_mocks": [],
+          "implicit_package_mocks": true,
+          "automock": false,
+          "extensions": [
+            "ts",
+            "js"
+          ]
+        },
+        "snapshots": {
+          "custom": {
+            "resolver": {
+              "path": "<fixture>/config/snapshot-resolver.cjs"
+            }
+          }
+        },
+        "uncertainties": []
+      }
+    ],
+    "uncertainties": []
+  },
+  "tests": [
+    {
+      "project": "<fixture>",
+      "inputs": {
+        "test": "<fixture>/src/feature/f.unit.ts",
+        "entries": [],
+        "edges": [],
+        "probes": [],
+        "memberships": [
+          {
+            "dir": "<fixture>",
+            "pattern": "**/*.snap",
+            "reason": "custom snapshot resolver"
+          }
+        ],
+        "mocks": [],
+        "uncertainties": [
+          {
+            "kind": "unsupported_syntax",
+            "file": "<fixture>/src/feature/f.unit.ts",
+            "line": 0,
+            "field": null,
+            "detail": "custom snapshot resolver: snapshot path not computed; any .snap file under the root counts"
+          }
+        ]
+      }
+    }
+  ]
+}

@@ -1,0 +1,877 @@
+---
+source: crates/turborepo-trace-tasks/tests/p2.rs
+expression: "render(&set, &root, &[\"nx\", \"task\"])"
+---
+## task:.#affected
+{
+  "sources": [
+    "npm"
+  ],
+  "files": [
+    "package.json"
+  ],
+  "deps": [
+    "task:libs/ui#test",
+    "nx:ui:test",
+    "nx:web:test"
+  ],
+  "commands": [
+    "nx affected -t test [nx] Full"
+  ],
+  "spec": {
+    "configs": [
+      "package.json"
+    ],
+    "task_deps": [
+      {
+        "target": {
+          "kind": "all",
+          "name": "test"
+        },
+        "reason": "nx"
+      },
+      {
+        "target": {
+          "kind": "id",
+          "id": "nx:legacy:test"
+        },
+        "reason": "nx"
+      },
+      {
+        "target": {
+          "kind": "id",
+          "id": "nx:ui:test"
+        },
+        "reason": "nx"
+      },
+      {
+        "target": {
+          "kind": "id",
+          "id": "nx:web:test"
+        },
+        "reason": "nx"
+      }
+    ],
+    "toolchain": [
+      {
+        "ecosystem": "npm",
+        "name": "nx"
+      }
+    ],
+    "runs": [
+      {
+        "kind": "task",
+        "target": {
+          "kind": "all",
+          "name": "test"
+        }
+      },
+      {
+        "kind": "task",
+        "target": {
+          "kind": "id",
+          "id": "nx:legacy:test"
+        }
+      },
+      {
+        "kind": "task",
+        "target": {
+          "kind": "id",
+          "id": "nx:ui:test"
+        }
+      },
+      {
+        "kind": "task",
+        "target": {
+          "kind": "id",
+          "id": "nx:web:test"
+        }
+      }
+    ]
+  }
+}
+
+## task:.#build:all
+{
+  "sources": [
+    "npm"
+  ],
+  "files": [
+    "package.json"
+  ],
+  "deps": [
+    "nx:legacy:build",
+    "nx:ui:build",
+    "nx:web:build"
+  ],
+  "commands": [
+    "nx run-many -t build [nx] Full"
+  ],
+  "spec": {
+    "configs": [
+      "package.json"
+    ],
+    "task_deps": [
+      {
+        "target": {
+          "kind": "all",
+          "name": "build"
+        },
+        "reason": "nx"
+      },
+      {
+        "target": {
+          "kind": "id",
+          "id": "nx:legacy:build"
+        },
+        "reason": "nx"
+      },
+      {
+        "target": {
+          "kind": "id",
+          "id": "nx:ui:build"
+        },
+        "reason": "nx"
+      },
+      {
+        "target": {
+          "kind": "id",
+          "id": "nx:web:build"
+        },
+        "reason": "nx"
+      }
+    ],
+    "toolchain": [
+      {
+        "ecosystem": "npm",
+        "name": "nx"
+      }
+    ],
+    "runs": [
+      {
+        "kind": "task",
+        "target": {
+          "kind": "all",
+          "name": "build"
+        }
+      },
+      {
+        "kind": "task",
+        "target": {
+          "kind": "id",
+          "id": "nx:legacy:build"
+        }
+      },
+      {
+        "kind": "task",
+        "target": {
+          "kind": "id",
+          "id": "nx:ui:build"
+        }
+      },
+      {
+        "kind": "task",
+        "target": {
+          "kind": "id",
+          "id": "nx:web:build"
+        }
+      }
+    ]
+  }
+}
+
+## task:.#web
+{
+  "sources": [
+    "npm"
+  ],
+  "files": [
+    "package.json"
+  ],
+  "deps": [
+    "nx:web:build"
+  ],
+  "commands": [
+    "nx run web:build [nx] Full"
+  ],
+  "spec": {
+    "configs": [
+      "package.json"
+    ],
+    "task_deps": [
+      {
+        "target": {
+          "kind": "package",
+          "package": "web",
+          "name": "build"
+        },
+        "reason": "nx"
+      },
+      {
+        "target": {
+          "kind": "id",
+          "id": "nx:web:build"
+        },
+        "reason": "nx"
+      }
+    ],
+    "toolchain": [
+      {
+        "ecosystem": "npm",
+        "name": "nx"
+      }
+    ],
+    "runs": [
+      {
+        "kind": "task",
+        "target": {
+          "kind": "package",
+          "package": "web",
+          "name": "build"
+        }
+      },
+      {
+        "kind": "task",
+        "target": {
+          "kind": "id",
+          "id": "nx:web:build"
+        }
+      }
+    ]
+  }
+}
+
+## task:libs/ui#test
+{
+  "sources": [
+    "npm"
+  ],
+  "files": [
+    "libs/ui/package.json"
+  ],
+  "deps": [],
+  "commands": [
+    "vitest run [vitest] Full"
+  ],
+  "spec": {
+    "inputs": [
+      "libs/ui/vite.config.cjs",
+      "libs/ui/vite.config.cts",
+      "libs/ui/vite.config.js",
+      "libs/ui/vite.config.mjs",
+      "libs/ui/vite.config.mts",
+      "libs/ui/vite.config.ts",
+      "libs/ui/vitest.config.cjs",
+      "libs/ui/vitest.config.cts",
+      "libs/ui/vitest.config.js",
+      "libs/ui/vitest.config.mjs",
+      "libs/ui/vitest.config.mts",
+      "libs/ui/vitest.config.ts",
+      "libs/ui/vitest.workspace.js",
+      "libs/ui/vitest.workspace.json",
+      "libs/ui/vitest.workspace.ts"
+    ],
+    "configs": [
+      "libs/ui/package.json"
+    ],
+    "memberships": [
+      {
+        "dir": "libs/ui",
+        "pattern": "**/*.{js,jsx,ts,tsx,mjs,cjs,mts,cts,snap}",
+        "reason": "vitest default sources"
+      },
+      {
+        "dir": "libs/ui",
+        "pattern": "**/*.{test,spec}.{js,jsx,ts,tsx,mjs,cjs,mts,cts}",
+        "reason": "vitest default test files"
+      }
+    ],
+    "toolchain": [
+      {
+        "ecosystem": "npm",
+        "name": "vitest"
+      }
+    ],
+    "runs": [
+      {
+        "kind": "tests",
+        "framework": "vitest",
+        "dir": "libs/ui"
+      }
+    ]
+  }
+}
+
+## nx:legacy:build
+{
+  "sources": [
+    "nx"
+  ],
+  "files": [
+    "libs/legacy/project.json",
+    "nx.json"
+  ],
+  "deps": [
+    "nx:ui:build",
+    "nx:web:build"
+  ],
+  "commands": [
+    "tsc -p libs/legacy/tsconfig.json [tsc] Full"
+  ],
+  "spec": {
+    "inputs": [
+      "babel.config.json"
+    ],
+    "outputs": [
+      {
+        "path": "dist/libs/legacy",
+        "kind": "declared"
+      },
+      {
+        "path": "libs/legacy/build",
+        "kind": "declared"
+      },
+      {
+        "path": "libs/legacy/dist",
+        "kind": "declared"
+      },
+      {
+        "path": "libs/legacy/public",
+        "kind": "declared"
+      }
+    ],
+    "configs": [
+      "libs/legacy/project.json",
+      "libs/legacy/tsconfig.json",
+      "nx.json"
+    ],
+    "memberships": [
+      {
+        "dir": "apps/web",
+        "pattern": "**/*",
+        "exclude": [
+          "**/*.spec.ts",
+          "jest.config.ts"
+        ],
+        "reason": "nx inputs"
+      },
+      {
+        "dir": "libs/legacy",
+        "pattern": "**/*",
+        "exclude": [
+          "**/*.spec.ts",
+          "jest.config.ts"
+        ],
+        "reason": "nx inputs"
+      },
+      {
+        "dir": "libs/legacy/src",
+        "pattern": "**/*.ts",
+        "reason": "tsconfig include"
+      },
+      {
+        "dir": "libs/ui",
+        "pattern": "**/*",
+        "exclude": [
+          "**/*.spec.ts",
+          "jest.config.ts"
+        ],
+        "reason": "nx inputs"
+      }
+    ],
+    "task_deps": [
+      {
+        "target": {
+          "kind": "upstream",
+          "name": "build"
+        },
+        "reason": "nx dependsOn ^"
+      },
+      {
+        "target": {
+          "kind": "id",
+          "id": "nx:ui:build"
+        },
+        "reason": "nx dependsOn ^"
+      },
+      {
+        "target": {
+          "kind": "id",
+          "id": "nx:web:build"
+        },
+        "reason": "nx dependsOn ^"
+      }
+    ],
+    "toolchain": [
+      {
+        "ecosystem": "npm",
+        "name": "typescript"
+      }
+    ]
+  }
+}
+
+## nx:ui:build
+{
+  "sources": [
+    "nx"
+  ],
+  "files": [
+    "libs/ui/project.json",
+    "nx.json"
+  ],
+  "deps": [],
+  "commands": [
+    "tsc -p 'libs/ui/tsconfig.lib.json' [tsc] Full"
+  ],
+  "spec": {
+    "inputs": [
+      "babel.config.json"
+    ],
+    "outputs": [
+      {
+        "path": "dist/libs/ui",
+        "kind": "declared"
+      }
+    ],
+    "configs": [
+      "libs/ui/project.json",
+      "libs/ui/tsconfig.lib.json",
+      "nx.json"
+    ],
+    "entries": [
+      {
+        "path": "libs/ui/src/index.ts",
+        "lang": "js"
+      }
+    ],
+    "memberships": [
+      {
+        "dir": "libs/ui",
+        "pattern": "**/*",
+        "exclude": [
+          "**/*.spec.ts",
+          "jest.config.ts"
+        ],
+        "reason": "nx inputs"
+      },
+      {
+        "dir": "libs/ui",
+        "pattern": "*.md",
+        "exclude": [
+          "**/*.spec.ts",
+          "jest.config.ts"
+        ],
+        "reason": "nx assets"
+      },
+      {
+        "dir": "libs/ui/src",
+        "pattern": "**/*.ts",
+        "reason": "tsconfig include"
+      }
+    ],
+    "task_deps": [
+      {
+        "target": {
+          "kind": "upstream",
+          "name": "build"
+        },
+        "reason": "nx dependsOn ^"
+      }
+    ],
+    "toolchain": [
+      {
+        "ecosystem": "npm",
+        "name": "typescript"
+      }
+    ]
+  }
+}
+
+## nx:ui:test
+{
+  "sources": [
+    "nx"
+  ],
+  "files": [
+    "libs/ui/project.json",
+    "nx.json"
+  ],
+  "deps": [
+    "task:libs/ui#test"
+  ],
+  "commands": [],
+  "spec": {
+    "inputs": [
+      "babel.config.json",
+      "jest.preset.js"
+    ],
+    "configs": [
+      "libs/ui/project.json",
+      "nx.json"
+    ],
+    "memberships": [
+      {
+        "dir": "libs/ui",
+        "pattern": "**/*",
+        "reason": "nx inputs"
+      }
+    ],
+    "task_deps": [
+      {
+        "target": {
+          "kind": "package",
+          "package": "libs/ui",
+          "name": "test"
+        },
+        "reason": "nx:run-script"
+      }
+    ],
+    "env": [
+      "CI"
+    ]
+  }
+}
+
+## nx:web:build
+{
+  "sources": [
+    "nx"
+  ],
+  "files": [
+    "apps/web/project.json",
+    "nx.json"
+  ],
+  "deps": [
+    "nx:ui:build"
+  ],
+  "commands": [
+    "vite build --config 'apps/web/vite.config.ts' [vite] Full"
+  ],
+  "spec": {
+    "inputs": [
+      "apps/web/index.html",
+      "babel.config.json"
+    ],
+    "outputs": [
+      {
+        "path": "apps/web/dist",
+        "kind": "artifact"
+      },
+      {
+        "path": "dist/apps/web",
+        "kind": "declared"
+      }
+    ],
+    "configs": [
+      "apps/web/project.json",
+      "apps/web/vite.config.ts",
+      "nx.json"
+    ],
+    "entries": [
+      {
+        "path": "apps/web/src/main.ts",
+        "lang": "js"
+      },
+      {
+        "path": "apps/web/vite.config.ts",
+        "lang": "js"
+      }
+    ],
+    "memberships": [
+      {
+        "dir": "apps/web",
+        "pattern": "**/*",
+        "exclude": [
+          "**/*.spec.ts",
+          "jest.config.ts"
+        ],
+        "reason": "nx inputs"
+      },
+      {
+        "dir": "apps/web",
+        "pattern": ".env*",
+        "reason": "vite env files"
+      },
+      {
+        "dir": "apps/web/public",
+        "pattern": "**",
+        "reason": "vite publicDir"
+      },
+      {
+        "dir": "libs/ui",
+        "pattern": "**/*",
+        "exclude": [
+          "**/*.spec.ts",
+          "jest.config.ts"
+        ],
+        "reason": "nx inputs"
+      }
+    ],
+    "task_deps": [
+      {
+        "target": {
+          "kind": "upstream",
+          "name": "build"
+        },
+        "reason": "nx dependsOn ^"
+      },
+      {
+        "target": {
+          "kind": "id",
+          "id": "nx:ui:build"
+        },
+        "reason": "nx dependsOn ^"
+      }
+    ],
+    "toolchain": [
+      {
+        "ecosystem": "npm",
+        "name": "vite"
+      }
+    ]
+  }
+}
+
+## nx:web:deploy
+{
+  "sources": [
+    "nx"
+  ],
+  "files": [
+    "apps/web/project.json",
+    "nx.json"
+  ],
+  "deps": [
+    "nx:web:build"
+  ],
+  "commands": [
+    "node tools/deploy.js apps/web [node] Full"
+  ],
+  "spec": {
+    "outputs": [
+      {
+        "path": "apps/web/build",
+        "kind": "declared"
+      },
+      {
+        "path": "apps/web/dist",
+        "kind": "declared"
+      },
+      {
+        "path": "apps/web/public",
+        "kind": "declared"
+      },
+      {
+        "path": "dist/apps/web",
+        "kind": "declared"
+      }
+    ],
+    "configs": [
+      "apps/web/project.json",
+      "nx.json"
+    ],
+    "entries": [
+      {
+        "path": "tools/deploy.js",
+        "lang": "js"
+      }
+    ],
+    "task_deps": [
+      {
+        "target": {
+          "kind": "id",
+          "id": "nx:web:build"
+        },
+        "reason": "nx dependsOn"
+      }
+    ],
+    "definition": [
+      "tools/deploy.js"
+    ]
+  }
+}
+
+## nx:web:e2e
+{
+  "sources": [
+    "nx"
+  ],
+  "files": [
+    "apps/web/project.json",
+    "nx.json"
+  ],
+  "deps": [],
+  "commands": [],
+  "spec": {
+    "inputs": [
+      "babel.config.json"
+    ],
+    "outputs": [
+      {
+        "path": "apps/web/build",
+        "kind": "declared"
+      },
+      {
+        "path": "apps/web/dist",
+        "kind": "declared"
+      },
+      {
+        "path": "apps/web/public",
+        "kind": "declared"
+      },
+      {
+        "path": "dist/apps/web",
+        "kind": "declared"
+      }
+    ],
+    "configs": [
+      "apps/web/project.json",
+      "nx.json"
+    ],
+    "memberships": [
+      {
+        "dir": "apps/web",
+        "pattern": "**",
+        "reason": "uncertain task"
+      },
+      {
+        "dir": "apps/web",
+        "pattern": "**/*",
+        "reason": "nx inputs"
+      }
+    ],
+    "uncertainties": [
+      {
+        "kind": "unknown_command",
+        "detail": "nx executor `@nx-extend/e2e:run`"
+      }
+    ]
+  }
+}
+
+## nx:web:lint
+{
+  "sources": [
+    "nx"
+  ],
+  "files": [
+    "apps/web/project.json",
+    "nx.json"
+  ],
+  "deps": [],
+  "commands": [
+    "eslint 'apps/web' [lint] Full"
+  ],
+  "spec": {
+    "inputs": [
+      "package.json"
+    ],
+    "configs": [
+      "apps/web/project.json",
+      "nx.json"
+    ],
+    "memberships": [
+      {
+        "dir": "apps/web",
+        "pattern": "**",
+        "reason": "eslint files",
+        "data": true
+      }
+    ],
+    "toolchain": [
+      {
+        "ecosystem": "npm",
+        "name": "eslint"
+      }
+    ]
+  }
+}
+
+## nx:web:test
+{
+  "sources": [
+    "nx"
+  ],
+  "files": [
+    "apps/web/project.json",
+    "nx.json"
+  ],
+  "deps": [],
+  "commands": [
+    "jest --config 'apps/web/jest.config.ts' [jest] Full"
+  ],
+  "spec": {
+    "inputs": [
+      "apps/web/jest.config.cjs",
+      "apps/web/jest.config.cts",
+      "apps/web/jest.config.js",
+      "apps/web/jest.config.json",
+      "apps/web/jest.config.mjs",
+      "apps/web/jest.config.mts",
+      "babel.config.json",
+      "jest.preset.js"
+    ],
+    "configs": [
+      "apps/web/jest.config.ts",
+      "apps/web/project.json",
+      "jest.preset.js",
+      "nx.json"
+    ],
+    "entries": [
+      {
+        "path": "apps/web/jest.config.ts",
+        "lang": "js"
+      }
+    ],
+    "memberships": [
+      {
+        "dir": "apps/web",
+        "pattern": "**/*",
+        "reason": "nx inputs"
+      },
+      {
+        "dir": "apps/web",
+        "pattern": "**/*.{js,mjs,cjs,jsx,ts,mts,cts,tsx,json,node}",
+        "reason": "jest test files"
+      },
+      {
+        "dir": "apps/web",
+        "pattern": "**/__mocks__/**",
+        "reason": "manual mocks (jest haste map)"
+      },
+      {
+        "dir": "libs/ui",
+        "pattern": "**/*",
+        "exclude": [
+          "**/*.spec.ts",
+          "jest.config.ts"
+        ],
+        "reason": "nx inputs"
+      }
+    ],
+    "toolchain": [
+      {
+        "ecosystem": "npm",
+        "name": "jest"
+      },
+      {
+        "ecosystem": "npm",
+        "name": "jest-environment-node"
+      }
+    ],
+    "env": [
+      "CI"
+    ],
+    "runs": [
+      {
+        "kind": "tests",
+        "framework": "jest",
+        "dir": "apps/web"
+      }
+    ],
+    "definition": [
+      "apps/web/jest.config.ts"
+    ]
+  }
+}
