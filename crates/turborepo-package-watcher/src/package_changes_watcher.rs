@@ -754,6 +754,21 @@ impl Subscriber {
         pkg_dep_graph: &PackageGraph,
         package_file_hashes: &mut HashMap<PackageName, PackageHashBaseline>,
     ) -> RescanDiff {
+        // Config events bypass ignore rules, but default hashes do not include
+        // untracked, ignored configs. Preserve the conservative fallback when
+        // their changes cannot be recovered from the package baselines.
+        let config_paths = [
+            self.repo_root.join_component(CONFIG_FILE),
+            self.repo_root.join_component(CONFIG_FILE_JSONC),
+        ];
+        if config_paths
+            .iter()
+            .chain(self.custom_turbo_json_path.iter())
+            .any(|path| !self.repository_ignore.is_relevant(path.as_std_path(), false))
+        {
+            return RescanDiff::Unknown;
+        }
+
         let mut trie = Trie::new();
         let mut fresh = Vec::new();
         for package in hash_scopes(pkg_dep_graph) {
