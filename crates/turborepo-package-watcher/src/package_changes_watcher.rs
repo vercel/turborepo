@@ -773,6 +773,14 @@ impl Subscriber {
             return RescanDiff::Unknown;
         }
 
+        let scope_roots: HashSet<_> = hash_scopes(pkg_dep_graph)
+            .map(|package| {
+                self.repo_root
+                    .resolve(&package.path)
+                    .as_std_path()
+                    .to_path_buf()
+            })
+            .collect();
         let mut trie = Trie::new();
         let mut fresh = Vec::new();
         for package in hash_scopes(pkg_dep_graph) {
@@ -811,6 +819,16 @@ impl Subscriber {
                 .filter(|(file, _)| !hashes.contains_key(*file));
             for (file, _) in added_or_modified.chain(removed) {
                 let path = package_root.resolve(&file.to_anchored_system_path_buf());
+                // Nested scopes have independently updated baselines. Their
+                // files must not be recovered from an older ancestor baseline.
+                if path
+                    .as_std_path()
+                    .ancestors()
+                    .take_while(|ancestor| *ancestor != package_root.as_std_path())
+                    .any(|ancestor| scope_roots.contains(ancestor))
+                {
+                    continue;
+                }
                 trie.insert(path.to_string(), ());
             }
             fresh.push((
