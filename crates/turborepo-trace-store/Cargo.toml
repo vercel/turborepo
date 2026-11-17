@@ -29,8 +29,6 @@ turborepo-trace-lang-js = { workspace = true }
 turborepo-trace-lockfile = { workspace = true }
 turborepo-trace-tasks = { workspace = true }
 xxhash-rust = { workspace = true }
-# No default features: the store only needs bulk compression and decompression, and
-# `legacy`/`zdict_builder` would otherwise turn on for every crate's zstd build.
 zstd = { version = "0.13", default-features = false }
 
 [dev-dependencies]
