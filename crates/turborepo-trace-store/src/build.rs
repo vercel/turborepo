@@ -744,7 +744,7 @@ fn read_obs_cache(
     let (unchanged, prev, walk_changed) = walk;
     let mut m = HashMap::new();
     let mut l = Listings::default();
-    let Ok(b) = std::fs::read(crate::cache_dir(out).join("obs")) else {
+    let Ok(b) = std::fs::read(crate::cache_dir(out).join(crate::cache_file::OBS)) else {
         return (m, l, None, HashMap::new());
     };
     if b.len() < 48 || &b[..8] != OBS_MAGIC || b[8..24] != token.to_le_bytes() {
@@ -861,7 +861,7 @@ fn write_obs_cache(
     mtime: &dyn Fn(&Path) -> Option<i128>,
     racy: i128,
 ) {
-    let path = crate::cache_dir(out).join("obs");
+    let path = crate::cache_dir(out).join(crate::cache_file::OBS);
     let Some(walk) = crate::walk::cache_token(out) else {
         let _ = std::fs::remove_file(&path);
         return;
@@ -2227,7 +2227,9 @@ pub fn build(opts: &GraphOptions, langs: &[Arc<dyn Language>]) -> Result<BuildRe
     let make_tracer = || tracer_for(&repo, opts, langs, graph_in_tree.as_deref());
     // The task workspace (every manifest read again) right after discovery,
     // overlapping the tracer and the hash cache.
-    let manifests = crate::smallfiles::SmallFiles::open(&crate::cache_dir(&out).join("manifests"));
+    let manifests = crate::smallfiles::SmallFiles::open(
+        &crate::cache_dir(&out).join(crate::cache_file::MANIFESTS),
+    );
     let (((ws, task_graph), (lock_loader, locks, lock_hashes)), (hashes, tracer)) = rayon::join(
         || {
             rayon::join(
@@ -2253,7 +2255,7 @@ pub fn build(opts: &GraphOptions, langs: &[Arc<dyn Language>]) -> Result<BuildRe
                 || {
                     static HASHES: Span = Span::new("setup: hash cache open");
                     let _t = HASHES.enter();
-                    HashCache::open(&crate::cache_dir(&out).join("hashes"))
+                    HashCache::open(&crate::cache_dir(&out).join(crate::cache_file::HASHES))
                 },
                 || {
                     static TRACER: Span = Span::new("setup: tracer");
@@ -2319,7 +2321,7 @@ pub fn build(opts: &GraphOptions, langs: &[Arc<dyn Language>]) -> Result<BuildRe
     // The store's shards: the pack and its log (a pack in the pre-log location is
     // gone).
     let pack = shard::Pack::open(&store);
-    let _ = std::fs::remove_file(crate::cache_dir(&out).join("pack"));
+    let _ = std::fs::remove_file(crate::cache_dir(&out).join(crate::cache_file::PACK));
     let cx = Cx {
         task_graph,
         opts_digest: options_digest(opts, &tracer),

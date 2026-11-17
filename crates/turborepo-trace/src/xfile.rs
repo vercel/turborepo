@@ -127,7 +127,7 @@ const CACHE_MAGIC: &[u8; 8] = b"DTXFACT\n";
 
 impl FactsCache {
     fn open(dir: Option<&Path>) -> FactsCache {
-        let path = dir.map(|d| d.join("xfile-facts"));
+        let path = dir.map(|d| d.join(turborepo_trace_store::cache_file::XFILE_FACTS));
         let mut old = HashMap::new();
         let head = Self::header();
         if let Some(buf) = path.as_ref().and_then(|p| std::fs::read(p).ok())
@@ -745,7 +745,9 @@ impl TraceFile {
         head.extend_from_slice(mode.as_bytes());
         head.extend_from_slice(&bind::file_steps().to_le_bytes());
         Some(TraceFile {
-            path: g.cache_dir()?.join("xfile-trace"),
+            path: g
+                .cache_dir()?
+                .join(turborepo_trace_store::cache_file::XFILE_TRACE),
             head,
         })
     }
@@ -1071,7 +1073,12 @@ pub(crate) fn patch(g: &Graph, earlier: &Patch, stats: bool) -> Option<Patch> {
     } else {
         // Stored for this graph; or stored for the graph before an edit that changed no
         // file the run consulted, which makes it this graph's; or bound (replayed) now.
-        g.carried_patch("bound", key, carries_over, run)
+        g.carried_patch(
+            turborepo_trace_store::cache_file::DERIVED_BOUND,
+            key,
+            carries_over,
+            run,
+        )
     };
     if kept == Kept::Carried {
         turborepo_trace_core::timing::mark("bound: kept across the edit");

@@ -476,7 +476,7 @@ pub fn gc(out: &Path) -> Result<GcReport, Error> {
 
 /// Whether `name` is a file a build writes in the store: the pack, its log, a
 /// shard key, a walked-file list, or the temporary file an interrupted
-/// [`write_atomic`] left (`<name>.tmp.<pid>.<thread>`). A store also holds what
+/// `write_atomic` left (`<name>.tmp.<pid>.<thread>`). A store also holds what
 /// a checkout put there, which [`gc`] leaves alone.
 pub fn is_store_file(name: &str) -> bool {
     let name = name.split(".tmp.").next().unwrap_or(name);
@@ -634,22 +634,60 @@ pub fn evict(
     Ok(report)
 }
 
-/// The files a build keeps in the caches below [`cache_dir`], by name, and the
-/// only ones [`evict`] removes: the cache directory is checkout-controlled when
-/// it sits in the graph directory, so a file there that no build wrote is not
-/// the cleanup's to delete. The note naming the graph directory a per-machine
-/// cache belongs to (`graph-dir`) is deliberately absent.
-pub const CACHE_FILES: &[&str] = &[
-    "hashes",       // [`hash::HashCache`]
-    "manifests",    // [`smallfiles::SmallFiles`]
-    "walk",         // [`walk::walk_cached`]
-    "obs",          // [`build`]
-    "composed",     // [`compose::reuse`]
-    "composed.for", // [`compose::reuse`]
-    "tables",       // [`compose::tables`]
-    "names-data",   // `turborepo-trace/src/names.rs`
-    "pack",         // a pack in the pre-log location
-];
+/// The names of the files a build or a query keeps in the caches below
+/// [`cache_dir`], one constant per file in [`cache_file`], and [`CACHE_FILES`]:
+/// a cache is named once, so a writer and the eviction cannot list different
+/// names.
+macro_rules! cache_files {
+    ($($(#[$doc:meta])* $name:ident = $file:literal;)*) => {
+        /// The names of the files a build or a query keeps in the caches below
+        /// [`crate::cache_dir`], one constant per file: the writer and
+        /// [`crate::CACHE_FILES`] use the same constant.
+        pub mod cache_file {
+            $($(#[$doc])* pub const $name: &str = $file;)*
+        }
+
+        /// The files in the caches below [`cache_dir`] that [`evict`] may
+        /// delete, and the only ones: the cache directory is checkout-controlled
+        /// when it sits in the graph directory, so a file there that no build or
+        /// query wrote is not the cleanup's to delete. Every name of
+        /// [`cache_file`] is here; the note naming the graph directory a
+        /// per-machine cache belongs to (`graph-dir`) is deliberately not.
+        pub const CACHE_FILES: &[&str] = &[$(cache_file::$name),*];
+    };
+}
+
+cache_files! {
+    /// Content hashes keyed by file stamp ([`crate::hash::HashCache`]).
+    HASHES = "hashes";
+    /// Small setup files keyed by file stamp ([`crate::smallfiles::SmallFiles`]).
+    MANIFESTS = "manifests";
+    /// The previous walk with its directory stamps ([`crate::walk::walk_cached`]).
+    WALK = "walk";
+    /// The tree parts and listings of the last build (`build.rs`).
+    OBS = "obs";
+    /// The composed parts of the last composition (`compose.rs`).
+    COMPOSED = "composed";
+    /// The snapshot the composed parts were composed for (`compose/reuse.rs`).
+    COMPOSED_FOR = "composed.for";
+    /// The lookup tables of the last composition (`compose/tables.rs`).
+    TABLES = "tables";
+    /// The derived environment layer (`compose/env.rs`).
+    DERIVED_ENV = "derived-env";
+    /// The derived manual-mock layer (`compose/mocks.rs`).
+    DERIVED_MOCKS = "derived-mocks";
+    /// The derived cross-file binding layer (`turborepo-trace/src/xfile.rs`).
+    DERIVED_BOUND = "derived-bound";
+    /// The names layer's data (`turborepo-trace/src/names.rs`).
+    NAMES_DATA = "names-data";
+    /// Cross-file facts keyed by content hash and file name
+    /// (`turborepo-trace/src/xfile.rs`).
+    XFILE_FACTS = "xfile-facts";
+    /// The recorded run of cross-file binding (`turborepo-trace/src/xfile.rs`).
+    XFILE_TRACE = "xfile-trace";
+    /// A pack in the pre-log location; a build removes it.
+    PACK = "pack";
+}
 
 /// A file of a graph directory, for [`evict`].
 struct FileUse {
