@@ -261,6 +261,11 @@ pub enum ArtifactError {
     /// The graph directory already holds a graph.
     #[error("{0} already holds a graph")]
     Exists(PathBuf),
+    /// The graph directory, or the store below it, is a symbolic link: a commit
+    /// can add `.turbo/trace`, and installing a graph there would write outside
+    /// the repository.
+    #[error("{0}: not a directory (a symbolic link)")]
+    Linked(PathBuf),
 }
 
 impl ArtifactError {
@@ -279,6 +284,16 @@ impl ArtifactError {
 
 fn io(path: &Path) -> impl FnOnce(std::io::Error) -> ArtifactError + '_ {
     move |e| ArtifactError::Io(path.to_path_buf(), e)
+}
+
+/// [`crate::real_dir`]'s errors as artifact errors: a link at the graph
+/// directory is an install failure, not a rejected artifact.
+fn install(e: crate::Error) -> ArtifactError {
+    match e {
+        crate::Error::Linked(path) => ArtifactError::Linked(path),
+        crate::Error::Io(path, e) => ArtifactError::Io(path, e),
+        other => ArtifactError::Store(other.to_string()),
+    }
 }
 
 /// Options of [`pack`].
@@ -641,6 +656,13 @@ pub fn unpack(
     force: bool,
 ) -> Result<UnpackReport, ArtifactError> {
     let t0 = Instant::now();
+    // A checkout controls `.turbo/trace`: a link at it, above it, or at the store
+    // must not carry the installed graph outside the repository.
+    let base = std::fs::canonicalize(root)
+        .map(|p| turborepo_trace_core::fs::normalize(&p))
+        .ok();
+    crate::real_dir(out, base.as_deref()).map_err(install)?;
+    crate::real_dir(&out.join("store"), base.as_deref()).map_err(install)?;
     let file = std::fs::File::open(src).map_err(io(src))?;
     let len = file.metadata().map_err(io(src))?.len();
     if len == 0 {

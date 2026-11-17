@@ -215,11 +215,16 @@ fn builds_composes_and_queries() {
     assert_eq!(rep.analyzed_files, 0);
     assert_eq!(export(&out), before);
 
-    // gc keeps exactly the referenced shards and the snapshot's walked-file list.
-    std::fs::write(out.join("store/stale"), "x").unwrap();
-    let gc = turborepo_trace_store::gc(&out).unwrap();
-    assert_eq!(gc.removed, 1);
-    assert_eq!(gc.kept, before.1.len() + 1);
+    // gc keeps exactly the referenced shards and the snapshot's walked-file list,
+    // and leaves what no build of the graph wrote there alone.
+    let stale = "0123456789abcdef0123456789abcdef";
+    std::fs::write(out.join("store").join(stale), "x").unwrap();
+    std::fs::write(out.join("store/notes.txt"), "keep").unwrap();
+    let collected = turborepo_trace_store::gc(&out).unwrap();
+    assert_eq!(collected.removed, 1, "{collected:?}");
+    assert_eq!(collected.kept, before.1.len() + 1);
+    assert!(!out.join("store").join(stale).exists());
+    assert!(out.join("store/notes.txt").exists(), "not a graph artifact");
 }
 
 /// The graph directory follows age and size limits: `gc` runs first, so a
@@ -237,32 +242,39 @@ fn eviction_keeps_the_snapshot_and_trims_the_rest() {
     turborepo_trace_store::wait_for_cache_writes();
     let before = export(&out);
     let cache = turborepo_trace_store::cache_dir(&out);
-    let stale = cache.join("eviction-test-stale");
-    std::fs::write(&stale, [0u8; 4096]).unwrap();
-    std::fs::File::options()
-        .write(true)
-        .open(&stale)
-        .unwrap()
-        .set_modified(std::time::SystemTime::now() - std::time::Duration::from_secs(3600))
-        .unwrap();
-    // The caches this build wrote, whatever they are.
-    let written: Vec<String> = std::fs::read_dir(&cache)
+    // The caches this build wrote, whatever they are, and a file of the user's
+    // that no build wrote: only the former is the cleanup's to delete.
+    let mut written: Vec<String> = std::fs::read_dir(&cache)
         .unwrap()
         .filter_map(|e| e.ok())
         .map(|e| e.file_name().to_string_lossy().into_owned())
-        .filter(|name| name != "eviction-test-stale" && name != "graph-dir")
+        .filter(|name| turborepo_trace_store::CACHE_FILES.contains(&name.as_str()))
         .collect();
+    written.sort();
     assert!(!written.is_empty(), "the build wrote caches");
+    std::fs::write(cache.join("notes.txt"), "keep").unwrap();
+    // The cache written longest ago, by its mtime, as an unchanged tree leaves it.
+    let old = written[0].clone();
+    std::fs::File::options()
+        .write(true)
+        .open(cache.join(&old))
+        .unwrap()
+        .set_modified(std::time::SystemTime::now() - std::time::Duration::from_secs(3600))
+        .unwrap();
 
-    // Age: the file last written an hour ago goes, what this build wrote stays.
+    // Age: the cache last written an hour ago goes, the others stay.
     let aged = turborepo_trace_store::evict(&out, Some(std::time::Duration::from_secs(600)), None)
         .unwrap();
-    assert!(!stale.exists(), "{aged:?}");
     assert_eq!(aged.cached, 1, "{aged:?}");
+    assert!(!cache.join(&old).exists(), "{old} stayed: {aged:?}");
     assert!(aged.removed >= 1, "the superseded shard version: {aged:?}");
-    for name in &written {
+    for name in &written[1..] {
         assert!(cache.join(name).exists(), "{name} went: {aged:?}");
     }
+    assert!(
+        cache.join("notes.txt").exists(),
+        "not a cache a build writes"
+    );
     assert_eq!(export(&out), before, "the snapshot is untouched");
 
     // Size: over the limit, the caches go and the store stays.
@@ -271,6 +283,10 @@ fn eviction_keeps_the_snapshot_and_trims_the_rest() {
     for name in &written {
         assert!(!cache.join(name).exists(), "{name} stayed: {sized:?}");
     }
+    assert!(
+        cache.join("notes.txt").exists(),
+        "not a cache a build writes"
+    );
     // Nothing left to reclaim: a second run removes nothing.
     let again = turborepo_trace_store::evict(&out, None, Some(1)).unwrap();
     assert_eq!(

@@ -2183,6 +2183,11 @@ pub fn build(opts: &GraphOptions, langs: &[Arc<dyn Language>]) -> Result<BuildRe
     let repo = turborepo_trace_core::fs::normalize(&repo);
     let out = opts.out_dir(&repo);
     let store = out.join("store");
+    // A checkout controls `.turbo/trace`: a link at it, above it, at the store or
+    // at the caches must not carry the build's writes outside the repository.
+    crate::real_dir(&out, Some(&repo))?;
+    crate::real_dir(&store, Some(&repo))?;
+    crate::real_dir(&crate::cache_dir(&out), Some(&repo))?;
     std::fs::create_dir_all(&store).map_err(|e| Error::io(&store, e))?;
     // The graph directory by its real path, as the walk and the tracer meet it
     // below the (canonical) root: they leave it out by path.

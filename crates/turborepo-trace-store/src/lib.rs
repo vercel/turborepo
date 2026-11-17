@@ -232,11 +232,49 @@ pub enum Error {
     /// No graph has been built in this directory.
     #[error("no graph in {0}")]
     NotBuilt(PathBuf),
+    /// A graph directory, or the store or caches below it, is a symbolic link.
+    ///
+    /// A graph directory is checkout-controlled (a commit can add
+    /// `.turbo/trace`), so writing into it and cleaning it up refuse to follow
+    /// one: the link would reach files outside the repository.
+    #[error("{0}: not a directory (a symbolic link)")]
+    Linked(PathBuf),
 }
 
 impl Error {
     pub(crate) fn io(path: &Path, e: std::io::Error) -> Error {
         Error::Io(path.to_path_buf(), e)
+    }
+}
+
+/// Refuses a symbolic link at `path`, and at every component of `path` below
+/// `base` when `path` lies there: that is the part of the path a checkout
+/// controls, and following a link in it would write, or delete, outside the
+/// repository. Without such a base (a graph directory or cache outside the
+/// checkout) `path` itself is all that can be checked.
+///
+/// A `path` that does not exist is not a link: the caller creates it.
+pub(crate) fn real_dir(path: &Path, base: Option<&Path>) -> Result<(), Error> {
+    let stop = base.filter(|b| path.starts_with(b));
+    if stop.is_none() {
+        return not_link(path);
+    }
+    for at in path.ancestors() {
+        not_link(at)?;
+        if stop == Some(at) {
+            break;
+        }
+    }
+    Ok(())
+}
+
+/// `path` is not a symbolic link (it need not exist).
+fn not_link(path: &Path) -> Result<(), Error> {
+    match std::fs::symlink_metadata(path) {
+        Ok(meta) if meta.file_type().is_symlink() => Err(Error::Linked(path.to_path_buf())),
+        Ok(_) => Ok(()),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(e) => Err(Error::io(path, e)),
     }
 }
 
@@ -369,9 +407,19 @@ pub struct GcReport {
 /// Deletes from `<out>/store` every shard the current manifest does not
 /// reference: rewrites the pack with exactly the referenced shards (dropping
 /// its log) and removes every other file but the snapshot's walked-file list.
+///
+/// Only files a build writes there are deleted (see [`is_store_file`]), and
+/// only when they are regular files: a graph directory is checkout-controlled,
+/// so a symbolic link at it, above it, or at the store is refused
+/// ([`Error::Linked`]) and anything else in the store is left alone.
 pub fn gc(out: &Path) -> Result<GcReport, Error> {
     let manifest = Manifest::read(out).ok_or_else(|| Error::NotBuilt(out.to_path_buf()))?;
     let store = out.join("store");
+    // Before anything is read through them or deleted below them: a commit can
+    // add `.turbo/trace`, or the store, as a link to anywhere.
+    let base = PathBuf::from(&manifest.root);
+    real_dir(out, Some(&base))?;
+    real_dir(&store, Some(&base))?;
     let pack = shard::Pack::open(&store);
     let mut r = GcReport::default();
     let shards: Vec<(&str, shard::LoadedShard)> = manifest
@@ -404,6 +452,15 @@ pub fn gc(out: &Path) -> Result<GcReport, Error> {
     for e in std::fs::read_dir(&store).map_err(|e| Error::io(&store, e))? {
         let e = e.map_err(|e| Error::io(&store, e))?;
         let name = e.file_name().to_string_lossy().into_owned();
+        // What a build did not write there is not the cleanup's to delete, and a
+        // link is not a file of ours whatever it is called.
+        let regular = e
+            .file_type()
+            .map_err(|err| Error::io(&e.path(), err))?
+            .is_file();
+        if !regular || !is_store_file(&name) {
+            continue;
+        }
         if keep.contains(name.as_str()) {
             if name != shard::PACK_FILE {
                 r.kept += 1;
@@ -415,6 +472,18 @@ pub fn gc(out: &Path) -> Result<GcReport, Error> {
         r.removed += 1;
     }
     Ok(r)
+}
+
+/// Whether `name` is a file a build writes in the store: the pack, its log, a
+/// shard key, a walked-file list, or the temporary file an interrupted
+/// [`write_atomic`] left (`<name>.tmp.<pid>.<thread>`). A store also holds what
+/// a checkout put there, which [`gc`] leaves alone.
+pub fn is_store_file(name: &str) -> bool {
+    let name = name.split(".tmp.").next().unwrap_or(name);
+    name == shard::PACK_FILE
+        || name == shard::LOG_FILE
+        || manifest::is_shard_key(name)
+        || manifest::is_files_name(name)
 }
 
 /// Bytes the current snapshot occupies in the store: the pack and its log, the
@@ -471,6 +540,11 @@ pub struct EvictReport {
 /// and loses the caches. Every cache file is state a build recomputes, so
 /// eviction costs a slower next build and changes no result.
 ///
+/// Only the cache files a build writes ([`CACHE_FILES`]) are removed, and only
+/// when they are regular files: a symbolic link at the graph directory, above
+/// it, or at a cache directory is refused ([`Error::Linked`]), and anything
+/// else there is left alone.
+///
 /// Best effort, like the task cache's eviction: a file that cannot be removed
 /// is left for the next run.
 pub fn evict(
@@ -478,8 +552,15 @@ pub fn evict(
     max_age: Option<std::time::Duration>,
     max_size: Option<u64>,
 ) -> Result<EvictReport, Error> {
+    let manifest = Manifest::read(out);
+    // Before anything below them is deleted: a commit can add `.turbo/trace`, or
+    // its cache directory, as a link to anywhere.
+    let base = manifest.as_ref().map(|m| PathBuf::from(&m.root));
+    let cache = cache_dir(out);
+    real_dir(out, base.as_deref())?;
+    real_dir(&cache, base.as_deref())?;
     let mut report = EvictReport::default();
-    match &Manifest::read(out) {
+    match &manifest {
         // The store already holds exactly the snapshot: there is nothing to
         // reclaim, and a pack of the whole snapshot is not rewritten for nothing.
         Some(manifest) if store_is_current(out, manifest) => {
@@ -506,9 +587,10 @@ pub fn evict(
         + std::fs::metadata(out.join("graph.json")).map_or(0, |m| m.len());
     let mut cached = 0u64;
     let mut files = Vec::new();
-    for file in files_below(&cache_dir(out)) {
-        // The note naming the graph directory a per-machine cache belongs to.
-        if file.path.file_name().and_then(|n| n.to_str()) == Some("graph-dir") {
+    for file in files_below(&cache) {
+        // Only the caches a build writes are the cleanup's to delete: a graph
+        // directory is checkout-controlled and may hold anything.
+        if !CACHE_FILES.contains(&file.name.as_str()) {
             continue;
         }
         cached += file.bytes;
@@ -552,8 +634,26 @@ pub fn evict(
     Ok(report)
 }
 
+/// The files a build keeps in the caches below [`cache_dir`], by name, and the
+/// only ones [`evict`] removes: the cache directory is checkout-controlled when
+/// it sits in the graph directory, so a file there that no build wrote is not
+/// the cleanup's to delete. The note naming the graph directory a per-machine
+/// cache belongs to (`graph-dir`) is deliberately absent.
+pub const CACHE_FILES: &[&str] = &[
+    "hashes",       // [`hash::HashCache`]
+    "manifests",    // [`smallfiles::SmallFiles`]
+    "walk",         // [`walk::walk_cached`]
+    "obs",          // [`build`]
+    "composed",     // [`compose::reuse`]
+    "composed.for", // [`compose::reuse`]
+    "tables",       // [`compose::tables`]
+    "names-data",   // `turborepo-trace/src/names.rs`
+    "pack",         // a pack in the pre-log location
+];
+
 /// A file of a graph directory, for [`evict`].
 struct FileUse {
+    name: String,
     path: PathBuf,
     bytes: u64,
     /// When the file last changed, which is when it was last written: a build
@@ -578,28 +678,30 @@ fn store_is_current(out: &Path, manifest: &Manifest) -> bool {
         .into_iter()
         .chain(manifest.files.as_deref())
         .collect();
-    files_below(&store).iter().all(|f| {
-        f.path
-            .file_name()
-            .and_then(|n| n.to_str())
-            .is_some_and(|n| keep.contains(n))
-    })
+    files_below(&store)
+        .iter()
+        .all(|f| keep.contains(f.name.as_str()))
 }
 
-/// The files directly below `dir`.
+/// The regular files directly below `dir`. Symbolic links and directories are
+/// not files a build wrote, and are never followed or removed.
 fn files_below(dir: &Path) -> Vec<FileUse> {
     let mut files = Vec::new();
     let Ok(entries) = std::fs::read_dir(dir) else {
         return files;
     };
     for entry in entries.flatten() {
+        let Ok(kind) = entry.file_type() else {
+            continue;
+        };
+        if !kind.is_file() {
+            continue;
+        }
         let Ok(meta) = entry.metadata() else {
             continue;
         };
-        if !meta.is_file() {
-            continue;
-        }
         files.push(FileUse {
+            name: entry.file_name().to_string_lossy().into_owned(),
             path: entry.path(),
             bytes: meta.len(),
             used: meta.modified().unwrap_or(std::time::UNIX_EPOCH),
