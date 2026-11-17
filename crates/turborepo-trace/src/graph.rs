@@ -210,8 +210,9 @@ pub(crate) fn open(loc: &GraphLoc, no_refresh: bool, stats: bool) -> Result<Grap
 }
 
 /// `g` with the facts derived from the composed graph applied:
-/// working-directory-relative references resolved per test
-/// (`turborepo_trace_store::Graph::cwd_patch`) and the repository's
+/// working-directory-relative references resolved per test, or from the
+/// directory of the task that runs a build script
+/// (`turborepo_trace_store::Graph::cwd_patch`), and the repository's
 /// hints (`turborepo_trace_store::Hints`, from the file named by
 /// `TURBO_TRACE_DEBUG_HINTS`: the tests' configuration; `turbo trace` reads
 /// none). `TURBO_TRACE_DEBUG_CWD=0` turns the whole derived layer off, hints

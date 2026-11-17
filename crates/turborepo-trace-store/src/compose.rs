@@ -197,6 +197,8 @@ pub struct Graph {
     entry_cwds: Vec<(u32, String)>,
     /// [`Graph::set_cwd_root_always`].
     cwd_root_always: bool,
+    /// [`Graph::set_cwd_strict`].
+    cwd_strict: bool,
     /// [`Graph::cwd_assumed`]: `(entry, sentence)`.
     cwd_notes: std::sync::Mutex<Vec<(u32, String)>>,
     /// [`Graph::cwd_dropped`].
@@ -348,6 +350,7 @@ impl Graph {
                     tables_cache: Some(crate::cache_dir(out).join("tables")),
                     entry_cwds: Vec::new(),
                     cwd_root_always: cwd::root_always_by_switch(),
+                    cwd_strict: false,
                     cwd_notes: Default::default(),
                     cwd_dropped: Default::default(),
                     carried,
@@ -615,6 +618,7 @@ impl Graph {
             tables_cache: Some(crate::cache_dir(out).join("tables")),
             entry_cwds: Vec::new(),
             cwd_root_always: cwd::root_always_by_switch(),
+            cwd_strict: false,
             cwd_notes: Default::default(),
             cwd_dropped: Default::default(),
             carried: None,
@@ -1380,6 +1384,36 @@ impl Graph {
         out
     }
 
+    /// The directories the commands of build task `n` run in, when that is
+    /// known (`turborepo_trace_graph::names`, "Who runs a process"): a
+    /// package script (run by npm, pnpm, yarn or bun, through turbo too) runs
+    /// in the directory of its package, the one in the task's id. `None` for a
+    /// task of another source, for a script with a command line that changes
+    /// directory or hands one to its tool, which the stored task does not
+    /// resolve, and for a script that starts a shell or a script file
+    /// ([`starts_a_script`]): what that runs, it runs where it chooses.
+    pub fn task_dirs(&self, n: NodeId) -> Option<Vec<String>> {
+        let t = self.task(n)?;
+        let package_script = !t.sources.is_empty()
+            && t.sources
+                .iter()
+                .all(|s| matches!(s.as_str(), "npm" | "turbo"));
+        if !package_script
+            || t.lines.iter().any(|l| changes_directory(l.as_str()))
+            || t.commands
+                .iter()
+                .any(|c| starts_a_script(c.program.as_ref().map(|p| p.as_str())))
+        {
+            return None;
+        }
+        let dir = t.id.as_str().strip_prefix("task:")?.rsplit_once('#')?.0;
+        Some(vec![if dir == "." {
+            String::new()
+        } else {
+            dir.trim_matches('/').to_owned()
+        }])
+    }
+
     /// The task record of a task node.
     pub fn task(&self, n: NodeId) -> Option<&shard::ArchivedTaskRec> {
         let node = self.nodes[n.index()];
@@ -2045,6 +2079,38 @@ fn output_may_reach(drel: &str, out_pattern: Option<&str>, exclude: &[String]) -
         .any(|e| expand_braces(e).iter().all(|a| covers_dir(a)))
 }
 
+/// Whether a command line can run a program somewhere else than where it
+/// starts: `cd`, `pushd`, or a tool's option that names a directory to work in.
+fn changes_directory(line: &str) -> bool {
+    line.split(|c: char| c.is_whitespace() || matches!(c, ';' | '&' | '|' | '(' | ')'))
+        .any(|w| {
+            matches!(
+                w,
+                "cd" | "pushd" | "popd" | "-C" | "--cwd" | "--dir" | "--prefix" | "--cd"
+            ) || ["--cwd=", "--dir=", "--prefix=", "--cd="]
+                .iter()
+                .any(|p| w.starts_with(p))
+        })
+}
+
+/// Whether the program of a command (after wrapper stripping; `None`: not
+/// recognized) is a shell or a script file run by its path (`bash gen.sh`,
+/// `./scripts/build`, `x.sh`): it can change directory before it starts the
+/// program that reads.
+fn starts_a_script(program: Option<&str>) -> bool {
+    match program {
+        None => true,
+        Some(p) => {
+            matches!(
+                p,
+                "bash" | "sh" | "zsh" | "dash" | "ksh" | "fish" | "source" | "."
+            ) || p.contains('/')
+                || p.ends_with(".sh")
+                || p.ends_with(".bash")
+        }
+    }
+}
+
 /// Whether the output at repo-relative `p` (with an optional glob and excludes
 /// below it) covers the repo-relative `path`.
 fn output_covers(p: &str, pattern: Option<&str>, exclude: &[String], path: &str) -> bool {
@@ -2402,7 +2468,42 @@ impl GraphView for Graph {
 
 #[cfg(test)]
 mod tests {
-    use super::{may_list_output, output_may_reach};
+    use super::{changes_directory, may_list_output, output_may_reach, starts_a_script};
+
+    #[test]
+    fn where_a_task_runs_is_not_known_behind_a_directory_change_or_a_script() {
+        for line in [
+            "cd scripts && node ../build.js",
+            "pnpm --dir ../x build",
+            "make -C sub",
+            "node x.js --cwd=..",
+            "(pushd a; node b.js)",
+            "npm --prefix web run build",
+        ] {
+            assert!(changes_directory(line), "{line}");
+        }
+        for line in [
+            "node build.js",
+            "tsx scripts/build.ts --watch",
+            "next build && node post.js",
+            "node build.js --define=cdn",
+        ] {
+            assert!(!changes_directory(line), "{line}");
+        }
+        for program in [
+            None,
+            Some("bash"),
+            Some("sh"),
+            Some("./scripts/gen"),
+            Some("scripts/gen.sh"),
+            Some("gen.sh"),
+        ] {
+            assert!(starts_a_script(program), "{program:?}");
+        }
+        for program in ["node", "tsx", "next", "go", "tsc"] {
+            assert!(!starts_a_script(Some(program)), "{program}");
+        }
+    }
 
     #[test]
     fn listings_inside_an_output_respect_its_pattern_and_excludes() {

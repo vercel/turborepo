@@ -711,70 +711,6 @@ fn entry_cwds(g: &Graph) -> impl Fn(NodeId) -> Vec<String> + '_ {
     }
 }
 
-/// The directories the commands of a build task run in, when that is known
-/// (`turborepo_trace_graph::names`, "Who runs a process"): a package script
-/// (run by npm, pnpm, yarn or bun, through turbo too) runs in the directory of
-/// its package, the one in the task's id. `None` for a task of another source,
-/// for a script with a command line that changes directory or hands one to its
-/// tool, which the stored task does not resolve, and for a script that starts a
-/// shell or a script file ([`starts_a_script`]): what that runs, it runs where
-/// it chooses.
-fn task_dirs(g: &Graph) -> impl Fn(NodeId) -> Option<Vec<String>> + '_ {
-    move |n| {
-        let t = g.task(n)?;
-        let package_script = !t.sources.is_empty()
-            && t.sources
-                .iter()
-                .all(|s| matches!(s.as_str(), "npm" | "turbo"));
-        if !package_script
-            || t.lines.iter().any(|l| changes_directory(l.as_str()))
-            || t.commands
-                .iter()
-                .any(|c| starts_a_script(c.program.as_ref().map(|p| p.as_str())))
-        {
-            return None;
-        }
-        let dir = t.id.as_str().strip_prefix("task:")?.rsplit_once('#')?.0;
-        Some(vec![if dir == "." {
-            String::new()
-        } else {
-            dir.trim_matches('/').to_owned()
-        }])
-    }
-}
-
-/// Whether a command line can run a program somewhere else than where it
-/// starts: `cd`, `pushd`, or a tool's option that names a directory to work in.
-fn changes_directory(line: &str) -> bool {
-    line.split(|c: char| c.is_whitespace() || matches!(c, ';' | '&' | '|' | '(' | ')'))
-        .any(|w| {
-            matches!(
-                w,
-                "cd" | "pushd" | "popd" | "-C" | "--cwd" | "--dir" | "--prefix" | "--cd"
-            ) || ["--cwd=", "--dir=", "--prefix=", "--cd="]
-                .iter()
-                .any(|p| w.starts_with(p))
-        })
-}
-
-/// Whether the program of a command (after wrapper stripping; `None`: not
-/// recognized) is a shell or a script file run by its path (`bash gen.sh`,
-/// `./scripts/build`, `x.sh`): it can change directory before it starts the
-/// program that reads.
-fn starts_a_script(program: Option<&str>) -> bool {
-    match program {
-        None => true,
-        Some(p) => {
-            matches!(
-                p,
-                "bash" | "sh" | "zsh" | "dash" | "ksh" | "fish" | "source" | "."
-            ) || p.contains('/')
-                || p.ends_with(".sh")
-                || p.ends_with(".bash")
-        }
-    }
-}
-
 /// Adds to `report` the entries that `changes` affect through names. Returns
 /// how many were added (entries that nothing else selected).
 ///
@@ -800,7 +736,10 @@ pub(crate) fn apply<V: GraphView>(
         return 0;
     }
     let cwds = entry_cwds(g);
-    let tasks = task_dirs(g);
+    // The directories the commands of a build task run in, when that is known
+    // (`turborepo_trace_graph::names`, "Who runs a process";
+    // `turborepo_trace_store::Graph::task_dirs`).
+    let tasks = |n: NodeId| g.task_dirs(n);
     let pass = |entries: &NodeSet, runtime: &NodeSet| {
         engine.named_affected(
             &layer.index,
@@ -872,41 +811,6 @@ mod tests {
     use turborepo_trace_graph::ChangeKind;
 
     use super::*;
-
-    #[test]
-    fn where_a_task_runs_is_not_known_behind_a_directory_change_or_a_script() {
-        for line in [
-            "cd scripts && node ../build.js",
-            "pnpm --dir ../x build",
-            "make -C sub",
-            "node x.js --cwd=..",
-            "(pushd a; node b.js)",
-            "npm --prefix web run build",
-        ] {
-            assert!(changes_directory(line), "{line}");
-        }
-        for line in [
-            "node build.js",
-            "tsx scripts/build.ts --watch",
-            "next build && node post.js",
-            "node build.js --define=cdn",
-        ] {
-            assert!(!changes_directory(line), "{line}");
-        }
-        for program in [
-            None,
-            Some("bash"),
-            Some("sh"),
-            Some("./scripts/gen"),
-            Some("scripts/gen.sh"),
-            Some("gen.sh"),
-        ] {
-            assert!(starts_a_script(program), "{program:?}");
-        }
-        for program in ["node", "tsx", "next", "go", "tsc"] {
-            assert!(!starts_a_script(Some(program)), "{program}");
-        }
-    }
 
     #[test]
     fn tool_manifests() {

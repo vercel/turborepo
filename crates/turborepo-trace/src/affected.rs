@@ -913,8 +913,11 @@ fn affected(cmd: AffectedCmd, out: &mut dyn Write, host: Option<&Host>) -> Resul
         .strict(cmd.strict);
     let aopts = opts.affected.clone();
     // Under --strict a working-directory path keeps its reading from the repository
-    // root (`turborepo_trace_store::Graph::set_cwd_root_always`).
+    // root (`turborepo_trace_store::Graph::set_cwd_root_always`), and a read whose
+    // directory cannot be bounded is not resolved with the test that reaches it
+    // (`turborepo_trace_store::Graph::set_cwd_strict`).
     g.set_cwd_root_always(cmd.strict);
+    g.set_cwd_strict(cmd.strict);
     // Working-directory-relative references resolved per test (same node ids as
     // `g`).
     let dg = crate::graph::derived(&g, cmd.stats)?;
