@@ -248,15 +248,15 @@ impl SCM {
             // tracked paths elsewhere in the repository must not fail this query.
             match git.git_ls_files_cached_with_unsupported() {
                 Ok(list) => list.paths.into_iter().collect(),
-                Err(err) if err.is_resource_exhaustion() => return Err(err),
-                Err(err) => {
+                Err(err) if git.has_no_index_file() => {
                     debug!(
-                        "git ls-files failed for {:?}: {}. No outputs are tracked, as with manual \
-                         hashing",
+                        "git ls-files failed for {:?}: {}. The repository has no index file, so \
+                         no outputs are tracked",
                         package_path, err,
                     );
                     return Ok(GitHashes::new());
                 }
+                Err(err) => return Err(err),
             }
         } else {
             std::collections::HashSet::new()
@@ -350,6 +350,15 @@ impl SCM {
 }
 
 impl GitRepo {
+    fn has_no_index_file(&self) -> bool {
+        crate::worktree::resolve_git_dir(&self.root).is_ok_and(|git_dir| {
+            matches!(
+                git_dir.join_component("index").as_std_path().try_exists(),
+                Ok(false)
+            )
+        })
+    }
+
     fn get_package_file_hashes<S: AsRef<str>>(
         &self,
         turbo_root: &AbsoluteSystemPath,
@@ -1053,8 +1062,9 @@ mod tests {
     }
 
     #[test]
-    fn test_tracked_outputs_are_empty_when_git_is_unusable() {
+    fn test_tracked_outputs_are_empty_when_git_fails_without_an_index_file() {
         let (_tmp, root) = tmp_dir();
+        root.join_component(".git").create_dir_all().unwrap();
         let stale = root.join_components(&["packages", "app", "dist", "stale.js"]);
         stale.ensure_dir().unwrap();
         stale.create_with_contents("stale output").unwrap();
@@ -1071,6 +1081,30 @@ mod tests {
             .unwrap()
             .is_empty()
         );
+    }
+
+    #[test]
+    fn test_tracked_outputs_fail_when_git_fails_with_an_index_file() {
+        let (_tmp, root) = tmp_dir();
+        setup_repository(&root);
+        let tracked = root.join_components(&["packages", "app", "dist", "LICENSE"]);
+        tracked.ensure_dir().unwrap();
+        tracked.create_with_contents("license").unwrap();
+        require_git_cmd(&root, &["add", "."]);
+        let scm = SCM::new(&root);
+        let read = || {
+            scm.get_tracked_output_hashes(
+                &root,
+                AnchoredSystemPath::new("packages/app").unwrap(),
+                &["dist/**".to_owned()],
+                &[],
+                None,
+            )
+        };
+        assert_eq!(read().unwrap().len(), 1);
+        root.join_components(&[".git", "HEAD"]).remove().unwrap();
+        assert!(root.join_components(&[".git", "index"]).exists());
+        assert!(read().is_err());
     }
 
     #[test]
