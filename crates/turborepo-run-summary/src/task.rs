@@ -49,6 +49,14 @@ pub struct TaskCacheSummary {
     /// A hash of uncommitted changes when the cache entry was produced.
     #[serde(skip_serializing_if = "Option::is_none")]
     dirty_hash: Option<String>,
+    /// `false` for a cache hit whose outputs were not restored because no
+    /// task in the run read them. Omitted when outputs were restored.
+    #[serde(skip_serializing_if = "is_true")]
+    outputs_restored: bool,
+}
+
+fn is_true(value: &bool) -> bool {
+    *value
 }
 
 #[derive(Debug, Serialize, Copy, Clone)]
@@ -178,7 +186,14 @@ impl TaskCacheSummary {
             source: None,
             sha: None,
             dirty_hash: None,
+            outputs_restored: true,
         }
+    }
+
+    /// Marks whether a cache hit's outputs were restored to disk.
+    pub fn with_outputs_restored(mut self, restored: bool) -> Self {
+        self.outputs_restored = restored || matches!(self.status, CacheStatus::Miss);
+        self
     }
 }
 
@@ -207,6 +222,7 @@ impl From<Option<CacheHitMetadata>> for TaskCacheSummary {
                     time_saved: cache_hit.time_saved,
                     sha: cache_hit.sha,
                     dirty_hash: cache_hit.dirty_hash,
+                    outputs_restored: true,
                 }
             }
             None => Self::cache_miss(),
@@ -231,6 +247,7 @@ impl From<Option<HashTrackerCacheHitMetadata>> for TaskCacheSummary {
                     time_saved: metadata.time_saved,
                     sha: metadata.sha,
                     dirty_hash: metadata.dirty_hash,
+                    outputs_restored: true,
                 }
             }
             None => Self::cache_miss(),
@@ -468,6 +485,7 @@ mod test {
             time_saved: 6,
             sha: None,
             dirty_hash: None,
+            outputs_restored: true,
         },
         serde_json::json!({
                 "local": true,
@@ -487,6 +505,7 @@ mod test {
             time_saved: 6,
             sha: Some("abc123".to_string()),
             dirty_hash: Some("def456".to_string()),
+            outputs_restored: true,
         },
         serde_json::json!({
                 "local": true,
@@ -498,6 +517,27 @@ mod test {
                 "dirtyHash": "def456",
             })
         ; "local cache hit with scm state"
+    )]
+    #[test_case(
+        TaskCacheSummary {
+            local: false,
+            remote: true,
+            status: CacheStatus::Hit,
+            source: Some(CacheSource::Remote),
+            time_saved: 6,
+            sha: None,
+            dirty_hash: None,
+            outputs_restored: false,
+        },
+        serde_json::json!({
+                "local": false,
+                "remote": true,
+                "status": "HIT",
+                "source": "REMOTE",
+                "timeSaved": 6,
+                "outputsRestored": false,
+            })
+        ; "cache hit with outputs not restored"
     )]
     #[test_case(
         TaskSummaryTaskDefinition {

@@ -139,7 +139,8 @@ where
             .env_vars(task_id)
             .ok_or_else(|| Error::MissingEnvVars(task_id.clone()))?;
 
-        let cache_summary = TaskCacheSummary::from(self.hash_tracker.cache_status(task_id));
+        let cache_summary = TaskCacheSummary::from(self.hash_tracker.cache_status(task_id))
+            .with_outputs_restored(self.hash_tracker.outputs_restored(task_id));
 
         let (dependencies, dependents) = self.dependencies_and_dependents(task_id, display_task);
 

@@ -143,6 +143,8 @@ impl<'a, R: TaskGraphRunOpts> ExecContextFactory<'a, R> {
             is_github_actions: self.visitor.run_opts.is_github_actions(),
             pretty_prefix,
             task_cache,
+            unrestored_hit: None,
+            dependency_outputs: None,
             hash_tracker: self.visitor.task_hasher.task_hash_tracker(),
             errors: TaskErrorCollectorWrapper::from_arc(self.errors.clone()),
             warnings: TaskWarningCollectorWrapper::from_arc(self.visitor.warnings.clone()),

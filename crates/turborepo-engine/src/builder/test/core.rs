@@ -1504,3 +1504,57 @@ fn test_task_definition_validation_errors(tasks: serde_json::Value, task: &str, 
         "expected {expected:?}, got {err}"
     );
 }
+
+#[test]
+fn entrypoints_are_the_selected_tasks_and_survive_pruning() {
+    let repo_root_dir = TempDir::new().unwrap();
+    let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_dir.path()).unwrap();
+    let package_graph = mock_package_graph(
+        &repo_root,
+        package_jsons! {
+            repo_root,
+            "lib" => [],
+            "app" => ["lib"],
+            "web" => ["lib"]
+        },
+    );
+    let loader = TestTurboJsonLoader::new(HashMap::from([(
+        PackageName::Root,
+        turbo_json(json!({
+            "tasks": {
+                "test": { "dependsOn": ["build"] },
+                "build": { "dependsOn": ["^build"] }
+            }
+        })),
+    )]));
+    let engine = EngineBuilder::new(&repo_root, &package_graph, &loader, false)
+        .with_tasks(Some(Spanned::new(TaskName::from("test"))))
+        .with_workspaces(vec![PackageName::from("app"), PackageName::from("web")])
+        .build()
+        .unwrap();
+
+    // Requested tasks in selected packages are entrypoints; the tasks they
+    // pull in are not.
+    for task in ["app#test", "web#test"] {
+        assert!(
+            engine.is_entrypoint(&TaskId::try_from(task).unwrap()),
+            "{task}"
+        );
+    }
+    for task in ["app#build", "web#build", "lib#build"] {
+        let task_id = TaskId::try_from(task).unwrap();
+        assert!(engine.task_definition(&task_id).is_some(), "{task}");
+        assert!(!engine.is_entrypoint(&task_id), "{task}");
+    }
+
+    // Narrowing to a subset keeps only the retained selected tasks.
+    let engine = engine.retain_filtered_tasks(&HashSet::from([TaskId::new("app", "test")]));
+    assert!(engine.is_entrypoint(&TaskId::new("app", "test")));
+    assert!(!engine.is_entrypoint(&TaskId::new("web", "test")));
+    assert!(!engine.is_entrypoint(&TaskId::new("lib", "build")));
+    assert!(
+        engine
+            .task_definition(&TaskId::new("web", "test"))
+            .is_none()
+    );
+}

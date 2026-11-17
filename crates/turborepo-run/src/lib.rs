@@ -12,6 +12,7 @@ mod managed;
 pub use managed::ManagedRun;
 pub use turborepo_task_graph::ManagedEnvironment;
 pub(crate) mod scope;
+
 #[cfg(test)]
 mod task_definition_test;
 
@@ -1482,6 +1483,8 @@ impl Run {
         if let Some(tools) = &self.execution.managed_environment {
             visitor = visitor.with_managed_environment(tools.clone());
         }
+        visitor = visitor
+            .with_skip_unused_restores(skips_unused_restores(&self.execution.opts, is_watch));
         if self.execution.opts.run_opts.dry_run.is_some() {
             visitor.dry_run();
         }
@@ -2046,6 +2049,19 @@ fn emit_graphviz_warning() -> Result<(), io::Error> {
     )
     .emit();
     Ok(())
+}
+
+/// Whether a run leaves unused cache hits of unselected dependencies
+/// unrestored. Only runs that narrow the selection (filters, `--affected`, or
+/// running from inside a package) opt in; full runs and watch mode always
+/// restore every hit.
+fn skips_unused_restores(opts: &Opts, is_watch: bool) -> bool {
+    let scope = &opts.scope_opts;
+    opts.future_flags.skip_unused_restores
+        && !is_watch
+        && (!scope.filter_patterns.is_empty()
+            || scope.affected_range.is_some()
+            || scope.pkg_inference_root.is_some())
 }
 
 #[cfg(test)]

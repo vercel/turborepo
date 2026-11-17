@@ -161,6 +161,13 @@ pub struct FutureFlags {
     /// hash behavior.
     #[serde(default)]
     pub experimental_setup: bool,
+    /// Skip restoring the cached outputs of dependency-only tasks when no task
+    /// that runs in this invocation needs them. Applies to filtered and
+    /// `--affected` runs: selected tasks and the dependencies of tasks that
+    /// execute are still restored, while other dependency cache hits are only
+    /// reported. Disabled by default.
+    #[serde(default)]
+    pub skip_unused_restores: bool,
 }
 
 // Manual TS impl because #[derive(TS)] conflicts with the Deserializable
@@ -181,7 +188,7 @@ impl TS for FutureFlags {
          boolean, strictTaskEntrypointSelection?: boolean, globalConfiguration?: boolean, \
          experimentalCargoWorkspaces?: boolean, experimentalPythonWorkspaces?: boolean, \
          experimentalGoWorkspaces?: boolean, experimentalTaskCommand?: boolean, \
-         experimentalSetup?: boolean, hashFilePermissions?: boolean }"
+         experimentalSetup?: boolean, hashFilePermissions?: boolean, skipUnusedRestores?: boolean }"
             .to_string()
     }
 
@@ -192,7 +199,7 @@ impl TS for FutureFlags {
          boolean, strictTaskEntrypointSelection?: boolean, globalConfiguration?: boolean, \
          experimentalCargoWorkspaces?: boolean, experimentalPythonWorkspaces?: boolean, \
          experimentalGoWorkspaces?: boolean, experimentalTaskCommand?: boolean, \
-         experimentalSetup?: boolean, hashFilePermissions?: boolean }"
+         experimentalSetup?: boolean, hashFilePermissions?: boolean, skipUnusedRestores?: boolean }"
             .to_string()
     }
 
@@ -204,7 +211,7 @@ impl TS for FutureFlags {
          globalConfiguration?: boolean, experimentalCargoWorkspaces?: boolean, \
          experimentalPythonWorkspaces?: boolean, experimentalGoWorkspaces?: boolean, \
          experimentalTaskCommand?: boolean, experimentalSetup?: boolean, hashFilePermissions?: \
-         boolean };"
+         boolean, skipUnusedRestores?: boolean };"
             .to_string()
     }
 
@@ -216,7 +223,7 @@ impl TS for FutureFlags {
          globalConfiguration?: boolean, experimentalCargoWorkspaces?: boolean, \
          experimentalPythonWorkspaces?: boolean, experimentalGoWorkspaces?: boolean, \
          experimentalTaskCommand?: boolean, experimentalSetup?: boolean, hashFilePermissions?: \
-         boolean };"
+         boolean, skipUnusedRestores?: boolean };"
             .to_string()
     }
 
@@ -255,6 +262,21 @@ mod tests {
     }
 
     #[test]
+    fn skip_unused_restores_defaults_to_false_and_parses() {
+        assert!(!FutureFlags::default().skip_unused_restores);
+        for (json, expected) in [
+            (r#"{}"#, false),
+            (r#"{"futureFlags":{"skipUnusedRestores":false}}"#, false),
+            (r#"{"futureFlags":{"skipUnusedRestores":true}}"#, true),
+        ] {
+            let raw = crate::RawRootTurboJson::parse(json, "turbo.json").unwrap();
+            let raw: crate::RawTurboJson = raw.try_into().unwrap();
+            let config = crate::TurboJson::try_from(raw).unwrap();
+            assert_eq!(config.future_flags.skip_unused_restores, expected);
+        }
+    }
+
+    #[test]
     fn future_flags_are_optional_in_all_typescript_forms() {
         for typescript in [
             FutureFlags::inline(),
@@ -264,6 +286,7 @@ mod tests {
         ] {
             assert!(typescript.contains("experimentalSetup?: boolean"));
             assert!(typescript.contains("hashFilePermissions?: boolean"));
+            assert!(typescript.contains("skipUnusedRestores?: boolean"));
         }
     }
 }

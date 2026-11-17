@@ -179,6 +179,9 @@ pub struct Engine<S = Built, T: TaskDefinitionInfo = TaskInfo> {
     task_definitions: HashMap<TaskId<'static>, T>,
     task_locations: HashMap<TaskId<'static>, Spanned<()>>,
     package_tasks: HashMap<PackageName, Vec<petgraph::graph::NodeIndex>>,
+    /// Tasks the run's selection asked for, as opposed to tasks that are only
+    /// in the graph because a selected task depends on them.
+    entrypoints: HashSet<TaskId<'static>>,
     pub has_non_interruptible_tasks: bool,
 }
 
@@ -216,8 +219,15 @@ impl<T: TaskDefinitionInfo + Default + Clone> Engine<Building, T> {
             task_definitions: HashMap::default(),
             task_locations: HashMap::default(),
             package_tasks: HashMap::default(),
+            entrypoints: HashSet::default(),
             has_non_interruptible_tasks: false,
         }
+    }
+
+    /// Records the tasks the run's selection asked for. Every other task in
+    /// the graph is only a dependency of one of them.
+    pub fn set_entrypoints(&mut self, entrypoints: impl IntoIterator<Item = TaskId<'static>>) {
+        self.entrypoints = entrypoints.into_iter().collect();
     }
 
     pub fn get_index(&mut self, task_id: &TaskId<'static>) -> petgraph::graph::NodeIndex {
@@ -278,6 +288,7 @@ impl<T: TaskDefinitionInfo + Default + Clone> Engine<Building, T> {
             task_definitions,
             task_locations,
             package_tasks,
+            entrypoints,
             has_non_interruptible_tasks,
             ..
         } = self;
@@ -289,6 +300,7 @@ impl<T: TaskDefinitionInfo + Default + Clone> Engine<Building, T> {
             task_definitions,
             task_locations,
             package_tasks,
+            entrypoints,
             has_non_interruptible_tasks,
         }
     }
@@ -506,7 +518,7 @@ impl<T: TaskDefinitionInfo + Clone> Engine<Built, T> {
     /// Unlike `retain_affected_tasks`, this does NOT expand to dependents.
     /// Use this for `--filter` where the user explicitly scoped the task set
     /// and dependent expansion has already been handled by selector resolution.
-    pub fn retain_filtered_tasks(self, filtered_tasks: &HashSet<TaskId>) -> Self {
+    pub fn retain_filtered_tasks(mut self, filtered_tasks: &HashSet<TaskId>) -> Self {
         let entrypoint_indices: Vec<_> = filtered_tasks
             .iter()
             .filter_map(|task_id| self.task_lookup.get(task_id))
@@ -532,6 +544,10 @@ impl<T: TaskDefinitionInfo + Clone> Engine<Built, T> {
             "task graph pruned for --filter"
         );
 
+        // Only the filtered tasks remain selected; everything else retained
+        // here is a dependency of one of them.
+        self.entrypoints
+            .retain(|task| filtered_tasks.contains(task));
         self.prune_to_reachable(&reachable, false)
     }
 
@@ -677,6 +693,8 @@ impl<T: TaskDefinitionInfo + Clone> Engine<Built, T> {
             .retain(|id, _| self.task_lookup.contains_key(id));
         self.task_locations
             .retain(|id, _| self.task_lookup.contains_key(id));
+        self.entrypoints
+            .retain(|id| self.task_lookup.contains_key(id));
 
         self.package_tasks =
             self.task_lookup
@@ -694,6 +712,12 @@ impl<T: TaskDefinitionInfo + Clone> Engine<Built, T> {
             .any(|def| def.persistent() && !def.interruptible());
 
         self
+    }
+
+    /// Whether the run's selection asked for `task_id`, rather than the task
+    /// being in the graph only as a dependency of a selected task.
+    pub fn is_entrypoint(&self, task_id: &TaskId) -> bool {
+        self.entrypoints.contains(task_id)
     }
 
     pub fn dependencies(&self, task_id: &TaskId) -> Option<Vec<&TaskNode>> {

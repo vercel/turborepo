@@ -539,6 +539,43 @@ are enabled, a plain task-level filter drops a matching task without a command,
 while `...` can explicitly select executable dependencies or dependents through
 that missing task node.
 
+#### `skipUnusedRestores`
+
+Default: `false`
+
+Skip restoring cached outputs that nothing in the run reads. With `--filter`,
+`--affected`, or a run started inside a package directory, Turborepo also runs
+the tasks your selected tasks depend on. When such a dependency is a cache hit,
+its outputs only matter if a task that executes (a cache miss) can read them.
+
+```jsonc title="./turbo.json"
+{
+  "futureFlags": {
+    "skipUnusedRestores": true,
+  },
+}
+```
+
+With this flag enabled, Turborepo checks the cache status of every task before
+the run starts. It then restores:
+
+- Outputs of the tasks you selected, so they are always on disk when the run
+  ends.
+- Outputs of every task that a task which executes depends on, directly or
+  transitively, before that task starts.
+- Outputs of producers for tasks that hash
+  [`dependencyOutputs`](#deferred-hashing).
+
+Other dependency cache hits aren't fetched, restored, or replayed. They are
+reported as `cache hit, outputs not restored (unused by this run)`, and in [Run
+Summaries](/docs/reference/run#--summarize) as cache hits with their hash and
+`"outputsRestored": false`. A dependent's hash includes its dependencies' task
+hashes, not their outputs, so cache keys are unchanged.
+
+If a task that was expected to be a cache hit has to execute after all, the
+skipped outputs it depends on are restored before it starts. Runs without a
+filter, `--dry`, and `turbo watch` restore every cache hit as before.
+
 #### `globalConfiguration`
 
 Default: `false`

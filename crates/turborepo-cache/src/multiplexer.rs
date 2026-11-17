@@ -381,37 +381,54 @@ impl CacheMultiplexer {
         let mut hits = vec![None; keys.len()];
         let mut remote_keys = Vec::new();
         for (index, key) in keys.iter().enumerate() {
-            if self.cache_config.local.read
-                && let Some(fs) = &self.fs
-                && let Ok(Some(hit)) = fs.exists(key)
-            {
+            if let Some(hit) = self.local_exists(key) {
                 hits[index] = Some(hit);
             } else {
                 remote_keys.push((index, key.clone()));
             }
         }
-        if remote_keys.is_empty() || !self.cache_config.remote.read {
+        if remote_keys.is_empty() {
             return hits;
         }
-        let Some(http) = self.get_http_cache() else {
-            return hits;
-        };
         let hashes: Vec<_> = remote_keys.iter().map(|(_, key)| key.clone()).collect();
-        let batch = http.batch_exists(&hashes).await;
+        let remote_hits = self.remote_batch_exists(&hashes).await;
+        for ((index, _), hit) in remote_keys.into_iter().zip(remote_hits) {
+            hits[index] = hit;
+        }
+        hits
+    }
+
+    /// Checks `keys` against the remote cache only, returning one result per
+    /// key in order. Uses one query request, falling back to concurrent HEADs
+    /// for keys the query does not answer.
+    pub(crate) async fn remote_batch_exists(
+        &self,
+        keys: &[String],
+    ) -> Vec<Option<CacheHitMetadata>> {
+        if keys.is_empty() || !self.cache_config.remote.read {
+            return vec![None; keys.len()];
+        }
+        let Some(http) = self.get_http_cache() else {
+            return vec![None; keys.len()];
+        };
+        let batch = http.batch_exists(keys).await;
         // Older self-hosted caches do not implement the batch endpoint. Resolve
         // their HEAD fallbacks concurrently so network latency does not add up
         // once per task, while limiting the number of in-flight requests.
         let batch = &batch;
-        let resolved = stream::iter(remote_keys.into_iter().map(|(index, key)| async move {
-            let hit = match batch {
-                Ok(entries) => match entries.get(&key) {
-                    Some(hit) => hit.clone(),
-                    None => http.exists(&key).await.ok().flatten(),
-                },
-                Err(_) => http.exists(&key).await.ok().flatten(),
-            };
-            (index, hit)
-        }))
+        let mut hits = vec![None; keys.len()];
+        let resolved = stream::iter(keys.iter().cloned().enumerate().map(
+            |(index, key)| async move {
+                let hit = match batch {
+                    Ok(entries) => match entries.get(&key) {
+                        Some(hit) => hit.clone(),
+                        None => http.exists(&key).await.ok().flatten(),
+                    },
+                    Err(_) => http.exists(&key).await.ok().flatten(),
+                };
+                (index, hit)
+            },
+        ))
         .buffer_unordered(16)
         .collect::<Vec<_>>()
         .await;

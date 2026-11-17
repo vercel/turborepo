@@ -430,6 +430,16 @@ export interface FutureFlags {
    * @defaultValue `false`
    */
   experimentalSetup?: boolean;
+  /**
+   * Skip restoring the cached outputs of dependency-only tasks when no task
+   * that runs in this invocation needs them. Applies to filtered and
+   * `--affected` runs: selected tasks and the dependencies of tasks that
+   * execute are still restored, while other dependency cache hits are only
+   * reported. Disabled by default.
+   *
+   * @defaultValue `false`
+   */
+  skipUnusedRestores?: boolean;
 }
 
 export interface GlobalConfig {
