@@ -245,6 +245,14 @@ fn eviction_keeps_the_snapshot_and_trims_the_rest() {
         .unwrap()
         .set_modified(std::time::SystemTime::now() - std::time::Duration::from_secs(3600))
         .unwrap();
+    // The caches this build wrote, whatever they are.
+    let written: Vec<String> = std::fs::read_dir(&cache)
+        .unwrap()
+        .filter_map(|e| e.ok())
+        .map(|e| e.file_name().to_string_lossy().into_owned())
+        .filter(|name| name != "eviction-test-stale" && name != "graph-dir")
+        .collect();
+    assert!(!written.is_empty(), "the build wrote caches");
 
     // Age: the file last written an hour ago goes, what this build wrote stays.
     let aged = turborepo_trace_store::evict(&out, Some(std::time::Duration::from_secs(600)), None)
@@ -252,13 +260,17 @@ fn eviction_keeps_the_snapshot_and_trims_the_rest() {
     assert!(!stale.exists(), "{aged:?}");
     assert_eq!(aged.cached, 1, "{aged:?}");
     assert!(aged.removed >= 1, "the superseded shard version: {aged:?}");
-    assert!(cache.join("hashes").exists(), "{aged:?}");
+    for name in &written {
+        assert!(cache.join(name).exists(), "{name} went: {aged:?}");
+    }
     assert_eq!(export(&out), before, "the snapshot is untouched");
 
     // Size: over the limit, the caches go and the store stays.
     let sized = turborepo_trace_store::evict(&out, None, Some(1)).unwrap();
     assert!(sized.cached >= 1, "{sized:?}");
-    assert!(!cache.join("hashes").exists(), "{sized:?}");
+    for name in &written {
+        assert!(!cache.join(name).exists(), "{name} stayed: {sized:?}");
+    }
     // Nothing left to reclaim: a second run removes nothing.
     let again = turborepo_trace_store::evict(&out, None, Some(1)).unwrap();
     assert_eq!(
