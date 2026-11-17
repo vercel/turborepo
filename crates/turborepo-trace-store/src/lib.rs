@@ -8,6 +8,8 @@
 //!   implements [`turborepo_trace_graph::GraphView`], so the query engine and
 //!   every exporter run on it.
 //! - [`gc`]: deletes store files no manifest references.
+//! - [`evict`]: `gc` first, then turbo's `cacheMaxAge` and `cacheMaxSize`
+//!   applied to the rest of the graph directory.
 //!
 //! On-disk layout (`.turbo/trace/` by default):
 //!
@@ -432,6 +434,178 @@ pub fn store_size(out: &Path) -> u64 {
             .filter_map(|k| std::fs::metadata(store.join(k)).ok())
             .map(|m| m.len())
             .sum::<u64>()
+}
+
+/// What [`evict`] removed.
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
+pub struct EvictReport {
+    /// Store files kept: the shards of the current snapshot and its walked-file
+    /// list ([`GcReport::kept`]).
+    pub kept: usize,
+    /// Store files removed by [`gc`]: superseded shard versions, walked-file
+    /// lists no snapshot names ([`GcReport::removed`]).
+    pub removed: usize,
+    /// Cache files of the graph directory removed.
+    pub cached: usize,
+    /// Bytes freed.
+    pub bytes: u64,
+}
+
+/// Trims the graph directory `out` the way turbo's `cacheMaxAge` and
+/// `cacheMaxSize` trim the task cache in `.turbo/cache`: [`gc`] runs first, and
+/// the limits then apply to what it leaves that the next command does not need.
+///
+/// The shards the current `graph.json` references are never eviction
+/// candidates, whatever their age: they are what the next command opens, and
+/// [`gc`] (which goes first) drops every store file the manifest does not
+/// reference, superseded shard versions and a log that grew among them. Nothing
+/// is evicted one shard at a time: the store is a pack and its log
+/// ([`shard::Pack`]), not a file per shard, and after [`gc`] holds no shard the
+/// manifest leaves out.
+///
+/// The limits apply to the rest of the graph directory, the caches below
+/// [`cache_dir`] (the per-machine directory when the host sets one): a cache
+/// file last written more than `max_age` ago is removed, then the least
+/// recently used ones are removed while the graph directory is over
+/// `max_size`. A snapshot that is over `max_size` on its own keeps the store
+/// and loses the caches. Every cache file is state a build recomputes, so
+/// eviction costs a slower next build and changes no result.
+///
+/// Best effort, like the task cache's eviction: a file that cannot be removed
+/// is left for the next run.
+pub fn evict(
+    out: &Path,
+    max_age: Option<std::time::Duration>,
+    max_size: Option<u64>,
+) -> Result<EvictReport, Error> {
+    let mut report = EvictReport::default();
+    match &Manifest::read(out) {
+        // The store already holds exactly the snapshot: there is nothing to
+        // reclaim, and a pack of the whole snapshot is not rewritten for nothing.
+        Some(manifest) if store_is_current(out, manifest) => {
+            report.kept = manifest.shards.len() + usize::from(manifest.files.is_some());
+        }
+        _ => match gc(out) {
+            Ok(cleaned) => {
+                report.kept = cleaned.kept;
+                report.removed = cleaned.removed;
+                report.bytes = cleaned.bytes;
+            }
+            // No snapshot: nothing is referenced, and a store a build is writing is
+            // not the cleanup's to touch. Only the caches are trimmed.
+            Err(Error::NotBuilt(_)) => {}
+            Err(e) => return Err(e),
+        },
+    }
+    // What the next command needs, counted and never evicted: the store after
+    // `gc`, and the manifest.
+    let snapshot = files_below(&out.join("store"))
+        .iter()
+        .map(|f| f.bytes)
+        .sum::<u64>()
+        + std::fs::metadata(out.join("graph.json")).map_or(0, |m| m.len());
+    let mut cached = 0u64;
+    let mut files = Vec::new();
+    for file in files_below(&cache_dir(out)) {
+        // The note naming the graph directory a per-machine cache belongs to.
+        if file.path.file_name().and_then(|n| n.to_str()) == Some("graph-dir") {
+            continue;
+        }
+        cached += file.bytes;
+        files.push(file);
+    }
+    // Phase 1: age. A cache file's mtime is when its contents last changed, so a
+    // file that an unchanged tree left alone is the one that goes first.
+    if let Some(max_age) = max_age {
+        let cutoff = std::time::SystemTime::now()
+            .checked_sub(max_age)
+            .unwrap_or(std::time::UNIX_EPOCH);
+        for file in &files {
+            if file.used >= cutoff || std::fs::remove_file(&file.path).is_err() {
+                continue;
+            }
+            report.cached += 1;
+            report.bytes += file.bytes;
+            cached = cached.saturating_sub(file.bytes);
+        }
+    }
+    // Phase 2: size, least recently used first. The snapshot is not evictable
+    // but its bytes count: a graph directory over the limit with it alone keeps
+    // no cache at all.
+    if let Some(max_size) = max_size {
+        let mut total = cached + snapshot;
+        if total > max_size {
+            files.sort_by_key(|f| f.used);
+            for file in &files {
+                if total <= max_size {
+                    break;
+                }
+                if std::fs::remove_file(&file.path).is_err() {
+                    continue;
+                }
+                report.cached += 1;
+                report.bytes += file.bytes;
+                total = total.saturating_sub(file.bytes);
+            }
+        }
+    }
+    Ok(report)
+}
+
+/// A file of a graph directory, for [`evict`].
+struct FileUse {
+    path: PathBuf,
+    bytes: u64,
+    /// When the file last changed, which is when it was last written: a build
+    /// only rewrites a cache file whose contents differ, and every read of a
+    /// changed file writes it again.
+    used: std::time::SystemTime,
+}
+
+/// Whether the store of `out` already holds exactly what [`gc`] would leave:
+/// the manifest's shards, in the pack, and its walked-file list. No log (its
+/// records are replaced versions until a compaction), no other shard, no
+/// walked-file list no snapshot names.
+fn store_is_current(out: &Path, manifest: &Manifest) -> bool {
+    let store = out.join("store");
+    let (packed, _) = shard::Pack::index_only(&store);
+    if packed.len() != manifest.shards.len()
+        || !manifest.shards.iter().all(|s| packed.contains(&s.key))
+    {
+        return false;
+    }
+    let keep: std::collections::HashSet<&str> = [shard::PACK_FILE]
+        .into_iter()
+        .chain(manifest.files.as_deref())
+        .collect();
+    files_below(&store).iter().all(|f| {
+        f.path
+            .file_name()
+            .and_then(|n| n.to_str())
+            .is_some_and(|n| keep.contains(n))
+    })
+}
+
+/// The files directly below `dir`.
+fn files_below(dir: &Path) -> Vec<FileUse> {
+    let mut files = Vec::new();
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return files;
+    };
+    for entry in entries.flatten() {
+        let Ok(meta) = entry.metadata() else {
+            continue;
+        };
+        if !meta.is_file() {
+            continue;
+        }
+        files.push(FileUse {
+            path: entry.path(),
+            bytes: meta.len(),
+            used: meta.modified().unwrap_or(std::time::UNIX_EPOCH),
+        });
+    }
+    files
 }
 
 #[cfg(test)]

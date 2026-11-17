@@ -60,6 +60,7 @@ pub use api::{
     UncoveredTask, affected, explain, lint, prefetch_requests, supported, why,
 };
 pub use error::Error;
+pub use graph::evict_graph;
 
 /// The exit code of a command: `0` success; `affected --exit-code` and `lint`
 /// give `1` and `2` their meanings.

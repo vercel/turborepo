@@ -222,6 +222,53 @@ fn builds_composes_and_queries() {
     assert_eq!(gc.kept, before.1.len() + 1);
 }
 
+/// The graph directory follows age and size limits: `gc` runs first, so a
+/// superseded shard version goes and the snapshot's shards stay, and the limits
+/// are applied to what the snapshot does not need.
+#[test]
+fn eviction_keeps_the_snapshot_and_trims_the_rest() {
+    let t = fixture();
+    let r = canonical(t.path());
+    let out = r.join(".turbotrace");
+    build(&opts(&r, &out, Externals::Opaque), &langs()).unwrap();
+    // An edit re-keys a shard: the store holds the previous version of it.
+    write(&r, "packages/b/src/index.ts", "export default 3;\n");
+    build(&opts(&r, &out, Externals::Opaque), &langs()).unwrap();
+    turborepo_trace_store::wait_for_cache_writes();
+    let before = export(&out);
+    let cache = turborepo_trace_store::cache_dir(&out);
+    let stale = cache.join("eviction-test-stale");
+    std::fs::write(&stale, [0u8; 4096]).unwrap();
+    std::fs::File::options()
+        .write(true)
+        .open(&stale)
+        .unwrap()
+        .set_modified(std::time::SystemTime::now() - std::time::Duration::from_secs(3600))
+        .unwrap();
+
+    // Age: the file last written an hour ago goes, what this build wrote stays.
+    let aged = turborepo_trace_store::evict(&out, Some(std::time::Duration::from_secs(600)), None)
+        .unwrap();
+    assert!(!stale.exists(), "{aged:?}");
+    assert_eq!(aged.cached, 1, "{aged:?}");
+    assert!(aged.removed >= 1, "the superseded shard version: {aged:?}");
+    assert!(cache.join("hashes").exists(), "{aged:?}");
+    assert_eq!(export(&out), before, "the snapshot is untouched");
+
+    // Size: over the limit, the caches go and the store stays.
+    let sized = turborepo_trace_store::evict(&out, None, Some(1)).unwrap();
+    assert!(sized.cached >= 1, "{sized:?}");
+    assert!(!cache.join("hashes").exists(), "{sized:?}");
+    // Nothing left to reclaim: a second run removes nothing.
+    let again = turborepo_trace_store::evict(&out, None, Some(1)).unwrap();
+    assert_eq!(
+        (again.cached, again.removed, again.bytes),
+        (0, 0, 0),
+        "{again:?}"
+    );
+    assert_eq!(export(&out), before, "the snapshot is untouched");
+}
+
 #[test]
 fn touching_one_file_retraces_one_shard() {
     let t = fixture();
