@@ -246,10 +246,18 @@ impl SCM {
         let tracked = if repo_index.is_none() {
             // The output walk already validated selected paths. Unsupported
             // tracked paths elsewhere in the repository must not fail this query.
-            git.git_ls_files_cached_with_unsupported()?
-                .paths
-                .into_iter()
-                .collect()
+            match git.git_ls_files_cached_with_unsupported() {
+                Ok(list) => list.paths.into_iter().collect(),
+                Err(err) if err.is_resource_exhaustion() => return Err(err),
+                Err(err) => {
+                    debug!(
+                        "git ls-files failed for {:?}: {}. No outputs are tracked, as with manual \
+                         hashing",
+                        package_path, err,
+                    );
+                    return Ok(GitHashes::new());
+                }
+            }
         } else {
             std::collections::HashSet::new()
         };
