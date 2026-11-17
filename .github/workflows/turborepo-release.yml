@@ -423,7 +423,32 @@ jobs:
         run: ./scripts/install.windows.test.ps1
 
       - name: Build
+        # Fail before the job timeout so the diagnostics step below still runs.
+        timeout-minutes: 32
         run: ${{ matrix.settings.rust-build-env }} cargo build --profile release-turborepo -p turbo --target ${{ matrix.settings.target }}
+
+      - name: Diagnose stuck build
+        if: ${{ failure() && runner.os != 'Windows' }}
+        shell: bash
+        run: |
+          echo "::group::Process tree"
+          ps -axo pid,ppid,etime,stat,command || true
+          echo "::endgroup::"
+          if [[ "$RUNNER_OS" == "macOS" ]]; then
+            for pid in $(pgrep -x maker; pgrep -x zig); do
+              echo "::group::sample $pid ($(ps -o comm= -p "$pid"))"
+              sample "$pid" 5 -file /dev/stdout || true
+              echo "::endgroup::"
+            done
+          fi
+          for dir in target/${{ matrix.settings.target }}/release-turborepo/build/libghostty-vt-sys-*/; do
+            for f in output stderr; do
+              [[ -f "$dir$f" ]] || continue
+              echo "::group::$dir$f"
+              tail -n 200 "$dir$f"
+              echo "::endgroup::"
+            done
+          done
 
       - name: Install rcodesign
         if: ${{ contains(matrix.settings.target, 'apple-darwin') }}
