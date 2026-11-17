@@ -106,6 +106,16 @@ pub struct RawSetupPolicy {
     /// the official URLs, and environment variables override these values.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub mirrors: Option<Spanned<RawSetupMirrors>>,
+    /// Toolchain IDs in the order `turbo setup` installs their dependencies,
+    /// one at a time. Without it, every toolchain's installer runs at the
+    /// same time. Set it when one ecosystem's install needs another's
+    /// dependencies, such as a Python build hook that runs npm. It must list
+    /// each of the repository's toolchains exactly once.
+    #[serde(
+        rename = "dependencyInstallOrder",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub dependency_install_order: Option<Vec<String>>,
 }
 
 /// Repository-configured setup values for one toolchain. `None` means the
@@ -123,6 +133,7 @@ pub struct SetupPolicy {
     overrides: BTreeMap<ToolchainId, ToolchainSetupPolicy>,
     additional_tools: BTreeMap<String, RawAdditionalTool>,
     mirrors: SetupMirrors,
+    dependency_install_order: Option<Vec<ToolchainId>>,
 }
 
 impl SetupPolicy {
@@ -179,6 +190,12 @@ impl SetupPolicy {
             overrides,
             additional_tools: additional_tools::validate(raw.additional_tools.as_ref())?,
             mirrors: mirrors::validate(raw.mirrors.as_ref())?,
+            dependency_install_order: (raw.dependency_install_order.as_ref()).map(|order| {
+                order
+                    .iter()
+                    .map(|id| ToolchainId::new(id.clone()))
+                    .collect()
+            }),
         })
     }
 
@@ -209,10 +226,17 @@ impl SetupPolicy {
         &self.mirrors
     }
 
+    /// `dependencyInstallOrder` as written, when the repository set it. Setup
+    /// checks it against the toolchains it finds.
+    pub fn dependency_install_order(&self) -> Option<&[ToolchainId]> {
+        self.dependency_install_order.as_deref()
+    }
+
     /// Whether the repository configured any setup value.
     pub fn is_configured(&self) -> bool {
         !self.additional_tools.is_empty()
             || self.mirrors != SetupMirrors::default()
+            || self.dependency_install_order.is_some()
             || self.defaults != ToolchainSetupPolicy::default()
             || self
                 .overrides

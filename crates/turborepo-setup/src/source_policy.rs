@@ -165,6 +165,10 @@ fn applied_policy(setup: &jsonc_parser::ast::Value) -> bool {
         |name: &str, value: &Value| VALUES.contains(&name) && matches!(value, Value::StringLit(_));
     let toolchain =
         |name: &str, toolchain: &Value| TOOLCHAINS.contains(&name) && strings(&VALUES, toolchain);
+    let string_list = |value: &Value| {
+        matches!(value, Value::Array(array)
+            if array.elements.iter().all(|element| matches!(element, Value::StringLit(_))))
+    };
     matches!(setup, Value::Object(object) if !object.properties.is_empty()
     && object.properties.iter().all(|p| {
         let name = p.name.as_str();
@@ -172,6 +176,7 @@ fn applied_policy(setup: &jsonc_parser::ast::Value) -> bool {
             || toolchain(name, &p.value)
             || name == "additionalTools"
             || (name == "mirrors" && strings(&MIRRORS, &p.value))
+            || (name == "dependencyInstallOrder" && string_list(&p.value))
     }))
 }
 

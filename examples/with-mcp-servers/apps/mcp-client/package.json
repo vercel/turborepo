@@ -7,20 +7,20 @@
     "build": "tsc",
     "dev": "tsc --watch",
     "start": "node dist/index.js",
-    "lint": "eslint src/",
+    "lint": "oxlint src/",
     "check-types": "tsc --noEmit"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "1.30.0",
+    "@modelcontextprotocol/sdk": "1.32.2",
     "@repo/mcp-calculator": "workspace:*",
     "@repo/mcp-file-reader": "workspace:*",
-    "zod": "4.6.2"
+    "zod": "4.6.7"
   },
   "devDependencies": {
-    "@repo/eslint-config": "workspace:*",
+    "@repo/oxlint-config": "workspace:*",
     "@repo/typescript-config": "workspace:*",
-    "@types/node": "22.20.2",
-    "eslint": "10.10.0",
+    "@types/node": "26.6.6",
+    "oxlint": "1.94.0",
     "typescript": "7.0.2"
   }
 }

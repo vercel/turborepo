@@ -181,7 +181,9 @@ Forces the use of color, even in non-interactive terminals. This is useful for e
 
 ### `--no-color`
 
-Suppresses color in terminal output, even in interactive terminals.
+Suppresses color in terminal output, even in interactive terminals. Color codes are also removed from task output, both live and replayed from the cache. Log files keep the output as the task wrote it.
+
+Alternatively, you can suppress color using [the `NO_COLOR` environment variable](/docs/reference/system-environment-variables#no_color).
 
 ### `--no-update-notifier`
 

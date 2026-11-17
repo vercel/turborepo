@@ -27,7 +27,7 @@ use turbo_trace::TraceError;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 pub use turborepo_query_api::{
     AffectedPackagesError, BoundariesFuture, QueryErrorLocation, QueryResult, QueryRun,
-    QueryTaskId, SCHEMA_QUERY,
+    QueryTaskHash, QueryTaskId, SCHEMA_QUERY,
 };
 use turborepo_repository::{
     change_mapper::{AllPackageChangeReason, PackageInclusionReason},

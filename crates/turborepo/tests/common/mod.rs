@@ -272,6 +272,32 @@ pub fn setup_lockfile_test(dir: &Path, pm_name: &str) {
     git(dir, &["commit", "-m", "Initial", "--quiet"]);
 }
 
+/// Applies a lockfile-aware-caching fixture patch (copied into `dir` by
+/// [`setup_lockfile_test`]) to `target`. The fixture patches name scratch
+/// files as their destination, so the `+++` header is rewritten to `target`.
+pub fn apply_lockfile_patch(dir: &Path, target: &str, patch_file: &str) {
+    let patch = fs::read_to_string(dir.join(patch_file))
+        .unwrap()
+        .lines()
+        .map(|line| {
+            line.strip_prefix("+++ ")
+                .map_or_else(|| line.to_string(), |_| format!("+++ {target}"))
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+        + "\n";
+    let rewritten = tempfile::NamedTempFile::new().unwrap();
+    fs::write(rewritten.path(), patch).unwrap();
+    let status = std::process::Command::new("git")
+        .args(["apply", "--unsafe-paths"])
+        .arg(rewritten.path())
+        .current_dir(dir)
+        .stdout(std::process::Stdio::null())
+        .status()
+        .unwrap();
+    assert!(status.success(), "git apply {patch_file} failed");
+}
+
 /// Set up a find-turbo test fixture. Copies the fixture directory, makes
 /// scripts executable on Unix, and places echo_args as turbo.exe on Windows.
 pub fn setup_find_turbo(dir: &Path, fixture_name: &str) {

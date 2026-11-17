@@ -71,6 +71,10 @@ pub enum Error {
     Join(#[from] tokio::task::JoinError),
     #[error("Missing root workspace")]
     MissingRootWorkspace,
+    #[error("Task Graph is missing an entry for a task being hashed")]
+    MissingTaskGraphEntry,
+    #[error("Task Graph contains a cycle")]
+    TaskGraphCycle,
     #[error("File hash task did not complete")]
     FileHashTaskIncomplete,
     #[error("Internal dependency hash task did not complete")]

@@ -595,6 +595,17 @@ export interface SetupPolicy {
    * official URLs, and environment variables override these values.
    */
   mirrors?: SetupMirrors;
+
+  /**
+   * Toolchain IDs in the order `turbo setup` installs their dependencies,
+   * one at a time. Without it, every toolchain's installer runs at the same
+   * time. Set it when one ecosystem's install needs another's dependencies,
+   * such as a Python build hook that runs npm.
+   *
+   * It must list each of the repository's toolchains exactly once; a
+   * missing, unknown, or repeated toolchain is an error.
+   */
+  dependencyInstallOrder?: string[];
 }
 
 export interface SetupMirrors {

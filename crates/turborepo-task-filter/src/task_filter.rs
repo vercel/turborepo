@@ -18,7 +18,10 @@
 use std::collections::{HashMap, HashSet};
 
 use turbopath::AbsoluteSystemPath;
-use turborepo_repository::package_graph::{PackageGraph, PackageName};
+use turborepo_repository::{
+    change_mapper::LockfileContents,
+    package_graph::{PackageGraph, PackageName},
+};
 use turborepo_scope::{ChangedFilesDetector, TargetSelector, target_selector::GitRange};
 use turborepo_task_id::TaskId;
 use wax::Program;
@@ -431,6 +434,7 @@ fn resolve_git_range(
                 &files,
                 global_deps,
                 managed_setup,
+                || lockfile_contents(scm, repo_root, pkg_dep_graph, git_range, &files),
             );
             Ok(Some(affected))
         }
@@ -487,6 +491,7 @@ fn resolve_match_dependencies(
                 &files,
                 context.global_deps,
                 context.managed_setup,
+                || lockfile_contents(scm, repo_root, pkg_dep_graph, git_range, &files),
             );
             // Intersection: task must be in the candidate set AND affected
             Ok(candidate_tasks.intersection(&affected).cloned().collect())
@@ -513,6 +518,16 @@ fn get_changed_files(
         git_range.merge_base,
     )?;
     Ok(result)
+}
+
+fn lockfile_contents(
+    scm: &impl ChangedFilesDetector,
+    repo_root: &AbsoluteSystemPath,
+    pkg_dep_graph: &PackageGraph,
+    git_range: &GitRange,
+    changes: &turborepo_types::TaskInputChanges,
+) -> LockfileContents {
+    scm.lockfile_contents(repo_root, pkg_dep_graph, git_range, &changes.files)
 }
 
 /// Expands a task set to include all `with` siblings, transitively.

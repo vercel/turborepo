@@ -98,15 +98,11 @@ impl<'a, R: TaskGraphRunOpts> ExecContextFactory<'a, R> {
     }
 
     /// Whether `exec_context` would produce a runnable task (and so a cache
-    /// restore) for `task_id`. Tasks without a command are skipped before any
-    /// cache lookup. Which provider handles a task doesn't depend on the
-    /// environment, so an empty one is enough to answer this.
+    /// restore) for `task_id`. Answered from the repository, not a run: which
+    /// provider handles a task does not depend on the environment, so nothing
+    /// is resolved and no managed selection is revalidated.
     pub fn has_command(&self, task_id: &TaskId<'static>) -> bool {
-        matches!(
-            self.command_factory
-                .command(task_id, &EnvironmentVariableMap::default()),
-            Ok(Some(_))
-        )
+        self.command_factory.has_command(task_id)
     }
 
     pub fn exec_context(

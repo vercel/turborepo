@@ -207,10 +207,11 @@ impl<'a> LineScanner<'a> {
             };
             self.pos = next_pos;
 
-            if line.contains('\r') {
-                // CRLF input: saphyr handles it, we don't model it.
-                return Err(Unsupported::here());
-            }
+            let line = if line.contains('\r') {
+                strip_crlf(line, rest)?
+            } else {
+                line
+            };
             let indent = count_indent(line);
             let content = &line[indent..];
             if content.is_empty() {
@@ -376,7 +377,12 @@ impl<'a> LineScanner<'a> {
                 Some(i) => (&rest[..i], self.pos + i + 1),
                 None => (rest, self.text.len()),
             };
-            if line.contains('\r') || line.contains('\t') {
+            let line = if line.contains('\r') {
+                strip_crlf(line, rest)?
+            } else {
+                line
+            };
+            if line.contains('\t') {
                 return Err(Unsupported::here());
             }
             let indent = count_indent(line);
@@ -451,6 +457,19 @@ impl<'a> LineScanner<'a> {
             .push_back(Event::Scalar(Cow::Owned(result), style, 0, None));
         Ok(())
     }
+}
+
+/// Normalize CRLF only on the uncommon CR-containing path. Bare CRs,
+/// including a trailing CR at EOF, remain outside the scanner subset.
+fn strip_crlf<'a>(line: &'a str, rest: &str) -> FResult<&'a str> {
+    if rest.as_bytes().get(line.len()) != Some(&b'\n') {
+        return Err(Unsupported::here());
+    }
+    let line = line.strip_suffix('\r').ok_or_else(Unsupported::here)?;
+    if line.contains('\r') {
+        return Err(Unsupported::here());
+    }
+    Ok(line)
 }
 
 fn count_indent(line: &str) -> usize {

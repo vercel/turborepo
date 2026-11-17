@@ -1,4 +1,9 @@
-use std::{env, path::Path, process};
+use std::{
+    env,
+    io::{self, IsTerminal},
+    path::Path,
+    process,
+};
 
 use sysinfo::{RefreshKind, System, SystemExt};
 use turborepo_repository::{package_json::PackageJson, package_manager::PackageManager};
@@ -98,7 +103,7 @@ pub async fn run(base: CommandBase) {
         "   Shell (SHELL): {}",
         env::var("SHELL").unwrap_or_else(|_| "unknown".to_owned())
     );
-    println!("   stdin: {}", turborepo_ci::is_ci());
+    println!("   stdin: {}", io::stdin().is_terminal());
     println!("   Node.js version: {node_version}");
     println!();
 }

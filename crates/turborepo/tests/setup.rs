@@ -351,11 +351,29 @@ fn standalone_help_needs_no_js_or_gate_and_does_not_parse_config() {
             "--tools-only",
             "--no-lock",
             "--update-lock",
+            "--verbose",
             "--cwd",
         ] {
             assert!(text.contains(flag), "missing {flag}: {text}");
         }
         assert!(text.contains("not yet implemented"));
+    }
+}
+
+#[test]
+fn only_setup_accepts_verbose_through_the_real_binary() {
+    let temp = tempfile::tempdir().unwrap();
+    assert_eq!(
+        invoke(temp.path(), &["setup", "--verbose"], false),
+        invoke(temp.path(), &["setup"], false)
+    );
+    for words in [&["build", "--verbose"][..], &["run", "build", "--verbose"]] {
+        let (code, text) = invoke(temp.path(), words, false);
+        assert_eq!(code, 1, "{words:?}: {text}");
+        assert!(
+            text.contains("The --verbose flag is not supported. Please use --verbosity instead."),
+            "{words:?}: {text}"
+        );
     }
 }
 

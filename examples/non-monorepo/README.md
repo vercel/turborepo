@@ -4,7 +4,7 @@ This Turborepo starter is maintained by the Turborepo core team.
 
 ## Using this example
 
-Use Node.js 26 and npm 12.2.0. Run the following command:
+Use Node.js 26 and npm 12.2.2. Run the following command:
 
 ```sh
 npx create-turbo@latest -e non-monorepo --package-manager npm

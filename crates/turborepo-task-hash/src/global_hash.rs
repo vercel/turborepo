@@ -11,7 +11,10 @@ use tracing::debug;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, RelativeUnixPathBuf};
 use turborepo_env::{DetailedMap, EnvironmentVariableMap, get_global_hashable_env_vars};
 use turborepo_hash::{GlobalHashable, TurboHash};
-use turborepo_repository::package_manager::{self, PackageManager};
+use turborepo_repository::{
+    change_mapper::ROOT_GITATTRIBUTES,
+    package_manager::{self, PackageManager},
+};
 use turborepo_run_summary::{GlobalEnvVarSummary, GlobalHashSummary};
 use turborepo_scm::SCM;
 use turborepo_types::{EnvMode, GlobalHashInputs as GlobalHashInputsTrait};
@@ -107,10 +110,7 @@ pub fn collect_global_file_hash_inputs<'a>(
     let mut discovered_global_deps =
         collect_global_deps(package_manager, root_path, global_file_dependencies)?;
 
-    // .gitattributes drives CRLF→LF normalization which affects file hashes.
-    // Including it in the global hash ensures cache invalidation when
-    // normalization rules change.
-    let gitattributes_path = root_path.join_component(".gitattributes");
+    let gitattributes_path = root_path.join_component(ROOT_GITATTRIBUTES);
     if gitattributes_path.exists() {
         discovered_global_deps.insert(gitattributes_path);
     }

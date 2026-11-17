@@ -2,9 +2,12 @@
 
 mod common;
 
-use std::{fs, path::Path, process::Stdio};
+use std::{fs, path::Path};
 
-use common::{git, git_commit_staged_if_changed, replace_turbo_json, run_turbo_with_env, setup};
+use common::{
+    apply_lockfile_patch, git, git_commit_staged_if_changed, replace_turbo_json,
+    run_turbo_with_env, setup,
+};
 use serde_json::Value;
 
 const TURBO_JSON_GLOBAL_DEPS: &str = r#"{
@@ -146,29 +149,6 @@ fn setup_lockfile_fixture(dir: &Path, pm_name: &str) {
 
     git(dir, &["add", "."]);
     git(dir, &["commit", "-m", "Initial", "--quiet"]);
-}
-
-fn apply_patch(dir: &Path, target: &str, patch_file: &str) {
-    let patch = fs::read_to_string(dir.join(patch_file))
-        .unwrap()
-        .lines()
-        .map(|line| {
-            line.strip_prefix("+++ ")
-                .map_or_else(|| line.to_string(), |_| format!("+++ {target}"))
-        })
-        .collect::<Vec<_>>()
-        .join("\n")
-        + "\n";
-    let rewritten = tempfile::NamedTempFile::new().unwrap();
-    fs::write(rewritten.path(), patch).unwrap();
-    let status = std::process::Command::new("git")
-        .args(["apply", "--unsafe-paths"])
-        .arg(rewritten.path())
-        .current_dir(dir)
-        .stdout(Stdio::null())
-        .status()
-        .unwrap();
-    assert!(status.success(), "git apply {patch_file} failed");
 }
 
 #[test]
@@ -533,10 +513,10 @@ fn lockfile_aware_contract(pm_name: &str) -> String {
     };
     let a_initial = run("a");
     let b_initial = run("b");
-    apply_patch(tempdir.path(), lockfile, dependency_patch);
+    apply_lockfile_patch(tempdir.path(), lockfile, dependency_patch);
     let a_dep_bump = run("a");
     let b_dep_bump = run("b");
-    apply_patch(tempdir.path(), lockfile, "turbo-bump.patch");
+    apply_lockfile_patch(tempdir.path(), lockfile, "turbo-bump.patch");
     let a_root_bump = run("a");
     let b_root_bump = run("b");
 

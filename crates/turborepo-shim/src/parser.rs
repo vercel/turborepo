@@ -269,13 +269,6 @@ impl ShimArgs {
                                  `--debug` as a value, use `-- --debug`."
                         .to_string(),
                 });
-            } else if arg == "--verbose" {
-                return Err(Error::UnsupportedFlag {
-                    flag: "--verbose".to_string(),
-                    suggestion: "Please use --verbosity instead.\n if you are trying to pass \
-                                 `--verbose` as a value, use `-- --verbose`."
-                        .to_string(),
-                });
             } else {
                 remaining_turbo_args.push(arg);
             }
@@ -456,18 +449,14 @@ impl ShimArgs {
 
     pub fn color_config(&self) -> ColorConfig {
         if self.no_color {
-            ColorConfig::new(true)
+            ColorConfig::disabled_by_user()
         } else if self.color {
             // Do our best to enable ansi colors, but even if the terminal doesn't support
             // still emit ansi escape sequences.
             Self::supports_ansi();
             ColorConfig::new(false)
-        } else if Self::supports_ansi() {
-            // If the terminal supports ansi colors, then we can infer if we should emit
-            // colors
-            ColorConfig::infer()
         } else {
-            ColorConfig::new(true)
+            ColorConfig::infer(Self::supports_ansi())
         }
     }
 

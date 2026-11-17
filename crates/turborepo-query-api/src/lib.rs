@@ -68,6 +68,19 @@ pub struct BoundaryDiagnostic {
 pub type BoundariesFuture<'a> =
     Pin<Box<dyn Future<Output = Result<Vec<BoundaryDiagnostic>, Error>> + Send + 'a>>;
 
+/// A task's hash, as a dry-run summary reports it.
+#[derive(Clone, Debug, Default, Eq, PartialEq)]
+pub struct QueryTaskHash {
+    /// The task hash, or `None` when hashing waits until execution.
+    pub hash: Option<String>,
+    /// Why the hash waits until execution, when it does.
+    pub hash_reason: Option<String>,
+}
+
+pub type TaskHashesFuture<'a> = Pin<
+    Box<dyn Future<Output = Result<Arc<HashMap<QueryTaskId, QueryTaskHash>>, Error>> + Send + 'a>,
+>;
+
 /// The interface that the query layer requires from a run context.
 ///
 /// Repository data is exposed through `RepoContext`, while engine data is
@@ -109,6 +122,10 @@ pub trait QueryRun: Send + Sync + 'static {
         changed_files: &turborepo_types::TaskInputChanges,
     ) -> Result<HashMap<QueryTaskId, String>, AffectedPackagesError>;
 
+    /// Every task's hash in the Task Graph, keyed by task identity, matching
+    /// the hashes a dry-run summary reports. Computed at most once per run.
+    fn task_hashes(&self) -> TaskHashesFuture<'_>;
+
     fn check_boundaries(&self, show_progress: bool) -> BoundariesFuture<'_>;
 }
 
@@ -129,6 +146,8 @@ pub enum Error {
     Path(#[from] turbopath::PathError),
     #[error("Failed to calculate affected packages: {0}")]
     AffectedPackages(#[from] AffectedPackagesError),
+    #[error("Failed to calculate task hashes: {0}")]
+    TaskHash(Box<dyn std::error::Error + Send + Sync>),
     #[error(transparent)]
     SignalListener(#[from] turborepo_signals::listeners::Error),
     /// Opaque error from the query implementation crate.

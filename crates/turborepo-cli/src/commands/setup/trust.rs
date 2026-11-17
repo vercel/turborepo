@@ -1,6 +1,6 @@
 //! The repository's record in the user's tool store: the user-owned evidence
-//! that binds one repository, by directory identity and turbo.lock digest, to
-//! the environment setup installed for it. Run consumers must additionally
+//! that binds one repository, by canonical path, inode and turbo.lock digest,
+//! to the environment setup installed for it. Run consumers must additionally
 //! gate managed mode, validate declarations/lock and revalidate immediately
 //! before use. Unix privacy uses owner, mode and macOS ACL checks; Windows
 //! uses owner-only DACLs read from each opened handle (see `dacl`).
@@ -25,8 +25,12 @@ const SCHEMA: u32 = 2;
 struct Record {
     schema: u32,
     root: PathBuf,
-    /// Unix device and inode, or Windows volume serial number and file index.
+    /// Unix device, or Windows volume serial number, as setup saw it. Recorded
+    /// for diagnostics only, never compared: a repository restored, copied or
+    /// remounted on another device at the same path keeps the path and inode
+    /// but gets a new device.
     device: u64,
+    /// Unix inode, or the Windows file index: the directory's identity here.
     inode: u64,
     /// The turbo.lock digest. Absent only for a `--no-lock` clone, which its
     /// clone-local selection identifies instead.
@@ -180,8 +184,9 @@ fn open(_: &Path, _: &fs::Metadata, _: bool) -> io::Result<File> {
     Err(unsafe_state())
 }
 
-/// Repository identity: device and inode, or volume serial number and file
-/// index on Windows. A same-path re-clone gets a new identity.
+/// Repository identity: inode, or file index on Windows, with the device (or
+/// volume serial number) beside it. A same-path re-clone gets a new inode,
+/// while a restore or copy onto another device keeps it.
 fn identity(path: &Path) -> io::Result<(u64, u64)> {
     #[cfg(unix)]
     {
@@ -340,10 +345,13 @@ impl TrustStore {
         self.load().map(|_| ())
     }
 
-    /// Whether the record still names this exact directory: a re-clone or
-    /// move at the same path gets a new identity.
+    /// Whether the record still names this exact directory: only the inode (the
+    /// file index on Windows) is compared, so a repository restored, copied or
+    /// remounted on another device at the same path matches, while a re-clone
+    /// or move at the same path gets a new inode.
     fn same_directory(&self, record: &Record) -> io::Result<bool> {
-        Ok(identity(&self.root)? == (record.device, record.inode))
+        let (_, inode) = identity(&self.root)?;
+        Ok(inode == record.inode)
     }
 
     /// The clone-local selection `turbo setup --no-lock` recorded, if this

@@ -136,6 +136,7 @@ fn root_json_and_jsonc_applied_policy_shapes_pass() -> TestResult {
             // Preserve applied_policy's shape validation, not value validation.
             r#"{"setup":{"tools":"future-value","additionalTools":null}}"#,
             r#"{"setup":{"mirrors":{}}}"#,
+            r#"{"setup":{"dependencyInstallOrder":["go","javascript"]}}"#,
             r#"{"setup":{"tools":"managed","mirrors":{"node":"https://mirror.invalid/dist","npmRegistry":"https://mirror.invalid/npm","bun":"https://mirror.invalid/github","uv":"https://mirror.invalid/astral","python":"https://mirror.invalid/astral","go":"https://mirror.invalid/go","rust":"https://mirror.invalid/rust"}}}"#,
         ] {
             fs::write(&path, contents)?;
@@ -165,6 +166,8 @@ fn unsupported_root_policy_shapes_are_configured_without_echoing_secrets() -> Te
             r#"{"setup":{"mirrors":"private-secret"}}"#,
             r#"{"setup":{"mirrors":{"deno":"private-secret"}}}"#,
             r#"{"setup":{"mirrors":{"node":{"url":"private-secret"}}}}"#,
+            r#"{"setup":{"dependencyInstallOrder":"private-secret"}}"#,
+            r#"{"setup":{"dependencyInstallOrder":[{"url":"private-secret"}]}}"#,
             // An applied duplicate does not hide an unapplied setup property.
             r#"{"setup":{"tools":"skip"},"setup":{"registry":"private-secret"}}"#,
         ] {

@@ -4,6 +4,7 @@
     "build": "turbo run build",
     "dev": "turbo run dev",
     "lint": "turbo run lint",
+    "check-types": "turbo run check-types",
     "clean": "turbo run clean && rm -rf node_modules",
     "format": "prettier --write \"**/*.{ts,tsx,md}\"",
     "changeset": "changeset",
@@ -12,10 +13,13 @@
     "preview-storybook": "turbo run preview-storybook"
   },
   "devDependencies": {
-    "@changesets/cli": "^2.27.1",
-    "prettier": "^3.2.5",
-    "turbo": "^2.9.6"
+    "@changesets/cli": "3.0.3",
+    "prettier": "3.9.10",
+    "turbo": "2.11.10"
   },
-  "packageManager": "pnpm@8.15.6",
+  "packageManager": "pnpm@12.18.0",
+  "engines": {
+    "node": ">=26.13.0"
+  },
   "name": "design-system"
 }

@@ -2,7 +2,7 @@
 
 Ghostty-backed virtual terminal support for Turborepo's TUI.
 
-This crate depends on [`libghostty-vt`](https://crates.io/crates/libghostty-vt) for
+This crate depends on [`libghostty-vt`](https://docs.rs/libghostty-vt) for
 safe Rust bindings to [libghostty-vt](https://ghostty.org), and adds
 Turborepo-specific integration:
 

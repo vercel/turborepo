@@ -18,7 +18,7 @@ use turborepo_daemon::{
 };
 use turborepo_filewatch::{
     RepositoryIgnore, WatchScope, WatchSource,
-    hash_watcher::{HashSpec, HashWatcher, InputGlobs},
+    hash_watcher::{Error as HashWatcherError, HashSpec, HashWatcher, InputGlobs},
 };
 use turborepo_microfrontends_config::UnifiedTurboJsonLoader;
 use turborepo_repository::{
@@ -290,6 +290,16 @@ fn publish_watch_spec(graph: &PackageGraph, watch_spec: &RwLock<WatchSpec>, read
         .write()
         .unwrap_or_else(|poisoned| poisoned.into_inner()) = graph.active_watch_spec();
     ready.store(true, Ordering::Release);
+}
+
+/// Files changed since the hash baselines, rebuilt after the watcher lost
+/// events.
+enum RescanDiff {
+    Files(Box<Trie<String, ()>>),
+    /// A later rescan invalidated the hashes before they finished.
+    Superseded,
+    /// The hashes cannot be compared, so the change set stays unknown.
+    Unknown,
 }
 
 struct PackageHashBaseline {
@@ -739,6 +749,100 @@ impl Subscriber {
         hashes
     }
 
+    async fn changed_files_since_baseline(
+        &self,
+        pkg_dep_graph: &PackageGraph,
+        package_file_hashes: &mut HashMap<PackageName, PackageHashBaseline>,
+    ) -> RescanDiff {
+        // Config events bypass ignore rules, but default hashes do not include
+        // untracked, ignored configs. Preserve the conservative fallback when
+        // their changes cannot be recovered from the package baselines.
+        let config_paths = [
+            self.repo_root.join_component(CONFIG_FILE),
+            self.repo_root.join_component(CONFIG_FILE_JSONC),
+        ];
+        if config_paths
+            .iter()
+            .chain(self.custom_turbo_json_path.iter())
+            .any(|path| {
+                !self
+                    .repository_ignore
+                    .is_relevant(path.as_std_path(), false)
+            })
+        {
+            return RescanDiff::Unknown;
+        }
+
+        let scope_roots: HashSet<_> = hash_scopes(pkg_dep_graph)
+            .map(|package| {
+                self.repo_root
+                    .resolve(&package.path)
+                    .as_std_path()
+                    .to_path_buf()
+            })
+            .collect();
+        let mut trie = Trie::new();
+        let mut fresh = Vec::new();
+        for package in hash_scopes(pkg_dep_graph) {
+            let hashes = self
+                .hash_watcher
+                .get_file_hashes(HashSpec {
+                    package_path: package.path.clone(),
+                    inputs: InputGlobs::Default,
+                })
+                .await;
+            let hashes = match hashes {
+                Ok(hashes) => hashes,
+                Err(HashWatcherError::Unavailable(reason)) => {
+                    tracing::debug!("rescan hashes for {} superseded: {reason}", package.name);
+                    return RescanDiff::Superseded;
+                }
+                Err(error) => {
+                    tracing::debug!("rescan hashes for {} failed: {error}", package.name);
+                    return RescanDiff::Unknown;
+                }
+            };
+            let Some(baseline) = package_file_hashes
+                .get(&package.name)
+                .filter(|baseline| baseline.path == package.path)
+            else {
+                tracing::debug!("rescan baseline for {} missing", package.name);
+                return RescanDiff::Unknown;
+            };
+            let package_root = self.repo_root.resolve(&package.path);
+            let added_or_modified = hashes
+                .iter()
+                .filter(|(file, hash)| baseline.hashes.get(*file) != Some(*hash));
+            let removed = baseline
+                .hashes
+                .iter()
+                .filter(|(file, _)| !hashes.contains_key(*file));
+            for (file, _) in added_or_modified.chain(removed) {
+                let path = package_root.resolve(&file.to_anchored_system_path_buf());
+                // Nested scopes have independently updated baselines. Their
+                // files must not be recovered from an older ancestor baseline.
+                if path
+                    .as_std_path()
+                    .ancestors()
+                    .take_while(|ancestor| *ancestor != package_root.as_std_path())
+                    .any(|ancestor| scope_roots.contains(ancestor))
+                {
+                    continue;
+                }
+                trie.insert(path.to_string(), ());
+            }
+            fresh.push((
+                package.name,
+                PackageHashBaseline {
+                    path: package.path,
+                    hashes,
+                },
+            ));
+        }
+        package_file_hashes.extend(fresh);
+        RescanDiff::Files(Box::new(trie))
+    }
+
     /// Send a Rediscover event and reinitialize repo state. Returns the new
     /// state tuple on success, or `None` if the caller should break.
     async fn rediscover_and_reinit(&self) -> Option<RepoState> {
@@ -969,9 +1073,30 @@ impl Subscriber {
                 };
                 last_batch_at = Some(tokio::time::Instant::now());
 
-                let ChangedFiles::Some(trie) = changed_files else {
-                    rediscover!(self, repo_state, change_mapper);
-                    continue;
+                // Dropped events leave the change set unknown. Diffing against the
+                // hash baselines recovers it, and gitignored files never appear in it.
+                let (trie, hashes_verified) = match changed_files {
+                    ChangedFiles::Some(trie) => (*trie, false),
+                    ChangedFiles::All => match self
+                        .changed_files_since_baseline(
+                            &repo_state.pkg_dep_graph,
+                            &mut package_file_hashes,
+                        )
+                        .await
+                    {
+                        RescanDiff::Files(trie) => (*trie, true),
+                        // The hash watcher drained these queries for a later
+                        // watcher error, which also reaches this subscriber.
+                        RescanDiff::Superseded => {
+                            *self.changed_files.lock().await.borrow_mut() = ChangedFiles::All;
+                            changes_pending.notify_one();
+                            continue;
+                        }
+                        RescanDiff::Unknown => {
+                            rediscover!(self, repo_state, change_mapper);
+                            continue;
+                        }
+                    },
                 };
 
                 // Classify using foundational change knowledge + active
@@ -1029,13 +1154,14 @@ impl Subscriber {
 
                         let changed_files = Arc::new(changed_files);
                         for pkg in filtered_pkgs {
-                            if !self
-                                .is_same_hash(
-                                    &repo_state.pkg_dep_graph,
-                                    &pkg,
-                                    &mut package_file_hashes,
-                                )
-                                .await
+                            if hashes_verified
+                                || !self
+                                    .is_same_hash(
+                                        &repo_state.pkg_dep_graph,
+                                        &pkg,
+                                        &mut package_file_hashes,
+                                    )
+                                    .await
                             {
                                 let _ = self.package_change_events_tx.send(
                                     PackageChangeEvent::Package {
@@ -2285,6 +2411,96 @@ mod test {
             matches!(event, Some(PackageChangeEvent::Rediscover)),
             "expected Rediscover, got {:?}",
             event
+        );
+    }
+
+    /// Send the event a backend emits when it dropped events, as FSEvents does
+    /// under a burst of writes.
+    fn send_rescan(hash_events_tx: &WatchEventSender, file_events_tx: &WatchEventSender) {
+        let rescan = notify::Event::new(EventKind::Other).set_flag(notify::event::Flag::Rescan);
+        hash_events_tx.send(Ok(rescan.clone())).unwrap();
+        file_events_tx.send(Ok(rescan)).unwrap();
+    }
+
+    #[tokio::test]
+    async fn rescan_after_ignored_burst_does_not_rerun() {
+        let (_tmp, repo_root) = setup_git_repo();
+        let mut handle = create_test_watcher(&repo_root);
+        let rx = &mut handle.watcher.package_change_events_rx;
+        assert!(matches!(
+            recv_event(rx, Duration::from_secs(5)).await,
+            Some(PackageChangeEvent::Rediscover)
+        ));
+
+        let cache = repo_root.join_components(&["packages", "a", ".cache"]);
+        cache.create_dir_all().unwrap();
+        for i in 0..50 {
+            cache
+                .join_component(&format!("{i}.bin"))
+                .create_with_contents(b"ignored")
+                .unwrap();
+        }
+        send_rescan(&handle.hash_events_tx, &handle.file_events_tx);
+        send_rescan(&handle.hash_events_tx, &handle.file_events_tx);
+
+        let event = recv_event(rx, Duration::from_millis(500)).await;
+        assert!(event.is_none(), "expected no rerun, got {event:?}");
+    }
+
+    #[tokio::test]
+    async fn rescan_reports_tracked_change_for_its_package() {
+        let (_tmp, repo_root) = setup_git_repo();
+        let mut handle = create_test_watcher(&repo_root);
+        let rx = &mut handle.watcher.package_change_events_rx;
+        assert!(matches!(
+            recv_event(rx, Duration::from_secs(5)).await,
+            Some(PackageChangeEvent::Rediscover)
+        ));
+
+        repo_root
+            .join_components(&["packages", "a", "index.ts"])
+            .create_with_contents(b"export const a = 2;")
+            .unwrap();
+        send_rescan(&handle.hash_events_tx, &handle.file_events_tx);
+
+        let event = recv_event(rx, Duration::from_secs(5)).await;
+        match event {
+            Some(PackageChangeEvent::Package {
+                name,
+                changed_files,
+            }) => {
+                assert_eq!(name.to_string(), "a");
+                assert_eq!(
+                    *changed_files,
+                    HashSet::from([anchored("packages/a/index.ts")])
+                );
+            }
+            other => panic!("expected package a to change, got {other:?}"),
+        }
+        let event = recv_event(rx, Duration::from_millis(500)).await;
+        assert!(event.is_none(), "expected only package a, got {event:?}");
+    }
+
+    #[tokio::test]
+    async fn rescan_after_turbo_json_change_rediscovers() {
+        let (_tmp, repo_root) = setup_git_repo();
+        let mut handle = create_test_watcher(&repo_root);
+        let rx = &mut handle.watcher.package_change_events_rx;
+        assert!(matches!(
+            recv_event(rx, Duration::from_secs(5)).await,
+            Some(PackageChangeEvent::Rediscover)
+        ));
+
+        repo_root
+            .join_component(CONFIG_FILE)
+            .create_with_contents(br#"{"tasks":{"build":{},"lint":{}}}"#)
+            .unwrap();
+        send_rescan(&handle.hash_events_tx, &handle.file_events_tx);
+
+        let event = recv_event(rx, Duration::from_secs(5)).await;
+        assert!(
+            matches!(event, Some(PackageChangeEvent::Rediscover)),
+            "expected Rediscover, got {event:?}"
         );
     }
 

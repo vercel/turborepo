@@ -134,11 +134,13 @@ impl<'a> OverrideEnvVars<'a> {
     }
 
     fn ui(&self) -> Option<UIMode> {
-        let value = self
-            .environment
-            .get(OsStr::new("ci"))
-            .or_else(|| self.environment.get(OsStr::new("no_color")))?;
-        truth_env_var(value.to_str()?)?.then_some(UIMode::Stream)
+        if let Some(ci) = self.environment.get(OsStr::new("ci")) {
+            return truth_env_var(ci.to_str()?)?.then_some(UIMode::Stream);
+        }
+        // Any non-empty value counts (https://no-color.org), matching how
+        // `ColorConfig` reads `NO_COLOR`.
+        let no_color = self.environment.get(OsStr::new("no_color"))?;
+        (!no_color.is_empty()).then_some(UIMode::Stream)
     }
 }
 
@@ -445,5 +447,22 @@ mod test {
             assert_eq!(case.output.team_slug, config.output.team_slug, "{reason}");
             assert_eq!(case.output.token, config.output.token, "{reason}");
         }
+    }
+
+    #[test]
+    fn test_ui_mode() {
+        let ui = |vars: &[(&str, &str)]| {
+            let env: HashMap<OsString, OsString> = vars
+                .iter()
+                .map(|(key, value)| ((*key).into(), (*value).into()))
+                .collect();
+            OverrideEnvVars::new(&env).unwrap().ui()
+        };
+
+        assert_eq!(ui(&[]), None);
+        assert_eq!(ui(&[("no_color", "1")]), Some(UIMode::Stream));
+        assert_eq!(ui(&[("no_color", "yes")]), Some(UIMode::Stream));
+        assert_eq!(ui(&[("no_color", "")]), None);
+        assert_eq!(ui(&[("ci", "true")]), Some(UIMode::Stream));
     }
 }

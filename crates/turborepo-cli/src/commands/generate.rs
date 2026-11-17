@@ -1,6 +1,6 @@
 use std::{
     io,
-    process::{Command, Stdio},
+    process::{Command, ExitStatus, Stdio},
 };
 
 use semver::Version;
@@ -135,12 +135,16 @@ fn call_turbo_gen(
         .stderr(Stdio::inherit());
 
     let child = spawn_child(package_manager_process).map_err(Error::PackageManagerCommandFailed)?;
-    let exit_code = child
-        .wait()
-        .map_err(Error::PackageManagerCommandFailed)?
-        .code()
-        .unwrap_or(2);
-    Ok(exit_code)
+    let status = child.wait().map_err(Error::PackageManagerCommandFailed)?;
+    Ok(exit_code(status))
+}
+
+fn exit_code(status: ExitStatus) -> i32 {
+    #[cfg(unix)]
+    if let Some(signal) = std::os::unix::process::ExitStatusExt::signal(&status) {
+        return 128 + signal;
+    }
+    status.code().unwrap_or(2)
 }
 
 pub fn run(
@@ -149,21 +153,19 @@ pub fn run(
     command: &Option<GenerateCommand>,
     args: &GeneratorCustomArgs,
     telemetry: CommandEventBuilder,
-) -> Result<(), Error> {
+) -> Result<i32, Error> {
     telemetry.track_generator_tag(tag);
     // check if a subcommand was passed
     if let Some(GenerateCommand::Workspace(workspace_args)) = command {
         let raw_args = serde_json::to_string(&workspace_args)?;
         telemetry.track_generator_option("workspace");
-        call_turbo_gen(repo_root, "workspace", tag, &raw_args)?;
+        call_turbo_gen(repo_root, "workspace", tag, &raw_args)
     } else {
         // if no subcommand was passed, run the generate command as default
         let raw_args = serde_json::to_string(&args)?;
         telemetry.track_generator_option("run");
-        call_turbo_gen(repo_root, "run", tag, &raw_args)?;
+        call_turbo_gen(repo_root, "run", tag, &raw_args)
     }
-
-    Ok(())
 }
 
 #[cfg(test)]
@@ -266,5 +268,21 @@ mod tests {
             package_manager_for_generate(&repo_root),
             PackageManager::Pnpm9
         );
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn test_exit_code_signal_and_exit_statuses() {
+        use std::os::unix::process::ExitStatusExt;
+
+        // Normal clean exit
+        assert_eq!(exit_code(ExitStatus::from_raw(0)), 0);
+        // Non-zero exit code (shifted by 8 on Unix)
+        assert_eq!(exit_code(ExitStatus::from_raw(1 << 8)), 1);
+        assert_eq!(exit_code(ExitStatus::from_raw(42 << 8)), 42);
+        // SIGINT (Ctrl-C) -> 128 + 2 = 130
+        assert_eq!(exit_code(ExitStatus::from_raw(libc::SIGINT)), 130);
+        // SIGTERM -> 128 + 15 = 143
+        assert_eq!(exit_code(ExitStatus::from_raw(libc::SIGTERM)), 143);
     }
 }

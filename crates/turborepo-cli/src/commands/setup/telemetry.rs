@@ -78,7 +78,9 @@ fn activation_failure(error: &turborepo_setup::activation::Error) -> SetupFailur
 fn dependencies_failure(error: &super::dependencies::Error) -> SetupFailure {
     use super::dependencies::Error as Dependencies;
     match error {
-        Dependencies::UndeclaredManager => SetupFailure::Discovery,
+        Dependencies::UndeclaredManager | Dependencies::InstallOrder { .. } => {
+            SetupFailure::Discovery
+        }
         Dependencies::Unlocked(_) | Dependencies::Sources(_) => SetupFailure::LockInvalid,
         Dependencies::NotInstalled(_) | Dependencies::Untrusted => SetupFailure::Readiness,
         // Refused before any installer runs: these installers have no

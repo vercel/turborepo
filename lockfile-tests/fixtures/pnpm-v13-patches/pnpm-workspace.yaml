@@ -1,0 +1,14 @@
+packages:
+  - "apps/*"
+  - "packages/*"
+
+patchedDependencies:
+  "is-odd@^3.0.0": patches/is-odd.patch
+  left-pad: patches/left-pad.patch
+
+overrides:
+  is-number@^6: 6.0.0
+  kind-of: 6.0.3
+
+lockfile:
+  format: v13

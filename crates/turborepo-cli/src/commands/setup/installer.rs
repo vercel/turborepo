@@ -36,11 +36,27 @@ pub(super) fn status(command: &mut Command) -> io::Result<ExitStatus> {
     unsafe extern "system" fn swallow(event: u32) -> BOOL {
         BOOL::from(matches!(event, CTRL_C_EVENT | CTRL_BREAK_EVENT))
     }
+    static CTRL_HANDLER_USERS: std::sync::Mutex<usize> = std::sync::Mutex::new(0);
     struct Swallowing;
+    impl Swallowing {
+        fn start() -> Option<Self> {
+            let mut waiting = CTRL_HANDLER_USERS.lock().unwrap_or_else(|e| e.into_inner());
+            // SAFETY: `swallow` is a valid handler for the life of the process.
+            if *waiting == 0 && unsafe { SetConsoleCtrlHandler(Some(swallow), TRUE) } == 0 {
+                return None;
+            }
+            *waiting += 1;
+            Some(Self)
+        }
+    }
     impl Drop for Swallowing {
         fn drop(&mut self) {
-            // SAFETY: removes the handler this guard registered.
-            unsafe { SetConsoleCtrlHandler(Some(swallow), FALSE) };
+            let mut waiting = CTRL_HANDLER_USERS.lock().unwrap_or_else(|e| e.into_inner());
+            *waiting -= 1;
+            if *waiting == 0 {
+                // SAFETY: removes the handler the first waiter registered.
+                unsafe { SetConsoleCtrlHandler(Some(swallow), FALSE) };
+            }
         }
     }
 
@@ -53,9 +69,7 @@ pub(super) fn status(command: &mut Command) -> io::Result<ExitStatus> {
         ));
     }
     let job = turborepo_process::JobObject::new()?;
-    // SAFETY: `swallow` is a valid handler for the life of the process.
-    let _swallowing =
-        (unsafe { SetConsoleCtrlHandler(Some(swallow), TRUE) } != 0).then_some(Swallowing);
+    let _swallowing = Swallowing::start();
     // Suspended until it is in the job, so no descendant can start outside it.
     let mut child = command.creation_flags(CREATE_SUSPENDED).spawn()?;
     // Like task processes, an installer whose job assignment Windows refuses
