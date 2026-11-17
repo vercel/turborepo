@@ -29,7 +29,7 @@ turborepo-trace-lang-js = { workspace = true }
 turborepo-trace-lockfile = { workspace = true }
 turborepo-trace-tasks = { workspace = true }
 xxhash-rust = { workspace = true }
-zstd = "0.13"
+zstd = { version = "0.13", default-features = false }
 
 [dev-dependencies]
 proptest = { workspace = true }
