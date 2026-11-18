@@ -33,6 +33,7 @@ pub mod gha;
 pub mod gogenerate;
 pub mod just;
 pub mod make;
+pub mod native;
 pub mod npm;
 pub mod nx;
 pub mod pypackaging;
@@ -576,6 +577,7 @@ pub fn sources() -> &'static [&'static dyn TaskSource] {
         let mut v: Vec<&'static dyn TaskSource> = Vec::new();
         v.extend(npm::sources());
         v.extend(turbo::sources());
+        v.extend(native::sources());
         v.extend(make::sources());
         v.extend(docker::sources());
         v.extend(nx::sources());

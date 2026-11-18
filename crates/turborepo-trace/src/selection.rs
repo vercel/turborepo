@@ -627,7 +627,12 @@ pub(crate) fn build(i: &Input<'_>) -> Document {
     }
 
     // 2. Files that look like tests and are no entry.
-    let asked = |f: &str| i.frameworks.iter().any(|t| t == f || t == "all");
+    // A framework `turbo trace` lists no tests of (pytest: the Python language is
+    // not part of it) is never asked for, also not by `all`: a task that starts its
+    // tests always starts (step 3).
+    let asked = |f: &str| {
+        crate::api::FRAMEWORKS.contains(&f) && i.frameworks.iter().any(|t| t == f || t == "all")
+    };
     for n in unknown_tests(g, i.entries, i.frameworks, i.not_tests) {
         acc.entry(dir_of_node(n))
             .or_default()

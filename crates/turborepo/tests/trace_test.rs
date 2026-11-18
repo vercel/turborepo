@@ -2104,3 +2104,62 @@ fn tests_takes_only_the_frameworks_it_supports() {
     let selected = affected(dir.path(), &["--changed", JEST_MUL, "--tests", "jest"]);
     assert_selects(&selected, &[JEST_MUL], &[JEST_ADD]);
 }
+
+/// pytest is no framework `turbo trace` lists tests of: a task that starts it
+/// runs whole, and says so (also when every framework is asked for).
+#[cfg(unix)]
+#[test]
+fn a_pytest_task_runs_whole() {
+    let dir = fixture("trace_jest");
+    let math = dir.path().join("packages/math/package.json");
+    let manifest = fs::read_to_string(&math).unwrap();
+    let mut json: serde_json::Value = serde_json::from_str(&manifest).unwrap();
+    json["scripts"]["test"] = "pytest".into();
+    fs::write(&math, serde_json::to_string_pretty(&json).unwrap()).unwrap();
+    git(dir.path(), &["commit", "--quiet", "-am", "pytest"]);
+    let selection = affected_json(dir.path(), &["--changed", "packages/app/src/greet.js"]);
+    assert_eq!(selection.uncovered, ["math#test"]);
+}
+
+/// turbo's native packages (`experimentalCargoWorkspaces`,
+/// `experimentalPythonWorkspaces`): a crate's tests are those of the crate's
+/// `test` task, and the `test` task of a uv project that declares pytest runs
+/// whole.
+#[cfg(unix)]
+#[test]
+fn native_packages_have_their_test_tasks() {
+    let dir = fixture("cargo_monorepo");
+    fs::create_dir_all(dir.path().join("crates/lib-a/tests")).unwrap();
+    fs::write(
+        dir.path().join("crates/lib-a/tests/it.rs"),
+        "#[test]\nfn it() {}\n",
+    )
+    .unwrap();
+    git(dir.path(), &["add", "-A"]);
+    git(dir.path(), &["commit", "--quiet", "-m", "a test"]);
+    let selection = affected_json(dir.path(), &["--changed", "crates/lib-a/src/lib.rs"]);
+    assert_eq!(
+        selection
+            .tests
+            .get("crates/lib-a/tests/it.rs")
+            .map(String::as_str),
+        Some("lib-a#test"),
+        "{:?}",
+        selection.tests
+    );
+    assert!(selection.uncovered.is_empty(), "{:?}", selection.uncovered);
+
+    let dir = fixture("uv_monorepo");
+    let app = dir.path().join("python/py-app/pyproject.toml");
+    fs::write(
+        &app,
+        fs::read_to_string(&app).unwrap() + "\n[dependency-groups]\ndev = [\"pytest\"]\n",
+    )
+    .unwrap();
+    git(dir.path(), &["commit", "--quiet", "-am", "pytest"]);
+    let selection = affected_json(
+        dir.path(),
+        &["--changed", "python/py-app/src/py_app/__init__.py"],
+    );
+    assert_eq!(selection.uncovered, ["py-app#test"]);
+}

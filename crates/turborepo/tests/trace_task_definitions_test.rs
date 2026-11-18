@@ -8,8 +8,14 @@
 //! equal where one definition of the root `turbo.json` applies, and a superset
 //! where a package `turbo.json` or a root `<package>#<task>` adds to it (the
 //! trace unions their values instead of taking the more specific one). The
-//! trace's workspace is that of `package.json` workspaces: the tasks of Cargo
-//! and uv packages (turbo's native packages) are listed, not compared.
+//! trace's packages are those of its graph: the `package.json` workspaces and
+//! the crates and Python projects. turbo's native packages (Cargo crates, uv
+//! projects) have tasks turbo derives from the toolchain; the trace reads those
+//! of crates (`sources/native.rs`), and an output turbo derives for one (the
+//! binary of `cargo build`) is covered when it lies in what the trace reads the
+//! task's command to write. Of uv projects it reads only the tasks that start
+//! tests (`turbo trace` does not analyze Python): their other tasks are listed,
+//! not compared.
 
 mod common;
 
@@ -20,7 +26,7 @@ use std::{
 
 use common::{run_turbo_with_env, setup};
 use turborepo_trace_tasks::{
-    TaskRef,
+    Options, TaskRef, analyze_package,
     sources::{SourceCx, TaskSource, Workspace, turbo::Turbo},
 };
 
@@ -169,16 +175,68 @@ fn turbo_side(
     planned.then_some(out)
 }
 
+/// The trace's packages: the `package.json` workspaces, and the directories
+/// with a `Cargo.toml` or a `pyproject.toml` (the graph's crates and Python
+/// projects).
+fn trace_workspace(root: &Path) -> Workspace {
+    fn walk(root: &Path, dir: &Path, out: &mut Vec<String>) {
+        let Ok(rd) = std::fs::read_dir(dir) else {
+            return;
+        };
+        for e in rd.flatten() {
+            let p = e.path();
+            let name = e.file_name();
+            if e.file_type().is_ok_and(|t| t.is_dir()) {
+                if !matches!(
+                    name.to_str(),
+                    Some(".git" | "node_modules" | "target" | ".turbo")
+                ) {
+                    walk(root, &p, out);
+                }
+            } else if matches!(name.to_str(), Some("Cargo.toml" | "pyproject.toml")) {
+                let rel = dir.strip_prefix(root).unwrap().to_string_lossy();
+                out.push(if rel.is_empty() {
+                    ".".into()
+                } else {
+                    rel.into_owned()
+                });
+            }
+        }
+    }
+    let js = Workspace::discover(root);
+    let mut rels: Vec<String> = js.packages.iter().map(|p| p.rel.clone()).collect();
+    walk(root, root, &mut rels);
+    Workspace::from_roots(root, rels)
+}
+
+/// What the trace reads a task's commands to write (absolute): the outputs of
+/// its specification that are not declared in `turbo.json`.
+type Written = BTreeSet<PathBuf>;
+
 /// The trace's reading of the same tasks, and whether more than the root's
 /// generic definition contributed to each (a package `turbo.json`, a root
-/// `<package>#<task>`).
-fn trace_side(ws: &Workspace) -> BTreeMap<(String, String), (Declared, bool)> {
+/// `<package>#<task>`); and the tasks of the trace's task model, with what
+/// their commands write.
+#[allow(clippy::type_complexity)]
+fn trace_side(
+    ws: &Workspace,
+) -> (
+    BTreeMap<(String, String), (Declared, bool)>,
+    BTreeMap<(String, String), Written>,
+) {
     let mut out = BTreeMap::new();
+    let mut tasks = BTreeMap::new();
     for pkg in &ws.packages {
         let cx = SourceCx {
             workspace: ws,
             package: pkg,
         };
+        for t in analyze_package(ws, pkg, &Options::default()) {
+            tasks.insert(
+                (pkg.rel.clone(), t.name.clone()),
+                t.spec.outputs.iter().map(|o| normalize(&o.path)).collect(),
+            );
+        }
         for t in Turbo.discover(&cx) {
             let own = t.files.len() > 1;
             let mut d = Declared::default();
@@ -219,7 +277,7 @@ fn trace_side(ws: &Workspace) -> BTreeMap<(String, String), (Declared, bool)> {
             entry.1 |= own || several;
         }
     }
-    out
+    (out, tasks)
 }
 
 #[test]
@@ -239,7 +297,7 @@ fn depends_on_and_outputs_cover_turbos_task_definitions() {
             setup::setup_package_manager(dir.path(), "npm@10.5.0").unwrap();
         }
         let root = std::fs::canonicalize(dir.path()).unwrap();
-        let ws = Workspace::discover(&root);
+        let ws = trace_workspace(&root);
         let names = task_names(&root, &ws);
         if names.is_empty() {
             skipped.push(format!("{name}: no tasks"));
@@ -249,21 +307,40 @@ fn depends_on_and_outputs_cover_turbos_task_definitions() {
             skipped.push(format!("{name}: turbo cannot plan it"));
             continue;
         };
-        let ours = trace_side(&ws);
+        let (ours, model) = trace_side(&ws);
         compared += 1;
         for (key, t) in &theirs {
-            if !ws.packages.iter().any(|p| p.rel == key.0) {
-                native.insert(format!("{name} {}", key.0));
+            // A task of a uv project, or of the uv workspace (at the root, without a
+            // script of that name).
+            let dir = root.join(&key.0);
+            let script = read_jsonc(&dir.join("package.json"))
+                .is_some_and(|m| m["scripts"].get(&key.1).is_some());
+            if dir.join("pyproject.toml").is_file() && !script {
+                native.insert(format!("{name} {}#{}", key.0, key.1));
                 continue;
             }
             tasks += 1;
-            let Some((o, own)) = ours.get(key) else {
+            // A native package's task is in the trace's task model (its `turbo.json`
+            // definition alone only augments a task some source defines).
+            let none = Written::new();
+            let written = match model.get(key) {
+                Some(w) => Some(w),
+                None if dir.join("package.json").is_file() => Some(&none),
+                None => None,
+            };
+            let (Some((o, own)), Some(written)) = (ours.get(key), written) else {
                 wrong.push(format!(
                     "{name} {key:?}: not read by the trace (turbo: {t:?})"
                 ));
                 continue;
             };
-            let covered = t.depends_on.is_subset(&o.depends_on) && t.outputs.is_subset(&o.outputs);
+            // An output turbo derives (not in `turbo.json`) lies in what the task's
+            // command writes.
+            let output_covered = |g: &String| {
+                o.outputs.contains(g) || written.iter().any(|w| Path::new(g).starts_with(w))
+            };
+            let covered =
+                t.depends_on.is_subset(&o.depends_on) && t.outputs.iter().all(output_covered);
             // Outputs the trace adds for nested packages are exclusions (`!<nested>/**`).
             let extra_outputs: BTreeSet<&String> = o
                 .outputs
@@ -285,7 +362,7 @@ fn depends_on_and_outputs_cover_turbos_task_definitions() {
     for s in &skipped {
         eprintln!("  {s}");
     }
-    eprintln!("not compared, packages outside the trace's workspace: {native:?}");
+    eprintln!("not compared, tasks of uv projects: {native:?}");
     assert!(compared >= 35, "too few fixtures compared: {compared}");
     assert!(
         wrong.is_empty(),
