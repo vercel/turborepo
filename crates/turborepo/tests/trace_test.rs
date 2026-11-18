@@ -1576,8 +1576,6 @@ func TestTemp(t *testing.T) {
 /// extension, so `shared/app.staging.yaml` is not at it.
 #[cfg(unix)]
 #[test]
-#[ignore = "known gap: a climbing string that ends inside a file name (a prefix completed by a \
-            variable) does not name the file"]
 fn go_climbing_string_completed_within_its_last_segment() {
     assert_climb_selects(
         &[
@@ -1611,8 +1609,6 @@ func TestShared(t *testing.T) {
 /// gets no places at all.
 #[cfg(unix)]
 #[test]
-#[ignore = "known gap: a climbing string with a rest of one segment is not completed with an \
-            extension"]
 fn go_climbing_string_of_one_segment_completed_with_an_extension() {
     assert_climb_selects(
         &[
@@ -1640,6 +1636,41 @@ func TestSchema(t *testing.T) {
         ],
         "schema.json",
         "services/billing/stem/stem_test.go",
+    );
+}
+
+/// `base + "_golden.json"`, the base a climbing string in a package that also
+/// holds a string that only climbs: the shape anywhere, continued too.
+#[cfg(unix)]
+#[test]
+fn go_climbing_string_completed_with_a_suffix_where_the_base_can_move() {
+    assert_climb_selects(
+        &[
+            ("shared/case_golden.json", "{}\n"),
+            (
+                "services/billing/golden/golden_test.go",
+                r#"package golden
+
+import (
+	"path/filepath"
+	"testing"
+
+	"example.com/billing/config"
+)
+
+const root = "../.."
+
+func TestGolden(t *testing.T) {
+	base := filepath.Join(root, "../shared/case")
+	if _, err := config.Load(base + "_golden.json"); err != nil {
+		t.Fatal(err)
+	}
+}
+"#,
+            ),
+        ],
+        "shared/case_golden.json",
+        "services/billing/golden/golden_test.go",
     );
 }
 

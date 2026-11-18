@@ -113,6 +113,10 @@ fn ancestor(dir: &str, k: u32) -> &str {
 /// segments), and every directory above it.
 struct Keys<'a> {
     shapes: HashSet<&'a str>,
+    /// Every suffix of a changed path that starts at a segment boundary, in
+    /// order: what a shape whose last segment can be continued is looked up
+    /// in ([`Keys::continued`]).
+    suffixes: Vec<&'a str>,
     dirs: HashSet<&'a str>,
     /// The changed paths by directory: `(file name, path)`.
     files: std::collections::HashMap<&'a str, Vec<(&'a str, &'a str)>>,
@@ -121,6 +125,7 @@ struct Keys<'a> {
 impl<'a> Keys<'a> {
     fn of(changes: &'a [Change]) -> Self {
         let mut shapes = HashSet::new();
+        let mut suffixes = Vec::new();
         let mut dirs = HashSet::new();
         let mut files: std::collections::HashMap<&str, Vec<(&str, &str)>> = Default::default();
         dirs.insert("");
@@ -140,6 +145,7 @@ impl<'a> Keys<'a> {
                 }
             }
             ends.push(path.len());
+            suffixes.extend(starts.iter().map(|&s| &path[s..]));
             let n = starts.len();
             for end in 0..n {
                 if end + 1 < n {
@@ -158,11 +164,23 @@ impl<'a> Keys<'a> {
                 }
             }
         }
+        suffixes.sort_unstable();
+        suffixes.dedup();
         Keys {
             shapes,
+            suffixes,
             dirs,
             files,
         }
+    }
+
+    /// Whether `shape`, continued within its last segment, can name a changed
+    /// path: a suffix of a changed path at a segment boundary starts with it
+    /// (`turborepo_trace_graph::names::shape_continues`). Every shape that
+    /// names a changed path does.
+    fn continued(&self, shape: &str) -> bool {
+        let i = self.suffixes.partition_point(|s| *s < shape);
+        self.suffixes.get(i).is_some_and(|s| s.starts_with(shape))
     }
 }
 
@@ -199,12 +217,19 @@ struct FileNames {
     cwd_dirs: Vec<(String, String, u32, bool)>,
     /// Paths that a string climbs to from the working directory (leading `..`,
     /// then the shape), with the line
-    /// (`turborepo_trace_core::names::Name::climbs_from_cwd`).
+    /// (`turborepo_trace_core::names::Name::climbs_from_cwd`): made by
+    /// [`settle`] from `cwd_names`.
     cwd_climbs: Vec<(String, u32)>,
-    /// The indices in `shapes` of the names that count inside the package only
-    /// because their strings climb from the working directory: with
-    /// `cwd_climbs`, what [`unanchor`] takes back.
-    cwd_shapes: Vec<usize>,
+    /// The names whose strings climb from the working directory, when their
+    /// shape continued can name a changed path: the shape, the line, how far
+    /// they climb, and their index in `shapes` when they name a changed path
+    /// as a shape. [`settle`] decides where they go.
+    cwd_names: Vec<(String, u32, u32, Option<usize>)>,
+    /// Go names whose strings climb from where nothing says, when their shape
+    /// continued can name a changed path: the shape and the line. They name
+    /// their shape, continued, anywhere
+    /// (`turborepo_trace_graph::NameIndex::add_prefix`).
+    prefixes: Vec<(String, u32)>,
     /// The file can move the base of its package's relative paths
     /// (`turborepo_trace_core::names::Names::moves_base`).
     moves_base: bool,
@@ -241,42 +266,51 @@ fn file_names(
         paths: Vec::new(),
         cwd_dirs: Vec::new(),
         cwd_climbs: Vec::new(),
-        cwd_shapes: Vec::new(),
+        cwd_names: Vec::new(),
+        prefixes: Vec::new(),
         moves_base: d.moves_base,
         chdir: d.chdir,
         cwd: None,
         test_path: None,
         ups: 0,
     };
+    // A Go string that climbs is the start of a path that code can complete
+    // (`"../../shared/app." + env + ".yaml"`, `base + ".json"`): its last segment
+    // can be continued.
+    let go = !data && path.ends_with(".go");
     for (line, shape, rest) in d.shapes() {
         out.seen += 1;
-        if keys.shapes.contains(shape) {
-            // A parent step in the file (`..`, `dirname`) can cut the spelled path back to
-            // the shape: the rest then says nothing.
-            let rest = rest.filter(|_| d.ups == 0 || data);
-            let from_cwd = facts::climbs_from_cwd(line);
-            let climbs = facts::climbs(line) || (from_cwd > 0 && !climb_cwd);
-            let (line, span) = facts::line_and_span(line);
-            // Every string with this name lies inside one closed region: not a name.
-            if let Some((first, last)) = span
-                && closed.iter().any(|c| c.start <= first && last < c.end)
-            {
-                continue;
-            }
+        let keyed = keys.shapes.contains(shape);
+        let from_cwd = facts::climbs_from_cwd(line);
+        let marked = facts::climbs(line);
+        let continued = go && (marked || from_cwd > 0) && keys.continued(shape);
+        if !keyed && !continued {
+            continue;
+        }
+        // A parent step in the file (`..`, `dirname`) can cut the spelled path back to
+        // the shape: the rest then says nothing.
+        let rest = rest.filter(|_| d.ups == 0 || data);
+        let climbs = marked || (from_cwd > 0 && !climb_cwd);
+        let (line, span) = facts::line_and_span(line);
+        // Every string with this name lies inside one closed region: not a name.
+        if let Some((first, last)) = span
+            && closed.iter().any(|c| c.start <= first && last < c.end)
+        {
+            continue;
+        }
+        if go && climbs {
+            // Its shape, continued, anywhere (that covers what the shape names).
+            out.prefixes.push((shape.to_owned(), line));
+            continue;
+        }
+        let at = keyed.then(|| {
             out.shapes
                 .push((shape.to_owned(), rest.map(str::to_owned), line, climbs));
-            // A changed path that the string can climb to ends with its shape: only a name
-            // of a changed path needs its places.
-            if from_cwd > 0 && climb_cwd && !data && !climbs {
-                out.cwd_shapes.push(out.shapes.len() - 1);
-                // Below the working directory, whatever package that is (a base below it
-                // in a nested package), and at the directories it climbs to.
-                out.cwd_climbs.push((format!("**/{shape}"), line));
-                for j in 1..=from_cwd {
-                    out.cwd_climbs
-                        .push((format!("{}{shape}", "../".repeat(j as usize)), line));
-                }
-            }
+            out.shapes.len() - 1
+        });
+        // Where it climbs to: [`settle`] decides with the other files of the directory.
+        if go && from_cwd > 0 && climb_cwd {
+            out.cwd_names.push((shape.to_owned(), line, from_cwd, at));
         }
     }
     // A data file has no location of its own.
@@ -336,15 +370,21 @@ fn file_names(
     out
 }
 
-/// Takes back the working-directory anchoring of the climbing strings of the
-/// Go files in a directory where some Go file can move the base
-/// (`turborepo_trace_core::names::Names::moves_base`: a `Chdir`, a string
-/// that only climbs): their shapes name anywhere again, as a string that climbs
-/// from where nothing says. Where a Go file changes the working directory
-/// (`turborepo_trace_core::names::Names::chdir`), every name of the
-/// directory's Go files names anywhere: after the change a relative path is
-/// taken from elsewhere, a literal one too.
-fn unanchor(g: &Graph, files: &mut [FileNames]) {
+/// Where the strings of the Go files that climb from the working directory go
+/// (`turborepo_trace_core::names::Name::climbs_from_cwd`), decided per
+/// directory (a Go package):
+///
+/// - where some Go file of the directory can move the base
+///   (`turborepo_trace_core::names::Names::moves_base`: a `Chdir`, a string
+///   that only climbs), they name their shape, continued, anywhere, as a string
+///   that climbs from where nothing says;
+/// - where a Go file changes the working directory
+///   (`turborepo_trace_core::names::Names::chdir`), every name of the
+///   directory's Go files names anywhere too: after the change a relative path
+///   is taken from elsewhere, a literal one too;
+/// - otherwise they name their rest at the directories they climb to, and their
+///   shape below the working directory (continued, both).
+fn settle(g: &Graph, files: &mut [FileNames]) {
     let dir = |n: NodeId| {
         let p = g.path(n);
         p.ends_with(".go")
@@ -355,9 +395,6 @@ fn unanchor(g: &Graph, files: &mut [FileNames]) {
         .filter(|f| f.moves_base)
         .filter_map(|f| dir(f.node))
         .collect();
-    if moved.is_empty() {
-        return;
-    }
     let changed: HashSet<&str> = files
         .iter()
         .filter(|f| f.chdir)
@@ -370,15 +407,30 @@ fn unanchor(g: &Graph, files: &mut [FileNames]) {
                 s.3 = true;
             }
         }
-        if f.cwd_shapes.is_empty() || !moved.contains(d) {
+        let names = std::mem::take(&mut f.cwd_names);
+        if moved.contains(d) {
+            for (shape, line, _, at) in names {
+                if let Some(i) = at {
+                    f.shapes[i].3 = true;
+                }
+                f.prefixes.push((shape, line));
+            }
             continue;
         }
-        for &i in &f.cwd_shapes {
-            f.shapes[i].3 = true;
+        for (shape, line, k, _) in names {
+            f.cwd_climbs.extend(climb_places(&shape, line, k));
         }
-        f.cwd_shapes.clear();
-        f.cwd_climbs.clear();
     }
+}
+
+/// The places of a string of shape `shape` at `line` that climbs `k`
+/// directories from the working directory: below the working directory,
+/// whatever package that is (a base below it in a nested package), and at the
+/// directories it climbs to.
+fn climb_places(shape: &str, line: u32, k: u32) -> Vec<(String, u32)> {
+    std::iter::once((format!("**/{shape}"), line))
+        .chain((1..=k).map(|j| (format!("{}{shape}", "../".repeat(j as usize)), line)))
+        .collect()
 }
 
 /// Whether the environment registry owns the record `u` (it resolved what it
@@ -400,6 +452,9 @@ fn add_names(index: &mut NameIndex, f: &FileNames, data: bool, live: &dyn Fn(u32
     }
     for (shape, rest, line, climbs) in &f.shapes {
         index.add_name(f.node, shape, rest.as_deref(), *line, *climbs);
+    }
+    for (shape, line) in &f.prefixes {
+        index.add_prefix(f.node, shape, *line, true);
     }
     if data {
         index.mark_data(f.node);
@@ -663,7 +718,7 @@ pub(crate) fn build<V: GraphView>(
             file_names(&keys, n, g.path(n), &d, false, &mine, climb_cwd)
         })
     });
-    unanchor(g, &mut per_file);
+    settle(g, &mut per_file);
     let files = per_file.len();
     let mut names = 0;
     for f in &per_file {
@@ -983,27 +1038,38 @@ mod tests {
 
     #[test]
     fn a_string_that_climbs_from_the_working_directory_names_its_places() {
-        let fact = "names:0,1,0,5,0\n4>3\tpackage.json\n6^\tshared/a.json\n8>2\tother.json";
-        let d = facts::decode(fact).unwrap();
+        let fact = [
+            "names:0,1,0,5,0",
+            "4>3\tpackage.json",
+            "6^\tshared/a.json",
+            "8>2\tother.json",
+            "9>1\tshared/app.",
+        ]
+        .join("\n");
+        let d = facts::decode(&fact).unwrap();
         let n = NodeId(4);
         let changes = [
             Change::new(ChangeKind::Modified, "web/package.json"),
             Change::new(ChangeKind::Modified, "x/shared/a.json"),
+            Change::new(ChangeKind::Modified, "shared/app.staging.yaml"),
         ];
         let keys = Keys::of(&changes);
         let f = file_names(&keys, n, "svc/a/x_test.go", &d, false, &[], true);
-        // The shape counts inside the package; the places are the directories it
-        // climbs to. A plain climbing mark stays; a name of no changed path is left
-        // out.
+        // The shape counts inside the package; where the strings climb to is left
+        // to `settle`. A plain climbing mark names its shape, continued, anywhere; a
+        // name of no changed path is left out; a shape that only a continuation of
+        // its last segment makes a name of a changed path climbs too.
+        assert_eq!(f.shapes, [("package.json".to_owned(), None, 4, false)]);
+        assert_eq!(f.prefixes, [("shared/a.json".to_owned(), 6)]);
         assert_eq!(
-            f.shapes,
+            f.cwd_names,
             [
-                ("package.json".to_owned(), None, 4, false),
-                ("shared/a.json".to_owned(), None, 6, true)
+                ("package.json".to_owned(), 4, 3, Some(0)),
+                ("shared/app.".to_owned(), 9, 1, None)
             ]
         );
         assert_eq!(
-            f.cwd_climbs,
+            climb_places("package.json", 4, 3),
             [
                 ("**/package.json".to_owned(), 4),
                 ("../package.json".to_owned(), 4),
@@ -1011,10 +1077,18 @@ mod tests {
                 ("../../../package.json".to_owned(), 4)
             ]
         );
-        // Off (A/B, or without the package assumption): the shape anywhere, as before.
+        // Off (A/B, or without the package assumption): the shape, continued,
+        // anywhere.
         let f = file_names(&keys, n, "svc/a/x_test.go", &d, false, &[], false);
-        assert_eq!(f.shapes[0], ("package.json".to_owned(), None, 4, true));
-        assert!(f.cwd_climbs.is_empty());
+        assert!(f.shapes.is_empty() && f.cwd_names.is_empty());
+        assert_eq!(
+            f.prefixes,
+            [
+                ("package.json".to_owned(), 4),
+                ("shared/a.json".to_owned(), 6),
+                ("shared/app.".to_owned(), 9)
+            ]
+        );
     }
 
     #[test]
@@ -1038,6 +1112,13 @@ mod tests {
         }
         for not in ["get", "get.test", "ts", "src/get.test.ts"] {
             assert!(!k.shapes.contains(not), "{not}");
+        }
+        // Continued within the last segment, at a segment boundary.
+        for shape in ["handlers/ge", "get.te", "pkg/src/hand", "g"] {
+            assert!(k.continued(shape), "{shape}");
+        }
+        for not in ["et.test.ts", "andlers", "src/get"] {
+            assert!(!k.continued(not), "{not}");
         }
         let mut dirs: Vec<&str> = k.dirs.iter().copied().collect();
         dirs.sort();

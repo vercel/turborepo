@@ -717,23 +717,40 @@ fn a_string_that_climbs_from_the_working_directory_names_where_it_climbs_to() {
 
 #[test]
 fn the_place_of_a_climbing_string_takes_an_extension_and_its_shape_counts_below() {
-    use turborepo_trace_graph::names::{at_place, shape_names};
-    // At the place, below it, and the place completed with an extension.
+    use turborepo_trace_graph::names::{at_place, shape_continues, shape_names};
+    // At the place, below it, and the place continued within its last segment (code
+    // completes the string: `base + ".json"`, `base + "_golden.json"`).
     for path in [
         "shared/golden",
         "shared/golden/a.json",
         "shared/golden.json",
         "shared/golden.test.json",
+        "shared/goldenx.json",
+        "shared/golden_v2.json",
+        "shared/golden.d/a.json",
     ] {
         assert!(at_place(path, "shared/golden"), "{path}");
     }
     for path in [
-        "shared/goldenx.json",
-        "shared/golden.d/a.json",
         "shared/other.json",
+        "shared/gold.json",
+        "x/shared/golden.json",
     ] {
         assert!(!at_place(path, "shared/golden"), "{path}");
     }
+    assert!(at_place("shared/app.staging.yaml", "shared/app."));
+    // Below the working directory: the shape at a segment boundary, continued.
+    for rel in [
+        "shared/app.staging.yaml",
+        "x/shared/app.test.yaml",
+        "x/shared/app./y",
+    ] {
+        assert!(shape_continues(rel, "shared/app."), "{rel}");
+    }
+    assert!(shape_continues("a/schema.json", "schema"));
+    assert!(shape_continues("schemas/v1/a.json", "schema"));
+    assert!(!shape_continues("a/xschema.json", "schema"));
+    assert!(!shape_continues("shared/ap.yaml", "shared/app."));
     // The shape anywhere, as the index names a path: a suffix of the path or of an
     // ancestor directory, or of the path up to an extension.
     for rel in [

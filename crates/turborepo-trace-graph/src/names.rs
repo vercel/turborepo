@@ -128,13 +128,16 @@
 //! own and the others the plugin sees) and the rest `R` goes to `R` at one of
 //! the directories `1..=k` above the directory the process runs in, or below
 //! that directory when it is joined onto a deeper base. So it names `R` at
-//! those directories, whatever package they are in, and `R` completed with an
-//! extension there (`R.json`, as a shape names a file by its stem); its shape
-//! anywhere below the directory the process runs in, whatever package that is;
-//! and its shape inside the package like any other string, instead of its
-//! shape anywhere ([`NameIndex::add_cwd_climb`], with the directories of "Who
-//! runs a process"). This is a second assumption about where a path goes, made
-//! only together with the package assumption
+//! those directories, whatever package they are in, and `R` continued within
+//! its last segment there (`R.json`, `R_golden.json`, `R.d/a.json`: the string
+//! can be the start of a path that code completes, `base + ".json"`); its
+//! shape, continued in the same way, anywhere below the directory the process
+//! runs in, whatever package that is; and its shape inside the package like any
+//! other string, instead of its shape anywhere ([`NameIndex::add_cwd_climb`],
+//! with the directories of "Who runs a process"). Where the plugin's assumption
+//! below does not hold, the string names its shape, continued, anywhere
+//! ([`NameIndex::add_prefix`]). This is a second assumption about where a path
+//! goes, made only together with the package assumption
 //! (`TURBO_TRACE_DEBUG_NAMES_CLIMB_CWD=0` turns it off for A/B measurements;
 //! `--strict` opens the reads altogether):
 //!
@@ -315,6 +318,8 @@ struct Pattern {
 #[derive(Clone, Debug, Default)]
 pub struct NameIndex {
     shapes: HashMap<Box<str>, Vec<NameRef>>,
+    /// Shapes whose last segment code can continue ([`NameIndex::add_prefix`]).
+    prefixes: HashMap<Box<str>, Vec<NameRef>>,
     /// Shapes with a rest, by shape.
     patterns: HashMap<Box<str>, Vec<Pattern>>,
     /// Directory (repository relative, `""` for the root) to the files that use
@@ -391,6 +396,24 @@ impl NameIndex {
         self.count += 1;
     }
 
+    /// `node` has a string at `line` that is the start of a path that code can
+    /// complete (`"../shared/app." + env + ".yaml"`, `base + "_golden.json"`):
+    /// it names every path that a suffix of it at a segment boundary starts
+    /// with ([`shape_continues`]), which is all that the shape names and the
+    /// continuations of its last segment. `climbs`: as for
+    /// [`NameIndex::add_name`].
+    pub fn add_prefix(&mut self, node: NodeId, shape: &str, line: u32, climbs: bool) {
+        let shape = shape.trim_matches('/');
+        if shape.is_empty() {
+            return;
+        }
+        self.prefixes
+            .entry(shape.into())
+            .or_default()
+            .push(NameRef { node, line, climbs });
+        self.count += 1;
+    }
+
     /// `node`, a file in the directory `dir` (repository relative, `""` for the
     /// root), uses its own location at `line`.
     pub fn add_location(&mut self, node: NodeId, dir: &str, line: u32) {
@@ -424,12 +447,12 @@ impl NameIndex {
     /// `node` has a string at `line` that climbs from the working directory to
     /// the path `rel` (leading `..`, then the string's shape): it names
     /// everything at or below `rel` taken from the directories an entry runs
-    /// in, and `rel` completed with an extension ([`at_place`]), whatever
-    /// package that is in. `rel` = `**/<shape>` names the shape anywhere below
-    /// those directories ([`shape_names`]). Unlike [`NameIndex::add_cwd_dir`],
-    /// the parent steps elsewhere in the file do not raise it: they are in
-    /// `rel` already ("Strings that climb from the working directory" in the
-    /// module documentation).
+    /// in, and `rel` continued within its last segment ([`at_place`]), whatever
+    /// package that is in. `rel` = `**/<shape>` names the shape, continued too,
+    /// anywhere below those directories ([`shape_continues`]). Unlike
+    /// [`NameIndex::add_cwd_dir`], the parent steps elsewhere in the file
+    /// do not raise it: they are in `rel` already ("Strings that climb from
+    /// the working directory" in the module documentation).
     pub fn add_cwd_climb(&mut self, node: NodeId, rel: &str, line: u32) {
         self.cwd_dirs
             .push((NameRef::at(node, line), rel.into(), "**".into(), false));
@@ -533,6 +556,24 @@ impl NameIndex {
                                 f(p.at, NamedBy::Shape(&p.text));
                             }
                         }
+                    }
+                }
+            }
+        }
+        // Shapes that can be continued: every start of every suffix at a segment
+        // boundary.
+        if !self.prefixes.is_empty() {
+            for &s in &starts {
+                for (e, _) in path[s..].char_indices().skip(1) {
+                    if let Some((shape, refs)) = self.prefixes.get_key_value(&path[s..s + e]) {
+                        for &r in refs {
+                            f(r, NamedBy::Shape(shape));
+                        }
+                    }
+                }
+                if let Some((shape, refs)) = self.prefixes.get_key_value(&path[s..]) {
+                    for &r in refs {
+                        f(r, NamedBy::Shape(shape));
                     }
                 }
             }
@@ -664,14 +705,26 @@ fn part_base(d: &str, rel: &str) -> String {
 }
 
 /// Whether `path` is at the place `base` of a string that climbs: `base` or
-/// below it, or `base` completed with an extension (`base.json`,
-/// `base.test.json`), as a shape names a file by its stem.
+/// below it, or `base` continued within its last segment and below that
+/// (`base.json`, `base_golden.json`, `base-v2/a.json`, `base.d/a.json`): the
+/// string can be the start of a path that code completes (`dir + ".json"`,
+/// `prefix + name + ".yaml"`).
 pub fn at_place(path: &str, base: &str) -> bool {
-    below(path, base)
-        || (!base.is_empty()
-            && path
-                .strip_prefix(base)
-                .is_some_and(|r| r.len() > 1 && r.starts_with('.') && !r.contains('/')))
+    base.is_empty() || path.starts_with(base)
+}
+
+/// Whether `shape` starts the path `rel` (relative to some directory) at a
+/// segment boundary: some segment of `rel` and what follows it start with the
+/// shape, so `shared/app.` names `x/shared/app.staging.yaml`, and `schema`
+/// names `schema.json` and `schemas/a.json`. What a string that climbs names
+/// below the directory it is taken from, where its last segment can be
+/// continued (see [`at_place`]); it names whatever [`shape_names`] names.
+pub fn shape_continues(rel: &str, shape: &str) -> bool {
+    let shape = shape.trim_matches('/');
+    !shape.is_empty()
+        && std::iter::once(0)
+            .chain(rel.match_indices('/').map(|(i, _)| i + 1))
+            .any(|s| rel[s..].starts_with(shape))
 }
 
 /// Whether `shape` names the path `rel` (relative to some directory) as the
@@ -1507,17 +1560,14 @@ impl<G: GraphView> Engine<'_, G> {
         // it is in; the parent steps elsewhere in the file raise it only inside
         // the package.
         if !index.cwd_dirs.is_empty() {
-            // The changed paths without an extension of their last segment: the places of
-            // strings that climb name those too ([`at_place`]).
-            let mut stems: HashSet<&str> = HashSet::new();
-            for c in changes {
-                let last = c.path.rfind('/').map_or(0, |i| i + 1);
-                for (i, _) in c.path[last..].match_indices('.') {
-                    if i > 0 {
-                        stems.insert(&c.path[..last + i]);
-                    }
-                }
-            }
+            // The changed paths in order: the place of a string that climbs names a path
+            // that continues it ([`at_place`]).
+            let mut sorted: Vec<&str> = changes.iter().map(|c| c.path.as_str()).collect();
+            sorted.sort_unstable();
+            let continued = |base: &str| {
+                let i = sorted.partition_point(|p| *p < base);
+                sorted.get(i).is_some_and(|p| p.starts_with(base))
+            };
             // The relative part, the pattern, and whether the file's parent steps raise it.
             type Parts<'x> = Vec<(&'x str, &'x str, bool)>;
             let mut per_file: std::collections::BTreeMap<u32, (u32, Parts<'_>)> =
@@ -1597,7 +1647,7 @@ impl<G: GraphView> Engine<'_, G> {
                                 parts.iter().any(|(rel, _, _)| {
                                     let base = part_base(d, rel);
                                     changed_below.any(&base)
-                                        || stems.contains(base.as_str())
+                                        || continued(&base)
                                         || (1..=max_ups)
                                             .any(|k| near_in(home, round, ancestor(&base, k)))
                                 })
@@ -1630,7 +1680,7 @@ impl<G: GraphView> Engine<'_, G> {
                             bases.sort_by_key(|b| if b.4 { 0 } else { b.3.len() });
                             let near = bases.iter().any(|(base, ..)| {
                                 changed_below.any(base)
-                                    || stems.contains(base.as_str())
+                                    || continued(base)
                                     || changed_below.any(ancestor(base, ups))
                             });
                             if !near {
@@ -1657,7 +1707,7 @@ impl<G: GraphView> Engine<'_, G> {
                                                         .and_then(|r| r.strip_prefix('/'))
                                                 };
                                                 return sub
-                                                    .is_some_and(|r| shape_names(r, shape))
+                                                    .is_some_and(|r| shape_continues(r, shape))
                                                     .then(|| {
                                                         format!(
                                                             "the string '{shape}' with parent \
@@ -2659,6 +2709,22 @@ mod tests {
         });
         out.sort();
         out
+    }
+
+    #[test]
+    fn prefixes_name_the_continuations_of_their_last_segment() {
+        let mut ix = NameIndex::new();
+        ix.add_prefix(NodeId(1), "shared/app.", 3, true);
+        ix.add_prefix(NodeId(2), "schema", 4, true);
+        assert_eq!(
+            named(&ix, "x/shared/app.staging.yaml"),
+            [(1, "shared/app.".to_owned())]
+        );
+        assert_eq!(named(&ix, "schema.json"), [(2, "schema".to_owned())]);
+        assert_eq!(named(&ix, "a/schema/b.json"), [(2, "schema".to_owned())]);
+        assert_eq!(named(&ix, "a/schemas_v1.json"), [(2, "schema".to_owned())]);
+        assert!(named(&ix, "a/xschema.json").is_empty());
+        assert!(named(&ix, "shared/ap.yaml").is_empty());
     }
 
     #[test]
