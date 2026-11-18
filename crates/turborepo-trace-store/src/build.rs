@@ -345,6 +345,11 @@ pub(crate) struct Cx {
     pub link_memo: dashmap::DashMap<PathBuf, u128>,
     /// [`seen_digest`] per place, per build.
     pub seen_memo: dashmap::DashMap<PathBuf, Arc<Seen>>,
+    /// The key observation sets of a lockfile link's virtual file, per target
+    /// package directory, per build ([`carry_link_file`]).
+    #[allow(clippy::type_complexity)]
+    pub link_file_sets:
+        dashmap::DashMap<PathBuf, Arc<Vec<Arc<turborepo_trace_core::Observations>>>>,
     /// Digest of a manifest's resolution view ([`view_digest`]), per build.
     pub view_memo: dashmap::DashMap<PathBuf, Option<u128>>,
     /// Memo for [`view_digest`] of a loader view.
@@ -2340,6 +2345,7 @@ pub fn build(opts: &GraphOptions, langs: &[Arc<dyn Language>]) -> Result<BuildRe
         fresh_listings: Default::default(),
         link_memo: Default::default(),
         seen_memo: Default::default(),
+        link_file_sets: Default::default(),
         view_memo: Default::default(),
         loader_view_memo: Default::default(),
         is_file_memo: Default::default(),
@@ -3492,6 +3498,47 @@ pub(crate) struct ObsAcc {
     pub extra: turborepo_trace_core::Observations,
 }
 
+/// Adds to `acc` what the tracer consulted for the virtual file that a lockfile
+/// link's request is resolved as, inside the target package's directory `dir`
+/// (`file`: the observations of that file's file-level group: the tsconfig
+/// chain, the scope of its manifest), as key observations of the current
+/// reference group.
+///
+/// The request is resolved under the `paths` of the tsconfig that governs the
+/// target package, of which the importer has no record of its own: when that
+/// chain changes (the target's tsconfig gains or loses an alias), the importer
+/// is traced again. Key observations, not inputs, as for the requests of the
+/// framework pass (`Fw::carry`): an edit of a config above the target does not
+/// select the importer's tests. One set per target directory, shared by every
+/// importer of the build, plus the sets the tracer made for that file.
+fn carry_link_file(
+    cx: &Cx,
+    dir: &Path,
+    file: &turborepo_trace_core::Observations,
+    acc: &mut ObsAcc,
+) {
+    if file.is_empty() {
+        return;
+    }
+    let sets = Arc::clone(
+        &cx.link_file_sets
+            .entry(dir.to_path_buf())
+            .or_insert_with(|| {
+                let mut set = file.clone();
+                let theirs = std::mem::take(&mut set.key);
+                let mut sets = vec![Arc::new(set)];
+                sets.extend(theirs);
+                sets.retain(|s| !s.is_empty());
+                Arc::new(sets)
+            }),
+    );
+    for set in sets.iter() {
+        if !acc.extra.key.iter().any(|k| Arc::ptr_eq(k, set)) {
+            acc.extra.key.push(Arc::clone(set));
+        }
+    }
+}
+
 impl TargetCx<'_> {
     /// The record of a load next to a module that is not installed
     /// ([`turborepo_trace_core::located`]), when the lockfile links the
@@ -3682,6 +3729,13 @@ impl TargetCx<'_> {
                     .tracer
                     .analyze_source(&dir.join("__turbotrace_link__.js"), src.as_bytes());
                 let mut out = Vec::new();
+                // What the tracer consulted for the virtual file itself (its file-level
+                // group: the tsconfig chain of the target package, whose `paths` decide
+                // the request): key observations of the importer, so that the chain's
+                // change traces it again.
+                for g in a.groups.iter().filter(|g| g.ref_index.is_none()) {
+                    carry_link_file(cx, &dir, &g.observations, acc);
+                }
                 for g in a.groups.iter().filter(|g| g.ref_index == Some(0)) {
                     acc.extra.extend_from(&g.observations);
                     for e in &a.edges[g.edges.clone()] {
@@ -4158,7 +4212,10 @@ pub(crate) fn assemble(
             // reads would be dropped (they decide which version is linked).
             let pins: Vec<PathBuf> = std::mem::take(&mut acc.pins).into_iter().collect();
             let view_pins: Vec<PathBuf> = std::mem::take(&mut acc.view_pins).into_iter().collect();
-            let extra = std::mem::take(&mut acc.extra);
+            let mut extra = std::mem::take(&mut acc.extra);
+            // Sets the classification named (a lockfile link's resolution:
+            // [`carry_link_file`]), keyed like the group's own.
+            let extra_keys = std::mem::take(&mut extra.key);
             aliased |= g.observations.aliased || extra.aliased;
             let norm = if extra.is_empty() {
                 crate::normalize::normalize(&ncx, &g.observations, memo)
@@ -4194,7 +4251,7 @@ pub(crate) fn assemble(
             });
             // What the group's result was computed from without being an input of it:
             // sets the file names ([`crate::shard::Shard::key_groups`]).
-            for set in &g.observations.key {
+            for set in g.observations.key.iter().chain(&extra_keys) {
                 let id = Arc::as_ptr(set) as usize;
                 if key_seen.insert(id) {
                     let cell = Arc::clone(&*key_norms.entry(id).or_default());
