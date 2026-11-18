@@ -158,6 +158,15 @@ turbo run build --concurrency=50%
 turbo run test --concurrency=5
 ```
 
+<Callout type="warn">
+  The default `10` is a fixed limit, not a value derived from the number of CPUs or
+  available memory. On a small or shared machine, several memory-heavy tasks (compilers,
+  type checkers, bundlers) can exhaust memory and be terminated before they finish; the
+  run summary then reports only the task's exit code. Set a bound that fits the host, for
+  example `--concurrency=2` on a shared 4-core laptop, and run the same tasks once without
+  a gate so the cache absorbs the expensive work.
+</Callout>
+
 ### `--continue[=<option>]`
 
 Default: `never`
