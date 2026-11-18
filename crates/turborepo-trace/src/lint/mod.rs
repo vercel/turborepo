@@ -22,6 +22,7 @@
 mod baseline;
 mod config;
 mod cwdpaths;
+mod gocwd;
 mod output;
 mod patterns;
 mod suppress;
@@ -177,6 +178,14 @@ pub const RULES: &[Rule] = &[
         summary: "a test pattern that matches through the directories the checkout lies below: \
                   which files are tests depends on the place",
         run: patterns::above_root,
+    },
+    Rule {
+        name: "go-working-directory",
+        default: Severity::Warn,
+        summary: "a Go file that changes the working directory: the relative paths of its package \
+                  are followed, a string of another package and the importers of a package that \
+                  changes it in its init are assumed",
+        run: gocwd::changes,
     },
     Rule {
         name: "cwd-path-explained",

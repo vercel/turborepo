@@ -1571,6 +1571,37 @@ func TestTemp(t *testing.T) {
     assert_selects(&selected, &[test], &[]);
 }
 
+/// `turbo trace lint` lists a Go file that changes the working directory, with
+/// what it leaves to other packages; a `Chdir` into a temporary directory is
+/// none.
+#[cfg(unix)]
+#[test]
+fn lint_lists_a_go_file_that_changes_the_working_directory() {
+    let dir = climb_fixture_with(&[
+        (
+            "services/billing/moved/main_test.go",
+            "package moved\n\nimport (\n\t\"os\"\n\t\"testing\"\n)\n\nfunc TestMain(m *testing.M) \
+             {\n\tif err := os.Chdir(\"../..\"); err != nil \
+             {\n\t\tpanic(err)\n\t}\n\tos.Exit(m.Run())\n}\n",
+        ),
+        (
+            "services/billing/tmpwd/tmpwd_test.go",
+            "package tmpwd\n\nimport \"testing\"\n\nfunc TestTemp(t *testing.T) \
+             {\n\tt.Chdir(t.TempDir())\n}\n",
+        ),
+    ]);
+    let output = trace(dir.path(), &["lint"]);
+    assert_eq!(output.status.code(), Some(0), "{}", stderr(&output));
+    let text = stdout(&output);
+    assert!(
+        text.contains("services/billing/moved/main_test.go:9")
+            && text.contains("go-working-directory")
+            && text.contains("still held to that package"),
+        "{text}"
+    );
+    assert!(!text.contains("tmpwd_test.go"), "{text}");
+}
+
 /// `"../../../shared/app." + env + ".yaml"`: the climbing string ends inside
 /// the file name. Its place is compared as a directory or as a stem before an
 /// extension, so `shared/app.staging.yaml` is not at it.
