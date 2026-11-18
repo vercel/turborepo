@@ -3,7 +3,8 @@
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
-      "outputs": ["dist"]
+      "outputs": ["dist"],
+      "tags": ["ci"]
     },
     "test": {
       "command": [
@@ -21,7 +22,8 @@
         "src/tag.test.ts",
         "src/version-command.test.ts",
         "src/version.test.ts"
-      ]
+      ],
+      "tags": ["ci"]
     },
     "lint:prettier": {
       "command": [
@@ -33,6 +35,9 @@
         "--cache",
         "--ignore-path=../../.prettierignore"
       ]
+    },
+    "check-types": {
+      "tags": ["ci"]
     }
   }
 }

@@ -11,7 +11,8 @@
         "src/client.test.ts",
         "src/config.test.ts",
         "src/utils.test.ts"
-      ]
+      ],
+      "tags": ["ci"]
     },
     "lint:prettier": {
       "command": [
@@ -23,6 +24,9 @@
         "--cache",
         "--ignore-path=../../.prettierignore"
       ]
+    },
+    "check-types": {
+      "tags": ["ci"]
     }
   }
 }

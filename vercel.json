@@ -5,5 +5,11 @@
       "benchmark-data": false,
       "gh-pages": false
     }
+  },
+  "ci": {
+    "bootstrapping": {
+      "installCommand": "bash scripts/vercel-ci-install-tools.sh",
+      "installEnv": {}
+    }
   }
 }
