@@ -8,6 +8,4 @@ set -euo pipefail
 runtime="$(dirname "$(pwd)")/.vercel-ci-runtime"
 npm install --prefix "$runtime" --no-audit --no-fund turbo@canary
 
-# Frozen mode installs exactly what the committed turbo.lock records. It fails
-# if turbo.lock no longer matches the tool declarations.
 "$runtime/node_modules/.bin/turbo" setup --frozen
