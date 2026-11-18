@@ -1731,11 +1731,12 @@ mod tests {
         let coarse = names_with(src.as_bytes(), false, false);
         assert_eq!((coarse.anchor, coarse.ups), (Some(7), 5));
         assert!(coarse.anchored.is_empty());
-        // The string climbs; as joined onto the working directory it is marked with
-        // its steps and the `Dir`; the location covers where it goes from there.
+        // The string climbs; the `Dir` is in a helper, which can run more than once,
+        // so it names its shape anywhere; the location covers where it goes from
+        // there.
         assert_eq!(
             (coarse.names[0].climbs, coarse.names[0].climbs_from_cwd),
-            (false, 5)
+            (true, 0)
         );
         // With: the directory, and no parent step is left to apply to it.
         let n = names(src.as_bytes(), false);

@@ -1729,8 +1729,6 @@ func TestShared(t *testing.T) {
 /// a loop.
 #[cfg(unix)]
 #[test]
-#[ignore = "known gap: filepath.Dir in the clauses of a for statement is not seen as a call in a \
-            loop"]
 fn go_climbing_string_after_dir_calls_in_a_for_clause() {
     assert_climb_selects(
         &[(
@@ -1776,8 +1774,6 @@ func TestShared(t *testing.T) {
 /// brace ends its line, so it is taken for the loop's body and the body is not.
 #[cfg(unix)]
 #[test]
-#[ignore = "known gap: the body of a for statement whose header holds a composite literal on \
-            several lines is not seen as a loop"]
 fn go_climbing_string_after_a_dir_loop_over_a_table_literal() {
     assert_climb_selects(
         &[(
