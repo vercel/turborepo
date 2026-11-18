@@ -60,6 +60,9 @@ pub enum LockfileContents {
 pub enum PackageInclusionReason {
     /// All the packages are invalidated
     All(AllPackageChangeReason),
+    /// A package the root `package.json` depends on changed, and this
+    /// package inherits root dependencies, so every one of its tasks changed
+    RootInternalDepChanged { root_internal_dep: PackageName },
     /// Root task was run
     RootTask { task: String },
     /// We conservatively assume that the root package is changed because
@@ -122,6 +125,14 @@ pub enum PackageChanges {
     Some(HashMap<WorkspacePackage, PackageInclusionReason>),
 }
 
+enum FileChanges {
+    All(AllPackageChangeReason),
+    Some {
+        packages: HashMap<WorkspacePackage, PackageInclusionReason>,
+        root_dependency_changed: Option<PackageName>,
+    },
+}
+
 pub struct ChangeMapper<'a, PD> {
     pkg_graph: &'a PackageGraph,
 
@@ -176,50 +187,57 @@ impl<'a, PD: PackageChangeMapper> ChangeMapper<'a, PD> {
         let filtered_changed_files = self.filter_ignored_files(changed_files.iter())?;
 
         // calculate lockfile_change here based on changed_files
-        match self.get_changed_packages(filtered_changed_files.into_iter()) {
-            PackageChanges::All(reason) => Ok(PackageChanges::All(reason)),
-
-            PackageChanges::Some(mut changed_pkgs) => {
-                match lockfile_contents {
-                    LockfileContents::Changed {
-                        path,
-                        previous_contents,
-                    } => self.apply_lockfile_changes(
-                        changed_pkgs,
-                        self.get_changed_packages_from_lockfile(&path, &previous_contents),
-                    ),
-                    LockfileContents::Resolved(changes) => {
-                        self.apply_lockfile_changes(changed_pkgs, Ok(changes))
-                    }
-
-                    // We don't have the actual contents, so just invalidate everything
-                    LockfileContents::UnknownChange => {
-                        // this can happen in a blobless checkout
-                        debug!(
-                            "we know the lockfile changed but we don't have the contents so we \
-                             have to assume all packages changed and rebuild everything"
-                        );
-                        Ok(PackageChanges::All(
-                            AllPackageChangeReason::LockfileChangedWithoutDetails,
-                        ))
-                    }
-
-                    // We don't know if the lockfile changed or not, so we can't assume anything
-                    LockfileContents::Unchanged => {
-                        debug!("the lockfile did not change");
-                        if let Err(error) =
-                            self.add_relationship_affected_packages(&mut changed_pkgs)
-                        {
-                            tracing::error!(%error, "relationship affectedness projection failed");
-                            return Ok(PackageChanges::All(
-                                AllPackageChangeReason::ConservativeFallback,
-                            ));
-                        }
-                        Ok(PackageChanges::Some(changed_pkgs))
-                    }
-                }
+        let (mut changed_pkgs, root_dependency_changed) =
+            match self.get_changed_packages(filtered_changed_files.into_iter()) {
+                FileChanges::All(reason) => return Ok(PackageChanges::All(reason)),
+                FileChanges::Some {
+                    packages,
+                    root_dependency_changed,
+                } => (packages, root_dependency_changed),
+            };
+        let mut changes = match lockfile_contents {
+            LockfileContents::Changed {
+                path,
+                previous_contents,
+            } => self.apply_lockfile_changes(
+                changed_pkgs,
+                self.get_changed_packages_from_lockfile(&path, &previous_contents),
+            ),
+            LockfileContents::Resolved(changes) => {
+                self.apply_lockfile_changes(changed_pkgs, Ok(changes))
             }
+
+            // We don't have the actual contents, so just invalidate everything
+            LockfileContents::UnknownChange => {
+                // this can happen in a blobless checkout
+                debug!(
+                    "we know the lockfile changed but we don't have the contents so we have to \
+                     assume all packages changed and rebuild everything"
+                );
+                Ok(PackageChanges::All(
+                    AllPackageChangeReason::LockfileChangedWithoutDetails,
+                ))
+            }
+
+            // We don't know if the lockfile changed or not, so we can't assume anything
+            LockfileContents::Unchanged => {
+                debug!("the lockfile did not change");
+                if let Err(error) = self.add_relationship_affected_packages(&mut changed_pkgs) {
+                    tracing::error!(%error, "relationship affectedness projection failed");
+                    return Ok(PackageChanges::All(
+                        AllPackageChangeReason::ConservativeFallback,
+                    ));
+                }
+                Ok(PackageChanges::Some(changed_pkgs))
+            }
+        };
+        if let (Ok(PackageChanges::Some(changed_pkgs)), Some(root_internal_dep)) =
+            (&mut changes, root_dependency_changed)
+        {
+            self.pkg_graph
+                .mark_root_dependency_change(changed_pkgs, &root_internal_dep);
         }
+        changes
     }
 
     fn apply_lockfile_changes(
@@ -278,15 +296,15 @@ impl<'a, PD: PackageChangeMapper> ChangeMapper<'a, PD> {
     fn get_changed_packages<'b>(
         &self,
         files: impl Iterator<Item = &'b AnchoredSystemPathBuf>,
-    ) -> PackageChanges {
+    ) -> FileChanges {
         let root_internal_deps = self.pkg_graph.root_internal_package_dependencies();
+        let mut every_package_inherits = None;
+        let mut root_dependency_changed = None;
         let mut changed_packages = HashMap::new();
         for file in files {
             match self.package_detector.detect_package(file) {
                 PackageMapping::Packages(packages) => {
                     for (pkg, reason) in packages {
-                        // Any co-located owner may be a root dependency, which
-                        // changes the global hash and invalidates every package.
                         if root_internal_deps.contains(&pkg) {
                             debug!(
                                 "{} changes root internal dependency: \"{}\"\nshortest path from \
@@ -295,11 +313,16 @@ impl<'a, PD: PackageChangeMapper> ChangeMapper<'a, PD> {
                                 pkg.name,
                                 self.pkg_graph.root_internal_dependency_explanation(&pkg),
                             );
-                            return PackageChanges::All(
-                                AllPackageChangeReason::RootInternalDepChanged {
-                                    root_internal_dep: pkg.name,
-                                },
-                            );
+                            if *every_package_inherits.get_or_insert_with(|| {
+                                self.pkg_graph.every_package_inherits_root_dependencies()
+                            }) {
+                                return FileChanges::All(
+                                    AllPackageChangeReason::RootInternalDepChanged {
+                                        root_internal_dep: pkg.name,
+                                    },
+                                );
+                            }
+                            root_dependency_changed.get_or_insert_with(|| pkg.name.clone());
                         }
                         debug!("{} changes \"{}\"", file.to_string(), pkg.name);
                         changed_packages.insert(pkg, reason);
@@ -307,13 +330,16 @@ impl<'a, PD: PackageChangeMapper> ChangeMapper<'a, PD> {
                 }
                 PackageMapping::All(reason) => {
                     debug!("all packages changed due to {file:?}");
-                    return PackageChanges::All(reason);
+                    return FileChanges::All(reason);
                 }
                 PackageMapping::None => {}
             }
         }
 
-        PackageChanges::Some(changed_packages)
+        FileChanges::Some {
+            packages: changed_packages,
+            root_dependency_changed,
+        }
     }
 
     fn add_relationship_affected_packages(

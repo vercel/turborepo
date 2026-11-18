@@ -336,7 +336,7 @@ fn deferred_hash(
         inputs(root, graph, &definitions, true, false),
         &run_opts,
         &env,
-        "global-hash",
+        &crate::global_hash::TEST_GLOBAL_HASHES,
         root,
         EnvironmentVariableMap::default(),
         &[],

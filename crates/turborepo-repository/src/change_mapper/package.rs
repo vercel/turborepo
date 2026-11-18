@@ -575,12 +575,21 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn colocated_root_dependency_still_invalidates_all_packages() -> Result<(), anyhow::Error>
-    {
+    async fn colocated_root_dependency_invalidates_only_javascript_packages()
+    -> Result<(), anyhow::Error> {
         use crate::{package_graph::PackageName, toolchain::ToolchainId};
 
         let repo_root = tempdir()?;
         let root = AbsoluteSystemPath::from_std_path(repo_root.path())?;
+        let root_package_json = || PackageJson {
+            dependencies: Some([("aaa-js".to_string(), "*".to_string())].into()),
+            ..Default::default()
+        };
+        let file = AnchoredSystemPathBuf::from_raw("packages/shared/src/file.txt")?;
+        let root_dependency_changed = PackageInclusionReason::RootInternalDepChanged {
+            root_internal_dep: PackageName::from("aaa-js"),
+        };
+
         let graph = colocated_graph(
             root,
             "aaa-js",
@@ -588,19 +597,43 @@ mod tests {
                 (ToolchainId::GO, "go.mod"),
                 (ToolchainId::RUST, "Cargo.toml"),
             ],
-            PackageJson {
-                dependencies: Some([("aaa-js".to_string(), "*".to_string())].into()),
-                ..Default::default()
-            },
+            root_package_json(),
         )
         .await?;
         let mapper = ChangeMapper::new(&graph, vec![], DefaultPackageChangeMapper::new(&graph));
-        let file = AnchoredSystemPathBuf::from_raw("packages/shared/src/file.txt")?;
+        let PackageChanges::Some(packages) =
+            mapper.changed_packages([file.clone()].into(), LockfileContents::Unchanged)?
+        else {
+            panic!("a mixed repository must not invalidate every package");
+        };
+        let reasons = packages
+            .into_iter()
+            .map(|(package, reason)| (package.name.to_string(), reason))
+            .collect::<std::collections::BTreeMap<_, _>>();
+        let file_changed = PackageInclusionReason::FileChanged { file: file.clone() };
+        assert_eq!(
+            reasons,
+            std::collections::BTreeMap::from([
+                ("//".to_string(), root_dependency_changed.clone()),
+                ("aaa-js".to_string(), root_dependency_changed.clone()),
+                ("child-js".to_string(), root_dependency_changed.clone()),
+                ("parent".to_string(), root_dependency_changed.clone()),
+                ("unrelated".to_string(), root_dependency_changed.clone()),
+                ("go".to_string(), file_changed.clone()),
+                ("rust".to_string(), file_changed),
+            ])
+        );
+
+        let repo_root = tempdir()?;
+        let root = AbsoluteSystemPath::from_std_path(repo_root.path())?;
+        let graph = colocated_graph(root, "aaa-js", &[], root_package_json()).await?;
+        let mapper = ChangeMapper::new(&graph, vec![], DefaultPackageChangeMapper::new(&graph));
         assert_eq!(
             mapper.changed_packages([file].into(), LockfileContents::Unchanged)?,
             PackageChanges::All(AllPackageChangeReason::RootInternalDepChanged {
                 root_internal_dep: PackageName::from("aaa-js")
-            })
+            }),
+            "a JavaScript-only repository keeps the all-packages reason"
         );
         Ok(())
     }

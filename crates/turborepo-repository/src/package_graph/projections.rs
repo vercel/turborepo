@@ -6,6 +6,7 @@ use super::PackageName;
 use crate::{
     knowledge::{RelationshipKnowledge, RepositoryKnowledge},
     relationships::{DependencyKind, RelationshipTarget},
+    toolchain::RootDependencyInputs,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -53,6 +54,7 @@ struct RelationshipIndex {
     is_root_ordering_input: Box<[bool]>,
     root_input_dependencies: Box<[ScopeId]>,
     is_root_input_dependency: Box<[bool]>,
+    inherits_root_inputs: Box<[bool]>,
 }
 
 impl RelationshipIndex {
@@ -160,6 +162,19 @@ impl RelationshipIndex {
         let mut root_input_members = closure_members(&inputs, &[root]);
         root_input_members[root.index()] = false;
         let root_input_dependencies = member_ids(&root_input_members);
+        let inherits_root_inputs = names
+            .iter()
+            .map(|name| {
+                let inputs = match name {
+                    PackageName::Root => RootDependencyInputs::for_namespace(true, None),
+                    PackageName::Other(identity) => RootDependencyInputs::for_namespace(
+                        false,
+                        repository.scope(identity).map(|scope| scope.toolchain()),
+                    ),
+                };
+                inputs == RootDependencyInputs::Inherited
+            })
+            .collect();
 
         Self {
             names,
@@ -175,7 +190,14 @@ impl RelationshipIndex {
             is_root_ordering_input: root_ordering_members.into_boxed_slice(),
             root_input_dependencies,
             is_root_input_dependency: root_input_members.into_boxed_slice(),
+            inherits_root_inputs,
         }
+    }
+
+    fn root_input_dependents(&self, reverse: &Adjacency, seeds: &[ScopeId]) -> Vec<bool> {
+        let mut seeds = seeds.to_vec();
+        seeds.extend(member_ids(&self.inherits_root_inputs));
+        closure_members(reverse, &seeds)
     }
 
     fn id(&self, package: &PackageName) -> Result<ScopeId, RelationshipProjectionError> {
@@ -199,7 +221,9 @@ impl RelationshipIndex {
     ) -> Result<Vec<PackageName>, RelationshipProjectionError> {
         let package = self.id(package)?;
         let mut members = closure_members(&self.ordering, &[package]);
-        include_ids(&mut members, &self.root_ordering_inputs);
+        if self.inherits_root_inputs[package.index()] {
+            include_ids(&mut members, &self.root_ordering_inputs);
+        }
         members[package.index()] = false;
         Ok(self.names_from_members(&members))
     }
@@ -210,7 +234,7 @@ impl RelationshipIndex {
     ) -> Result<Vec<PackageName>, RelationshipProjectionError> {
         let package = self.id(package)?;
         let mut members = if self.is_root_ordering_input[package.index()] {
-            vec![true; self.names.len()]
+            self.root_input_dependents(&self.reverse_ordering, &[package])
         } else {
             closure_members(&self.reverse_ordering, &[package])
         };
@@ -224,7 +248,9 @@ impl RelationshipIndex {
     ) -> Result<Vec<PackageName>, RelationshipProjectionError> {
         let package = self.id(package)?;
         let mut members = closure_members(&self.inputs, &[package]);
-        include_ids(&mut members, &self.root_input_dependencies);
+        if self.inherits_root_inputs[package.index()] {
+            include_ids(&mut members, &self.root_input_dependencies);
+        }
         members[package.index()] = false;
         Ok(self.names_from_members(&members))
     }
@@ -349,8 +375,9 @@ impl OrderingRelationships {
 /// Transitive package relationships used by package filtering.
 ///
 /// Dependency queries include the root JavaScript package's transitive internal
-/// dependencies as implied dependencies. Dependent queries preserve the
-/// corresponding all-packages behavior for those root inputs.
+/// dependencies as implied dependencies of every scope that inherits them (see
+/// [`RootDependencyInputs`]). Dependent queries mirror that: a root input's
+/// dependents are the inheriting scopes and anything with a real edge to them.
 #[derive(Debug, Clone)]
 pub struct FilteringRelationships(Arc<RelationshipIndex>);
 
@@ -364,8 +391,8 @@ impl FilteringRelationships {
     }
 
     /// Returns sorted transitive dependents excluding `package`. A root
-    /// internal input has every other authoritative identity as a
-    /// dependent.
+    /// internal input has every inheriting identity, and their dependents, as
+    /// dependents.
     pub fn transitive_dependents(
         &self,
         package: &PackageName,
@@ -387,7 +414,13 @@ impl FilteringRelationships {
             return Ok(Vec::new());
         }
         let mut members = closure_members(&self.0.ordering, &seeds);
-        include_ids(&mut members, &self.0.root_ordering_inputs);
+        if members
+            .iter()
+            .zip(self.0.inherits_root_inputs.iter())
+            .any(|(member, inherits)| *member && *inherits)
+        {
+            include_ids(&mut members, &self.0.root_ordering_inputs);
+        }
         Ok(self.0.names_from_members(&members))
     }
 }
@@ -421,35 +454,36 @@ impl AffectedRelationships {
             .map(Vec::into_boxed_slice)
             .collect::<Vec<_>>()
             .into_boxed_slice();
-        let members = closure_members(&reverse, &seeds);
+        let mut members = closure_members(&reverse, &seeds);
         if members
             .iter()
             .zip(self.0.is_root_input_dependency.iter())
             .any(|(affected, root_input)| *affected && *root_input)
         {
-            return Ok(self.0.names.to_vec());
+            members = self.0.root_input_dependents(&reverse, &seeds);
         }
         Ok(self.0.names_from_members(&members))
     }
 
     /// Returns changed seeds and all transitive input dependents.
     ///
-    /// If any seed is a root internal input, every authoritative identity,
-    /// including the root Turbo namespace, is affected. Empty input is valid.
-    /// If any seed is unknown, no partial result is returned. Output is sorted
-    /// and deduplicated.
+    /// If any seed is a root internal input, every inheriting identity,
+    /// including the root Turbo namespace, and their dependents are affected.
+    /// Empty input is valid. If any seed is unknown, no partial result is
+    /// returned. Output is sorted and deduplicated.
     pub fn affected_by(
         &self,
         packages: &[PackageName],
     ) -> Result<Vec<PackageName>, RelationshipProjectionError> {
         let seeds = self.0.ids(packages)?;
-        if seeds
+        let members = if seeds
             .iter()
             .any(|seed| self.0.is_root_input_dependency[seed.index()])
         {
-            return Ok(self.0.names.to_vec());
-        }
-        let members = closure_members(&self.0.reverse_inputs, &seeds);
+            self.0.root_input_dependents(&self.0.reverse_inputs, &seeds)
+        } else {
+            closure_members(&self.0.reverse_inputs, &seeds)
+        };
         Ok(self.0.names_from_members(&members))
     }
 
@@ -462,12 +496,14 @@ impl AffectedRelationships {
     ) -> Result<Vec<PackageName>, RelationshipProjectionError> {
         let seed = self.0.id(package)?;
         let input_members = if self.0.is_root_input_dependency[seed.index()] {
-            vec![true; self.0.names.len()]
+            self.0
+                .root_input_dependents(&self.0.reverse_inputs, &[seed])
         } else {
             closure_members(&self.0.reverse_inputs, &[seed])
         };
         let ordering_members = if self.0.is_root_ordering_input[seed.index()] {
-            vec![true; self.0.names.len()]
+            self.0
+                .root_input_dependents(&self.0.reverse_ordering, &[seed])
         } else {
             closure_members(&self.0.reverse_ordering, &[seed])
         };
@@ -489,7 +525,8 @@ pub struct HashRelationships(Arc<RelationshipIndex>);
 
 impl HashRelationships {
     /// Returns the full transitive internal dependency inputs, including
-    /// implied root inputs and excluding `package`.
+    /// implied root inputs when `package` inherits them, and excluding
+    /// `package`.
     /// Output is sorted and deduplicated.
     pub fn dependency_inputs(
         &self,
