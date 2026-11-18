@@ -1722,13 +1722,8 @@ fn plain_setup_provisions_tools_and_reports_dependencies_skipped() {
             Sha256::digest(fs::read(root.join("turbo.lock")).unwrap())
         )
     );
-    let receipt = store
-        .join("repos")
-        .join(format!(
-            "{:x}",
-            Sha256::digest(canonical_root.as_os_str().as_encoded_bytes())
-        ))
-        .join("record.json");
+    let receipt =
+        turborepo_tool_install::UserStore::repo_in(&store, &canonical_root).join("record.json");
     assert_eq!(
         fs::metadata(&receipt).unwrap().permissions().mode() & 0o077,
         0

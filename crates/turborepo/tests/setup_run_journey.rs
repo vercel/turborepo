@@ -621,9 +621,9 @@ fn setup_records_the_repository_in_the_user_tool_store() {
     let j = Journey::new();
     j.turbo(&j.root, TOOLS_ONLY, &[]).succeeds();
     let root = j.root.canonicalize().unwrap();
-    let name = format!("{:x}", Sha256::digest(root.as_os_str().as_encoded_bytes()));
     let data = j.home.join(".local/share");
-    let record = |store: &Path| store.join("repos").join(&name).join("record.json");
+    let record =
+        |store: &Path| turborepo_tool_install::UserStore::repo_in(store, &root).join("record.json");
     let default = data.join("turborepo/tools");
     let value: serde_json::Value =
         serde_json::from_slice(&fs::read(record(&default)).unwrap()).unwrap();
