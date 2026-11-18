@@ -15,12 +15,6 @@ drive="$(dirname "$(pwd)")"
 runtime="$drive/.vercel-ci-runtime"
 export TURBO_TOOL_STORE="$drive/.turbo-tools"
 
-# Earlier versions of this script wrote these into node_modules, and Vercel CI
-# can restore node_modules from earlier runs. Managed turbo treats
-# node_modules/.bin/turbo as the repository's own turbo and fails when it
-# can't resolve it.
-rm -rf node_modules/.vercel-ci node_modules/.bin/turbo node_modules/.bin/cargo node_modules/.bin/rustc
-
 npm install --prefix "$runtime" --no-audit --no-fund turbo@canary
 
 # Replace npm's turbo link with a wrapper, so every turbo command finds the
@@ -36,8 +30,3 @@ chmod +x "$turbo"
 
 # No turbo.lock is committed, so setup has to resolve one.
 "$turbo" setup --no-frozen
-"$turbo" --version
-
-# Vercel CI hides the output of its planning step, which runs `turbo query`
-# next. Run a query here so a failure shows up in the install log.
-"$turbo" query '{ packages { items { name } } }' > /dev/null
