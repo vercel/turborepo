@@ -5,5 +5,11 @@
       "benchmark-data": false,
       "gh-pages": false
     }
+  },
+  "ci": {
+    "bootstrapping": {
+      "installCommand": "pnpm install --frozen-lockfile && bash scripts/vercel-ci-install-tools.sh",
+      "installEnv": {}
+    }
   }
 }
