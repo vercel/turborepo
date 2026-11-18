@@ -3,10 +3,12 @@
   "extends": ["//"],
   "tasks": {
     "build": {
-      "command": ["pnpm", "exec", "tsdown"]
+      "command": ["pnpm", "exec", "tsdown"],
+      "tags": ["ci"]
     },
     "test": {
-      "command": ["pnpm", "exec", "jest", "--runInBand", "--forceExit"]
+      "command": ["pnpm", "exec", "jest", "--runInBand", "--forceExit"],
+      "tags": ["ci"]
     },
     "lint:prettier": {
       "command": [
@@ -18,6 +20,9 @@
         "--cache",
         "--ignore-path=../../.prettierignore"
       ]
+    },
+    "check-types": {
+      "tags": ["ci"]
     }
   }
 }

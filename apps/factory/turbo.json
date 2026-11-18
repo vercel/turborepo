@@ -31,7 +31,11 @@
         "VERCEL_OIDC_TOKEN"
       ]
     },
-    "check-types": {},
-    "test": {}
+    "check-types": {
+      "tags": ["ci"]
+    },
+    "test": {
+      "tags": ["ci"]
+    }
   }
 }

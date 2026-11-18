@@ -100,19 +100,22 @@
     },
     "//#lint": {
       "inputs": ["!pnpm-lock.yaml"],
-      "command": ["pnpm", "exec", "oxlint", "--deny-warnings", "."]
+      "command": ["pnpm", "exec", "oxlint", "--deny-warnings", "."],
+      "tags": ["ci"]
     },
     "//#lint:fix": {
       "command": ["pnpm", "exec", "oxlint", "--fix", "."]
     },
     "//#format": {
-      "command": ["pnpm", "exec", "oxfmt", "--check"]
+      "command": ["pnpm", "exec", "oxfmt", "--check"],
+      "tags": ["ci"]
     },
     "//#format:fix": {
       "command": ["pnpm", "exec", "oxfmt", "."]
     },
     "//#check:toml": {
-      "command": ["pnpm", "exec", "taplo", "format", "--check"]
+      "command": ["pnpm", "exec", "taplo", "format", "--check"],
+      "tags": ["ci"]
     },
     "//#fix:toml": {
       "command": ["pnpm", "exec", "taplo", "format"]

@@ -42,11 +42,13 @@
         "content/**/*.mdx",
         "$TURBO_ROOT$/docs/link-checker/src/**"
       ],
-      "cache": false
+      "cache": false,
+      "tags": ["ci"]
     },
     "check-types": {
       "dependsOn": ["collect-examples-data", "check-types:mdx"],
-      "command": ["pnpm", "exec", "tsc", "--noEmit"]
+      "command": ["pnpm", "exec", "tsc", "--noEmit"],
+      "tags": ["ci"]
     },
     "check-types:next": {
       "cache": false,
@@ -66,7 +68,8 @@
         "--experimental-strip-types",
         "scripts/generate-openapi-docs.ts",
         "--check"
-      ]
+      ],
+      "tags": ["ci"]
     },
     "generate:openapi": {
       "cache": false,

@@ -7,7 +7,8 @@
     "build": {
       "outputs": ["schemas/**"],
       "dependsOn": ["^topo"],
-      "command": ["pnpm", "exec", "tsc"]
+      "command": ["pnpm", "exec", "tsc"],
+      "tags": ["ci"]
     },
     "lint:prettier": {
       "command": ["pnpm", "exec", "prettier", "-c", ".", "--cache"]
@@ -78,11 +79,15 @@
       ]
     },
     "package:types": {
-      "command": ["pnpm", "exec", "attw", "--profile", "node16", "--pack"]
+      "command": ["pnpm", "exec", "attw", "--profile", "node16", "--pack"],
+      "tags": ["ci"]
     },
     "generate-schema:legacy": {
       "cache": false,
       "command": ["pnpm", "exec", "tsx", "scripts/generate-schema.ts"]
+    },
+    "check-types": {
+      "tags": ["ci"]
     }
   }
 }
