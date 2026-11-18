@@ -1,47 +1,33 @@
 #!/usr/bin/env bash
-# Installs the tools Vercel CI tasks need but its images don't include.
+# Vercel CI install command. This repository has no turbo dependency, so CI
+# installs the latest turbo canary, then `turbo setup` installs the Rust
+# toolchain and the dependencies. `futureFlags.experimentalCargoWorkspaces`
+# makes every turbo command run `cargo metadata`, so turbo needs that toolchain.
 #
-# Vercel CI only gives tasks the files inside the repository, and puts
-# `node_modules/.bin` on each task's PATH. So the tools go under
-# `node_modules/.vercel-ci`, and small wrappers in `node_modules/.bin` expose them.
-#
-# - turbo: this repository has no turbo dependency, so CI installs the latest canary.
-# - cargo and rustc: `futureFlags.experimentalCargoWorkspaces` makes every turbo
-#   command run `cargo metadata`, so turbo can't start without them.
+# Vercel CI snapshots the whole drive that holds the repository, so both
+# directories below reach every task cell:
+# - `.vercel-ci-runtime` is Vercel CI's runtime prefix. Its `node_modules/.bin`
+#   is on the PATH of the planning step and of every task.
+# - `.turbo-tools` is the turbo tool store, which must be outside the repository.
 set -euo pipefail
 
-root="$(pwd)"
-tools="$root/node_modules/.vercel-ci"
-bin="$root/node_modules/.bin"
-export RUSTUP_HOME="$tools/rustup"
-export CARGO_HOME="$tools/cargo"
-mkdir -p "$tools" "$bin"
+drive="$(dirname "$(pwd)")"
+runtime="$drive/.vercel-ci-runtime"
+export TURBO_TOOL_STORE="$drive/.turbo-tools"
 
-npm install --prefix "$tools/turbo" --no-save --no-audit --no-fund --no-package-lock turbo@canary
+npm install --prefix "$runtime" --no-audit --no-fund turbo@canary
 
-curl --proto '=https' --tlsv1.2 -fsSL https://sh.rustup.rs |
-  sh -s -- -y --no-modify-path --profile minimal --default-toolchain none
-# Installs the toolchain that rust-toolchain.toml pins.
-"$CARGO_HOME/bin/rustup" toolchain install
-
-# Each wrapper finds the tools relative to its own path, so the wrappers still
-# work when the repository is restored somewhere else.
-write_wrapper() {
-  local name=$1 target=$2
-  cat > "$bin/$name" <<EOF
+# Replace npm's turbo link with a wrapper, so every turbo command finds the
+# tool store without a TURBO_TOOL_STORE entry for each task.
+turbo="$runtime/node_modules/.bin/turbo"
+rm -f "$turbo"
+cat > "$turbo" <<EOF
 #!/usr/bin/env bash
-tools="\$(cd "\$(dirname "\${BASH_SOURCE[0]}")/../.vercel-ci" && pwd)"
-export RUSTUP_HOME="\$tools/rustup"
-export CARGO_HOME="\$tools/cargo"
-exec "\$tools/$target" "\$@"
+export TURBO_TOOL_STORE="$TURBO_TOOL_STORE"
+exec "$runtime/node_modules/turbo/bin/turbo" "\$@"
 EOF
-  chmod +x "$bin/$name"
-}
-write_wrapper turbo turbo/node_modules/.bin/turbo
-write_wrapper cargo cargo/bin/cargo
-write_wrapper rustc cargo/bin/rustc
+chmod +x "$turbo"
 
-# Download the crates `cargo metadata` reads now, so tasks don't fetch them.
-"$bin/cargo" fetch --locked
-"$bin/turbo" --version
-"$bin/cargo" --version
+# No turbo.lock is committed, so setup has to resolve one.
+"$turbo" setup --no-frozen
+"$turbo" --version
