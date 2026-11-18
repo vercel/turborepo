@@ -361,6 +361,20 @@ fn directory(path: &Path) -> Result<(), Error> {
     create_directory(path, real_directory)
 }
 
+/// A [`real_directory`] that other users cannot read either. The Cargo homes
+/// below it hold private dependency sources and credentials.
+fn owner_only_directory(path: &Path) -> Result<(), Error> {
+    real_directory(path)?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        if fs::symlink_metadata(path)?.mode() & 0o077 != 0 {
+            return Err(Error::UnsafePath);
+        }
+    }
+    Ok(())
+}
+
 /// A new directory only this user can access: mode 0700, or a protected
 /// owner-only DACL that its children inherit, so nothing under it inherits
 /// grants from wherever the store lives.

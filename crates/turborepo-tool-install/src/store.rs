@@ -23,9 +23,10 @@ use std::{
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    Error, Export, Staging, Tool, TreeRef, UserStore, VarValue, directory, is_sha256,
-    make_read_only, read_bounded, real_directory, relative_path, repo_turbo::RepoTurbo, selection,
-    sha256_hex, shim_name, sync_directory, sync_tree, tree_hash, validate_tools, write_private,
+    Error, Export, Staging, Tool, TreeRef, UserStore, VarValue, create_directory, directory,
+    is_sha256, make_read_only, owner_only_directory, read_bounded, real_directory, relative_path,
+    repo_turbo::RepoTurbo, selection, sha256_hex, shim_name, sync_directory, sync_tree, tree_hash,
+    validate_tools, write_private,
 };
 
 /// Bump when the store's tree layout or seal changes. A change in how one
@@ -269,7 +270,7 @@ impl UserStore {
             directory(&self.root.join(dir))?;
         }
         // Setup creates each Cargo home without its parents.
-        directory(&self.cargo_homes())?;
+        create_directory(&self.cargo_homes(), owner_only_directory)?;
         Ok(SetupSession {
             store: self,
             repo,
@@ -312,7 +313,7 @@ impl UserStore {
                         // Setup creates the homes' directory private. Cargo
                         // would create a missing one that others can read,
                         // and a later setup would reject it.
-                        match real_directory(&self.cargo_homes()) {
+                        match owner_only_directory(&self.cargo_homes()) {
                             Err(Error::Io(e)) if e.kind() == io::ErrorKind::NotFound => {
                                 return Err(Error::NotInstalled("Cargo home".into()));
                             }

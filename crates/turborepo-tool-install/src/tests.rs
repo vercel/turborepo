@@ -485,6 +485,15 @@ fn launchers_run_other_trees_without_an_inherited_environment_and_leave_cargo_ho
         f.store.activate(&root, selection.key()),
         Err(Error::NotInstalled(_))
     ));
+    // Nor one whose parent other users can read.
+    fs::create_dir(f.store.cargo_homes()).unwrap();
+    fs::set_permissions(f.store.cargo_homes(), fs::Permissions::from_mode(0o755)).unwrap();
+    assert!(matches!(
+        f.store.activate(&root, selection.key()),
+        Err(Error::UnsafePath)
+    ));
+    let setup = f.store.begin_setup(repo.path(), Reuse::Sealed);
+    assert!(matches!(setup, Err(Error::UnsafePath)));
 }
 
 /// The tree key, as the store names directories, without exposing it.
