@@ -382,6 +382,10 @@ fn file_names(
 ///   (`turborepo_trace_core::names::Names::chdir`), every name of the
 ///   directory's Go files names anywhere too: after the change a relative path
 ///   is taken from elsewhere, a literal one too;
+/// - where a symbolic link is below the working directory, or on the way from a
+///   directory a string climbs to down to its place, the path the string spells
+///   is not where it leads: they name their shape, continued, anywhere, as
+///   before the anchoring ([`has_link_below`]);
 /// - otherwise they name their rest at the directories they climb to, and their
 ///   shape below the working directory (continued, both). How far a string
 ///   climbs is raised by the parent steps of the directory's other Go files
@@ -389,7 +393,7 @@ fn file_names(
 ///   call of another file can be its base (`const Fixtures =
 ///   "../../../fixtures"` next to `filepath.Join(Fixtures,
 ///   "../shared/a.json")`).
-fn settle(g: &Graph, files: &mut [FileNames]) {
+fn settle(g: &Graph, root: &Path, files: &mut [FileNames]) {
     let dir = |n: NodeId| {
         let p = g.path(n);
         p.ends_with(".go")
@@ -405,6 +409,8 @@ fn settle(g: &Graph, files: &mut [FileNames]) {
         .filter(|f| f.chdir)
         .filter_map(|f| dir(f.node))
         .collect();
+    // Per directory: whether a symbolic link is below it.
+    let mut links: std::collections::HashMap<String, bool> = std::collections::HashMap::new();
     // The parent steps of every directory's Go files.
     let mut ups: std::collections::HashMap<&str, u32> = std::collections::HashMap::new();
     for f in files.iter() {
@@ -421,7 +427,18 @@ fn settle(g: &Graph, files: &mut [FileNames]) {
             }
         }
         let names = std::mem::take(&mut f.cwd_names);
-        if moved.contains(d) {
+        let others = ups.get(d).copied().unwrap_or(0).saturating_sub(f.ups);
+        let k_of = |k: u32| k.saturating_add(others).min(facts::MAX_UPS);
+        // A link below the working directory, or at a place: the spelled path leads
+        // elsewhere.
+        let linked = !names.is_empty()
+            && (*links
+                .entry(d.to_owned())
+                .or_insert_with(|| has_link_below(root, d))
+                || names.iter().any(|(shape, _, k, _)| {
+                    (1..=k_of(*k)).any(|j| has_link_on(root, ancestor(d, j), shape))
+                }));
+        if moved.contains(d) || linked {
             for (shape, line, _, at) in names {
                 if let Some(i) = at {
                     f.shapes[i].3 = true;
@@ -430,12 +447,60 @@ fn settle(g: &Graph, files: &mut [FileNames]) {
             }
             continue;
         }
-        let others = ups.get(d).copied().unwrap_or(0).saturating_sub(f.ups);
         for (shape, line, k, _) in names {
-            let k = k.saturating_add(others).min(facts::MAX_UPS);
-            f.cwd_climbs.extend(climb_places(&shape, line, k));
+            f.cwd_climbs.extend(climb_places(&shape, line, k_of(k)));
         }
     }
+}
+
+/// Most entries [`has_link_below`] looks at; a larger tree is taken to have a
+/// link.
+const MAX_LINK_SCAN: usize = 20_000;
+
+/// Whether a symbolic link is at or below the directory `dir` (repository
+/// relative) of the tree at `root`: a path spelled below it can lead anywhere.
+/// Links are not followed; a tree of more than [`MAX_LINK_SCAN`] entries, or
+/// one that cannot be read, counts as having one.
+fn has_link_below(root: &Path, dir: &str) -> bool {
+    let start = root.join(dir);
+    match std::fs::symlink_metadata(&start) {
+        Ok(m) if m.file_type().is_symlink() => return true,
+        Ok(m) if m.is_dir() => {}
+        _ => return false,
+    }
+    let mut stack = vec![start];
+    let mut seen = 0usize;
+    while let Some(d) = stack.pop() {
+        let Ok(rd) = std::fs::read_dir(&d) else {
+            return true;
+        };
+        for e in rd {
+            let Ok(e) = e else { return true };
+            seen += 1;
+            if seen > MAX_LINK_SCAN {
+                return true;
+            }
+            let Ok(t) = e.file_type() else { return true };
+            if t.is_symlink() {
+                return true;
+            }
+            if t.is_dir() && e.file_name() != ".git" {
+                stack.push(e.path());
+            }
+        }
+    }
+    false
+}
+
+/// Whether a symbolic link is on the way from the directory `base`
+/// (repository relative) down the segments of `shape`: the place of a string
+/// that climbs to `base` leads elsewhere.
+fn has_link_on(root: &Path, base: &str, shape: &str) -> bool {
+    let mut p = root.join(base);
+    shape.split('/').filter(|s| !s.is_empty()).any(|seg| {
+        p.push(seg);
+        std::fs::symlink_metadata(&p).is_ok_and(|m| m.file_type().is_symlink())
+    })
 }
 
 /// The places of a string of shape `shape` at `line` that climbs `k`
@@ -733,7 +798,7 @@ pub(crate) fn build<V: GraphView>(
             file_names(&keys, n, g.path(n), &d, false, &mine, climb_cwd)
         })
     });
-    settle(g, &mut per_file);
+    settle(g, root, &mut per_file);
     let files = per_file.len();
     let mut names = 0;
     for f in &per_file {
@@ -1138,6 +1203,24 @@ mod tests {
         let mut dirs: Vec<&str> = k.dirs.iter().copied().collect();
         dirs.sort();
         assert_eq!(dirs, ["", "pkg", "pkg/src", "pkg/src/handlers"]);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn links_below_a_directory_and_on_a_place() {
+        let d = tempfile::tempdir().unwrap();
+        let root = d.path();
+        std::fs::create_dir_all(root.join("svc/a/testdata/deep")).unwrap();
+        std::fs::create_dir_all(root.join("shared")).unwrap();
+        assert!(!has_link_below(root, "svc/a"));
+        assert!(!has_link_on(root, "svc", "shared/x.json"));
+        std::os::unix::fs::symlink("../../../../shared", root.join("svc/a/testdata/deep/data"))
+            .unwrap();
+        assert!(has_link_below(root, "svc/a"));
+        assert!(!has_link_below(root, "shared"));
+        std::os::unix::fs::symlink("../shared", root.join("svc/shared")).unwrap();
+        assert!(has_link_on(root, "svc", "shared/x.json"));
+        assert!(!has_link_on(root, "", "shared/x.json"));
     }
 
     #[test]

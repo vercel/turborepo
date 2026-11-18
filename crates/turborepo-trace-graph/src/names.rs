@@ -155,7 +155,9 @@
 //! mark this way (see its documentation): their parent steps raise how far the
 //! string climbs, a base of theirs that climbs further makes it name its shape
 //! anywhere, and a change of the working directory there makes every name of
-//! the package name anywhere.
+//! the package name anywhere. The caller makes the strings of a package name
+//! their shape anywhere too where a symbolic link is below its directory or on
+//! the way down to a place: the path a string spells is not where it leads.
 //!
 //! # Who runs a process
 //!

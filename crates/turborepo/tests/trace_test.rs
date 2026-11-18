@@ -1908,8 +1908,6 @@ func TestShared(t *testing.T) {
 /// directory by its spelling, and the file is elsewhere.
 #[cfg(unix)]
 #[test]
-#[ignore = "known gap: a climbing string joined onto a linked directory below the working \
-            directory names nothing where the link leads"]
 fn go_climbing_string_on_a_linked_directory_below_the_working_directory() {
     let dir = tempfile::tempdir().unwrap();
     setup::copy_fixture("trace_go_climb", dir.path()).unwrap();
@@ -1944,6 +1942,51 @@ func TestShared(t *testing.T) {
     );
     assert_selects(&strict, &[test], &[]);
     let selected = affected(dir.path(), &["--changed", "shared/defaults.json"]);
+    assert_selects(&selected, &[test], &[]);
+}
+
+/// A climbing string whose place is a link (`services/billing/shared` leads to
+/// `vendor/shared`): the place it spells is not where it reads.
+#[cfg(unix)]
+#[test]
+fn go_climbing_string_through_a_linked_place() {
+    let dir = tempfile::tempdir().unwrap();
+    setup::copy_fixture("trace_go_climb", dir.path()).unwrap();
+    let package = dir.path().join("services/billing/placed");
+    fs::create_dir_all(&package).unwrap();
+    fs::create_dir_all(dir.path().join("vendor/shared")).unwrap();
+    fs::write(dir.path().join("vendor/shared/x.json"), "{}\n").unwrap();
+    fs::write(
+        package.join("placed_test.go"),
+        r#"package placed
+
+import (
+	"testing"
+
+	"example.com/billing/config"
+)
+
+func TestShared(t *testing.T) {
+	if _, err := config.Load("../shared/x.json"); err != nil {
+		t.Fatal(err)
+	}
+}
+"#,
+    )
+    .unwrap();
+    std::os::unix::fs::symlink(
+        "../../vendor/shared",
+        dir.path().join("services/billing/shared"),
+    )
+    .unwrap();
+    setup::setup_git(dir.path()).unwrap();
+    let test = "services/billing/placed/placed_test.go";
+    let strict = affected(
+        dir.path(),
+        &["--changed", "vendor/shared/x.json", "--strict"],
+    );
+    assert_selects(&strict, &[test], &[]);
+    let selected = affected(dir.path(), &["--changed", "vendor/shared/x.json"]);
     assert_selects(&selected, &[test], &[]);
 }
 

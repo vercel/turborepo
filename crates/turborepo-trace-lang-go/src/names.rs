@@ -71,7 +71,10 @@
 //!   `runtime.Caller`): such a base can be joined to the strings of the other
 //!   files ([`Names::moves_base`](turborepo_trace_core::names::Names::moves_base)).
 //!   The parent steps of a file without names count for the others too: its
-//!   fact is kept for them.
+//!   fact is kept for them;
+//! - every climbing string of a package with a symbolic link below its
+//!   directory, or on the way down to a place a string climbs to: the path it
+//!   spells is not where it leads (the query looks at the tree).
 //!
 //! A call that changes the working directory (not into a temporary directory,
 //! [`chdir_calls`]) moves every relative path of the directory's files, the
