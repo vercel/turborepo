@@ -51,7 +51,7 @@ use crate::{
 };
 
 /// The manifest the composed cache was written for, next to it.
-const STAMP: &str = "composed.for";
+const STAMP: &str = crate::cache_file::COMPOSED_FOR;
 /// Shards that may differ for a reuse to be tried, and their bytes: beyond
 /// these, comparing costs what composing does.
 const MAX_CHANGED: usize = 64;
@@ -144,7 +144,9 @@ pub(super) fn across_edit(
         return None;
     }
     // The cache is this manifest's already: the usual case, decided from 24 bytes.
-    if cache_key(&crate::cache_dir(out).join("composed")) == Some(cache::key(manifest)) {
+    if cache_key(&crate::cache_dir(out).join(crate::cache_file::COMPOSED))
+        == Some(cache::key(manifest))
+    {
         return None;
     }
     let old: Manifest =
@@ -197,7 +199,7 @@ pub(super) fn across_edit(
         }
     }
     let shard_files: Vec<usize> = shards.iter().map(|s| s.get().files.len()).collect();
-    let bytes = std::fs::read(crate::cache_dir(out).join("composed")).ok()?;
+    let bytes = std::fs::read(crate::cache_dir(out).join(crate::cache_file::COMPOSED)).ok()?;
     let composed = cache::Composed::decode(&bytes, cache::key(&old), &shard_files)?;
     Some(Taken {
         composed,

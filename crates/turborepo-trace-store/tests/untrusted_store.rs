@@ -203,3 +203,102 @@ fn forged_shards_with_valid_checksums_are_traced_again() {
     }
     Graph::open(&out).unwrap();
 }
+
+/// A commit can add `.turbo/trace`, or its store, as a link to anywhere. Now
+/// that a command cleans the graph directory up, following one would delete
+/// files outside the repository.
+#[test]
+fn a_symlinked_store_is_refused() {
+    let (_t, r) = repo();
+    build(&opts(&r), &langs()).unwrap();
+    let out = out(&r);
+    let store = out.join("store");
+    let elsewhere = tempfile::tempdir().unwrap();
+    let shard = "0123456789abcdef0123456789abcdef";
+    std::fs::write(elsewhere.path().join(shard), "keep").unwrap();
+    std::fs::remove_dir_all(&store).unwrap();
+    turborepo_trace_core::os::symlink(elsewhere.path(), &store).unwrap();
+
+    assert!(gc(&out).is_err(), "gc followed the store");
+    assert!(
+        turborepo_trace_store::evict(&out, None, Some(1)).is_err(),
+        "eviction followed the store"
+    );
+    assert!(
+        build(&opts(&r), &langs()).is_err(),
+        "a build wrote through the store"
+    );
+    assert!(
+        elsewhere.path().join(shard).exists(),
+        "deleted outside the store"
+    );
+}
+
+/// The caches below the graph directory are checkout-controlled too: eviction
+/// refuses a link there, and deletes only the files a build writes.
+#[test]
+fn a_symlinked_cache_is_refused() {
+    let (_t, r) = repo();
+    build(&opts(&r), &langs()).unwrap();
+    let out = out(&r);
+    let cache = turborepo_trace_store::cache_dir(&out);
+    let elsewhere = tempfile::tempdir().unwrap();
+    std::fs::write(elsewhere.path().join("hashes"), "keep").unwrap();
+    std::fs::remove_dir_all(&cache).unwrap();
+    turborepo_trace_core::os::symlink(elsewhere.path(), &cache).unwrap();
+
+    assert!(turborepo_trace_store::evict(&out, None, Some(1)).is_err());
+    assert!(
+        elsewhere.path().join("hashes").exists(),
+        "deleted through the cache"
+    );
+}
+
+/// `gc` deletes only what a build writes in the store: a file of the user's, a
+/// directory, and a link that points outside the store all stay.
+#[test]
+fn gc_leaves_what_a_build_does_not_write_alone() {
+    let (_t, r) = repo();
+    build(&opts(&r), &langs()).unwrap();
+    let out = out(&r);
+    let store = out.join("store");
+    let elsewhere = tempfile::tempdir().unwrap();
+    let target = elsewhere.path().join("keep.txt");
+    std::fs::write(&target, "keep").unwrap();
+    std::fs::write(store.join("notes.txt"), "keep").unwrap();
+    std::fs::create_dir(store.join("sub")).unwrap();
+    turborepo_trace_core::os::symlink(&target, store.join("link")).unwrap();
+    // A superseded shard version, by its name: that is the cleanup's to delete.
+    let stale = "0123456789abcdef0123456789abcdef";
+    std::fs::write(store.join(stale), "x").unwrap();
+
+    let collected = gc(&out).unwrap();
+    assert_eq!(collected.removed, 1, "{collected:?}");
+    assert!(!store.join(stale).exists());
+    assert!(store.join("notes.txt").exists(), "not a graph artifact");
+    assert!(store.join("sub").is_dir(), "not a graph artifact");
+    assert!(store.join("link").is_symlink(), "a link was followed");
+    assert!(target.exists(), "deleted through a link");
+}
+
+/// The graph directory itself is checkout-controlled: a commit can add
+/// `.turbo/trace` as a link to anywhere, and nothing there is written or
+/// deleted through it.
+#[test]
+fn a_symlinked_graph_directory_is_refused() {
+    let (_t, r) = repo();
+    build(&opts(&r), &langs()).unwrap();
+    let out = out(&r);
+    let elsewhere = tempfile::tempdir().unwrap();
+    std::fs::copy(out.join("graph.json"), elsewhere.path().join("graph.json")).unwrap();
+    std::fs::remove_dir_all(&out).unwrap();
+    turborepo_trace_core::os::symlink(elsewhere.path(), &out).unwrap();
+
+    assert!(gc(&out).is_err(), "gc followed the graph directory");
+    assert!(turborepo_trace_store::evict(&out, None, Some(1)).is_err());
+    assert!(build(&opts(&r), &langs()).is_err());
+    assert!(
+        elsewhere.path().join("graph.json").exists(),
+        "deleted through the graph directory"
+    );
+}

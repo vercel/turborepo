@@ -1388,21 +1388,22 @@ impl Graph {
             }
             h.update(&[2]);
         }
-        let (patch, meta, hit) = self.cached_patch("env", h.digest128(), || {
-            let (p, s) = self.env_patch_with(decls, oracle);
-            let meta = [
-                s.uses,
-                s.resolved,
-                s.kept,
-                s.variables,
-                s.assignments,
-                s.helpers,
-                s.edges,
-            ]
-            .map(|v| v as u64)
-            .to_vec();
-            (p, meta)
-        });
+        let (patch, meta, hit) =
+            self.cached_patch(crate::cache_file::DERIVED_ENV, h.digest128(), || {
+                let (p, s) = self.env_patch_with(decls, oracle);
+                let meta = [
+                    s.uses,
+                    s.resolved,
+                    s.kept,
+                    s.variables,
+                    s.assignments,
+                    s.helpers,
+                    s.edges,
+                ]
+                .map(|v| v as u64)
+                .to_vec();
+                (p, meta)
+            });
         let m = |i: usize| meta.get(i).copied().unwrap_or(0) as usize;
         let stats = EnvStats {
             uses: m(0),

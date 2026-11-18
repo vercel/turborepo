@@ -115,8 +115,9 @@ impl Graph {
     }
 
     /// A derived layer of this graph ([`turborepo_trace_graph::Patch`]) from
-    /// the store's cache (`<cache dir>/derived-<name>`), or computed
-    /// with `compute` and stored there.
+    /// the store's cache (`<cache dir>/<file>`), or computed
+    /// with `compute` and stored there. `file` is a [`crate::cache_file`]
+    /// name.
     ///
     /// A derived layer is a pure function of the composed graph and a few
     /// inputs of its own (the hints file, a switch): `key` identifies
@@ -130,11 +131,11 @@ impl Graph {
     /// `TURBO_TRACE_DEBUG_DERIVED_CACHE=0` always computes.
     pub fn cached_patch(
         &self,
-        name: &str,
+        file: &str,
         key: u128,
         compute: impl FnOnce() -> (Patch, Vec<u64>),
     ) -> (Patch, Vec<u64>, bool) {
-        let (patch, meta, kept) = self.carried_patch(name, key, |_, _| false, compute);
+        let (patch, meta, kept) = self.carried_patch(file, key, |_, _| false, compute);
         (patch, meta, kept == Kept::Cached)
     }
 
@@ -158,7 +159,7 @@ impl Graph {
     /// [`Graph::cached_patch`], which can also take the layer over from the
     /// snapshot before an edit (see the module documentation).
     ///
-    /// When the cache holds the layer `name` of the snapshot this graph took
+    /// When the cache holds the layer in `file` of the snapshot this graph took
     /// its composed parts from, stored with the same `key`, `same` is given
     /// that layer's numbers and the files whose contents changed since
     /// ([`Graph::carried`]). It must return true only if the layer read the
@@ -171,7 +172,7 @@ impl Graph {
     /// `TURBO_TRACE_DEBUG_DERIVED_CACHE=0` always computes.
     pub fn carried_patch(
         &self,
-        name: &str,
+        file: &str,
         key: u128,
         same: impl FnOnce(&[u64], &[NodeId]) -> bool,
         compute: impl FnOnce() -> (Patch, Vec<u64>),
@@ -182,7 +183,7 @@ impl Graph {
             .as_deref()
             .and_then(|p| p.parent())
             .filter(|_| on)
-            .map(|dir| dir.join(format!("derived-{name}")));
+            .map(|dir| dir.join(file));
         let full = full_key(super::cache::key(&self.manifest), key);
         if let Some(p) = &path
             && let Ok(bytes) = std::fs::read(p)

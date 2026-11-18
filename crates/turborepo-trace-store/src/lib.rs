@@ -8,6 +8,8 @@
 //!   implements [`turborepo_trace_graph::GraphView`], so the query engine and
 //!   every exporter run on it.
 //! - [`gc`]: deletes store files no manifest references.
+//! - [`evict`]: `gc` first, then turbo's `cacheMaxAge` and `cacheMaxSize`
+//!   applied to the rest of the graph directory.
 //!
 //! On-disk layout (`.turbo/trace/` by default):
 //!
@@ -230,11 +232,49 @@ pub enum Error {
     /// No graph has been built in this directory.
     #[error("no graph in {0}")]
     NotBuilt(PathBuf),
+    /// A graph directory, or the store or caches below it, is a symbolic link.
+    ///
+    /// A graph directory is checkout-controlled (a commit can add
+    /// `.turbo/trace`), so writing into it and cleaning it up refuse to follow
+    /// one: the link would reach files outside the repository.
+    #[error("{0}: not a directory (a symbolic link)")]
+    Linked(PathBuf),
 }
 
 impl Error {
     pub(crate) fn io(path: &Path, e: std::io::Error) -> Error {
         Error::Io(path.to_path_buf(), e)
+    }
+}
+
+/// Refuses a symbolic link at `path`, and at every component of `path` below
+/// `base` when `path` lies there: that is the part of the path a checkout
+/// controls, and following a link in it would write, or delete, outside the
+/// repository. Without such a base (a graph directory or cache outside the
+/// checkout) `path` itself is all that can be checked.
+///
+/// A `path` that does not exist is not a link: the caller creates it.
+pub(crate) fn real_dir(path: &Path, base: Option<&Path>) -> Result<(), Error> {
+    let stop = base.filter(|b| path.starts_with(b));
+    if stop.is_none() {
+        return not_link(path);
+    }
+    for at in path.ancestors() {
+        not_link(at)?;
+        if stop == Some(at) {
+            break;
+        }
+    }
+    Ok(())
+}
+
+/// `path` is not a symbolic link (it need not exist).
+fn not_link(path: &Path) -> Result<(), Error> {
+    match std::fs::symlink_metadata(path) {
+        Ok(meta) if meta.file_type().is_symlink() => Err(Error::Linked(path.to_path_buf())),
+        Ok(_) => Ok(()),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(e) => Err(Error::io(path, e)),
     }
 }
 
@@ -367,9 +407,19 @@ pub struct GcReport {
 /// Deletes from `<out>/store` every shard the current manifest does not
 /// reference: rewrites the pack with exactly the referenced shards (dropping
 /// its log) and removes every other file but the snapshot's walked-file list.
+///
+/// Only files a build writes there are deleted (see [`is_store_file`]), and
+/// only when they are regular files: a graph directory is checkout-controlled,
+/// so a symbolic link at it, above it, or at the store is refused
+/// ([`Error::Linked`]) and anything else in the store is left alone.
 pub fn gc(out: &Path) -> Result<GcReport, Error> {
     let manifest = Manifest::read(out).ok_or_else(|| Error::NotBuilt(out.to_path_buf()))?;
     let store = out.join("store");
+    // Before anything is read through them or deleted below them: a commit can
+    // add `.turbo/trace`, or the store, as a link to anywhere.
+    let base = PathBuf::from(&manifest.root);
+    real_dir(out, Some(&base))?;
+    real_dir(&store, Some(&base))?;
     let pack = shard::Pack::open(&store);
     let mut r = GcReport::default();
     let shards: Vec<(&str, shard::LoadedShard)> = manifest
@@ -402,6 +452,15 @@ pub fn gc(out: &Path) -> Result<GcReport, Error> {
     for e in std::fs::read_dir(&store).map_err(|e| Error::io(&store, e))? {
         let e = e.map_err(|e| Error::io(&store, e))?;
         let name = e.file_name().to_string_lossy().into_owned();
+        // What a build did not write there is not the cleanup's to delete, and a
+        // link is not a file of ours whatever it is called.
+        let regular = e
+            .file_type()
+            .map_err(|err| Error::io(&e.path(), err))?
+            .is_file();
+        if !regular || !is_store_file(&name) {
+            continue;
+        }
         if keep.contains(name.as_str()) {
             if name != shard::PACK_FILE {
                 r.kept += 1;
@@ -413,6 +472,18 @@ pub fn gc(out: &Path) -> Result<GcReport, Error> {
         r.removed += 1;
     }
     Ok(r)
+}
+
+/// Whether `name` is a file a build writes in the store: the pack, its log, a
+/// shard key, a walked-file list, or the temporary file an interrupted
+/// `write_atomic` left (`<name>.tmp.<pid>.<thread>`). A store also holds what
+/// a checkout put there, which [`gc`] leaves alone.
+pub fn is_store_file(name: &str) -> bool {
+    let name = name.split(".tmp.").next().unwrap_or(name);
+    name == shard::PACK_FILE
+        || name == shard::LOG_FILE
+        || manifest::is_shard_key(name)
+        || manifest::is_files_name(name)
 }
 
 /// Bytes the current snapshot occupies in the store: the pack and its log, the
@@ -432,6 +503,249 @@ pub fn store_size(out: &Path) -> u64 {
             .filter_map(|k| std::fs::metadata(store.join(k)).ok())
             .map(|m| m.len())
             .sum::<u64>()
+}
+
+/// What [`evict`] removed.
+#[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
+pub struct EvictReport {
+    /// Store files kept: the shards of the current snapshot and its walked-file
+    /// list ([`GcReport::kept`]).
+    pub kept: usize,
+    /// Store files removed by [`gc`]: superseded shard versions, walked-file
+    /// lists no snapshot names ([`GcReport::removed`]).
+    pub removed: usize,
+    /// Cache files of the graph directory removed.
+    pub cached: usize,
+    /// Bytes freed.
+    pub bytes: u64,
+}
+
+/// Trims the graph directory `out` the way turbo's `cacheMaxAge` and
+/// `cacheMaxSize` trim the task cache in `.turbo/cache`: [`gc`] runs first, and
+/// the limits then apply to what it leaves that the next command does not need.
+///
+/// The shards the current `graph.json` references are never eviction
+/// candidates, whatever their age: they are what the next command opens, and
+/// [`gc`] (which goes first) drops every store file the manifest does not
+/// reference, superseded shard versions and a log that grew among them. Nothing
+/// is evicted one shard at a time: the store is a pack and its log
+/// ([`shard::Pack`]), not a file per shard, and after [`gc`] holds no shard the
+/// manifest leaves out.
+///
+/// The limits apply to the rest of the graph directory, the caches below
+/// [`cache_dir`] (the per-machine directory when the host sets one): a cache
+/// file last written more than `max_age` ago is removed, then the least
+/// recently used ones are removed while the graph directory is over
+/// `max_size`. A snapshot that is over `max_size` on its own keeps the store
+/// and loses the caches. Every cache file is state a build recomputes, so
+/// eviction costs a slower next build and changes no result.
+///
+/// Only the cache files a build writes ([`CACHE_FILES`]) are removed, and only
+/// when they are regular files: a symbolic link at the graph directory, above
+/// it, or at a cache directory is refused ([`Error::Linked`]), and anything
+/// else there is left alone.
+///
+/// Best effort, like the task cache's eviction: a file that cannot be removed
+/// is left for the next run.
+pub fn evict(
+    out: &Path,
+    max_age: Option<std::time::Duration>,
+    max_size: Option<u64>,
+) -> Result<EvictReport, Error> {
+    let manifest = Manifest::read(out);
+    // Before anything below them is deleted: a commit can add `.turbo/trace`, or
+    // its cache directory, as a link to anywhere.
+    let base = manifest.as_ref().map(|m| PathBuf::from(&m.root));
+    let cache = cache_dir(out);
+    real_dir(out, base.as_deref())?;
+    real_dir(&cache, base.as_deref())?;
+    let mut report = EvictReport::default();
+    match &manifest {
+        // The store already holds exactly the snapshot: there is nothing to
+        // reclaim, and a pack of the whole snapshot is not rewritten for nothing.
+        Some(manifest) if store_is_current(out, manifest) => {
+            report.kept = manifest.shards.len() + usize::from(manifest.files.is_some());
+        }
+        _ => match gc(out) {
+            Ok(cleaned) => {
+                report.kept = cleaned.kept;
+                report.removed = cleaned.removed;
+                report.bytes = cleaned.bytes;
+            }
+            // No snapshot: nothing is referenced, and a store a build is writing is
+            // not the cleanup's to touch. Only the caches are trimmed.
+            Err(Error::NotBuilt(_)) => {}
+            Err(e) => return Err(e),
+        },
+    }
+    // What the next command needs, counted and never evicted: the store after
+    // `gc`, and the manifest.
+    let snapshot = files_below(&out.join("store"))
+        .iter()
+        .map(|f| f.bytes)
+        .sum::<u64>()
+        + std::fs::metadata(out.join("graph.json")).map_or(0, |m| m.len());
+    let mut cached = 0u64;
+    let mut files = Vec::new();
+    for file in files_below(&cache) {
+        // Only the caches a build writes are the cleanup's to delete: a graph
+        // directory is checkout-controlled and may hold anything.
+        if !CACHE_FILES.contains(&file.name.as_str()) {
+            continue;
+        }
+        cached += file.bytes;
+        files.push(file);
+    }
+    // Phase 1: age. A cache file's mtime is when its contents last changed, so a
+    // file that an unchanged tree left alone is the one that goes first.
+    if let Some(max_age) = max_age {
+        let cutoff = std::time::SystemTime::now()
+            .checked_sub(max_age)
+            .unwrap_or(std::time::UNIX_EPOCH);
+        for file in &files {
+            if file.used >= cutoff || std::fs::remove_file(&file.path).is_err() {
+                continue;
+            }
+            report.cached += 1;
+            report.bytes += file.bytes;
+            cached = cached.saturating_sub(file.bytes);
+        }
+    }
+    // Phase 2: size, least recently used first. The snapshot is not evictable
+    // but its bytes count: a graph directory over the limit with it alone keeps
+    // no cache at all.
+    if let Some(max_size) = max_size {
+        let mut total = cached + snapshot;
+        if total > max_size {
+            files.sort_by_key(|f| f.used);
+            for file in &files {
+                if total <= max_size {
+                    break;
+                }
+                if std::fs::remove_file(&file.path).is_err() {
+                    continue;
+                }
+                report.cached += 1;
+                report.bytes += file.bytes;
+                total = total.saturating_sub(file.bytes);
+            }
+        }
+    }
+    Ok(report)
+}
+
+/// The names of the files a build or a query keeps in the caches below
+/// [`cache_dir`], one constant per file in [`cache_file`], and [`CACHE_FILES`]:
+/// a cache is named once, so a writer and the eviction cannot list different
+/// names.
+macro_rules! cache_files {
+    ($($(#[$doc:meta])* $name:ident = $file:literal;)*) => {
+        /// The names of the files a build or a query keeps in the caches below
+        /// [`crate::cache_dir`], one constant per file: the writer and
+        /// [`crate::CACHE_FILES`] use the same constant.
+        pub mod cache_file {
+            $($(#[$doc])* pub const $name: &str = $file;)*
+        }
+
+        /// The files in the caches below [`cache_dir`] that [`evict`] may
+        /// delete, and the only ones: the cache directory is checkout-controlled
+        /// when it sits in the graph directory, so a file there that no build or
+        /// query wrote is not the cleanup's to delete. Every name of
+        /// [`cache_file`] is here; the note naming the graph directory a
+        /// per-machine cache belongs to (`graph-dir`) is deliberately not.
+        pub const CACHE_FILES: &[&str] = &[$(cache_file::$name),*];
+    };
+}
+
+cache_files! {
+    /// Content hashes keyed by file stamp ([`crate::hash::HashCache`]).
+    HASHES = "hashes";
+    /// Small setup files keyed by file stamp ([`crate::smallfiles::SmallFiles`]).
+    MANIFESTS = "manifests";
+    /// The previous walk with its directory stamps ([`crate::walk::walk_cached`]).
+    WALK = "walk";
+    /// The tree parts and listings of the last build (`build.rs`).
+    OBS = "obs";
+    /// The composed parts of the last composition (`compose.rs`).
+    COMPOSED = "composed";
+    /// The snapshot the composed parts were composed for (`compose/reuse.rs`).
+    COMPOSED_FOR = "composed.for";
+    /// The lookup tables of the last composition (`compose/tables.rs`).
+    TABLES = "tables";
+    /// The derived environment layer (`compose/env.rs`).
+    DERIVED_ENV = "derived-env";
+    /// The derived manual-mock layer (`compose/mocks.rs`).
+    DERIVED_MOCKS = "derived-mocks";
+    /// The derived cross-file binding layer (`turborepo-trace/src/xfile.rs`).
+    DERIVED_BOUND = "derived-bound";
+    /// The names layer's data (`turborepo-trace/src/names.rs`).
+    NAMES_DATA = "names-data";
+    /// Cross-file facts keyed by content hash and file name
+    /// (`turborepo-trace/src/xfile.rs`).
+    XFILE_FACTS = "xfile-facts";
+    /// The recorded run of cross-file binding (`turborepo-trace/src/xfile.rs`).
+    XFILE_TRACE = "xfile-trace";
+    /// A pack in the pre-log location; a build removes it.
+    PACK = "pack";
+}
+
+/// A file of a graph directory, for [`evict`].
+struct FileUse {
+    name: String,
+    path: PathBuf,
+    bytes: u64,
+    /// When the file last changed, which is when it was last written: a build
+    /// only rewrites a cache file whose contents differ, and every read of a
+    /// changed file writes it again.
+    used: std::time::SystemTime,
+}
+
+/// Whether the store of `out` already holds exactly what [`gc`] would leave:
+/// the manifest's shards, in the pack, and its walked-file list. No log (its
+/// records are replaced versions until a compaction), no other shard, no
+/// walked-file list no snapshot names.
+fn store_is_current(out: &Path, manifest: &Manifest) -> bool {
+    let store = out.join("store");
+    let (packed, _) = shard::Pack::index_only(&store);
+    if packed.len() != manifest.shards.len()
+        || !manifest.shards.iter().all(|s| packed.contains(&s.key))
+    {
+        return false;
+    }
+    let keep: std::collections::HashSet<&str> = [shard::PACK_FILE]
+        .into_iter()
+        .chain(manifest.files.as_deref())
+        .collect();
+    files_below(&store)
+        .iter()
+        .all(|f| keep.contains(f.name.as_str()))
+}
+
+/// The regular files directly below `dir`. Symbolic links and directories are
+/// not files a build wrote, and are never followed or removed.
+fn files_below(dir: &Path) -> Vec<FileUse> {
+    let mut files = Vec::new();
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return files;
+    };
+    for entry in entries.flatten() {
+        let Ok(kind) = entry.file_type() else {
+            continue;
+        };
+        if !kind.is_file() {
+            continue;
+        }
+        let Ok(meta) = entry.metadata() else {
+            continue;
+        };
+        files.push(FileUse {
+            name: entry.file_name().to_string_lossy().into_owned(),
+            path: entry.path(),
+            bytes: meta.len(),
+            used: meta.modified().unwrap_or(std::time::UNIX_EPOCH),
+        });
+    }
+    files
 }
 
 #[cfg(test)]

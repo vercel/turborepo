@@ -171,6 +171,17 @@ pub(crate) fn graph_options(
     }
 }
 
+/// Cleans the graph directory of the repository at `root`
+/// (`<root>/.turbo/trace`) after a command, following turbo's `cacheMaxAge` and
+/// `cacheMaxSize` ([`turborepo_trace_store::evict`]). Nothing here can fail the
+/// command, and a store that already holds exactly the snapshot is not
+/// rewritten ([`turborepo_trace_store::evict`] skips it), so the cost is paid
+/// only when there is something to reclaim.
+pub fn evict_graph(root: &Path, max_age: Option<std::time::Duration>, max_size: Option<u64>) {
+    let out = root.join(turborepo_trace_store::DEFAULT_GRAPH_PATH);
+    let _ = turborepo_trace_store::evict(&out, max_age, max_size);
+}
+
 fn print_report(r: &turborepo_trace_store::BuildReport, out: &Path) {
     let t = r.timings_ms;
     eprintln!(
