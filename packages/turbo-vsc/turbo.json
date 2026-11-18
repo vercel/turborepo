@@ -12,7 +12,8 @@
         "src/turbo-daemon-command.test.ts",
         "src/turbo-discovery.test.ts",
         "src/turbo-run-terminal-options.test.ts"
-      ]
+      ],
+      "tags": ["ci"]
     },
     "esbuild": {
       "outputs": ["out/main.js", "out/main.js.map"],
@@ -46,6 +47,9 @@
         "--baseContentUrl",
         "https://github.com/vercel/turborepo/raw/HEAD/packages/turbo-vsc"
       ]
+    },
+    "check-types": {
+      "tags": ["ci"]
     }
   }
 }

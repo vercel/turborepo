@@ -29,6 +29,12 @@ jobs:
           - 22
           - 24
           - 26
+        # Vercel CI runs these tasks on Linux with Node 24.
+        exclude:
+          - os:
+              name: ubuntu
+              runner: ubuntu-latest
+            node-version: 24
     env:
       TURBO_CACHE: ${{ github.event.pull_request.head.repo.full_name == github.repository && 'remote:rw' || 'local:rw' }}
 
