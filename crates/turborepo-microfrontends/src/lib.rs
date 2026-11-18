@@ -144,7 +144,8 @@ impl TurborepoMfeConfig {
         source: &str,
         has_mfe_dependency: bool,
     ) -> Result<Self, Error> {
-        // If package has @vercel/microfrontends dependency, use lenient ConfigV1 parser
+        // If package has @vercel/microfrontends dependency, use lenient
+        // ConfigV1 parser
         if has_mfe_dependency {
             let config_v1_result = ConfigV1::from_str(input, source)?;
             match config_v1_result {
@@ -164,7 +165,8 @@ impl TurborepoMfeConfig {
             }
         }
 
-        // Without @vercel/microfrontends dependency, use strict Turborepo schema only
+        // Without @vercel/microfrontends dependency, use strict Turborepo
+        // schema only
         let config = TurborepoConfig::from_str(input, source)?;
         Ok(Self {
             inner: config.clone(),

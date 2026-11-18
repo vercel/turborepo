@@ -251,8 +251,9 @@ fn a_refresh_of_an_unchanged_tree_is_a_fixed_point_for_every_fixture() {
                     let root = std::fs::canonicalize(t.path()).unwrap().join("repo");
                     std::fs::create_dir(&root).unwrap();
                     create(&root);
-                    // The graph directory exists before the tree is aged, so that the first
-                    // build does not modify the root directory (see the test below for a
+                    // The graph directory exists before the tree is aged, so
+                    // that the first build does not modify
+                    // the root directory (see the test below for a
                     // build that does).
                     std::fs::create_dir_all(place.dir(&root)).unwrap();
                     backdate(t.path(), 60).unwrap();
@@ -293,7 +294,8 @@ fn a_young_tree_converges_one_refresh_after_the_racy_window() {
         std::thread::sleep(
             turborepo_trace_store::hash::RACY_WINDOW + std::time::Duration::from_millis(200),
         );
-        // Nothing is traced (shards are keyed by content), whatever is checked again.
+        // Nothing is traced (shards are keyed by content), whatever is checked
+        // again.
         let r = rebuild(&root, &out);
         assert_eq!((r.traced, r.written), (0, 0), "{place:?}");
         for nth in ["second", "third"] {

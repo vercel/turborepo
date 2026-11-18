@@ -194,8 +194,8 @@ pub(crate) fn dump(
             line("file-refs", f.path.as_str(), &toks.join(" "));
         }
     }
-    // Who reads each membership: the languages of the referencing files, and the
-    // pseudo-files by name.
+    // Who reads each membership: the languages of the referencing files, and
+    // the pseudo-files by name.
     let mut readers: Vec<BTreeSet<String>> = vec![BTreeSet::new(); s.memberships.len()];
     for f in s.files.iter() {
         let who = match f.lang.as_ref().map(|l| l.as_str()) {

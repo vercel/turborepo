@@ -73,10 +73,10 @@ fn signature_algorithms_with_p521(
     let mut all: Vec<&'static dyn SignatureVerificationAlgorithm> = ring_algs.all.to_vec();
     all.extend_from_slice(P521_ALGS);
 
-    // `mapping` is used to verify the server's handshake signature, keyed by the
-    // TLS `SignatureScheme`. Add P-521 so endpoints presenting a P-521 leaf can
-    // complete the handshake too. ECDSA_NISTP521_SHA512 is the only ECDSA P-521
-    // scheme defined by TLS.
+    // `mapping` is used to verify the server's handshake signature, keyed by
+    // the TLS `SignatureScheme`. Add P-521 so endpoints presenting a P-521
+    // leaf can complete the handshake too. ECDSA_NISTP521_SHA512 is the
+    // only ECDSA P-521 scheme defined by TLS.
     let mut mapping = ring_algs.mapping.to_vec();
     mapping.push((
         SignatureScheme::ECDSA_NISTP521_SHA512,

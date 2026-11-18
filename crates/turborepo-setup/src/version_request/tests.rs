@@ -177,7 +177,8 @@ fn prerelease_opt_in_is_per_branch_not_per_term_or_request() -> TestResult {
     assert!(!VersionRequest::parse(">=1.2.3-alpha <1.2.3-beta")?.matches(&release));
     assert!(!VersionRequest::parse(">=1.2.3-alpha <1 || >=1 <2")?.matches(&release));
     assert!(!VersionRequest::parse("^1.2.3-alpha")?.matches(&Version::parse("1.2.4-alpha")?));
-    // Numeric prerelease ordering is exact, not lossy JavaScript Number ordering.
+    // Numeric prerelease ordering is exact, not lossy JavaScript Number
+    // ordering.
     assert!(
         !VersionRequest::parse("=1.2.3-9007199254740992")?
             .matches(&Version::parse("1.2.3-9007199254740993")?)
@@ -227,7 +228,8 @@ fn constraints_obey_boolean_algebra() -> TestResult {
                     "{a} || {b}: {release}"
                 );
                 // Prerelease opt-in belongs to the whole conjunction, not each
-                // separate request; stable releases have ordinary AND semantics.
+                // separate request; stable releases have ordinary AND
+                // semantics.
                 if release.pre.is_empty() {
                     assert_eq!(
                         and.matches(&release),
@@ -283,7 +285,8 @@ fn parser_limits_are_inclusive_and_overflow_never_wraps() -> TestResult {
         );
     }
     let full = vec![vec!["^1"; MAX_BRANCH_TERMS].join(" "); MAX_REQUEST_BRANCHES].join("||");
-    // Bytes bound the combined work even when each branch/term count is allowed.
+    // Bytes bound the combined work even when each branch/term count is
+    // allowed.
     assert_eq!(
         VersionRequest::parse(&full).err(),
         Some(VersionRequestError::TooComplex)

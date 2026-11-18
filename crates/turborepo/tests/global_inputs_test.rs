@@ -158,7 +158,8 @@ fn test_global_inputs_can_be_excluded_and_affect_tasks() {
     // Modify the global input file
     fs::write(tempdir.path().join("config.txt"), "changed value").unwrap();
 
-    // Third build: app-a misses (no negation) but app-b HITS (excluded config.txt)
+    // Third build: app-a misses (no negation) but app-b HITS (excluded
+    // config.txt)
     let output = run_turbo(tempdir.path(), &["build", "--output-logs=hash-only"]);
     assert!(output.status.success());
     let stdout = String::from_utf8_lossy(&output.stdout);

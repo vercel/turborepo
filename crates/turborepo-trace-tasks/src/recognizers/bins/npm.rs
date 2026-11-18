@@ -100,8 +100,8 @@ fn find_installed_uncached(
         return Some(classify(&shim_target(p), cx, ".bin"));
     }
     let dirs = search_dirs(cmd, cx);
-    // A `.bin` entry whose target is gone is a stale install: the manifests decide,
-    // and it is only used when nothing else matches.
+    // A `.bin` entry whose target is gone is a stale install: the manifests
+    // decide, and it is only used when nothing else matches.
     let mut stale = None;
     for d in &dirs {
         let p = d.join("node_modules/.bin").join(name);
@@ -371,9 +371,9 @@ struct BinIndex {
 
 impl BinIndex {
     fn build(root: &Path) -> BinIndex {
-        // Built once per shared cache and repo; what it reads is not attributed to the
-        // task that happens to build it (the matching manifest is re-read per
-        // lookup instead).
+        // Built once per shared cache and repo; what it reads is not attributed
+        // to the task that happens to build it (the matching manifest
+        // is re-read per lookup instead).
         let frame = turborepo_trace_core::record::start();
         let ws = Workspace::discover(root);
         let mut idx = BinIndex::default();

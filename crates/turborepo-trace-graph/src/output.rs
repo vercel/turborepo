@@ -685,8 +685,9 @@ pub fn write_names_assumption<G: GraphView>(
          ({package}) or of the package of the file that holds the read, unless the code says \
          where the path goes (--strict does not assume it)"
     )?;
-    // Go code with such a read: its strings that climb are taken from the working
-    // directory (`crate::names`, "Strings that climb from the working directory").
+    // Go code with such a read: its strings that climb are taken from the
+    // working directory (`crate::names`, "Strings that climb from the
+    // working directory").
     if opts.named_climbs_from_cwd
         && notes
             .iter()

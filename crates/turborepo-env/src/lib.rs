@@ -361,8 +361,9 @@ impl EnvironmentVariableMap {
         #[cfg(not(windows))]
         {
             let mut output = EnvironmentVariableMap::default();
-            // The builtin list contains only literals and literal prefixes followed
-            // by one star. A test below guards this invariant.
+            // The builtin list contains only literals and literal prefixes
+            // followed by one star. A test below guards this
+            // invariant.
             for pattern in BUILTIN_PASS_THROUGH_ENV {
                 if let Some(prefix) = pattern.strip_suffix('*') {
                     for (name, value) in &self.0 {
@@ -389,8 +390,9 @@ impl EnvironmentVariableMap {
     ) -> Result<WildcardMaps, Error> {
         #[cfg(not(windows))]
         {
-            // Normalize only the leading include/exclude marker. Leave all other
-            // escaping and wildcard syntax to the existing regex implementation.
+            // Normalize only the leading include/exclude marker. Leave all
+            // other escaping and wildcard syntax to the existing
+            // regex implementation.
             let simple_patterns = || {
                 wildcard_patterns.iter().map(|pattern| {
                     let pattern = pattern.as_ref();
@@ -503,9 +505,10 @@ impl EnvironmentVariableMap {
         Ok(resolved_set.resolve())
     }
 
-    // FromWildcardsUnresolved returns a wildcardSet specifying the inclusions and
-    // exclusions discovered from a set of wildcard patterns. This is used to ensure
-    // that user exclusions have primacy over inferred inclusions.
+    // FromWildcardsUnresolved returns a wildcardSet specifying the inclusions
+    // and exclusions discovered from a set of wildcard patterns. This is
+    // used to ensure that user exclusions have primacy over inferred
+    // inclusions.
     pub fn wildcard_map_from_wildcards_unresolved(
         &self,
         wildcard_patterns: &[impl AsRef<str>],
@@ -585,17 +588,20 @@ fn wildcard_to_regex_pattern(pattern: &str) -> String {
         if char == WILDCARD {
             if previous_char == Some(WILDCARD_ESCAPE) {
                 // Found a literal *
-                // Replace the trailing "\*" with just "*" before adding the segment.
+                // Replace the trailing "\*" with just "*" before adding the
+                // segment.
                 regex_string.push(regex::escape(&format!(
                     "{}*",
                     &pattern[previous_index..(i - 1)]
                 )));
             } else {
                 // Found a wildcard
-                // Add in the static segment since the last wildcard. Can be zero length.
+                // Add in the static segment since the last wildcard. Can be
+                // zero length.
                 regex_string.push(regex::escape(&pattern[previous_index..i]));
 
-                // Add a dynamic segment if it isn't adjacent to another dynamic segment.
+                // Add a dynamic segment if it isn't adjacent to another dynamic
+                // segment.
                 if let Some(last_segment) = regex_string.last()
                     && last_segment != REGEX_WILDCARD_SEGMENT
                 {

@@ -115,8 +115,8 @@ impl<'g, G: GraphView + Sync> Relations<'g, G> {
         if self.g.lang(n) != Some("js") {
             return None;
         }
-        // Decided on the path in the graph: the root may itself be below a directory
-        // called `node_modules`.
+        // Decided on the path in the graph: the root may itself be below a
+        // directory called `node_modules`.
         let rel = self.g.path(n);
         (!rel.split('/').any(|c| c == "node_modules")).then(|| self.root.join(rel))
     }
@@ -508,8 +508,8 @@ impl At<'_, '_> {
             return None;
         }
         let m = self.source.module(&target).ok()?;
-        // The answer is about the function this file defines: a test that mocks the
-        // file sees the call instead ([`DiskSource::mockers`]).
+        // The answer is about the function this file defines: a test that mocks
+        // the file sees the call instead ([`DiskSource::mockers`]).
         self.source.relied(&target, self.root);
         Some((target, m))
     }
@@ -536,8 +536,8 @@ impl Oracle for At<'_, '_> {
         if !self.source.pure_calls {
             return false;
         }
-        // The factory ran where the constant was declared; calling what it returned
-        // hands out the adapter.
+        // The factory ran where the constant was declared; calling what it
+        // returned hands out the adapter.
         if self.source.packages
             && c.spec == "@flags-sdk/vercel"
             && c.name == "createVercelAdapter"
@@ -582,9 +582,9 @@ impl Oracle for At<'_, '_> {
     }
 
     fn esm(&self, c: Callee<'_>) -> bool {
-        // An ES module of the repository, as the graph has it (a changed file too: when
-        // it was something else at the base, it is a changed file as a whole, and what
-        // reads it loads it).
+        // An ES module of the repository, as the graph has it (a changed file
+        // too: when it was something else at the base, it is a changed
+        // file as a whole, and what reads it loads it).
         self.source
             .resolve
             .as_ref()
@@ -791,9 +791,9 @@ impl<'a> DiskSource<'a> {
         let Some(facts) = &self.facts else {
             return Vec::new();
         };
-        // What a request has to end with (a file) or be (a package) to name each
-        // builder source: the file's name without its extension, or the
-        // directory of an index file.
+        // What a request has to end with (a file) or be (a package) to name
+        // each builder source: the file's name without its extension,
+        // or the directory of an index file.
         let needle = |what: &str| -> String {
             match what.strip_prefix("pkg:") {
                 Some(p) => p.to_owned(),
@@ -976,10 +976,10 @@ impl<'a> DiskSource<'a> {
 impl<'a> ModuleSource for DiskSource<'a> {
     fn prepare(&self, files: &[&str]) {
         use rayon::prelude::*;
-        // A relation takes a read, a lex and a parse of the file: a changed name with
-        // many importers asks for all of theirs, one after the other, unless
-        // they are worked out here on every core. One file alone is left to the
-        // walk.
+        // A relation takes a read, a lex and a parse of the file: a changed
+        // name with many importers asks for all of theirs, one after
+        // the other, unless they are worked out here on every core. One
+        // file alone is left to the walk.
         let Some(facts) = self.facts.as_ref().filter(|_| files.len() >= PREPARE_MIN) else {
             return;
         };
@@ -1003,8 +1003,9 @@ impl<'a> ModuleSource for DiskSource<'a> {
         }
         let _t = T_SHAPE.enter();
         let s = self.fact(path).map(|(n, fact)| {
-            // The relation keys an import by where it starts; its specifier is the one of
-            // the edge that starts there. (The walk matches an edge by both.)
+            // The relation keys an import by where it starts; its specifier is
+            // the one of the edge that starts there. (The walk
+            // matches an edge by both.)
             let mut specs: Vec<(u32, String)> = Vec::new();
             if let Some(f) = &self.facts {
                 (f.edges)(n, &mut |start, spec| {
@@ -1026,8 +1027,8 @@ impl<'a> ModuleSource for DiskSource<'a> {
         };
         let _t = T_READING.enter();
         let alias = turborepo_trace_graph::barrel::aliased(spec);
-        // The relation keys an import by where it starts; the edge is that import when
-        // it is written as one.
+        // The relation keys an import by where it starts; the edge is that
+        // import when it is written as one.
         if alias.is_none()
             && (e.span.is_none()
                 || !matches!(
@@ -1046,8 +1047,9 @@ impl<'a> ModuleSource for DiskSource<'a> {
         let lend = |n: &'a str| std::borrow::Cow::Borrowed(n);
         // What the import or re-export that starts at `start` reads.
         let at = |start: u32| -> Reading<'a> {
-            // An import declaration without a namespace binding hands no namespace over:
-            // only an answer with a line of its own can (a namespace import, a `require`).
+            // An import declaration without a namespace binding hands no
+            // namespace over: only an answer with a line of its own
+            // can (a namespace import, a `require`).
             let (used, own_line) = match fact.at_line(start) {
                 Some(u) => u,
                 None => return Reading::All(None),
@@ -1260,10 +1262,10 @@ fn clean_exports(path: &str, src: &str) -> Option<Vec<String>> {
     if ret.fatal_error || !ret.diagnostics.is_empty() || ret.is_flow_language {
         return None;
     }
-    // oxc skips the duplicate-export check for TypeScript (`export type A` next to
-    // `export const A` is fine there); transpilers reject duplicate value
-    // exports. Any duplicate non-type export name (TS overloads included,
-    // conservatively) disqualifies.
+    // oxc skips the duplicate-export check for TypeScript (`export type A` next
+    // to `export const A` is fine there); transpilers reject duplicate
+    // value exports. Any duplicate non-type export name (TS overloads
+    // included, conservatively) disqualifies.
     let r = &ret.module_record;
     let mut seen = std::collections::HashSet::new();
     for e in r
@@ -1498,12 +1500,13 @@ fn barrel_candidate(
     // Only the exports whose definition changed, when the file does the same at
     // load time at both revisions (`symbols::changed`).
     // Why a version has no definition-level facts, reported
-    // with the load-time changes (`pruning.load_time_changes` of `--format json`).
+    // with the load-time changes (`pruning.load_time_changes` of `--format
+    // json`).
     let mut no_facts: Option<String> = None;
     let diff = enabled("EXPORT_DIFF")
         .then(|| {
-            // The same oracle for both revisions: imports resolve as in the working tree,
-            // and only unchanged files are consulted.
+            // The same oracle for both revisions: imports resolve as in the
+            // working tree, and only unchanged files are consulted.
             let at = source.map(|s| s.at(path));
             let oracle: &dyn Oracle = match &at {
                 Some(at) => at,
@@ -1526,8 +1529,8 @@ fn barrel_candidate(
         .collect();
     let pure = h.side_effect_free && b.side_effect_free;
     let load_time = no_facts;
-    // A file whose definitions cannot be compared is not narrowed, and it is not
-    // left to barrel pruning's own test either: that test does not see
+    // A file whose definitions cannot be compared is not narrowed, and it is
+    // not left to barrel pruning's own test either: that test does not see
     // everything a module does when it is loaded (an import that a transpiler
     // drops, a decorator on a parameter).
     if load_time.is_some() {
@@ -1538,16 +1541,18 @@ fn barrel_candidate(
     }
     if let Some(c) = diff {
         if !c.evaluation {
-            // Linking: an export that is gone is a rebound name, which the walk ends at for
-            // every import and re-export that names it; a name the head newly asks of
-            // another module has to be there.
+            // Linking: an export that is gone is a rebound name, which the walk
+            // ends at for every import and re-export that names it;
+            // a name the head newly asks of another module has to
+            // be there.
             if let Some(why) = unlinked(path, &h, &b, source) {
                 return Err(Rejected {
                     reason: why,
                     load_time: None,
                 });
             }
-            // Every export of a side-effect-free file changed: the plain barrel candidate.
+            // Every export of a side-effect-free file changed: the plain barrel
+            // candidate.
             let narrowed = !pure || !all.iter().eq(c.exports.iter());
             return Ok(Candidate {
                 path: path.to_owned(),
@@ -1558,11 +1563,12 @@ fn barrel_candidate(
                 reordered: c.reordered,
             });
         }
-        // The comparison is the authority where it has an answer: what the file does
-        // when it is loaded differs. The check below would let some of that
-        // through (an import whose last use as a value went away is no longer
-        // loaded; a decorator on a parameter runs), so the file is not a
-        // candidate whatever that check says.
+        // The comparison is the authority where it has an answer: what the file
+        // does when it is loaded differs. The check below would let
+        // some of that through (an import whose last use as a value
+        // went away is no longer loaded; a decorator on a parameter
+        // runs), so the file is not a candidate whatever that check
+        // says.
         let reason = if !h.side_effect_free {
             "head: top-level side effects"
         } else if !b.side_effect_free {
@@ -1587,8 +1593,8 @@ fn barrel_candidate(
             load_time,
         });
     }
-    // Without the comparison nothing says which names changed: the file must export
-    // and ask for the same names at both revisions ([`links`]).
+    // Without the comparison nothing says which names changed: the file must
+    // export and ask for the same names at both revisions ([`links`]).
     if h_links != b_links {
         return Err(Rejected {
             reason: "exported or imported names differ between base and head".to_owned(),
@@ -1610,9 +1616,9 @@ fn barrel_candidate(
             load_time,
         });
     }
-    // Every export counts as changed. Without definition-level facts the names that
-    // exist at one revision only are known to be rebound; on an import cycle
-    // any name may be.
+    // Every export counts as changed. Without definition-level facts the names
+    // that exist at one revision only are known to be rebound; on an import
+    // cycle any name may be.
     let exports: Vec<String> = all.into_iter().collect();
     let rebound = if cyclic {
         exports.clone()
@@ -2165,7 +2171,8 @@ mod tests {
     fn clean_parses() {
         assert!(parses_cleanly("a.ts", "export const a = 1;\n"));
         assert!(!parses_cleanly("a.ts", "export const a = ;\n"));
-        // Early errors inside function bodies (the side-effect check skips bodies).
+        // Early errors inside function bodies (the side-effect check skips
+        // bodies).
         assert!(!parses_cleanly(
             "a.ts",
             "export function f() { let x = 1; let x = 2; }\n"
@@ -2213,8 +2220,8 @@ mod tests {
             let of = |src: &str| check_version("a.ts", src).expect("skippable").1;
             of(a) == of(b)
         };
-        // A body, a namespace member, a type-only import and a `require` ask for
-        // nothing new.
+        // A body, a namespace member, a type-only import and a `require` ask
+        // for nothing new.
         assert!(same(
             "import { x } from './x';\nexport function f() { return 1; }\n",
             "import { x } from './x';\nexport function f() { return x; }\n"

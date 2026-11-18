@@ -60,8 +60,9 @@ impl BunLockfile {
             }
 
             // `pruned_data.packages` is not modified until the additions are
-            // applied, so it holds exactly the keys present at the start of this
-            // pass. Children of a key are the contiguous range after `"{key}/"`.
+            // applied, so it holds exactly the keys present at the start of
+            // this pass. Children of a key are the contiguous range
+            // after `"{key}/"`.
             let mut additions = BTreeMap::new();
 
             for keys in keys_by_ident.values().filter(|keys| keys.len() > 1) {
@@ -175,9 +176,9 @@ impl BunLockfile {
             .filter_map(|ws_path| self.data.workspaces.get(ws_path).map(|ws| ws.name.clone()))
             .collect();
 
-        // Every lockfile key for each ident, in key order. Looking idents up here
-        // instead of scanning all packages per requested ident keeps this linear
-        // in the size of the lockfile.
+        // Every lockfile key for each ident, in key order. Looking idents up
+        // here instead of scanning all packages per requested ident
+        // keeps this linear in the size of the lockfile.
         let mut keys_by_ident: HashMap<&str, Vec<&String>> = HashMap::new();
         for (lockfile_key, entry) in &self.data.packages {
             keys_by_ident
@@ -211,9 +212,9 @@ impl BunLockfile {
             }
         };
 
-        // When idents map to multiple lockfile keys, only include workspace-specific
-        // entries for target workspaces to avoid pulling in unrelated workspace
-        // versions
+        // When idents map to multiple lockfile keys, only include
+        // workspace-specific entries for target workspaces to avoid
+        // pulling in unrelated workspace versions
         for pkg in packages {
             if self.data.packages.contains_key(pkg)
                 || pruned_data.workspaces.values().any(|ws| &ws.name == pkg)
@@ -256,9 +257,11 @@ impl BunLockfile {
                         if let Some(dealiased_key) = parsed_key.dealias() {
                             let dealiased_str = dealiased_key.to_string();
 
-                            // Check if dealiasing would conflict with an existing package.
-                            // If the top-level key points at a different ident, keep the
-                            // nested key so both versions remain addressable.
+                            // Check if dealiasing would conflict with an
+                            // existing package.
+                            // If the top-level key points at a different ident,
+                            // keep the nested key
+                            // so both versions remain addressable.
                             let would_conflict = if let Some(existing_entry) =
                                 self.data.packages.get(&dealiased_str)
                             {
@@ -300,13 +303,15 @@ impl BunLockfile {
                             if let Some(dealiased_key) = parsed_key.dealias() {
                                 let dealiased_str = dealiased_key.to_string();
 
-                                // Check if dealiasing would conflict with an existing package.
+                                // Check if dealiasing would conflict with an
+                                // existing package.
                                 // Different idents must keep distinct keys.
                                 if let Some(existing_entry) = self.data.packages.get(&dealiased_str)
                                 {
                                     let ident = PackageIdent::parse(&existing_entry.ident);
                                     if ident.is_workspace() || entry.ident != existing_entry.ident {
-                                        // This would conflict with another package - keep full key.
+                                        // This would conflict with another
+                                        // package - keep full key.
                                         key.clone()
                                     } else {
                                         // No conflict - safe to dealias
@@ -321,14 +326,17 @@ impl BunLockfile {
                                 key.clone()
                             }
                         } else {
-                            // Keep the key as-is (it's nested under a package, not a workspace)
+                            // Keep the key as-is (it's nested under a package,
+                            // not a workspace)
                             key.clone()
                         }
                     } else {
                         // No slash - this is a top-level entry
-                        // Check if a workspace-scoped version will be de-aliased to this same key
+                        // Check if a workspace-scoped version will be
+                        // de-aliased to this same key
                         if dealias_set.contains(key) {
-                            // Skip this top-level entry - it conflicts with a workspace-scoped
+                            // Skip this top-level entry - it conflicts with a
+                            // workspace-scoped
                             // version
                             continue;
                         }
@@ -351,16 +359,17 @@ impl BunLockfile {
                     renamed_prefixes.push((format!("{key}/"), format!("{pruned_key}/")));
                 }
 
-                // Check if this is a workspace mapping entry (e.g., "storybook":
-                // ["storybook@workspace:apps/storybook"])
+                // Check if this is a workspace mapping entry (e.g.,
+                // "storybook": ["storybook@workspace:apps/
+                // storybook"])
                 let ident = PackageIdent::parse(&entry.ident);
                 let is_workspace_mapping = ident.is_workspace() && ident.name() == key;
 
                 // Handle workspace mapping entries
                 if is_workspace_mapping {
                     // Extract the workspace path from the mapping
-                    // Format: "storybook@workspace:apps/storybook" -> workspace path is
-                    // "apps/storybook"
+                    // Format: "storybook@workspace:apps/storybook" -> workspace
+                    // path is "apps/storybook"
                     if let Some(workspace_path) = ident.workspace_path() {
                         // Ensure transitive workspace dependencies are in the
                         // pruned set. The initial pruned_data.workspaces only
@@ -377,7 +386,8 @@ impl BunLockfile {
 
                         // Check if this workspace is in the pruned set
                         if pruned_data.workspaces.contains_key(workspace_path) {
-                            // This workspace IS in the pruned set - keep the mapping as-is
+                            // This workspace IS in the pruned set - keep the
+                            // mapping as-is
                             pruned_data
                                 .packages
                                 .insert(pruned_key.clone(), entry.clone());
@@ -393,12 +403,14 @@ impl BunLockfile {
                             .next_back()
                             .unwrap_or(workspace_path);
 
-                        // Look for the actual package entry stored with workspace-scoped key
+                        // Look for the actual package entry stored with
+                        // workspace-scoped key
                         // e.g., "storybook/storybook" for workspace "storybook"
                         let scoped_key = format!("{workspace_name}/{key}");
 
                         if let Some(actual_package) = self.data.packages.get(&scoped_key) {
-                            // Include the actual package entry with the unscoped key
+                            // Include the actual package entry with the
+                            // unscoped key
                             pruned_data
                                 .packages
                                 .insert(pruned_key.clone(), actual_package.clone());
@@ -427,8 +439,9 @@ impl BunLockfile {
                     }
                 }
 
-                // Check if this package references a workspace (e.g., via @workspace: in ident)
-                // and ensure that workspace is included
+                // Check if this package references a workspace (e.g., via
+                // @workspace: in ident) and ensure that
+                // workspace is included
                 let package_ident = PackageIdent::parse(&entry.ident);
                 if let Some(workspace_path) = package_ident.workspace_path() {
                     // Add this workspace if not already included
@@ -442,9 +455,10 @@ impl BunLockfile {
                 }
 
                 // Include bundled dependencies
-                // Bundled dependencies are stored with nested keys like "parent/dep"
-                // and have "bundled": true in their info
-                // Note: We search using the original key from the source lockfile
+                // Bundled dependencies are stored with nested keys like
+                // "parent/dep" and have "bundled": true in
+                // their info Note: We search using the original
+                // key from the source lockfile
                 let bundled_prefix = format!("{key}/");
                 for (lockfile_key, bundled_entry) in
                     keys_with_prefix(&self.data.packages, &bundled_prefix)
@@ -458,12 +472,15 @@ impl BunLockfile {
                             .unwrap_or(false)
                     {
                         // Check if this is a bundled dependency
-                        // In Bun's format, bundled is indicated by the "bundled" field
-                        // Bundled deps are always nested under their parent,
-                        // so we need to adjust the key if we dealiased the parent
+                        // In Bun's format, bundled is indicated by the
+                        // "bundled" field Bundled deps
+                        // are always nested under their parent,
+                        // so we need to adjust the key if we dealiased the
+                        // parent
                         let bundled_pruned_key =
                             if should_dealias && lockfile_key.starts_with(&bundled_prefix) {
-                                // Replace the parent prefix with the dealiased version
+                                // Replace the parent prefix with the dealiased
+                                // version
                                 format!("{}{}", pruned_key, &lockfile_key[key.len()..])
                             } else {
                                 lockfile_key.clone()
@@ -474,8 +491,9 @@ impl BunLockfile {
                     }
                 }
             } else {
-                // Key doesn't exist in original lockfile - check if it's a workspace name
-                // and create a workspace mapping entry for it
+                // Key doesn't exist in original lockfile - check if it's a
+                // workspace name and create a workspace mapping
+                // entry for it
                 if let Some((ws_path, ws_entry)) = pruned_data
                     .workspaces
                     .iter()
@@ -520,21 +538,23 @@ impl BunLockfile {
         // the root package.json with all overrides intact, so the lockfile must
         // keep them in sync. If overrides are selectively stripped here, bun
         // detects the mismatch with package.json and re-resolves, which breaks
-        // `bun install --frozen-lockfile` when a range has drifted (e.g. "latest").
+        // `bun install --frozen-lockfile` when a range has drifted (e.g.
+        // "latest").
         pruned_data.overrides = self.data.overrides.clone();
 
         // ORPHAN REMOVAL: After de-aliasing, some packages may be orphaned
         // (only depended on by packages that were skipped due to de-aliasing
         // conflicts). We need to remove these orphaned packages.
         //
-        // Strategy: Recompute which packages are reachable from workspace dependencies
-        // using the pruned packages. Packages not reachable are orphans.
+        // Strategy: Recompute which packages are reachable from workspace
+        // dependencies using the pruned packages. Packages not
+        // reachable are orphans.
 
         // Build key_to_entry for closure computation
         let mut temp_key_to_entry: HashMap<String, String> = HashMap::new();
         for (path, entry) in &pruned_data.packages {
-            // Take first occurrence for duplicate idents (shouldn't happen after
-            // de-aliasing)
+            // Take first occurrence for duplicate idents (shouldn't happen
+            // after de-aliasing)
             temp_key_to_entry
                 .entry(entry.ident.clone())
                 .or_insert(path.clone());
@@ -575,8 +595,8 @@ impl BunLockfile {
                     deps.extend(od.clone());
                 }
                 // Include peer dependencies for orphan removal computation
-                // Peer dependencies that are actually installed should not be considered
-                // orphans
+                // Peer dependencies that are actually installed should not be
+                // considered orphans
                 if let Some(pd) = &ws_entry.peer_dependencies {
                     deps.extend(pd.clone());
                 }
@@ -592,7 +612,8 @@ impl BunLockfile {
                     .flat_map(|closure| closure.iter().map(|p| p.key.clone()))
                     .collect();
 
-                // Also keep track of reachable lockfile keys for nested package detection
+                // Also keep track of reachable lockfile keys for nested package
+                // detection
                 let reachable_lockfile_keys: HashSet<String> = recomputed_closures
                     .values()
                     .flat_map(|closure| {
@@ -771,10 +792,10 @@ impl BunLockfile {
         }
 
         // After pruning, some packages may have required peer dependencies that
-        // are no longer present in the pruned set (e.g. expo-network is provided
-        // by mobile workspaces that were pruned away). Bun refuses to parse a
-        // lockfile with unresolvable required peers, so we move them to
-        // optionalPeers.
+        // are no longer present in the pruned set (e.g. expo-network is
+        // provided by mobile workspaces that were pruned away). Bun
+        // refuses to parse a lockfile with unresolvable required peers,
+        // so we move them to optionalPeers.
         let pruned_package_names: HashSet<String> = pruned_data.packages.keys().cloned().collect();
         for entry in pruned_data.packages.values_mut() {
             if let Some(info) = &mut entry.info {
@@ -796,10 +817,11 @@ impl BunLockfile {
             }
         }
 
-        // SUFFIXED KEY RENAME: Bun appends suffixes like `--for-generate-function-map`
-        // to distinguish multiple versions of the same package. When the primary
-        // (unsuffixed) entry is pruned and only the suffixed one remains, rename
-        // the key to the base package name so bun can resolve it.
+        // SUFFIXED KEY RENAME: Bun appends suffixes like
+        // `--for-generate-function-map` to distinguish multiple
+        // versions of the same package. When the primary (unsuffixed)
+        // entry is pruned and only the suffixed one remains, rename the
+        // key to the base package name so bun can resolve it.
         {
             let top_level_pkg_names: HashSet<String> = pruned_data
                 .packages
@@ -920,15 +942,19 @@ impl BunLockfile {
                     {
                         format!("{key}/{suffix}")
                     } else {
-                        // The entry was found in an ancestor scope of the source
-                        // key, so its key can't be re-parented under the
+                        // The entry was found in an ancestor scope of the
+                        // source key, so its key can't
+                        // be re-parented under the
                         // dependent's pruned key. Bun resolves dependencies by
-                        // walking up the dependent's scope chain by name, so the
-                        // verbatim key is fine as long as SOME entry named
-                        // dep_name is reachable from the dependent. When none is
-                        // (the dependent was renamed by de-aliasing/promotion and
-                        // the ancestor chain was pruned), bun fails to parse the
-                        // lockfile; nest the entry directly under the dependent
+                        // walking up the dependent's scope chain by name, so
+                        // the verbatim key is fine as
+                        // long as SOME entry named
+                        // dep_name is reachable from the dependent. When none
+                        // is (the dependent was renamed
+                        // by de-aliasing/promotion and
+                        // the ancestor chain was pruned), bun fails to parse
+                        // the lockfile; nest the entry
+                        // directly under the dependent
                         // instead. See
                         // https://github.com/vercel/turborepo/issues/13233
                         let name_resolvable = pruned_data.packages.contains_key(dep_name) || {
@@ -987,9 +1013,9 @@ impl BunLockfile {
         }
 
         // Alias keys can share the same package ident, e.g. `string-width` and
-        // `string-width-cjs`. Bun expects their nested dependency sets to stay in
-        // sync; keeping only one sibling makes `bun install --frozen-lockfile`
-        // rewrite the pruned lockfile.
+        // `string-width-cjs`. Bun expects their nested dependency sets to stay
+        // in sync; keeping only one sibling makes `bun install
+        // --frozen-lockfile` rewrite the pruned lockfile.
         self.include_duplicate_alias_children(&mut pruned_data);
 
         // FINAL SWEEP: emulate bun's lockfile "clean" pass. Bun resolves every

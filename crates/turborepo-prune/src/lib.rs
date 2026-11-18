@@ -412,10 +412,13 @@ pub async fn prune(input: PruneInput, telemetry: CommandEventBuilder) -> Result<
                         || context.directory().components().next().is_none()
                     {
                         if input.future_flags.affected_using_task_inputs {
-                            // No directory copy does not mean no task namespace:
-                            // preserve configured tasks and native task overrides.
-                            // The aggregate's install closure retains its members,
-                            // which seed the domain plan below (not the aggregate,
+                            // No directory copy does not mean no task
+                            // namespace:
+                            // preserve configured tasks and native task
+                            // overrides.
+                            // The aggregate's install closure retains its
+                            // members, which seed
+                            // the domain plan below (not the aggregate,
                             // which is not itself a lockfile package).
                             workspace_names.push(workspace);
                         }
@@ -491,9 +494,10 @@ pub async fn prune(input: PruneInput, telemetry: CommandEventBuilder) -> Result<
         prune.copy_turbo_json(&workspace_names, managed_setup.enabled())?;
         prune.copy_global_dependencies()?;
 
-        // Distinct JavaScript rendering + materialization: core already selected
-        // closures and laid out packages. Format rewriting lives entirely in
-        // `render_javascript_prune`; orchestration only writes the artifacts.
+        // Distinct JavaScript rendering + materialization: core already
+        // selected closures and laid out packages. Format rewriting
+        // lives entirely in `render_javascript_prune`; orchestration
+        // only writes the artifacts.
         if let Some((root_definition, handle)) = render {
             let rendered = handle
                 .join()
@@ -1177,7 +1181,8 @@ impl<'a> Prune<'a> {
 
     fn internal_dependencies(&self) -> Result<Vec<PackageName>, Error> {
         // Install-oriented package closure including required same-name peer
-        // workspaces — from relationship knowledge, not PackageJson peer tables.
+        // workspaces — from relationship knowledge, not PackageJson peer
+        // tables.
         let seeds: Vec<PackageName> = self
             .scope
             .iter()

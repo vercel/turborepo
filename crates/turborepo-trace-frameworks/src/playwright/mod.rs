@@ -261,8 +261,8 @@ pub fn load_config(config: &Path) -> (FrameworkInputs, BaseUrls) {
             }
         }
     }
-    // A `testDir` written relative to the config without `..` is the same directory
-    // of the tree wherever the checkout is.
+    // A `testDir` written relative to the config without `..` is the same
+    // directory of the tree wherever the checkout is.
     let plain = |s: &str| {
         let repo = fsx::base().unwrap_or_else(|| PathBuf::from("/"));
         crate::location::stays_inside(&repo, &dir, s)
@@ -288,11 +288,11 @@ pub fn load_config(config: &Path) -> (FrameworkInputs, BaseUrls) {
         }
         _ => Vec::new(),
     };
-    // Playwright matches `testMatch` and `testIgnore` against the absolute path of
-    // a file (expressions and globs alike), so the discovery is kept as the
-    // config writes it for whoever keeps the project to check whether the place
-    // of the checkout decides something ([`crate::location`]). Directories
-    // called `node_modules` are skipped below `testDir` only.
+    // Playwright matches `testMatch` and `testIgnore` against the absolute path
+    // of a file (expressions and globs alike), so the discovery is kept as
+    // the config writes it for whoever keeps the project to check whether
+    // the place of the checkout decides something ([`crate::location`]).
+    // Directories called `node_modules` are skipped below `testDir` only.
     let mk = |name: String,
               (td, td_plain): (PathBuf, bool),
               inc: Vec<TestPattern>,

@@ -449,8 +449,8 @@ impl Recognizer for GoRunTool {
         let prog = go_tool_program(&path)
             .map(str::to_string)
             .unwrap_or_else(|| path.rsplit('/').next().unwrap_or(&path).to_string());
-        // Rewrite as `<prog> args…` (argv[0] replaced by the program, the go words
-        // dropped).
+        // Rewrite as `<prog> args…` (argv[0] replaced by the program, the go
+        // words dropped).
         let mut c = cmd.shifted(at);
         c.argv[0] = Word::lit(prog.clone());
         match registry().find(&c) {

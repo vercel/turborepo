@@ -107,7 +107,8 @@ fn fixture_process() {
         }
         "stale" => {
             // Added, changed and removed provenance; declaration values remain
-            // syntactically valid so the frozen lock, not discovery, rejects it.
+            // syntactically valid so the frozen lock, not discovery, rejects
+            // it.
             for change in ["node", "manager", "removed", "added"] {
                 let f = Fixture::new();
                 let (file, field) = match change {

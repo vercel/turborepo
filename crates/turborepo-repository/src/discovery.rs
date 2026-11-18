@@ -117,7 +117,8 @@ pub async fn discover_turbo_config_path(
         tokio::fs::try_exists(turbo_jsonc.as_path())
     );
 
-    // Discovery has historically treated stat errors as a missing optional config.
+    // Discovery has historically treated stat errors as a missing optional
+    // config.
     select_turbo_config_path(
         directory,
         turbo_json_exists.unwrap_or_default(),
@@ -313,8 +314,8 @@ impl PackageDiscovery for LocalPackageDiscovery {
         })
     }
 
-    // there is no notion of waiting for upstream deps here, so this is the same as
-    // the non-blocking
+    // there is no notion of waiting for upstream deps here, so this is the same
+    // as the non-blocking
     async fn discover_packages_blocking(&self) -> Result<DiscoveryResponse, Error> {
         self.discover_packages().await
     }

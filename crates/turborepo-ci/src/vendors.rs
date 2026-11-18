@@ -299,8 +299,10 @@ pub(crate) fn get_vendors() -> &'static [Vendor] {
                         |group_name| {
                             Arc::new(move |start_time| {
                                 let timestamp = start_time.timestamp();
-                                // GitLab CI section names only allow /a-zA-Z0-9._-/ characters
-                                // Replace @ with 'at' and / with '-' for section identifier
+                                // GitLab CI section names only allow
+                                // /a-zA-Z0-9._-/ characters
+                                // Replace @ with 'at' and / with '-' for
+                                // section identifier
                                 let sanitized_group_name =
                                     group_name.replace('@', "at-").replace('/', "-");
                                 format!(

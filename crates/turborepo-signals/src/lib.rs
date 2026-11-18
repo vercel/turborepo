@@ -106,15 +106,16 @@ impl SignalHandler {
                 let mut state = worker_state
                     .lock()
                     .unwrap_or_else(|poisoned| poisoned.into_inner());
-                // Mark ourselves as closing to prevent any additional subscribers from being
-                // added
+                // Mark ourselves as closing to prevent any additional
+                // subscribers from being added
                 state.is_closing = true;
                 state
                     .subscribers
                     .drain(..)
                     .filter_map(|callback| {
                         let (tx, rx) = oneshot::channel();
-                        // If the subscriber is no longer around we don't wait for the callback
+                        // If the subscriber is no longer around we don't wait
+                        // for the callback
                         callback.send(tx).ok()?;
                         Some(rx)
                     })
@@ -213,8 +214,8 @@ impl SignalHandler {
         }
     }
 
-    // Check if the worker thread is done, only meant to be used for assertions in
-    // testing
+    // Check if the worker thread is done, only meant to be used for assertions
+    // in testing
     #[cfg(test)]
     fn is_done(&self) -> bool {
         self.close.is_closed()

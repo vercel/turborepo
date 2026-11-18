@@ -142,7 +142,8 @@ impl<'a, L: TurboJsonLoader> TaskInheritanceResolver<'a, L> {
                 continue;
             }
 
-            // Create a child resolver that skips validation (only validate at entry point)
+            // Create a child resolver that skips validation (only validate at
+            // entry point)
             let child_resolver = TaskInheritanceResolver {
                 loader: self.loader,
                 validation_mode: ValidationMode::Skip,
@@ -230,7 +231,8 @@ impl<'a, L: TurboJsonLoader> TaskInheritanceResolver<'a, L> {
         inherited_tasks: &HashSet<TaskName<'static>>,
         state: &mut ResolutionState,
     ) -> Result<(), BuilderError> {
-        // Validate that the task exists in the extends chain (only at entry point)
+        // Validate that the task exists in the extends chain (only at entry
+        // point)
         if self.validation_mode == ValidationMode::Validate
             && !inherited_tasks.contains(task_name)
             && !self.implicit_tasks.contains(task_name)

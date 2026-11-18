@@ -247,9 +247,10 @@ impl Opts {
             } else if config.enabled == Some(false) {
                 Some(RemoteCacheDisabledReason::InConfig)
             } else {
-                // Linked and enabled in config, but remote cache is still disabled.
-                // This means CLI flags (--no-cache + --force, or --cache=local:rw)
-                // disabled both remote read and write.
+                // Linked and enabled in config, but remote cache is still
+                // disabled. This means CLI flags (--no-cache +
+                // --force, or --cache=local:rw) disabled both
+                // remote read and write.
                 Some(RemoteCacheDisabledReason::ByFlags)
             }
         } else {
@@ -677,7 +678,8 @@ impl<'a> TryFrom<OptsInputs<'a>> for CacheOpts {
             cache.remote.read = false;
             cache.remote.write = false;
         } else if let Some(false) = inputs.config.enabled {
-            // We're linked, but if the user has explicitly disabled remote cache
+            // We're linked, but if the user has explicitly disabled remote
+            // cache
             cache.remote.read = false;
             cache.remote.write = false;
         };
@@ -686,9 +688,10 @@ impl<'a> TryFrom<OptsInputs<'a>> for CacheOpts {
             cache.remote.write = false;
         }
 
-        // Note that we don't currently use the team_id value here. In the future, we
-        // should probably verify that we only use the signature value when the
-        // configured team_id matches the final resolved team_id.
+        // Note that we don't currently use the team_id value here. In the
+        // future, we should probably verify that we only use the
+        // signature value when the configured team_id matches the final
+        // resolved team_id.
         let unused_remote_cache_opts_team_id =
             inputs.config.team_id().map(|team_id| team_id.to_string());
         let signature = inputs.config.signature();

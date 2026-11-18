@@ -159,8 +159,8 @@ fn other_roots_and_another_order_of_files_are_bound_again() {
     let (_, t) = record(&r, &[HELPER]);
     assert_eq!(replayed(&t, &r, &[HELPER, "pkg/a.test.ts"]), None);
     assert_eq!(replayed(&t, &r, &[]), None);
-    // The same files with other ids relative to each other: the run binds and sorts
-    // in the order of the ids.
+    // The same files with other ids relative to each other: the run binds and
+    // sorts in the order of the ids.
     let mut files = base();
     files.swap(1, 2);
     assert_eq!(replayed(&t, &repo(&files), &[HELPER]), None);
@@ -269,7 +269,8 @@ fn sequences_of_edits_replay_or_rebind() {
                 for step in [a, b, c] {
                     (edits[step].1)(&mut files);
                     let r = repo(&files);
-                    // `replayed` checks the answer against binding from nothing.
+                    // `replayed` checks the answer against binding from
+                    // nothing.
                     match replayed(&t, &r, &[HELPER]) {
                         Some(_) => replays += 1,
                         None => {

@@ -38,8 +38,9 @@ pub(super) fn run(
         return Err(Error::NoLockTool(id.clone()));
     }
     NativeRecord::preflight(&snapshot)?;
-    // An existing real lock is authoritative: reject drift/unsupported semantics
-    // before transports, WRITER, the store, or any ignored-state mutation.
+    // An existing real lock is authoritative: reject drift/unsupported
+    // semantics before transports, WRITER, the store, or any ignored-state
+    // mutation.
     let existing = snapshot
         .previous_lock()
         .map(|lock| {
@@ -70,7 +71,8 @@ pub(super) fn run(
     let runtime = tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()?;
-    // Fixed order, retained through discovery/policy checks and atomic selection.
+    // Fixed order, retained through discovery/policy checks and atomic
+    // selection.
     let guard = snapshot.guard()?;
     check()?;
     snapshot.check_guard(&guard)?;

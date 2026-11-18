@@ -166,8 +166,8 @@ fn run_case(case: &Case, root: &Path) -> Result<(Vec<Check>, BTreeSet<String>, u
     if let Some(c) = &case.conditions {
         builder = builder.conditions(cases::turbotrace_conditions(c));
     }
-    // Only the esm-paths cases use the `paths` aliases unit.test.js passes to every
-    // case.
+    // Only the esm-paths cases use the `paths` aliases unit.test.js passes to
+    // every case.
     let uses_paths = case.name.starts_with("esm-paths");
     builder = if case.exports_only || uses_paths {
         builder.language(NftJs {
@@ -197,8 +197,9 @@ fn run_case(case: &Case, root: &Path) -> Result<(Vec<Check>, BTreeSet<String>, u
                 ));
             };
             let (mut files, _) = file_sets(&cold, cold.entry_files(idx));
-            // nft collects the files whose parents are in the closure, so the entry itself
-            // only counts when another file of its closure references it (a cycle).
+            // nft collects the files whose parents are in the closure, so the
+            // entry itself only counts when another file of its
+            // closure references it (a cycle).
             let entry_id = cold.file_id(&entry_path);
             let closure: BTreeSet<_> = cold
                 .entry_files(idx)

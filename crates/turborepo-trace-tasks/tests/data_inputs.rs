@@ -88,8 +88,8 @@ fn a_type_check_only_reads_its_project_and_its_declared_inputs() {
         (vec![], vec!["packages/assets/tools/upload.ts".to_owned()])
     );
 
-    // `tsc -p` emitting JavaScript: importers of `dist/index.js` run a copy of the
-    // sources.
+    // `tsc -p` emitting JavaScript: importers of `dist/index.js` run a copy of
+    // the sources.
     assert_eq!(
         memberships(&set, &root, "task:packages/assets#build"),
         [m("packages/assets/src/**/*", "tsconfig include", false)]
@@ -98,8 +98,8 @@ fn a_type_check_only_reads_its_project_and_its_declared_inputs() {
         memberships(&set, &root, "task:packages/lib#build"),
         [m("packages/lib/src/**/*", "tsconfig include", false)]
     );
-    // An unknown command may run or compile any file of its package: nothing of it
-    // is read-only.
+    // An unknown command may run or compile any file of its package: nothing of
+    // it is read-only.
     let tool = memberships(&set, &root, "task:packages/tool#build");
     assert!(
         !tool.is_empty()
@@ -163,9 +163,9 @@ fn tsc_emit_options_decide_what_is_only_read() {
         [false]
     );
 
-    // The file a project names: read by the declaration-only project, compiled when
-    // the same sources are emitted (`--emitDeclarationOnly false` overrides the
-    // config: the emit is then not known exactly).
+    // The file a project names: read by the declaration-only project, compiled
+    // when the same sources are emitted (`--emitDeclarationOnly false`
+    // overrides the config: the emit is then not known exactly).
     let spec = recognize("packages/assets", "tsc -p tsconfig.json");
     assert_eq!(
         (rel(&root, &spec.inputs), rel(&root, &spec.data_inputs)),
@@ -215,9 +215,9 @@ fn a_task_of_tsc_parts_produces_what_its_parts_write() {
     let set = discover(&ws, &Options::default());
     let o = |p: &str, kind, part| (p.to_owned(), kind, part);
 
-    // `tsc -b` type-check, turbo `outputs: ["node_modules/.cache/tsbuildinfo.json",
-    // "dist"]` and `dependsOn: ["typegen", "^build", "^type-check"]`; the
-    // package has no `typegen`.
+    // `tsc -b` type-check, turbo `outputs:
+    // ["node_modules/.cache/tsbuildinfo.json", "dist"]` and `dependsOn:
+    // ["typegen", "^build", "^type-check"]`; the package has no `typegen`.
     assert_eq!(
         outputs(&set, &root, "task:packages/assets#type-check"),
         [
@@ -232,8 +232,9 @@ fn a_task_of_tsc_parts_produces_what_its_parts_write() {
             ),
         ]
     );
-    // `tsc --build --force`, turbo `outputs: ["dist/**"]`, `dependsOn: ["^build"]`
-    // with an upstream package: the JavaScript in `dist` is the project's.
+    // `tsc --build --force`, turbo `outputs: ["dist/**"]`, `dependsOn:
+    // ["^build"]` with an upstream package: the JavaScript in `dist` is the
+    // project's.
     assert_eq!(
         outputs(&set, &root, "task:packages/analytics#build"),
         [

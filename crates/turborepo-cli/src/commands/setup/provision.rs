@@ -623,8 +623,9 @@ pub(super) fn run(
         resolvable(&snapshot)?;
     }
     // Ordinary setup validates matching pins before its no-op writer. Explicit
-    // refresh may repair invalid native selections within this supported cohort;
-    // the candidate callback still gates EVERY new selection before any writer.
+    // refresh may repair invalid native selections within this supported
+    // cohort; the candidate callback still gates EVERY new selection before
+    // any writer.
     let lock_action = if !write {
         None
     } else if let Some(lock) = snapshot.previous_lock() {

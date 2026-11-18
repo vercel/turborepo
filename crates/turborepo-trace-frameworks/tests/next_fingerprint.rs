@@ -171,8 +171,8 @@ fn fingerprint_covers_every_route() {
 
 #[test]
 fn rebuild_noise_does_not_change_fingerprints() {
-    // The same build elsewhere on disk, with another build id, other action ids and
-    // another content-hash name for a client chunk.
+    // The same build elsewhere on disk, with another build id, other action ids
+    // and another content-hash name for a client chunk.
     let c = Copy::new();
     let base = base_fingerprint();
     let b = load();
@@ -261,7 +261,8 @@ fn stylesheet_changes_by_rule() {
     );
     assert!(!strict.changed.contains_key("/api/hello"));
 
-    // A changed declaration of an existing rule affects every route in both modes.
+    // A changed declaration of an existing rule affects every route in both
+    // modes.
     let c = Copy::new();
     assert_eq!(
         c.edit(
@@ -333,7 +334,8 @@ fn effective_fingerprints_follow_invocations() {
         base.routes["/api/hello"].own,
         base.routes["/api/hello"].effective
     );
-    // The server action is listed on the entry that bundles it, from the manifest.
+    // The server action is listed on the entry that bundles it, from the
+    // manifest.
     assert!(
         base.routes["/dashboard/settings"]
             .invokes

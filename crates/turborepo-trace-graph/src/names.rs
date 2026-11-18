@@ -498,8 +498,8 @@ impl NameIndex {
                 f(r, NamedBy::Path(path));
             }
         }
-        // Segment boundaries: `starts[i]` is the offset of segment `i`, `ends[i]` its
-        // end.
+        // Segment boundaries: `starts[i]` is the offset of segment `i`,
+        // `ends[i]` its end.
         let mut starts = vec![0usize];
         let mut ends = Vec::new();
         for (i, b) in path.bytes().enumerate() {
@@ -547,7 +547,8 @@ impl NameIndex {
                 }
             }
         };
-        // The path itself and each ancestor directory, by every suffix of its segments.
+        // The path itself and each ancestor directory, by every suffix of its
+        // segments.
         for end in 0..n {
             for start in 0..=end {
                 lookup(&path[starts[start]..ends[end]], f);
@@ -858,8 +859,9 @@ impl<G: GraphView> Engine<'_, G> {
             queue.push(r.0);
         }
         let every = filter.is_all();
-        // Per node, for the tasks the first walk stopped at: 1 known, 2 not known; 0
-        // for every other node, and for those once walked through.
+        // Per node, for the tasks the first walk stopped at: 1 known, 2 not
+        // known; 0 for every other node, and for those once walked
+        // through.
         let mut stopped = vec![0u8; parent.len()];
         let mut at: Vec<u32> = Vec::new();
         let mut head = 0;
@@ -906,8 +908,9 @@ impl<G: GraphView> Engine<'_, G> {
                     parent[s as usize] = n.0;
                     queue.push(s);
                 } else if stopped[s as usize] == 1 {
-                    // A known task that is also above a task that is not known: what is
-                    // above it is reached through the latter too.
+                    // A known task that is also above a task that is not known:
+                    // what is above it is reached through
+                    // the latter too.
                     stopped[s as usize] = 0;
                     queue.push(s);
                 }
@@ -1171,8 +1174,8 @@ impl<G: GraphView> Engine<'_, G> {
         let Some(p) = self.pairing(changes, entries, runtime_entries, opts, task_dirs) else {
             return Vec::new();
         };
-        // The directories and the package that `runner` (an entry, or the task that
-        // runs the process) gives a process.
+        // The directories and the package that `runner` (an entry, or the task
+        // that runs the process) gives a process.
         let dirs_of = |runner: NodeId| -> Vec<String> {
             match p.runners.get(&runner.0) {
                 Some(r) => r.dirs.clone(),
@@ -1191,7 +1194,8 @@ impl<G: GraphView> Engine<'_, G> {
         let mut out: Vec<NamedResult> = Vec::new();
         let mut done = NodeSet::new(g.node_count());
 
-        // 1. Strings and file locations. A location says where it goes; a string counts
+        // 1. Strings and file locations. A location says where it goes; a
+        //    string counts
         // for the packages that hold the changed path (the package assumption).
         let hits = p.hits(index, changes);
         let mut add = |e: NodeId, chain: Vec<NodeId>, hit: &Hit, site: NodeId| {
@@ -1228,15 +1232,16 @@ impl<G: GraphView> Engine<'_, G> {
                 continue;
             }
             let to_name = p.to_names(index, group.files.iter().copied());
-            // The first name of the file `n` for a path the package at `pkg` holds.
+            // The first name of the file `n` for a path the package at `pkg`
+            // holds.
             let hit_of = |n: NodeId, pkg: &str| {
                 hits.scoped
                     .get(pkg)
                     .and_then(|m| m.get(&n.0))
                     .or_else(|| group.packages.iter().find_map(|k| hits.scoped[k].get(&n.0)))
             };
-            // The changed path is in the package the process runs for: the package of the
-            // entry, or of the task that runs it.
+            // The changed path is in the package the process runs for: the
+            // package of the entry, or of the task that runs it.
             if entries {
                 let found = p.reach_by_runner(
                     &to_name,
@@ -1267,16 +1272,18 @@ impl<G: GraphView> Engine<'_, G> {
         }
         lap("modules that load a naming file");
 
-        // 2. Names that depend on the entry: the working directory and the test's own
-        // directory. A file with a named working-directory record uses the working
-        // directory whether or not it says so.
+        // 2. Names that depend on the entry: the working directory and the
+        //    test's own
+        // directory. A file with a named working-directory record uses the
+        // working directory whether or not it says so.
         let mut cwd_users: HashMap<u32, u32> = HashMap::new();
         for r in &index.cwd_users {
             cwd_users.entry(r.node.0).or_insert(r.line);
         }
-        // Files that only have a working-directory record: the reference was resolved
-        // against the repository root when the file was traced, so the root is covered
-        // by the edges, probes and memberships recorded on the file itself.
+        // Files that only have a working-directory record: the reference was
+        // resolved against the repository root when the file was
+        // traced, so the root is covered by the edges, probes and
+        // memberships recorded on the file itself.
         let mut record_only: HashSet<u32> = HashSet::new();
         for &n in &p.sites {
             if let Some(u) = g.uncertainties(n).find(|u| {
@@ -1292,20 +1299,21 @@ impl<G: GraphView> Engine<'_, G> {
         for r in &index.test_path_users {
             test_users.entry(r.node.0).or_insert(r.line);
         }
-        // The rounds after the first (the packages with named reads that hold a changed
-        // path) only matter for an entry whose directory reaches such a path and no
-        // path of its own package: the changed paths by the directories above
-        // them, and the directories of the entries by package.
+        // The rounds after the first (the packages with named reads that hold a
+        // changed path) only matter for an entry whose directory
+        // reaches such a path and no path of its own package: the
+        // changed paths by the directories above them, and the
+        // directories of the entries by package.
         let scopes = p.scopes(changes);
-        // Every changed path by the directories above it: a runner whose directories
-        // have no changed path below them names none, and most runners are in
-        // that case.
+        // Every changed path by the directories above it: a runner whose
+        // directories have no changed path below them names none, and
+        // most runners are in that case.
         let mut changed_below = Below::default();
         for c in changes {
             changed_below.add(&c.path);
         }
-        // The same per package that holds them (the package assumption): what a runner
-        // of that package can read in the first round.
+        // The same per package that holds them (the package assumption): what a
+        // runner of that package can read in the first round.
         let mut changed_in: HashMap<&str, Below<'_>> = HashMap::new();
         if let Some(pk) = &p.packages {
             for c in changes {
@@ -1314,9 +1322,9 @@ impl<G: GraphView> Engine<'_, G> {
                 }
             }
         }
-        // Whether a runner of the package at `home` can read a changed path at or below
-        // `dir` in the round `round`: a path of its own package in the first round, of
-        // the round's packages later.
+        // Whether a runner of the package at `home` can read a changed path at
+        // or below `dir` in the round `round`: a path of its own
+        // package in the first round, of the round's packages later.
         let near_in = |home: &str, round: usize, dir: &str| -> bool {
             if round > 0 {
                 scopes.rounds[round - 1].any(dir)
@@ -1352,7 +1360,8 @@ impl<G: GraphView> Engine<'_, G> {
                     }
                 }
             }
-            // The tasks that run a process for an entry lend it their directories.
+            // The tasks that run a process for an entry lend it their
+            // directories.
             for (&t, r) in &p.runners {
                 let pkg = p.home(NodeId(t));
                 for d in &r.dirs {
@@ -1372,11 +1381,12 @@ impl<G: GraphView> Engine<'_, G> {
             if users.is_empty() {
                 continue;
             }
-            // An entry can load several users, and each names other directories for it:
-            // as far up as its own parent steps reach, and without the repository root
-            // for a file that only has a record. One pass per kind of user, so that an
-            // entry is asked about every kind it loads (one pass over all users would ask
-            // only about the nearest).
+            // An entry can load several users, and each names other directories
+            // for it: as far up as its own parent steps reach, and
+            // without the repository root for a file that only has
+            // a record. One pass per kind of user, so that an entry
+            // is asked about every kind it loads (one pass over all users would
+            // ask only about the nearest).
             let mut tasks_hit: Vec<Seed<(String, String)>> = Vec::new();
             let emit =
                 |s: Selected<(String, String)>, done: &mut NodeSet, out: &mut Vec<NamedResult>| {
@@ -1422,10 +1432,12 @@ impl<G: GraphView> Engine<'_, G> {
                 seeds.sort_unstable();
                 let to_user = self.code_ancestors(&p.code, seeds.iter().map(|&n| NodeId(n)), None);
                 for (round, (scope, to_site)) in p.rounds().into_iter().enumerate() {
-                    // A later round is for the entries whose directory, raised by this kind
-                    // of user, reaches a changed path of the round's packages and none of
-                    // their own package (those were asked in the first round, and an entry
-                    // that reaches no named read there reaches none here).
+                    // A later round is for the entries whose directory, raised
+                    // by this kind of user, reaches a
+                    // changed path of the round's packages and none of
+                    // their own package (those were asked in the first round,
+                    // and an entry that reaches no named
+                    // read there reaches none here).
                     if round > 0 {
                         let below = &scopes.rounds[round - 1];
                         let useful = |d: &str, pkg: &str| {
@@ -1444,8 +1456,9 @@ impl<G: GraphView> Engine<'_, G> {
                             continue;
                         }
                     }
-                    // The names the runner of the process gives it: the entry, or the task
-                    // that runs it for the entry.
+                    // The names the runner of the process gives it: the entry,
+                    // or the task that runs it for the
+                    // entry.
                     let found = p.reach_by_runner(
                         &to_user,
                         to_site,
@@ -1462,7 +1475,8 @@ impl<G: GraphView> Engine<'_, G> {
                                     .filter(|d| !d.is_empty())
                                     .collect()
                             } else if base == EntryBase::Cwd || is_task {
-                                // A task has no test path: its directories stand for it.
+                                // A task has no test path: its directories
+                                // stand for it.
                                 let d = dirs_of(runner);
                                 if d.is_empty() { vec![String::new()] } else { d }
                             } else {
@@ -1476,8 +1490,8 @@ impl<G: GraphView> Engine<'_, G> {
                             if !dirs.iter().any(|d| changed_below.any(ancestor(d, ups))) {
                                 return None;
                             }
-                            // As far up as the files of this kind can step, inside the
-                            // package.
+                            // As far up as the files of this kind can step,
+                            // inside the package.
                             changes
                                 .iter()
                                 .filter(|c| p.inside(pkgs, &c.path))
@@ -1500,15 +1514,16 @@ impl<G: GraphView> Engine<'_, G> {
             }
             lap("modules that load a working-directory or test-path user");
         }
-        // 3. Paths a file builds on the working directory: the directories an entry
-        //    runs
-        // in, with the file's relative part and what is read there. Files with the same
-        // parts share one pass. The directory is where the path goes, whatever package
-        // it is in; the parent steps elsewhere in the file raise it only inside
-        // the package.
+        // 3. Paths a file builds on the working directory: the directories an
+        //    entry runs
+        // in, with the file's relative part and what is read there. Files with
+        // the same parts share one pass. The directory is where the
+        // path goes, whatever package it is in; the parent steps
+        // elsewhere in the file raise it only inside the package.
         if !index.cwd_dirs.is_empty() {
-            // The changed paths without an extension of their last segment: the places of
-            // strings that climb name those too ([`at_place`]).
+            // The changed paths without an extension of their last segment: the
+            // places of strings that climb name those too
+            // ([`at_place`]).
             let mut stems: HashSet<&str> = HashSet::new();
             for c in changes {
                 let last = c.path.rfind('/').map_or(0, |i| i + 1);
@@ -1518,7 +1533,8 @@ impl<G: GraphView> Engine<'_, G> {
                     }
                 }
             }
-            // The relative part, the pattern, and whether the file's parent steps raise it.
+            // The relative part, the pattern, and whether the file's parent
+            // steps raise it.
             type Parts<'x> = Vec<(&'x str, &'x str, bool)>;
             let mut per_file: std::collections::BTreeMap<u32, (u32, Parts<'_>)> =
                 std::collections::BTreeMap::new();
@@ -1570,8 +1586,9 @@ impl<G: GraphView> Engine<'_, G> {
                     });
                 };
                 for (round, (scope, to_site)) in p.rounds().into_iter().enumerate() {
-                    // A later round is for what the parent steps add: a directory of the
-                    // group, raised, that reaches a changed path of the round's packages.
+                    // A later round is for what the parent steps add: a
+                    // directory of the group, raised, that
+                    // reaches a changed path of the round's packages.
                     if round > 0 {
                         let below = &scopes.rounds[round - 1];
                         let any = max_ups > 0
@@ -1614,7 +1631,8 @@ impl<G: GraphView> Engine<'_, G> {
                             let user = chain.first().map_or(NONE, |n| n.0);
                             // As far up as the file can step elsewhere.
                             let ups = index.ups.get(&user).copied().unwrap_or(0);
-                            // The directories the parts are built on, per directory of the
+                            // The directories the parts are built on, per
+                            // directory of the
                             // runner and part, with the directory and the part.
                             type Base<'x> = (String, &'x str, &'x str, &'x str, bool);
                             let mut bases: Vec<Base<'_>> = dirs
@@ -1625,8 +1643,10 @@ impl<G: GraphView> Engine<'_, G> {
                                     })
                                 })
                                 .collect();
-                            // The places of a climbing string nearest the working directory
-                            // first: the reason names the fewest steps that reach the path.
+                            // The places of a climbing string nearest the
+                            // working directory
+                            // first: the reason names the fewest steps that
+                            // reach the path.
                             bases.sort_by_key(|b| if b.4 { 0 } else { b.3.len() });
                             let near = bases.iter().any(|(base, ..)| {
                                 changed_below.any(base)
@@ -1646,8 +1666,10 @@ impl<G: GraphView> Engine<'_, G> {
                                             } else {
                                                 format!("{d}/")
                                             };
-                                            // A string that climbs, joined onto a base below the
-                                            // working directory: its shape anywhere below it.
+                                            // A string that climbs, joined onto
+                                            // a base below the
+                                            // working directory: its shape
+                                            // anywhere below it.
                                             if let Some(shape) = rel.strip_prefix("**/") {
                                                 let sub = if d.is_empty() {
                                                     Some(c.path.as_str())
@@ -1666,7 +1688,8 @@ impl<G: GraphView> Engine<'_, G> {
                                                         )
                                                     });
                                             }
-                                            // A string that climbs: where it goes, and no further.
+                                            // A string that climbs: where it
+                                            // goes, and no further.
                                             return at_place(&c.path, base).then(|| {
                                                 let d = at;
                                                 let shape = rel.trim_start_matches("../");
@@ -2035,9 +2058,10 @@ impl<'g, G: GraphView> Engine<'g, G> {
                     p.runners.insert(i, Runner { dirs, home, class });
                 }
             }
-            // Only the tasks that can be the nearest one above a module that loads a named
-            // read are runners of anything here: the others would only widen what the
-            // passes have to consider (their directories, their packages).
+            // Only the tasks that can be the nearest one above a module that
+            // loads a named read are runners of anything here: the
+            // others would only widen what the passes have to
+            // consider (their directories, their packages).
             if !p.runners.is_empty() {
                 let modules: Vec<NodeId> = (0..g.node_count())
                     .filter(|&i| p.to_site[i as usize] != NONE)
@@ -2183,8 +2207,8 @@ impl<'a, 'g, G: GraphView> Pairing<'a, 'g, G> {
         for c in changes {
             let holders = self.packages.as_ref().map(|pk| pk.holders(&c.path));
             index.named(&c.path, &mut |r, by| {
-                // A location and a path built on it say where they go; so does a string
-                // that climbs out of where it starts.
+                // A location and a path built on it say where they go; so does
+                // a string that climbs out of where it starts.
                 let located = matches!(by, NamedBy::Location(_) | NamedBy::Path(_)) || r.climbs;
                 let hit = || Hit {
                     path: c.path.clone(),
@@ -2371,12 +2395,13 @@ impl<'a, 'g, G: GraphView> Pairing<'a, 'g, G> {
         };
         let mut spent = self.spent.borrow_mut();
         spent.calls += 1;
-        // A task is asked once per class of task and naming file, for every class of
-        // entry; the naming file of a module is looked up once.
+        // A task is asked once per class of task and naming file, for every
+        // class of entry; the naming file of a module is looked up
+        // once.
         let mut asked: HashMap<(u32, u32), Option<H>> = HashMap::new();
         let mut naming: HashMap<u32, u32> = HashMap::new();
-        // Per class of task: 1 near (and of a package asked for), 2 not, 0 not looked
-        // at.
+        // Per class of task: 1 near (and of a package asked for), 2 not, 0 not
+        // looked at.
         let mut near_class = vec![0u8; self.runner_classes as usize];
         for (pi, &(filter, pass)) in self.passes.iter().enumerate() {
             let t0 = std::time::Instant::now();
@@ -2678,8 +2703,8 @@ mod tests {
                 (5, "pkg/test".to_owned()),
             ]
         );
-        // A directory shape names everything below it, at any depth, and nothing beside
-        // it.
+        // A directory shape names everything below it, at any depth, and
+        // nothing beside it.
         assert_eq!(
             named(&ix, "x/fixtures/deep/er/b.bin"),
             [(2, "fixtures".to_owned())]
@@ -2805,7 +2830,8 @@ mod tests {
         assert_eq!(pk.home("services/b/x.ts"), "");
         assert_eq!(pk.home("services/a.ts"), "");
         assert_eq!(pk.home("x.ts"), "");
-        // A package holds everything at or below its directory, packages inside it too.
+        // A package holds everything at or below its directory, packages inside
+        // it too.
         assert!(pk.within("services/a", "services/a/src/x.ts"));
         assert!(pk.within("services/a", "services/a/tools/x.ts"));
         assert!(!pk.within("services/a", "services/ab/x.ts"));

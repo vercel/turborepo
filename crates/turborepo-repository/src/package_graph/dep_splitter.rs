@@ -126,8 +126,8 @@ impl<'a> DependencySplitter<'a> {
             version
         };
 
-        // If link_workspace_packages isn't set any version without workspace protocol
-        // is considered external.
+        // If link_workspace_packages isn't set any version without workspace
+        // protocol is considered external.
         if !self.link_workspace_packages && !version.starts_with("workspace:") {
             return None;
         }
@@ -160,9 +160,10 @@ impl<'a> DependencySplitter<'a> {
             }
             WorkspacePackageSpecifier::Path(path) => {
                 let package_path = self.workspace_dir.join_unix_path(path);
-                // There's a chance that the user provided path could escape the root, in which
-                // case we don't support packages outside of the workspace.
-                // Pnpm also doesn't support this so we defer to them to provide the error
+                // There's a chance that the user provided path could escape the
+                // root, in which case we don't support packages
+                // outside of the workspace. Pnpm also doesn't
+                // support this so we defer to them to provide the error
                 // message.
                 let package_path = AnchoredSystemPathBuf::new(self.repo_root, package_path).ok()?;
                 self.workspace(&package_path).or_else(|| {
@@ -252,11 +253,11 @@ impl<'a> DependencyVersion<'a> {
     }
 
     fn is_external(&self) -> bool {
-        // The npm protocol for yarn by default still uses the workspace package if the
-        // workspace version is in a compatible semver range. See https://github.com/yarnpkg/berry/discussions/4015
-        // For now, we will just assume if the npm protocol is being used and the
-        // version matches its an internal dependency which matches the existing
-        // behavior before this additional logic was added.
+        // The npm protocol for yarn by default still uses the workspace package
+        // if the workspace version is in a compatible semver range. See https://github.com/yarnpkg/berry/discussions/4015
+        // For now, we will just assume if the npm protocol is being used and
+        // the version matches its an internal dependency which matches
+        // the existing behavior before this additional logic was added.
 
         self.protocol.is_some_and(|p| p != "npm")
     }
@@ -269,19 +270,22 @@ impl<'a> DependencyVersion<'a> {
     ) -> bool {
         match self.protocol {
             Some("workspace") => {
-                // TODO: Since support at the moment is non-existent for workspaces that contain
-                // multiple versions of the same package name, just assume its a
+                // TODO: Since support at the moment is non-existent for
+                // workspaces that contain multiple versions of
+                // the same package name, just assume its a
                 // match and don't check the range for an exact match.
                 true
             }
             Some("file") | Some("link") => {
-                // Default to internal if we have the package but somehow cannot get the path
+                // Default to internal if we have the package but somehow cannot
+                // get the path
                 RelativeUnixPathBuf::new(self.version)
                     .map(|file_path| cwd.join_unix_path(file_path))
                     .map_or(true, |dep_path| root.contains(&dep_path))
             }
             Some(_) if self.is_external() => {
-                // Other protocols are assumed to be external references ("github:", etc)
+                // Other protocols are assumed to be external references
+                // ("github:", etc)
                 false
             }
             // npm: alias syntax (e.g. `npm:buffer@6.0.3` or `npm:@scope/pkg@^1.0.0`)
@@ -289,23 +293,27 @@ impl<'a> DependencyVersion<'a> {
             Some("npm") if self.is_npm_alias() => false,
             _ if self.version == "*" => true,
             _ if package_version.is_empty() => {
-                // The workspace version of this package does not contain a version, no version
-                // based constraints will match it so it must be external.
+                // The workspace version of this package does not contain a
+                // version, no version based constraints will
+                // match it so it must be external.
                 false
             }
             _ => {
-                // If we got this far, then we need to check the workspace package version to
-                // see it satisfies the dependencies range to determine whether
+                // If we got this far, then we need to check the workspace
+                // package version to see it satisfies the
+                // dependencies range to determine whether
                 // or not it's an internal or external dependency.
                 let constraint = node_semver::Range::parse(self.version);
                 let version = node_semver::Version::parse(package_version);
 
-                // For backwards compatibility with existing behavior, if we can't parse the
-                // version then we treat the dependency as an internal package
+                // For backwards compatibility with existing behavior, if we
+                // can't parse the version then we treat the
+                // dependency as an internal package
                 // reference and swallow the error.
 
-                // TODO: some package managers also support tags like "latest". Does extra
-                // handling need to be added for this corner-case
+                // TODO: some package managers also support tags like "latest".
+                // Does extra handling need to be added for this
+                // corner-case
                 constraint
                     .ok()
                     .zip(version.ok())
@@ -645,7 +653,8 @@ mod test {
             );
             map
         };
-        // catalog resolves to a semver range that matches the workspace package version
+        // catalog resolves to a semver range that matches the workspace package
+        // version
         let catalogs = make_catalogs(&[("pkg-b", "^1.0.0")], &[]);
         let path_index = path_index();
         let name_index = WorkspaceNameIndex::from_workspaces(&workspaces);
@@ -712,7 +721,8 @@ mod test {
         };
         let path_index = path_index();
         let name_index = WorkspaceNameIndex::from_workspaces(&workspaces);
-        // No catalogs - catalog: specifier can't be resolved, treated as external
+        // No catalogs - catalog: specifier can't be resolved, treated as
+        // external
         let splitter = DependencySplitter {
             repo_root: &root,
             workspace_dir: &pkg_dir,

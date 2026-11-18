@@ -554,7 +554,8 @@ impl Graph {
                 let unc_span = [u.span[0].to_native(), u.span[1].to_native()];
                 let guess = is_guess(u.detail.as_str());
                 let specs = literals(&r.spec).filter(|_| !guess);
-                // A module load of a JS file through a pattern below the working directory.
+                // A module load of a JS file through a pattern below the
+                // working directory.
                 let pat = if specs.is_none() && !guess && js && is_module_kind(k) {
                     pattern(&r.spec)
                 } else {
@@ -631,7 +632,8 @@ impl Graph {
                 let direct = cands.iter().any(|c| is_file(c));
                 let manifest = join_simple(&p, "package.json");
                 if !direct && is_file(&manifest) {
-                    // A package directory: its `main` decides, and is not known here.
+                    // A package directory: its `main` decides, and is not known
+                    // here.
                     return None;
                 }
                 let dir = !below(&p).is_empty();
@@ -640,8 +642,8 @@ impl Graph {
                     if is_file(c) {
                         hit(&mut out, c);
                     } else if !(dir && *c == p) {
-                        // A probe on an existing directory would match every file added
-                        // below it.
+                        // A probe on an existing directory would match every
+                        // file added below it.
                         out.probes.push(c.clone());
                     }
                 }
@@ -658,7 +660,8 @@ impl Graph {
                     }
                     let files = below(&p);
                     if files.is_empty() {
-                        // Missing: a file created there, or below it, changes the read.
+                        // Missing: a file created there, or below it, changes
+                        // the read.
                         if p.is_empty() {
                             return None;
                         }
@@ -704,12 +707,13 @@ impl Graph {
         let (PatTok::Lit(first), rest) = parts.split_first()? else {
             return None;
         };
-        // The directory the pattern starts in: the literal start up to its last `/`.
+        // The directory the pattern starts in: the literal start up to its last
+        // `/`.
         let cut = first.rfind('/')?;
         let dir = join_cwd(cwd, &first[..cut])?;
         if dir.is_empty() || dir == cwd.trim_matches('/') {
-            // A pattern over the whole working directory (or the repository) bounds
-            // nothing.
+            // A pattern over the whole working directory (or the repository)
+            // bounds nothing.
             return None;
         }
         let prefix = format!("{dir}/");
@@ -719,8 +723,8 @@ impl Graph {
         if files.len() > MAX_DIR_FILES {
             return None;
         }
-        // The pattern relative to the directory, as written and as a module path that
-        // is completed by an extension or an `index` file.
+        // The pattern relative to the directory, as written and as a module
+        // path that is completed by an extension or an `index` file.
         let mut toks: Vec<PatTok> = Vec::with_capacity(rest.len() + 1);
         if cut + 1 < first.len() {
             toks.push(PatTok::Lit(first[cut + 1..].to_owned()));
@@ -819,8 +823,9 @@ impl Graph {
             while let Some(x) = stack.pop() {
                 let (srcs, attrs) = rev.neighbors(NodeId(x));
                 for (&p, &a) in srcs.iter().zip(attrs) {
-                    // Only what runs the file runs it in its own working directory: a task
-                    // that reads the file as an input, or a file that reads its text, does
+                    // Only what runs the file runs it in its own working
+                    // directory: a task that reads the file
+                    // as an input, or a file that reads its text, does
                     // not (the edges uncertainty does not follow either).
                     if runs.accepts(a) && reach.insert(NodeId(p)) {
                         stack.push(p);
@@ -830,12 +835,13 @@ impl Graph {
             s.reach = reach;
         }
         turborepo_trace_core::timing::mark("derive: reach");
-        // Tests of one project share their working directories: what a site adds to a
-        // test is computed once per (set of working directories, site).
+        // Tests of one project share their working directories: what a site
+        // adds to a test is computed once per (set of working
+        // directories, site).
         let mut test_nodes: Vec<u32> = tests.keys().copied().collect();
         test_nodes.sort_unstable();
-        // The root is one more working directory of a test whose runner can be started
-        // there (see the module documentation).
+        // The root is one more working directory of a test whose runner can be
+        // started there (see the module documentation).
         let rooted = self.tests_run_from_root();
         let assume = !self.cwd_root_always;
         let mut set_ids: HashMap<(&[&str], bool), u32> = HashMap::new();
@@ -880,8 +886,8 @@ impl Graph {
         let mut dropped: Vec<CwdDropped> = Vec::new();
         let mut bundles: rustc_hash::FxHashMap<(u32, u32), Bundle> = Default::default();
         let mut resolutions = 0usize;
-        // (test, site) pairs, to a fixed point: an edge added to a test can reach more
-        // sites.
+        // (test, site) pairs, to a fixed point: an edge added to a test can
+        // reach more sites.
         let mut work: Vec<(u32, u32)> = Vec::new();
         for (si, s) in sites.iter().enumerate() {
             for &t in &test_nodes {
@@ -904,15 +910,20 @@ impl Graph {
                     let site = &sites[si as usize];
                     let mut b = Bundle::default();
                     let (dirs, rooted) = sets[key.0 as usize];
-                    // The root as a working directory that the set does not name.
+                    // The root as a working directory that the set does not
+                    // name.
                     let implicit = rooted && !dirs.contains(&"");
                     for (r, pat) in site.refs.iter().zip(&site.patterns) {
                         for cwd in dirs.iter().copied().chain(implicit.then_some("")) {
-                            // From the root, what a path that climbs above it and comes
-                            // back names is a reading, not a path of the repository: not
-                            // taken where another working directory explains the path. The
-                            // root that the set does not name is read for such paths only
-                            // (the tracer's edges on the file cover every other path).
+                            // From the root, what a path that climbs above it
+                            // and comes back names
+                            // is a reading, not a path of the repository: not
+                            // taken where another working directory explains
+                            // the path. The
+                            // root that the set does not name is read for such
+                            // paths only
+                            // (the tracer's edges on the file cover every other
+                            // path).
                             let mut at_root: Option<SiteRef> = None;
                             if cwd.is_empty() {
                                 let all: Vec<String> = match pat {
@@ -932,16 +943,23 @@ impl Graph {
                                     if !back && implicit {
                                         continue;
                                     }
-                                    // A test whose only working directory is the
-                                    // root runs the reference there and nowhere else:
-                                    // no other directory can be the one the path was
-                                    // written for, and the reading is the only one.
+                                    // A test whose only working directory is
+                                    // the
+                                    // root runs the reference there and nowhere
+                                    // else:
+                                    // no other directory can be the one the
+                                    // path was
+                                    // written for, and the reading is the only
+                                    // one.
                                     let elsewhere = dirs.iter().any(|d| !d.is_empty());
                                     let by = (back && assume && elsewhere)
                                         .then(|| {
-                                            // The test's own directories, and the
-                                            // directory of the package that holds the
-                                            // reference (a script is written for it).
+                                            // The test's own directories, and
+                                            // the
+                                            // directory of the package that
+                                            // holds the
+                                            // reference (a script is written
+                                            // for it).
                                             dirs.iter()
                                                 .copied()
                                                 .chain(std::iter::once(site.pkg.as_str()))
@@ -1029,7 +1047,8 @@ impl Graph {
                     b.members.sort_unstable();
                     b.members.dedup();
                     for (sj, other) in sites.iter().enumerate() {
-                        // A file the test only reads does not run in the test either.
+                        // A file the test only reads does not run in the test
+                        // either.
                         if b.edges.iter().any(|e| {
                             runs.accepts(EdgeAttr(e.1)) && other.reach.contains(NodeId(e.0))
                         }) {
@@ -1142,8 +1161,8 @@ mod root_tests {
         );
         // From packages/a, `../w1/…` goes through packages/w1, which does not.
         assert_eq!(explained("packages/a", "../w1/data/x.json", exists), None);
-        // From a directory the path leaves the repository from, nothing is explained,
-        // and the root explains nothing.
+        // From a directory the path leaves the repository from, nothing is
+        // explained, and the root explains nothing.
         assert_eq!(
             explained("apps", "../../packages/ui/dist/a.svg", exists),
             None

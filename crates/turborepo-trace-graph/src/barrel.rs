@@ -834,9 +834,9 @@ fn forwarded(kind: &ReExportKind) -> Forwarded<'static> {
 /// How the edge `e` of a file with the module shape `shape` reads the module it
 /// leads to (the default of [`ModuleSource::reading`]).
 pub fn reading_of(shape: Option<&Shape>, e: &Edge<'_>) -> Reading<'static> {
-    // The edge a module mapper adds next to an import's own edge (it has no span)
-    // reads what the file's import of that specifier reads, when there is
-    // exactly one.
+    // The edge a module mapper adds next to an import's own edge (it has no
+    // span) reads what the file's import of that specifier reads, when
+    // there is exactly one.
     if let (Some(shape), Some(orig)) = (shape, e.specifier.and_then(aliased)) {
         if !shape.understood || shape.uses_all {
             return Reading::All(None);
@@ -1076,7 +1076,8 @@ fn isolated_modules(text: &str) -> bool {
 /// of both jest and vitest (matched by a config of each) gets the weaker of the
 /// two answers.
 pub fn entry_runner<G: GraphView>(g: &G, source: &dyn ModuleSource, entry: NodeId) -> Runner {
-    // Config files per runner: jest, vitest (`None`: not a test of that runner).
+    // Config files per runner: jest, vitest (`None`: not a test of that
+    // runner).
     let mut configs: [Option<Vec<NodeId>>; 2] = [None, None];
     let mut ts_jest = false;
     for e in g.out_edges(entry) {
@@ -1240,7 +1241,8 @@ fn track<G: GraphView>(
     let mut is_relevant = NodeSet::new(g.node_count());
     let mut barrels = Vec::new();
     let mut passed = NodeSet::new(g.node_count());
-    // The tracked files whose importers were announced ([`ModuleSource::prepare`]).
+    // The tracked files whose importers were announced
+    // ([`ModuleSource::prepare`]).
     let mut announced = NodeSet::new(g.node_count());
     while let Some(n) = work.pop() {
         let names = state.get(&n).cloned().unwrap_or_default();
@@ -1249,8 +1251,8 @@ fn track<G: GraphView>(
             .iter()
             .filter_map(|n| n.strip_prefix(REBOUND))
             .collect();
-        // The importers that are asked below and for the files that wait behind `n`,
-        // announced together, each file's once.
+        // The importers that are asked below and for the files that wait behind
+        // `n`, announced together, each file's once.
         let mut asked: Vec<&str> = Vec::new();
         for &m in std::iter::once(&n).chain(&work) {
             if !announced.insert(m) {
@@ -1278,8 +1280,8 @@ fn track<G: GraphView>(
                 continue;
             }
             let s = NodeId(s);
-            // A file that no waiting entry loads decides nothing, and neither does anything
-            // that imports it.
+            // A file that no waiting entry loads decides nothing, and neither
+            // does anything that imports it.
             if is_relevant.contains(s) || !needed.contains(s) {
                 continue;
             }
@@ -1290,12 +1292,13 @@ fn track<G: GraphView>(
             // (name of `n`, name of `s`)
             let mut grown: Vec<(String, String)> = Vec::new();
             let mut reexports = false;
-            // The imports of `n` that read tracked names, for [`ModuleSource::taint`];
-            // `opaque`: a read that is not an import the module shape knows.
+            // The imports of `n` that read tracked names, for
+            // [`ModuleSource::taint`]; `opaque`: a read that is not
+            // an import the module shape knows.
             let mut imports: Vec<TaintedImport> = Vec::new();
             let mut opaque = false;
-            // A re-export by name of a binding that was added, removed or redeclared:
-            // linking `s` can fail.
+            // A re-export by name of a binding that was added, removed or
+            // redeclared: linking `s` can fail.
             let mut relinked: Option<String> = None;
             let first = || names.iter().next().cloned().unwrap_or_default();
             let is_rebound = |name: &str| rebound_here.contains(&name);
@@ -1336,7 +1339,8 @@ fn track<G: GraphView>(
                             .collect();
                         if let Some(u) = read.first() {
                             hit.get_or_insert_with(|| u.clone());
-                            // Member-level changes are known for the candidate itself.
+                            // Member-level changes are known for the candidate
+                            // itself.
                             let members = if n == f {
                                 members
                                     .iter()
@@ -1377,12 +1381,15 @@ fn track<G: GraphView>(
                 continue;
             }
             if let Some(name) = hit {
-                // The exports through which `s` passes the change on, when that is the only
-                // way it can: by its definition-level facts, else all of them when it is pure.
+                // The exports through which `s` passes the change on, when that
+                // is the only way it can: by its
+                // definition-level facts, else all of them when it is pure.
                 let through: Result<Vec<String>, How> = if entries.contains(s) {
-                    // An entry runs everything it reads. It passes nothing on, and is not
-                    // selected, only when no statement of it reads what changed: it names
-                    // the change in types, or reads other members of a changed table.
+                    // An entry runs everything it reads. It passes nothing on,
+                    // and is not selected, only when no
+                    // statement of it reads what changed: it names
+                    // the change in types, or reads other members of a changed
+                    // table.
                     if opaque {
                         Err(How::Edge)
                     } else if !changed.contains(s) && b.source.reads(path, &imports) == Some(false)
@@ -1429,9 +1436,10 @@ fn track<G: GraphView>(
                     }
                 }
             }
-            // An entry is not a barrel on the way to an importer: what loads it may read
-            // what it exports (a framework calls the handlers of a route file, a runner the
-            // default export of its config, a plugin makes a test of every export of a
+            // An entry is not a barrel on the way to an importer: what loads it
+            // may read what it exports (a framework calls the
+            // handlers of a route file, a runner the default export
+            // of its config, a plugin makes a test of every export of a
             // file). An entry that forwards a tracked name uses it.
             if let Some((name, _)) = grown.first().filter(|_| entries.contains(s)) {
                 is_relevant.insert(s);
@@ -1533,10 +1541,10 @@ pub(crate) fn resolve<G: GraphView>(
         .map(|d| d.0)
         .collect();
     let is_erased = NodeSet::from_iter_in(g.node_count(), erased_d.iter().copied());
-    // Entries that reach a candidate at all: the ones whose runner allows skipping
-    // it wait for the walks below, the others are affected. An erased-equal
-    // file needs a runner that transpiles file by file, and a modified entry
-    // always runs.
+    // Entries that reach a candidate at all: the ones whose runner allows
+    // skipping it wait for the walks below, the others are affected. An
+    // erased-equal file needs a runner that transpiles file by file, and a
+    // modified entry always runs.
     let mut pending: Vec<NodeId> = Vec::new();
     let mut owner: HashMap<NodeId, NodeId> = HashMap::new();
     let mut runners: HashMap<NodeId, Runner> = HashMap::new();
@@ -1559,8 +1567,9 @@ pub(crate) fn resolve<G: GraphView>(
                 continue;
             }
             let runner = *runners.entry(n).or_insert_with(|| b.runner(g, n));
-            // A modified entry always runs: nothing in the graph reads the exports of a
-            // route file, and the name walk only looks at importers.
+            // A modified entry always runs: nothing in the graph reads the
+            // exports of a route file, and the name walk only looks
+            // at importers.
             let skippable = if erased {
                 runner == Runner::Isolated && !is_erased.contains(n)
             } else {
@@ -1622,8 +1631,8 @@ pub(crate) fn resolve<G: GraphView>(
     let mut prefix: HashMap<NodeId, Vec<NodeId>> = HashMap::new();
     for &(f, i) in &barrel_d {
         let c = &b.candidates[i];
-        // The walks decide the entries that wait: with none waiting there is nothing to
-        // find out.
+        // The walks decide the entries that wait: with none waiting there is
+        // nothing to find out.
         let Tracked {
             relevant,
             barrels,
@@ -1684,9 +1693,9 @@ pub(crate) fn resolve<G: GraphView>(
             }
         }
     }
-    // A mock of a module that the answers relied on sees the calls that were taken
-    // to only build a value: the entries that load a file with such a mock and
-    // a file that relied on the module are affected.
+    // A mock of a module that the answers relied on sees the calls that were
+    // taken to only build a value: the entries that load a file with such a
+    // mock and a file that relied on the module are affected.
     if let (false, Some(&(f, _))) = (pending.is_empty(), barrel_d.first()) {
         let nodes = |paths: &[String]| -> Vec<NodeId> {
             paths.iter().filter_map(|p| g.node_by_path(p)).collect()
@@ -1768,7 +1777,8 @@ pub(crate) fn resolve<G: GraphView>(
             reached.insert(n);
         }
         for &e in &pending {
-            // (An entry that waits for an erased-equal file may be a modified candidate.)
+            // (An entry that waits for an erased-equal file may be a modified
+            // candidate.)
             if !reached.contains(e) || is_affected.contains(e) {
                 continue;
             }
@@ -1786,7 +1796,8 @@ pub(crate) fn resolve<G: GraphView>(
             });
         }
     }
-    // Skipped entries, attributed to the candidate their shortest chain starts at.
+    // Skipped entries, attributed to the candidate their shortest chain starts
+    // at.
     let mut per: HashMap<NodeId, usize> = HashMap::new();
     for &e in &pending {
         if !is_affected.contains(e) {

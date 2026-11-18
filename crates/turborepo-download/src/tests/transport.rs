@@ -82,7 +82,8 @@ impl Local {
                     .push(request.clone());
                 if let Some(upstream) = tunnel {
                     // Never resolve or connect to the request's authority: this
-                    // proxy can only tunnel to its preselected loopback fixture.
+                    // proxy can only tunnel to its preselected loopback
+                    // fixture.
                     if !request.starts_with(&format!(
                         "CONNECT localhost:{} HTTP/1.1\r\n",
                         upstream.port()

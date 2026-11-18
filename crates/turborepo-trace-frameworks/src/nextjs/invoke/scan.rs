@@ -555,7 +555,8 @@ impl<'a, 'r> Engine<'a, 'r> {
             if let Some(ai) = self.match_api(f, &cs) {
                 let api = &self.apis[ai];
                 if api.kind == UrlUse::Build {
-                    // `new URL(x, base)` builds a URL; the site that uses it is evaluated.
+                    // `new URL(x, base)` builds a URL; the site that uses it is
+                    // evaluated.
                     continue;
                 }
                 let kind = api_kind(api);
@@ -611,7 +612,8 @@ impl<'a, 'r> Engine<'a, 'r> {
                 }));
                 continue;
             }
-            // TanStack Query: the calls whose arguments hold `queryFn` / `mutationFn`.
+            // TanStack Query: the calls whose arguments hold `queryFn` /
+            // `mutationFn`.
             let query = match &cs.module {
                 Some(m) => is_query_module(m) && QUERY_HOOKS.contains(&cs.method.as_str()),
                 None => cs.receiver.is_some() && QUERY_CLIENT_METHODS.contains(&cs.method.as_str()),
@@ -741,7 +743,8 @@ impl<'a, 'r> Engine<'a, 'r> {
         if whole.is_empty()
             && let Some(first) = elems.first()
         {
-            // An array key with a fetcher that takes the URL as its first argument.
+            // An array key with a fetcher that takes the URL as its first
+            // argument.
             whole = first.clone();
         }
         if !whole.is_empty() {
@@ -1026,7 +1029,8 @@ impl<'a, 'r> Engine<'a, 'r> {
         ev: &Eval<'_, '_>,
         depth: u32,
     ) -> (Vec<Tpl>, Vec<Tpl>, Vec<String>) {
-        // An SWR or TanStack Query call around this call, here or in a wrapper's body.
+        // An SWR or TanStack Query call around this call, here or in a
+        // wrapper's body.
         if self.ctx_kind.get().is_none()
             && let Some(cx) = self.contexts.get(&inner.file.id)
             && let Some(&(_, _, k)) = cx
@@ -1235,9 +1239,9 @@ impl<'a, 'r> Engine<'a, 'r> {
                 true
             })
         };
-        // Parameters of callbacks have no callers to bind them: unknown values. So are
-        // all parameters in the conservative form of a wrapper (a use that is
-        // not a call).
+        // Parameters of callbacks have no callers to bind them: unknown values.
+        // So are all parameters in the conservative form of a wrapper
+        // (a use that is not a call).
         let bindable = forward
             && params_in(&vals).iter().any(|r| {
                 self.files
@@ -1316,9 +1320,10 @@ impl<'a, 'r> Engine<'a, 'r> {
                 (tpls, method, via)
             }
         };
-        // The conservative form of a wrapper that takes whole URLs (some alternative is
-        // the parameter itself, after an optional origin): any URL, an unknown
-        // target. A wrapper that adds a path prefix keeps its open pattern.
+        // The conservative form of a wrapper that takes whole URLs (some
+        // alternative is the parameter itself, after an optional
+        // origin): any URL, an unknown target. A wrapper that adds a
+        // path prefix keeps its open pattern.
         let (tpls, method, via) = if !forward
             && tpls.iter().any(|t| {
                 let mut it = t
@@ -1410,8 +1415,8 @@ impl<'a, 'r> Engine<'a, 'r> {
                 .unwrap_or_default();
             unresolved = vec![src.tag(&arg)];
         }
-        // A wrapper: the URL depends on a parameter of an enclosing named function and
-        // is not a usable pattern without it.
+        // A wrapper: the URL depends on a parameter of an enclosing named
+        // function and is not a usable pattern without it.
         if forward && inner.level < MAX_LEVEL && Self::weak(&urls, &unresolved) {
             let refs = params_in(&tpls);
             let owner = refs
@@ -1428,9 +1433,10 @@ impl<'a, 'r> Engine<'a, 'r> {
             {
                 return;
             }
-            // The framework calls a route's entry functions (a page with its props, a
-            // handler with the request, a server action with its arguments): no call binds
-            // their parameters, so the site stays here, unknown from the request.
+            // The framework calls a route's entry functions (a page with its
+            // props, a handler with the request, a server action
+            // with its arguments): no call binds their parameters,
+            // so the site stays here, unknown from the request.
             let owner =
                 owner.filter(|&func| !crate::nextjs::source::request_entry(&f, func as usize));
             if let Some(func) = owner {
@@ -1492,7 +1498,8 @@ impl<'a, 'r> Engine<'a, 'r> {
                     let mut new: Vec<Rc<Inner>> = Vec::new();
                     if let Some(cs) = self.calls.get(&key) {
                         for c in cs {
-                            // A caller that passes its own fetcher is bound through the
+                            // A caller that passes its own fetcher is bound
+                            // through the
                             // fetcher, not through the key.
                             let mut fwd = None;
                             if let Some(idx) = inner.fetcher_fwd {
@@ -1579,7 +1586,8 @@ impl<'a, 'r> Engine<'a, 'r> {
         if targets.is_empty() {
             return;
         }
-        // The idiom: an SWR or TanStack Query call around the site wins over `fetch`.
+        // The idiom: an SWR or TanStack Query call around the site wins over
+        // `fetch`.
         let mut kind = inner.kind;
         if kind == InvokeKind::Fetch
             && let Some(k) = self.ctx_kind.get()
@@ -1656,8 +1664,8 @@ impl<'a, 'r> Engine<'a, 'r> {
                 fetcher_args.insert((r.file.id, r.arg));
             }
         }
-        // The names a wrapper can be imported under: an import of another name is not
-        // one.
+        // The names a wrapper can be imported under: an import of another name
+        // is not one.
         let mut wrapper_names: HashSet<String> = HashSet::new();
         for &k in &keys {
             if let Some(f) = self.files.by_id(k.0)
@@ -1710,8 +1718,9 @@ impl<'a, 'r> Engine<'a, 'r> {
                 };
                 let prev = if t > 0 { f.kind(t - 1) } else { TokKind::Eof };
                 let next = f.kind(t + 1);
-                // Not a reference: a member name, a call, a declaration, a type query, a
-                // property key, an import or export specifier.
+                // Not a reference: a member name, a call, a declaration, a type
+                // query, a property key, an import or export
+                // specifier.
                 if matches!(prev, TokKind::Dot | TokKind::OptChain)
                     || matches!(next, TokKind::LParen | TokKind::Lt | TokKind::Colon)
                     || (t > 0
@@ -1730,7 +1739,8 @@ impl<'a, 'r> Engine<'a, 'r> {
                 {
                     continue;
                 }
-                // `window.name = name`: a global installed for debugging is not followed.
+                // `window.name = name`: a global installed for debugging is not
+                // followed.
                 if prev == TokKind::Assign
                     && (t.saturating_sub(9)..t)
                         .rev()
@@ -1767,7 +1777,8 @@ impl<'a, 'r> Engine<'a, 'r> {
                 }
             }
         }
-        // A wrapper's conservative form is the same at every use: evaluated once.
+        // A wrapper's conservative form is the same at every use: evaluated
+        // once.
         let mut forms: HashMap<(FnKey, usize), Vec<Site>> = HashMap::new();
         for (key, at) in uses {
             let Some(list) = self.summaries.get(&key).cloned() else {
@@ -1859,8 +1870,9 @@ fn url_strings(ev: &Eval<'_, '_>, f: &Rc<JsFile>, out: &mut Vec<UrlString>) {
             TokKind::TemplateHead => {
                 if let Some(c) = f.closer(t) {
                     let raw = f.toks[t].text(&f.src);
-                    // Only templates that start with `/`, or with a name followed by `/`
-                    // (a constant base: `${API_TEAMS}/${id}`).
+                    // Only templates that start with `/`, or with a name
+                    // followed by `/` (a constant base:
+                    // `${API_TEAMS}/${id}`).
                     let base_hole = raw.len() >= 2 && raw[1] == b'$' && {
                         let mut k = t + 1;
                         while f.kind(k) == TokKind::Ident
@@ -1878,8 +1890,9 @@ fn url_strings(ev: &Eval<'_, '_>, f: &Rc<JsFile>, out: &mut Vec<UrlString>) {
                     };
                     if raw.len() >= 2 && (raw[1] == b'/' || base_hole) {
                         let v = ev.eval(f, t, c + 1);
-                        // A hole that is a parameter of a named function is the caller's
-                        // string: the caller's closure has it (or a site evaluates it).
+                        // A hole that is a parameter of a named function is the
+                        // caller's string: the caller's
+                        // closure has it (or a site evaluates it).
                         let caller_supplied = params_in(&v).iter().any(|r| {
                             r.file == f.id
                                 && f.funcs
@@ -1989,8 +2002,8 @@ pub(crate) fn scan_urls(files: &Files<'_>, paths: &[PathBuf], apis: &[UrlApi]) -
             UrlUse::Navigation | UrlUse::Build => InvokeKind::Navigation,
         };
         let mut targets: Vec<SiteTarget> = s.urls.into_iter().map(SiteTarget::Url).collect();
-        // `href="#top"`, `href="?tab=usage"`: the page the visitor is on, no other
-        // route.
+        // `href="#top"`, `href="?tab=usage"`: the page the visitor is on, no
+        // other route.
         targets.extend(
             s.unresolved
                 .iter()

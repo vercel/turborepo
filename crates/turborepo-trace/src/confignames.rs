@@ -232,8 +232,8 @@ fn place(ancestors: &[AstKind<'_>], lit: Span, list: bool) -> Place {
     let mut path: Vec<&str> = if list { vec!["[]"] } else { Vec::new() };
     let mut child = lit;
     let mut broken = false;
-    // The array literal below was spread into the next one: its elements are that
-    // one's.
+    // The array literal below was spread into the next one: its elements are
+    // that one's.
     let mut spread = false;
     for (i, kind) in ancestors.iter().rev().enumerate() {
         // Some versions of the visitor enter the literal itself.
@@ -244,8 +244,8 @@ fn place(ancestors: &[AstKind<'_>], lit: Span, list: bool) -> Place {
         {
             continue;
         }
-        // Whether the list built so far is still a list of the same elements one level
-        // up.
+        // Whether the list built so far is still a list of the same elements
+        // one level up.
         let list = path.last() == Some(&"[]");
         let _ = i;
         match kind {
@@ -270,8 +270,9 @@ fn place(ancestors: &[AstKind<'_>], lit: Span, list: bool) -> Place {
                         |k| matches!(k, AstKind::VariableDeclaration(v) if v.kind.is_const()),
                     ) =>
             {
-                // Not exported (`export const`): another module could use it. A name in an
-                // export list is a use like any other.
+                // Not exported (`export const`): another module could use it. A
+                // name in an export list is a use like any
+                // other.
                 let exported = ancestors
                     .iter()
                     .rev()
@@ -299,7 +300,8 @@ fn place(ancestors: &[AstKind<'_>], lit: Span, list: bool) -> Place {
                             || (m.property.name == "concat"
                                 && c.arguments.iter().any(|a| a.span() == child))) =>
             {
-                // A joined list is one string: an element of a list, or part of a template.
+                // A joined list is one string: an element of a list, or part of
+                // a template.
                 if matches!(&c.callee, Expression::StaticMemberExpression(m)
                     if c.callee.span() == child && m.property.name == "join")
                 {
@@ -638,8 +640,8 @@ export default config;
             next(WRAPPED, "legacy-native"),
             importers(&["experimental.serverComponentsExternalPackages[]"])
         );
-        // The key of `modularizeImports`, and the rewritten specifier that names the
-        // same package.
+        // The key of `modularizeImports`, and the rewritten specifier that
+        // names the same package.
         assert_eq!(
             next(WRAPPED, "lodash-lib"),
             importers(&[
@@ -658,7 +660,8 @@ export default config;
         );
         // A field this module does not decide.
         assert_eq!(next(WRAPPED, "loader-pkg"), readers(&["images.loaderFile"]));
-        // The same key outside the config's own nesting (an argument of a call).
+        // The same key outside the config's own nesting (an argument of a
+        // call).
         assert_eq!(
             next(WRAPPED, "late-lib"),
             readers(&["optimizePackageImports[]"])
@@ -762,14 +765,16 @@ export default config;
             named(Tool::Next, "next.config.ts", ts.as_bytes(), &["pkg"], false),
             importers(&["transpilePackages[]"])
         );
-        // A string of one decided field and one other use: the other use decides.
+        // A string of one decided field and one other use: the other use
+        // decides.
         let both = "export default { transpilePackages: ['pkg'], env: { X: 'pkg' } };";
         assert_eq!(next(both, "pkg"), readers(&["env.X"]));
     }
 
     #[test]
     fn imports_and_comments() {
-        // An import is an edge: with the edge in the graph it is the caller's business.
+        // An import is an edge: with the edge in the graph it is the caller's
+        // business.
         let linked = |name| {
             named(
                 Tool::Next,

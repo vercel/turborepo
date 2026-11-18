@@ -180,8 +180,8 @@ mod x86 {
 
     #[inline]
     pub(super) fn find_any3_sse2(hay: &[u8], a: u8, b: u8, c: u8) -> Option<usize> {
-        // SAFETY: SSE2 is part of the x86_64 baseline; every load reads 16 bytes inside
-        // `hay`.
+        // SAFETY: SSE2 is part of the x86_64 baseline; every load reads 16
+        // bytes inside `hay`.
         unsafe {
             let (va, vb, vc) = (
                 _mm_set1_epi8(a as i8),
@@ -273,8 +273,8 @@ mod neon {
 
     #[inline]
     pub(super) fn find_any3(hay: &[u8], a: u8, b: u8, c: u8) -> Option<usize> {
-        // SAFETY: NEON is always available on aarch64; every load reads 16 bytes inside
-        // `hay`.
+        // SAFETY: NEON is always available on aarch64; every load reads 16
+        // bytes inside `hay`.
         unsafe {
             let (va, vb, vc) = (vdupq_n_u8(a), vdupq_n_u8(b), vdupq_n_u8(c));
             let mut i = 0;
@@ -296,8 +296,8 @@ mod neon {
 
     #[inline]
     pub(super) fn masks<const N: usize>(block: &[u8; BLOCK], sets: [&ByteSet; N]) -> [u64; N] {
-        // SAFETY: NEON is always available on aarch64; every load reads 16 bytes inside
-        // the referenced arrays.
+        // SAFETY: NEON is always available on aarch64; every load reads 16
+        // bytes inside the referenced arrays.
         unsafe {
             let lo_t = sets.map(|s| vld1q_u8(s.lo.as_ptr()));
             let hi_t = sets.map(|s| vld1q_u8(s.hi.as_ptr()));

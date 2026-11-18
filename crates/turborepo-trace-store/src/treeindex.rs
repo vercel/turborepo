@@ -80,9 +80,9 @@ impl<'a> Narrow<'a> {
         }
         let wild = |s: &str| s.contains(['*', '?']);
         let mut segments: Vec<&str> = pattern.split('/').collect();
-        // `*` and `?` never match `/`, and `**` is a segment of its own (or, written
-        // inside a segment, a `*`): what the last segment matches is the base
-        // name.
+        // `*` and `?` never match `/`, and `**` is a segment of its own (or,
+        // written inside a segment, a `*`): what the last segment
+        // matches is the base name.
         match segments.pop() {
             Some(last) if !wild(last) => out.name = Some(last).filter(|l| !l.is_empty()),
             Some(last) => {
@@ -118,8 +118,8 @@ impl TreeIndex {
             .build()
             .ok()?;
         let count = std::sync::atomic::AtomicUsize::new(0);
-        // Everything parallel runs in the private pool: the global pool's workers may
-        // all be waiting for this index.
+        // Everything parallel runs in the private pool: the global pool's
+        // workers may all be waiting for this index.
         let entries: Vec<(String, u8)> = pool.install(|| {
             let mut e = collect(fs, root, "", walked, &count)?;
             e.par_sort_unstable_by(|a, b| a.0.cmp(&b.0));
@@ -194,9 +194,9 @@ impl TreeIndex {
     /// narrow the range to a fraction of it (a scan of the range is as
     /// good).
     fn candidates(&self, narrow: &Narrow<'_>, lo: usize, hi: usize) -> Option<Vec<(usize, usize)>> {
-        // An entry by its own name costs one glob match; an entry on the way costs two
-        // searches for what lies below it, and a common name (`src`) covers most of the
-        // range anyway.
+        // An entry by its own name costs one glob match; an entry on the way
+        // costs two searches for what lies below it, and a common name
+        // (`src`) covers most of the range anyway.
         let own_limit = ((hi - lo) / 8).max(8);
         let way_limit = ((hi - lo) / 256).max(8);
         // The entry itself, by its name or the head of its name.
@@ -277,7 +277,8 @@ impl TreeIndex {
         let mut scan = |from: usize, to: usize| {
             for i in from..to {
                 let p = &self.paths[i][plen..];
-                // A literal fragment has no '/': it is in the parent's path or the name.
+                // A literal fragment has no '/': it is in the parent's path or
+                // the name.
                 if lit.is_some_and(|l| !p.contains(l)) {
                     continue;
                 }
@@ -568,8 +569,8 @@ mod tests {
         assert_eq!(stem("."), ".");
         assert_eq!(stem(""), "");
         assert_eq!(stem("é.py"), "é");
-        // Every name that starts with the head has the head's stem, or the head does
-        // not say.
+        // Every name that starts with the head has the head's stem, or the head
+        // does not say.
         assert_eq!(stem_of_head("six.py"), Some("six"));
         assert_eq!(stem_of_head("six."), Some("six"));
         assert_eq!(stem_of_head("__init__.py"), Some("__init__"));
@@ -735,7 +736,8 @@ mod tests {
             }
         }
         assert!(answered > 500, "{answered}");
-        // The repository-wide listings found something, and narrowing was at work.
+        // The repository-wide listings found something, and narrowing was at
+        // work.
         let root = |pattern: &str| {
             ix.listing(
                 &r,

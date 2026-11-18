@@ -145,9 +145,10 @@ impl JoinAndGetDepth for Path {
         let joined = self.join(path);
         let depth = joined.components().count();
         let depth = if path.is_absolute() {
-            // If `path` is absolute, then it replaces `self` (`joined` and `path` are the
-            // same). In this case, the depth of the join is the depth of
-            // `joined` (there is no root sub-path).
+            // If `path` is absolute, then it replaces `self` (`joined` and
+            // `path` are the same). In this case, the depth of the
+            // join is the depth of `joined` (there is no root
+            // sub-path).
             depth.saturating_add(1)
         } else if path.has_root() {
             depth
@@ -694,9 +695,10 @@ impl WalkTree {
 
 impl CancelWalk for WalkTree {
     fn cancel_walk_tree(&mut self) {
-        // `IntoIter::skip_current_dir` discards the least recently yielded directory,
-        // but `cancel_walk_tree` must act upon the most recently yielded node
-        // regardless of its topology (leaf vs. branch).
+        // `IntoIter::skip_current_dir` discards the least recently yielded
+        // directory, but `cancel_walk_tree` must act upon the most
+        // recently yielded node regardless of its topology (leaf vs.
+        // branch).
         if self.is_dir {
             self.input.skip_current_dir();
         }

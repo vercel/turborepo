@@ -27,7 +27,8 @@ fn test_package_task_syntax_filters_workspaces() {
     .collect();
     let loader = TestTurboJsonLoader::new(turbo_jsons);
 
-    // Simulate `turbo run app1#build` without --filter (all workspaces passed in)
+    // Simulate `turbo run app1#build` without --filter (all workspaces passed
+    // in)
     let engine_all_workspaces = EngineBuilder::new(&repo_root, &package_graph, &loader, false)
         .with_tasks(Some(Spanned::new(TaskName::from("app1#build"))))
         .with_workspaces(vec![
@@ -208,10 +209,10 @@ fn test_root_task_with_package_task_syntax_and_all_workspaces() {
 #[test]
 fn test_root_task_with_double_slash_hash_cli_syntax() {
     // Regression test for https://github.com/vercel/turborepo/issues/12239
-    // Running `turbo run //#root-level-call` (with the //#  prefix on the CLI task)
-    // must execute the root task. Previously, the root_enabled_tasks comparison
-    // failed because it compared the package-qualified TaskName against the
-    // stripped version stored in root_enabled_tasks.
+    // Running `turbo run //#root-level-call` (with the //#  prefix on the CLI
+    // task) must execute the root task. Previously, the root_enabled_tasks
+    // comparison failed because it compared the package-qualified TaskName
+    // against the stripped version stored in root_enabled_tasks.
     let repo_root_dir = TempDir::with_prefix("repo").unwrap();
     let repo_root = AbsoluteSystemPathBuf::new(repo_root_dir.path().to_str().unwrap()).unwrap();
     let package_graph = mock_package_graph(

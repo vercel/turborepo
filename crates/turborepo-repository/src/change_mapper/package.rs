@@ -128,11 +128,12 @@ impl DefaultPackageChangeMapperWithLockfile {
 impl PackageChangeMapper for DefaultPackageChangeMapperWithLockfile {
     #[expect(clippy::unwrap_used, reason = "the empty root path is valid")]
     fn detect_package(&self, path: &AnchoredSystemPath) -> PackageMapping {
-        // If we have a lockfile change, we consider this as a root package change,
-        // since there's a chance that the root package uses a workspace package
-        // dependency (this is cursed behavior but sadly possible). There's a chance
-        // that we can make this more accurate by checking which package
-        // manager, since not all package managers may permit root pulling from
+        // If we have a lockfile change, we consider this as a root package
+        // change, since there's a chance that the root package uses a
+        // workspace package dependency (this is cursed behavior but
+        // sadly possible). There's a chance that we can make this more
+        // accurate by checking which package manager, since not all
+        // package managers may permit root pulling from
         // workspace package dependencies
         if PackageManager::supported_managers()
             .iter()
@@ -188,9 +189,9 @@ impl<'a> GlobalDepsPackageChangeMapper<'a> {
 impl PackageChangeMapper for GlobalDepsPackageChangeMapper<'_> {
     fn detect_package(&self, path: &AnchoredSystemPath) -> PackageMapping {
         // Configured global dependencies are part of every task's hash, so they
-        // take precedence over package ownership and lockfile handling: a global
-        // file inside a package, or a lockfile listed as global, still changes
-        // every package.
+        // take precedence over package ownership and lockfile handling: a
+        // global file inside a package, or a lockfile listed as global,
+        // still changes every package.
         if self.global_deps_matcher.is_match(path.clean().as_str()) {
             return PackageMapping::All(AllPackageChangeReason::GlobalDepsChanged {
                 file: path.to_owned(),
@@ -552,7 +553,8 @@ mod tests {
                         );
                     }
                 }
-                // Co-location does not let parents claim a deeper package's files.
+                // Co-location does not let parents claim a deeper package's
+                // files.
                 let file = AnchoredSystemPathBuf::from_raw("packages/shared/child/src/file.txt")?;
                 let PackageChanges::Some(packages) =
                     mapper.changed_packages([file].into(), LockfileContents::Unchanged)?
@@ -699,8 +701,8 @@ mod tests {
             LockfileContents::Unchanged,
         )?;
 
-        // We only get a root workspace change since we have global deps specified and
-        // README.md is not one of them
+        // We only get a root workspace change since we have global deps
+        // specified and README.md is not one of them
         assert_eq!(
             package_changes,
             PackageChanges::Some(

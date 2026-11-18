@@ -68,8 +68,8 @@ impl InputOptions<'_> {
 fn translate_key_event(options: InputOptions, key_event: KeyEvent) -> Option<Event> {
     // On Windows events for releasing a key are produced
     // We skip these to avoid emitting 2 events per key press.
-    // There is still a `Repeat` event for when a key is held that will pass through
-    // this guard.
+    // There is still a `Repeat` event for when a key is held that will pass
+    // through this guard.
     if key_event.kind == KeyEventKind::Release {
         return None;
     }
@@ -526,7 +526,8 @@ mod test {
     #[test_case(in_list(), H, Some(Event::ToggleStream { scope: StreamScope::SelectedTask }) ; "h streams selected task")]
     #[test_case(in_list(), S, Some(Event::ToggleStream { scope: StreamScope::All }) ; "s streams all tasks")]
     #[test_case(in_list(), SHIFT_H, Some(Event::ToggleSidebar) ; "shift+h toggles sidebar")]
-    // Note: This only checks event variants not any data contained in the variant
+    // Note: This only checks event variants not any data contained in the
+    // variant
     fn test_translate_key_event_variant(
         opts: InputOptions,
         key_event: crossterm::event::KeyEvent,

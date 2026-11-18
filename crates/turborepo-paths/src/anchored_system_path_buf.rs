@@ -3,6 +3,7 @@ use std::{
     fmt,
     ops::Deref,
     path::{Path, PathBuf},
+    str::FromStr,
 };
 
 use camino::{Utf8Component, Utf8Components, Utf8Path, Utf8PathBuf};
@@ -14,10 +15,10 @@ use crate::{AbsoluteSystemPath, AnchoredSystemPath, PathError, PathValidation, c
 #[serde(transparent)]
 pub struct AnchoredSystemPathBuf(pub(crate) Utf8PathBuf);
 
-impl TryFrom<&str> for AnchoredSystemPathBuf {
-    type Error = PathError;
+impl FromStr for AnchoredSystemPathBuf {
+    type Err = PathError;
 
-    fn try_from(path: &str) -> Result<Self, Self::Error> {
+    fn from_str(path: &str) -> Result<Self, Self::Err> {
         let path = Utf8Path::new(path);
         if path.is_absolute() {
             return Err(PathError::NotRelative(path.to_string()));
@@ -55,7 +56,7 @@ impl TryFrom<&Path> for AnchoredSystemPathBuf {
             .to_str()
             .ok_or_else(|| PathError::InvalidUnicode(path.to_string_lossy().to_string()))?;
 
-        Self::try_from(path)
+        Self::from_str(path)
     }
 }
 
@@ -102,7 +103,8 @@ impl AnchoredSystemPathBuf {
     /// shouldn't be an issue.
     pub fn relative_path_between(start: &AbsoluteSystemPath, end: &AbsoluteSystemPath) -> Self {
         // Filter the implicit "RootDir" component that exists for unix paths.
-        // For windows paths, we may want an assertion that we aren't crossing drives
+        // For windows paths, we may want an assertion that we aren't crossing
+        // drives
         let these_components = start
             .components()
             .skip_while(|c| *c == Utf8Component::RootDir)
@@ -125,8 +127,8 @@ impl AnchoredSystemPathBuf {
         );
 
         let traverse_count = these_components.len() - prefix_len;
-        // For every remaining non-matching segment in self, add a directory traversal
-        // Then, add every non-matching segment from other
+        // For every remaining non-matching segment in self, add a directory
+        // traversal Then, add every non-matching segment from other
         let path = std::iter::repeat_n(Utf8Component::ParentDir, traverse_count)
             .chain(other_components.into_iter().skip(prefix_len))
             .collect::<Utf8PathBuf>();

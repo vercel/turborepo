@@ -262,7 +262,8 @@ pub(super) fn follow<'a>(
             pattern: e.pattern.as_str().into(),
             conditional: e.conditional,
         };
-        // An unconditional entry says more than a conditional one for the same place.
+        // An unconditional entry says more than a conditional one for the same
+        // place.
         if !entries.iter().any(|x| {
             (x.cwd, &x.rel, &x.pattern, x.line) == (a.cwd, &a.rel, &a.pattern, a.line)
                 && (!x.conditional || a.conditional)
@@ -540,9 +541,10 @@ impl<'a> Walk<'_, 'a, '_, '_> {
     fn consume(&mut self, cur: NodeId, val: &JsVal, cwd: bool, depth: u32) {
         let span = self.engine.nodes.kind(cur).span();
         if self.in_site(span) {
-            // The read's own reference says what is read. When the tail is unknown that
-            // reference is a pattern (or a record the names bound): the known directory
-            // is its name. The read has its own record: no use is added.
+            // The read's own reference says what is read. When the tail is
+            // unknown that reference is a pattern (or a record the
+            // names bound): the known directory is its name. The
+            // read has its own record: no use is added.
             for (base, v, _) in anchored_leaves(val) {
                 let (dir, reasons) = v.as_ref().map(prefix_of).unwrap_or_default();
                 if !reasons.is_empty() {
@@ -817,7 +819,8 @@ impl<'a> Walk<'_, 'a, '_, '_> {
         if error_ctor(self.engine, &c.callee) && !crate::names::rule_off("message") {
             return Passed::Dropped;
         }
-        // A spread before the argument: its position in the callee is not known.
+        // A spread before the argument: its position in the callee is not
+        // known.
         if c.arguments[..index]
             .iter()
             .any(|a| matches!(a, Argument::SpreadElement(_)))
@@ -1177,23 +1180,24 @@ impl<'a> Walk<'_, 'a, '_, '_> {
             None => (String::new(), Vec::new()),
         };
         let origin = origin::combine(reasons.iter().map(|r| &**r)).0;
-        // Every unknown part has to be the environment's: a tail that also has a
-        // parameter or a listing in it is not.
+        // Every unknown part has to be the environment's: a tail that also has
+        // a parameter or a listing in it is not.
         let mut env = !reasons.is_empty()
             && reasons
                 .iter()
                 .all(|r| matches!(origin::combine([&**r]).0, Origin::Env | Origin::Call))
             && matches!(origin, Origin::Env | Origin::Call)
             && !crate::names::rule_off("env");
-        // A call is a candidate for an environment helper only when a variable name is
-        // among its arguments (`getEnv('KEYS_PATH', fallback)`); the path with any
-        // other call in its tail (`randomUUID()`) is an ordinary escape, with
-        // no record.
+        // A call is a candidate for an environment helper only when a variable
+        // name is among its arguments (`getEnv('KEYS_PATH',
+        // fallback)`); the path with any other call in its tail
+        // (`randomUUID()`) is an ordinary escape, with no record.
         if env && origin == Origin::Call && !env_helper_calls(&self.engine.env.value_of(leaf)) {
             env = false;
         }
         if env {
-            // One use per place and origin: the value of all its leaves together.
+            // One use per place and origin: the value of all its leaves
+            // together.
             let at = turborepo_trace_core::Span::new(span.start, span.end);
             let known = self
                 .escapes
@@ -1464,7 +1468,8 @@ mod tests {
                    default_node_env: 'development' });\n}\n}\n";
         let (list, marks) = entries(src);
         assert_eq!(list, ["C  .env*", "C ../.. .env*", "L ../.. .env*"]);
-        // Nothing of the coarse marks is left, and the `..` are part of the entries.
+        // Nothing of the coarse marks is left, and the `..` are part of the
+        // entries.
         assert_eq!(marks, (false, false, 0));
         // Other files in the directory: an option that names them is an escape.
         let (list, _) = entries(
@@ -1535,8 +1540,8 @@ mod tests {
 
     #[test]
     fn a_site_consumes_its_argument() {
-        // A known path: the read's reference says what is read, nothing is named, and
-        // the parent step is part of the evaluated path.
+        // A known path: the read's reference says what is read, nothing is
+        // named, and the parent step is part of the evaluated path.
         let (list, marks) = entries(
             "import { readFileSync } from 'fs'; import { resolve, join } from 'path';\nconst d = \
              resolve(__dirname, '..');\nconst part = 'conf' + 'ig';\nexport const load = () => \
@@ -1544,7 +1549,8 @@ mod tests {
         );
         assert_eq!(list, Vec::<String>::new());
         assert_eq!(marks, (false, false, 0));
-        // An unknown tail: the read is a pattern below the directory, which is named.
+        // An unknown tail: the read is a pattern below the directory, which is
+        // named.
         let (list, marks) = entries(
             "import { readFileSync } from 'fs'; import { resolve, join } from 'path';\nconst d = \
              resolve(__dirname, '..');\nexport const load = (name) => readFileSync(join(d, \
@@ -1552,8 +1558,8 @@ mod tests {
         );
         assert_eq!(list, ["L ../data **"]);
         assert_eq!(marks, (false, false, 0));
-        // A member of the location escapes with it; a value that is only tested or
-        // measured names nothing.
+        // A member of the location escapes with it; a value that is only tested
+        // or measured names nothing.
         let (list, marks) = entries("if (__dirname.split('/').pop() === 'x') { run(); }");
         assert_eq!((list.len(), marks.0), (1, false));
         let (list, marks) = entries("if (__dirname.length > 3) { run(); }");
@@ -1799,7 +1805,8 @@ mod tests {
             (a.cwd, &*a.rel, &*a.pattern, a.conditional, a.line),
             (false, "../..", "**", true, 7)
         );
-        // The use is where the path leaves: the argument of the imported function.
+        // The use is where the path leaves: the argument of the imported
+        // function.
         assert_eq!(escapes[0].detail, "abs");
         assert_eq!(escapes.len(), 1);
         assert_eq!(escapes[0].origin, Origin::Call);
@@ -1813,7 +1820,8 @@ mod tests {
         assert_eq!(n.anchored.len(), 1);
         assert!(n.anchored[0].conditional);
         assert_eq!(escapes[0].origin, Origin::Env);
-        // Nor is a call that is given no variable name: an ordinary escape, no record.
+        // Nor is a call that is given no variable name: an ordinary escape, no
+        // record.
         let (n, escapes) = names(
             "import { randomUUID } from 'node:crypto'; import path from 'node:path';\nexport \
              function tempFile(): string { return path.resolve(__dirname, '../.tmp', \
@@ -1856,8 +1864,8 @@ mod tests {
             ),
             Vec::<String>::new()
         );
-        // Also through a constant that is itself a template (the host is a name of its
-        // own).
+        // Also through a constant that is itself a template (the host is a name
+        // of its own).
         assert_eq!(
             shapes(
                 "export const HOST = 'example.com'; export const BASE = `https://${HOST}`; export \
@@ -1871,8 +1879,8 @@ mod tests {
             shapes("const BASE = 'fixtures/data'; export const f = `${BASE}/a.json`;"),
             ["fixtures/data", "fixtures/data/a.json"]
         );
-        // A constant that is shadowed where the template is: the parameter is not
-        // known.
+        // A constant that is shadowed where the template is: the parameter is
+        // not known.
         assert_eq!(
             shapes(
                 "const API = 'https://api.example.com'; export const u = (API) => \
@@ -1892,8 +1900,8 @@ mod tests {
 
     #[test]
     fn what_cannot_be_followed_keeps_the_coarse_mark() {
-        // The engine has no value for `PWD`: the working directory mark stays, with the
-        // parent steps of the file.
+        // The engine has no value for `PWD`: the working directory mark stays,
+        // with the parent steps of the file.
         let (list, marks) =
             entries("const up = require('path').resolve(process.env.PWD, '..'); helper(up);");
         assert_eq!(list, Vec::<String>::new());

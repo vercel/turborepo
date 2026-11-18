@@ -44,7 +44,8 @@ pub(super) fn missing_package_dir(
     if !from.ends_with(".go") || sub.is_empty() || module.contains(' ') {
         return None;
     }
-    // The module root: the nearest directory at or above the file with a `go.mod`.
+    // The module root: the nearest directory at or above the file with a
+    // `go.mod`.
     let mut dir = from.rsplit_once('/').map_or("", |(d, _)| d);
     loop {
         let go_mod = if dir.is_empty() {
@@ -98,7 +99,8 @@ mod tests {
             .as_deref(),
             Some("gen/v1")
         );
-        // No go.mod above the file, another kind of record, a file that is not Go.
+        // No go.mod above the file, another kind of record, a file that is not
+        // Go.
         assert_eq!(
             missing_package_dir("services/ops/app/api/connect.go", DETAIL, |_| false),
             None

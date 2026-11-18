@@ -1151,8 +1151,8 @@ impl RawTurboJson {
             return Ok(None);
         };
 
-        // Anchoring the path can fail if the path resides outside of the repository
-        // Just display absolute path in that case.
+        // Anchoring the path can fail if the path resides outside of the
+        // repository Just display absolute path in that case.
         let root_relative_path = repo_root.anchor(path).map_or_else(
             |_| path.as_str().to_owned(),
             |relative| relative.to_string(),
@@ -1185,8 +1185,8 @@ impl RawTurboJson {
     // (`TaskAccessTraceFile`) and has been commented out for now. It will be
     // re-enabled when the dependency structure is resolved.
     //
-    // pub fn from_task_access_trace(trace: &HashMap<String, TaskAccessTraceFile>)
-    // -> Option<Self> {     if trace.is_empty() {
+    // pub fn from_task_access_trace(trace: &HashMap<String,
+    // TaskAccessTraceFile>) -> Option<Self> {     if trace.is_empty() {
     //         return None;
     //     }
     //
@@ -1213,8 +1213,8 @@ impl RawTurboJson {
     //
     //         let name = TaskName::from(task_name.as_str());
     //         let root_task = name.into_root_task();
-    //         pipeline.insert(root_task, Spanned::new(task_definition.clone()));
-    //     }
+    //         pipeline.insert(root_task,
+    // Spanned::new(task_definition.clone()));     }
     //
     //     Some(RawTurboJson {
     //         tasks: Some(pipeline),

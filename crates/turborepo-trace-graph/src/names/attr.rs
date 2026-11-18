@@ -57,8 +57,8 @@ impl<G: GraphView> Engine<'_, G> {
         let Some(p) = self.pairing(changes, entries, runtime_entries, opts, task_dirs) else {
             return out;
         };
-        // The directories the runner of a process gives it (an entry, or the task that
-        // runs the process for it).
+        // The directories the runner of a process gives it (an entry, or the
+        // task that runs the process for it).
         let dirs_of = |runner: NodeId| -> Vec<String> {
             match p.runners.get(&runner.0) {
                 Some(r) => r.dirs.clone(),
@@ -164,7 +164,8 @@ impl<G: GraphView> Engine<'_, G> {
             });
         }
 
-        // 2. Names that depend on the entry, one group per directory that matched.
+        // 2. Names that depend on the entry, one group per directory that
+        //    matched.
         let mut cwd_users: HashMap<u32, u32> = HashMap::new();
         for r in &index.cwd_users {
             cwd_users.entry(r.node.0).or_insert(r.line);
@@ -195,8 +196,8 @@ impl<G: GraphView> Engine<'_, G> {
                 EntryBase::Cwd => "cwd",
                 EntryBase::TestDir => "testdir",
             };
-            // One search per user file: an entry may be reached from several, with
-            // different `ups`.
+            // One search per user file: an entry may be reached from several,
+            // with different `ups`.
             let mut by_dir: BTreeMap<String, (HashSet<u32>, HashSet<u32>, String)> =
                 BTreeMap::new();
             let mut seeds: Vec<u32> = users.keys().copied().collect();
@@ -273,11 +274,13 @@ impl<G: GraphView> Engine<'_, G> {
             }
         }
 
-        // 3. Paths a file builds on the working directory (`join(process.cwd(), '..',
-        // name)`): one group per place they lead to, as the cause says it (`the working
-        // directory (the repository root)`, `… of task:x#build (services/a/)`). The
-        // entries are what `named_affected` selects with nothing but those paths in the
-        // index, so an entry counts under the first place that names a changed path for
+        // 3. Paths a file builds on the working directory (`join(process.cwd(),
+        //    '..',
+        // name)`): one group per place they lead to, as the cause says it (`the
+        // working directory (the repository root)`, `… of task:x#build
+        // (services/a/)`). The entries are what `named_affected`
+        // selects with nothing but those paths in the index, so an
+        // entry counts under the first place that names a changed path for
         // it.
         if !index.cwd_dirs.is_empty() {
             let only = NameIndex {

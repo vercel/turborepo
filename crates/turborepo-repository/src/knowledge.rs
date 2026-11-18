@@ -891,7 +891,8 @@ mod tests {
             RepositoryKnowledge::build(&root, None, &observations, &roots),
             Err(Error::DefinitionOutsideRepository { .. })
         ));
-        // Missing files still resolve their existing symlinked parent for containment.
+        // Missing files still resolve their existing symlinked parent for
+        // containment.
         std::fs::remove_file(outside.path().join("package.json")).unwrap();
         assert!(matches!(
             RepositoryKnowledge::build(&root, None, &observations, &roots),

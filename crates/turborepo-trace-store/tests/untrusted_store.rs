@@ -88,8 +88,8 @@ fn a_crafted_walked_file_list_name_deletes_nothing_outside_the_store() {
     let fresh = build(&opts(&r), &langs()).unwrap();
     let out = out(&r);
     let base = turborepo_trace_core::fs::normalize(&std::fs::canonicalize(t.path()).unwrap());
-    // `<tmp>/victim` seen from `<tmp>/repo/.turbo/trace/store`, and by its absolute
-    // path.
+    // `<tmp>/victim` seen from `<tmp>/repo/.turbo/trace/store`, and by its
+    // absolute path.
     let relative = base.join("victim");
     let absolute = base.join("victim-abs");
     std::fs::write(&relative, "keep").unwrap();
@@ -120,8 +120,8 @@ fn a_crafted_shard_key_reaches_nothing_outside_the_store() {
     let out = out(&r);
     let store = out.join("store");
     let base = turborepo_trace_core::fs::normalize(&std::fs::canonicalize(t.path()).unwrap());
-    // A file outside the store that is a valid shard: `gc` and compaction delete
-    // the loose files of the shards they keep.
+    // A file outside the store that is a valid shard: `gc` and compaction
+    // delete the loose files of the shards they keep.
     let real = &fresh.manifest.shards[0].key;
     let bytes = Pack::open(&store).unwrap().get(real).unwrap().file_bytes();
     let victim = base.join("victim-shard");

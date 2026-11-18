@@ -28,8 +28,8 @@ impl LocalTurboConfig {
 
     // Used for testing when we want to manually set the controlling env var
     fn infer_internal(repo_state: &RepoState, is_enabled: Option<bool>) -> Option<Self> {
-        // TODO: once we have properly communicated this functionality we should make
-        // this opt-out.
+        // TODO: once we have properly communicated this functionality we should
+        // make this opt-out.
         if !is_enabled.unwrap_or(false) {
             debug!("downloading correct local version not enabled");
             return None;
@@ -51,9 +51,10 @@ impl LocalTurboConfig {
             return lockfile.turbo_version();
         }
 
-        // If there isn't a package manager, just try to parse all known lockfiles
-        // This isn't the most efficient, but since we'll be hitting network to download
-        // the correct binary the unnecessary file reads aren't costly relative to the
+        // If there isn't a package manager, just try to parse all known
+        // lockfiles This isn't the most efficient, but since we'll be
+        // hitting network to download the correct binary the
+        // unnecessary file reads aren't costly relative to the
         // download.
         PackageManager::supported_managers().iter().find_map(|pm| {
             let lockfile = pm

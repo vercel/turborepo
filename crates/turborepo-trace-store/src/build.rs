@@ -443,9 +443,10 @@ impl Listings {
     }
 
     fn valid(&self) -> &[bool] {
-        // Nested rayon work: never inside `get_or_init`, which blocks the workers that
-        // ask meanwhile (see `crate::once`; this deadlocked untouched refreshes
-        // of a large monorepo). The build computes it once up front, off the
+        // Nested rayon work: never inside `get_or_init`, which blocks the
+        // workers that ask meanwhile (see `crate::once`; this
+        // deadlocked untouched refreshes of a large monorepo). The
+        // build computes it once up front, off the
         // pool ([`Listings::warm`]).
         crate::once::init_once(&self.valid, || {
             self.dirs
@@ -1047,8 +1048,8 @@ impl Cx {
         if !self.listings_prev.is_valid(dir, pattern) {
             return false;
         }
-        // Served from the previous build without listing; recorded for the next obs
-        // cache.
+        // Served from the previous build without listing; recorded for the next
+        // obs cache.
         let _ = self.membership_digest(dir, pattern);
         true
     }
@@ -1166,8 +1167,9 @@ fn tree_part(
         Cover::No => reusable = false,
     };
     let tp0 = Instant::now();
-    // Probes. Large tables are checked in parallel chunks (one big shard must not
-    // be the long pole of a refresh); chunk digests are combined in order.
+    // Probes. Large tables are checked in parallel chunks (one big shard must
+    // not be the long pole of a refresh); chunk digests are combined in
+    // order.
     type Chunk = (u128, Vec<Cover>, std::collections::HashSet<PathBuf>);
     let chunk_digests: Vec<Chunk> = s
         .probes
@@ -1178,9 +1180,10 @@ fn tree_part(
             let mut cov: Vec<Cover> = Vec::new();
             let mut walked: std::collections::HashSet<PathBuf> = Default::default();
             let mut paths = Vec::new();
-            // The paths a record probed, then the directories those probes were conditional
-            // on (`expand_guards`: one that appears changes what a trace records), then
-            // where a walk-up went on (`expand_above`: found there, or not).
+            // The paths a record probed, then the directories those probes were
+            // conditional on (`expand_guards`: one that appears
+            // changes what a trace records), then where a walk-up
+            // went on (`expand_above`: found there, or not).
             for p in chunk {
                 for (tag, expand) in crate::normalize::PRESENCE {
                     paths.clear();
@@ -1218,11 +1221,12 @@ fn tree_part(
             add(c, &mut covers);
         }
     }
-    // The directory each probed path lies in: there or not. A lookup that stops at
-    // a missing directory records the directory; once it is there, the lookup
-    // goes on and records paths inside it, none of which exists. Two shards
-    // that differ in exactly that had the same key (no probe of either is
-    // present), and the store kept the first one's bytes under it.
+    // The directory each probed path lies in: there or not. A lookup that stops
+    // at a missing directory records the directory; once it is there, the
+    // lookup goes on and records paths inside it, none of which exists. Two
+    // shards that differ in exactly that had the same key (no probe of
+    // either is present), and the store kept the first one's bytes under
+    // it.
     for rel in crate::normalize::probe_dirs(s.probes.as_slice()) {
         let a = abs(&root, &rel);
         if fs.is_dir(&a) {
@@ -1234,8 +1238,8 @@ fn tree_part(
             h.str(&rel);
             h.str(&crate::normalize::nearest_dir_on(fs, &root, &rel));
         }
-        // The repository's root is there for every build of it; what would cover it is
-        // its parent directory, which is anyone's.
+        // The repository's root is there for every build of it; what would
+        // cover it is its parent directory, which is anyone's.
         if a == cx.repo {
             continue;
         }
@@ -1247,12 +1251,12 @@ fn tree_part(
         }
     }
     let tp1 = Instant::now();
-    // Membership listings (one digest per directory and pattern per build: the same
-    // membership, such as a jest project's `**/__mocks__/**`, appears in many
-    // shards).
+    // Membership listings (one digest per directory and pattern per build: the
+    // same membership, such as a jest project's `**/__mocks__/**`, appears
+    // in many shards).
     let mut listings: Vec<(PathBuf, String)> = Vec::new();
-    // A listing that only membership hubs reference is not listed: the shard stores
-    // the hubs' states of it (below), nothing else
+    // A listing that only membership hubs reference is not listed: the shard
+    // stores the hubs' states of it (below), nothing else
     // ([`crate::shard::Shard::hub_members`]).
     let hub_only =
         |i: usize| tasks.is_some() && s.hub_members.binary_search(&(i as u32).into()).is_ok();
@@ -1274,9 +1278,9 @@ fn tree_part(
         if key_only(i) {
             continue;
         }
-        // The walked directories the listing reads: the directory (and with a deep
-        // pattern its whole walked subtree), or for a missing directory its
-        // walked cover.
+        // The walked directories the listing reads: the directory (and with a
+        // deep pattern its whole walked subtree), or for a missing
+        // directory its walked cover.
         let base = abs(&root, m.dir.as_str());
         if cx.walked_dirs.contains(&base) {
             let p = m.pattern.as_str();
@@ -1305,8 +1309,8 @@ fn tree_part(
         }
     }
     // Membership hubs: what the shard keeps of each hub's member list
-    // ([`crate::tasks::Tasks::hub_state`]). It is a function of the walked files
-    // below the hub's directory, like the listing it stands for.
+    // ([`crate::tasks::Tasks::hub_state`]). It is a function of the walked
+    // files below the hub's directory, like the listing it stands for.
     if let Some(tasks) = tasks {
         for hub in s.hubs.iter() {
             let base = if hub.dir.is_empty() {
@@ -1317,8 +1321,9 @@ fn tree_part(
             if cx.walked_dirs.contains(&base) {
                 deep.push(base);
             } else {
-                // A directory the walk does not enter (ignored, or not there): no walked
-                // file is below it. Covered like any observation outside the walk, by its
+                // A directory the walk does not enter (ignored, or not there):
+                // no walked file is below it. Covered like any
+                // observation outside the walk, by its
                 // nearest walked or existing ancestor.
                 match cx.cover(&base) {
                     Cover::Walked(w) => {
@@ -1427,9 +1432,9 @@ fn tree_part(
             covers.len()
         ));
     }
-    // Stamp the outside directories; one modified shortly before the build started
-    // (or during it) cannot be trusted: the observations above may predate the
-    // modification.
+    // Stamp the outside directories; one modified shortly before the build
+    // started (or during it) cannot be trusted: the observations above may
+    // predate the modification.
     let racy = cx.start_ns - 2_000_000_000;
     let covers_dbg: Vec<PathBuf> = if turborepo_trace_core::timing::enabled() {
         covers.iter().cloned().collect()
@@ -1568,8 +1573,8 @@ pub(crate) fn obs_digest_keyed(
             None => h.str("missing"),
         }
     }
-    // Whether the checkout lies below `node_modules`, for a shard with a file whose
-    // governing tsconfig has aliases ([`crate::fw::place_state`]).
+    // Whether the checkout lies below `node_modules`, for a shard with a file
+    // whose governing tsconfig has aliases ([`crate::fw::place_state`]).
     if let Some(below) = crate::fw::place_state(cx, s) {
         h.str("aliased");
         h.str(crate::fw::place_word(below));
@@ -1627,9 +1632,10 @@ pub(crate) fn obs_digest_keyed(
             continue;
         }
         if let Some(rest) = l.location.strip_prefix(SEEN_LINK) {
-            // A place that led into the tree or nowhere is in the tree part. One that led
-            // into an installed package is checked here like a package link: the package's
-            // identity is its manifest's contents, which no directory's mtime covers.
+            // A place that led into the tree or nowhere is in the tree part.
+            // One that led into an installed package is checked
+            // here like a package link: the package's identity is
+            // its manifest's contents, which no directory's mtime covers.
             if !l.name.is_empty() {
                 h.str("seen-link");
                 h.str(l.location.as_str());
@@ -1641,9 +1647,9 @@ pub(crate) fn obs_digest_keyed(
         h.str(l.location.as_str());
         h.u128(link_digest(cx, &abs(&root, l.location.as_str())));
     }
-    // Listings that only files' key lists reference: one digest per directory and
-    // pattern per build, taken from the previous build while the listed tree is
-    // unchanged ([`Cx::membership_digest`]).
+    // Listings that only files' key lists reference: one digest per directory
+    // and pattern per build, taken from the previous build while the listed
+    // tree is unchanged ([`Cx::membership_digest`]).
     for i in s.key_only.iter() {
         let m = &s.memberships[i.to_native() as usize];
         h.str("key-member");
@@ -1731,17 +1737,20 @@ pub(crate) fn seen_state(cx: &Cx, loc: &Path) -> Arc<Seen> {
                 let (Ok(target), Some(dir)) = (std::fs::read_link(&at), at.parent()) else {
                     break;
                 };
-                // The link's directory, by its mtime: a link that comes to lead elsewhere
-                // is the same entry of the same kind in a listing of it.
+                // The link's directory, by its mtime: a link that comes to lead
+                // elsewhere is the same entry of the same kind
+                // in a listing of it.
                 seen.link_dirs.push(dir.to_path_buf());
                 at = abs(dir, &target.to_string_lossy());
                 seen.would_lead.push(at.clone());
             }
-            // Where it would lead is part of what was seen: a lookup goes on there, and a
-            // link that comes to lead to another place where nothing is, is followed to
-            // that place by a new trace. (A config's walk that listed the link's directory
-            // used to leave a record of the link by accident, while it led nowhere:
-            // `turborepo_trace_frameworks::fsx`, `entries`.)
+            // Where it would lead is part of what was seen: a lookup goes on
+            // there, and a link that comes to lead to another place
+            // where nothing is, is followed to that place by a new
+            // trace. (A config's walk that listed the link's directory
+            // used to leave a record of the link by accident, while it led
+            // nowhere: `turborepo_trace_frameworks::fsx`,
+            // `entries`.)
             for place in &seen.would_lead {
                 h.str(&rel_to(&cx.repo, &cx.repo, place));
             }
@@ -1756,9 +1765,10 @@ pub(crate) fn seen_state(cx: &Cx, loc: &Path) -> Arc<Seen> {
                 .collect();
             h.str("at");
             h.str(&rel_to(&cx.repo, &cx.repo, &real));
-            // An installed package: observations inside it are not recorded (its identity
-            // stands for its files), so the identity is part of what was seen. A workspace
-            // package's files are recorded where they are.
+            // An installed package: observations inside it are not recorded
+            // (its identity stands for its files), so the identity
+            // is part of what was seen. A workspace package's files
+            // are recorded where they are.
             if cx.ids.is_third_party(&real.join("x"))
                 && let Some((id, _)) = link_identity(cx, loc)
             {
@@ -2006,7 +2016,8 @@ impl ListCx<'_> {
             };
             let matches = may_match && self.glob.as_ref().is_none_or(|g| g.matches(&rel));
             if is_dir {
-                // A directory entry can itself satisfy a single-segment pattern.
+                // A directory entry can itself satisfy a single-segment
+                // pattern.
                 if matches {
                     out.push(format!("{rel}/"));
                 }
@@ -2053,71 +2064,6 @@ pub(crate) fn required_literal(pattern: &str) -> Option<&str> {
         .flat_map(|seg| seg.split(['*', '?']))
         .filter(|s| !s.is_empty())
         .max_by_key(|s| s.len())
-}
-
-#[cfg(test)]
-mod listing_tests {
-    use super::*;
-
-    #[test]
-    fn task_pseudo_paths() {
-        // A membership hub named after a `.dockerignore` exclude, a task, a part.
-        for p in [
-            "/r/services/svc-a/#members:{services/svc-a/app,services/svc-a/app/**} \
-             !{**/node_modules,**/node_modules/**}",
-            "/r/#members:**",
-            "/r/apps/web/#task:apps/web#build",
-            "/r/apps/web/#docker:apps/web/Dockerfile#builder",
-            "/r/packages/ui/#tsc:packages/ui/tsconfig.json",
-        ] {
-            assert!(is_task_pseudo_path(Path::new(p)), "{p}");
-        }
-        // Real files, also below node_modules and with a `#` in a name.
-        for p in [
-            "/r/node_modules/pkg/index.js",
-            "/r/src/#private/x.js",
-            "/r/docs/c#/notes.md",
-            "/r/src/#",
-        ] {
-            assert!(!is_task_pseudo_path(Path::new(p)), "{p}");
-        }
-    }
-
-    #[test]
-    fn literals() {
-        assert_eq!(required_literal("**/__mocks__/**"), Some("__mocks__"));
-        assert_eq!(required_literal("**/*.snap"), Some(".snap"));
-        assert_eq!(required_literal("*.{js,ts}"), None);
-        assert_eq!(required_literal("**"), None);
-        assert_eq!(required_literal("a.test.ts.snap"), Some("a.test.ts.snap"));
-    }
-
-    #[test]
-    fn listing_with_prefilter() {
-        let d = tempfile::tempdir().unwrap();
-        for f in [
-            "a/__mocks__/x.js",
-            "a/b/__mocks__/y.js",
-            "a/b/z.js",
-            "__mocks__/r.js",
-            "c.snap",
-            "a/d.snap",
-        ] {
-            let p = d.path().join(f);
-            std::fs::create_dir_all(p.parent().unwrap()).unwrap();
-            std::fs::write(p, "").unwrap();
-        }
-        let fs = DirCache::new();
-        assert_eq!(
-            membership_listing(&fs, d.path(), "**/__mocks__/**"),
-            ["__mocks__/r.js", "a/__mocks__/x.js", "a/b/__mocks__/y.js"]
-        );
-        assert_eq!(
-            membership_listing(&fs, d.path(), "**/*.snap"),
-            ["a/d.snap", "c.snap"]
-        );
-        assert_eq!(membership_listing(&fs, d.path(), "*.snap"), ["c.snap"]);
-    }
 }
 
 /// One first-party package's state during a build.
@@ -2217,8 +2163,8 @@ pub fn build(opts: &GraphOptions, langs: &[Arc<dyn Language>]) -> Result<BuildRe
     let walk_state = (walk.unchanged, walk.prev, walk.changed);
     mark("build: walked dir set");
     report.files = files.len();
-    // Independent setup steps in parallel: workspace discovery, lockfiles, the hash
-    // cache and the tracer.
+    // Independent setup steps in parallel: workspace discovery, lockfiles, the
+    // hash cache and the tracer.
     let make_tracer = || tracer_for(&repo, opts, langs, graph_in_tree.as_deref());
     // The task workspace (every manifest read again) right after discovery,
     // overlapping the tracer and the hash cache.
@@ -2311,8 +2257,8 @@ pub fn build(opts: &GraphOptions, langs: &[Arc<dyn Language>]) -> Result<BuildRe
         );
     }
     mark("build: obs cache");
-    // The store's shards: the pack and its log (a pack in the pre-log location is
-    // gone).
+    // The store's shards: the pack and its log (a pack in the pre-log location
+    // is gone).
     let pack = shard::Pack::open(&store);
     let _ = std::fs::remove_file(crate::cache_dir(&out).join("pack"));
     let cx = Cx {
@@ -2363,8 +2309,9 @@ pub fn build(opts: &GraphOptions, langs: &[Arc<dyn Language>]) -> Result<BuildRe
     }
     mark("build: cx");
     let fw = crate::fw::Fw::new(&cx.tracer, &repo, &files, &cx.places);
-    // Hub members that `TargetCx::classify` (first-party, not following) links to a
-    // third-party package rather than by path keep stored edges (`HubRec::skip`).
+    // Hub members that `TargetCx::classify` (first-party, not following) links
+    // to a third-party package rather than by path keep stored edges
+    // (`HubRec::skip`).
     let hub_third_party = |p: &Path| {
         cx.ids.language(p, cx.fs()).is_some()
             || (cx.ids.is_third_party(p) && cx.ids.package_root(p).is_some())
@@ -2656,7 +2603,8 @@ pub fn build(opts: &GraphOptions, langs: &[Arc<dyn Language>]) -> Result<BuildRe
                     crate::keydump::enabled().then(|| xxhash_rust::xxh3::xxh3_128(&encoded));
                 let loaded = shard::decode(&encoded, "new").expect("own encoding");
                 drop(tc);
-                // Task pseudo-files are not entries: the key covers them through observations.
+                // Task pseudo-files are not entries: the key covers them
+                // through observations.
                 let list: Vec<(String, Option<u128>)> = shard
                     .files
                     .iter()
@@ -2664,10 +2612,11 @@ pub fn build(opts: &GraphOptions, langs: &[Arc<dyn Language>]) -> Result<BuildRe
                     .map(|f| (f.path.clone(), f.hash.map(join)))
                     .collect();
                 let to = Instant::now();
-                // The observation digest for the key, and next to it (one very large shard
-                // must not wait for the two in turn) the state of everything the shard
-                // observed, per table entry: what the next refresh compares to find which
-                // files to trace again.
+                // The observation digest for the key, and next to it (one very
+                // large shard must not wait for the two in
+                // turn) the state of everything the shard
+                // observed, per table entry: what the next refresh compares to
+                // find which files to trace again.
                 let ((obs, tree), states) = rayon::join(
                     || {
                         let _t = OBS.enter();
@@ -2715,8 +2664,9 @@ pub fn build(opts: &GraphOptions, langs: &[Arc<dyn Language>]) -> Result<BuildRe
                 let tw = WRITE.enter();
                 let written = write_shard(&cx, &shard)?;
                 drop(tw);
-                // Only the key and the package links are needed after this: the shard itself
-                // (its files and edges) is freed as soon as it is staged.
+                // Only the key and the package links are needed after this: the
+                // shard itself (its files and edges) is freed
+                // as soon as it is staged.
                 Ok((
                     p.def.root.clone(),
                     (
@@ -2788,8 +2738,8 @@ pub fn build(opts: &GraphOptions, langs: &[Arc<dyn Language>]) -> Result<BuildRe
     report.first_party = pkgs.len();
     // Package roots (real paths) per identity, from the link records.
     let roots = third_party_roots(&cx, &pkgs, &reuse, &new_shards);
-    // With `--externals follow`, installed packages are traced; packages known only
-    // from the lockfile (nothing installed) stay opaque in both modes.
+    // With `--externals follow`, installed packages are traced; packages known
+    // only from the lockfile (nothing installed) stay opaque in both modes.
     type Ids = (BTreeMap<(String, String), String>, Vec<(String, String)>);
     let (traced_roots, opaque_ids): Ids = match opts.externals {
         Externals::Opaque => (BTreeMap::new(), links.keys().cloned().collect()),
@@ -2797,8 +2747,9 @@ pub fn build(opts: &GraphOptions, langs: &[Arc<dyn Language>]) -> Result<BuildRe
             let mut t = BTreeMap::new();
             let mut o = Vec::new();
             for id in links.keys() {
-                // Language packages (namespaced `eco:name`) stay opaque: their files are
-                // traced by their own languages' rules, not as `node_modules` packages.
+                // Language packages (namespaced `eco:name`) stay opaque: their
+                // files are traced by their own languages'
+                // rules, not as `node_modules` packages.
                 if id.0.contains(':') {
                     o.push(id.clone());
                     continue;
@@ -2903,9 +2854,9 @@ pub fn build(opts: &GraphOptions, langs: &[Arc<dyn Language>]) -> Result<BuildRe
     manifest.files = crate::manifest::write_files(&store, &files);
     report.manifest_written = manifest.write(&out)?;
     mark("build: files list + manifest");
-    // The previous snapshot's walked-file list is referenced by nothing now. Only a
-    // name of the form this function writes is deleted: the manifest it came
-    // from is checkout-controlled (`Manifest::read` checks it too).
+    // The previous snapshot's walked-file list is referenced by nothing now.
+    // Only a name of the form this function writes is deleted: the manifest
+    // it came from is checkout-controlled (`Manifest::read` checks it too).
     if let Some(prev) = prev_files
         .filter(|p| Some(p) != manifest.files.as_ref() && crate::manifest::is_files_name(p))
     {
@@ -2961,10 +2912,10 @@ pub fn build(opts: &GraphOptions, langs: &[Arc<dyn Language>]) -> Result<BuildRe
     let fw_memos = fw.into_memos();
     drop(tasks);
     mark("build: task state dropped");
-    // The obs cache is written in the background (the graph load follows); the next
-    // build and the CLI wait for it (`wait_for_cache_writes`). Then the build
-    // state (dir cache, memo tables, shards) is freed there too, off the
-    // caller's critical path.
+    // The obs cache is written in the background (the graph load follows); the
+    // next build and the CLI wait for it (`wait_for_cache_writes`). Then
+    // the build state (dir cache, memo tables, shards) is freed there too,
+    // off the caller's critical path.
     let cx = Arc::new(cx);
     let cx2 = Arc::clone(&cx);
     report.obs_written = !obs_unchanged;
@@ -3009,8 +2960,9 @@ fn third_party_roots(
     new_shards: &HashMap<String, NewShard>,
 ) -> BTreeMap<(String, String), String> {
     let mut out: BTreeMap<(String, String), String> = BTreeMap::new();
-    // The smallest real root; a lockfile-only link (empty root) never wins over an
-    // installed one. Workspace links (empty version) are not third-party packages.
+    // The smallest real root; a lockfile-only link (empty root) never wins over
+    // an installed one. Workspace links (empty version) are not third-party
+    // packages.
     let mut add = |name: &str, version: &str, root: &str| {
         if version.is_empty() {
             return;
@@ -3127,10 +3079,11 @@ fn assemble_first_party(
     }
     files.sort_by_key(|(ei, _)| *ei);
     let root_abs = cx.pkg_root_abs(&p.def.root);
-    // Framework inputs: extra edges and groups, test marks, key-only config inputs.
-    // Per file, in parallel (a large package must not be a sequential long pole).
-    // Build tasks (see `crate::tasks`) are discovered next to that: task analysis
-    // of a big package (the root) is long and mostly sequential.
+    // Framework inputs: extra edges and groups, test marks, key-only config
+    // inputs. Per file, in parallel (a large package must not be a
+    // sequential long pole). Build tasks (see `crate::tasks`) are
+    // discovered next to that: task analysis of a big package (the root) is
+    // long and mostly sequential.
     type TestMark = (String, &'static str, Vec<PathBuf>);
     type FileFw = (
         Vec<TestMark>,
@@ -3188,14 +3141,15 @@ fn assemble_first_party(
     );
     let mut tests: Vec<TestMark> = Vec::new();
     let mut key_reads: BTreeSet<PathBuf> = BTreeSet::new();
-    // Each file's own key-only configs, in the order of `files` (the shard's file
-    // order).
+    // Each file's own key-only configs, in the order of `files` (the shard's
+    // file order).
     let mut file_keys: Vec<Vec<PathBuf>> = Vec::with_capacity(per_file.len());
-    // What the framework pass found for an entry without making it an edge target.
+    // What the framework pass found for an entry without making it an edge
+    // target.
     let mut reached: HashMap<usize, Vec<crate::fw::Reached>> = HashMap::new();
-    // The location records of the configs that were consulted for the shard's files
-    // ([`crate::located`]). A kept file was consulted for the configs of the
-    // previous shard, whose contents and states are unchanged
+    // The location records of the configs that were consulted for the shard's
+    // files ([`crate::located`]). A kept file was consulted for the configs
+    // of the previous shard, whose contents and states are unchanged
     // ([`crate::filereuse::plan`]).
     let mut located: BTreeSet<crate::shard::LocatedRec> = BTreeSet::new();
     if let (Some(old), true) = (
@@ -3319,8 +3273,8 @@ fn assemble_first_party(
     recs.dedup();
     shard.tests = recs;
     shard.located = located.into_iter().collect();
-    // Listings that only hub pseudo-files reference: keyed by the hubs' states, not
-    // by the listing ([`crate::shard::Shard::hub_members`]).
+    // Listings that only hub pseudo-files reference: keyed by the hubs' states,
+    // not by the listing ([`crate::shard::Shard::hub_members`]).
     {
         let mut readers: Vec<u8> = vec![0; shard.memberships.len()];
         for f in &shard.files {
@@ -3344,15 +3298,16 @@ fn assemble_first_party(
             .filter(|&i| readers[i as usize] == 1)
             .collect();
     }
-    // What task discovery looked for in a package without tasks, and what a source
-    // decided its tasks by without an input of them, stays in the key (the
-    // first workflow, Makefile or script of the package, a Python package that
-    // comes or goes, must re-key the shard).
+    // What task discovery looked for in a package without tasks, and what a
+    // source decided its tasks by without an input of them, stays in the
+    // key (the first workflow, Makefile or script of the package, a Python
+    // package that comes or goes, must re-key the shard).
     if !pt.discovery.is_empty() {
         let seen =
             crate::normalize::add_key_only(&cx.normcx(&root_abs, false), &pt.discovery, &mut shard);
-        // The places the observations went through (links, package directories): where
-        // each leads is part of the key, as for a group's ([`TargetCx::seen`]).
+        // The places the observations went through (links, package
+        // directories): where each leads is part of the key, as for a
+        // group's ([`TargetCx::seen`]).
         let mut have: std::collections::HashSet<LinkRec> =
             shard.obs.links.iter().cloned().collect();
         for dir in seen {
@@ -3393,11 +3348,11 @@ fn assemble_first_party(
             .iter()
             .flat_map(|g| g.memberships.iter().copied())
             .collect();
-        // Only the listings of a subtree: the entries of one directory (the directories
-        // a `projects` glob matches) are part of the tree part like a probe,
-        // which then depends on that one directory and is reused while it is
-        // unchanged. (As a key-only listing it would be listed again by every
-        // refresh.)
+        // Only the listings of a subtree: the entries of one directory (the
+        // directories a `projects` glob matches) are part of the tree
+        // part like a probe, which then depends on that one directory
+        // and is reused while it is unchanged. (As a key-only listing
+        // it would be listed again by every refresh.)
         shard.key_only = keyed
             .into_iter()
             .filter(|&i| {
@@ -3595,13 +3550,14 @@ impl TargetCx<'_> {
             return None;
         }
         let importer = &cx.ws.packages[own].root;
-        // A type-only import that the lockfile doesn't resolve is satisfied by the
-        // package's DefinitelyTyped stubs, as TypeScript resolves it (`import
-        // type {X} from 'retry'` → `@types/retry`). Runtime never loads it.
-        // A name the lockfile does not resolve is an observation too: the importer
-        // gaining the dependency (or the repository its first lockfile)
-        // resolves this reference. Recorded as a link with no identity, which
-        // the key checks like any lock link.
+        // A type-only import that the lockfile doesn't resolve is satisfied by
+        // the package's DefinitelyTyped stubs, as TypeScript resolves
+        // it (`import type {X} from 'retry'` → `@types/retry`). Runtime
+        // never loads it. A name the lockfile does not resolve is an
+        // observation too: the importer gaining the dependency (or the
+        // repository its first lockfile) resolves this reference.
+        // Recorded as a link with no identity, which the key checks
+        // like any lock link.
         let absent = |name: &str, acc: &mut ObsAcc| {
             acc.links.insert(LinkRec {
                 location: format!("{LOCK_LINK}{importer}:{name}"),
@@ -3658,7 +3614,8 @@ impl TargetCx<'_> {
                     integrity: None,
                     root: root.clone(),
                 });
-                // `exports`, `main` and `types` decide the target: contents are an input.
+                // `exports`, `main` and `types` decide the target: contents are
+                // an input.
                 acc.view_pins.insert(manifest.clone());
                 let dir = cx.pkg_root_abs(&root);
                 let has_exports = cx
@@ -3697,7 +3654,8 @@ impl TargetCx<'_> {
                     }
                 }
                 if out.is_empty() {
-                    // Unresolvable inside the package: the manifest stands for it.
+                    // Unresolvable inside the package: the manifest stands for
+                    // it.
                     acc.found.insert(rel_to(self.root_abs, &cx.repo, &manifest));
                     out.push(TargetRec::Cross(CrossRec {
                         name: def.name.clone(),
@@ -3728,13 +3686,15 @@ impl TargetCx<'_> {
         let cx = self.cx;
         let repo = &cx.repo;
         // A task pseudo-file is named after an id or after globs
-        // (`<package>/#members:<dir>/<pattern> !<exclude>`): a `node_modules` in the
-        // name is text of a pattern (`!**/node_modules/**`, the excludes of a
-        // `.dockerignore` or a tsconfig), not a directory. Read as a path, such
-        // a hub became a file of a third-party package called
-        // `node_modules/**`, and its task lost every member.
+        // (`<package>/#members:<dir>/<pattern> !<exclude>`): a `node_modules`
+        // in the name is text of a pattern (`!**/node_modules/**`, the
+        // excludes of a `.dockerignore` or a tsconfig), not a
+        // directory. Read as a path, such a hub became a file of a
+        // third-party package called `node_modules/**`, and its task
+        // lost every member.
         let pseudo = is_task_pseudo_path(path);
-        // A language's third-party package (Python distribution, Go module, crate).
+        // A language's third-party package (Python distribution, Go module,
+        // crate).
         if !self.follow
             && !pseudo
             && let Some(li) = cx.ids.language(path, cx.fs())
@@ -3787,16 +3747,19 @@ impl TargetCx<'_> {
                 subpath: rel_to(&proot, repo, path),
             });
         }
-        // A first-party file, or one outside the repository: the links the resolution
-        // crossed (a workspace package's `node_modules/<name>` link) decide that it is
-        // reached at all. A link that goes or leads elsewhere changes the resolution,
+        // A first-party file, or one outside the repository: the links the
+        // resolution crossed (a workspace package's
+        // `node_modules/<name>` link) decide that it is reached at all.
+        // A link that goes or leads elsewhere changes the resolution,
         // and the file it used to lead to is still there.
         if !pseudo {
             self.crossed(links, acc);
-            // A link of the tree is an input of the reference at its own path, too: a
-            // diff that makes it lead elsewhere names the link and nothing else, and a
-            // query finds the reference by it. (A package directory is made by an
-            // install: what it leads to changes with the lockfile or a manifest.)
+            // A link of the tree is an input of the reference at its own path,
+            // too: a diff that makes it lead elsewhere names the
+            // link and nothing else, and a query finds the
+            // reference by it. (A package directory is made by an
+            // install: what it leads to changes with the lockfile or a
+            // manifest.)
             for l in links {
                 if l.starts_with(repo) && !cx.ids.is_third_party(&l.join("x")) {
                     acc.extra.reads.push(l.clone());
@@ -3858,7 +3821,8 @@ impl TargetCx<'_> {
         }
         let cx = self.cx;
         self.crossed(links, acc);
-        // Links that were crossed without a file to name ([`crate::fw::Reached`]).
+        // Links that were crossed without a file to name
+        // ([`crate::fw::Reached`]).
         if path.as_os_str().is_empty() {
             return;
         }
@@ -3881,9 +3845,9 @@ impl TargetCx<'_> {
 /// at `root_abs`.
 pub(crate) fn seen_link(cx: &Cx, root_abs: &Path, location: &Path) -> Option<LinkRec> {
     let state = seen_state(cx, location);
-    // Outside the repository and leading nowhere: not recorded, like a probe there
-    // (the directory that would cover it is the repository's parent, which is
-    // anyone's).
+    // Outside the repository and leading nowhere: not recorded, like a probe
+    // there (the directory that would cover it is the repository's parent,
+    // which is anyone's).
     if state.real.is_none() && !location.starts_with(&cx.repo) {
         return None;
     }
@@ -4003,8 +3967,8 @@ pub(crate) fn assemble(
     prehash: impl Fn(usize) -> Option<u128> + Sync,
     tcx: &TargetCx<'_>,
 ) -> Shard {
-    // First-party shards drop observations inside installed packages: their link
-    // identities cover them. Traced third-party shards keep them.
+    // First-party shards drop observations inside installed packages: their
+    // link identities cover them. Traced third-party shards keep them.
     let ncx = cx.normcx(root_abs, package.kind == kind::THIRD_PARTY);
     let repo_string = cx.repo.to_string_lossy();
     let repo_str: &str = &repo_string;
@@ -4028,8 +3992,8 @@ pub(crate) fn assemble(
         let rel = rels[ei].clone();
         let mut uncs: Vec<PendingUnc> = Vec::new();
         let mut seen_unc = std::collections::HashSet::new();
-        // `effect`: what the reference that raised the record does with its target
-        // (`crate::shard::EFFECT_*`).
+        // `effect`: what the reference that raised the record does with its
+        // target (`crate::shard::EFFECT_*`).
         let mut push_unc = |u: &Uncertainty, line: u32, effect: u8, uncs: &mut Vec<PendingUnc>| {
             let mut r = unc_rec(u, line);
             // No record names the directory the checkout lives in.
@@ -4050,8 +4014,9 @@ pub(crate) fn assemble(
         }
         let mut refs = Vec::with_capacity(a.groups.len());
         // Whether a tsconfig with aliases decides one of the file's records
-        // ([`crate::shard::FileRec::aliased`]): its own resolutions, and those made for
-        // it elsewhere (a link resolved into a package, `acc.extra`).
+        // ([`crate::shard::FileRec::aliased`]): its own resolutions, and those
+        // made for it elsewhere (a link resolved into a package,
+        // `acc.extra`).
         let mut aliased = false;
         for g in &a.groups {
             let line = match (g.ref_index, &a.extraction) {
@@ -4060,8 +4025,9 @@ pub(crate) fn assemble(
             };
             let mut edges = Vec::new();
             let group = &a.edges[g.edges.clone()];
-            // Resolved only into an install outside the repository (`node_modules` above
-            // the root), which the repository's lockfile does not describe and
+            // Resolved only into an install outside the repository
+            // (`node_modules` above the root), which the
+            // repository's lockfile does not describe and
             // CI does not have.
             let outside_only = |e: &turborepo_trace_core::AnalyzedEdge| {
                 !e.succ.is_empty()
@@ -4069,9 +4035,11 @@ pub(crate) fn assemble(
                         .iter()
                         .all(|s| tcx.outside_install(&cx.tracer.path_of(*s)))
             };
-            // Unresolved, or resolved outside the repository: the importer's lockfile entry
-            // decides. When it does, the reference's other outside-only edges (the outside
-            // package's manifest reads) belong to the discarded resolution and are dropped.
+            // Unresolved, or resolved outside the repository: the importer's
+            // lockfile entry decides. When it does, the reference's
+            // other outside-only edges (the outside
+            // package's manifest reads) belong to the discarded resolution and
+            // are dropped.
             let replaced: Vec<Option<Vec<TargetRec>>> = group
                 .iter()
                 .map(|e| {
@@ -4083,7 +4051,8 @@ pub(crate) fn assemble(
                     if lockable {
                         tcx.via_lockfile(&e.edge, &mut acc)
                     } else if e.succ.is_empty() {
-                        // A language package known from its manifest but not installed.
+                        // A language package known from its manifest but not
+                        // installed.
                         crate::external::link(tcx, &e.edge).map(|(link, cross, pins)| {
                             acc.links.insert(link);
                             acc.pins.extend(pins);
@@ -4154,8 +4123,9 @@ pub(crate) fn assemble(
                     });
                 }
             }
-            // Pins live in the language's environment or the repo; recorded even where
-            // reads would be dropped (they decide which version is linked).
+            // Pins live in the language's environment or the repo; recorded
+            // even where reads would be dropped (they decide which
+            // version is linked).
             let pins: Vec<PathBuf> = std::mem::take(&mut acc.pins).into_iter().collect();
             let view_pins: Vec<PathBuf> = std::mem::take(&mut acc.view_pins).into_iter().collect();
             let extra = std::mem::take(&mut acc.extra);
@@ -4192,22 +4162,25 @@ pub(crate) fn assemble(
                     p
                 },
             });
-            // What the group's result was computed from without being an input of it:
-            // sets the file names ([`crate::shard::Shard::key_groups`]).
+            // What the group's result was computed from without being an input
+            // of it: sets the file names
+            // ([`crate::shard::Shard::key_groups`]).
             for set in &g.observations.key {
                 let id = Arc::as_ptr(set) as usize;
                 if key_seen.insert(id) {
                     let cell = Arc::clone(&*key_norms.entry(id).or_default());
                     cell.get_or_init(|| {
                         let norm = crate::normalize::normalize(&ncx, set, memo);
-                        // The package directories the set's observations went through.
+                        // The package directories the set's observations went
+                        // through.
                         let mut through = ObsAcc::default();
                         for dir in &norm.seen {
                             tcx.seen(dir, &mut through);
                         }
                         // A set of the framework pass
-                        // ([`crate::shard::KeyGroupRec::framework`]; a set the pass did not
-                        // make is named by no framework group: `Fw::augment`).
+                        // ([`crate::shard::KeyGroupRec::framework`]; a set the
+                        // pass did not make is named by
+                        // no framework group: `Fw::augment`).
                         let framework = g.ref_index == Some(crate::shard::FRAMEWORK_LEVEL);
                         (norm, through.links, framework)
                     });
@@ -4278,8 +4251,8 @@ pub(crate) fn assemble(
     let mut tables = Tables::default();
     let mut acc = ObsAcc::default();
     let mut out_files = Vec::new();
-    // What each file's edges reached and went through, until the shard's lists are
-    // final.
+    // What each file's edges reached and went through, until the shard's lists
+    // are final.
     let mut file_obs: Vec<(BTreeSet<String>, BTreeSet<LinkRec>)> = Vec::new();
     let mut details: Vec<String> = Vec::new();
     let mut detail_ix: HashMap<String, u32> = HashMap::new();
@@ -4346,7 +4319,8 @@ pub(crate) fn assemble(
                     match key_by_id.get(&id) {
                         Some(&i) => i,
                         None => {
-                            // (Every chunk is done: the records are this map's alone.)
+                            // (Every chunk is done: the records are this map's
+                            // alone.)
                             let records = key_norms
                                 .remove(&id)
                                 .and_then(|(_, cell)| Arc::try_unwrap(cell).ok())
@@ -4376,13 +4350,14 @@ pub(crate) fn assemble(
         file_obs.push((f.acc.found, f.acc.links));
         out_files.push(rec);
     }
-    // The directories the sets of key observations were located through are links
-    // of the shard, named by the set.
+    // The directories the sets of key observations were located through are
+    // links of the shard, named by the set.
     for (_, through, _) in &key_sets {
         acc.links.extend(through.iter().cloned());
     }
-    // Per file, its own reached files and links as indexes into the shard's sorted
-    // lists: what a later refresh checks before it keeps the file's records.
+    // Per file, its own reached files and links as indexes into the shard's
+    // sorted lists: what a later refresh checks before it keeps the file's
+    // records.
     let found: Vec<String> = acc.found.into_iter().collect();
     let links: Vec<LinkRec> = acc.links.into_iter().collect();
     for (rec, (ff, fl)) in out_files.iter_mut().zip(file_obs) {
@@ -4397,8 +4372,8 @@ pub(crate) fn assemble(
             .map(|i| i as u32)
             .collect();
     }
-    // The sets of key observations, in the order of their values; a file names its
-    // sets.
+    // The sets of key observations, in the order of their values; a file names
+    // its sets.
     let mut order: Vec<usize> = (0..key_sets.len()).collect();
     order.sort_unstable_by(|a, b| key_sets[*a].cmp(&key_sets[*b]));
     let mut key_groups: Vec<crate::shard::KeyGroupRec> = Vec::new();
@@ -4475,4 +4450,70 @@ fn is_vendored_third_party(cx: &Cx, rel: &str) -> bool {
             .environment_roots()
             .iter()
             .any(|r| r.name.starts_with("python:") && abs.starts_with(&r.path))
+}
+
+#[cfg(test)]
+mod listing_tests {
+    use super::*;
+
+    #[test]
+    fn task_pseudo_paths() {
+        // A membership hub named after a `.dockerignore` exclude, a task, a
+        // part.
+        for p in [
+            "/r/services/svc-a/#members:{services/svc-a/app,services/svc-a/app/**} \
+             !{**/node_modules,**/node_modules/**}",
+            "/r/#members:**",
+            "/r/apps/web/#task:apps/web#build",
+            "/r/apps/web/#docker:apps/web/Dockerfile#builder",
+            "/r/packages/ui/#tsc:packages/ui/tsconfig.json",
+        ] {
+            assert!(is_task_pseudo_path(Path::new(p)), "{p}");
+        }
+        // Real files, also below node_modules and with a `#` in a name.
+        for p in [
+            "/r/node_modules/pkg/index.js",
+            "/r/src/#private/x.js",
+            "/r/docs/c#/notes.md",
+            "/r/src/#",
+        ] {
+            assert!(!is_task_pseudo_path(Path::new(p)), "{p}");
+        }
+    }
+
+    #[test]
+    fn literals() {
+        assert_eq!(required_literal("**/__mocks__/**"), Some("__mocks__"));
+        assert_eq!(required_literal("**/*.snap"), Some(".snap"));
+        assert_eq!(required_literal("*.{js,ts}"), None);
+        assert_eq!(required_literal("**"), None);
+        assert_eq!(required_literal("a.test.ts.snap"), Some("a.test.ts.snap"));
+    }
+
+    #[test]
+    fn listing_with_prefilter() {
+        let d = tempfile::tempdir().unwrap();
+        for f in [
+            "a/__mocks__/x.js",
+            "a/b/__mocks__/y.js",
+            "a/b/z.js",
+            "__mocks__/r.js",
+            "c.snap",
+            "a/d.snap",
+        ] {
+            let p = d.path().join(f);
+            std::fs::create_dir_all(p.parent().unwrap()).unwrap();
+            std::fs::write(p, "").unwrap();
+        }
+        let fs = DirCache::new();
+        assert_eq!(
+            membership_listing(&fs, d.path(), "**/__mocks__/**"),
+            ["__mocks__/r.js", "a/__mocks__/x.js", "a/b/__mocks__/y.js"]
+        );
+        assert_eq!(
+            membership_listing(&fs, d.path(), "**/*.snap"),
+            ["a/d.snap", "c.snap"]
+        );
+        assert_eq!(membership_listing(&fs, d.path(), "*.snap"), ["c.snap"]);
+    }
 }

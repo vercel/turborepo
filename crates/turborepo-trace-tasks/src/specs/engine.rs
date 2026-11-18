@@ -417,7 +417,8 @@ impl Run<'_> {
                 report(w, &mut items, out, &label);
             }
         }
-        // `package.json` is read (and recorded) even when an earlier source wins.
+        // `package.json` is read (and recorded) even when an earlier source
+        // wins.
         if let Some(k) = &vs.pkg
             && let Some(pj) = find_up(&cwd, "package.json", Some(self.cx.repo_root))
         {
@@ -884,7 +885,8 @@ check = [{ use = "write", read_outputs = "gen outputs" }]
         };
         let (r, out, outputs) = run("gen build");
         assert_eq!(r, Recognition::Full);
-        // No default candidate exists: both are probes, the directory as a membership.
+        // No default candidate exists: both are probes, the directory as a
+        // membership.
         assert_eq!(out.inputs, [dir.join("schema.x")]);
         assert_eq!(out.memberships[0].dir, dir.join("schema"));
         assert_eq!(out.memberships[0].pattern, "**/*.x");

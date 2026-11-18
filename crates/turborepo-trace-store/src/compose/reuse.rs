@@ -143,7 +143,8 @@ pub(super) fn across_edit(
     {
         return None;
     }
-    // The cache is this manifest's already: the usual case, decided from 24 bytes.
+    // The cache is this manifest's already: the usual case, decided from 24
+    // bytes.
     if cache_key(&crate::cache_dir(out).join("composed")) == Some(cache::key(manifest)) {
         return None;
     }
@@ -177,8 +178,9 @@ pub(super) fn across_edit(
         if !same_for_composition(&before, &shards[i]) {
             return None;
         }
-        // The same files in the same order (they were just compared): the ones with
-        // other contents. A file without a recorded hash counts as changed.
+        // The same files in the same order (they were just compared): the ones
+        // with other contents. A file without a recorded hash counts as
+        // changed.
         let hash = |f: &shard::ArchivedFileRec| {
             f.hash
                 .as_ref()

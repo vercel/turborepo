@@ -313,8 +313,9 @@ pub fn shared_prefix(base: &Path, path: &Path) -> usize {
 /// in the record, also for a checkout below `/tmp`.
 pub fn from_base(base: &Path, text: &str) -> String {
     let name = |c: char| c.is_alphanumeric() || matches!(c, '_' | '-' | '.' | '~' | '@');
-    // The base and the directories above it, nearest first, each with what stands
-    // for it. `/` is in every absolute path: nothing can be said about it.
+    // The base and the directories above it, nearest first, each with what
+    // stands for it. `/` is in every absolute path: nothing can be said
+    // about it.
     let dirs: Vec<(String, String)> = base
         .ancestors()
         .enumerate()
@@ -815,8 +816,9 @@ impl DirCache {
         let hidden_name = hidden
             .filter(|h| h.parent() == Some(dir))
             .and_then(|h| h.file_name());
-        // Directories hidden by name, in `dir` when it is the base or below it; `dir`
-        // itself is hidden when one of its components below the base has that name.
+        // Directories hidden by name, in `dir` when it is the base or below it;
+        // `dir` itself is hidden when one of its components below the
+        // base has that name.
         let mut named: Option<&[u8]> = None;
         if let Some((base, name)) = self.hidden_named.get()
             && let Ok(rel) = dir.strip_prefix(base)
@@ -834,8 +836,8 @@ impl DirCache {
                 if hidden_name.is_some_and(|n| n == e.file_name()) {
                     return None;
                 }
-                // `file_type` uses `d_type` and only falls back to `lstat` when the
-                // filesystem reports DT_UNKNOWN.
+                // `file_type` uses `d_type` and only falls back to `lstat` when
+                // the filesystem reports DT_UNKNOWN.
                 let kind = match e.file_type() {
                     Ok(t) if t.is_symlink() => EntryKind::Symlink,
                     Ok(t) if t.is_dir() => EntryKind::Dir,
@@ -1242,12 +1244,7 @@ impl DirCache {
             let path = dir.join(e.name());
             let is_file = match e.kind {
                 EntryKind::File => true,
-                EntryKind::Dir => {
-                    if self.walk_into(&path, limit, out) {
-                        return true;
-                    }
-                    false
-                }
+                EntryKind::Dir => self.walk_into(&path, limit, out),
                 EntryKind::Symlink => {
                     matches!(
                         self.link_info(&path),
@@ -1499,8 +1496,9 @@ mod tests {
             "/etc/x, ../repo2/y and /work/ci/repo/z"
         );
         assert_eq!(t("nothing here"), "nothing here");
-        // Only where a path starts: a directory of the repository, or of another path,
-        // that is called like one the checkout lives in is not that directory.
+        // Only where a path starts: a directory of the repository, or of
+        // another path, that is called like one the checkout lives in
+        // is not that directory.
         assert_eq!(
             t("@/src/work/x -> /work/ci/repo/src/work/x"),
             "@/src/work/x -> /work/ci/repo/src/work/x"
@@ -1574,8 +1572,8 @@ mod tests {
                 .map(|e| e.rel)
                 .collect()
         };
-        // An absolute path: every place it could be mounted at, the file system root
-        // first.
+        // An absolute path: every place it could be mounted at, the file system
+        // root first.
         assert_eq!(
             rels(Some(0), "/vercel/cmp/repo/data/abs.json"),
             [
@@ -1625,7 +1623,8 @@ mod tests {
         }
         // Not those: an ordinary directory that is called like one.
         assert_eq!(rels(Some(0), "/tmpx/a"), ["tmpx/a", "a"]);
-        // A directory of the system is no mount point; a checkout can be below one.
+        // A directory of the system is no mount point; a checkout can be below
+        // one.
         assert_eq!(
             rels(Some(0), "/usr/src/app/a.json"),
             ["usr/src/app/a.json", "app/a.json", "a.json"]
@@ -1658,8 +1657,9 @@ mod tests {
                 "{spec}"
             );
         }
-        // A climb above the root: back inside when the directories it goes through are
-        // called what it says. One reading, since the number of levels is known.
+        // A climb above the root: back inside when the directories it goes
+        // through are called what it says. One reading, since the
+        // number of levels is known.
         assert_eq!(rels(Some(0), "../repo/data/x.json"), ["data/x.json"]);
         assert_eq!(rels(Some(1), "../../repo/data/x.json"), ["data/x.json"]);
         assert_eq!(
@@ -1688,7 +1688,8 @@ mod tests {
         ] {
             assert_eq!(rels(Some(depth), spec), [""; 0], "{spec}");
         }
-        // From a directory that is not in the repository only an absolute path counts.
+        // From a directory that is not in the repository only an absolute path
+        // counts.
         assert_eq!(rels(None, "../repo/data/x.json"), [""; 0]);
     }
 
@@ -1779,8 +1780,8 @@ mod tests {
         // Without it, everything is there.
         let c = DirCache::new();
         assert!(c.is_file(&r.join("graph/cache/obs")));
-        // By name, below a base: every directory called `graph` there, not a file of
-        // that name, and nothing outside the base.
+        // By name, below a base: every directory called `graph` there, not a
+        // file of that name, and nothing outside the base.
         fs::write(r.join("src/Nested/graph"), "a file").unwrap();
         let c = DirCache::new();
         c.hide_named(&r.join("src"), "graph");
@@ -1917,9 +1918,9 @@ mod tests {
                 });
             }
         });
-        // Same number of reads as a single sequential lookup: each directory (the
-        // parent and its ancestors, for exact-spelling checks) is read exactly
-        // once.
+        // Same number of reads as a single sequential lookup: each directory
+        // (the parent and its ancestors, for exact-spelling checks) is
+        // read exactly once.
         let sequential = DirCache::new();
         assert!(sequential.is_file(&r.join("src/a.txt")));
         assert_eq!(c.stats().dirs_read, sequential.stats().dirs_read);
@@ -2016,7 +2017,8 @@ mod tests {
         let rp = lr.resolve(&c, &r.join("loop1/x"));
         assert!(rp.links.len() as u32 >= MAX_LINK_DEPTH);
 
-        // readlink only ran for symlink entries: foo, bar, alias, chain, loop1, loop2.
+        // readlink only ran for symlink entries: foo, bar, alias, chain, loop1,
+        // loop2.
         assert_eq!(c.stats().links_resolved, 6);
     }
 

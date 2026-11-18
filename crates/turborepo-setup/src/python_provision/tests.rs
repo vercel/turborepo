@@ -20,7 +20,8 @@ fn archive(files: &[(&str, &str)]) -> Vec<u8> {
     let mut tar = tar::Builder::new(Vec::new());
     for (path, body) in files {
         let mut header = tar::Header::new_gnu();
-        // Like the official builds, rename in place: the old tail follows the NUL.
+        // Like the official builds, rename in place: the old tail follows the
+        // NUL.
         header.set_path(format!("python/install/{path}")).unwrap();
         header.set_size(body.len() as u64);
         header.set_mode(0o755);

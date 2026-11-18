@@ -112,7 +112,8 @@ pub fn text(r: &Report, out: &mut dyn Write) -> io::Result<()> {
         .filter(|i| i.status == Status::Baselined)
         .collect();
     if !baselined.is_empty() {
-        // Most tests first; the sort is stable, so ties stay in file and line order.
+        // Most tests first; the sort is stable, so ties stay in file and line
+        // order.
         baselined.sort_by_key(|i| std::cmp::Reverse(i.finding.cost.map_or(0, |c| c.reached)));
         writeln!(
             out,

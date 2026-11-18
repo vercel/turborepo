@@ -121,7 +121,8 @@ impl Git {
     // Invariant: the merge base is asked for whenever `exact` is false, the branch this is on.
     #[allow(clippy::expect_used)]
     pub fn new(root: &Path, rev: &str, exact: bool) -> anyhow::Result<Git> {
-        // A revision git would read as an option is refused, as turbo refuses it.
+        // A revision git would read as an option is refused, as turbo refuses
+        // it.
         crate::adapter::validate_ref(rev).map_err(|e| anyhow::anyhow!(e))?;
         // Every git call at once (process startup dominates).
         let commit = format!("{rev}^{{commit}}");
@@ -228,12 +229,12 @@ impl Git {
             })
             .into());
         }
-        // A shallow checkout cuts history off. A merge base found in what is left is
-        // only certain when no cut lies between the two tips and the bases:
-        // behind a cut there may be a later common ancestor. Not so when one
-        // tip is an ancestor of the other (a pull request's merge ref compared
-        // with its first parent): that tip is the merge base whatever the cut
-        // hides.
+        // A shallow checkout cuts history off. A merge base found in what is
+        // left is only certain when no cut lies between the two tips
+        // and the bases: behind a cut there may be a later common
+        // ancestor. Not so when one tip is an ancestor of the other (a
+        // pull request's merge ref compared with its first parent):
+        // that tip is the merge base whatever the cut hides.
         let tip_is_base = || {
             let commit = |r: &str| {
                 git(&toplevel, &["rev-parse", "--verify", "--quiet", r])
@@ -424,8 +425,8 @@ impl Git {
         let Ok(out) = out else {
             return;
         };
-        // Per request, in order: `<object> <type> <size>\n<bytes>\n`, or `<request>
-        // missing\n`.
+        // Per request, in order: `<object> <type> <size>\n<bytes>\n`, or
+        // `<request> missing\n`.
         let mut read: Vec<(&str, Option<std::sync::Arc<[u8]>>)> = Vec::new();
         let mut rest = out.stdout.as_slice();
         for p in &wanted {
@@ -501,7 +502,8 @@ impl Git {
         let out = child.wait_with_output();
         let _ = writer.join();
         let out = out.ok().filter(|o| o.status.success())?;
-        // Per request, in order: `<object> <type> <size>`, or `<request> missing`.
+        // Per request, in order: `<object> <type> <size>`, or `<request>
+        // missing`.
         let text = String::from_utf8_lossy(&out.stdout);
         let answers: Vec<bool> = text
             .lines()
@@ -534,8 +536,8 @@ impl Git {
                 &self.toplevel,
                 &["diff", "--raw", "--no-renames", "-z", base, "--"],
             )?;
-            // Per path: `:<mode at the base> <mode now> <object> <object> <status>`, then
-            // the path.
+            // Per path: `:<mode at the base> <mode now> <object> <object>
+            // <status>`, then the path.
             let mut it = diff.split('\0').filter(|s| !s.is_empty());
             while let Some(meta) = it.next() {
                 let Some(path) = it.next() else { break };
@@ -921,9 +923,11 @@ pub fn effects(g: &Graph, changes: &[Change], git: Option<&Git>, mut pre: PrePar
                             ("", p) => p.to_owned(),
                             (d, p) => format!("{d}/{p}"),
                         };
-                        // `changed`: another package, added or removed. `affected`: the same
-                        // package with another closure, also when no package changed at all
-                        // (the importer moved to another peer variant of its test runner).
+                        // `changed`: another package, added or removed.
+                        // `affected`: the same
+                        // package with another closure, also when no package
+                        // changed at all (the importer
+                        // moved to another peer variant of its test runner).
                         let names: BTreeSet<&str> = imp
                             .changed
                             .iter()
@@ -976,8 +980,9 @@ pub fn effects(g: &Graph, changes: &[Change], git: Option<&Git>, mut pre: PrePar
             if eco != "go" {
                 fx.drop.insert(c.path.clone());
             } else if go_sum_same {
-                // `go.mod` always stays a file change. `go.sum` stays one whenever a module
-                // hash was added, removed or changed (see `gosumdiff`).
+                // `go.mod` always stays a file change. `go.sum` stays one
+                // whenever a module hash was added, removed or
+                // changed (see `gosumdiff`).
                 fx.drop.insert(key_name);
             }
         } else {
@@ -996,7 +1001,8 @@ pub fn effects(g: &Graph, changes: &[Change], git: Option<&Git>, mut pre: PrePar
                     });
                 }
             }
-            // With a base revision, the cause is a side that is missing or does not parse.
+            // With a base revision, the cause is a side that is missing or does
+            // not parse.
             let why = match (git.is_some(), old.is_some(), new.is_some()) {
                 (false, _, _) => "changed without old contents (use --since)",
                 (true, _, false) => "the new contents are missing or do not parse",

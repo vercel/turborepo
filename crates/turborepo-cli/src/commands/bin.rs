@@ -10,8 +10,8 @@ pub enum Error {
 
 pub fn run() -> Result<(), Error> {
     let path = current_exe()?;
-    // NOTE: The Go version uses `base.UI.Output`, we should use the Rust equivalent
-    // eventually.
+    // NOTE: The Go version uses `base.UI.Output`, we should use the Rust
+    // equivalent eventually.
     println!("{}", path.to_string_lossy());
 
     Ok(())

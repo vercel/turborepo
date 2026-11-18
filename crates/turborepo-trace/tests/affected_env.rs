@@ -285,8 +285,8 @@ fn assignment_from_a_constructor_parameter_needs_a_cross_file_evaluator() {
          'flags.json');\n  const service = new FlagsService(datafilePath);\n  const env = await \
          service.getTestEnv();\n  expect(env.FLAGS_TEST_DATAFILE).toBe(datafilePath);\n});\n",
     );
-    // The temporary directory is itself a variable; a test points it at a directory
-    // it makes.
+    // The temporary directory is itself a variable; a test points it at a
+    // directory it makes.
     write(
         r,
         "server/tmp.test.ts",
@@ -330,9 +330,9 @@ fn variable_directory_with_a_literal_path() {
     // A new file that the path can name.
     write(r, "other/seed/a.json", "{}\n");
     assert_eq!(affected(r, &["other/seed/a.json"]), ["src/seed.test.js"]);
-    // An assignment nobody can evaluate changes nothing: whatever the directory is,
-    // the literal part bounds the path. The assigning file is an input of the
-    // reader.
+    // An assignment nobody can evaluate changes nothing: whatever the directory
+    // is, the literal part bounds the path. The assigning file is an input
+    // of the reader.
     write(
         r,
         "scripts/run.js",
@@ -659,8 +659,8 @@ fn module_path_relative_to_an_unknown_working_directory() {
     assert_eq!(affected(r, &["packages/events/collections.ts"]), test);
     // The launcher that assigns the variable is an input of the reader.
     assert_eq!(affected(r, &["packages/seeder/scripts/launch.mjs"]), test);
-    // The same path below another directory: a module the launcher could name from
-    // there.
+    // The same path below another directory: a module the launcher could name
+    // from there.
     write(
         r,
         "examples/packages/events/seed.config.ts",

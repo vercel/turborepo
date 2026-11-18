@@ -772,7 +772,8 @@ impl JsFile {
             }
         }
         let name_before = |f: &JsFile, k: usize| -> Option<(String, FnKind)> {
-            // `name = <fn>`, `name: <fn>` (property), `const name = async <fn>`.
+            // `name = <fn>`, `name: <fn>` (property), `const name = async
+            // <fn>`.
             let mut j = k;
             if j > 0 && f.text(j - 1) == "async" {
                 j -= 1;
@@ -843,10 +844,11 @@ impl JsFile {
                     block: true,
                 });
             } else if self.kind(k) == TokKind::Arrow && k > 0 {
-                // `(params): ReturnType =>`: find the `)` before the return type.
+                // `(params): ReturnType =>`: find the `)` before the return
+                // type.
                 let mut pe = k - 1;
-                // A plain `(...) =>` or `x =>` (also a property `key: x =>`); else a return
-                // type sits between `)` and `=>`.
+                // A plain `(...) =>` or `x =>` (also a property `key: x =>`);
+                // else a return type sits between `)` and `=>`.
                 let return_type_ident = self.kind(pe) == TokKind::Ident
                     && k >= 3
                     && self.kind(k - 2) == TokKind::Colon
@@ -956,7 +958,8 @@ impl JsFile {
                 && self.open_of[k - 1] != u32::MAX
                 && self.kind(self.open_of[k - 1] as usize) == TokKind::LBrace
             {
-                // A method: `name(params) {` in a class body or an object literal.
+                // A method: `name(params) {` in a class body or an object
+                // literal.
                 let nm = k - 1;
                 let name = self.text(nm).trim_matches(['"', '\'']).to_string();
                 if matches!(
@@ -1700,8 +1703,8 @@ impl JsFile {
             if at < fd.body.1
                 && let Some(pi) = fd.params.iter().position(|p| p.name == name)
             {
-                // A parameter shadows a binding of the enclosing block, and is shadowed by
-                // one in its own body.
+                // A parameter shadows a binding of the enclosing block, and is
+                // shadowed by one in its own body.
                 consider(
                     2 * (fd.body.1 - fd.start) + 1,
                     Decl::Param {
@@ -1911,8 +1914,8 @@ impl JsFile {
                 }
                 TokKind::LBrace => {
                     if let Some(c) = self.closer(k).filter(|&c| c <= b) {
-                        // A method body inside an object literal or class is another
-                        // function.
+                        // A method body inside an object literal or class is
+                        // another function.
                         let method = self.funcs.iter().any(|fd| fd.body.0 == k + 1);
                         if !method {
                             guards.push(Guard::Opaque);
@@ -2404,8 +2407,8 @@ fn piece_class(p: &Piece) -> String {
 fn cap(mut v: Vec<Tpl>) -> Vec<Tpl> {
     v.dedup();
     if v.len() > 4 {
-        // Alternatives that differ only in the names of their unknown parts, or after
-        // the start of a query string, are one.
+        // Alternatives that differ only in the names of their unknown parts, or
+        // after the start of a query string, are one.
         let mut seen: std::collections::HashSet<Vec<String>> = std::collections::HashSet::new();
         v.retain(|t| {
             let mut key = Vec::with_capacity(t.len());
@@ -2883,7 +2886,8 @@ impl<'a, 'r> Eval<'a, 'r> {
                     }
                 }
                 TokKind::Arrow => {
-                    // A function value: its body is not this expression's operators.
+                    // A function value: its body is not this expression's
+                    // operators.
                     return (None, Vec::new(), Vec::new(), Vec::new());
                 }
                 TokKind::Question if q.is_none() => q = Some(k),
@@ -3213,8 +3217,8 @@ impl<'a, 'r> Eval<'a, 'r> {
                     }
                     None => Vec::new(),
                 };
-                // React state holds what its setter is given: unknown parts of the value
-                // come from there too.
+                // React state holds what its setter is given: unknown parts of
+                // the value come from there too.
                 if super::source::is_state(f, name, bi) && !v.is_empty() {
                     let s = super::source::of_binding(self.files, f, name, bi);
                     for p in v.iter_mut().flatten() {
@@ -3364,7 +3368,8 @@ impl<'a, 'r> Eval<'a, 'r> {
                     return self.field_of_expr(f, a, b, path, depth + 1);
                 }
                 if v.is_empty() && !full.is_empty() && x.args.get(p.index as usize).is_none() {
-                    // A field of a missing argument with a whole-parameter default (`opts = {}`).
+                    // A field of a missing argument with a whole-parameter
+                    // default (`opts = {}`).
                     return Vec::new();
                 }
                 return v;
@@ -3618,7 +3623,8 @@ impl<'a, 'r> Eval<'a, 'r> {
             }
             return res;
         }
-        // Truthiness of a plain name or member: a known non-empty string, or no value.
+        // Truthiness of a plain name or member: a known non-empty string, or no
+        // value.
         if let Some(links) = self.links(f, a, b)
             && links.iter().all(|l| l.args.is_none())
         {
@@ -3864,9 +3870,10 @@ impl<'a, 'r> Eval<'a, 'r> {
                         return None;
                     }
                     let from = self.ev(f, p, q, depth + 1);
-                    // A placeholder with an unknown name (`{${key}}`, `:${key}`): path
-                    // parameter substitution. Every such placeholder becomes an unknown
-                    // segment part.
+                    // A placeholder with an unknown name (`{${key}}`,
+                    // `:${key}`): path
+                    // parameter substitution. Every such placeholder becomes an
+                    // unknown segment part.
                     if let [t] = from.as_slice()
                         && let Some((pre, suf)) = placeholder_shape(t)
                     {
@@ -3885,8 +3892,8 @@ impl<'a, 'r> Eval<'a, 'r> {
                                 .collect(),
                         );
                     }
-                    // A computed replacement: known when the receiver starts with the
-                    // needle (`url.replace('https://host', base)`), unchanged when a fully
+                    // A computed replacement: known when the receiver starts
+                    // with the needle (`url.replace('https://host', base)`), unchanged when a fully
                     // known receiver does not contain it.
                     let to = self.ev(f, args[1].0, args[1].1, depth + 1);
                     let mut out = Vec::new();
@@ -3973,8 +3980,8 @@ impl<'a, 'r> Eval<'a, 'r> {
                     v
                 });
             }
-            // `useMemo(() => value, deps)`, `useCallback(fn, deps)`: the function's
-            // results.
+            // `useMemo(() => value, deps)`, `useCallback(fn, deps)`: the
+            // function's results.
             if matches!(root.as_str(), "useMemo")
                 && let Some((x, y)) = first_arg(&Some(*args))
                 && let Some(fi) = f.fn_at(x, y)
@@ -4196,7 +4203,8 @@ pub fn call_sites(f: &JsFile) -> Vec<CallSite> {
         };
         if closers(j) > 0 {
             let mut d = 0;
-            // Brackets inside the type arguments (`<{ a: T[] } | null>`), walking back.
+            // Brackets inside the type arguments (`<{ a: T[] } | null>`),
+            // walking back.
             let mut nest = 0;
             let mut steps = 0;
             loop {

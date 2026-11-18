@@ -345,8 +345,9 @@ impl DiscoverySpec {
             .collect();
         let mut pattern = |mut p: PatternSpec| -> PatternSpec {
             if p.rooted {
-                // `<rootDir>/../../x` from a root one level down: where it lands depends
-                // on what the directory of the checkout is called.
+                // `<rootDir>/../../x` from a root one level down: where it
+                // lands depends on what the directory of the
+                // checkout is called.
                 if has_dot_dot(&p.text) && !stays_inside(w.repo, w.root_dir, &p.text) {
                     note(format!(
                         "the pattern {} climbs above the repository with `..`",
@@ -697,17 +698,18 @@ fn suspected(d: &DiscoverySpec, repo: &Path, tree: &Tree<'_>) -> bool {
     let neutral: Vec<String> = NEUTRAL_ROOTS.iter().map(|n| format!("{n}/")).collect();
     let mut starts: Vec<&str> = vec![here.as_str()];
     starts.extend(neutral.iter().map(String::as_str));
-    // A path that starts with the project's root directory, written by the runner:
-    // such a pattern sees the root where the file's path starts, the same at
-    // every place, unless the root's own text can be found again further on.
+    // A path that starts with the project's root directory, written by the
+    // runner: such a pattern sees the root where the file's path starts,
+    // the same at every place, unless the root's own text can be found
+    // again further on.
     let plain_root = !d.root_dir.starts_with('/')
         && !has_dot_dot(&d.root_dir)
         && repo_s
             .chars()
             .all(|c| c.is_alphanumeric() || matches!(c, '/' | '_' | '-' | '.' | '@' | '~'));
     let overlaps = || {
-        // The root's text, read as an expression (`.` is any character), found in
-        // itself at a later directory.
+        // The root's text, read as an expression (`.` is any character), found
+        // in itself at a later directory.
         let r = repo_s.as_bytes();
         (1..r.len()).filter(|&i| r[i] == b'/').any(|i| {
             r[i..]
@@ -732,8 +734,9 @@ fn suspected(d: &DiscoverySpec, repo: &Path, tree: &Tree<'_>) -> bool {
             continue;
         }
         if p.text.contains(PLACE) {
-            // The root where the config computed it: at the start of the pattern it is
-            // where every file's path starts, like `<rootDir>`.
+            // The root where the config computed it: at the start of the
+            // pattern it is where every file's path starts, like
+            // `<rootDir>`.
             let once = p.text.starts_with(PLACE) && p.text.matches(PLACE).count() == 1;
             if !once || !plain_root {
                 return true;
@@ -808,16 +811,17 @@ pub fn differences(spec: &ProjectSpec, fell_back: bool, repo: &Path, tree: &Tree
                     } else if tb && !ta {
                         lost.push(f.clone());
                     } else if left_out(&here_u, &a) != left_out(&there_u, &b) {
-                        // No test either way, and left out of the runner's file map at
-                        // one root only (its mocks, its modules).
+                        // No test either way, and left out of the runner's file
+                        // map at one root only (its
+                        // mocks, its modules).
                         differs = true;
                     }
                 }
             }
             if !gained.is_empty() || !lost.is_empty() || differs {
                 out.dependent = true;
-                // The lists are the applying discovery's, against the first neutral root
-                // that differs.
+                // The lists are the applying discovery's, against the first
+                // neutral root that differs.
                 if std::ptr::eq(d, applying) && out.gained.is_empty() && out.lost.is_empty() {
                     gained.sort();
                     gained.dedup();
@@ -860,8 +864,8 @@ pub fn names(spec: &DiscoverySpec, repo: &Path, file: &str) -> Vec<String> {
         let p = root.join(file);
         (m.is_test(&p), m.left_out(&p))
     };
-    // (Every pattern that leaves files out counts here: the names are for a message
-    // about one file whose answer differs.)
+    // (Every pattern that leaves files out counts here: the names are for a
+    // message about one file whose answer differs.)
     let here = answer(repo);
     let parts: Vec<&std::ffi::OsStr> = repo.iter().skip(1).collect();
     let mut out = Vec::new();
@@ -1148,7 +1152,8 @@ mod tests {
         assert_eq!(v.gained, ["src/a.test.js"]);
         let tree = Tree::new(&fs);
         assert!(!verdict(&counted, false, Path::new("/work/a/repo"), &tree).dependent);
-        // One directory: the shallow neutral root has one too, the deep one differs.
+        // One directory: the shallow neutral root has one too, the deep one
+        // differs.
         let one = jest(
             &[PatternSpec::jest_regex("^/[^/]+/src/.*[.]test[.]js$")],
             &[],

@@ -82,8 +82,8 @@ impl Fx {
         if let Some(&n) = self.ids.get(p) {
             return n;
         }
-        // The pseudo-files of the task layer: a `tsc -b` project, a membership hub, a
-        // task.
+        // The pseudo-files of the task layer: a `tsc -b` project, a membership
+        // hub, a task.
         let lang = [
             ("tsproject:", "task-part"),
             ("members:", "task-members"),
@@ -438,8 +438,8 @@ fn star_collisions_keep_the_file() {
 
 #[test]
 fn importer_of_the_file_inside_the_barrel_makes_dependents_affected() {
-    // index.ts re-exports c.ts, and c.ts imports {y} from a.ts: whoever uses c.ts
-    // sees a.ts.
+    // index.ts re-exports c.ts, and c.ts imports {y} from a.ts: whoever uses
+    // c.ts sees a.ts.
     let mut fx = Fx::new();
     fx.import("t.test.ts", "index.ts", Some(&["c"]));
     fx.reexport("index.ts", "c.ts", ReExportKind::Star);
@@ -513,10 +513,10 @@ fn entries_using_the_names_stay_relevant() {
 
 #[test]
 fn an_entry_that_reexports_a_tracked_name_uses_it() {
-    // A route file `export { GET } from './handlers'`, a config `export { default }
-    // from './base'`: what loads an entry may read what it exports, so an entry
-    // that forwards a name of the changed file is no barrel on the way to
-    // somewhere else.
+    // A route file `export { GET } from './handlers'`, a config `export {
+    // default } from './base'`: what loads an entry may read what it
+    // exports, so an entry that forwards a name of the changed file is no
+    // barrel on the way to somewhere else.
     for kind in [
         named(&[("y", "handler")]),
         ReExportKind::Star,
@@ -529,7 +529,8 @@ fn an_entry_that_reexports_a_tracked_name_uses_it() {
         let (aff, r, p) = run(&g, &ids, &src, "a.ts", Some(&["y"]), &[]);
         assert_eq!(aff, ["r.test.ts"]);
         assert_eq!(r.entries[0].witness, [ids["a.ts"], ids["r.test.ts"]]);
-        // The entry is a reader of the file, not a barrel it was skipped through.
+        // The entry is a reader of the file, not a barrel it was skipped
+        // through.
         assert!(p.skipped[0].barrels.is_empty(), "{:?}", p.skipped);
         assert_eq!(p.skipped[0].relevant, 1);
     }
@@ -572,9 +573,9 @@ fn an_entry_that_reexports_a_tracked_name_uses_it() {
 
 #[test]
 fn a_changed_entry_runs_even_when_nothing_reads_its_exports() {
-    // A route file with nothing but exported functions is side-effect free, so it
-    // is a candidate; no module imports it. What reads its exports is whatever
-    // loads the entry.
+    // A route file with nothing but exported functions is side-effect free, so
+    // it is a candidate; no module imports it. What reads its exports is
+    // whatever loads the entry.
     let mut fx = Fx::new();
     fx.import("r.test.ts", "lib.ts", Some(&["x"]));
     fx.jest("r.test.ts", "");

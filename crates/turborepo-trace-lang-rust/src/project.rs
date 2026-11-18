@@ -249,10 +249,10 @@ impl CargoProject {
     /// The raw manifest in `dir` (no inheritance), if `dir/Cargo.toml` exists
     /// and parses.
     pub fn raw_manifest(&self, dir: &Path) -> Option<Arc<Manifest>> {
-        // A manifest above the repository is the machine's: the searches for a package
-        // and for a workspace root go up from a crate, and what the checkout happens to
-        // live in (another checkout's workspace, a home directory) is no part of the
-        // tree.
+        // A manifest above the repository is the machine's: the searches for a
+        // package and for a workspace root go up from a crate, and what
+        // the checkout happens to live in (another checkout's
+        // workspace, a home directory) is no part of the tree.
         if self.fs.is_above_base(dir) {
             return None;
         }
@@ -296,8 +296,8 @@ impl CargoProject {
     }
 
     fn is_vendored(&self, dir: &Path) -> bool {
-        // A `vendor` directory of the repository: one the checkout itself lives in is
-        // not.
+        // A `vendor` directory of the repository: one the checkout itself lives
+        // in is not.
         dir.parent().is_some_and(|p| {
             p.file_name().is_some_and(|n| n == "vendor") && !self.fs.is_above_base(p)
         })
@@ -475,8 +475,9 @@ impl CargoProject {
         let mut files = Vec::new();
         let mut d = Some(root);
         while let Some(cur) = d {
-            // Up to the repository root: a `.cargo/config.toml` above it is the machine's
-            // (cargo's own home directory is asked below).
+            // Up to the repository root: a `.cargo/config.toml` above it is the
+            // machine's (cargo's own home directory is asked
+            // below).
             if self.fs.is_above_base(cur) {
                 break;
             }
@@ -493,7 +494,8 @@ impl CargoProject {
         if self.fs.is_file(&home) && !files.contains(&home) {
             files.push(home);
         }
-        // Nearer files take precedence: merge `source` tables from the farthest first.
+        // Nearer files take precedence: merge `source` tables from the farthest
+        // first.
         let mut sources: BTreeMap<String, (toml::Table, PathBuf)> = BTreeMap::new();
         for f in files.iter().rev() {
             let Ok(bytes) = self.fs.read_cached(f) else {
@@ -718,7 +720,8 @@ impl CargoProject {
                         queue.push(i);
                         Ok(i)
                     });
-                // Locked but not downloaded: the lock entry still says which crate it is.
+                // Locked but not downloaded: the lock entry still says which
+                // crate it is.
                 missing.push(match (&r, lock) {
                     (Err(_), Some(l)) if d.path.is_none() => lock_idx
                         .and_then(|i| find_dep_entry(l, i, &d.package))

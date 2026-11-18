@@ -39,9 +39,10 @@ fn affected(root: &Path, framework: &str, changed: &[&str]) -> Vec<String> {
         args.push("--changed");
         args.push(c);
     }
-    // These tests are about how open uncertainty travels; their fixtures use a read
-    // with a computed path as the uncertain site. Such reads are bounded by
-    // names by default (tests/affected_names.rs), so that layer is off here.
+    // These tests are about how open uncertainty travels; their fixtures use a
+    // read with a computed path as the uncertain site. Such reads are
+    // bounded by names by default (tests/affected_names.rs), so that layer
+    // is off here.
     let o = Command::new(support::harness())
         .args(&args)
         .env("TURBO_TRACE_DEBUG_NAMES", "0")
@@ -422,9 +423,9 @@ fn jest_config_path_values_are_not_dependencies_of_every_test() {
     assert_eq!(affected(r, "jest", &["src/a.js"]), ["src/a.test.js"]);
     assert_eq!(affected(r, "jest", &["src/c.js"]), ["src/c.test.js"]);
     assert_eq!(affected(r, "jest", &["mocks/config.js"]), ["src/c.test.js"]);
-    // A mapper target directory written as `${path.resolve(__dirname, 'lib')}/$1`:
-    // the file an import maps to selects its importer, another file of the
-    // directory selects nothing.
+    // A mapper target directory written as `${path.resolve(__dirname,
+    // 'lib')}/$1`: the file an import maps to selects its importer, another
+    // file of the directory selects nothing.
     assert_eq!(affected(r, "jest", &["lib/x.js"]), ["src/c.test.js"]);
     assert!(affected(r, "jest", &["lib/y.js"]).is_empty());
     let all = ["src/a.test.js", "src/b.test.js", "src/c.test.js"];
@@ -488,8 +489,8 @@ fn vitest_plugins_known_loader_and_unknown() {
         affected(r, "vitest", &["src/main.wgsl"]),
         ["src/render.test.ts"]
     );
-    // A shader with an `#import` line: the test that loads it is uncertain (what
-    // that line includes is not traced), the others are not.
+    // A shader with an `#import` line: the test that loads it is uncertain
+    // (what that line includes is not traced), the others are not.
     let d = repo("react(), wgslVitePlugin({ minify: true })", INCLUDES);
     let r = d.path();
     assert_eq!(
@@ -504,7 +505,8 @@ fn vitest_plugins_known_loader_and_unknown() {
         affected(r, "vitest", &["src/common.wgsl"]),
         ["src/render.test.ts"]
     );
-    // Without the loader plugin too: the line is in the file whoever compiles it.
+    // Without the loader plugin too: the line is in the file whoever compiles
+    // it.
     let d = repo("react()", INCLUDES);
     let r = d.path();
     assert_eq!(
@@ -584,8 +586,8 @@ module.exports = {
         affected(r, "jest", &["packages/chat/src/a.js"]),
         ["packages/chat/src/a.test.js"]
     );
-    // (The mapped module is a file of an installed package: its changes arrive as
-    // lockfile changes, not as path changes.)
+    // (The mapped module is a file of an installed package: its changes arrive
+    // as lockfile changes, not as path changes.)
     assert_eq!(
         affected(r, "jest", &["packages/chat/jest.config.js"]),
         [

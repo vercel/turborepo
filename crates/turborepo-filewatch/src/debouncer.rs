@@ -143,8 +143,8 @@ mod tests {
         let start = Instant::now();
         handle.await.unwrap();
         let end = Instant::now();
-        // give some wiggle room to account for race conditions, but assert that we
-        // didn't immediately complete after the last bump
+        // give some wiggle room to account for race conditions, but assert that
+        // we didn't immediately complete after the last bump
         assert!(end - start > Duration::from_millis(5));
         // we shouldn't be able to bump it after it's run out it's timeout
         assert!(!debouncer.bump());

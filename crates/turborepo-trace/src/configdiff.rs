@@ -186,7 +186,8 @@ pub fn manifest_delta(old: &str, new: &str) -> Option<ManifestDelta> {
     let new: Value = serde_json::from_str(new).ok()?;
     let (o, n) = (old.as_object()?, new.as_object()?);
     let mut d = ManifestDelta::default();
-    // Resolution fields are compared as written: the order of conditions decides.
+    // Resolution fields are compared as written: the order of conditions
+    // decides.
     for f in crate::exportsdiff::fields_differ(&old_doc, &new_doc) {
         d.fields.push(f.to_owned());
         d.resolution.push(f.to_owned());
@@ -888,8 +889,8 @@ impl PackageTexts {
                 out.configs.push((Some(n), path.to_owned(), bytes));
             }
         }
-        // Config files of the package directory and its ancestors (a root `.babelrc`
-        // applies to the package).
+        // Config files of the package directory and its ancestors (a root
+        // `.babelrc` applies to the package).
         let mut at = Some(dir);
         while let Some(d) = at {
             for name in DOT_CONFIGS {
@@ -1146,8 +1147,8 @@ fn implicit_consumers(
             jsx_source = true;
             continue;
         }
-        // The config of a tool whose readers the graph knows: the field that names the
-        // package decides (crate::confignames).
+        // The config of a tool whose readers the graph knows: the field that
+        // names the package decides (crate::confignames).
         let links = (*node).is_some_and(|n| linkers.contains(&n));
         let needles: Vec<&str> = std::iter::once(name)
             .chain(
@@ -1250,7 +1251,8 @@ fn resolution_seeds(
     candidates.sort_unstable();
     candidates.dedup();
     let mut memo: HashMap<String, crate::exportsdiff::Outcome> = HashMap::new();
-    // Whether a field that can answer a request for a file of the package changed.
+    // Whether a field that can answer a request for a file of the package
+    // changed.
     let remaps_files = ["exports", "browser", "typesVersions"]
         .iter()
         .any(|f| old.get(f) != new.get(f));
@@ -1290,11 +1292,12 @@ fn resolution_seeds(
             {
                 ".".to_owned()
             } else if let Some(r) = mapped.filter(|r| !r.starts_with(['.', '/'])) {
-                // A mapped request is usually a path, recorded relative to the repository
-                // root. The package directory is the root request. A file below it is
-                // answered by the manifest only where a `browser` object remaps files; it
-                // is checked like a subpath (also against `exports`, which errs on the
-                // side of a change).
+                // A mapped request is usually a path, recorded relative to the
+                // repository root. The package directory is the
+                // root request. A file below it is answered by
+                // the manifest only where a `browser` object remaps files; it
+                // is checked like a subpath (also against `exports`, which errs
+                // on the side of a change).
                 let r = r.trim_end_matches('/');
                 let below = if dir.is_empty() {
                     Some(r)
@@ -1365,9 +1368,9 @@ fn uses_of(
     let mut readers = Vec::new();
     let mut stand_ins = Vec::new();
     let mut prev = None;
-    // Per source: the labelled specifiers of its edges into `m`, and whether the
-    // same reference also has a successor that is not a file named `name` (the
-    // module it loads).
+    // Per source: the labelled specifiers of its edges into `m`, and whether
+    // the same reference also has a successor that is not a file named
+    // `name` (the module it loads).
     let mut labelled: Vec<(&str, bool)> = Vec::new();
     for &s in srcs {
         if prev == Some(s) {
@@ -1503,14 +1506,16 @@ pub fn effects(
             continue;
         };
         report.fields = d.fields.clone();
-        // What the loads of tsconfig files got of the manifest ([`loader_readers`]).
+        // What the loads of tsconfig files got of the manifest
+        // ([`loader_readers`]).
         let (loads, only_loads) = if loader_view_rule() {
             loader_readers(engine, &c.path)
         } else {
             (Vec::new(), Vec::new())
         };
-        // The same at both revisions: wherever the file stays a whole-file change
-        // below, it is none for the nodes that have it through a load alone.
+        // The same at both revisions: wherever the file stays a whole-file
+        // change below, it is none for the nodes that have it through a
+        // load alone.
         let spared = if same_for_loads && !only_loads.is_empty() {
             fx.spared.push((c.path.clone(), only_loads.clone()));
             format!(
@@ -1543,9 +1548,9 @@ pub fn effects(
             path: c.path.clone(),
         };
         let mut seeds: Vec<NodeId> = Vec::new();
-        // The loads of tsconfig files that read another view of the manifest than at
-        // the base: the files below those configs, whatever follows for its
-        // importers.
+        // The loads of tsconfig files that read another view of the manifest
+        // than at the base: the files below those configs, whatever
+        // follows for its importers.
         if !same_for_loads {
             seeds.extend(loads.iter().copied());
         }
@@ -1557,8 +1562,8 @@ pub fn effects(
             seeds.extend(readers);
             stand_ins = s;
         }
-        // Resolution fields, entry by entry: the importers whose requests the manifest
-        // answers differently.
+        // Resolution fields, entry by entry: the importers whose requests the
+        // manifest answers differently.
         let mut type_seeds: Vec<NodeId> = Vec::new();
         if let Some(docs) = &d.docs {
             match resolution_seeds(engine, &c.path, &docs.0, &docs.1) {
@@ -1575,9 +1580,9 @@ pub fn effects(
                 }
             }
         }
-        // Dependencies: per changed name, its consumers in the package: the nodes that
-        // link it, and the ones that use it without an import (see
-        // `implicit_consumers`).
+        // Dependencies: per changed name, its consumers in the package: the
+        // nodes that link it, and the ones that use it without an
+        // import (see `implicit_consumers`).
         if !d.deps.is_empty() {
             if !dependency_fields() {
                 report.reason = "dependencies changed".to_owned();
@@ -1604,8 +1609,9 @@ pub fn effects(
                     && implicit.nodes.is_empty()
                     && implicit.types.is_empty()
                     && !implicit.outside_graph;
-                // A config that names the package where its tool loads it: the nodes that
-                // have the config as an input read it like the ones with an edge to it.
+                // A config that names the package where its tool loads it: the
+                // nodes that have the config as an input read
+                // it like the ones with an edge to it.
                 for &c in &implicit.as_changed {
                     engine.match_inputs(g.path(c), &mut |m| linked.push(m));
                 }
@@ -1622,7 +1628,8 @@ pub fn effects(
                 linked.extend(implicit.nodes);
                 type_seeds.extend(implicit.types);
                 if implicit.outside_graph {
-                    // Named by a file that is not a node: its readers are not known.
+                    // Named by a file that is not a node: its readers are not
+                    // known.
                     unknown.push(name);
                 } else if none {
                     if d.deps_removed.contains(name) || lockfile_diffed {
@@ -1648,8 +1655,9 @@ pub fn effects(
             report.links = linked.len();
             seeds.extend(linked);
         }
-        // Scripts: the task of each added or edited script; for a removed one, every
-        // task that read the manifest (its dependents no longer find it).
+        // Scripts: the task of each added or edited script; for a removed one,
+        // every task that read the manifest (its dependents no longer
+        // find it).
         let pkg = if dir.is_empty() { "." } else { dir };
         for s in &d.scripts_changed {
             if let Some(t) = g.node_by_path(&format!("task:{pkg}#{s}")) {
@@ -1665,8 +1673,8 @@ pub fn effects(
                 }
             });
         }
-        // `version` is `$npm_package_version` in the package's scripts (and in the
-        // environment of what they run, see below).
+        // `version` is `$npm_package_version` in the package's scripts (and in
+        // the environment of what they run, see below).
         if d.version {
             version_bumps.get_or_insert_with(|| c.path.clone());
             let prefix = format!("task:{pkg}#");
@@ -1821,7 +1829,8 @@ mod tests {
 
     #[test]
     fn resolution_fields_are_kept_for_the_entry_diff() {
-        // Not whole-file by themselves: applied per request (crate::exportsdiff).
+        // Not whole-file by themselves: applied per request
+        // (crate::exportsdiff).
         let d = delta(
             r##"{"main":"a.js","exports":{".":{"import":"./a.mjs","default":"./a.js"}},"imports":{"#a":"./a.js"},"version":"1"}"##,
             r##"{"main":"b.js","exports":{".":{"default":"./a.js","import":"./a.mjs"}},"imports":{"#a":"./a.js"},"version":"2"}"##,
@@ -1967,8 +1976,9 @@ mod tests {
         let fw = |spec: &str, loads_module| {
             classify_use(K::Require, Some(spec), Some("js"), pj, loads_module)
         };
-        // An import a module mapper rewrites to a path: the edge lists the module and
-        // the manifest that says which module type the requesting package has.
+        // An import a module mapper rewrites to a path: the edge lists the
+        // module and the manifest that says which module type the
+        // requesting package has.
         let mapped = "jest:moduleNameMapper #/swr/use-team -> apps/site/swr/use-team";
         assert_eq!(fw(mapped, true), Use::Resolution);
         assert_eq!(
@@ -1978,8 +1988,8 @@ mod tests {
         // Mocks and transforms resolve requests the same way.
         assert_eq!(fw("jest:automocked #/lib/flags", true), Use::Resolution);
         assert_eq!(fw("jest:require_actual ./store", true), Use::Resolution);
-        // A request rewritten to a package that did not resolve: the manifest stands
-        // for it (the edge has no other successor).
+        // A request rewritten to a package that did not resolve: the manifest
+        // stands for it (the edge has no other successor).
         assert_eq!(
             fw(
                 "jest:moduleNameMapper ./a.module.css -> identity-obj-proxy",
@@ -1997,12 +2007,12 @@ mod tests {
             Use::Data
         );
         assert_eq!(fw("jest:require_actual ../package.json", false), Use::Data);
-        // Nothing else was loaded: the request resolved to the manifest (an `imports`
-        // entry that names it), or nothing says otherwise.
+        // Nothing else was loaded: the request resolved to the manifest (an
+        // `imports` entry that names it), or nothing says otherwise.
         assert_eq!(fw("jest:automocked #manifest", false), Use::Data);
         assert_eq!(fw(mapped, false), Use::StandIn("apps".into()));
-        // An import of the plain graph has its own manifest edges: its module edge into
-        // a manifest is a read.
+        // An import of the plain graph has its own manifest edges: its module
+        // edge into a manifest is a read.
         assert_eq!(
             classify_use(K::Require, Some("#manifest"), Some("js"), pj, true),
             Use::Data

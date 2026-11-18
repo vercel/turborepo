@@ -953,7 +953,8 @@ fn rust_only_plans_bind_the_toolchain_file_and_cargo_home() {
     let home = installed.store.cargo_home(&root);
     let activate = || installed.store.activate(&root, plan.selection().key());
 
-    // An existing private home is used; a redirected or non-directory one is not.
+    // An existing private home is used; a redirected or non-directory one is
+    // not.
     fs::create_dir_all(&home).unwrap();
     assert!(activate().is_ok());
     fs::remove_dir(&home).unwrap();

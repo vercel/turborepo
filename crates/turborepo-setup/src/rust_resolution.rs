@@ -144,8 +144,9 @@ pub fn resolve(toolchain: &Toolchain, manifest: &[u8]) -> Result<Tool, Error> {
         let Some((host, _)) = rustup::target(platform) else {
             continue;
         };
-        // Profile members a host lacks (rust-mingw) are skipped, as rustup does;
-        // explicit components and targets are required on every recorded host.
+        // Profile members a host lacks (rust-mingw) are skipped, as rustup
+        // does; explicit components and targets are required on every
+        // recorded host.
         let optional = profile
             .iter()
             .map(String::as_str)

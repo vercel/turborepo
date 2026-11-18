@@ -3,6 +3,7 @@ use std::{
     fmt, io,
     ops::Deref,
     path::{Path, PathBuf},
+    str::FromStr,
 };
 
 use camino::{Utf8Components, Utf8Path, Utf8PathBuf};
@@ -220,10 +221,10 @@ impl TryFrom<&Path> for AbsoluteSystemPathBuf {
     }
 }
 
-impl TryFrom<&str> for AbsoluteSystemPathBuf {
-    type Error = PathError;
+impl FromStr for AbsoluteSystemPathBuf {
+    type Err = PathError;
 
-    fn try_from(value: &str) -> Result<Self, Self::Error> {
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
         Self::new(Utf8PathBuf::from(value))
     }
 }

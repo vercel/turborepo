@@ -86,7 +86,8 @@ pub async fn run(query: &str, docs_version: Option<&str>) -> Result<(), Error> {
         .json()
         .await?;
 
-    // Filter to only show "page" type results with non-empty content, limit to 10
+    // Filter to only show "page" type results with non-empty content, limit to
+    // 10
     let page_results: Vec<_> = results
         .iter()
         .filter(|r| r.result_type == "page" && !r.content.is_empty())

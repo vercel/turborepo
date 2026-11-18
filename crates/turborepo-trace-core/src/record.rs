@@ -533,7 +533,8 @@ mod tests {
             read(Path::new("/r"));
             7
         };
-        // Captured inside a listings pause: everything is captured, nothing leaks out.
+        // Captured inside a listings pause: everything is captured, nothing
+        // leaks out.
         let outer = start();
         let (v, obs) = pause_listings(|| capture(work));
         assert_eq!(v, 7);

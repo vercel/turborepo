@@ -39,8 +39,9 @@ fn inventory_tree(root: &Path) -> String {
                 walk(base, &path, out);
             } else if meta.is_file() {
                 let bytes = fs::read(&path).expect("read file");
-                // Stable FNV-1a fingerprint — good enough for golden inventories
-                // without pulling a crypto hash into the turbo test crate.
+                // Stable FNV-1a fingerprint — good enough for golden
+                // inventories without pulling a crypto hash
+                // into the turbo test crate.
                 let mut hash: u64 = 0xcbf29ce484222325;
                 for byte in &bytes {
                     hash ^= u64::from(*byte);
@@ -506,7 +507,8 @@ snapshots:
       version: 3.0.1"#
             );
             assert!(!contents.contains("apps/app-b:"));
-            // is-odd remains a root dependency, but not a default-catalog reference.
+            // is-odd remains a root dependency, but not a default-catalog
+            // reference.
             assert!(contents.contains("is-odd@3.0.1:"));
             let expected_workspace = workspace.replace("  - apps/*", "- apps/*");
             let workspace_paths = if docker {

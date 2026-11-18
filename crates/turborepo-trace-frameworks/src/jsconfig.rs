@@ -189,8 +189,8 @@ impl ConfigHost for FsHost<'_> {
             st.factory_calls += 1;
         }
         let src = fsx::read(&file).ok()?;
-        // The module is evaluated again, with the call: its values are not kept between
-        // evaluations, and its notes are the same ones.
+        // The module is evaluated again, with the call: its values are not kept
+        // between evaluations, and its notes are the same ones.
         let mut host = FsHost {
             dir: file.parent().unwrap_or(Path::new("/")).to_path_buf(),
             depth_left: self.depth_left - 1,
@@ -418,8 +418,8 @@ pub fn workspace_module(
     if fsx::in_node_modules(&real) {
         return None;
     }
-    // In terms of `root` as the caller names it (it may itself be reached through a
-    // link).
+    // In terms of `root` as the caller names it (it may itself be reached
+    // through a link).
     let pkg = root.join(real.strip_prefix(&real_root).ok()?);
     Some(package_source(&pkg, subpath).ok_or_else(|| {
         format!(
@@ -644,7 +644,8 @@ fn eval_file(
     let notes = std::mem::take(&mut m.notes);
     let mut st = state.borrow_mut();
     for n in notes.into_iter().map(|n| (file.to_path_buf(), n)) {
-        // A factory is evaluated once per call, and loads its helpers each time.
+        // A factory is evaluated once per call, and loads its helpers each
+        // time.
         if !(cx.follow_factories && st.notes.contains(&n)) {
             st.notes.push(n);
         }

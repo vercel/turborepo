@@ -227,7 +227,8 @@ impl<'a, PD: PackageChangeMapper> ChangeMapper<'a, PD> {
         mut changed_pkgs: HashMap<WorkspacePackage, PackageInclusionReason>,
         changes: Result<Vec<ExternalDependencyChange>, ChangeMapError>,
     ) -> Result<PackageChanges, ChangeMapError> {
-        // if we run into issues, don't error, just assume all packages have changed
+        // if we run into issues, don't error, just assume all packages have
+        // changed
         let Ok(lockfile_changes) = changes else {
             debug!("unable to determine lockfile changes, assuming all packages changed");
             return Ok(PackageChanges::All(
@@ -274,7 +275,8 @@ impl<'a, PD: PackageChangeMapper> ChangeMapper<'a, PD> {
             .collect())
     }
 
-    // note: this could probably be optimized by using a hashmap of package paths
+    // note: this could probably be optimized by using a hashmap of package
+    // paths
     fn get_changed_packages<'b>(
         &self,
         files: impl Iterator<Item = &'b AnchoredSystemPathBuf>,
@@ -286,7 +288,8 @@ impl<'a, PD: PackageChangeMapper> ChangeMapper<'a, PD> {
                 PackageMapping::Packages(packages) => {
                     for (pkg, reason) in packages {
                         // Any co-located owner may be a root dependency, which
-                        // changes the global hash and invalidates every package.
+                        // changes the global hash and invalidates every
+                        // package.
                         if root_internal_deps.contains(&pkg) {
                             debug!(
                                 "{} changes root internal dependency: \"{}\"\nshortest path from \

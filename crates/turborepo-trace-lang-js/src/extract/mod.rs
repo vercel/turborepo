@@ -759,8 +759,9 @@ impl<'s> Recognizer<'s, '_> {
                 let is_modifier = match second.kind {
                     TokKind::LBrace | TokKind::Star => true,
                     TokKind::Ident if second.kw == Kw::From => {
-                        // `import type from 'x'` (default import named `type`) vs
-                        // `import type from from 'x'`.
+                        // `import type from 'x'` (default import named `type`)
+                        // vs `import type from from
+                        // 'x'`.
                         let third = self.ts.peek(2);
                         third.kind == TokKind::Ident && third.kw == Kw::From
                     }
@@ -971,8 +972,9 @@ impl<'s> Recognizer<'s, '_> {
             t.prev_kw,
             Kw::Function | Kw::Const | Kw::Let | Kw::Var | Kw::Class
         ) {
-            // `function require(...)`, `var require = ...`: shadows `require` in the
-            // enclosing scope, unless it is `const require = createRequire(...)`.
+            // `function require(...)`, `var require = ...`: shadows `require`
+            // in the enclosing scope, unless it is `const require =
+            // createRequire(...)`.
             if t.prev_kw != Kw::Class {
                 match self.create_require_init() {
                     None => self.push_shadow(t.depth),
@@ -985,8 +987,8 @@ impl<'s> Recognizer<'s, '_> {
             return;
         }
         let aliased = self.shadow_note();
-        // `const require = createRequire(elsewhere)`: the calls are resolved from
-        // there.
+        // `const require = createRequire(elsewhere)`: the calls are resolved
+        // from there.
         let elsewhere = self
             .loaders
             .iter()
@@ -996,8 +998,9 @@ impl<'s> Recognizer<'s, '_> {
         let n = self.ts.peek(0);
         match n.kind {
             TokKind::LParen if elsewhere => {
-                // `require('fs')`: a builtin module is the same for every `require`
-                // function, and what is bound to it is tracked as usual.
+                // `require('fs')`: a builtin module is the same for every
+                // `require` function, and what is bound to it
+                // is tracked as usual.
                 let cap = self.capture_arg(0, 0);
                 let lit = match cap.close {
                     Some(c) if c == cap.first + 1 => {
@@ -1203,8 +1206,8 @@ impl<'s> Recognizer<'s, '_> {
     /// they resolve.
     fn on_create_require(&mut self, t: Token, lp: usize) {
         let own = self.names_this_file(lp);
-        // (An argument too long to capture: no inline call is looked for, and a name
-        // bound to the result is a value.)
+        // (An argument too long to capture: no inline call is looked for, and a
+        // name bound to the result is a value.)
         if let Some(close) = self.call_close(lp) {
             // The argument says where the function searches from: a
             // `new URL(x, import.meta.url)` there locates no file that is read.
@@ -1231,8 +1234,8 @@ impl<'s> Recognizer<'s, '_> {
         }
         if let Some(Target::Name(name)) = self.assigned_target(t.start) {
             if name == "require" {
-                // Registered at its declaration ([`Recognizer::on_require`]); an
-                // assignment to the name binds it again.
+                // Registered at its declaration ([`Recognizer::on_require`]);
+                // an assignment to the name binds it again.
                 if !self.declares(t.start, name) {
                     self.add_loader(name, false, true, t.depth);
                 }
@@ -1492,7 +1495,8 @@ impl<'s> Recognizer<'s, '_> {
                     first = i + 1;
                 }
                 TokKind::Comma if t.depth == d + 1 => {
-                    // Later arguments do not matter (`import('x', {with: ...})`).
+                    // Later arguments do not matter (`import('x', {with:
+                    // ...})`).
                     return ArgCapture {
                         first,
                         end: i,
@@ -1552,10 +1556,10 @@ impl<'s> Recognizer<'s, '_> {
             if next.kind == TokKind::LBrace && next.flags & NEWLINE_BEFORE == 0 {
                 return None;
             }
-            // `{ require({ fallback = true } = {}): T { ... } }`: a TypeScript method with
-            // a return type. A call is never followed by `:` when it starts a
-            // statement or an object or class member (`c ? require(x) : y`
-            // follows a `?`).
+            // `{ require({ fallback = true } = {}): T { ... } }`: a TypeScript
+            // method with a return type. A call is never followed
+            // by `:` when it starts a statement or an object or
+            // class member (`c ? require(x) : y` follows a `?`).
             if self.dialect.ts && next.kind == TokKind::Colon && self.at_member_start(t.start) {
                 return None;
             }
@@ -1605,7 +1609,8 @@ impl<'s> Recognizer<'s, '_> {
             }
             self.ex.refs.push(r.with_flags(flags));
         } else {
-            // `require.resolve(x)` and `req.resolve(x)` share the kind and load nothing.
+            // `require.resolve(x)` and `req.resolve(x)` share the kind and load
+            // nothing.
             let requires = kind == RefKind::Require
                 && !(lp >= 1 && {
                     let callee = self.ts.peek(lp - 1);
@@ -1619,7 +1624,8 @@ impl<'s> Recognizer<'s, '_> {
             // `callee ( 'x' )`: nothing else to see.
             self.consume(c + 1);
         } else {
-            // Leave the argument tokens to the main loop (they may contain references).
+            // Leave the argument tokens to the main loop (they may contain
+            // references).
             self.consume(lp);
         }
         literal
@@ -1763,9 +1769,9 @@ impl<'s> Recognizer<'s, '_> {
         static FLOW: turborepo_trace_core::timing::Span =
             turborepo_trace_core::timing::Span::new("trace: value flow (inside extract)");
         let t = FLOW.enter();
-        // The engine is off or declines the file (it does not parse, is too large or
-        // too deep, uses `eval` or `with`): no site has a value, and the file
-        // has no environment facts.
+        // The engine is off or declines the file (it does not parse, is too
+        // large or too deep, uses `eval` or `with`): no site has a
+        // value, and the file has no environment facts.
         let flow = if *ENABLED {
             crate::flow::evaluate(
                 self.src,
@@ -1792,16 +1798,17 @@ impl<'s> Recognizer<'s, '_> {
         for s in sites {
             let asked = s.wants != Wants::Nothing;
             let v = if asked { vals.next().flatten() } else { None };
-            // References before this site (and this site's own, if it keeps them).
+            // References before this site (and this site's own, if it keeps
+            // them).
             let upto = if v.is_some() {
                 s.refs.start
             } else {
                 s.refs.end
             };
             while let Some((i, mut r)) = old.next_if(|(i, _)| *i < upto) {
-                // A site the engine was asked about and did not answer keeps the token
-                // result, which nothing has checked: the references stay, with an open
-                // record.
+                // A site the engine was asked about and did not answer keeps
+                // the token result, which nothing has checked:
+                // the references stay, with an open record.
                 if v.is_none() && asked && i >= s.refs.start {
                     unchecked(&mut r, s.site.arg_span, &s.detail);
                 }
@@ -1825,22 +1832,28 @@ impl<'s> Recognizer<'s, '_> {
                 &s.detail,
                 s.aliased,
             );
-            // A load asked of its callee that stays unknown: what is not known is where the
-            // `require` function searches (or what it is asked for there), and no other
-            // file's value can be put in its place: the value-flow facts make such a site
-            // no sink (`SiteIn::load`). So its record does not say `param`, `call` or
-            // `imported`, the origins of a value that callers or a callee decide: a file
-            // would be a binding site for a record that binding cannot close, and its
-            // facts would be computed for nothing on every graph without a facts cache
-            // (after a restore). The detail keeps the text of the call.
+            // A load asked of its callee that stays unknown: what is not known
+            // is where the `require` function searches (or what it
+            // is asked for there), and no other file's value can be
+            // put in its place: the value-flow facts make such a site
+            // no sink (`SiteIn::load`). So its record does not say `param`,
+            // `call` or `imported`, the origins of a value that
+            // callers or a callee decide: a file would be a binding
+            // site for a record that binding cannot close, and its
+            // facts would be computed for nothing on every graph without a
+            // facts cache (after a restore). The detail keeps the
+            // text of the call.
             //
-            // A template of origin `call` (the request is the result of an imported
-            // function, which may be an environment helper) is found by the origin of its
-            // record, so it says the origin the record ends with. When another alternative
-            // of the load has a record of the same kind at the same place (a parameter, a
-            // value nothing knows), the two cannot be told apart, and what resolves the
-            // one must not close the other: the template says that its record is shared,
-            // and the environment layer adds what it names and leaves the records alone.
+            // A template of origin `call` (the request is the result of an
+            // imported function, which may be an environment
+            // helper) is found by the origin of its record, so it
+            // says the origin the record ends with. When another alternative
+            // of the load has a record of the same kind at the same place (a
+            // parameter, a value nothing knows), the two cannot be
+            // told apart, and what resolves the one must not close
+            // the other: the template says that its record is shared,
+            // and the environment layer adds what it names and leaves the
+            // records alone.
             let mut shared = false;
             if asked_load {
                 shared = self.ex.refs[from..].iter().any(|r| {
@@ -1854,12 +1867,14 @@ impl<'s> Recognizer<'s, '_> {
                     }
                 }
             }
-            // The alternatives that stay open with origin `env` or `call`, as templates
-            // the graph store resolves against the repository's assignments. A load asked
-            // of its callee says where it searches from: a relative value is resolved
-            // from there, and with an unknown place it resolves nothing. Such a load has
-            // no template that could not be evaluated anyway (the place itself is the
-            // unknown): nothing would look for it.
+            // The alternatives that stay open with origin `env` or `call`, as
+            // templates the graph store resolves against the
+            // repository's assignments. A load asked of its callee
+            // says where it searches from: a relative value is resolved
+            // from there, and with an unknown place it resolves nothing. Such a
+            // load has no template that could not be evaluated
+            // anyway (the place itself is the unknown): nothing
+            // would look for it.
             for (origin, value) in uses {
                 if asked_load && !evaluable(&value) {
                     continue;
@@ -1890,8 +1905,8 @@ impl<'s> Recognizer<'s, '_> {
                     shared,
                 });
             }
-            // A record whose value other files decide: callers (a parameter), a called
-            // function or an imported binding.
+            // A record whose value other files decide: callers (a parameter), a
+            // called function or an imported binding.
             let param = self.ex.refs[from..]
                 .iter()
                 .any(|r| matches!(&r.uncertainty, Some(u) if matches!(u.origin, Origin::Param | Origin::Call | Origin::Imported)));
@@ -1917,22 +1932,23 @@ impl<'s> Recognizer<'s, '_> {
     /// file (the empty string) or lie outside the repository (temporary
     /// directories) produce nothing.
     fn emit_outcome(&mut self, site: Site, out: Outcome, detail: &str, aliased: Option<String>) {
-        // A module loaded from the temporary directory was generated at runtime (a
-        // bundle, a compiled addon, a script written by the test) from files
-        // this site cannot name: the load keeps a record. A file read from
-        // there is just the program's own data.
+        // A module loaded from the temporary directory was generated at runtime
+        // (a bundle, a compiled addon, a script written by the test)
+        // from files this site cannot name: the load keeps a record. A
+        // file read from there is just the program's own data.
         let generated = matches!(
             site.kind,
             RefKind::Require | RefKind::DynamicImport | RefKind::Worker | RefKind::ChildProcess
         ) && evaluator::in_tmp(&out.val);
-        // A `require` whose specifier ends with `.json` in every alternative reads a
-        // data file: Node parses a `.json` file, nothing in it runs and it
-        // loads nothing further. Where such a specifier cannot be said, the
-        // record is that of a read with a computed path, not of a module load
-        // (which would bring dependencies of its own). A specifier that can be
-        // said (a literal, a known directory prefix) is a `require` reference
-        // as before, and so is one through an alias of `require` or
-        // of `require.resolve`, which reads nothing. Only a value of the value-flow
+        // A `require` whose specifier ends with `.json` in every alternative
+        // reads a data file: Node parses a `.json` file, nothing in it
+        // runs and it loads nothing further. Where such a specifier
+        // cannot be said, the record is that of a read with a computed
+        // path, not of a module load (which would bring dependencies of
+        // its own). A specifier that can be said (a literal, a known
+        // directory prefix) is a `require` reference as before, and so
+        // is one through an alias of `require` or of `require.resolve`,
+        // which reads nothing. Only a value of the value-flow
         // engine counts: the token evaluator reads names without scopes, so the
         // `.json` it sees may belong to another binding of that name.
         let kind = site.kind;
@@ -2036,8 +2052,8 @@ impl<'s> Recognizer<'s, '_> {
             r.uncertainty = u;
             self.ex.refs.push(r);
         }
-        // One unknown reference per origin of the alternatives that could not be
-        // lowered.
+        // One unknown reference per origin of the alternatives that could not
+        // be lowered.
         let mut origins: Vec<(Origin, String)> = Vec::new();
         for o in lowered.origins {
             if !origins.iter().any(|x| x.0 == o.0) {
@@ -2147,7 +2163,8 @@ impl<'s> Recognizer<'s, '_> {
                     && self.is_literal(&lit)
                     && self.ts.peek(i + 3).kind == TokKind::RParen
             }) else {
-                // Not a binding: maybe a constant (or a `let`/`var` initial value).
+                // Not a binding: maybe a constant (or a `let`/`var` initial
+                // value).
                 if !destructured
                     && let Some(end) = self.const_init(pat, init, decl.kw != Kw::Const)
                     && self.ts.peek(end).kind == TokKind::Comma
@@ -2167,8 +2184,8 @@ impl<'s> Recognizer<'s, '_> {
                 member = self.ident_str(&m);
                 j += 2;
             }
-            // `const x = require('url').pathToFileURL(__filename).href`: a value computed
-            // from the module, not a binding to it.
+            // `const x = require('url').pathToFileURL(__filename).href`: a
+            // value computed from the module, not a binding to it.
             if matches!(
                 self.ts.peek(j).kind,
                 TokKind::Dot
@@ -2337,10 +2354,10 @@ impl<'s> Recognizer<'s, '_> {
         if cap.end == cap.first {
             return; // missing argument
         }
-        // `new Worker(code, { eval: true })`: the first argument is source text that
-        // the worker evaluates. No file is loaded, so the site is code
-        // evaluation like `eval` and `new Function`, not a load of an unknown
-        // file.
+        // `new Worker(code, { eval: true })`: the first argument is source text
+        // that the worker evaluates. No file is loaded, so the site is
+        // code evaluation like `eval` and `new Function`, not a load of
+        // an unknown file.
         if e.kind == RefKind::Worker && self.worker_evals(lp) {
             self.eval_like(t, lp, "new Worker", ", {eval: true}");
             return;
@@ -2852,8 +2869,8 @@ fn evaluable(value: &turborepo_trace_core::env::EnvValue) -> bool {
 /// token evaluator reads names without scopes and top-level `let` / `var`
 /// bindings by their initial value, so its result alone is a guess.
 fn unchecked(r: &mut RawRef<'_>, at: Span, detail: &str) {
-    // An informational record is replaced; any other (also `CwdDependent`, which
-    // the working directory of a test can resolve) stays.
+    // An informational record is replaced; any other (also `CwdDependent`,
+    // which the working directory of a test can resolve) stays.
     let open = r
         .uncertainty
         .as_ref()

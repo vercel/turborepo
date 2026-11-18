@@ -201,8 +201,8 @@ fn a_removed_unused_export_selects_nothing() {
     let r = d.path();
     write(r, "src/attribution/utils.ts", UTILS_WITHOUT_COOKIE);
     assert_eq!(affected(r), Vec::<String>::new());
-    // Without the export-level comparison (as before): every test that loads the
-    // file.
+    // Without the export-level comparison (as before): every test that loads
+    // the file.
     assert_eq!(
         affected_env(
             r,
@@ -305,8 +305,8 @@ fn a_changed_export_selects_the_tests_that_use_it_through_importers() {
 
 #[test]
 fn an_importer_that_reads_the_change_at_load_time_selects_its_dependents() {
-    // `registry.ts` calls `hasSignal` while it loads: whatever a test uses of it,
-    // the change can show.
+    // `registry.ts` calls `hasSignal` while it loads: whatever a test uses of
+    // it, the change can show.
     let d = tracking();
     let r = d.path();
     write(
@@ -449,8 +449,8 @@ fn changed_load_time_code_is_a_whole_file_change() {
         &PREDICATE.replace("'lib.postpone'", "'lib.postpone.v2'"),
     );
     assert_eq!(affected(r), ["test/team.test.ts"]);
-    // A lookup that runs code at load time (a member access can be a getter): the
-    // statement itself changes.
+    // A lookup that runs code at load time (a member access can be a getter):
+    // the statement itself changes.
     let lookup = PREDICATE.replace("Symbol.for('lib.postpone')", "globalThis.symbols.postpone");
     write(r, "src/is-internal-error.ts", &lookup);
     git(r, &["commit", "-q", "-am", "lookup"]);
@@ -502,12 +502,12 @@ fn changed_load_time_code_is_a_whole_file_change() {
 
 #[test]
 fn a_load_time_difference_the_comparison_finds_is_a_whole_file_change() {
-    // `m.ts` stops using its import of `log.ts` as a value: a transpiler drops the
-    // import, and `log.ts`, which logs when it is loaded, no longer runs. Both
-    // versions of `m.ts` are free of side effects and import the same modules
-    // as written, so barrel pruning alone would track `m.ts` by its exports and
-    // skip a test that loads it without naming one. The comparison knows that
-    // the module's loads differ.
+    // `m.ts` stops using its import of `log.ts` as a value: a transpiler drops
+    // the import, and `log.ts`, which logs when it is loaded, no longer
+    // runs. Both versions of `m.ts` are free of side effects and import the
+    // same modules as written, so barrel pruning alone would track `m.ts`
+    // by its exports and skip a test that loads it without naming one. The
+    // comparison knows that the module's loads differ.
     let d = commit(&[
         (
             "src/log.ts",
@@ -549,9 +549,9 @@ fn a_load_time_difference_the_comparison_finds_is_a_whole_file_change() {
 
 #[test]
 fn a_mock_of_a_builder_selects_the_tests_that_load_a_file_relying_on_it() {
-    // `declareFlag` only builds a value, so a changed declaration changes `flagX`
-    // and nothing else. A test that mocks the module `declareFlag` comes from
-    // sees the call and its argument whatever it reads.
+    // `declareFlag` only builds a value, so a changed declaration changes
+    // `flagX` and nothing else. A test that mocks the module `declareFlag`
+    // comes from sees the call and its argument whatever it reads.
     let d = commit(&[
         (
             "src/declare.ts",
@@ -587,8 +587,8 @@ fn a_mock_of_a_builder_selects_the_tests_that_load_a_file_relying_on_it() {
         "import { declareFlag } from './declare';\nexport const flagX = declareFlag({ key: 'y' \
          });\nexport const other = 1;\n",
     );
-    // Not the test that reads `other` without a mock, and not the one that mocks
-    // the builder without loading the file that calls it.
+    // Not the test that reads `other` without a mock, and not the one that
+    // mocks the builder without loading the file that calls it.
     assert_eq!(affected(r), ["test/mocked.test.ts"]);
     let e = explain(r, "test/mocked.test.ts");
     assert!(
@@ -609,9 +609,9 @@ fn a_mock_of_a_builder_selects_the_tests_that_load_a_file_relying_on_it() {
 
 #[test]
 fn a_function_that_reads_this_reads_the_namespace_of_a_barrel() {
-    // `api.viaThis()` hands the namespace of the barrel to `viaThis`, which reads
-    // `hidden` from it: a change of `hidden` reaches the test although it names
-    // only `viaThis`.
+    // `api.viaThis()` hands the namespace of the barrel to `viaThis`, which
+    // reads `hidden` from it: a change of `hidden` reaches the test
+    // although it names only `viaThis`.
     let d = commit(&[
         (
             "src/a.ts",
@@ -644,8 +644,8 @@ fn a_function_that_reads_this_reads_the_namespace_of_a_barrel() {
         "src/c.ts",
         "export function hidden() {\n  return 2;\n}\n",
     );
-    // A named import calls the function without a receiver, and a namespace that is
-    // only read member by member is handed to nobody.
+    // A named import calls the function without a receiver, and a namespace
+    // that is only read member by member is handed to nobody.
     assert_eq!(affected(r), ["test/ns.test.ts"]);
 }
 
@@ -665,8 +665,8 @@ fn a_modified_test_always_runs() {
 
 #[test]
 fn whole_module_uses_of_an_importer_select() {
-    // A test that mocks the fetch wrapper, and one that takes its namespace apart
-    // at run time: both can observe any export of it.
+    // A test that mocks the fetch wrapper, and one that takes its namespace
+    // apart at run time: both can observe any export of it.
     let d = fetching();
     let r = d.path();
     write(
@@ -773,11 +773,12 @@ fn a_load_time_call_that_only_builds_a_value_passes_the_change_on_by_name() {
             "code === 'REDIRECT' || code === 'HANGING' ||",
         ),
     );
-    // `GET = withTrace(...)` wraps a function that reaches the change: its own test
-    // runs, the test of the constant next to it doesn't. `register(...)` keeps
-    // its argument in module state: everything that loads that file.
-    // `getProduct = cache(...)` too: React's `cache` is not in every React
-    // build (18 stable has none), so a call of it is load-time code.
+    // `GET = withTrace(...)` wraps a function that reaches the change: its own
+    // test runs, the test of the constant next to it doesn't.
+    // `register(...)` keeps its argument in module state: everything that
+    // loads that file. `getProduct = cache(...)` too: React's `cache` is
+    // not in every React build (18 stable has none), so a call of it is
+    // load-time code.
     assert_eq!(
         affected(r),
         [
@@ -813,9 +814,9 @@ fn a_load_time_call_that_only_builds_a_value_passes_the_change_on_by_name() {
 
 #[test]
 fn a_changed_wrapper_is_load_time_code_of_its_callers() {
-    // The wrapper itself changes (it now calls the handler once while wrapping):
-    // what its callers do at load time changed, so every test that loads a
-    // caller runs.
+    // The wrapper itself changes (it now calls the handler once while
+    // wrapping): what its callers do at load time changed, so every test
+    // that loads a caller runs.
     let d = wrappers();
     let r = d.path();
     let trace = std::fs::read_to_string(r.join("src/trace.ts")).unwrap();
@@ -1011,9 +1012,9 @@ fn a_registry_entry_that_runs_code_is_load_time_code() {
         ),
     );
     assert_eq!(affected(r), ["test/comments.test.ts", "test/logs.test.ts"]);
-    // The adapter is made differently: the declarator is no longer taken on trust
-    // at the base revision, so a flag added in the same change is a whole-file
-    // change again.
+    // The adapter is made differently: the declarator is no longer taken on
+    // trust at the base revision, so a flag added in the same change is a
+    // whole-file change again.
     let d = registry();
     let r = d.path();
     write(
@@ -1053,9 +1054,9 @@ fn schema_builders_and_tables_over_constants_are_compared_by_export() {
         affected_env(r, &BEFORE),
         ["test/query.test.ts", "test/row.test.ts"]
     );
-    // That a zod builder only builds a value is an assumption about a package: it
-    // is stated for the test that is not selected, and `--strict` does not make
-    // it.
+    // That a zod builder only builds a value is an assumption about a package:
+    // it is stated for the test that is not selected, and `--strict` does
+    // not make it.
     let e = explain(r, "test/query.test.ts");
     assert!(
         e.contains("unaffected test/query.test.ts")
@@ -1067,8 +1068,9 @@ fn schema_builders_and_tables_over_constants_are_compared_by_export() {
             ),
         "{e}"
     );
-    // (`--strict` also opens the imports of packages that are not installed here,
-    // so the list has more than these two; what the rule did is in the JSON.)
+    // (`--strict` also opens the imports of packages that are not installed
+    // here, so the list has more than these two; what the rule did is in
+    // the JSON.)
     let strict: serde_json::Value = serde_json::from_str(&ok_env(
         r,
         &[
@@ -1077,8 +1079,8 @@ fn schema_builders_and_tables_over_constants_are_compared_by_export() {
         &[],
     ))
     .unwrap();
-    // The schema file's own builder calls are load-time code now, and one of them
-    // changed: the file counts as a whole.
+    // The schema file's own builder calls are load-time code now, and one of
+    // them changed: the file counts as a whole.
     let changes = &strict["pruning"]["load_time_changes"];
     assert_eq!(changes[0]["path"], "src/schemas.ts", "{changes}");
     assert!(
@@ -1108,8 +1110,8 @@ fn schema_builders_and_tables_over_constants_are_compared_by_export() {
         &format!("{schemas}\nexport const fallback = level.parse('info');\n"),
     );
     assert_eq!(affected(r), ["test/query.test.ts", "test/row.test.ts"]);
-    // An entry added to the route table: the table's readers, not the readers of a
-    // function next to it.
+    // An entry added to the route table: the table's readers, not the readers
+    // of a function next to it.
     let d = registry();
     let r = d.path();
     let routes = std::fs::read_to_string(r.join("src/routes.ts")).unwrap();
@@ -1127,7 +1129,8 @@ fn schema_builders_and_tables_over_constants_are_compared_by_export() {
         affected_env(r, &BEFORE),
         ["test/known.test.ts", "test/routes.test.ts"]
     );
-    // The constant in a label changes too: it is what the template is made from.
+    // The constant in a label changes too: it is what the template is made
+    // from.
     write(
         r,
         "src/constants.ts",
@@ -1194,8 +1197,8 @@ fn a_member_added_to_an_enum_selects_the_code_that_enumerates_it() {
             "  Project = 'project',\n  Rules = 'rules',\n",
         ),
     );
-    // Only `allResources` takes the enum as a whole; the others read members that
-    // did not change.
+    // Only `allResources` takes the enum as a whole; the others read members
+    // that did not change.
     assert_eq!(affected(r), ["test/all.test.ts"]);
     assert_eq!(
         affected_env(r, &BEFORE),

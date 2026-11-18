@@ -322,7 +322,8 @@ pub struct Trace {
 fn digest_ids(ids: impl Iterator<Item = Option<u32>>) -> u64 {
     let mut h = Xxh3::new();
     for id in ids {
-        // A file outside the trace has no index: it never equals a recorded answer.
+        // A file outside the trace has no index: it never equals a recorded
+        // answer.
         h.update(&id.map_or(u64::MAX, u64::from).to_le_bytes());
     }
     h.digest()
@@ -434,11 +435,12 @@ pub fn replay(trace: &mut Trace, w: &dyn World, roots: &[u32]) -> Option<Replaye
     }
     drop(files_time);
     let mut updated = false;
-    // The facts first: they are what an edit changes most often, and each takes a
-    // comparison of two numbers.
+    // The facts first: they are what an edit changes most often, and each takes
+    // a comparison of two numbers.
     for facts in [true, false] {
         if !facts {
-            // The importers of the modules the run asked about, in one pass over the edges.
+            // The importers of the modules the run asked about, in one pass
+            // over the edges.
             let _t = IMPORTERS.enter();
             let asked: Vec<u32> = trace
                 .asks
@@ -471,8 +473,8 @@ pub fn replay(trace: &mut Trace, w: &dyn World, roots: &[u32]) -> Option<Replaye
                     if source.is_some() && *source == now {
                         true
                     } else if w.facts_digest(f) == *digest {
-                        // (A file without a nameable source stays without one: nothing
-                        // to store again.)
+                        // (A file without a nameable source stays without one:
+                        // nothing to store again.)
                         if *source != now {
                             *source = now;
                             updated = true;

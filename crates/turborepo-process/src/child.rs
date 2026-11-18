@@ -143,8 +143,8 @@ impl Child {
         let (exit_tx, exit_rx) = watch::channel(None);
 
         let _task = tokio::spawn(async move {
-            // On Windows it is important that this gets dropped once the child process
-            // exits
+            // On Windows it is important that this gets dropped once the child
+            // process exits
             let controller = controller;
             debug!("waiting for task: {pid:?}");
             let mut manager = ChildStateManager {
@@ -188,7 +188,8 @@ impl Child {
     /// Wait for the `Child` to exit, returning the exit code.
     pub async fn wait(&mut self) -> Option<ChildExit> {
         trace!("watching exit channel of {}", self.label);
-        // If sending end of exit channel closed, then return last value in the channel
+        // If sending end of exit channel closed, then return last value in the
+        // channel
         match self.exit_channel.changed().await {
             Ok(()) => trace!("exit channel was updated"),
             Err(_) => trace!("exit channel sender was dropped"),

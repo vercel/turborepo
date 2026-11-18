@@ -51,7 +51,8 @@ impl<'de> Deserialize<'de> for PackageEntry {
         let mut registry = None;
         let mut info = None;
 
-        // Special case: root packages have a unique second value, so we handle it here
+        // Special case: root packages have a unique second value, so we handle
+        // it here
         if key.ends_with("@root:") {
             let root = vals.pop_front().and_then(|val| {
                 serde_json::from_value::<RootInfo>(match val {
@@ -75,7 +76,8 @@ impl<'de> Deserialize<'de> for PackageEntry {
         if let Some(val) = vals.pop_front() {
             match val {
                 Vals::Str(reg) => {
-                    // Only set registry for npm packages, not git/github packages
+                    // Only set registry for npm packages, not git/github
+                    // packages
                     if !is_git_or_github_package(&key) {
                         registry = Some(reg);
                     }
@@ -239,8 +241,8 @@ mod test {
     );
 
     // GitHub package with CORRUPTED input (has empty string at position 1)
-    // This tests that the deserializer fix correctly ignores registry for github
-    // packages
+    // This tests that the deserializer fix correctly ignores registry for
+    // github packages
     fixture!(
         github_pkg_corrupted_input,
         PackageEntry,

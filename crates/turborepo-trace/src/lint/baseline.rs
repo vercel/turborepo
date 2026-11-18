@@ -306,8 +306,8 @@ mod tests {
         );
         assert_eq!(m.baselined, [true, true, true]);
         assert!(m.stale.is_empty());
-        // One more of a known key: the first two are baselined, the third is new. A key
-        // the baseline does not have is new.
+        // One more of a known key: the first two are baselined, the third is
+        // new. A key the baseline does not have is new.
         let m = b.matches(
             &[
                 key("a.js", "k"),

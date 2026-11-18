@@ -324,7 +324,8 @@ pub fn header_constraints(src: &[u8]) -> HeaderConstraints {
     let mut pos = 0usize;
     let mut go_build_seen = false;
     let mut code_start = src.len();
-    // `+build` candidates with their line offsets; only those before `end` count.
+    // `+build` candidates with their line offsets; only those before `end`
+    // count.
     let mut plus: Vec<(usize, String)> = Vec::new();
     'lines: while pos < src.len() {
         let line_start = pos;

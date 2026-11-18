@@ -266,9 +266,9 @@ pub fn infer_context(ws: &Workspace, dockerfile: &Path, df: &dockerfile::Dockerf
     if srcs.is_empty() {
         return own;
     }
-    // Scored by the first path segment of each source in the candidate's listing:
-    // listing a directory is not a probe of the paths below it (which may be
-    // other tasks' outputs).
+    // Scored by the first path segment of each source in the candidate's
+    // listing: listing a directory is not a probe of the paths below it
+    // (which may be other tasks' outputs).
     let firsts: BTreeSet<&str> = srcs
         .iter()
         .map(|s| s.split('/').next().unwrap_or(s))
@@ -286,8 +286,8 @@ pub fn infer_context(ws: &Workspace, dockerfile: &Path, df: &dockerfile::Dockerf
         )
     };
     let score = |d: &Path| {
-        // Only the names checked are observed (a full listing would be shared by every
-        // task of the package).
+        // Only the names checked are observed (a full listing would be shared
+        // by every task of the package).
         let Some(entries) = turborepo_trace_core::record::pause_listings(|| fsx::read_dir(d))
         else {
             return 0;
@@ -603,8 +603,9 @@ impl Cx<'_> {
                     .push((dest_abs.clone(), self.ctx.to_path_buf()));
                 continue;
             }
-            // `{c,c/**}` covers a file or a directory source without a filesystem check (a
-            // probe during discovery would be shared by every task of the package).
+            // `{c,c/**}` covers a file or a directory source without a
+            // filesystem check (a probe during discovery would be
+            // shared by every task of the package).
             stage.spec.memberships.extend(self.ig.memberships(
                 self.ctx,
                 Some(&c),
@@ -628,7 +629,8 @@ impl Cx<'_> {
                     state.mounts.push((dest_abs.clone(), parent.to_path_buf()));
                 }
             } else if let (Some(ip), Some(rp)) = (dest_abs.rsplit_once('/'), path.parent()) {
-                // `COPY package.json /app/package.json`: the directory maps too.
+                // `COPY package.json /app/package.json`: the directory maps
+                // too.
                 let ip = if ip.0.is_empty() { "/" } else { ip.0 };
                 state.mounts.push((ip.to_string(), rp.to_path_buf()));
             }
@@ -744,7 +746,8 @@ impl Cx<'_> {
                 task_name: None,
                 scripts: &scripts,
             };
-            // Only task deps and toolchain names are kept, which no listing decides.
+            // Only task deps and toolchain names are kept, which no listing
+            // decides.
             let rep = turborepo_trace_core::record::pause_listings(|| {
                 registry().recognize(cmd, &rcx, &mut scratch)
             });
@@ -1192,8 +1195,8 @@ fn build_command(
     }
     let ws = workspace_for(cx);
     let inferred = analyze(&ws, &file, None, None, &BuildVars::new());
-    // The standalone `docker:` task describes this build only for the same context
-    // and no build args.
+    // The standalone `docker:` task describes this build only for the same
+    // context and no build args.
     let same = inferred.context == fsx::normalize(&ctx) && bargs.is_empty();
     let a = if same {
         inferred
@@ -1224,8 +1227,8 @@ fn build_command(
         out.config(file);
         Recognition::Full
     } else {
-        // A different context or build args: the standalone task does not describe this
-        // build, so its analysis is inlined.
+        // A different context or build args: the standalone task does not
+        // describe this build, so its analysis is inlined.
         let spec = a.closure_spec(idx);
         let uncertain = !spec.uncertainties.is_empty();
         out.merge(spec);
@@ -1258,8 +1261,8 @@ fn workspace_for(cx: &RecognizeCx<'_>) -> std::sync::Arc<Workspace> {
     let rel =
         crate::sources::norm_rel(&crate::sources::make::rel_of(cx.repo_root, cx.package_root));
     if discovered.packages.iter().any(|p| p.rel == rel) {
-        // Adding a package that is already there rebuilds the same workspace from the
-        // same manifests (whose reads discovery recorded).
+        // Adding a package that is already there rebuilds the same workspace
+        // from the same manifests (whose reads discovery recorded).
         return discovered;
     }
     M.get_or_init(RecMemo::new).get_or(
@@ -1419,9 +1422,9 @@ fn compose_command(
             continue;
         }
         let have: BTreeSet<TaskId> = tasks.iter().filter_map(|t| t.id.clone()).collect();
-        // `up` leaves the project running for the commands after it (the tests a job or
-        // script runs next talk to it), unless it waits for a container to exit: then
-        // the containers are the run itself.
+        // `up` leaves the project running for the commands after it (the tests
+        // a job or script runs next talk to it), unless it waits for a
+        // container to exit: then the containers are the run itself.
         let file_id = TaskId::docker(rel.clone(), None);
         if starts && have.contains(&file_id) {
             out.starts_service(TaskRef::Id { id: file_id });

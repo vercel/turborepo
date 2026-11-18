@@ -432,7 +432,8 @@ impl Platform {
             }
         }
         for t in &tokens {
-            // Bare `32`/`64` are architectures only next to an OS (`esbuild-linux-64`).
+            // Bare `32`/`64` are architectures only next to an OS
+            // (`esbuild-linux-64`).
             if (*t == "32" || *t == "64") && !saw_os {
                 continue;
             }

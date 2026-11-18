@@ -725,7 +725,8 @@ fn validate(request: &SetupRequest, tools_only: bool) -> Result<(), Error> {
         Mode::Provision => false,
     };
     if read_only && request.lock != LockMode::NoLock {
-        // CI/frozen/offline never change read-only modes into resolution or repair.
+        // CI/frozen/offline never change read-only modes into resolution or
+        // repair.
         return Ok(());
     }
     // Force reinstalls existing locked selections, independently of local
@@ -789,7 +790,8 @@ mod tests {
         let arch = cfg!(any(target_arch = "x86_64", target_arch = "aarch64"));
         let libc = turborepo_platform::host_libc();
         let host = cfg!(target_os = "macos") || matches!(libc, Ok(Some(Libc::Glibc { .. })));
-        // An x64 build qualifies only on an x64 host, not under arm64 emulation.
+        // An x64 build qualifies only on an x64 host, not under arm64
+        // emulation.
         let windows = cfg!(all(windows, target_arch = "x86_64"))
             && provision::windows_host_machine() == Some(0x8664);
         let platform = provision::platform();

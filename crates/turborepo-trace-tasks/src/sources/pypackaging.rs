@@ -710,10 +710,12 @@ impl Setuptools {
                             !FLAT_EXCLUDE.contains(&top)
                         }),
                 );
-                // A single-module distribution. A project without a name (at the root of
-                // the checkout, whose directory name is no part of the tree) is not asked
-                // for `<name>.py`: the build backend takes the modules it finds next to the
-                // project file, so every one of them is an input, and so is one that is
+                // A single-module distribution. A project without a name (at
+                // the root of the checkout, whose directory
+                // name is no part of the tree) is not asked for
+                // `<name>.py`: the build backend takes the modules it finds
+                // next to the project file, so every one of
+                // them is an input, and so is one that is
                 // added.
                 let name = import_name(project);
                 if !pkgs.is_empty() {
@@ -748,10 +750,10 @@ impl Setuptools {
                 }
             }
         }
-        // `include_package_data` (default on for pyproject-based configuration): files
-        // in packages that the sdist includes. With setuptools-scm that is
-        // every tracked file; otherwise MANIFEST.in decides (its memberships
-        // are added separately).
+        // `include_package_data` (default on for pyproject-based
+        // configuration): files in packages that the sdist includes.
+        // With setuptools-scm that is every tracked file; otherwise
+        // MANIFEST.in decides (its memberships are added separately).
         let ipd = self.include_package_data.unwrap_or(pyproject_based);
         if ipd && scm {
             for (_, d) in &pkgs {
@@ -1130,8 +1132,9 @@ impl PyDist {
                 })
             })
             .unwrap_or_else(|| {
-                // The directory's name, as the build backends fall back to it. Not for the
-                // checkout itself: what that directory is called is no part of the tree, so
+                // The directory's name, as the build backends fall back to it.
+                // Not for the checkout itself: what that
+                // directory is called is no part of the tree, so
                 // a project without a name at the root has no default package.
                 if fsx::is_checkout_dir(root) {
                     return String::new();
@@ -1237,9 +1240,9 @@ impl PyDist {
                 );
             }
         }
-        // No `dist/` output: the store would link every task that lists the project
-        // root as a consumer of this one (generated-file linking), and nothing
-        // reads `dist/`.
+        // No `dist/` output: the store would link every task that lists the
+        // project root as a consumer of this one (generated-file
+        // linking), and nothing reads `dist/`.
         let rel = repo_rel(&cx.workspace.root, root);
         let mut t = DiscoveredTask::new(TaskId::other("py-dist", rel), "dist", root.clone());
         t.spec = spec;

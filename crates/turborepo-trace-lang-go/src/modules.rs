@@ -268,10 +268,12 @@ impl Ctx {
                     go_mod: Some(m.dir.join("go.mod")),
                 }
             } else {
-                // The package is the Go files of that directory, also while it is missing: a
-                // generator can write them later (a gitignored `gen/` tree). The membership
-                // makes an added file a change of the importer, and lets the graph store link
-                // the importer to the task that produces files there.
+                // The package is the Go files of that directory, also while it
+                // is missing: a generator can write them later
+                // (a gitignored `gen/` tree). The membership
+                // makes an added file a change of the importer, and lets the
+                // graph store link the importer to the task
+                // that produces files there.
                 if fs.records() {
                     turborepo_trace_core::record::listing(&dir, "*.go");
                 }
@@ -317,8 +319,8 @@ impl Ctx {
         if !absent.is_empty() {
             return PkgLoc::NotDownloaded(absent);
         }
-        // Without the module cache's path: a record must not name a directory of the
-        // machine that built the graph.
+        // Without the module cache's path: a record must not name a directory
+        // of the machine that built the graph.
         PkgLoc::Missing(format!(
             "no required module provides package {import} (or it is not in the module cache)"
         ))
@@ -374,8 +376,9 @@ impl Ctx {
             if local || fs.is_dir(&root) {
                 continue;
             }
-            // The identity is the one the module's files would have: after `replace M => N
-            // W`, the directory (and so the identity) is `N@W`.
+            // The identity is the one the module's files would have: after
+            // `replace M => N W`, the directory (and so the
+            // identity) is `N@W`.
             let (m, v) = match modcache_module(&self.modcache, &root.join("go.mod")) {
                 Some((_, m, v)) => (m, v),
                 None => (module.clone(), version.clone()),
@@ -643,8 +646,9 @@ pub fn work_ctx(fs: &DirCache, go_work: &Path, vendor: VendorMode, modcache: &Pa
         .collect();
     let mut excludes = Vec::new();
     let mut sum_files = Vec::new();
-    // The `go.mod` of every workspace module: the build list is the union of their
-    // requirements, so each is an input of every file of the workspace.
+    // The `go.mod` of every workspace module: the build list is the union of
+    // their requirements, so each is an input of every file of the
+    // workspace.
     let mut mod_files = Vec::new();
     for u in &w.uses {
         let dir = normalize(&root.join(u));

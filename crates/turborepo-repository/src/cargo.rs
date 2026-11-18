@@ -2286,8 +2286,8 @@ struct CargoHomeEnvironment {
 
 impl CargoHomeEnvironment {
     fn current() -> Self {
-        // `var_os` preserves non-UTF-8 values and follows Windows' case-insensitive
-        // lookup.
+        // `var_os` preserves non-UTF-8 values and follows Windows'
+        // case-insensitive lookup.
         Self {
             cargo_home: std::env::var_os("CARGO_HOME"),
             user_profile: std::env::var_os("USERPROFILE"),
@@ -3956,8 +3956,9 @@ dependencies = ["lib-a"]
             );
         }
 
-        // The same in-memory observations flow through the native task contract:
-        // automatic caching cannot be enabled without restorable outputs.
+        // The same in-memory observations flow through the native task
+        // contract: automatic caching cannot be enabled without
+        // restorable outputs.
         let contributor = CargoContributor::new(root.clone());
         let package_context = task_context(&contributor, &root, "app", "crates/app");
         let contract =
@@ -5248,7 +5249,8 @@ release: 1.96.0-nightly\n",
         }
 
         // Clippy lints local dependencies too, so configuration above a
-        // dependency in another subtree applies; rustfmt formats only the crate.
+        // dependency in another subtree applies; rustfmt formats only the
+        // crate.
         let distant_dependency = task_context(&toolchain, &root, "lib-a", "libs/lib-a");
         let lint = contracts["app"]
             .derived_task_io(

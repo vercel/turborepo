@@ -182,7 +182,8 @@ fn e2e_tasks() {
         let root = fixtures().join(name);
         let ws = Workspace::discover(&root);
         let set = discover(&ws, &Options::default());
-        // Only script and directive tasks: other task sources are not under test here.
+        // Only script and directive tasks: other task sources are not under
+        // test here.
         for t in set
             .tasks
             .iter()

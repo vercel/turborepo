@@ -327,8 +327,8 @@ impl<'a> Engine<'a, '_> {
         name: Span,
     ) -> Cover<'a> {
         let i = list.iter().position(|s| within(s.span(), at))?;
-        // A function declaration can run before the statements in front of it. An
-        // `export`ed one is a declaration all the same.
+        // A function declaration can run before the statements in front of it.
+        // An `export`ed one is a declaration all the same.
         let hoisted = match &list[i] {
             Statement::FunctionDeclaration(_) => true,
             Statement::ExportDeclaration(e) => {
@@ -380,7 +380,8 @@ impl<'a> Engine<'a, '_> {
                 };
                 let a = self.holds(&l.left, sym, name, truth);
                 let b = self.holds(&l.right, sym, name, truth);
-                // `a && b` true: both; false: one of them. `a || b` the other way round.
+                // `a && b` true: both; false: one of them. `a || b` the other
+                // way round.
                 if and == truth {
                     both(a, b)
                 } else {
@@ -427,8 +428,9 @@ impl<'a> Engine<'a, '_> {
             }
             "includes" | "has" if self.is_sym(arg, sym) => {
                 let recv = self.eval(&m.object);
-                // An array or a `Set` of the file. (`includes` of a string is a substring
-                // test, and an object can define either method.)
+                // An array or a `Set` of the file. (`includes` of a string is a
+                // substring test, and an object can define
+                // either method.)
                 if !recv.leaves().iter().all(|l| matches!(l, V::Array(_))) {
                     return None;
                 }
@@ -460,8 +462,8 @@ impl<'a> Engine<'a, '_> {
 pub(super) fn regex_starts(text: &str) -> Option<Vec<String>> {
     let end = text.rfind('/')?;
     let (pattern, flags) = (text.get(1..end)?, &text[end + 1..]);
-    // `i`: other spellings match; `m`: `^` matches after any line break; `g` / `y`:
-    // the match starts at `lastIndex`.
+    // `i`: other spellings match; `m`: `^` matches after any line break; `g` /
+    // `y`: the match starts at `lastIndex`.
     if !flags.chars().all(|f| matches!(f, 'u' | 's' | 'd')) {
         return None;
     }
@@ -475,8 +477,9 @@ pub(super) fn regex_starts(text: &str) -> Option<Vec<String>> {
         match *chars.get(i)? {
             '\\' => {
                 let c = *chars.get(i + 1)?;
-                // An escaped punctuation character is itself; a letter or digit is a class,
-                // a back reference or a control character.
+                // An escaped punctuation character is itself; a letter or digit
+                // is a class, a back reference or a control
+                // character.
                 (!c.is_alphanumeric() && c != '_').then_some((c, i + 2))
             }
             '^' | '$' | '.' | '*' | '+' | '?' | '(' | ')' | '[' | ']' | '{' | '}' | '|' | '/' => {

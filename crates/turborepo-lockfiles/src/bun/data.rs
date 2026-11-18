@@ -47,7 +47,8 @@ impl<'de> Deserialize<'de> for Negatable {
 
         match value {
             Value::String(s) => {
-                // Treating "none" as special breaks wasm packages that use cpu="none"
+                // Treating "none" as special breaks wasm packages that use
+                // cpu="none"
                 if let Some(stripped) = s.strip_prefix('!') {
                     Ok(Negatable::Negated(vec![stripped.to_string()]))
                 } else {
@@ -72,7 +73,8 @@ impl<'de> Deserialize<'de> for Negatable {
                 let has_non_negated = platforms.iter().any(|p| !p.starts_with('!'));
 
                 if has_negated && has_non_negated {
-                    // npm spec requires explicit allows to take precedence over denies
+                    // npm spec requires explicit allows to take precedence over
+                    // denies
                     let allowed_platforms: Vec<String> = platforms
                         .into_iter()
                         .filter(|p| !p.starts_with('!'))

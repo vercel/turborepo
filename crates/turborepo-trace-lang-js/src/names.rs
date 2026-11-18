@@ -393,8 +393,8 @@ fn located_rel(g: &Group) -> Option<String> {
     }
     let mut out: Vec<&str> = Vec::new();
     let mut ups = 0u32;
-    // The file's name is the first segment of the location; the first `..` removes
-    // it.
+    // The file's name is the first segment of the location; the first `..`
+    // removes it.
     let mut file = g.file_token && !g.url;
     'pieces: for piece in &g.literals {
         if piece.chars().any(|c| c < ' ') {
@@ -559,9 +559,9 @@ impl Parts {
             |at: u32| followed.is_some_and(|f| f.covered.iter().any(|&(a, b)| a <= at && at < b));
         let location = followed.is_some_and(|f| f.location);
         let cwd = followed.is_some_and(|f| f.cwd);
-        // The parent steps of one expression apply to the location once: the deepest
-        // climb of any of them counts, not their sum. Steps elsewhere can be applied to
-        // any value.
+        // The parent steps of one expression apply to the location once: the
+        // deepest climb of any of them counts, not their sum. Steps
+        // elsewhere can be applied to any value.
         let (mut detached, mut anchored) = (0u32, 0u32);
         for s in self.steps.iter().filter(|s| !covered(s.at)) {
             if s.anchored && !location {
@@ -578,9 +578,10 @@ impl Parts {
         names.anchored = self.located.clone();
         if let Some(f) = followed {
             names.anchored.extend(f.entries.iter().cloned());
-            // A template whose leading hole is known is judged on its values: a URL is
-            // not a path, and a known directory makes the name longer. The names that
-            // only the template gave are replaced.
+            // A template whose leading hole is known is judged on its values: a
+            // URL is not a path, and a known directory makes the
+            // name longer. The names that only the template gave
+            // are replaced.
             for (at, values) in &f.leads {
                 let Some(t) = self.templates.iter().find(|t| t.at == *at) else {
                     continue;
@@ -622,11 +623,11 @@ fn lead_identifier(src: &[u8], at: u32) -> Option<&[u8]> {
 
 /// Ends the group `g` inside `parent`.
 fn close_group(g: Group, parent: Option<&mut Group>, out: &mut Found, collector: &mut Collector) {
-    // A literal path from the file's location that ends with a name: the extractor
-    // emits it as a reference where it is read, and everywhere else an anchored
-    // entry names exactly where it leads (its last segments are a name too,
-    // like any string). (One that ends with `..` or `.` is a directory no
-    // string names: a use of the location.)
+    // A literal path from the file's location that ends with a name: the
+    // extractor emits it as a reference where it is read, and everywhere
+    // else an anchored entry names exactly where it leads (its last
+    // segments are a name too, like any string). (One that ends with `..`
+    // or `.` is a directory no string names: a use of the location.)
     if g.builds_path
         && g.pure
         && g.down
@@ -643,12 +644,13 @@ fn close_group(g: Group, parent: Option<&mut Group>, out: &mut Found, collector:
         });
         return;
     }
-    // Anywhere else, parent steps that lead out of where a string starts say that
-    // the path leaves.
+    // Anywhere else, parent steps that lead out of where a string starts say
+    // that the path leaves.
     for &i in &g.climbing {
         collector.mark_climbs(i);
     }
-    // `const __filename = fileURLToPath(import.meta.url)` only defines the anchor.
+    // `const __filename = fileURLToPath(import.meta.url)` only defines the
+    // anchor.
     if g.defines_filename && g.pure && g.ups == 0 {
         out.uses.truncate(g.uses_from);
         return;
@@ -802,12 +804,12 @@ pub fn scan_parts(src: &[u8], dialect: Dialect) -> Parts {
             located: Vec::new(),
         };
     }
-    // Identifiers declared as `const X = '<string>'` or with a template, and the
-    // templates that start with a hole holding one identifier.
+    // Identifiers declared as `const X = '<string>'` or with a template, and
+    // the templates that start with a hole holding one identifier.
     let mut consts: std::collections::HashSet<&[u8]> = std::collections::HashSet::new();
     let mut leads: Vec<(LeadTemplate, &[u8])> = Vec::new();
-    // Consecutive literal arguments of a path function, and the last literal whose
-    // next token decides whether it is a whole argument.
+    // Consecutive literal arguments of a path function, and the last literal
+    // whose next token decides whether it is a whole argument.
     let mut run: Vec<Literal> = Vec::new();
     let mut pending: Option<Literal> = None;
     let merge = !rule_off("merge");
@@ -855,8 +857,8 @@ pub fn scan_parts(src: &[u8], dialect: Dialect) -> Parts {
                 );
             }
         }
-        // A run goes on over `,` and further literals (decided where the string is
-        // handled below); any other argument ends it.
+        // A run goes on over `,` and further literals (decided where the string
+        // is handled below); any other argument ends it.
         if run.first().is_some_and(|f| {
             !(t.depth == f.depth
                 && matches!(t.kind, TokKind::Comma | TokKind::Str | TokKind::Template))
@@ -865,8 +867,8 @@ pub fn scan_parts(src: &[u8], dialect: Dialect) -> Parts {
         }
         // `import.meta.<x>`: `t` is `<x>`.
         let after_meta = prev.kind == TokKind::Dot && ident(&prev2, b"meta");
-        // `dirname` that is not called: passed as a value (`xs.map(path.dirname)`), not
-        // imported or destructured.
+        // `dirname` that is not called: passed as a value
+        // (`xs.map(path.dirname)`), not imported or destructured.
         if ident(&prev, b"dirname")
             && !(prev2.kind == TokKind::Dot && ident(&hist[2], b"meta"))
             && t.kind != TokKind::LParen
@@ -1053,8 +1055,10 @@ pub fn scan_parts(src: &[u8], dialect: Dialect) -> Parts {
                         match groups.last_mut() {
                             Some(g) => {
                                 g.anchor = g.anchor.or(Some(line));
-                                // `import.meta.dirname` is the directory; `url` and
-                                // `filename` (decided by the next tokens) are the file.
+                                // `import.meta.dirname` is the directory; `url`
+                                // and
+                                // `filename` (decided by the next tokens) are
+                                // the file.
                                 g.file_token = true;
                                 if !g.url {
                                     g.literals.clear();
@@ -1148,7 +1152,8 @@ pub fn scan_parts(src: &[u8], dialect: Dialect) -> Parts {
             }
             _ => {}
         }
-        // The literals of a group that may be a literal path from the file's location.
+        // The literals of a group that may be a literal path from the file's
+        // location.
         if matches!(t.kind, TokKind::Str | TokKind::Template)
             && let Some(g) = groups.last_mut()
             && g.builds_path
@@ -1170,8 +1175,8 @@ pub fn scan_parts(src: &[u8], dialect: Dialect) -> Parts {
         }
         if let Some((value, ln, at)) = string {
             let whole = !value.chars().any(separates);
-            // A string that is compared or searched for is not a piece of a path there:
-            // `seg === '..'`, `rel.startsWith('..')`.
+            // A string that is compared or searched for is not a piece of a
+            // path there: `seg === '..'`, `rel.startsWith('..')`.
             let tested = (prev.kind == TokKind::Op
                 && matches!(prev.text(src), b"===" | b"!==" | b"==" | b"!="))
                 || (prev.kind == TokKind::LParen
@@ -1180,8 +1185,8 @@ pub fn scan_parts(src: &[u8], dialect: Dialect) -> Parts {
                         prev2.text(src),
                         b"startsWith" | b"endsWith" | b"includes" | b"indexOf" | b"lastIndexOf"
                     ));
-            // A literal that is a whole argument of a path function joins the literals
-            // around it: decided by the next token.
+            // A literal that is a whole argument of a path function joins the
+            // literals around it: decided by the next token.
             let argument = at_depth(&ctx, d) == 2
                 && merge
                 && whole
@@ -1189,7 +1194,8 @@ pub fn scan_parts(src: &[u8], dialect: Dialect) -> Parts {
                 && matches!(t.kind, TokKind::Str | TokKind::Template)
                 && matches!(prev.kind, TokKind::Comma | TokKind::LParen);
             if tested {
-                // Neither a name nor a parent step; a literal group stays literal.
+                // Neither a name nor a parent step; a literal group stays
+                // literal.
                 flush_run(&mut run, &mut groups, &mut collector, &mut found);
             } else if argument {
                 pending = Some(Literal {
@@ -1295,8 +1301,9 @@ mod tests {
 
     #[test]
     fn files_and_words() {
-        // An extension makes a single segment a name; a bare word is one only as an
-        // argument of a path function (directly or in an array argument).
+        // An extension makes a single segment a name; a bare word is one only
+        // as an argument of a path function (directly or in an array
+        // argument).
         assert_eq!(
             names(
                 "const { join } = require('path'); const s = 'schema.sql'; const w = 'fixtures'; \
@@ -1359,8 +1366,9 @@ mod tests {
 
     #[test]
     fn path_functions_by_binding() {
-        // Names that other APIs share count only for a callee bound to a path or file
-        // module: imported, required, or a member of `path` / `fs`.
+        // Names that other APIs share count only for a callee bound to a path
+        // or file module: imported, required, or a member of `path` /
+        // `fs`.
         for src in [
             "import { join } from 'node:path'; join(dir, 'testdata');",
             "import { join as j } from 'path'; j(dir, 'testdata');",
@@ -1406,8 +1414,8 @@ mod tests {
             shapes("const prefix = 'docs/'; if (p.startsWith(prefix)) read(p);"),
             ["docs"]
         );
-        // A tested string does not make a literal path below the location something
-        // else.
+        // A tested string does not make a literal path below the location
+        // something else.
         assert_eq!(
             loc("const f = join(__dirname, 'fixtures'); if (x === '..') f();"),
             (false, 0)
@@ -1477,9 +1485,9 @@ mod tests {
 
     #[test]
     fn words_inside_strings() {
-        // A path inside a command line, a flag value, a message or a list; an escape
-        // that is not part of a name separates words; a query or fragment is
-        // cut off.
+        // A path inside a command line, a flag value, a message or a list; an
+        // escape that is not part of a name separates words; a query or
+        // fragment is cut off.
         assert_eq!(
             shapes(
                 "a = 'node scripts/build.js --out=dist/app'; b = 'cannot read conf/app.json!'; c \
@@ -1663,7 +1671,8 @@ mod tests {
         // Without values the template names as before.
         let n = p.finish(None);
         assert!(n.names.iter().any(|x| &*x.shape == "apps"));
-        // With a URL in the hole it names nothing; `${other}/apps/y` still does.
+        // With a URL in the hole it names nothing; `${other}/apps/y` still
+        // does.
         let p = scan_parts(
             b"const API = 'https://api.example.com'; const u = `${API}/apps/${id}/x`; const v = `${other}/docs/y`;",
             Dialect::TS,
@@ -1676,7 +1685,8 @@ mod tests {
         let n = p.finish(Some(&f));
         let shapes: Vec<&str> = n.names.iter().map(|x| &*x.shape).collect();
         assert_eq!(shapes, ["docs/y"]);
-        // A constant declared with a template counts too (its value is the engine's).
+        // A constant declared with a template counts too (its value is the
+        // engine's).
         let p = scan_parts(
             b"const HOST = 'example.com'; const BASE = `https://${HOST}`; const u = `${BASE}/apps/${slug}`;",
             Dialect::TS,
@@ -1746,7 +1756,8 @@ mod tests {
 
     #[test]
     fn ups_count_parent_steps() {
-        // A literal path below the location moves nothing else; the rest adds up.
+        // A literal path below the location moves nothing else; the rest adds
+        // up.
         assert_eq!(
             loc(
                 "const a = join(__dirname, '..', '..', 'x'); const b = '../../y/z'; \
@@ -1754,8 +1765,8 @@ mod tests {
             ),
             (true, 3)
         );
-        // Without the location: how far above another base (the working directory, a
-        // parameter) the file can reach.
+        // Without the location: how far above another base (the working
+        // directory, a parameter) the file can reach.
         assert_eq!(
             loc("const b = resolve(process.cwd(), '..', '..'); xs.map(path.dirname);"),
             (false, 3)
@@ -1765,8 +1776,8 @@ mod tests {
             loc("const parts = [dir, '..', name].join('/');"),
             (false, 1)
         );
-        // The parent steps of expressions with the location do not add up: the deepest
-        // one counts, plus the steps without it.
+        // The parent steps of expressions with the location do not add up: the
+        // deepest one counts, plus the steps without it.
         assert_eq!(
             loc(
                 "const a = resolve(__dirname, '..', name); const b = resolve(__dirname, '../..', \

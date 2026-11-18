@@ -380,8 +380,9 @@ impl<'a> Comparison<'a> {
                     if middleware.is_some() {
                         continue;
                     }
-                    // A build without middleware has no matchers; one with middleware and
-                    // unreadable matchers runs it everywhere.
+                    // A build without middleware has no matchers; one with
+                    // middleware and unreadable matchers
+                    // runs it everywhere.
                     let sides: Vec<Option<Vec<JsRegex>>> = [base, head]
                         .iter()
                         .filter(|fp| fp.global.contains_key("middleware"))
@@ -613,7 +614,8 @@ impl<'a> Comparison<'a> {
                 continue;
             };
             for (i, (route, re)) in self.added_routes.iter().enumerate() {
-                // A route the spec already reached is covered by its own comparison.
+                // A route the spec already reached is covered by its own
+                // comparison.
                 if !seen.contains(&i) && !visits.routes.contains_key(route) && re.is_match(&rp) {
                     seen.insert(i);
                     out.push(Why::RouteAdded {
@@ -874,10 +876,11 @@ mod tests {
         };
         let base = fp("b1", invokes);
         let home: &[(&str, RequestKind)] = &[("/", RequestKind::Document)];
-        // The redirect target changed: had the spec been redirected, /about would be in
-        // its recording.
+        // The redirect target changed: had the spec been redirected, /about
+        // would be in its recording.
         assert!(reasons(&base, &fp("b2", change("/about")), home).is_empty());
-        // The handler the page's code fetches changed: the request may be the server's.
+        // The handler the page's code fetches changed: the request may be the
+        // server's.
         assert_eq!(
             reasons(&base, &fp("b2", change("/api/hello")), home),
             ["visits /, which invokes /api/hello, which changed"]

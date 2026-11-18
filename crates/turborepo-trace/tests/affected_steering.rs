@@ -153,8 +153,8 @@ fn reset(r: &Path) {
 fn approvers_edit_selects_nothing() {
     let d = repo();
     let r = d.path();
-    // The fixture works as described: a source edit reaches the test through the
-    // task.
+    // The fixture works as described: a source edit reaches the test through
+    // the task.
     write(r, "packages/a/src/index.js", "module.exports = { a: 2 };\n");
     assert_eq!(since(r, &["--on-uncertain", "ignore"]), [APP_TEST]);
     reset(r);
@@ -170,8 +170,9 @@ fn approvers_edit_selects_nothing() {
         since(r, &["--no-steering"]),
         [TOOL_DYN_TEST, APP_TEST, DYN_TEST]
     );
-    // With it: nothing, under either policy (only a steering file changed, so the
-    // uncertainty of application code does not count; the tooling test's does).
+    // With it: nothing, under either policy (only a steering file changed, so
+    // the uncertainty of application code does not count; the tooling
+    // test's does).
     assert!(since(r, &["--on-uncertain", "ignore"]).is_empty());
     assert_eq!(since(r, &[]), [TOOL_DYN_TEST]);
     // The same without a base revision.
@@ -231,8 +232,8 @@ fn added_and_deleted_approvers_select_nothing() {
         [APP_TEST]
     );
     assert!(since(r, &["--on-uncertain", "ignore"]).is_empty());
-    // A mixed change: the other file counts as always, and so does the uncertainty
-    // floor.
+    // A mixed change: the other file counts as always, and so does the
+    // uncertainty floor.
     write(r, "packages/a/src/index.js", "module.exports = { a: 3 };\n");
     assert_eq!(since(r, &["--on-uncertain", "ignore"]), [APP_TEST]);
     assert_eq!(since(r, &[]), [TOOL_DYN_TEST, APP_TEST, DYN_TEST]);
@@ -251,8 +252,8 @@ fn workflow_and_tooling_edits_select_their_explicit_readers() {
     );
     assert_eq!(since(r, &["--on-uncertain", "ignore"]), [READ_TEST]);
     // Only the trigger changed: no job's definition did, so no task reports
-    // (crates/turborepo-trace/src/workflows.rs; tests/affected_workflows.rs covers
-    // the job side).
+    // (crates/turborepo-trace/src/workflows.rs; tests/affected_workflows.rs
+    // covers the job side).
     let tasks = ok(
         r,
         &[

@@ -153,17 +153,19 @@ impl RepoGitIndex {
         let attrs = git.git_attrs();
 
         // On Windows a per-entry stat opens a handle to every tracked file
-        // (CreateFileW, a metadata query, and CloseHandle), which dominates this
-        // pass on NTFS. A directory listing returns every field gix's Windows
-        // `Stat` uses, so list each parent directory once instead. Entries a
-        // listing doesn't cover, or that don't match it, take the per-file path.
+        // (CreateFileW, a metadata query, and CloseHandle), which dominates
+        // this pass on NTFS. A directory listing returns every field
+        // gix's Windows `Stat` uses, so list each parent directory once
+        // instead. Entries a listing doesn't cover, or that don't match
+        // it, take the per-file path.
         #[cfg(windows)]
         let listed_stats = listed_stats(&git.root, &index);
 
         // Classify entries in parallel: stat each file, compare with index,
-        // and carry the raw ObjectId (20 bytes, Copy) instead of a heap-allocated
-        // hex String. Hex conversion uses a thread-local stack buffer to avoid
-        // allocator contention across rayon threads.
+        // and carry the raw ObjectId (20 bytes, Copy) instead of a
+        // heap-allocated hex String. Hex conversion uses a thread-local
+        // stack buffer to avoid allocator contention across rayon
+        // threads.
         //
         // Stat-stale (or racy) entries are content-verified inline with the
         // hardware-accelerated blob hasher: if the working file still hashes
@@ -193,8 +195,9 @@ impl RepoGitIndex {
                         return clean_entry(e, rel_path);
                     }
 
-                    // Git index paths are normalized repo-relative paths, so avoid
-                    // per-entry path_clean normalization before stat calls.
+                    // Git index paths are normalized repo-relative paths, so
+                    // avoid per-entry path_clean
+                    // normalization before stat calls.
                     let abs_path = git.root.join_unix_path_unchecked(&rel_path);
 
                     match gix_index::fs::Metadata::from_path_no_follow(abs_path.as_std_path()) {
@@ -1595,8 +1598,9 @@ fn listed_stats(
             let Ok(read_dir) = std::fs::read_dir(&abs_dir) else {
                 return found;
             };
-            // `DirEntry::metadata` comes from the listing itself on Windows and,
-            // like `symlink_metadata`, describes links rather than their targets.
+            // `DirEntry::metadata` comes from the listing itself on Windows
+            // and, like `symlink_metadata`, describes links rather
+            // than their targets.
             let listing: HashMap<std::ffi::OsString, gix_index::entry::Stat> = read_dir
                 .flatten()
                 .filter_map(|dir_entry| {
@@ -1700,12 +1704,12 @@ fn verify_candidate(
             // authoritative hash happens later during task-input hashing.
             //
             // Two guards keep the gate sound:
-            // - The index records the size truncated to u32 (`stat.len() as u32`), so
-            //   compare modulo 2^32 — an equal residue is inconclusive and falls through to
-            //   hashing.
-            // - Stat info must be present: `git read-tree` (and intent-to-add) zeroes it
-            //   out, so a zero mtime means the recorded size is absent, not that the blob
-            //   was empty.
+            // - The index records the size truncated to u32 (`stat.len() as
+            //   u32`), so compare modulo 2^32 — an equal residue is
+            //   inconclusive and falls through to hashing.
+            // - Stat info must be present: `git read-tree` (and intent-to-add)
+            //   zeroes it out, so a zero mtime means the recorded size is
+            //   absent, not that the blob was empty.
             let stat_present = entry.stat.mtime.secs != 0;
             if stat_present
                 && matches!(
@@ -1736,15 +1740,17 @@ fn verify_candidate(
             // (these flags are only consulted when no `.gitattributes`
             // exists anywhere — see the constructor and
             // `tracked_diff_clean_root`):
-            // - `crlf_count == 0`: CRLF-free content is a fixed point of every eol/autocrlf
-            //   conversion — safe under any config. This covers binary files too: git's
-            //   autocrlf/`text=auto` detection refuses to convert binary content, and even
-            //   a forced `text` attribute only rewrites CRLFs, of which there are none.
-            // - content with CRLFs (text or binary): safe only if eol conversion is
-            //   provably inert. Binary content is exempt from autocrlf/`text=auto`, but a
-            //   *forced* `text` attribute (`* text`, as opposed to `text=auto`) makes git
-            //   eol-convert even binary content, and such a rule can come from a
-            //   global/system attributes file that isn't loaded here — deferred to a config
+            // - `crlf_count == 0`: CRLF-free content is a fixed point of every
+            //   eol/autocrlf conversion — safe under any config. This covers
+            //   binary files too: git's autocrlf/`text=auto` detection refuses
+            //   to convert binary content, and even a forced `text` attribute
+            //   only rewrites CRLFs, of which there are none.
+            // - content with CRLFs (text or binary): safe only if eol
+            //   conversion is provably inert. Binary content is exempt from
+            //   autocrlf/`text=auto`, but a *forced* `text` attribute (`*
+            //   text`, as opposed to `text=auto`) makes git eol-convert even
+            //   binary content, and such a rule can come from a global/system
+            //   attributes file that isn't loaded here — deferred to a config
             //   check at dirty-hash time.
             let diff_safe = if !exec_matches || outcome.normalized {
                 DiffSafety::Unsafe
@@ -2483,7 +2489,8 @@ mod tests {
         let prefixes = [path("packages/a"), path("packages/a/sub")];
         let scope = UntrackedScope::new(Some(&prefixes));
         assert!(!scope.is_full_walk);
-        // packages/a/sub is nested under packages/a, so only packages/a should remain
+        // packages/a/sub is nested under packages/a, so only packages/a should
+        // remain
         assert_eq!(scope.prefixes.len(), 1);
         assert_eq!(scope.prefixes[0], "packages/a");
     }

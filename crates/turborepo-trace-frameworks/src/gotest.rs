@@ -319,8 +319,8 @@ impl Framework for GoTest {
         } else {
             out.probes.push(td);
         }
-        // Imports of every test file of the directory (the given source for the test
-        // itself, which may be unsaved or not yet on disk).
+        // Imports of every test file of the directory (the given source for the
+        // test itself, which may be unsaved or not yet on disk).
         let mut imports: Vec<String> = pf.test_imports.clone();
         imports.extend(scan_go_header(src).imports);
         for c in pf.conditional.iter().filter(|c| {
@@ -382,8 +382,8 @@ mod tests {
                     .into_owned()
             })
             .collect();
-        // Nested modules (lib/, the fake module cache) and testdata are not this
-        // project's.
+        // Nested modules (lib/, the fake module cache) and testdata are not
+        // this project's.
         assert_eq!(
             rel,
             [

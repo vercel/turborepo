@@ -1,3 +1,6 @@
+// To fix the overflow in async block
+#![recursion_limit = "256"]
+
 mod visitor;
 
 pub use turborepo_task_executor::ManagedEnvironment;

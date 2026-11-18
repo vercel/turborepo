@@ -172,7 +172,8 @@ fn an_unknown_vite_plugin_is_bounded_by_the_packages_its_project_declares() {
             affected(r, "vitest", path, &[], &[])
         );
     }
-    // The project's own package (a file nothing imports) and a package it declares.
+    // The project's own package (a file nothing imports) and a package it
+    // declares.
     assert_eq!(
         affected(r, "vitest", "apps/web/src/unused.ts", &[], &[]),
         WEB
@@ -287,8 +288,9 @@ fn the_lint_reports_an_unknown_plugin_once_at_its_config_line() {
             .starts_with("conditional_resolution/unknown: plugins: vite plugins are not modelled"),
         "{v}"
     );
-    // The finding says what bounds the load, counts the tests of the project once,
-    // and its fix is about the configuration (there is no specifier to narrow).
+    // The finding says what bounds the load, counts the tests of the project
+    // once, and its fix is about the configuration (there is no specifier
+    // to narrow).
     let f = v["findings"]
         .as_array()
         .unwrap()
@@ -315,7 +317,8 @@ fn the_lint_reports_an_unknown_plugin_once_at_its_config_line() {
             .starts_with("no specifier to narrow here: declare in the project's package.json"),
         "{f}"
     );
-    // The rule for edges that leave the declared packages finds nothing new here.
+    // The rule for edges that leave the declared packages finds nothing new
+    // here.
     let o = Command::new(support::harness())
         .args(["lint", "--tests", "vitest", "--format", "json"])
         .args(["--rule", "undeclared-dependency=error"])
@@ -586,8 +589,8 @@ fn a_load_next_to_a_module_that_is_not_installed_follows_the_lockfile() {
     );
     assert_eq!(affected(r, "jest", "README.md", &other, &off), none);
 
-    // The lockfile links the importer to the package of the repository: the file is
-    // traced again, and the load can reach that package.
+    // The lockfile links the importer to the package of the repository: the
+    // file is traced again, and the load can reach that package.
     write(r, "pnpm-lock.yaml", &lock("link:../../packages/lp"));
     let v = floor(r, "jest", &[]);
     assert_eq!(v["floor"], 0, "{v}");

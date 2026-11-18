@@ -1510,7 +1510,8 @@ mod tests {
             path: &str,
             entry_type: tar::EntryType,
         ) -> Result<()> {
-            // Bypass tar::Builder's path validation to model an untrusted artifact.
+            // Bypass tar::Builder's path validation to model an untrusted
+            // artifact.
             let mut tar_bytes = generate_raw_tar_with_unsafe_path(path, b"");
             let mut header = Header::from_byte_slice(&tar_bytes[..512]).clone();
             header.set_entry_type(entry_type);
@@ -1750,9 +1751,10 @@ mod tests {
 
         #[test]
         fn test_unicode_slash_lookalike_in_path() -> Result<()> {
-            // U+2215 is "DIVISION SLASH" — could be confused with path separator.
-            // On Windows the tar builder interprets backslashes as path separators
-            // and rejects `..` components, so we use the raw tar generator.
+            // U+2215 is "DIVISION SLASH" — could be confused with path
+            // separator. On Windows the tar builder interprets
+            // backslashes as path separators and rejects `..`
+            // components, so we use the raw tar generator.
             let tar_bytes =
                 generate_raw_tar_with_unsafe_path("foo\u{2215}..\\..\\escape", b"escaped");
 
@@ -1776,7 +1778,8 @@ mod tests {
         #[test]
         fn test_nfc_vs_nfd_normalization() -> Result<()> {
             // e-acute as NFC (U+00E9) vs NFD (e + combining acute U+0301)
-            // Two entries that look the same but differ in normalization could collide
+            // Two entries that look the same but differ in normalization could
+            // collide
             let tar_bytes = generate_raw_tar(&[
                 RawTarEntry::Directory {
                     path: "caf\u{00E9}",
@@ -1913,8 +1916,9 @@ mod tests {
             let output_dir_path = output_dir.path().to_string_lossy().into_owned();
             let anchor = AbsoluteSystemPath::new(&output_dir_path)?;
 
-            // On Unix this should succeed; on Windows it may fail due to MAX_PATH.
-            // Either way, no panic or escape should occur.
+            // On Unix this should succeed; on Windows it may fail due to
+            // MAX_PATH. Either way, no panic or escape should
+            // occur.
             let _ = reader.restore(anchor, None).map(|(f, _)| f);
 
             Ok(())

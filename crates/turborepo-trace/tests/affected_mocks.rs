@@ -332,8 +332,8 @@ fn manual_mocks_and_setup_files() {
 #[test]
 fn a_helpers_manual_mock_counts_for_tests_that_request_its_module() {
     // `src/helper.ts` registers the manual mock of `src/n.ts`, which imports
-    // `src/mockdep.ts`. `a` loads the helper only, `b` the helper and `src/n.ts`,
-    // `c` only `src/n.ts`.
+    // `src/mockdep.ts`. `a` loads the helper only, `b` the helper and
+    // `src/n.ts`, `c` only `src/n.ts`.
     let files = |helper: &'static str| -> Vec<(&'static str, &'static str)> {
         vec![
             ("src/helper.ts", helper),
@@ -364,8 +364,8 @@ fn a_helpers_manual_mock_counts_for_tests_that_request_its_module() {
     );
     let r = d.path();
     for changed in ["src/mockdep.ts", "src/__mocks__/n.ts"] {
-        // `a` never requests the module: the mock is not loaded. `c` requests it
-        // without the helper: it gets the real module.
+        // `a` never requests the module: the mock is not loaded. `c` requests
+        // it without the helper: it gets the real module.
         assert_eq!(selected(r, "jest", changed, &[]), [B], "{changed}");
         // The switch: the mock counts for whatever requests the module.
         assert_eq!(
@@ -423,8 +423,8 @@ fn a_helpers_manual_mock_counts_for_tests_that_request_its_module() {
         &files("jest.mock('./n');\nimport { n } from './n';\nexport const h = n;\n"),
     );
     assert_eq!(selected(d.path(), "jest", "src/mockdep.ts", &[]), [TEST, B]);
-    // An automock is built from the real module when it is requested: the helper
-    // adds no dependency. `requireActual` loads it with the helper.
+    // An automock is built from the real module when it is requested: the
+    // helper adds no dependency. `requireActual` loads it with the helper.
     let d = repo(
         ("jest.config.js", JEST),
         "import '../src/helper';",
@@ -497,9 +497,9 @@ fn project_conditions() {
     let with = |extra: &str| {
         format!("module.exports = {{ testMatch: ['**/test/**/*.test.ts'], {extra} }};\n")
     };
-    // A transform that is not known to hoist mock calls, automocking (also when the
-    // value is not known), a custom runner, ES modules, a custom resolver: the
-    // replacement does not count.
+    // A transform that is not known to hoist mock calls, automocking (also when
+    // the value is not known), a custom runner, ES modules, a custom
+    // resolver: the replacement does not count.
     for extra in [
         "transform: { '\\\\.tsx?$': '<rootDir>/transform.js' }",
         "transform: { '\\\\.tsx?$': 'esbuild-jest' }",
@@ -683,8 +683,8 @@ fn mock_calls_edited_between_queries() {
     write(r, TEST, &test("", ""));
     assert_eq!(both(r, "src/deep.ts"), [TEST]);
 
-    // A manual mock that a helper registers: `b` loads the helper and the module,
-    // `c` the module only.
+    // A manual mock that a helper registers: `b` loads the helper and the
+    // module, `c` the module only.
     const B: &str = "test/b.test.ts";
     const C: &str = "test/c.test.ts";
     const C_TEXT: &str = "import { n } from '../src/n';\ntest('c', () => { n; });\n";
@@ -804,8 +804,8 @@ fn a_manifest_config_gives_what_a_config_file_gives() {
         [TEST],
         "the haste mock of a manifest's config"
     );
-    // A manifest below the root with a mapper for the imports of the files below
-    // it: the test (at the root, under the root's config file) loads
+    // A manifest below the root with a mapper for the imports of the files
+    // below it: the test (at the root, under the root's config file) loads
     // `src/m.ts`.
     let below = [
         (

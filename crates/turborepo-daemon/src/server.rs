@@ -7,6 +7,7 @@
 
 use std::{
     collections::{HashMap, HashSet},
+    str::FromStr,
     sync::{
         Arc, Mutex, OnceLock,
         atomic::{AtomicBool, Ordering},
@@ -73,12 +74,13 @@ pub struct FileWatching<W: PackageChangesWatcher + 'static> {
 
 impl<W: PackageChangesWatcher + 'static> Clone for FileWatching<W> {
     fn clone(&self) -> Self {
-        // Clone the OnceLock by getting its value (if set) and setting it on the new
-        // lock This preserves the original behavior where clones share the same
-        // watcher Arc
+        // Clone the OnceLock by getting its value (if set) and setting it on
+        // the new lock This preserves the original behavior where
+        // clones share the same watcher Arc
         let new_package_changes_watcher = OnceLock::new();
         if let Some(watcher) = self.package_changes_watcher.get() {
-            // The Arc is cloned, so both instances share the same underlying watcher
+            // The Arc is cloned, so both instances share the same underlying
+            // watcher
             let _ = new_package_changes_watcher.set(Arc::clone(watcher));
         }
 
@@ -254,8 +256,8 @@ where
         F: Fn(PackageChangesWatcherArgs) -> W + Send + Sync + 'static,
     {
         // Run the actual service. It takes ownership of the struct given to it,
-        // so we use a private struct with just the pieces of state needed to handle
-        // RPCs.
+        // so we use a private struct with just the pieces of state needed to
+        // handle RPCs.
         TurboGrpcService {
             repo_root,
             paths,
@@ -278,9 +280,10 @@ where
             package_changes_watcher_factory,
         } = self;
 
-        // A channel to trigger the shutdown of the gRPC server. This is handed out
-        // to components internal to the server process such as root watching, as
-        // well as available to the gRPC server itself to handle the shutdown RPC.
+        // A channel to trigger the shutdown of the gRPC server. This is handed
+        // out to components internal to the server process such as root
+        // watching, as well as available to the gRPC server itself to
+        // handle the shutdown RPC.
         let (trigger_shutdown, mut shutdown_signal) = mpsc::channel::<()>(1);
 
         let factory = package_changes_watcher_factory.clone();
@@ -307,7 +310,8 @@ where
         let bump_timeout = Arc::new(BumpTimeout::new(timeout));
         let timeout_fut = bump_timeout.wait();
 
-        // when one of these futures complete, let the server gracefully shutdown
+        // when one of these futures complete, let the server gracefully
+        // shutdown
         let (grpc_shutdown_tx, shutdown_reason) = oneshot::channel();
         let shutdown_fut = async move {
             select! {
@@ -340,12 +344,14 @@ where
         tracing::debug!("server exited");
         // Ensure our timer will exit
         running.store(false, Ordering::SeqCst);
-        // We expect to have a signal from the grpc server on what triggered the exit
+        // We expect to have a signal from the grpc server on what triggered the
+        // exit
         let close_reason = shutdown_reason.await.unwrap_or(CloseReason::ServerClosed);
-        // Now that the server has exited, the TurboGrpcService instance should be
-        // dropped. The root watcher still has a reference to a receiver, keeping
-        // the filewatcher alive. Trigger the root watcher to exit. We don't care
-        // if we fail to send, root watching may have exited already
+        // Now that the server has exited, the TurboGrpcService instance should
+        // be dropped. The root watcher still has a reference to a
+        // receiver, keeping the filewatcher alive. Trigger the root
+        // watcher to exit. We don't care if we fail to send, root
+        // watching may have exited already
         let _ = exit_root_watch.send(());
         let _ = watch_root_handle.await;
         trace!("root watching exited");
@@ -395,8 +401,8 @@ impl<W: PackageChangesWatcher + 'static> TurboGrpcServiceInner<W> {
         tracing::debug!("initing package discovery");
 
         // exit_root_watch delivers a signal to the root watch loop to exit.
-        // In the event that the server shuts down via some other mechanism, this
-        // cleans up root watching task.
+        // In the event that the server shuts down via some other mechanism,
+        // this cleans up root watching task.
         let (exit_root_watch, root_watch_exit_signal) = oneshot::channel();
         let watch_root_handle = tokio::task::spawn(watch_root(
             file_watching.clone(),
@@ -472,7 +478,7 @@ impl<W: PackageChangesWatcher + 'static> TurboGrpcServiceInner<W> {
         include_default: bool,
     ) -> Result<HashMap<String, String>, RpcError> {
         let inputs = InputGlobs::from_raw(inputs, include_default)?;
-        let package_path = AnchoredSystemPathBuf::try_from(package_path.as_str())
+        let package_path = AnchoredSystemPathBuf::from_str(package_path.as_str())
             .map_err(|e| RpcError::InvalidAnchoredPath(package_path, e))?;
         let hash_spec = HashSpec {
             package_path,
@@ -538,8 +544,8 @@ async fn watch_root<W: PackageChangesWatcher + 'static>(
     tracing::debug!("watching root: {:?}", root);
 
     loop {
-        // Ignore the outer layer of Result, if the sender has closed, filewatching has
-        // gone away and we can return.
+        // Ignore the outer layer of Result, if the sender has closed,
+        // filewatching has gone away and we can return.
         select! {
             _ = &mut exit_signal => break,
             event = recv_events.recv() => {

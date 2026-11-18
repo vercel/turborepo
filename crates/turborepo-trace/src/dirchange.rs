@@ -98,21 +98,21 @@ pub(crate) fn dirs(
             }
         }
     }
-    // Made. What a kind says about the base: only a kind that the diff against the
-    // one base stated says that a path was there (see the module docs).
+    // Made. What a kind says about the base: only a kind that the diff against
+    // the one base stated says that a path was there (see the module docs).
     let several = git.is_some_and(|g| g.bases.len() > 1);
     let before: HashSet<&Change> = origin.before.iter().collect();
     let stated = |c: &Change| !several && !origin.bare.contains(&c.path) && !before.contains(c);
-    // A path that was modified or deleted below a directory was there before, and
-    // so was the directory.
+    // A path that was modified or deleted below a directory was there before,
+    // and so was the directory.
     let had: HashSet<&str> = changes
         .iter()
         .filter(|c| c.kind != ChangeKind::Added && stated(c))
         .flat_map(|c| ancestors(&c.path))
         .collect();
-    // The paths that may be new: added (against some base, when there are several:
-    // a directory that a base lacks has nothing but such paths below it), or
-    // there now and given without a status.
+    // The paths that may be new: added (against some base, when there are
+    // several: a directory that a base lacks has nothing but such paths
+    // below it), or there now and given without a status.
     let may_be_new = |c: &Change| {
         c.kind == ChangeKind::Added
             || (c.kind == ChangeKind::Modified && origin.bare.contains(&c.path))
@@ -233,8 +233,8 @@ mod tests {
             Change::new(ChangeKind::Added, "c/sub/n.ts"),
         ];
         let got = dirs(r, &changes, None, &Origin::diff(), &|_| true);
-        // `a` has a file that is no addition, `a/kept` too; `c` has a modified file
-        // (and `c/sub` is not there in this tree: no directory).
+        // `a` has a file that is no addition, `a/kept` too; `c` has a modified
+        // file (and `c/sub` is not there in this tree: no directory).
         assert_eq!(paths(&got, ChangeKind::Added), ["a/new", "a/new/deep"]);
         assert_eq!(paths(&got, ChangeKind::Deleted), ["gone", "gone/dir"]);
         // A directory that no lookup asked for is left out.
@@ -261,7 +261,8 @@ mod tests {
         write(r, "a/kept/z.ts");
         write(r, "a/kept/edited.ts");
         write(r, "a/half/one.ts");
-        // A source file that is new is a node of the refreshed graph: "modified".
+        // A source file that is new is a node of the refreshed graph:
+        // "modified".
         let changes = [
             Change::new(ChangeKind::Modified, "a/new/x.ts"),
             Change::new(ChangeKind::Added, "a/new/deep/y.ts"),
@@ -281,18 +282,21 @@ mod tests {
             before: &[],
         };
         let got = dirs(r, &changes, None, &origin, &|_| true);
-        // `a/kept` holds a file that is no path of the change; `a` holds `a/kept`.
-        // `a/half`: a path that is gone says nothing either (it may never have been
-        // there), and everything that is there is a path of the change.
+        // `a/kept` holds a file that is no path of the change; `a` holds
+        // `a/kept`. `a/half`: a path that is gone says nothing either
+        // (it may never have been there), and everything that is there
+        // is a path of the change.
         assert_eq!(
             paths(&got, ChangeKind::Added),
             ["a/half", "a/new", "a/new/deep"]
         );
-        // The same paths with the status a diff stated: the modified ones were there.
+        // The same paths with the status a diff stated: the modified ones were
+        // there.
         let got = dirs(r, &changes, None, &Origin::diff(), &|_| true);
         assert_eq!(paths(&got, ChangeKind::Added), ["a/new/deep"]);
         // Mixed (`--changed-from` with some lines that have a status): a stated
-        // modification below a directory is evidence, a path without a status is none.
+        // modification below a directory is evidence, a path without a status
+        // is none.
         let bare = set(&["a/new/x.ts"]);
         let origin = Origin {
             bare: &bare,
@@ -330,7 +334,8 @@ mod tests {
         };
         let got = dirs(r, &changes, None, &origin, &|d| d != "a");
         assert_eq!(paths(&got, ChangeKind::Added), ["a/since"]);
-        // Without the earlier changes the modification says that `a/since` was there.
+        // Without the earlier changes the modification says that `a/since` was
+        // there.
         let got = dirs(r, &changes[1..], None, &Origin::diff(), &|d| d != "a");
         assert_eq!(paths(&got, ChangeKind::Added), [] as [&str; 0]);
     }

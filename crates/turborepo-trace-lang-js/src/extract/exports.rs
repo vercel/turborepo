@@ -934,8 +934,8 @@ impl<'s> Scanner<'s> {
                 }
             }
             k += 1;
-            // Skip the type annotation and initializer up to a comma at this level or the
-            // end of the statement.
+            // Skip the type annotation and initializer up to a comma at this
+            // level or the end of the statement.
             match self.skip_expr_until_decl_end(k) {
                 Some(e) if self.kind(e) == TokKind::Comma => k = e + 1,
                 Some(_) => return,
@@ -1321,8 +1321,9 @@ impl<'s> Scanner<'s> {
         }
         if self.kind(j) == TokKind::Ident {
             if declaration {
-                // Overload signatures repeat the name; duplicate bodies are syntax errors,
-                // which the parser validation callers run on candidates rejects.
+                // Overload signatures repeat the name; duplicate bodies are
+                // syntax errors, which the parser validation
+                // callers run on candidates rejects.
                 let name = self.ident_str(j)?;
                 self.fns.insert(name);
                 self.locals.insert(name);
@@ -1867,7 +1868,8 @@ impl<'s> Scanner<'s> {
                     prim = prim && p;
                 }
                 TokKind::Op | TokKind::Star | TokKind::Lt | TokKind::Gt => {
-                    // Operators on primitives run no user code (`valueOf`, `toString`).
+                    // Operators on primitives run no user code (`valueOf`,
+                    // `toString`).
                     if !prim {
                         return None;
                     }

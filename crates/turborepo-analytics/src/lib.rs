@@ -127,8 +127,9 @@ impl<C: AnalyticsClient + Clone + Send + Sync + 'static> Worker<C> {
                     }
                 }
             }
-            // Stop accepting new events, then drain anything already queued before the
-            // final flush. Closing a handle does not require dropping every sender.
+            // Stop accepting new events, then drain anything already queued
+            // before the final flush. Closing a handle does not
+            // require dropping every sender.
             self.rx.close();
             while let Some(event) = self.rx.recv().await {
                 self.buffer.push(event);
@@ -137,8 +138,9 @@ impl<C: AnalyticsClient + Clone + Send + Sync + 'static> Worker<C> {
                 }
             }
             self.flush_events();
-            // If close_with_timeout expires, dropping the JoinHandle detaches this
-            // worker, allowing pending requests to finish in the background.
+            // If close_with_timeout expires, dropping the JoinHandle detaches
+            // this worker, allowing pending requests to finish in
+            // the background.
             while let Some(result) = self.requests.join_next().await {
                 if let Err(err) = result {
                     debug!("analytics request task failed: {}", err);

@@ -76,8 +76,8 @@ impl<W: Write> Write for LogWriter<W> {
                      both caching is disabled and output logs are set to none."
                 );
 
-                // Returning the buffer's length so callers don't think this is a failure to
-                // create the buffer
+                // Returning the buffer's length so callers don't think this is
+                // a failure to create the buffer
                 Ok(buf.len())
             }
         }
@@ -138,7 +138,8 @@ fn replay_lines<W: Write, R: Read>(mut output: W, mut reader: R) -> std::io::Res
             Err(err) => return Err(err),
         };
         let end = pending + read;
-        // `buffer[..pending]` has no newline, so only the new bytes need a scan.
+        // `buffer[..pending]` has no newline, so only the new bytes need a
+        // scan.
         match buffer[pending..end].iter().rposition(|&b| b == b'\n') {
             Some(index) => {
                 let lines_end = pending + index + 1;

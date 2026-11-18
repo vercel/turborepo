@@ -140,14 +140,15 @@ pub fn parse(src: &str) -> Result<Lockfile> {
         }
     }
 
-    // Assign ids: name@version, disambiguated by source within colliding groups.
+    // Assign ids: name@version, disambiguated by source within colliding
+    // groups.
     let names: Vec<String> = entries
         .iter()
         .map(|e| {
             let d = e.descriptors.first().map(String::as_str).unwrap_or("");
             let (name, range) = split_name_at(d).unwrap_or((d, ""));
-            // Alias (`string-width-cjs@npm:string-width@^4`): the package is the aliased
-            // one.
+            // Alias (`string-width-cjs@npm:string-width@^4`): the package is
+            // the aliased one.
             match range.strip_prefix("npm:").and_then(split_name_at) {
                 Some((real, _)) => real.to_string(),
                 None => name.to_string(),

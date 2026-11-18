@@ -301,8 +301,9 @@ fn validate_path_expression(path: &str) -> Result<(), String> {
 }
 
 fn unescape_regex_literal(literal: &str) -> String {
-    // Config strings retain the JSONC escape layer, while direct parser inputs only
-    // contain the regex escape layer. Unescape until both representations converge.
+    // Config strings retain the JSONC escape layer, while direct parser inputs
+    // only contain the regex escape layer. Unescape until both
+    // representations converge.
     let mut unescaped = literal.to_string();
     loop {
         let mut next = String::with_capacity(unescaped.len());
@@ -393,10 +394,11 @@ impl PathPattern {
                     );
                 }
 
-                // Proxy supports a limited regex subset and compares negative-lookahead
-                // alternatives as exact path segments. Negative lookaheads are checked
-                // first so escaped parentheses inside exclusions are not mistaken for a
-                // plain parameter name.
+                // Proxy supports a limited regex subset and compares
+                // negative-lookahead alternatives as exact path
+                // segments. Negative lookaheads are checked
+                // first so escaped parentheses inside exclusions are not
+                // mistaken for a plain parameter name.
                 if param_name.contains("((?!")
                     || (param_name.contains('(') && !param_name.contains("\\("))
                 {
@@ -505,7 +507,8 @@ impl PathPattern {
                 }
                 Segment::WildcardPlus => {
                     // + matches one or more segments
-                    // We already consumed at least one segment by being in this loop
+                    // We already consumed at least one segment by being in this
+                    // loop
                     return true;
                 }
             }
@@ -847,7 +850,8 @@ mod tests {
     #[test]
     fn test_reject_optional_modifier() {
         let err = PathPattern::parse("/:path?").unwrap_err();
-        // The ? will be caught by the validate_path_expression check for unescaped ?
+        // The ? will be caught by the validate_path_expression check for
+        // unescaped ?
         assert!(err.contains("Optional") && err.contains("not supported"));
     }
 }

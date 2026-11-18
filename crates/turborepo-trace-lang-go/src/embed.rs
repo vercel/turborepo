@@ -70,8 +70,8 @@ pub fn parse(pattern: &str) -> Result<EmbedPattern<'_>, EmbedError> {
             return Err(EmbedError::Invalid(format!("bad path element {elem:?}")));
         }
     }
-    // Syntax check: `path.Match` reports ErrBadPattern for malformed classes and
-    // escapes.
+    // Syntax check: `path.Match` reports ErrBadPattern for malformed classes
+    // and escapes.
     for elem in glob.split('/') {
         if match_elem(elem, "").is_none() {
             return Err(EmbedError::Invalid(format!("malformed glob {elem:?}")));
@@ -90,7 +90,8 @@ pub fn has_meta(s: &str) -> bool {
 pub fn match_elem(pattern: &str, name: &str) -> Option<bool> {
     let p: Vec<char> = pattern.chars().collect();
     let n: Vec<char> = name.chars().collect();
-    // Iterative glob matching with single-star backtracking (linear in practice).
+    // Iterative glob matching with single-star backtracking (linear in
+    // practice).
     let (mut pi, mut ni) = (0usize, 0usize);
     let mut star: Option<(usize, usize)> = None;
     let mut syntax_ok = check_syntax(&p);
@@ -270,8 +271,8 @@ pub fn expand(
         let last = k + 1 == elems.len();
         let mut next = Vec::new();
         for dir in &cur {
-            // A directory with its own go.mod belongs to another module (except the package
-            // directory itself).
+            // A directory with its own go.mod belongs to another module (except
+            // the package directory itself).
             if dir != pkg_dir && has_go_mod(fs, dir) {
                 continue;
             }

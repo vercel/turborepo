@@ -723,8 +723,8 @@ impl Recognizer for TaskCli {
         };
         out.config(file.clone());
         let dir = repo_rel(cx.repo_root, file.parent().unwrap_or(cx.repo_root));
-        // Positionals up to `--` (the rest are CLI_ARGS); `VAR=x` positionals are
-        // variables.
+        // Positionals up to `--` (the rest are CLI_ARGS); `VAR=x` positionals
+        // are variables.
         let after_dash = cmd
             .args()
             .position(|w| w == "--")

@@ -155,7 +155,8 @@ impl SharedRelation {
                     one_method: true,
                     wide: inv.wide,
                 });
-                // The witness is a site that targets the route by precedence, if any.
+                // The witness is a site that targets the route by precedence,
+                // if any.
                 if e.wide && !inv.wide {
                     e.first = inv;
                     e.file = &f.file;
@@ -524,7 +525,8 @@ pub fn shared_relation<'a, G: GraphView>(
             format!("{app_rel}/{f}")
         }
     };
-    // The segment files of every route, and the middleware: where closures start.
+    // The segment files of every route, and the middleware: where closures
+    // start.
     let seg_nodes = |fs: &[String]| -> Vec<u32> {
         fs.iter()
             .filter_map(|f| g.node_by_path(&in_graph(f)).map(|n| n.0))
@@ -547,9 +549,9 @@ pub fn shared_relation<'a, G: GraphView>(
     seeds.sort_unstable();
     seeds.dedup();
 
-    // Reachability first: only the sites and strings some route (or the middleware)
-    // reaches are mapped to routes; a repository has many more (other apps,
-    // tests, scripts).
+    // Reachability first: only the sites and strings some route (or the
+    // middleware) reaches are mapped to routes; a repository has many more
+    // (other apps, tests, scripts).
     let reached = {
         let mut ids: HashMap<&'a std::path::Path, u32> = HashMap::new();
         let mut file_of: Vec<u32> = vec![u32::MAX; g.node_count() as usize];
@@ -582,7 +584,8 @@ pub fn shared_relation<'a, G: GraphView>(
             }
         }
         let on = |i: u32| (i as usize) < count && all[i as usize / 64] & (1 << (i % 64)) != 0;
-        // The middleware's own redirects and rewrites: the sites its closure reaches.
+        // The middleware's own redirects and rewrites: the sites its closure
+        // reaches.
         let mut of_mw = vec![0u64; count.div_ceil(64).max(1)];
         for &x in &mw {
             let c = comp[x as usize];
@@ -711,8 +714,8 @@ pub fn shared_relation<'a, G: GraphView>(
                 sites: 0,
                 wide,
             };
-            // Wide targets: entries of their own, until a site targets the route by
-            // precedence.
+            // Wide targets: entries of their own, until a site targets the
+            // route by precedence.
             for (t, url) in &mapped[i].wide {
                 let e = acc
                     .entry((s.kind, t))
@@ -815,8 +818,8 @@ pub fn shared_relation<'a, G: GraphView>(
     let mut bound_total: Vec<usize> = Vec::new();
     let mut routes: BTreeMap<String, RouteSets> = BTreeMap::new();
     for (ri, r) in app.table.routes.iter().enumerate() {
-        // What the shared segment files reach (the same for every route below them),
-        // and what only the route's own file reaches.
+        // What the shared segment files reach (the same for every route below
+        // them), and what only the route's own file reaches.
         let own: Vec<String> = closures[ri]
             .iter()
             .filter(|f| **f == r.file)

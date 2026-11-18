@@ -215,7 +215,8 @@ fn builds_composes_and_queries() {
     assert_eq!(rep.analyzed_files, 0);
     assert_eq!(export(&out), before);
 
-    // gc keeps exactly the referenced shards and the snapshot's walked-file list.
+    // gc keeps exactly the referenced shards and the snapshot's walked-file
+    // list.
     std::fs::write(out.join("store/stale"), "x").unwrap();
     let gc = turborepo_trace_store::gc(&out).unwrap();
     assert_eq!(gc.removed, 1);
@@ -233,8 +234,8 @@ fn touching_one_file_retraces_one_shard() {
     assert_eq!(rep.traced, 1, "{rep:?}");
     assert_eq!(rep.analyzed_files, 1);
 
-    // A lockfile bump re-keys only the shard that links lodash (and adds its opaque
-    // shard).
+    // A lockfile bump re-keys only the shard that links lodash (and adds its
+    // opaque shard).
     lodash(&r, "4.17.22", "sha512-new");
     let rep = build(&opts(&r, &out, Externals::Opaque), &langs()).unwrap();
     assert_eq!(
@@ -617,8 +618,8 @@ fn mixed_language_graph() {
         .map(|s| (s.kind.clone(), s.name.clone()))
         .collect();
     shards.sort();
-    // The Python project is a workspace package with or without the language; only
-    // the language reaches the distribution it imports.
+    // The Python project is a workspace package with or without the language;
+    // only the language reaches the distribution it imports.
     let want: Vec<(String, String)> = vec![
         ("first-party".into(), "crates:rsapp".into()),
         ("first-party".into(), "go:example.com/svc".into()),
@@ -938,8 +939,8 @@ fn a_derived_layer_is_carried_across_an_edit_when_its_owner_says_so() {
     let r = canonical(t.path());
     let out = r.join(".turbotrace");
     let rebuild = || build(&opts(&r, &out, Externals::Opaque), &langs()).unwrap();
-    // The layer of a graph: how it came about, its numbers, and what its owner was
-    // asked.
+    // The layer of a graph: how it came about, its numbers, and what its owner
+    // was asked.
     let layer = |g: &Graph, key: u128, say: bool| {
         let mut asked = None;
         let (_, meta, kept) = g.carried_patch(
@@ -971,8 +972,9 @@ fn a_derived_layer_is_carried_across_an_edit_when_its_owner_says_so() {
     assert_eq!(layer(&g, 7, true), (Kept::Cached, vec![nodes, 42], None));
     settle(g);
 
-    // An edit that keeps every reference: the composed graph is kept, and the graph
-    // names the file that changed. An owner that read it computes again.
+    // An edit that keeps every reference: the composed graph is kept, and the
+    // graph names the file that changed. An owner that read it computes
+    // again.
     let index = "packages/a/src/index.ts";
     write(&r, index, &format!("// one more line\n\n{A_INDEX}"));
     rebuild();
@@ -988,9 +990,9 @@ fn a_derived_layer_is_carried_across_an_edit_when_its_owner_says_so() {
     assert_eq!(layer(&g, 7, true), (Kept::Cached, vec![nodes, 42], None));
     settle(g);
 
-    // Another such edit, and an owner that did not read the file: the stored layer
-    // is this graph's, and is stored as such. A layer with other inputs is not
-    // offered.
+    // Another such edit, and an owner that did not read the file: the stored
+    // layer is this graph's, and is stored as such. A layer with other
+    // inputs is not offered.
     write(
         &r,
         index,
@@ -1014,8 +1016,8 @@ fn a_derived_layer_is_carried_across_an_edit_when_its_owner_says_so() {
     assert_eq!(layer(&g, 7, false), (Kept::Cached, vec![nodes, 42], None));
     settle(g);
 
-    // A layer with other inputs of its own (another key) is not the stored one: its
-    // owner is not asked.
+    // A layer with other inputs of its own (another key) is not the stored one:
+    // its owner is not asked.
     write(&r, index, &format!("// two more lines\n\n\n{A_INDEX}"));
     rebuild();
     let g = Graph::open(&out).unwrap();
@@ -1023,8 +1025,8 @@ fn a_derived_layer_is_carried_across_an_edit_when_its_owner_says_so() {
     assert_eq!(layer(&g, 8, true), (Kept::Computed, vec![nodes, 42], None));
     settle(g);
 
-    // An edit that composition sees (a new reference): composed again, nothing to
-    // carry.
+    // An edit that composition sees (a new reference): composed again, nothing
+    // to carry.
     write(
         &r,
         "packages/b/src/index.ts",
@@ -1092,8 +1094,8 @@ fn an_edit_that_keeps_references_reuses_the_composed_graph() {
     rebuild();
     assert!(open_warm(&out));
     same_as_fresh(&r, &out).unwrap();
-    // Without the shard that was replaced (the store was garbage-collected after
-    // the refresh) there is nothing to compare with.
+    // Without the shard that was replaced (the store was garbage-collected
+    // after the refresh) there is nothing to compare with.
     write(&r, "packages/b/src/other.ts", "// same again\nexport {};\n");
     rebuild();
     turborepo_trace_store::gc(&out).unwrap();
@@ -1189,9 +1191,9 @@ fn mock_calls_and_the_composed_graph() {
     let r = canonical(t.path());
     let out = r.join(".turbotrace");
     let rebuild = || build(&opts(&r, &out, Externals::Opaque), &langs()).unwrap();
-    // Everything equals a fresh build; the edges of the mock layer. The first read
-    // of the layer after a refresh is never answered by the cache: the manifest
-    // is new.
+    // Everything equals a fresh build; the edges of the mock layer. The first
+    // read of the layer after a refresh is never answered by the cache: the
+    // manifest is new.
     let check = |what: &str| -> usize {
         let (n, hit) = same_as_fresh(&r, &out).unwrap_or_else(|e| panic!("{what}: {e}"));
         assert!(!hit, "{what}: the layer of another manifest answered");
@@ -1239,17 +1241,17 @@ fn mock_calls_and_the_composed_graph() {
     assert!(open_warm(&out), "the same markers: composed parts reused");
     check("an edit below the mock call");
 
-    // Added to a helper: the marker of a manual mock, which the derived layer turns
-    // into an edge from the module to the mock.
+    // Added to a helper: the marker of a manual mock, which the derived layer
+    // turns into an edge from the module to the mock.
     write(&r, "test/helper.ts", &format!("{BARE}\n{MOCK_HELPER}"));
     rebuild();
     assert!(!open_warm(&out), "a new marker: composed again");
     assert_eq!(check("a manual mock registered by a helper"), 1);
     let manual = "mock:manual jest packages/b/src/__mocks__/db.ts for packages/b/src/db.ts";
     assert_eq!(markers(&out, "test/helper.ts"), [manual]);
-    // Moved in the helper: this marker names no line, so nothing that composition
-    // reads changed. The composed parts are reused and the new manifest's layer
-    // has the edge.
+    // Moved in the helper: this marker names no line, so nothing that
+    // composition reads changed. The composed parts are reused and the new
+    // manifest's layer has the edge.
     write(&r, "test/helper.ts", &format!("{MOCK_HELPER}\n{BARE}\n"));
     rebuild();
     assert!(open_warm(&out), "the same marker: composed parts reused");
@@ -1309,7 +1311,8 @@ fn step() -> impl Strategy<Value = Step> {
 fn apply_step(r: &Path, s: &Step) {
     let rewrite = |rel: &str, edit: &dyn Fn(String) -> String| {
         let p = r.join(rel);
-        // A file that is not there (yet, or any more) stays away: only content changes.
+        // A file that is not there (yet, or any more) stays away: only content
+        // changes.
         if let Ok(text) = std::fs::read_to_string(&p)
             && !rel.ends_with(".json")
         {

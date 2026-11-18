@@ -558,7 +558,8 @@ impl ProcessedWith {
     ) -> Result<Self, Error> {
         let (processed_with, extends) = extract_turbo_extends(raw_with, future_flags);
 
-        // Validate that no sibling starts with TOPOLOGICAL_PIPELINE_DELIMITER (^)
+        // Validate that no sibling starts with TOPOLOGICAL_PIPELINE_DELIMITER
+        // (^)
         let mut tasks = Vec::with_capacity(processed_with.len());
         for sibling in processed_with {
             if sibling.starts_with(TOPOLOGICAL_PIPELINE_DELIMITER) {
@@ -1216,8 +1217,8 @@ mod tests {
         assert_matches!(result, Err(Error::AbsolutePathInConfig { .. }));
     }
 
-    // Test that demonstrates the extends field is properly set when the helper is
-    // used
+    // Test that demonstrates the extends field is properly set when the helper
+    // is used
     #[test]
     fn test_processed_inputs_with_turbo_extends() {
         let raw_globs: Vec<Spanned<UnescapedString>> = vec![

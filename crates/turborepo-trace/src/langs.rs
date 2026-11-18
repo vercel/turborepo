@@ -101,8 +101,8 @@ impl LangArgs {
     /// Records the arguments (absolutized) below the graph directory `dir`.
     pub fn save(&self, dir: &std::path::Path) -> std::io::Result<()> {
         let json = serde_json::to_vec_pretty(&self.absolutized()).map_err(std::io::Error::other)?;
-        // Left alone when it already says the same: a refresh that changes nothing
-        // writes nothing below the graph directory.
+        // Left alone when it already says the same: a refresh that changes
+        // nothing writes nothing below the graph directory.
         turborepo_trace_store::write_if_changed(&dir.join(Self::FILE), &json).map(|_| ())
     }
 

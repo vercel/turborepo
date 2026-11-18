@@ -196,8 +196,8 @@ impl Token {
     /// * `client` - The client to use for API calls.
     /// * `valid_message_fn` - An optional callback that gets called if the
     ///   token is valid. It will be passed the user's email.
-    // TODO(voz): This should do a `get_user` or `get_teams` instead of the caller
-    // doing it. The reason we don't do it here is because the caller
+    // TODO(voz): This should do a `get_user` or `get_teams` instead of the
+    // caller doing it. The reason we don't do it here is because the caller
     // needs to do printing and requires the user struct, which we don't want to
     // return here.
     pub async fn is_valid<T: Client + TokenClient>(
@@ -404,9 +404,9 @@ fn is_token_active(metadata: &ResponseTokenMetadata, current_time: u128) -> bool
         .filter_map(|scope| scope.expires_at)
         .min();
 
-    // Not all scopes have an expiration date, so we need to check if all of them
-    // are expired. If there isn't an expiration date, we assume they are infinite
-    // and therefore cannot be expired.
+    // Not all scopes have an expiration date, so we need to check if all of
+    // them are expired. If there isn't an expiration date, we assume they
+    // are infinite and therefore cannot be expired.
     let all_scopes_active = earliest_expiration.is_none_or(|expiration| current_time < expiration);
 
     all_scopes_active && (active_at <= current_time)
@@ -861,7 +861,8 @@ mod tests {
         let result = Token::from_file(&file_path);
         let mut err = result.unwrap_err();
         if let Error::InvalidTokenFileFormat { path, .. } = &mut err {
-            // Overriding temporary path so we can use snapshot for error message
+            // Overriding temporary path so we can use snapshot for error
+            // message
             *path = "/path/to/bad.json".to_owned();
         }
         assert_snapshot!(err, @"'/path/to/bad.json' is an invalid token file: expected ident at line 1 column 2");

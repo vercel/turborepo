@@ -108,10 +108,10 @@ impl Glob {
     }
 
     fn match_bytes(&self, s: &[u8]) -> bool {
-        // The pattern is prefix, tokens, suffix, and what a token matches does not
-        // depend on its neighbours: the input matches iff it starts with the
-        // prefix, the rest ends with the suffix, and the tokens match what is
-        // between.
+        // The pattern is prefix, tokens, suffix, and what a token matches does
+        // not depend on its neighbours: the input matches iff it starts
+        // with the prefix, the rest ends with the suffix, and the
+        // tokens match what is between.
         let Some(s) = s.strip_prefix(&*self.prefix) else {
             return false;
         };
@@ -162,8 +162,9 @@ impl Glob {
                     }
                 }
                 Tok::DirsSlash => {
-                    // Empty, or consume s[j..=k] where s[k] == '/' then continue at k+1.
-                    // any_slash_after[j] = exists k >= j with s[k]=='/' && next[k+1].
+                    // Empty, or consume s[j..=k] where s[k] == '/' then
+                    // continue at k+1. any_slash_after[j] =
+                    // exists k >= j with s[k]=='/' && next[k+1].
                     let mut acc = false;
                     cur[n] = next[n];
                     for j in (0..n).rev() {

@@ -1093,7 +1093,8 @@ mod test {
         };
 
         let config = builder.build().unwrap();
-        // Directly accessing field to make sure we're not getting the default value
+        // Directly accessing field to make sure we're not getting the default
+        // value
         assert_eq!(config.enabled, Some(true));
         assert_eq!(config.api_url(), api_url);
         assert_eq!(config.login_url(), login_url);
@@ -1200,11 +1201,12 @@ mod test {
             Some(false)
         );
 
-        // Fields not set by higher-priority sources are filled in by lower-priority
-        // sources via deep merge.  Override did not set `enabled`, so turbo.json's
-        // `enabled: true` is used.
+        // Fields not set by higher-priority sources are filled in by
+        // lower-priority sources via deep merge.  Override did not set
+        // `enabled`, so turbo.json's `enabled: true` is used.
         assert_eq!(otel.enabled, Some(true));
-        // Override did not set `task_attributes`; env var set it, so it is used.
+        // Override did not set `task_attributes`; env var set it, so it is
+        // used.
         assert_eq!(
             otel.metrics
                 .as_ref()
@@ -1461,8 +1463,8 @@ mod test {
         );
         assert!(!main_result.is_shared_worktree);
 
-        // Test from linked worktree - should return absolute path to main worktree's
-        // cache
+        // Test from linked worktree - should return absolute path to main
+        // worktree's cache
         let linked_result = config.resolve_cache_dir(&worktree_path);
         let expected_cache_path = repo_root.join_component(".turbo").join_component("cache");
         assert_eq!(

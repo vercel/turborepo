@@ -27,7 +27,8 @@ impl RunObserver for OtelObserver {
     }
 
     fn shutdown(&self) {
-        // `shutdown` consumes the handle. Clone the cheap, Arc-backed handle first.
+        // `shutdown` consumes the handle. Clone the cheap, Arc-backed handle
+        // first.
         self.handle.clone().shutdown();
     }
 }

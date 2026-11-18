@@ -188,7 +188,8 @@ impl IniCx<'_> {
         while let Some(i) = rest.find('{') {
             out.push_str(&rest[..i]);
             let after = &rest[i + 1..];
-            // Nested braces (`{env:A:{env:B}}`) are rare: take up to the matching `}`.
+            // Nested braces (`{env:A:{env:B}}`) are rare: take up to the
+            // matching `}`.
             let mut d = 0;
             let mut end = None;
             for (j, c) in after.char_indices() {
@@ -872,8 +873,9 @@ pub(crate) fn call_args(s: &str) -> Option<&str> {
                         continue;
                     }
                     None => {
-                        // An f-string with substitutions or an unterminated string: skip to
-                        // the closing quote on this line.
+                        // An f-string with substitutions or an unterminated
+                        // string: skip to the closing
+                        // quote on this line.
                         let q = b[j];
                         j += 1;
                         while j < b.len() && b[j] != q && b[j] != b'\n' {
@@ -1149,8 +1151,8 @@ impl Recognizer for NoxCli {
         out.config(file.clone());
         let dir = file.parent().unwrap_or(&cmd.cwd).to_path_buf();
         let rel = repo_rel(cx.repo_root, &dir);
-        // Sessions: `-s a b`, `--session a`, `-e a` (positionals after -s up to the
-        // next option).
+        // Sessions: `-s a b`, `--session a`, `-e a` (positionals after -s up to
+        // the next option).
         let words: Vec<&str> = cmd.args().take_while(|w| *w != "--").collect();
         let mut names = Vec::new();
         let mut in_s = false;

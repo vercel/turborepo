@@ -268,7 +268,8 @@ pub fn strip_wrappers(cmd: &Command, cx: &RecognizeCx<'_>, out: &mut TaskSpec) -
         let args: Vec<String> = c.args().map(str::to_string).collect();
         let next = match name.as_str() {
             "npx" | "bunx" | "pnpx" => {
-                // Options before the package: `-y`, `--yes`, `-p pkg`, `--package=pkg`.
+                // Options before the package: `-y`, `--yes`, `-p pkg`,
+                // `--package=pkg`.
                 let mut i = 1;
                 while let Some(a) = c.argv.get(i).map(|w| w.text.as_str()) {
                     if a == "-p" || a == "--package" {
@@ -371,7 +372,8 @@ pub fn strip_wrappers(cmd: &Command, cx: &RecognizeCx<'_>, out: &mut TaskSpec) -
                 i
             }
             "uv" | "poetry" | "pipenv" | "pdm" | "hatch" | "rye" | "uvx" | "pipx" => {
-                // `uv run [opts] cmd`, `poetry run cmd`, `uvx tool`, `pipx run tool`.
+                // `uv run [opts] cmd`, `poetry run cmd`, `uvx tool`, `pipx run
+                // tool`.
                 let start = match (name.as_str(), args.first().map(String::as_str)) {
                     ("uvx", _) => 1,
                     (_, Some("run")) => 2,
@@ -429,7 +431,8 @@ pub fn strip_wrappers(cmd: &Command, cx: &RecognizeCx<'_>, out: &mut TaskSpec) -
                 i
             }
             "doppler" | "op" | "infisical" => {
-                // `doppler run -- cmd`, `op run -- cmd`, `infisical run -- cmd`.
+                // `doppler run -- cmd`, `op run -- cmd`, `infisical run --
+                // cmd`.
                 match c.argv.iter().position(|w| w.text == "--") {
                     Some(p) if args.first().is_some_and(|a| a == "run") => {
                         out.uncertain(
@@ -541,7 +544,8 @@ pub fn is_pm_builtin(pm: &str, sub: &str) -> bool {
         "-s",
         "--silent",
     ];
-    // `bun build` is the bundler; `pnpm build`/`yarn build` run the `build` script.
+    // `bun build` is the bundler; `pnpm build`/`yarn build` run the `build`
+    // script.
     (pm == "bun" && sub == "build") || COMMON.contains(&sub)
 }
 
@@ -607,7 +611,8 @@ impl Registry {
         cx: &RecognizeCx<'_>,
         out: &mut TaskSpec,
     ) -> CommandReport {
-        // The tests the command runs ([`crate::runs`]) are derived from what it adds.
+        // The tests the command runs ([`crate::runs`]) are derived from what it
+        // adds.
         let mark = crate::runs::mark(out);
         let rep = self.recognize_command(cmd, cx, out);
         crate::runs::observe(cmd, &rep, cx, mark, out);
@@ -621,8 +626,8 @@ impl Registry {
         out: &mut TaskSpec,
     ) -> CommandReport {
         let real = strip_wrappers(cmd, cx, out);
-        // Absolute paths the command writes out: what they name does not depend on
-        // where the checkout is ([`TaskSpec::written`]).
+        // Absolute paths the command writes out: what they name does not depend
+        // on where the checkout is ([`TaskSpec::written`]).
         let words = real
             .argv
             .iter()
@@ -636,10 +641,12 @@ impl Registry {
             };
             if real.writes(text) {
                 let p = fsx::normalize(Path::new(text));
-                // Not a path below the root of this checkout: a runner's own location is
-                // expanded into the text of its commands (`{toxinidir}/x`,
-                // `{{justfile_directory()}}/x`, `${{ github.workspace }}/x`), and that path
-                // is the tool's, to be looked up where it is.
+                // Not a path below the root of this checkout: a runner's own
+                // location is expanded into the text of its
+                // commands (`{toxinidir}/x`,
+                // `{{justfile_directory()}}/x`, `${{ github.workspace }}/x`),
+                // and that path is the tool's, to be looked up
+                // where it is.
                 if !p.starts_with(cx.repo_root) && !out.written.contains(&p) {
                     out.written.push(p);
                 }
@@ -654,14 +661,15 @@ impl Registry {
         let cx2 = RecognizeCx { env: &env, ..*cx };
         let found = self.find_index(&real);
         let generator = found.is_some_and(|i| i < self.generators);
-        // Redirections: inputs and outputs, whatever the program. A generator's stdout
-        // is a generated file (committed or not). Any other program's
-        // truncating redirection (`>`) can't be a read-modify-write of its
-        // target (the shell truncates it before the command runs), so an
-        // existing target is a committed generated file (`node gen.js >
-        // src/generated/client.js`) and a missing one an artifact. An append
-        // (`>>`) keeps the old contents: a generic write (in-place for an existing
-        // file).
+        // Redirections: inputs and outputs, whatever the program. A generator's
+        // stdout is a generated file (committed or not). Any other
+        // program's truncating redirection (`>`) can't be a
+        // read-modify-write of its target (the shell truncates it
+        // before the command runs), so an existing target is a
+        // committed generated file (`node gen.js > src/generated/
+        // client.js`) and a missing one an artifact. An append
+        // (`>>`) keeps the old contents: a generic write (in-place for an
+        // existing file).
         for r in &real.redirects {
             if r.is_null() || r.target.dynamic {
                 continue;
@@ -703,16 +711,18 @@ impl Registry {
                 }
             }
             if generator {
-                // Code generator outputs link back, including committed generated files.
+                // Code generator outputs link back, including committed
+                // generated files.
                 out.classify_outputs_since(outputs_before, OutputKind::Generated);
             }
-            // Contract: every uncertainty comes with the conservative fallback, so the
-            // graph never has to treat a task's uncertainty as "anything may be
-            // affected".
+            // Contract: every uncertainty comes with the conservative fallback,
+            // so the graph never has to treat a task's uncertainty
+            // as "anything may be affected".
             if out.uncertainties.len() > uncertain_before {
                 cx.whole_package(out, &format!("`{prog}` not fully recognized"));
             }
-            // Computed arguments may name any file: fall back to the package directory.
+            // Computed arguments may name any file: fall back to the package
+            // directory.
             if recognition != Recognition::Ignored && real.argv.iter().any(|w| w.dynamic) {
                 cx.whole_package(out, &format!("computed arguments to `{prog}`"));
                 if recognition == Recognition::Full {
@@ -729,8 +739,8 @@ impl Registry {
         if let Some(rep) = unknown_program_hook(cmd, &real, &cx2, out, &prog) {
             return rep;
         }
-        // A program whose path is computed (`"$ROOT/scripts/build.sh"`, `./bin/*`):
-        // some file runs, and the word does not say which.
+        // A program whose path is computed (`"$ROOT/scripts/build.sh"`,
+        // `./bin/*`): some file runs, and the word does not say which.
         if real.argv[0].text.contains('/') && (real.argv[0].dynamic || real.argv[0].glob) {
             out.uncertain(
                 UncertaintyKind::ComputedSpecifier,
@@ -751,7 +761,8 @@ impl Registry {
             let lang = EntryLang::of(&p);
             out.entry(p.clone(), lang);
             if lang == EntryLang::Auto {
-                // A shell script or binary: its contents are an input, its effects unknown.
+                // A shell script or binary: its contents are an input, its
+                // effects unknown.
                 out.uncertain(
                     UncertaintyKind::UnknownCommand,
                     format!("script `{}`", real.argv[0].text),

@@ -132,8 +132,8 @@ pub fn lint_paths(set: &TaskSet) -> Vec<PathsFinding> {
         if events.is_empty() {
             continue;
         }
-        // The files the job's closure depends on (repo-relative), and sample paths for
-        // its memberships.
+        // The files the job's closure depends on (repo-relative), and sample
+        // paths for its memberships.
         let mut files: BTreeSet<String> = BTreeSet::new();
         let mut members: BTreeSet<(String, String)> = BTreeSet::new();
         for task in set.closure(&t.id) {

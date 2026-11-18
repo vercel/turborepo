@@ -247,13 +247,14 @@ fn file_names(
     for (line, shape, rest) in d.shapes() {
         out.seen += 1;
         if keys.shapes.contains(shape) {
-            // A parent step in the file (`..`, `dirname`) can cut the spelled path back to
-            // the shape: the rest then says nothing.
+            // A parent step in the file (`..`, `dirname`) can cut the spelled
+            // path back to the shape: the rest then says nothing.
             let rest = rest.filter(|_| d.ups == 0 || data);
             let from_cwd = facts::climbs_from_cwd(line);
             let climbs = facts::climbs(line) || (from_cwd > 0 && !climb_cwd);
             let (line, span) = facts::line_and_span(line);
-            // Every string with this name lies inside one closed region: not a name.
+            // Every string with this name lies inside one closed region: not a
+            // name.
             if let Some((first, last)) = span
                 && closed.iter().any(|c| c.start <= first && last < c.end)
             {
@@ -261,12 +262,13 @@ fn file_names(
             }
             out.shapes
                 .push((shape.to_owned(), rest.map(str::to_owned), line, climbs));
-            // A changed path that the string can climb to ends with its shape: only a name
-            // of a changed path needs its places.
+            // A changed path that the string can climb to ends with its shape:
+            // only a name of a changed path needs its places.
             if from_cwd > 0 && climb_cwd && !data && !climbs {
                 out.cwd_shapes.push(out.shapes.len() - 1);
-                // Below the working directory, whatever package that is (a base below it
-                // in a nested package), and at the directories it climbs to.
+                // Below the working directory, whatever package that is (a base
+                // below it in a nested package), and at the
+                // directories it climbs to.
                 out.cwd_climbs.push((format!("**/{shape}"), line));
                 for j in 1..=from_cwd {
                     out.cwd_climbs
@@ -291,8 +293,8 @@ fn file_names(
                 out.locations.push((dir.to_owned(), line, false));
             }
         }
-        // Where the file's location and the working directory go, when they were
-        // followed.
+        // Where the file's location and the working directory go, when they
+        // were followed.
         for a in d.anchored() {
             if a.cwd {
                 out.cwd_dirs.push((
@@ -306,7 +308,8 @@ fn file_names(
             let base =
                 turborepo_trace_graph::join_rel(path.rsplit_once('/').map_or("", |x| x.0), &a.rel);
             if &*a.pattern == facts::EVERYTHING_BELOW {
-                // The parent steps elsewhere in the file can still be applied to it.
+                // The parent steps elsewhere in the file can still be applied
+                // to it.
                 let dir = ancestor(&base, d.ups);
                 if keys.dirs.contains(dir) {
                     out.locations.push((dir.to_owned(), a.line, a.conditional));
@@ -565,7 +568,8 @@ fn data_facts<V: GraphView>(
                 .collect()
         }
     };
-    // Size and modification time of every file, in parallel: the only per-run cost.
+    // Size and modification time of every file, in parallel: the only per-run
+    // cost.
     let workers = std::thread::available_parallelism()
         .map_or(4, |n| n.get())
         .min(8);
@@ -935,7 +939,8 @@ mod tests {
             "services/a/src/routes.ts",
         )];
         let keys = Keys::of(&changes);
-        // Two names of the changed path: one string at offset 120, one at 40 and 300.
+        // Two names of the changed path: one string at offset 120, one at 40
+        // and 300.
         let fact = "names:0,0,0,0,0\n7@120\tservices/a/src/routes\n3@40-300\tsrc/routes";
         let d = facts::decode(fact).unwrap();
         let n = NodeId(4);
@@ -947,8 +952,8 @@ mod tests {
                 .collect()
         };
         assert_eq!(shapes(&[]), ["services/a/src/routes", "src/routes"]);
-        // The table literal spans 100..200: the name whose only string is inside goes;
-        // the one that also occurs outside stays.
+        // The table literal spans 100..200: the name whose only string is
+        // inside goes; the one that also occurs outside stays.
         let table = ClosedSpan {
             node: n,
             start: 100,
@@ -974,9 +979,9 @@ mod tests {
         ];
         let keys = Keys::of(&changes);
         let f = file_names(&keys, n, "svc/a/x_test.go", &d, false, &[], true);
-        // The shape counts inside the package; the places are the directories it
-        // climbs to. A plain climbing mark stays; a name of no changed path is left
-        // out.
+        // The shape counts inside the package; the places are the directories
+        // it climbs to. A plain climbing mark stays; a name of no
+        // changed path is left out.
         assert_eq!(
             f.shapes,
             [
@@ -993,7 +998,8 @@ mod tests {
                 ("../../../package.json".to_owned(), 4)
             ]
         );
-        // Off (A/B, or without the package assumption): the shape anywhere, as before.
+        // Off (A/B, or without the package assumption): the shape anywhere, as
+        // before.
         let f = file_names(&keys, n, "svc/a/x_test.go", &d, false, &[], false);
         assert_eq!(f.shapes[0], ("package.json".to_owned(), None, 4, true));
         assert!(f.cwd_climbs.is_empty());

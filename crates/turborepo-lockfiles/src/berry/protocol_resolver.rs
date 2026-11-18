@@ -53,14 +53,15 @@ impl Key {
 }
 
 impl Entry {
-    // Insert the given descriptor's range into the correct slot depending if it is
-    // with or without a protocol
+    // Insert the given descriptor's range into the correct slot depending if it
+    // is with or without a protocol
     fn insert_descriptor(&mut self, descriptor: &Descriptor) -> Option<String> {
         let range = descriptor.range()?.to_string();
         match descriptor.protocol() {
             Some(protocol) => {
-                // Yarn 4 made the default npm protocol explicit in the lockfile.
-                // In order to return the more specific protocol we avoid overwriting other
+                // Yarn 4 made the default npm protocol explicit in the
+                // lockfile. In order to return the more
+                // specific protocol we avoid overwriting other
                 // protocols with the now explicit npm protocol.
                 if protocol != "npm" || self.with.is_none() {
                     match self.with.replace(RangeAndProtocol {

@@ -317,7 +317,8 @@ mod tests {
         };
         assert_eq!(detect(root.path(), Architecture::X64), Ok(glibc("2.39")));
 
-        // Older banners continue after the version; aarch64 uses its own loader.
+        // Older banners continue after the version; aarch64 uses its own
+        // loader.
         let shell = elf(ARM64, Some("/lib/ld-linux-aarch64.so.1"));
         let banner = b"GNU C Library (GNU libc) stable release version 2.31, by Roland McGrath";
         let root = host(&[

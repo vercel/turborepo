@@ -817,9 +817,9 @@ mod test {
 
         // Note: PidLock doesn't implement Debug, so we can't unwrap_err()
 
-        // todo: update this test. we should delete the socket file first, remove the
-        // pid file, and start a new daemon. the old one should just time
-        // out, and this should not error.
+        // todo: update this test. we should delete the socket file first,
+        // remove the pid file, and start a new daemon. the old one
+        // should just time out, and this should not error.
         if let Err(err) = result {
             assert_matches!(err, SocketOpenError::LockError(PidlockError::AlreadyOwned));
         } else {

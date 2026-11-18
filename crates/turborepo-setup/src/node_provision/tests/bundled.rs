@@ -179,8 +179,9 @@ async fn bundled_native_resolution_publication_execution_and_one_owner_generatio
             Outcome::Unchanged
         );
         assert_eq!(upstream.requests.load(Ordering::SeqCst), 1);
-        // The loopback server only accepts Node distribution requests; no registry
-        // transport exists anywhere in this path, including a network-free repeat.
+        // The loopback server only accepts Node distribution requests; no
+        // registry transport exists anywhere in this path, including a
+        // network-free repeat.
         upstream.task.abort();
         let mut sibling = plan.inventory_tool().clone();
         sibling.id = "fixture".into();
@@ -325,7 +326,8 @@ async fn invalid_verified_packages_never_promote_and_legacy_inventory_cannot_ass
         ));
         assert_eq!(store.published(), before);
         // A legacy inventory can have this SAME Node artifact/mappings with no
-        // semantic npm identity. Reuse must verify resources, not trust inventory.
+        // semantic npm identity. Reuse must verify resources, not trust
+        // inventory.
         let mut legacy = lock.document().clone();
         legacy.tools.remove("npm");
         legacy.tools.get_mut("node").unwrap().options.clear();

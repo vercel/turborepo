@@ -248,9 +248,10 @@ impl Lexer<'_> {
                 *s = de & (1 << 1) != 0;
             }
         }
-        // Words are found through ASCII identifier bytes only (a non-ASCII byte is an
-        // event that re-lexes exactly), so only the ASCII parts of the sets
-        // matter; they always fit the nibble tables (at most 8 rows).
+        // Words are found through ASCII identifier bytes only (a non-ASCII byte
+        // is an event that re-lexes exactly), so only the ASCII parts
+        // of the sets matter; they always fit the nibble tables (at
+        // most 8 rows).
         self.skim_first = ByteSet::new(|b| b < 0x80 && f[b as usize] != 0).unwrap_or(*ID_SET);
         self.skim_second = ByteSet::new(|b| b < 0x80 && second[b as usize]).unwrap_or(*ID_SET);
         self.skim_short_first = ByteSet::new(|b| b < 0x80 && short[b as usize]).unwrap_or(*ID_SET);
@@ -279,8 +280,8 @@ impl Lexer<'_> {
         let [ev, id, first, second, short] = match src.get(base..base + BLOCK) {
             Some(b) => masks_n(b.try_into().expect("block length"), sets),
             None => {
-                // Past the end: padding (no events, no identifiers), and the end itself is
-                // an event.
+                // Past the end: padding (no events, no identifiers), and the
+                // end itself is an event.
                 let mut buf = [b' '; BLOCK];
                 let n = src.len() - base;
                 buf[..n].copy_from_slice(&src[base..]);
@@ -313,13 +314,15 @@ impl Lexer<'_> {
                     return t;
                 }
             }
-            // The state is exact at `q`. `ev` and `cand` hold the events and candidate
-            // words of the block at `base` that are not yet processed.
+            // The state is exact at `q`. `ev` and `cand` hold the events and
+            // candidate words of the block at `base` that are not
+            // yet processed.
             let mut q = self.pos;
             let mut base = q;
             let (mut ev, mut id, mut cand) = self.skim_block(base, 0, &ev_set);
             loop {
-                // Candidate words before the next event (all of them if there is none).
+                // Candidate words before the next event (all of them if there
+                // is none).
                 let before = ev.wrapping_sub(1) & !ev;
                 while cand & before != 0 {
                     let off = cand.trailing_zeros() as usize;
@@ -367,8 +370,9 @@ impl Lexer<'_> {
                 };
                 q = self.pos;
                 let rel = q - base;
-                // After a token from the full lexer, a word may start right after an
-                // identifier byte (`1$a`: the number ends at `$`), which the block's word
+                // After a token from the full lexer, a word may start right
+                // after an identifier byte (`1$a`: the number
+                // ends at `$`), which the block's word
                 // starts miss.
                 if rel >= BLOCK
                     || (glued && is_id(src[q - 1]) && src.get(q).is_some_and(|&b| is_id(b)))
@@ -436,8 +440,8 @@ impl Lexer<'_> {
             }
         }
         let kw0 = keyword(&src[w..e]);
-        // A keyword after `.` is a plain identifier, so it may still be a dynamic
-        // trigger.
+        // A keyword after `.` is a plain identifier, so it may still be a
+        // dynamic trigger.
         let maybe = self.dyn_hit(w, e)
             || (kw0 != Kw::None
                 && ((mask | top_mask) & (1u64 << kw0 as u8) != 0
@@ -488,8 +492,9 @@ impl Lexer<'_> {
         };
         match b {
             b'(' => {
-                // Only `if`, `while`, `for`, `with` or `await` before it can make this a
-                // condition paren: check their last two bytes first.
+                // Only `if`, `while`, `for`, `with` or `await` before it can
+                // make this a condition paren: check their last
+                // two bytes first.
                 let mut j = p;
                 while j > q && is_ws(src[j - 1]) {
                     j -= 1;
@@ -606,11 +611,12 @@ impl Lexer<'_> {
     #[inline(always)]
     fn apply_lst(&mut self, l: Lst) {
         if let Some((kind, kw)) = l.tok {
-            // `prev_kw` becomes stale here; it is only read when `last_kw` is `await`,
-            // which `lst` never reconstructs.
+            // `prev_kw` becomes stale here; it is only read when `last_kw` is
+            // `await`, which `lst` never reconstructs.
             self.commit(kind, kw);
             if kind == TokKind::Bang {
-                // Only JS reaches this (`!` is an event in TypeScript): never a postfix.
+                // Only JS reaches this (`!` is an event in TypeScript): never a
+                // postfix.
                 self.last_bang_postfix = false;
             }
         }
@@ -661,8 +667,9 @@ impl Lexer<'_> {
         let src = self.src;
         let kw0 = keyword(&src[s..e]);
         if kw0 == Kw::None {
-            // A plain identifier, a private name (`#x`) or the tail of a number (`1.x`):
-            // all values without a keyword, which the lexer treats alike.
+            // A plain identifier, a private name (`#x`) or the tail of a number
+            // (`1.x`): all values without a keyword, which the
+            // lexer treats alike.
             return Some((TokKind::Ident, Kw::None));
         }
         if s > q {
@@ -808,7 +815,8 @@ mod tests {
             for &a in alphabet {
                 for &b in alphabet.iter().chain(b" x") {
                     for &c in alphabet.iter().chain(b" x") {
-                        // After a value, so `<` is not JSX (and `#!` is no hashbang).
+                        // After a value, so `<` is not JSX (and `#!` is no
+                        // hashbang).
                         let src = [b'x', b' ', a, b, c, b' ', b'y'];
                         if a == b'#' && IDENT_START[b as usize] {
                             continue;

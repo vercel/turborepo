@@ -113,8 +113,8 @@ fn repo() -> tempfile::TempDir {
          });\n",
     );
     write(r, "packages/reader/fixtures/x.json", "{}\n");
-    // A file of the reader's package that no test loads knows this fixture by its
-    // path, so the fixture is a file of the graph: a change to it is a
+    // A file of the reader's package that no test loads knows this fixture by
+    // its path, so the fixture is a file of the graph: a change to it is a
     // modification, and only names can select the tests for it.
     write(
         r,
@@ -159,8 +159,8 @@ fn a_string_names_only_files_of_the_test_s_package_or_of_the_read_s() {
     ] {
         assert_eq!(affected(r, path, &[], OFF), [A, B], "{path}");
     }
-    // `--strict` assumes nothing: the read is open, and every test that reaches it
-    // is selected.
+    // `--strict` assumes nothing: the read is open, and every test that reaches
+    // it is selected.
     assert_eq!(
         affected(r, "services/c/fixtures/x.json", &["--strict"], &[]),
         [A, B, C]
@@ -173,8 +173,8 @@ fn a_path_the_code_locates_is_named_in_any_package() {
     let r = d.path();
     // A string written with parent steps says that it leaves.
     assert_eq!(affected(r, "shared/data/x.json", &[], &[]), [B]);
-    // A literal path from a file's location says where it goes, also for the module
-    // that receives the value.
+    // A literal path from a file's location says where it goes, also for the
+    // module that receives the value.
     assert_eq!(affected(r, "shared/located/x.json", &[], &[]), [C]);
     // Not what is beside them.
     assert!(affected(r, "shared/other/x.json", &[], &[]).is_empty());

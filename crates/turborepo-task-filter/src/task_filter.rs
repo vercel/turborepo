@@ -859,7 +859,8 @@ mod tests {
     }
 
     // The package graph only supplies names; these task IDs model the tasks a
-    // Cargo workspace contributes, without Cargo discovery or process execution.
+    // Cargo workspace contributes, without Cargo discovery or process
+    // execution.
     async fn make_cargo_task_pkg_graph(root: &AbsoluteSystemPath) -> PackageGraph {
         make_pkg_graph(root, &["acme", "app", "lib-a"]).await
     }

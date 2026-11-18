@@ -293,7 +293,8 @@ impl Lockfile for NpmLockfile {
 
     fn patches(&self) -> Result<Vec<RelativeUnixPathBuf>, Error> {
         // npm 12 records patch paths on the package entries. Reading them from
-        // the subgraph naturally excludes patches for packages removed by prune.
+        // the subgraph naturally excludes patches for packages removed by
+        // prune.
         self.packages
             .values()
             .filter_map(|package| package.other.get("patched")?.get("path")?.as_str())
@@ -1408,9 +1409,10 @@ mod test {
             "send@0.17.2 should be promoted to node_modules/send"
         );
 
-        // mime@1.6.0 must be reachable from the promoted send. node_modules/mime
-        // is still occupied by the root devDep (3.0.0), so it must be nested
-        // directly under send rather than stranded under apps/app-2.
+        // mime@1.6.0 must be reachable from the promoted send.
+        // node_modules/mime is still occupied by the root devDep
+        // (3.0.0), so it must be nested directly under send rather than
+        // stranded under apps/app-2.
         assert_eq!(
             reparsed
                 .packages
@@ -1778,8 +1780,8 @@ mod test {
 
     #[test]
     fn test_turbo_version_rejects_non_semver() {
-        // Malicious version strings that could be used for RCE via npx should be
-        // rejected
+        // Malicious version strings that could be used for RCE via npx should
+        // be rejected
         let malicious_versions = [
             "file:./malicious.tgz",
             "https://evil.com/malicious.tgz",

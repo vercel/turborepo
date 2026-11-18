@@ -121,7 +121,8 @@ impl AsyncCache {
                     }
                 };
             }
-            // Drop write consumer to immediately notify callers that cache is shutting down
+            // Drop write consumer to immediately notify callers that cache is
+            // shutting down
             drop(write_consumer);
 
             let shutdown_callback = if let Some((closing, done)) = shutdown_callback {

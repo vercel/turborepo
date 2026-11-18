@@ -318,7 +318,8 @@ pub(crate) fn apply<G: GraphView>(
         return;
     }
     let g = engine.graph();
-    // `TURBO_TRACE_DEBUG_MOCKS_TIMING=1`: where the pass spends its time (stderr).
+    // `TURBO_TRACE_DEBUG_MOCKS_TIMING=1`: where the pass spends its time
+    // (stderr).
     let timing =
         turborepo_trace_core::debug::var_os("MOCKS_TIMING").map(|_| std::time::Instant::now());
     let lap = |what: &str| {
@@ -369,7 +370,8 @@ pub(crate) fn apply<G: GraphView>(
                     module,
                     at,
                 } => {
-                    // A manifest is never a module (the trace side does not name one).
+                    // A manifest is never a module (the trace side does not
+                    // name one).
                     if let Some(n) = g.node_by_path(module)
                         && !module.ends_with("package.json")
                     {
@@ -447,10 +449,12 @@ pub(crate) fn apply<G: GraphView>(
 
     let fwd = engine.forward();
     let n = g.node_count() as usize;
-    // Generation stamps: visited nodes and cut modules of the current candidate.
+    // Generation stamps: visited nodes and cut modules of the current
+    // candidate.
     let mut seen = vec![0u32; n];
     let mut cut = vec![0u32; n];
-    // Cut modules that a mock names by path (every load of the file gets the mock).
+    // Cut modules that a mock names by path (every load of the file gets the
+    // mock).
     let mut pathed = vec![0u32; n];
     let mut stack: Vec<NodeId> = Vec::new();
     let mut freed: Vec<(usize, MockSkip)> = Vec::new();
@@ -516,8 +520,8 @@ pub(crate) fn apply<G: GraphView>(
         }
         let jest = c.replaced.iter().all(|r| r.2);
         // Whether the load `from → to` returns the mock.
-        // Every edge of `from` to the cut module must be a load the runner answers with
-        // the mock.
+        // Every edge of `from` to the cut module must be a load the runner
+        // answers with the mock.
         let intercepted = |from: NodeId, to: NodeId| {
             if jest {
                 // An ES module file is not loaded through `require`.
@@ -532,10 +536,12 @@ pub(crate) fn apply<G: GraphView>(
                     continue;
                 }
                 let spec = e.specifier.unwrap_or("");
-                // Not a load (a read of the source); a request with a query, which names
-                // another module (vite's `?raw`, `?url`); in vitest Node's own `require`
-                // (an import resolved through an alias is a labelled edge of that kind);
-                // an import by path of a module the mock names by a bare request.
+                // Not a load (a read of the source); a request with a query,
+                // which names another module (vite's `?raw`,
+                // `?url`); in vitest Node's own `require`
+                // (an import resolved through an alias is a labelled edge of
+                // that kind); an import by path of a module the
+                // mock names by a bare request.
                 if !loads_module(e.attr)
                     || spec.contains('?')
                     || (!jest && e.kind() == RefKind::Require && !labelled(spec))
@@ -588,8 +594,9 @@ pub(crate) fn apply<G: GraphView>(
             st.other_path += 1;
             continue;
         }
-        // Nothing was cut on the way (the change reaches the entry through edges the
-        // walks do not follow, such as a deferred candidate's own rule): keep it.
+        // Nothing was cut on the way (the change reaches the entry through
+        // edges the walks do not follow, such as a deferred candidate's
+        // own rule): keep it.
         let Some((importer, module)) = skip else {
             st.other_path += 1;
             continue;
@@ -856,8 +863,9 @@ mod tests {
         f.jest("t.test.ts", "module.exports = {};");
         mark(&mut f, "t.test.ts", REPLACES);
         assert_eq!(run(f, "m.ts", true).0, ["t.test.ts"]);
-        // A module the mock names by a bare request: imports by a bare request (also
-        // through an alias) get the mock, an import by path may load another file.
+        // A module the mock names by a bare request: imports by a bare request
+        // (also through an alias) get the mock, an import by path may
+        // load another file.
         let named = |spec: &str| {
             let mut f = Fx::new();
             f.import("t.test.ts", "user.ts", None);
@@ -907,8 +915,8 @@ mod tests {
 
     #[test]
     fn a_manual_mock_counts_for_tests_that_load_a_file_that_registers_it() {
-        // The test requests `n.ts` and loads no file that registers the mock: it gets
-        // the real module.
+        // The test requests `n.ts` and loads no file that registers the mock:
+        // it gets the real module.
         for changed in ["__mocks__/n.ts", "mockdep.ts"] {
             let (sel, why) = run(lazy_fixture(&["user.ts"]), changed, true);
             assert!(sel.is_empty(), "{changed}: {sel:?}");
@@ -933,7 +941,8 @@ mod tests {
             run(lazy_fixture(&["user.ts", "helper.ts"]), "mockdep.ts", true).0,
             ["t.test.ts"]
         );
-        // The helper alone, with nothing that requests the module: no path at all.
+        // The helper alone, with nothing that requests the module: no path at
+        // all.
         assert!(
             run(lazy_fixture(&["helper.ts"]), "mockdep.ts", false)
                 .0
@@ -979,9 +988,9 @@ mod tests {
 
     #[test]
     fn a_test_selected_by_another_path_gets_that_chain() {
-        // `t.test.ts → n.ts → __mocks__/n.ts → mockdep.ts` is the shortest chain, and
-        // the test does not load the helper; it is selected through `long.ts →
-        // far.ts → mockdep.ts`.
+        // `t.test.ts → n.ts → __mocks__/n.ts → mockdep.ts` is the shortest
+        // chain, and the test does not load the helper; it is selected
+        // through `long.ts → far.ts → mockdep.ts`.
         let mut f = Fx::new();
         f.import("t.test.ts", "n.ts", None);
         f.edge("n.ts", "__mocks__/n.ts", RefKind::Require, REGISTERED, 900);
@@ -1029,8 +1038,8 @@ mod tests {
 
     #[test]
     fn a_replaced_module_and_an_unregistered_mock_together() {
-        // The change reaches the test through a module it replaces and through a manual
-        // mock it does not get: neither path counts.
+        // The change reaches the test through a module it replaces and through
+        // a manual mock it does not get: neither path counts.
         let with = |helper: bool| {
             let mut f = fixture();
             mark(&mut f, "t.test.ts", REPLACES);

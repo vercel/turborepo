@@ -381,8 +381,8 @@ fn an_open_load_is_bounded_by_the_declared_packages() {
         ),
     );
     const T: &str = "services/a/test/a.test.js";
-    // No edge is guessed from the file's directory, but the module there is a file
-    // of the test's own package, which the open record covers.
+    // No edge is guessed from the file's directory, but the module there is a
+    // file of the test's own package, which the open record covers.
     assert_eq!(affected(r, "services/a/other.js", &[]), [T]);
     assert_eq!(affected(r, "services/a/src/a.js", &[]), [T]);
     assert!(affected(r, "packages/plug/a.js", &[]).is_empty());

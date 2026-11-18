@@ -100,7 +100,8 @@ fn infer(
             if *stopped {
                 return None;
             }
-            // A nested clone/worktree must never borrow its enclosing repo's tools.
+            // A nested clone/worktree must never borrow its enclosing repo's
+            // tools.
             *stopped = dir.join_component(".git").exists();
             Some(dir.to_owned())
         })
@@ -247,7 +248,8 @@ fn check_nested_markers(
         if package_json.other.contains_key("workspaces") {
             return Err(nested("package.json"));
         }
-        // Read native JS globs without detecting or executing a package manager.
+        // Read native JS globs without detecting or executing a package
+        // manager.
         let manager = if root.join_component("pnpm-workspace.yaml").exists() {
             Some(PackageManager::Pnpm)
         } else if root.join_component("package.json").exists() {

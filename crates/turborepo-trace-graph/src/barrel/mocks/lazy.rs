@@ -203,11 +203,12 @@ pub(crate) fn apply<G: GraphView>(
     };
     // 1. Conditional edges between two files the change reaches.
     let mut pairs: HashMap<(u32, u32), u32> = HashMap::new();
-    // Modules, with the files that register the mocks of their conditional edges.
+    // Modules, with the files that register the mocks of their conditional
+    // edges.
     let mut modules: Vec<(NodeId, Vec<NodeId>)> = Vec::new();
     let mut found: Vec<(NodeId, NodeId)> = Vec::new();
-    // The modules with such edges from the derived layer's tags, else every file
-    // the change reaches.
+    // The modules with such edges from the derived layer's tags, else every
+    // file the change reaches.
     let tagged: Option<Vec<NodeId>> = g.tagged(super::TAG_MODULE).map(|t| {
         t.iter()
             .map(|&n| NodeId(n))
@@ -265,8 +266,8 @@ pub(crate) fn apply<G: GraphView>(
         .filter(|(_, r)| r.uncertain.is_none() && base[r.entry.index()] == NONE)
         .map(|(i, _)| i)
         .collect();
-    // 3. Per module: who requests it and loads a file that registers its mock (also
-    //    when
+    // 3. Per module: who requests it and loads a file that registers its mock
+    //    (also when
     // every test is selected without the edges: the per-entry walks ask).
     let mut requests: Vec<NodeSet> = Vec::with_capacity(modules.len());
     let mut holds: Vec<NodeSet> = Vec::with_capacity(modules.len());
@@ -297,8 +298,8 @@ pub(crate) fn apply<G: GraphView>(
         if holds.iter().any(|h| h.contains(r.entry)) {
             continue;
         }
-        // The conditional edge on the entry's chain (seed first), else of a module it
-        // requests.
+        // The conditional edge on the entry's chain (seed first), else of a
+        // module it requests.
         let on_chain = r
             .witness
             .windows(2)
@@ -336,9 +337,9 @@ pub(crate) fn apply<G: GraphView>(
             !drop[i - 1]
         });
     }
-    // A test selected without the edges whose chain uses one that does not hold for
-    // it: the chain of the walk without them (when its seed is a changed node
-    // with a cause).
+    // A test selected without the edges whose chain uses one that does not hold
+    // for it: the chain of the walk without them (when its seed is a
+    // changed node with a cause).
     for r in results.iter_mut() {
         if r.uncertain.is_some() || base[r.entry.index()] == NONE {
             continue;

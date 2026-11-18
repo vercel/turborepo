@@ -221,8 +221,8 @@ impl<'g> CwdReach<'g> {
                 break;
             }
             for &y in self.g.fwd.neighbors(NodeId(x)).0 {
-                // A node known to reach none adds nothing; one known to reach one is
-                // found when it is popped.
+                // A node known to reach none adds nothing; one known to reach
+                // one is found when it is popped.
                 if !self.no.contains(NodeId(y)) && self.seen.insert(NodeId(y)) {
                     visited.push(y);
                     stack.push(y);
@@ -231,7 +231,8 @@ impl<'g> CwdReach<'g> {
         }
         for x in &visited {
             self.seen.remove(NodeId(*x));
-            // A finished search without a record: none of its nodes reaches one.
+            // A finished search without a record: none of its nodes reaches
+            // one.
             if !found {
                 self.no.insert(NodeId(*x));
             }
@@ -262,9 +263,9 @@ impl Graph {
             None => Vec::new(),
         };
         let has_walked = walked_buf.is_some();
-        // Module loads that reach files the supplier did not reach before: per-test
-        // resolutions of working-directory-relative references ([`super::cwd`]) were
-        // computed without them.
+        // Module loads that reach files the supplier did not reach before:
+        // per-test resolutions of working-directory-relative references
+        // ([`super::cwd`]) were computed without them.
         let mut cwd_reach = CwdReach::new(self);
         let mut reach_of: HashMap<u32, NodeSet> = HashMap::new();
         let mut seen: HashSet<(u32, u32, u8)> = HashSet::new();
@@ -400,8 +401,9 @@ impl Graph {
                             }
                         }
                     }
-                    // A specifier the supplier itself lists (a module string of a route
-                    // table): its own references already are the dependency.
+                    // A specifier the supplier itself lists (a module string of
+                    // a route table): its own references
+                    // already are the dependency.
                     if !found
                         && !(s.starts_with("./") || s.starts_with("../"))
                         && self.out_edges(d.node).any(|e| {
@@ -461,8 +463,8 @@ impl Graph {
                 }
             }
             // Loaded modules the supplier did not reach before, that reach a
-            // working-directory-relative reference: its per-test resolution does not cover
-            // the supplier's tests.
+            // working-directory-relative reference: its per-test resolution
+            // does not cover the supplier's tests.
             if is_module_kind(d.kind) && !targets.is_empty() {
                 let reaching: Vec<u32> = targets
                     .iter()
@@ -485,8 +487,8 @@ impl Graph {
                 }
             }
         }
-        // Closed sites: drop the parameter-origin record, keeping records of other
-        // origins at the same place.
+        // Closed sites: drop the parameter-origin record, keeping records of
+        // other origins at the same place.
         let comp = crate::convert::query_unc_kind(
             crate::convert::UNCERTAINTY_KINDS
                 .iter()
@@ -517,8 +519,8 @@ impl Graph {
             }
             stats.dropped += 1;
         }
-        // Closed resolved sites and tables: cut the edges the bound dependencies
-        // replace.
+        // Closed resolved sites and tables: cut the edges the bound
+        // dependencies replace.
         let mut by_node: HashMap<u32, Vec<Rule<'_>>> = HashMap::new();
         for c in closed.iter().filter(|c| !c.open) {
             by_node
@@ -548,14 +550,15 @@ impl Graph {
                         place && spec.split(" | ").all(|x| specs.iter().any(|s| s == x))
                     })
             };
-            // Specifiers the file also names in a reference that stays: their alias edges
-            // stay too.
+            // Specifiers the file also names in a reference that stays: their
+            // alias edges stay too.
             let mut kept_specs: HashSet<&str> = HashSet::new();
             let mut replaced_specs: HashSet<&str> = HashSet::new();
             for e in self.out_edges(n) {
                 if let (Some(_), Some(spec)) = (e.span, e.specifier) {
-                    // Only a module load that stays keeps its specifier's alias edges (the
-                    // manifest a site consulted to resolve a bare specifier does not).
+                    // Only a module load that stays keeps its specifier's alias
+                    // edges (the manifest a site consulted
+                    // to resolve a bare specifier does not).
                     let set = if replaced(&e) {
                         &mut replaced_specs
                     } else if loads_module(e.attr.kind()) {

@@ -524,8 +524,8 @@ impl BoundariesChecker {
         for (idx, reason) in file_patches {
             let contents_before_span = &contents[last_idx..idx];
 
-            // Find the last newline before the span (note this is the index into the slice,
-            // not the full file)
+            // Find the last newline before the span (note this is the index
+            // into the slice, not the full file)
             let newline_idx = contents_before_span.rfind('\n');
 
             // If newline exists, we write all the contents before newline

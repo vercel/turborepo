@@ -554,10 +554,12 @@ impl<'g> Eval<'g> {
                             names
                         }
                     };
-                    // Next to literal text the variable's value does not have to be
-                    // known: whatever directory or name it is, the path contains the
-                    // literal text, which bounds it like a value set outside the
-                    // repository. The files that assign it are inputs either way.
+                    // Next to literal text the variable's value does not have
+                    // to be known: whatever directory or
+                    // name it is, the path contains the
+                    // literal text, which bounds it like a value set outside
+                    // the repository. The files that assign
+                    // it are inputs either way.
                     let bounded = parts
                         .iter()
                         .any(|p| matches!(p, EnvPart::Lit(s) if !s.is_empty()));
@@ -610,7 +612,8 @@ impl<'g> Eval<'g> {
             return Ok(Vec::new());
         };
         if returns {
-            // A string argument cannot be called; an unknown one could return anything.
+            // A string argument cannot be called; an unknown one could return
+            // anything.
             if let Some(EnvAlt::Unknown(r)) =
                 arg.value.iter().find(|a| matches!(a, EnvAlt::Unknown(_)))
             {
@@ -720,7 +723,8 @@ impl<'g> Eval<'g> {
                 calls: &s.value.calls,
                 bind: None,
             };
-            // What the file's own facts cannot evaluate, a cross-file evaluator may.
+            // What the file's own facts cannot evaluate, a cross-file evaluator
+            // may.
             let asked = s.at.and_then(|at| (self.oracle)(NodeId(s.node), at));
             let evaluated = match asked {
                 Some(answer) => {
@@ -729,8 +733,8 @@ impl<'g> Eval<'g> {
                             self.sites.push(f.0);
                         }
                     }
-                    // The answer has no calls of its own: what it could not follow is
-                    // unknown.
+                    // The answer has no calls of its own: what it could not
+                    // follow is unknown.
                     let acx = Cx {
                         node: s.node,
                         calls: &[],
@@ -743,8 +747,9 @@ impl<'g> Eval<'g> {
             match evaluated {
                 Ok(vals) => {
                     for v in vals {
-                        // A variable assigned from a variable set outside: covered by this
-                        // variable's own outside alternative.
+                        // A variable assigned from a variable set outside:
+                        // covered by this variable's
+                        // own outside alternative.
                         if !out.contains(&v) {
                             out.push(v);
                         }
@@ -771,8 +776,8 @@ impl<'g> Eval<'g> {
     fn call(&mut self, call: &EnvCall, cx: Cx<'_>, depth: u32) -> Result<Vec<Conc>, String> {
         let mut targets: Vec<u32> = Vec::new();
         for e in GraphView::out_edges(self.g, NodeId(cx.node)) {
-            // An import also links the package's manifest: only source files can define
-            // the function.
+            // An import also links the package's manifest: only source files
+            // can define the function.
             if e.specifier == Some(call.module.as_str())
                 && let Some(t) = e.to
                 && GraphView::lang(self.g, t) == Some("js")
@@ -941,12 +946,14 @@ fn normalize(dir: &str, text: &str) -> Option<Result<String, String>> {
                 if s.chars().all(|c| c == WILD) {
                     parts.push("**".to_owned());
                 } else {
-                    // Unknown text at the end of a segment may also contain separators.
+                    // Unknown text at the end of a segment may also contain
+                    // separators.
                     let pat = s.replace(WILD, "*");
                     if !s.ends_with(WILD) {
                         parts.push(pat);
                     } else if segs[i + 1..].iter().all(|r| r.is_empty() || *r == ".") {
-                        // The last segment: the name itself, or anything below it.
+                        // The last segment: the name itself, or anything below
+                        // it.
                         parts.push(format!("{pat}{{,/**}}"));
                     } else {
                         parts.push(pat);
@@ -1065,8 +1072,9 @@ impl Graph {
                         ))
                     };
                 }
-                // Relative to a working directory this module does not know: leading
-                // `..` and unknown directories are dropped, the rest is a path suffix.
+                // Relative to a working directory this module does not know:
+                // leading `..` and unknown directories are
+                // dropped, the rest is a path suffix.
                 let ext = c.ext_head && t.starts_with(WILD);
                 let mut rest = t;
                 loop {
@@ -1076,8 +1084,10 @@ impl Graph {
                         rest = r;
                     } else if let Some(r) = rest.strip_prefix(WILD) {
                         if r.is_empty() {
-                            // Nothing but unknown text: below a directory that only
-                            // something outside the repository names, it is outside too.
+                            // Nothing but unknown text: below a directory that
+                            // only
+                            // something outside the repository names, it is
+                            // outside too.
                             return if ext {
                                 Ok(Target::Nothing)
                             } else {
@@ -1268,8 +1278,9 @@ impl Graph {
                     .then(|| Glob::new(&pattern).map_err(|e| format!("`{p}`: {e}")))
                     .transpose()?;
                 let tail = format!("/{p}");
-                // Too many matches bound nothing: the read stays open, unless the unknown
-                // directory can only be set outside the repository.
+                // Too many matches bound nothing: the read stays open, unless
+                // the unknown directory can only be set outside
+                // the repository.
                 let mut hits: Vec<&str> = Vec::new();
                 let mut broad = false;
                 match &glob {
@@ -1512,7 +1523,8 @@ impl Graph {
                 }
                 let concs = ev.alts(&u.value.alts, cx, 0)?;
                 if module && !ev.declared && !concs.is_empty() && concs.iter().all(|c| c.outside) {
-                    // Code named only from outside the repository: nothing bounds it.
+                    // Code named only from outside the repository: nothing
+                    // bounds it.
                     return Err(format!(
                         "the repository never assigns {}: the module is named outside it",
                         ev.vars.join(", ")
@@ -1561,15 +1573,18 @@ impl Graph {
             for (d, p) in &res.members {
                 patch.membership(from, d, p);
             }
-            // Editing an assignment of a variable the use reads re-runs the readers.
+            // Editing an assignment of a variable the use reads re-runs the
+            // readers.
             for &s in &ev.sites {
                 if s != u.node {
                     patch.input(from, self.path_of(s as usize));
                 }
             }
-            // The records of the use: resolved ones go; one that stays and is fed by the
-            // environment is relabelled as an environment read with the reason, whatever
-            // origin the extractor gave it (a call of a helper), so that one layer owns it.
+            // The records of the use: resolved ones go; one that stays and is
+            // fed by the environment is relabelled as an
+            // environment read with the reason, whatever origin the
+            // extractor gave it (a call of a helper), so that one layer owns
+            // it.
             let origin = crate::convert::query_origin(u.origin);
             let span = q::Span {
                 start: u.span[0],
@@ -1591,15 +1606,18 @@ impl Graph {
                     })
                     .map(|r| (r.kind, r.line, r.span, r.detail.to_owned(), r.effect))
                     .collect();
-            // A patch names a record by kind, line and span, and a reference has one
-            // record per origin of its unknown alternatives: next to the value of an
-            // environment helper (origin `call`) a parameter, an imported binding, the
-            // command line or a value nothing knows has a record of the same kind at the
-            // same place. Dropping the key for this use would drop that record too and
-            // close an alternative nothing resolved (`require(c ? getEnv('X', F) : p)`),
-            // so a key that a record of another origin has is shared, whatever the use
-            // says: for a load asked of its callee the records all end as `unknown`, and
-            // only the use can say so.
+            // A patch names a record by kind, line and span, and a reference
+            // has one record per origin of its unknown
+            // alternatives: next to the value of an environment
+            // helper (origin `call`) a parameter, an imported binding, the
+            // command line or a value nothing knows has a record of the same
+            // kind at the same place. Dropping the key for this use
+            // would drop that record too and close an alternative
+            // nothing resolved (`require(c ? getEnv('X', F) : p)`),
+            // so a key that a record of another origin has is shared, whatever
+            // the use says: for a load asked of its callee the
+            // records all end as `unknown`, and only the use can
+            // say so.
             let shared = u.shared
                 || GraphView::uncertainties(self, from).any(|r| {
                     r.origin != origin

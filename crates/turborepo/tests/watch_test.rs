@@ -947,8 +947,8 @@ fn watch_same_content_write_does_not_rebuild() {
     assert!(status.success());
 
     // git commit may fail with "nothing to commit" since content is the same.
-    // That's fine — the point is the file was written (triggering inotify/FSEvents)
-    // but the hash hasn't changed.
+    // That's fine — the point is the file was written (triggering
+    // inotify/FSEvents) but the hash hasn't changed.
     let _ = std::process::Command::new("git")
         .args(["commit", "-m", "no-op write", "--allow-empty", "--quiet"])
         .current_dir(&test_dir)

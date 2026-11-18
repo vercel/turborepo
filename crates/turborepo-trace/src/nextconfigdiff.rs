@@ -196,8 +196,8 @@ fn next_jest_tests(engine: &Engine<'_, View<'_>>, path: &str) -> Vec<NodeId> {
     let view = engine.graph();
     let g = view.base();
     let dir = dir_of(path);
-    // jest config node → whether it imports `next/jest` and sits next to the Next
-    // config.
+    // jest config node → whether it imports `next/jest` and sits next to the
+    // Next config.
     let mut configs: HashMap<NodeId, bool> = HashMap::new();
     let mut out = Vec::new();
     engine.match_inputs(path, &mut |n| {
@@ -262,8 +262,8 @@ pub fn effects(
         ) else {
             continue;
         };
-        // The same runtime JavaScript at both revisions: the rule for such files
-        // applies (crate::erase).
+        // The same runtime JavaScript at both revisions: the rule for such
+        // files applies (crate::erase).
         if crate::erase::erased_equal(&c.path, &old, &new).is_ok() {
             continue;
         }
@@ -532,8 +532,8 @@ impl Direct {
                 });
             }
         }
-        // Not the seeds that only type resolution observes: a config and what it loads
-        // are transpiled, not checked.
+        // Not the seeds that only type resolution observes: a config and what
+        // it loads are transpiled, not checked.
         nodes.extend(cs.seeds.iter().map(|(n, _)| *n));
         Direct { nodes }
     }
@@ -566,7 +566,8 @@ fn load_changed(
                     if crate::loadcode::same_load(path, &old, &new) {
                         return true;
                     }
-                    // Both revisions only define things and load the same modules.
+                    // Both revisions only define things and load the same
+                    // modules.
                     let dialect = Dialect::from_path(Path::new(path));
                     let (b, h) = (
                         scan_shape(old.as_bytes(), dialect),
@@ -661,8 +662,8 @@ fn cwd_reads(
     }
     let mut out = Vec::new();
     for u in records {
-        // A guessed value (the wording of the extractor's records, as the per-test
-        // layer reads it).
+        // A guessed value (the wording of the extractor's records, as the
+        // per-test layer reads it).
         if u.detail.contains("initial value is used") || u.detail.contains("assumed to be `path.") {
             return None;
         }
@@ -815,9 +816,9 @@ pub fn prepare(
     entries: &NodeSet,
     strict: bool,
 ) -> Option<Pending> {
-    // The file changes that no field-level rule replaced by seeds (a manifest whose
-    // changed dependencies were applied per consumer is not a change of every
-    // file that resolved through it).
+    // The file changes that no field-level rule replaced by seeds (a manifest
+    // whose changed dependencies were applied per consumer is not a change
+    // of every file that resolved through it).
     let changes: &[Change] = &cs.files;
     let mode = loads_mode(strict);
     if mode == Loads::Off {
@@ -825,9 +826,9 @@ pub fn prepare(
     }
     let view = engine.graph();
     let g = view.base();
-    // The configs that jest tests among the entries read, with those tests and the
-    // loads. (config, its tests, its loads, the byte ranges of its route
-    // function bodies)
+    // The configs that jest tests among the entries read, with those tests and
+    // the loads. (config, its tests, its loads, the byte ranges of its
+    // route function bodies)
     #[allow(clippy::type_complexity)]
     let mut configs: Vec<(NodeId, Vec<NodeId>, Vec<Load>, Vec<(u32, u32)>)> = Vec::new();
     let mut set = NodeSet::new(g.node_count());
@@ -937,10 +938,10 @@ pub fn prepare(
     if configs.is_empty() {
         return None;
     }
-    // One evaluation of the loads, with the rules of a test that transpiles file by
-    // file. Without the graph's mock facts: changed exports then takes no
-    // definition-level shortcut for these few entries (a modified file counts
-    // with all its exports).
+    // One evaluation of the loads, with the rules of a test that transpiles
+    // file by file. Without the graph's mock facts: changed exports then
+    // takes no definition-level shortcut for these few entries (a modified
+    // file counts with all its exports).
     let outcome = crate::barrel::evaluate(engine, root, cs, &set, opts, git, Some(&set), None);
     let mut named = outcome.report;
     let mut evaluated: Vec<EntryResult> = std::mem::take(&mut named.entries);
@@ -952,15 +953,16 @@ pub fn prepare(
         reached_count: 0,
         unmatched: Vec::new(),
     };
-    // A loaded module that is itself modified is affected, whatever it exports (the
-    // barrel rule defers a modified module to the entries that use its exports,
-    // and here the module is the entry), unless its runtime JavaScript did not
-    // change.
+    // A loaded module that is itself modified is affected, whatever it exports
+    // (the barrel rule defers a modified module to the entries that use its
+    // exports, and here the module is the entry), unless its runtime
+    // JavaScript did not change.
     for (_, _, loads, _) in &configs {
         for l in loads.iter().filter(|l| l.removed.is_none()) {
-            // What loading an import does changed (found by `load_changed`): the engine may
-            // not connect the file to the import (a read inside a function is no edge of
-            // the load), so the verdict is made here.
+            // What loading an import does changed (found by `load_changed`):
+            // the engine may not connect the file to the import (a
+            // read inside a function is no edge of the load), so
+            // the verdict is made here.
             if let Some((f, _)) = &l.forced
                 && !evaluated
                     .iter()
@@ -1062,8 +1064,8 @@ impl Pending {
                 .filter(|e| e.entry == n && e.verdict != Verdict::Unaffected)
                 .collect()
         }
-        // The files with a read that names bound, and with a load that the declared
-        // packages bound.
+        // The files with a read that names bound, and with a load that the
+        // declared packages bound.
         let named_sites = if self.named.entries.is_empty() {
             Vec::new()
         } else {
@@ -1085,8 +1087,9 @@ impl Pending {
         };
         for (i, (c, tests, loads, bodies)) in configs.iter().enumerate() {
             let path = g.path(*c);
-            // Reads relative to the working directory: the config loads in the tests'
-            // process, so they are files of the tests' working directories.
+            // Reads relative to the working directory: the config loads in the
+            // tests' process, so they are files of the tests'
+            // working directories.
             let cwd_paths = cwd_reads(view, *c, bodies, tests, &cwds);
             let cwd_hit = cwd_paths.as_ref().and_then(|paths| {
                 let p = paths.iter().find(|p| {
@@ -1104,8 +1107,9 @@ impl Pending {
                     uncertain: None,
                 })
             });
-            // The config's node as a seed of its own: anything but its own edit, which is
-            // the content input's business ([`effects`]).
+            // The config's node as a seed of its own: anything but its own
+            // edit, which is the content input's business
+            // ([`effects`]).
             let own = results.get(c).filter(|r| {
                 r.witness.as_slice() == [*c]
                     && match &r.cause {
@@ -1125,12 +1129,15 @@ impl Pending {
             let own = own.copied().or(cwd_hit.as_ref());
             let mut found: Vec<&EntryResult> = Vec::new();
             found.extend(own);
-            // The layers see the config with everything it imports, also the imports that
-            // are left out: their reads sit in functions that do not run when the config
-            // loads. A layer's result for the config counts when a file of the config's
-            // process holds a read (a load) of the layer's kind; when none does, nothing
-            // of that kind runs at load, whatever the names say. (One result per entry is
-            // all a layer gives, so a result is not judged by the read it happens to cite.)
+            // The layers see the config with everything it imports, also the
+            // imports that are left out: their reads sit in
+            // functions that do not run when the config
+            // loads. A layer's result for the config counts when a file of the
+            // config's process holds a read (a load) of the layer's
+            // kind; when none does, nothing of that kind runs at
+            // load, whatever the names say. (One result per entry is
+            // all a layer gives, so a result is not judged by the read it
+            // happens to cite.)
             let (by_name, by_load) = (of(&self.named, *c), of(&self.bounded, *c));
             let runs = |sites: &[NodeId]| {
                 self.process
@@ -1291,7 +1298,8 @@ mod tests {
     fn everything_else_is_a_change() {
         let base = config(ENTRY_A, "");
         let err = |head: &str| route_rules_only(P, &base, head).unwrap_err();
-        // A field next/jest reads, and one it does not read (loading validates it).
+        // A field next/jest reads, and one it does not read (loading validates
+        // it).
         let head = base.replace("['@acme/ui']", "['@acme/ui', '@acme/icons']");
         assert!(
             err(&head).contains("runtime code differs"),
@@ -1311,7 +1319,8 @@ mod tests {
             "{}",
             err(&head)
         );
-        // The function's parameters and the property itself are outside the body.
+        // The function's parameters and the property itself are outside the
+        // body.
         let head = base.replace("async rewrites()", "async rewrites(extra = load())");
         assert!(
             err(&head).contains("runtime code differs"),

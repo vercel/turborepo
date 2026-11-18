@@ -270,9 +270,9 @@ fn listing_a_host_directory_is_an_external_reference() {
     );
     assert_eq!(new.host_targets(), [] as [&str; 0]);
     assert_eq!(new.host_observations(), [] as [&str; 0]);
-    // Nothing of the machine is looked at. The one record is the reading in which
-    // the listed directory is the place the repository is mounted at: a listing
-    // of the repository root, which is not expanded.
+    // Nothing of the machine is looked at. The one record is the reading in
+    // which the listed directory is the place the repository is mounted at:
+    // a listing of the repository root, which is not expanded.
     assert_eq!(new.details(), [ROOT_LISTING]);
 
     // The unconfined trace (`trace`, and the graph before) expands it.
@@ -297,8 +297,8 @@ fn the_analysis_does_not_depend_on_host_files() {
     let src = [&listing(), &shells(), &proc(), ADDON].join("\n");
     let before = lab.analyze("all.js", &src, true).fingerprint();
     let old_before = lab.analyze("all.js", &src, false).fingerprint();
-    // Another machine: more files in the listed directory, another process table,
-    // no shell, no addon.
+    // Another machine: more files in the listed directory, another process
+    // table, no shell, no addon.
     for i in 0..40 {
         lab.write(&format!("host/junk-{i}.txt"), "");
     }
@@ -346,12 +346,12 @@ fn a_host_glob_is_not_expanded_and_counts_nothing() {
             "fs_read_dir <lab>/host ->  [pattern_too_broad]",
         ]
     );
-    // The records hold what the code writes and nothing the machine has there. The
-    // read has a computed directory directly below an absolute directory, which
-    // may be the place the repository is mounted at:
-    // it is not read as `*/stat` from the root, an assumption with a record of its
-    // own (ignored by default, open under `--strict`). The listing has the
-    // reading "the repository is mounted there".
+    // The records hold what the code writes and nothing the machine has there.
+    // The read has a computed directory directly below an absolute
+    // directory, which may be the place the repository is mounted at:
+    // it is not read as `*/stat` from the root, an assumption with a record of
+    // its own (ignored by default, open under `--strict`). The listing has
+    // the reading "the repository is mounted there".
     let details = new.details();
     assert_eq!(details.len(), 2, "{details:?}");
     assert!(
@@ -384,8 +384,8 @@ fn a_module_loaded_from_outside_the_repository_keeps_a_record() {
                 the build machine"),
         "{records:?}"
     );
-    // The addon: one alternative is unknown (`options.addonPath`), the other a host
-    // path.
+    // The addon: one alternative is unknown (`options.addonPath`), the other a
+    // host path.
     assert!(
         records
             .iter()
@@ -394,9 +394,9 @@ fn a_module_loaded_from_outside_the_repository_keeps_a_record() {
     );
     assert!(new.host_targets().is_empty());
 
-    // A module in a temporary directory was generated at run time, from files the
-    // site does not name: an open record with origin data, whether the path is
-    // spelled out or comes from `os.tmpdir()`.
+    // A module in a temporary directory was generated at run time, from files
+    // the site does not name: an open record with origin data, whether the
+    // path is spelled out or comes from `os.tmpdir()`.
     let tmp = lab.analyze(
         "generated.js",
         "module.exports = require('/tmp/build-out/bundle.cjs');\n",
@@ -422,8 +422,8 @@ fn a_module_loaded_from_outside_the_repository_keeps_a_record() {
 #[test]
 fn paths_inside_the_repository_and_links_out_of_it_still_resolve() {
     let lab = Lab::new();
-    // A directory of the repository that is a link to a directory outside it: the
-    // path is spelled inside the repository, so it is the repository's.
+    // A directory of the repository that is a link to a directory outside it:
+    // the path is spelled inside the repository, so it is the repository's.
     turborepo_trace_core::os::symlink(lab.top.join("host"), lab.repo().join("src/linked")).unwrap();
     let src = r#"
 const { readdirSync, readFileSync } = require('node:fs');
@@ -452,9 +452,10 @@ fn the_directories_above_the_repository_are_the_machine_s() {
     if lab.below_temp() {
         return;
     }
-    // The lab's directory contains the repository, as `/tmp` or `/home` contain a
-    // checkout on some machines: listing it is the same external reference as
-    // anywhere else, so the graph does not depend on where the checkout lives.
+    // The lab's directory contains the repository, as `/tmp` or `/home` contain
+    // a checkout on some machines: listing it is the same external
+    // reference as anywhere else, so the graph does not depend on where the
+    // checkout lives.
     let top = lab.top.display().to_string();
     let src = "const fs = require('node:fs');\nmodule.exports = [fs.readdirSync('TOP'), \
                fs.readdirSync('/'), (name) => fs.readFileSync('TOP/cache-' + name)];\n";
@@ -470,9 +471,9 @@ fn the_directories_above_the_repository_are_the_machine_s() {
     );
     assert_eq!(a.details(), [ROOT_LISTING, "partial_specifier: name"]);
 
-    // A pattern that climbs out of the repository by relative steps, or starts at
-    // `/`, can lead back into it: it keeps its record, whose text names no
-    // directory of the machine.
+    // A pattern that climbs out of the repository by relative steps, or starts
+    // at `/`, can lead back into it: it keeps its record, whose text names
+    // no directory of the machine.
     let src = "const fs = require('node:fs');\nconst path = require('node:path');\nmodule.exports \
                = (name) => [\n  fs.readFileSync(path.join(__dirname, '../..', name)),\n  \
                fs.readFileSync('/' + name),\n];\n";
@@ -520,7 +521,8 @@ fn manifest_views(lab: &Lab, rel: &str) -> Vec<String> {
     let mut out: Vec<String> = Vec::new();
     for g in &a.groups {
         let o = &g.observations;
-        // (Through the resolution view, or through the view of a config loader.)
+        // (Through the resolution view, or through the view of a config
+        // loader.)
         let all = o.view_reads.iter().chain(&o.loader_reads).chain(
             o.key
                 .iter()
@@ -572,8 +574,8 @@ fn a_config_extended_through_a_package_records_the_levels_that_can_answer() {
     let root = "repo/node_modules/@cfg/base/package.json";
     let above = "node_modules/@cfg/base/package.json";
 
-    // Installed in the package, at the root and above the repository: the package's
-    // own install answers.
+    // Installed in the package, at the root and above the repository: the
+    // package's own install answers.
     let lab = Lab::new();
     project(&lab);
     install(&lab, "repo/packages/a/");

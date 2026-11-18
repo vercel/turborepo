@@ -54,8 +54,9 @@ pub(crate) async fn make_rate_limited_request(
     let mut last_error = None;
 
     for retry_count in 0..RETRY_MAX {
-        // Check immediately before sending. The lock is released before HTTP I/O:
-        // requests already in flight when a 429 arrives cannot be recalled.
+        // Check immediately before sending. The lock is released before HTTP
+        // I/O: requests already in flight when a 429 arrives cannot be
+        // recalled.
         loop {
             let gate = match timeout_at(deadline, rate_limit.0.lock()).await {
                 Ok(gate) => gate,
@@ -195,10 +196,11 @@ pub(crate) async fn make_retryable_request(
     let mut last_error = None;
     for retry_count in 0..RETRY_MAX {
         // A request builder can fail to clone for two reasons:
-        // - the URL given was given as a string and isn't a valid URL this can be
-        //   mitigated by constructing requests with pre-parsed URLs via Url::parse
-        // - the request body is a stream, in this case we'll just send the one request
-        //   we have
+        // - the URL given was given as a string and isn't a valid URL this can
+        //   be mitigated by constructing requests with pre-parsed URLs via
+        //   Url::parse
+        // - the request body is a stream, in this case we'll just send the one
+        //   request we have
         let Some(builder) = request_builder.try_clone() else {
             return Ok(Retry::Once(request_builder.send().await?));
         };

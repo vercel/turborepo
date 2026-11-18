@@ -123,7 +123,8 @@ impl TempRoots {
         let mut binds: Vec<Bind<'_>> = Vec::new();
         for (k, &f) in func_of_sig.iter().enumerate() {
             let t = tok(k);
-            // A signature: every identifier inside its parentheses is declared there.
+            // A signature: every identifier inside its parentheses is declared
+            // there.
             if t.is_ident(src, b"func") {
                 let mut j = k + 1;
                 let mut par = 0usize;
@@ -173,8 +174,8 @@ impl TempRoots {
                 }
                 continue;
             }
-            // `var name Type`, `var name Type = …`: the name can hold anything. `var name =
-            // value` is a binding like `name := value`.
+            // `var name Type`, `var name Type = …`: the name can hold anything.
+            // `var name = value` is a binding like `name := value`.
             if t.is_ident(src, b"var") && ident(k + 1) && !is(k + 2, b'=') {
                 let mut j = k + 1;
                 while ident(j) {
@@ -272,7 +273,8 @@ impl TempRoots {
                 if *name == b"_" {
                     continue;
                 }
-                // Only the first target of `dir, err := os.MkdirTemp(…)` is the directory.
+                // Only the first target of `dir, err := os.MkdirTemp(…)` is the
+                // directory.
                 if unreadable || i > 0 {
                     other.insert((f, name));
                 } else {
@@ -286,8 +288,8 @@ impl TempRoots {
             }
         }
 
-        // Fixpoint: a name is a temp root when every binding of it in its function is a
-        // temp value.
+        // Fixpoint: a name is a temp root when every binding of it in its
+        // function is a temp value.
         let mut out = TempRoots {
             func_of,
             roots: HashSet::new(),
@@ -308,8 +310,9 @@ impl TempRoots {
                     continue;
                 }
                 let own = || binds.iter().filter(|b| b.func == f && b.name == name);
-                // One binding must be a temp value on its own; the others may build on the
-                // name itself (`home = filepath.Join(home, "user")`).
+                // One binding must be a temp value on its own; the others may
+                // build on the name itself (`home =
+                // filepath.Join(home, "user")`).
                 let base = own().any(|b| out.temp_value(src, toks, &sig, b.value.0, b.value.1, f));
                 if !base {
                     continue;

@@ -101,7 +101,8 @@ pub fn parse(src: &str) -> Result<Lockfile> {
         }
         Some(Target::Package(key.to_string()))
     };
-    // Nearest enclosing install path first: `a/b` + `n` tries `a/b/n`, `a/n`, `n`.
+    // Nearest enclosing install path first: `a/b` + `n` tries `a/b/n`, `a/n`,
+    // `n`.
     let resolve = |from: &[&str], name: &str| -> Option<Target> {
         for depth in (0..=from.len()).rev() {
             let mut key = from[..depth].join("/");
@@ -131,8 +132,9 @@ pub fn parse(src: &str) -> Result<Lockfile> {
                     Some(t) => t,
                     None => Target::Unresolved(range.clone()),
                 };
-                // Unmet optional peers (`optionalPeers`) are expected; drop them instead of
-                // recording noise. Unmet required peers stay as unresolved edges.
+                // Unmet optional peers (`optionalPeers`) are expected; drop
+                // them instead of recording noise. Unmet
+                // required peers stay as unresolved edges.
                 if kind == DepKind::Peer
                     && target.package_id().is_none()
                     && optional_peers.contains(name)

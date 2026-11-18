@@ -236,8 +236,8 @@ impl<'a, R: TaskGraphRunOpts> Visitor<'a, R> {
     }
 
     // Disabling this lint until we stop adding state to the visitor.
-    // Once we have the full picture we will go about grouping these pieces of data
-    // together
+    // Once we have the full picture we will go about grouping these pieces of
+    // data together
     #[expect(clippy::too_many_arguments)]
     pub async fn new(
         repo: &'a RepoContext,
@@ -292,7 +292,8 @@ impl<'a, R: TaskGraphRunOpts> Visitor<'a, R> {
             (task_hasher, color_cache, grouping_layer)
         };
 
-        // Set up correct size for underlying pty (requires .await, so outside span)
+        // Set up correct size for underlying pty (requires .await, so outside
+        // span)
         if let Some(app) = ui_sender.as_ref()
             && let Some(pane_size) = app
                 .pane_size()
@@ -1014,10 +1015,12 @@ impl<'a, R: TaskGraphRunOpts> Visitor<'a, R> {
                     let manager = self.manager.clone();
 
                     if self.is_watch && task_definition.persistent {
-                        // In watch mode, persistent tasks are "fire-and-forget":
+                        // In watch mode, persistent tasks are
+                        // "fire-and-forget":
                         // signal success to the engine immediately so dependent
-                        // tasks can proceed, then run the executor in a detached
-                        // background task. The child process stays tracked by
+                        // tasks can proceed, then run the executor in a
+                        // detached background task. The
+                        // child process stays tracked by
                         // the ProcessManager for later stop_tasks() calls.
                         let _ = callback.send(Ok(()));
                         // Use a no-op tracker for the detached task. The real

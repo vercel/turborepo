@@ -161,8 +161,8 @@ fn is_utility(sel: &str) -> bool {
     if i == class_start || i > b.len() {
         return false;
     }
-    // Pseudo suffixes: `:name` or `::name`, each with an optional `(...)` without
-    // nesting.
+    // Pseudo suffixes: `:name` or `::name`, each with an optional `(...)`
+    // without nesting.
     while i < b.len() {
         if b[i] != b':' {
             return false;
@@ -249,7 +249,8 @@ pub fn compare(a: &CssRules, b: &CssRules) -> CssVerdict {
             _ => v.other.push(key.clone()),
         }
     }
-    // A custom property that an unchanged rule reads changes that rule's rendering.
+    // A custom property that an unchanged rule reads changes that rule's
+    // rendering.
     for name in &vars {
         let (plain, with_fallback) = (format!("var({name})"), format!("var({name},"));
         if unchanged

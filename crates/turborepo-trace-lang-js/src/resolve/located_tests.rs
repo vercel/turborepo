@@ -218,8 +218,8 @@ fn import_of_a_path_next_to_require_resolve() {
 
 #[test]
 fn import_of_exactly_the_resolved_file() {
-    // `import(pathToFileURL(require.resolve(m)))` loads the `require` entry, not
-    // what `import(m)` would.
+    // `import(pathToFileURL(require.resolve(m)))` loads the `require` entry,
+    // not what `import(m)` would.
     let r = run(
         true,
         "a.mjs",
@@ -392,8 +392,9 @@ fn create_require_searches_from_its_anchor() {
 
 #[test]
 fn a_third_party_target_is_its_package_unless_externals_are_followed() {
-    // A file next to a module, a module searched from a dependency, a glob below a
-    // module: each is the package the file lies in, as for a bare import of it.
+    // A file next to a module, a module searched from a dependency, a glob
+    // below a module: each is the package the file lies in, as for a bare
+    // import of it.
     let r = run_as(
         Externals::Stop,
         true,
@@ -500,8 +501,8 @@ fn searched_from_other(open: &[(UncertaintyKind, String)]) -> bool {
 
 #[test]
 fn a_module_that_is_not_installed() {
-    // The load is exactly the module: an unresolved edge with the bare specifier
-    // (which a lockfile can link), nothing open.
+    // The load is exactly the module: an unresolved edge with the bare
+    // specifier (which a lockfile can link), nothing open.
     let r = run(
         false,
         "a.mjs",
@@ -539,8 +540,9 @@ fn a_module_that_is_not_installed() {
         r.open
     );
     assert!(r.open.iter().any(|(_, s)| s == "eve"), "{:?}", r.open);
-    // Several values, one module: the reference of `import.meta.resolve`, one edge
-    // for the module and one for the load; no record of the reference itself.
+    // Several values, one module: the reference of `import.meta.resolve`, one
+    // edge for the module and one for the load; no record of the reference
+    // itself.
     let r = run(
         false,
         "a.mjs",
@@ -575,8 +577,8 @@ fn a_module_that_is_not_installed() {
         r.open
     );
     r.loads(&[], &["pkg/node_modules/dep/index.js"]);
-    // A package of that name in the repository changes nothing here: whether the
-    // module is a package of the registry or of the repository is the
+    // A package of that name in the repository changes nothing here: whether
+    // the module is a package of the registry or of the repository is the
     // lockfile's answer for the importer, which the graph store gives (it makes
     // the record open for a workspace link). The edge says which package's
     // entry decides.
@@ -594,9 +596,10 @@ fn a_module_that_is_not_installed() {
         "{:?}",
         r.open
     );
-    // A registry package searched from another package of the repository is decided
-    // by that package's lockfile entry: the reference depends on that package's
-    // manifest and on the lockfile (here a missing one: a probe).
+    // A registry package searched from another package of the repository is
+    // decided by that package's lockfile entry: the reference depends on
+    // that package's manifest and on the lockfile (here a missing one: a
+    // probe).
     let r = run(
         false,
         "c.cjs",
@@ -606,7 +609,8 @@ fn a_module_that_is_not_installed() {
     );
     assert!(searched_from_other(&r.open), "{:?}", r.open);
     r.loads(&["other/package.json"], &[]);
-    // The same with a package of that name in the repository (the store decides).
+    // The same with a package of that name in the repository (the store
+    // decides).
     let r = run_with(
         false,
         &[("packages/eve/package.json", r#"{"name":"eve"}"#)],
@@ -627,7 +631,8 @@ fn a_module_that_is_not_installed() {
     );
     assert!(searched_from_other(&r.open), "{:?}", r.open);
     r.loads(&["pnpm-lock.yaml", "other/package.json"], &[]);
-    // From the file's own package the lockfile entry is the answer: nothing open.
+    // From the file's own package the lockfile entry is the answer: nothing
+    // open.
     let r = run(
         false,
         "c.cjs",

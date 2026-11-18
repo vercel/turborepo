@@ -275,7 +275,8 @@ mod imp {
         }
 
         fn visit_call_expression(&mut self, it: &CallExpression<'a>) {
-            // `x.y(123, ...)`: a module id if `x` is a factory's context parameter.
+            // `x.y(123, ...)`: a module id if `x` is a factory's context
+            // parameter.
             if let Expression::StaticMemberExpression(m) = &it.callee
                 && let Expression::Identifier(object) = &m.object
             {
@@ -296,7 +297,8 @@ mod imp {
                     self.calls.push((object.span.start, ints));
                 }
             }
-            // `x.s([name, getter, name, 0, value, ...], id)`: the exports of a module.
+            // `x.s([name, getter, name, 0, value, ...], id)`: the exports of a
+            // module.
             if let Expression::StaticMemberExpression(m) = &it.callee
                 && m.property.name.as_str() == "s"
                 && let Some(Argument::ArrayExpression(arr)) = it.arguments.first()
@@ -308,9 +310,10 @@ mod imp {
                     entries,
                 });
             }
-            // `x.S([123, "name,local,name,local", 0, 456, "..."])`: what a module
-            // re-exports, per source module. An integer before a string is a
-            // module id; the pairs of a string are compared in sorted order.
+            // `x.S([123, "name,local,name,local", 0, 456, "..."])`: what a
+            // module re-exports, per source module. An integer
+            // before a string is a module id; the pairs of a string
+            // are compared in sorted order.
             if let Expression::StaticMemberExpression(m) = &it.callee
                 && m.property.name.as_str() == "S"
                 && let Expression::Identifier(object) = &m.object
@@ -348,10 +351,11 @@ mod imp {
         }
 
         fn visit_array_expression(&mut self, it: &ArrayExpression<'a>) {
-            // A list of chunk files (`["static/chunks/a.js","static/chunks/b.css"]`: what a
-            // lazy import loads). Which chunks, and how many, is how the bundler grouped
-            // the modules; the files count through the closure of the route
-            // that loads them.
+            // A list of chunk files
+            // (`["static/chunks/a.js","static/chunks/b.css"]`: what a
+            // lazy import loads). Which chunks, and how many, is how the
+            // bundler grouped the modules; the files count through
+            // the closure of the route that loads them.
             if !it.elements.is_empty()
                 && it.elements.iter().all(|e| match e {
                     ArrayExpressionElement::StringLiteral(s) => {
@@ -424,7 +428,8 @@ mod imp {
 
     impl Emit<'_> {
         fn range(&mut self, start: u32, end: u32) {
-            // The marks outlive `self`: copies of the references keep `self.out` free.
+            // The marks outlive `self`: copies of the references keep
+            // `self.out` free.
             let (text, occs, nums, lists, subs, shorthand) = (
                 self.text,
                 self.occs,
@@ -482,8 +487,8 @@ mod imp {
                 if o == Some(next) {
                     let occ = &occs[oi];
                     oi += 1;
-                    // Inside a list that was written, or overlapping records (a shorthand
-                    // key and its value): once.
+                    // Inside a list that was written, or overlapping records (a
+                    // shorthand key and its value): once.
                     if occ.start < at {
                         continue;
                     }
@@ -693,8 +698,8 @@ mod imp {
     ) {
         let mut ids: Vec<String> = Vec::new();
         for el in &arr.elements {
-            // A group in a called function: its modules, and the declarations they share as
-            // a text of their own.
+            // A group in a called function: its modules, and the declarations
+            // they share as a text of their own.
             if ids.is_empty()
                 && let Some((group, prelude)) = returned_group(el)
             {
@@ -712,7 +717,8 @@ mod imp {
                 ArrayExpressionElement::StringLiteral(s)
                     if !ids.is_empty() || (out.modules.is_empty() && out.other.is_empty()) =>
                 {
-                    // Development builds use string ids; a leading string is an id too.
+                    // Development builds use string ids; a leading string is an
+                    // id too.
                     ids.push(text[s.span.start as usize..s.span.end as usize].to_string());
                     continue;
                 }
@@ -778,7 +784,8 @@ mod imp {
         c.visit_program(&program);
         c.subs.sort_by_key(|s| s.0);
         c.occs.sort_by_key(|o| (o.start, o.end));
-        // The context parameters: the first parameter of every factory in the list.
+        // The context parameters: the first parameter of every factory in the
+        // list.
         let symbol_at: HashMap<u32, SymbolId> =
             c.occs.iter().map(|o| (o.start, o.symbol)).collect();
         let mut params: Vec<u32> = Vec::new();
@@ -850,8 +857,8 @@ mod imp {
 
         #[test]
         fn renamed_locals_are_equal() {
-            // The same chunk with every local renamed, as a minifier would in another
-            // build.
+            // The same chunk with every local renamed, as a minifier would in
+            // another build.
             let renamed = r#"module.exports=[34468,q=>{"use strict";var z=q.i(47560);q.S([z,"x"],34468)},47560,(r,s,t)=>{"use strict";let u=r.r(1);function v(w){return u.jsx("h1",{children:w.title})}r.s(["Hero",()=>v])}];"#;
             assert_eq!(split(SERVER), split(renamed));
         }
@@ -877,7 +884,8 @@ mod imp {
 
         #[test]
         fn modules_do_not_depend_on_their_chunk() {
-            // The second module alone in another chunk, with other names, is the same.
+            // The second module alone in another chunk, with other names, is
+            // the same.
             let alone = r#"module.exports=[47560,(x,y,z)=>{"use strict";let k=x.r(1);function m(n){return k.jsx("h1",{children:n.title})}x.s(["Hero",()=>m])}];"#;
             assert_eq!(
                 split(SERVER).unwrap().modules[1],
@@ -891,7 +899,8 @@ mod imp {
             let c = split(client).unwrap();
             assert_eq!(c.modules.len(), 1, "{c:?}");
             assert_eq!(c.modules[0].id, "42724");
-            // The script element, and the code around the list (with the runtime after it).
+            // The script element, and the code around the list (with the
+            // runtime after it).
             assert_eq!(c.other.len(), 2);
             let renamed = client.replace(
                 "var a=1;function b(c){return a+c}",
@@ -927,8 +936,8 @@ mod imp {
 
         #[test]
         fn wrapped_chunks_are_split() {
-            // A debug-id statement in front, the chunk inside a called function, comments
-            // after.
+            // A debug-id statement in front, the chunk inside a called
+            // function, comments after.
             let wrapped = format!(
                 ";!function(){{try{{var e=globalThis,n=(new \
                  e.Error).stack;n&&((e._debugIds||(e._debugIds={{}}))[n]=\"<DEBUG_ID>\"\
@@ -953,7 +962,8 @@ mod imp {
             });
             assert!(named.contains(".i(<hero>)"), "{named}");
             assert!(named.contains("],<self>)"), "{named}");
-            // With another id for the same target, the importer is the same once resolved.
+            // With another id for the same target, the importer is the same
+            // once resolved.
             let other = split(&SERVER.replace("47560", "99999")).unwrap();
             let again = resolve(&other.modules[0].text, |n| match n {
                 "99999" => Some("hero"),
@@ -965,8 +975,8 @@ mod imp {
 
         #[test]
         fn only_arguments_of_the_context_are_module_ids() {
-            // 47560 as a constant and as an argument of another object's method is a
-            // number.
+            // 47560 as a constant and as an argument of another object's method
+            // is a number.
             let c = split(
                 r#"module.exports=[7,(a,b)=>{var x=47560,t=[];a.i(47560);t.slice(47560);b.i(47560);(()=>a.r(47560))()}];"#,
             )
@@ -1005,13 +1015,14 @@ mod imp {
 
         #[test]
         fn a_group_in_a_called_function_is_read_as_modules() {
-            // The modules alone, and as a group that shares a function and its directive.
+            // The modules alone, and as a group that shares a function and its
+            // directive.
             let alone = r#"module.exports=[500001,a=>{"use strict";var b=a.i(700001);a.s(["Card",0,()=>b.x])},500002,500003,c=>{"use strict";c.v(1)}];"#;
             let grouped = r#"module.exports=[(()=>{"use strict";return[500001,a=>{var b=a.i(700001);a.s(["Card",0,()=>b.x])},500002,500003,c=>{c.v(1)}]})()];"#;
             let (a, g) = (split(alone).unwrap(), split(grouped).unwrap());
             assert_eq!(g.modules.len(), 3, "{g:?}");
-            // A module is the same alone and in a group: where the directive stands is not
-            // content.
+            // A module is the same alone and in a group: where the directive
+            // stands is not content.
             assert_eq!(a.modules, g.modules);
             // Module ids inside the group are marked.
             assert_eq!(super::super::integers(&g.modules[0].text), ["700001"]);
@@ -1042,8 +1053,9 @@ mod imp {
 
         #[test]
         fn reexport_pairs_are_sorted_and_their_modules_marked() {
-            // `S` lists what a module re-exports from other modules as `name,local` pairs,
-            // sorted by name; the name of a server action is its id.
+            // `S` lists what a module re-exports from other modules as
+            // `name,local` pairs, sorted by name; the name of a
+            // server action is its id.
             let a = r#"module.exports=[7,a=>{"use strict";a.S([810002,"<ACTION lib/a.ts#save>,x,<ACTION lib/a.ts#load>,y",0,810003,"<ACTION lib/b.ts#run>,z"])}];"#;
             let b = a.replace(
                 "<ACTION lib/a.ts#save>,x,<ACTION lib/a.ts#load>,y",
@@ -1064,7 +1076,8 @@ mod imp {
 
         #[test]
         fn a_list_of_chunk_names_is_grouping() {
-            // The loader of a lazy import: the chunks to load, then the module to run.
+            // The loader of a lazy import: the chunks to load, then the module
+            // to run.
             let a = r#"module.exports=[7,a=>{a.v(b=>Promise.all(["static/chunks/<F>.js","static/chunks/<F>.css"].map(c=>b.l(c))).then(()=>b(900001)))}];"#;
             let b = a.replace(r#","static/chunks/<F>.css""#, "");
             assert_eq!(split(a), split(&b));

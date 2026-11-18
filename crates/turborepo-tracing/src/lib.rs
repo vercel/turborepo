@@ -554,12 +554,14 @@ where
         let is_ansi = self.is_ansi();
         match *level {
             Level::ERROR => {
-                // The padding spaces are necessary to match the formatting of Go
+                // The padding spaces are necessary to match the formatting of
+                // Go
                 write_string::<Red, Black>(writer.by_ref(), is_ansi, " ERROR ")
                     .and_then(|_| write_message::<Red, Default>(writer, is_ansi, event))
             }
             Level::WARN => {
-                // The padding spaces are necessary to match the formatting of Go
+                // The padding spaces are necessary to match the formatting of
+                // Go
                 write_string::<Yellow, Black>(writer.by_ref(), is_ansi, " WARNING ")
                     .and_then(|_| write_message::<Yellow, Default>(writer, is_ansi, event))
             }

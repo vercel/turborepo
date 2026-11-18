@@ -353,8 +353,8 @@ fn run(
             .ok()?
     });
     if let (Some(t), Some(g)) = (timing, guard) {
-        // Debug aid: `flow <total µs> <guard µs> <sites> <bytes> <ok>` per analyzed
-        // file.
+        // Debug aid: `flow <total µs> <guard µs> <sites> <bytes> <ok>` per
+        // analyzed file.
         eprintln!(
             "flow {} {} {} {} {}",
             t.elapsed().as_micros(),
@@ -375,8 +375,8 @@ fn run(
 /// 375,000 nested functions, which overflowed the analysis thread's stack.)
 fn shallow_enough(src: &[u8], dialect: Dialect) -> bool {
     let mut lx = Lexer::new(src, dialect);
-    // Per open bracket: tokens since the last separator, and whether it is the head
-    // of an `if (...)`-like statement (its `)` does not end a value).
+    // Per open bracket: tokens since the last separator, and whether it is the
+    // head of an `if (...)`-like statement (its `)` does not end a value).
     let mut levels: Vec<(u32, bool)> = vec![(0, false)];
     // Tokens of the open chains of all levels.
     let mut total: usize = 0;
@@ -388,7 +388,8 @@ fn shallow_enough(src: &[u8], dialect: Dialect) -> bool {
         if t.kind == TokKind::Eof {
             break;
         }
-        // Closers pop first (the lexer's depth is the truth; the stack follows it).
+        // Closers pop first (the lexer's depth is the truth; the stack follows
+        // it).
         let depth = t.depth as usize + 1;
         let mut closed_header = false;
         while levels.len() > depth {
@@ -460,7 +461,8 @@ fn shallow_enough(src: &[u8], dialect: Dialect) -> bool {
         } else {
             let mut add: u32 = 1;
             if t.kind == TokKind::Jsx {
-                // One token for a whole element tree: its nesting is at most its tags.
+                // One token for a whole element tree: its nesting is at most
+                // its tags.
                 let tags = t.text(src).iter().filter(|&&b| b == b'<').count();
                 add = add.saturating_add(tags.min(u32::MAX as usize - 1) as u32);
             }
@@ -623,8 +625,9 @@ fn analyze(
             };
             let load = *ask == Ask::Load;
             let found = index.get(&span.start).and_then(|ts| {
-                // The one that ends where the site does; for a truncated capture, the
-                // outermost (the argument itself comes before what it starts with). A load
+                // The one that ends where the site does; for a truncated
+                // capture, the outermost (the argument itself
+                // comes before what it starts with). A load
                 // is a call, and only a load is.
                 let mut ts = ts.iter().filter(|t| matches!(t, Target::Call(_)) == load);
                 ts.clone()
@@ -658,7 +661,8 @@ fn analyze(
         let anchors =
             anchors.map(|a| anchors::follow(&mut engine, text, a.uses, a.sites, a.templates));
         if turborepo_trace_core::debug::var_os("FLOW_TIMING").is_some() {
-            // Debug aid: `flowparts <semantic µs> <index + evaluation µs> <steps>`.
+            // Debug aid: `flowparts <semantic µs> <index + evaluation µs>
+            // <steps>`.
             eprintln!(
                 "flowparts {} {} {}",
                 (t_sem - t_parse).as_micros(),

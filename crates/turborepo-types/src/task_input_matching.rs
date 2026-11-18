@@ -830,7 +830,8 @@ mod tests {
 
     #[test]
     fn turbo_root_default_matches_declared_root_file() {
-        // Same task shape, but this time the changed file IS the declared input.
+        // Same task shape, but this time the changed file IS the declared
+        // input.
         assert_match(
             "test-config.txt",
             "packages/lib-a",

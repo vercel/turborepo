@@ -263,8 +263,8 @@ fn refreshed_equals_cold(root: &Path, what: &str) -> turborepo_trace_store::Buil
         );
     }
     assert_eq!(got_keys, fresh_keys, "{what}: shard keys");
-    // Same keys, same bytes: what a store keeps under a key is what a fresh build
-    // writes.
+    // Same keys, same bytes: what a store keeps under a key is what a fresh
+    // build writes.
     assert!(
         store_bytes(&out) == store_bytes(fresh.path()),
         "{what}: the stores differ in bytes under equal keys"
@@ -360,8 +360,8 @@ fn the_artifact_is_a_function_of_the_tree() {
 fn what_is_checked_against_its_graph_travels_when_it_is_there() {
     let p = Packed::new(fixture);
     let plain = std::fs::read(p.pack("plain.tta", false)).unwrap();
-    // A query's recorded binding run, as far as the store is concerned: bytes it
-    // carries.
+    // A query's recorded binding run, as far as the store is concerned: bytes
+    // it carries.
     let name = artifact::CHECKED[0];
     assert_eq!(name, "cache/xfile-trace");
     let kept = p.root.join(".turbotrace").join(name);
@@ -389,7 +389,8 @@ fn what_is_checked_against_its_graph_travels_when_it_is_there() {
     // has.)
     std::fs::remove_file(out.join(name)).unwrap();
     refreshed_equals_cold(&there, "restored with a recorded run, then edited");
-    // An artifact without one leaves the one of a graph it replaces where it is.
+    // An artifact without one leaves the one of a graph it replaces where it
+    // is.
     std::fs::write(out.join(name), b"another run").unwrap();
     let plain_file = p.scratch.join("plain.tta");
     artifact::unpack(&plain_file, &out, &there, &expect(&there, &out), &[], true).unwrap();
@@ -420,7 +421,8 @@ fn packed_caches_answer_the_first_open() {
     unpack(&file, &there, &out).unwrap();
     let r = refreshed_equals_cold(&there, "restored with caches");
     assert_eq!(r.traced, 0);
-    // A graph restored a second time: the composed graph comes from the artifact.
+    // A graph restored a second time: the composed graph comes from the
+    // artifact.
     let again = p.elsewhere("d");
     let out = again.join(".turbotrace");
     unpack(&file, &again, &out).unwrap();
@@ -530,8 +532,8 @@ fn an_artifact_that_does_not_fit_installs_nothing() {
     );
     assert!(turborepo_trace_store::Manifest::read(&out).is_none());
 
-    // After all of that a build is a normal cold build, and the good artifact still
-    // works.
+    // After all of that a build is a normal cold build, and the good artifact
+    // still works.
     let r = refreshed_equals_cold(&there, "after rejected artifacts");
     assert!(r.traced > 0 && r.analyzed_files > 0);
 }
@@ -617,7 +619,8 @@ fn no_damaged_byte_installs_anything() {
                 write(r, ".github/workflows/ci.yml", WORKFLOW_NAMING_THE_ROOT);
             }
         });
-        // What a query leaves next to the graph, as far as the store is concerned.
+        // What a query leaves next to the graph, as far as the store is
+        // concerned.
         let run: Vec<u8> = (0..600u32)
             .flat_map(|i| (i * i % 251).to_le_bytes())
             .collect();
@@ -644,8 +647,8 @@ fn no_damaged_byte_installs_anything() {
             use turborepo_trace_core::os::FileExt;
             file.write_all_at(&[byte], at as u64).unwrap();
         };
-        // Where the chunks start, and where each one ends; the first chunk of each
-        // section.
+        // Where the chunks start, and where each one ends; the first chunk of
+        // each section.
         let n = u32::from_le_bytes(bytes[8..12].try_into().unwrap()) as usize;
         let mut ends = vec![12 + n + 8];
         let mut sections = Vec::new();
@@ -657,8 +660,8 @@ fn no_damaged_byte_installs_anything() {
         }
         assert_eq!(*ends.last().unwrap(), bytes.len());
         let start_of = |name: &str| sections.iter().find(|s| s.0 == name).map(|s| s.1);
-        // Elsewhere, the caches of a located artifact are the sections that are not
-        // used.
+        // Elsewhere, the caches of a located artifact are the sections that are
+        // not used.
         let from = match located {
             false => 0,
             true => start_of("cache/composed").expect("packed with the caches"),
@@ -731,8 +734,8 @@ fn an_existing_graph_is_kept_unless_forced() {
         Err(ArtifactError::Exists(_))
     ));
     assert_eq!(before, std::fs::read(out.join("graph.json")).unwrap());
-    // Forced: the artifact's graph replaces it, and a refresh brings it to the tree
-    // again.
+    // Forced: the artifact's graph replaces it, and a refresh brings it to the
+    // tree again.
     artifact::unpack(&file, &out, &there, &expect(&there, &out), &[], true).unwrap();
     assert_ne!(before, std::fs::read(out.join("graph.json")).unwrap());
     let r = refreshed_equals_cold(&there, "forced over an existing graph");
@@ -843,8 +846,8 @@ fn a_marker_or_scope_directory_that_appears_retraces_its_walk_ups() {
         "packages/b/index.ts",
         "import m from 'missing-pkg';\nexport default m;\n",
     );
-    // `packages/a` has a `node_modules` directory (a workspace link); nothing above
-    // `packages/b` has one.
+    // `packages/a` has a `node_modules` directory (a workspace link); nothing
+    // above `packages/b` has one.
     symlink(&r, "../../b", "packages/a/node_modules/b");
     let out = r.join(".turbotrace");
     build(&opts(&r, &out), &langs()).unwrap();
@@ -910,8 +913,8 @@ fn a_shard_that_names_its_checkout_is_traced_again_elsewhere() {
     let r = build(&opts(&p.root, &same), &langs()).unwrap();
     assert_eq!((r.traced, r.written), (0, 0));
 
-    // Another location: the shard is traced again, with this checkout's path, and
-    // the packed caches (composed from the other one) stay behind.
+    // Another location: the shard is traced again, with this checkout's path,
+    // and the packed caches (composed from the other one) stay behind.
     let there = p.elsewhere("b");
     let out = there.join(".turbotrace");
     let r = unpack(&file, &there, &out).unwrap();
@@ -991,8 +994,8 @@ fn a_pattern_that_the_place_decides_is_evaluated_where_the_graph_is_restored() {
     assert_eq!((r.traced, r.written), (1, 1));
     assert_eq!(jest_tests(&out), ["src/a.test.js", "tools/x.test.js"]);
 
-    // Packed there, the shard names its checkout; at an ordinary place it is traced
-    // again.
+    // Packed there, the shard names its checkout; at an ordinary place it is
+    // traced again.
     let again = p.scratch.join("named.tta");
     artifact::pack(&out, &again, &PackOptions::default()).unwrap();
     let h = artifact::read_header(&again).unwrap();
@@ -1044,7 +1047,8 @@ fn task_fixtures_restore_like_a_cold_build() {
         let there = p.elsewhere("b");
         let u = unpack(&file, &there, &there.join(".turbotrace")).unwrap();
         let r = refreshed_equals_cold(&there, &name);
-        // Every shard is reused, but those that name the first checkout's directory.
+        // Every shard is reused, but those that name the first checkout's
+        // directory.
         assert_eq!(
             (r.traced, r.written),
             (u.relocated, u.relocated),

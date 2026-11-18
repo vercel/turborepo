@@ -39,7 +39,8 @@ fn a_test_regex_without_a_slash_after_a_name_above_the_root_keeps_its_tests() {
         "repo[/]src[/].*[.]test[.]js$",
         "work.repo.src.*[.]test[.]js$",
     ] {
-        // jest: `new RegExp(re).test('/work/repo/src/a.test.js')` is true for each.
+        // jest: `new RegExp(re).test('/work/repo/src/a.test.js')` is true for
+        // each.
         assert!(
             regex::Regex::new(&re.replace(r"[\\/]", "[/]"))
                 .unwrap()

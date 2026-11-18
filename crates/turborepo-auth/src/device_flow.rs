@@ -484,7 +484,8 @@ mod tests {
 
     #[test]
     fn test_validate_endpoint_origins_subdomain() {
-        // Vercel's real setup: issuer is vercel.com, endpoints on api.vercel.com
+        // Vercel's real setup: issuer is vercel.com, endpoints on
+        // api.vercel.com
         let metadata = AuthorizationServerMetadata {
             issuer: "https://vercel.com".to_string(),
             device_authorization_endpoint:

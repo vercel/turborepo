@@ -162,8 +162,8 @@ fn taskfile() {
         deps_of(&set, "taskfile:.:build"),
         ["taskfile:.:gen", "taskfile:.:lib:compile"]
     );
-    // `sources`/`generates` are declared inputs and outputs: the generated client
-    // links back.
+    // `sources`/`generates` are declared inputs and outputs: the generated
+    // client links back.
     let generator = set.get(&"taskfile:.:gen".parse().unwrap()).unwrap();
     assert!(
         generator
@@ -287,9 +287,9 @@ fn github_actions() {
             .iter()
             .any(|e| e.path == root.join("tools/lib.sh"))
     );
-    // On push (paths: src/**, package.json) the filter misses lib/ (tsc include,
-    // via `turbo run build`) and tools/; on pull_request (paths-ignore:
-    // docs/**) nothing.
+    // On push (paths: src/**, package.json) the filter misses lib/ (tsc
+    // include, via `turbo run build`) and tools/; on pull_request
+    // (paths-ignore: docs/**) nothing.
     let lint = lint_paths(&set);
     let mut out = String::new();
     for f in &lint {
@@ -341,8 +341,9 @@ fn python_packaging() {
     let ws = Workspace::from_roots(&root, Vec::<String>::new());
     let set = discover(&ws, &Options::default());
     let t = set.get(&"py-dist:.".parse().unwrap()).unwrap();
-    // package_data, data_files, py_modules, MANIFEST.in; a computed `package_data=`
-    // argument (a computed `version=` does not change what ships).
+    // package_data, data_files, py_modules, MANIFEST.in; a computed
+    // `package_data=` argument (a computed `version=` does not change what
+    // ships).
     assert!(
         t.spec
             .memberships

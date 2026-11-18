@@ -351,8 +351,8 @@ pub fn request_changed(old: &Json, new: &Json, request: &str) -> Result<Outcome,
             out.types |= old.get(f) != new.get(f);
         }
     } else {
-        // `main` and its relatives name the package root only. A `browser` object that
-        // changed remaps any file.
+        // `main` and its relatives name the package root only. A `browser`
+        // object that changed remaps any file.
         let (a, b) = (old.get("browser"), new.get("browser"));
         if a != b && (matches!(a, Some(Json::Obj(_))) || matches!(b, Some(Json::Obj(_)))) {
             return Err(Shape("`browser` remaps files".into()));

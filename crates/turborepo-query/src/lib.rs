@@ -590,8 +590,9 @@ fn project_affected_task_packages(
                 TaskChangeReason::AllTasksChanged { .. } => {
                     // The raw calculator uses a description for global changes.
                     // Keep the original structured reason, even for task owners
-                    // absent from the legacy package map. With no global reason,
-                    // this is the input matcher's conservative fallback.
+                    // absent from the legacy package map. With no global
+                    // reason, this is the input matcher's
+                    // conservative fallback.
                     global_reason
                         .cloned()
                         .map(&convert_reason)
@@ -757,9 +758,10 @@ impl RepositoryQuery {
             .future_flags
             .affected_using_task_inputs
         {
-            // Project raw affectedness, not the affectedTasks resolver's scheduled
-            // tasks: unchanged prerequisites are not affected packages. Keep the
-            // QueryRun method legacy, since the raw calculator calls it itself.
+            // Project raw affectedness, not the affectedTasks resolver's
+            // scheduled tasks: unchanged prerequisites are not
+            // affected packages. Keep the QueryRun method legacy,
+            // since the raw calculator calls it itself.
             let legacy_packages = self
                 .run
                 .calculate_affected_packages(base.clone(), head.clone())?;
@@ -1053,7 +1055,8 @@ fn convert_task_change_reason(reason: affected_tasks::TaskChangeReason) -> TaskC
 
 pub async fn graphiql() -> impl IntoResponse {
     // GraphiQLSource always rendered the same HTML for this fixed version and
-    // endpoint; embedding that output avoids compiling its template per request.
+    // endpoint; embedding that output avoids compiling its template per
+    // request.
     response::Html(include_str!("query_ide.html"))
 }
 

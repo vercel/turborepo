@@ -100,7 +100,8 @@ impl<T: TaskDefinitionInfo + Clone + Send + Sync + 'static> Engine<Built, T> {
                     .node_weight(node_id)
                     .unwrap_or(&TaskNode::Root)
                 else {
-                    // Root task has nothing to do so we don't emit any event for it
+                    // Root task has nothing to do so we don't emit any event
+                    // for it
                     if done.send(true).is_err() {
                         debug!(
                             "Graph walker done callback receiver was closed before done signal \
@@ -121,7 +122,8 @@ impl<T: TaskDefinitionInfo + Clone + Send + Sync + 'static> Engine<Built, T> {
 
                 let mut continue_walking_subgraph = true;
                 match result.await.unwrap_or_else(|_| {
-                    // If the visitor doesn't send a callback, then we assume the task finished
+                    // If the visitor doesn't send a callback, then we assume
+                    // the task finished
                     tracing::trace!(
                         "Engine visitor dropped callback sender without sending result"
                     );

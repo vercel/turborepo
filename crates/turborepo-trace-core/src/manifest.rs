@@ -92,7 +92,8 @@ pub const LOADER_FIELDS: &[&str] = &[
 /// in order (like [`view`], which holds every byte of this one). `None` when
 /// `bytes` is not a JSON object.
 pub fn loader_view(bytes: &[u8]) -> Option<Vec<u8>> {
-    // A key written with escapes may spell one of the fields: kept, the safe side.
+    // A key written with escapes may spell one of the fields: kept, the safe
+    // side.
     project(bytes, |key| {
         key.contains(&b'\\') || LOADER_FIELDS.iter().any(|f| f.as_bytes() == key)
     })

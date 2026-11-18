@@ -131,7 +131,8 @@ impl WorkspaceGlobs {
         });
         if let Some(globs) = hit {
             // Clone outside the lock. Owned pattern vectors isolate the cache
-            // from caller mutations; regex programs themselves are shared by wax.
+            // from caller mutations; regex programs themselves are shared by
+            // wax.
             return Ok(globs.as_ref().clone());
         }
 
@@ -160,8 +161,8 @@ impl WorkspaceGlobs {
             })
             .collect::<Result<Vec<ValidatedGlob>, _>>()?;
         // `wax::any` accepts expressions directly: compiling each Glob first
-        // builds regexes which the combinator immediately discards. Only compile
-        // the combined matcher on the successful path.
+        // builds regexes which the combinator immediately discards. Only
+        // compile the combined matcher on the successful path.
         let directory_inclusions = compile_directory_globs(&raw_inclusions)?;
         let directory_exclusions = compile_directory_globs(&raw_exclusions)?;
         let validated_exclusions = raw_exclusions

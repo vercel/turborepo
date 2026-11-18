@@ -145,8 +145,9 @@ fn erased_equal_file_selects_entries_that_are_not_transpiled_tests() {
     assert_eq!(aff, ["build.ts", "u.test.ts"]);
     assert_eq!(p.unaffected.len(), 1);
 
-    // ts-jest: type-checks by default; with `diagnostics: false` it still compiles
-    // with the whole program; only `isolatedModules` transpiles file by file.
+    // ts-jest: type-checks by default; with `diagnostics: false` it still
+    // compiles with the whole program; only `isolatedModules` transpiles
+    // file by file.
     let ts_jest = |cfg: &str| {
         let mut fx = erased_fixture();
         fx.edge(
@@ -264,13 +265,15 @@ fn readers_of_the_erased_file_text_select() {
 
 #[test]
 fn loads_outside_the_transform_select() {
-    // The runner's config, loaded by the runner itself (possibly with type checks).
+    // The runner's config, loaded by the runner itself (possibly with type
+    // checks).
     let mut fx = erased_fixture();
     fx.import("jest.config.js", "types.ts", Some(&["T"]));
     let (aff, _) = erased(fx, &[]);
     assert_eq!(aff, ["t.test.ts"]);
 
-    // Setup files and mocks go through the transform like the test's own imports.
+    // Setup files and mocks go through the transform like the test's own
+    // imports.
     for label in [
         "jest:setup_file setup.ts",
         "jest:setup_file_after_env setup.ts",
@@ -509,8 +512,8 @@ fn uncertainty_behind_a_type_only_edge_does_not_select_transpiled_tests() {
             ..Case::default()
         },
     );
-    // The build root and the test that loads types.ts reach the uncertain site; the
-    // test that only has a type-only path to it does not.
+    // The build root and the test that loads types.ts reach the uncertain site;
+    // the test that only has a type-only path to it does not.
     assert_eq!(aff, ["build.ts", "o.test.ts"]);
 }
 
@@ -545,8 +548,8 @@ fn erased_and_type_only_rules_combine() {
 
 #[test]
 fn mapper_edges_read_what_the_import_reads() {
-    // t.test.ts imports `{x}` from the barrel through a module mapper: the import's
-    // own edge plus a labelled framework edge without a span.
+    // t.test.ts imports `{x}` from the barrel through a module mapper: the
+    // import's own edge plus a labelled framework edge without a span.
     let run = |alias_spec: &str| {
         let mut fx = Fx::new();
         fx.import("t.test.ts", "index.ts", Some(&["x"]));

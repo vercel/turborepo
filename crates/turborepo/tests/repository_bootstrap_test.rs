@@ -62,7 +62,8 @@ fn fixture(workspace: Workspace) -> tempfile::TempDir {
     // Copy only; do not install packages or initialize/commit a Git repository.
     // These fixtures contain local-only manifests and any required lock data.
     common::setup::copy_fixture(workspace.fixture, dir.path()).unwrap();
-    // Bound inference to this fixture, without invoking Git or creating commits.
+    // Bound inference to this fixture, without invoking Git or creating
+    // commits.
     fs::create_dir(dir.path().join(".git")).unwrap();
     assert!(!dir.path().join("package.json").exists());
     write_config(&dir.path().join("turbo.json"), workspace, true);

@@ -190,7 +190,8 @@ impl ProperTaskGraphBuilder {
         }
 
         // Build engine with all tasks
-        // We use `add_all_tasks` to get the complete task graph for visualization
+        // We use `add_all_tasks` to get the complete task graph for
+        // visualization
         let engine_loader = EngineTurboJsonLoader::new(&loader);
         let engine = EngineBuilder::new(
             &self.repo_root,

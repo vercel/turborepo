@@ -227,7 +227,8 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(probes.load(std::sync::atomic::Ordering::SeqCst), 1);
-        // Loading again is an explicit generation boundary, not a stale cache hit.
+        // Loading again is an explicit generation boundary, not a stale cache
+        // hit.
         features.load_root_package_json(root).unwrap();
         assert_eq!(probes.load(std::sync::atomic::Ordering::SeqCst), 2);
     }

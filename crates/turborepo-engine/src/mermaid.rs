@@ -31,9 +31,9 @@ fn render_graph<W: io::Write>(
     is_single: bool,
 ) -> Result<(), io::Error> {
     // Chosen randomly.
-    // Pick a constant seed so that the same graph generates the same nodes every
-    // time. This is not a security-sensitive operation, it's just aliases for
-    // the graph nodes.
+    // Pick a constant seed so that the same graph generates the same nodes
+    // every time. This is not a security-sensitive operation, it's just
+    // aliases for the graph nodes.
     let mut rng = SmallRng::seed_from_u64(4u64);
 
     let display_node = match is_single {

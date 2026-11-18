@@ -78,10 +78,10 @@ impl TaskGraph {
         ws: &Workspace,
         manifests: &crate::smallfiles::SmallFiles,
     ) -> Self {
-        // Unrecorded: each package's own manifest is part of its key, and what other
-        // manifests contribute to task resolution is keyed explicitly (dependency
-        // closures, config inputs). Read through the build's manifest cache
-        // (already read by discovery).
+        // Unrecorded: each package's own manifest is part of its key, and what
+        // other manifests contribute to task resolution is keyed
+        // explicitly (dependency closures, config inputs). Read through
+        // the build's manifest cache (already read by discovery).
         let read = |p: &Path| -> Option<serde_json::Value> {
             serde_json::from_slice(&manifests.read(p)?).ok()
         };
@@ -399,8 +399,9 @@ impl<'a> Tasks<'a> {
         {
             return std::sync::Arc::clone(v);
         }
-        // Among the walked files that are third-party files at all (usually none): a
-        // repository-wide hub does not classify every file of the repository again.
+        // Among the walked files that are third-party files at all (usually
+        // none): a repository-wide hub does not classify every file of
+        // the repository again.
         let v: std::sync::Arc<Vec<PathBuf>> =
             std::sync::Arc::new(self.members(key, self.third_party_files()));
         self.hub_memo
@@ -516,7 +517,8 @@ impl<'a> Tasks<'a> {
             format!("{dir}/")
         };
         let start = files.partition_point(|f| f.as_str() < prefix.as_str());
-        // Compiled once per membership (the root package's hubs see every walked file).
+        // Compiled once per membership (the root package's hubs see every
+        // walked file).
         let pat = crate::glob::FastGlob::new(m.pattern);
         let exc: Vec<crate::glob::FastGlob> = m
             .exclude
@@ -574,7 +576,8 @@ impl<'a> Tasks<'a> {
             out.discovery.extend_from(&t.decided_by);
         }
         if tasks.is_empty() {
-            // Nothing to attach the observations to: the shard keeps them key-only.
+            // Nothing to attach the observations to: the shard keeps them
+            // key-only.
             out.discovery = shared_obs;
             return out;
         }
@@ -589,8 +592,9 @@ impl<'a> Tasks<'a> {
             }
         }
         let tool_edges = self.resolve_tools(root_abs, &npm_tools);
-        // Task parts, one per distinct (kind, path) in the package: the first task's
-        // (the same project read by another task gives the same part).
+        // Task parts, one per distinct (kind, path) in the package: the first
+        // task's (the same project read by another task gives the same
+        // part).
         let mut parts: BTreeMap<String, &turborepo_trace_tasks::spec::TaskPart> = BTreeMap::new();
         for t in &tasks {
             for p in &t.spec.parts {
@@ -618,10 +622,11 @@ impl<'a> Tasks<'a> {
                 format!("#members:{name}")
             });
         }
-        // Each hub's edges are the walked files below its directory that match: the
-        // composed graph expands them from the walk (`HubRec`), so only the members
-        // that classify as third-party files keep stored edges. Scanned once
-        // per distinct membership in the build, in parallel, in map order.
+        // Each hub's edges are the walked files below its directory that match:
+        // the composed graph expands them from the walk (`HubRec`), so
+        // only the members that classify as third-party files keep
+        // stored edges. Scanned once per distinct membership in the
+        // build, in parallel, in map order.
         let hub_files: Vec<(String, FileAnalysis, &'static str)> = {
             use rayon::prelude::*;
             let hubs: Vec<(&Membership, &String)> = hubs.iter().collect();
@@ -630,8 +635,9 @@ impl<'a> Tasks<'a> {
                 .map(|(m, hub_rel)| {
                     let path = root_abs.join(hub_rel);
                     let mut obs = Observations::default();
-                    // The own files of a package: the listings that cover them and not the
-                    // nested packages (`crate::own`). What the hub's records take from the
+                    // The own files of a package: the listings that cover them
+                    // and not the nested packages
+                    // (`crate::own`). What the hub's records take from the
                     // tree is this and `hub_special`: [`Tasks::hub_state`].
                     match repo_rel(self.repo, &m.dir)
                         .and_then(|dir| self.own_listings(&dir, &m.pattern, &m.exclude, m.own))
@@ -683,9 +689,9 @@ impl<'a> Tasks<'a> {
             files
         };
         out.files.extend(hub_files);
-        // Part pseudo-files: the part's inputs as edges and observations, like a
-        // task's, but nothing of the tasks that contain it (their manifests,
-        // `turbo.json`, dependencies).
+        // Part pseudo-files: the part's inputs as edges and observations, like
+        // a task's, but nothing of the tasks that contain it (their
+        // manifests, `turbo.json`, dependencies).
         for (rel_path, p) in &parts {
             let path = root_abs.join(rel_path);
             let mut obs = p.observations.clone();
@@ -704,7 +710,8 @@ impl<'a> Tasks<'a> {
                         Vec::new(),
                         None,
                     );
-                    // A file the part only reads (a type-checked project's `files`).
+                    // A file the part only reads (a type-checked project's
+                    // `files`).
                     edges.push(if data { Self::data(e) } else { e });
                 } else {
                     obs.missing.push(i.clone());
@@ -764,7 +771,8 @@ impl<'a> Tasks<'a> {
                 }
             }
             obs.dedup();
-            // Outputs that link (a part of a persistent or CI task alone links nothing).
+            // Outputs that link (a part of a persistent or CI task alone links
+            // nothing).
             let mut outputs: Vec<TaskOutputRec> = Vec::new();
             for t in &tasks {
                 if !t
@@ -795,8 +803,8 @@ impl<'a> Tasks<'a> {
             out.parts
                 .push((rel_path.clone(), crate::shard::PartRec { file: 0, outputs }));
         }
-        // Per task, in parallel (the root package has hundreds of tasks, each merging
-        // the package-wide observations), in task order.
+        // Per task, in parallel (the root package has hundreds of tasks, each
+        // merging the package-wide observations), in task order.
         use rayon::prelude::*;
         type PerTask = (
             TaskRec,
@@ -843,8 +851,9 @@ impl<'a> Tasks<'a> {
                                 Vec::new(),
                                 None,
                             );
-                            // A file the task only reads: a data edge, unless another
-                            // command also runs or copies it (then it is an entry or a
+                            // A file the task only reads: a data edge, unless
+                            // another command also
+                            // runs or copies it (then it is an entry or a
                             // plain input too).
                             edges.push(if data { Self::data(e) } else { e });
                         } else {
@@ -872,10 +881,12 @@ impl<'a> Tasks<'a> {
                             Vec::new(),
                             None,
                         );
-                        // A data edge where the task only reads the members. A hub that
-                        // another membership of the task may run or compile (an unknown
-                        // command's package next to the turbo inputs of the same
-                        // directory) also gets a plain edge.
+                        // A data edge where the task only reads the members. A
+                        // hub that another membership
+                        // of the task may run or compile (an unknown
+                        // command's package next to the turbo inputs of the
+                        // same directory) also gets a
+                        // plain edge.
                         edges.push(if m.data { Self::data(e) } else { e });
                     }
                 }
@@ -915,10 +926,12 @@ impl<'a> Tasks<'a> {
                         Some(Uncertainty::new(kind, Span::DUMMY, detail)),
                     ));
                 }
-                // turbo configs: a task depends on its own entries of the task table and on
-                // the global keys, not on the file as a whole (an edit of the `lint` entry
-                // used to reach every importer of every build output). Its inputs are the
-                // sections, as pseudo-paths; the file's contents key the shard.
+                // turbo configs: a task depends on its own entries of the task
+                // table and on the global keys, not on the file
+                // as a whole (an edit of the `lint` entry
+                // used to reach every importer of every build output). Its
+                // inputs are the sections, as pseudo-paths; the
+                // file's contents key the shard.
                 let mut turbo: Vec<PathBuf> = Vec::new();
                 obs.reads.retain(|p| {
                     let is = turbo_config::is_config(&p.to_string_lossy());
@@ -996,8 +1009,9 @@ impl<'a> Tasks<'a> {
                         .uncertainties
                         .iter()
                         .map(|u| {
-                            // No record names the directory the checkout lives in (a
-                            // recognizer reports a computed working directory by its
+                            // No record names the directory the checkout lives
+                            // in (a recognizer
+                            // reports a computed working directory by its
                             // absolute path).
                             let text = format!("{}: {}", u.kind, u.detail);
                             crate::paths::without_repo(&self.repo.to_string_lossy(), &text)

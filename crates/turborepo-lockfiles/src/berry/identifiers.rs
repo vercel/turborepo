@@ -205,8 +205,8 @@ impl<'a> TryFrom<&'a str> for Locator<'a> {
     type Error = Error;
 
     fn try_from(value: &'a str) -> Result<Self, Self::Error> {
-        // Descriptors and locators have the same structure so we use the descriptor
-        // parsing logic
+        // Descriptors and locators have the same structure so we use the
+        // descriptor parsing logic
         let Descriptor { ident, range } = Descriptor::try_from(value).map_err(|err| match err {
             Error::Descriptor(val) => Error::Locator(val),
             _ => err,

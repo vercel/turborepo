@@ -14,8 +14,8 @@ use turborepo_trace_core::fs::normalize;
 /// when it is outside `repo`.
 pub fn rel_to(base: &Path, repo: &Path, path: &Path) -> String {
     use turborepo_trace_core::os::OsStrExt;
-    // Normalized absolute paths: a component prefix is a byte prefix ending at a
-    // separator.
+    // Normalized absolute paths: a component prefix is a byte prefix ending at
+    // a separator.
     let under = |p: &[u8], d: &[u8]| -> Option<usize> {
         if d == b"/" {
             return p.starts_with(b"/").then_some(1);
@@ -33,8 +33,8 @@ pub fn rel_to(base: &Path, repo: &Path, path: &Path) -> String {
     }
     if let Some(i) = under(pb, base.as_os_str().as_bytes()) {
         let rest = &pb[i.min(pb.len())..];
-        // `components` would drop empty and `.` components: only a clean rest is taken
-        // as is.
+        // `components` would drop empty and `.` components: only a clean rest
+        // is taken as is.
         if rest.is_empty()
             || !rest
                 .split(|&b| b == b'/')
@@ -227,8 +227,8 @@ mod tests {
             w("'/home/me/repo/a' and \"/home/me/repo/b\""),
             "'a' and \"b\""
         );
-        // Other paths stay: a sibling, a longer path that only contains the root, a
-        // URL.
+        // Other paths stay: a sibling, a longer path that only contains the
+        // root, a URL.
         assert_eq!(w("/home/me/repo2/a"), "/home/me/repo2/a");
         assert_eq!(w("/x/home/me/repo/a"), "/x/home/me/repo/a");
         assert_eq!(w("file:///home/me/repo/a"), "file:///home/me/repo/a");

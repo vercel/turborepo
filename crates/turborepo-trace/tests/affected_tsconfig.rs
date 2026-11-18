@@ -123,8 +123,8 @@ fn repo() -> tempfile::TempDir {
         "{\n  // shared options\n  \"compilerOptions\": { \"strict\": true, \"module\": \
          \"esnext\", \"moduleResolution\": \"bundler\" }\n}\n",
     );
-    // The package whose config changes: vitest tests with a plain config, one jest
-    // test.
+    // The package whose config changes: vitest tests with a plain config, one
+    // jest test.
     package(
         r,
         "packages/gate",
@@ -275,11 +275,11 @@ const WITH_OTEL: [&str; 3] = ["../otel", "../headers", "../iam"];
 fn a_reference_to_a_project_elsewhere_is_not_an_input_of_transpile_only_tests() {
     let d = repo();
     let r = d.path();
-    // The real change: one more referenced project, a sibling package with its own
-    // `include`.
+    // The real change: one more referenced project, a sibling package with its
+    // own `include`.
     write(r, GATE_TSCONFIG, &gate_tsconfig(&WITH_OTEL, TYPES));
-    // Without the rule every test below the config is selected, through the config
-    // only.
+    // Without the rule every test below the config is selected, through the
+    // config only.
     assert_eq!(tests_env(r, &OFF), [J_C, V_A, V_B]);
     assert!(tests(r).is_empty());
     let err = stats(r);
@@ -366,7 +366,8 @@ fn everything_else_is_a_whole_file_change() {
         ),
     );
     whole(r, "`compilerOptions` changed");
-    // The same projects in another order: the first one that includes a file wins.
+    // The same projects in another order: the first one that includes a file
+    // wins.
     write(
         r,
         GATE_TSCONFIG,
@@ -516,8 +517,8 @@ fn a_config_that_is_not_there_next_to_changed_references() {
     let all = [J_C, V_A, V_B];
     let scratch = tempfile::tempdir().unwrap();
     let off = [("TURBO_TRACE_DEBUG_TSCONFIG_PROBED", "0")];
-    // What the diff selects: with the rule, and without it on a graph of its own
-    // (the switch works while a file is traced).
+    // What the diff selects: with the rule, and without it on a graph of its
+    // own (the switch works while a file is traced).
     let both = |r: &Path, graph: &str, what: &str| -> Vec<String> {
         let with = tests(r);
         let graph = scratch.path().join(graph);
@@ -566,10 +567,10 @@ fn a_config_that_is_not_there_next_to_changed_references() {
         "{err}"
     );
     write(r, GATE_TSCONFIG, &gate_tsconfig(&BASE_REFS, TYPES));
-    // The generated config appears: the project loads and includes no file below
-    // the referencing configs, as before `headers` named it. Whatever that
-    // selects, the rule is no part of it. (A project that loads and comes to be
-    // broken: `a_referenced_project_that_comes_to_be_broken`.)
+    // The generated config appears: the project loads and includes no file
+    // below the referencing configs, as before `headers` named it. Whatever
+    // that selects, the rule is no part of it. (A project that loads and
+    // comes to be broken: `a_referenced_project_that_comes_to_be_broken`.)
     write(r, generated, "{}\n");
     both(r, "t1", "the generated config appears");
 
@@ -582,8 +583,8 @@ fn a_config_that_is_not_there_next_to_changed_references() {
     git(r, &["commit", "-q", "-m", "a dangling reference"]);
     assert_eq!(floor(r, &scratch.path().join("dangling"), &[]), before);
     assert!(both(r, "t2", "nothing changed").is_empty());
-    // It appears, and includes no file below `gate`: as for the generated config
-    // above.
+    // It appears, and includes no file below `gate`: as for the generated
+    // config above.
     write(r, "packages/missing/tsconfig.json", "{}\n");
     both(r, "t2", "the referenced project appears");
     // The dangling reference goes (the project is not there): Vite failed on it
@@ -592,8 +593,8 @@ fn a_config_that_is_not_there_next_to_changed_references() {
     write(r, GATE_TSCONFIG, &gate_tsconfig(&BASE_REFS, TYPES));
     assert_eq!(both(r, "t2", "the dangling reference goes"), all);
 
-    // The config of `gate` itself extends a generated config, and its references
-    // change.
+    // The config of `gate` itself extends a generated config, and its
+    // references change.
     let d = repo();
     let r = d.path();
     let broken = |refs: &[&str]| {
@@ -610,7 +611,8 @@ fn a_config_that_is_not_there_next_to_changed_references() {
     );
     assert_eq!(floor(r, &scratch.path().join("own"), &[]), before);
     assert!(both(r, "t3", "nothing changed").is_empty());
-    // Only the references: no transform reads them, and the config loads no better.
+    // Only the references: no transform reads them, and the config loads no
+    // better.
     write(r, GATE_TSCONFIG, &broken(&WITH_OTEL));
     let only_references = both(r, "t3", "only the references change");
     assert!(
@@ -671,8 +673,9 @@ fn a_referenced_project_that_comes_to_be_broken() {
     let open = scratch.path().join("open");
     let before = floor(r, &open, &off);
     assert!(check(r, "nothing changed").is_empty());
-    // The generated config goes: the project does not load. The files below the two
-    // referencing configs looked for it now, and their tests are selected.
+    // The generated config goes: the project does not load. The files below the
+    // two referencing configs looked for it now, and their tests are
+    // selected.
     std::fs::remove_file(r.join(generated)).unwrap();
     assert_eq!(check(r, "the generated config is deleted"), referencing);
     assert_eq!(
@@ -713,8 +716,8 @@ fn a_referenced_project_that_comes_to_be_broken() {
         referencing
     );
 
-    // The project comes to include the sources of `gate`: it governs them now, and
-    // its config is their input.
+    // The project comes to include the sources of `gate`: it governs them now,
+    // and its config is their input.
     let d = repo();
     let r = d.path();
     assert!(check(r, "nothing changed").is_empty());
@@ -729,8 +732,8 @@ fn a_referenced_project_that_comes_to_be_broken() {
         [V_A, V_B]
     );
 
-    // An edit of the project that changes neither: nothing below the referencing
-    // configs is selected, on either graph.
+    // An edit of the project that changes neither: nothing below the
+    // referencing configs is selected, on either graph.
     let d = repo();
     let r = d.path();
     assert!(check(r, "nothing changed").is_empty());
@@ -1057,7 +1060,8 @@ fn a_referenced_project_that_stops_including_a_file() {
             )),
         "{explained}"
     );
-    // The base is the merge base of the revision and HEAD, or the revision itself.
+    // The base is the merge base of the revision and HEAD, or the revision
+    // itself.
     git(r, &["branch", "other"]);
     git(r, &["stash", "-q"]);
     git(r, &["checkout", "-q", "other"]);
@@ -1143,8 +1147,8 @@ fn an_option_of_a_referenced_project_moves_no_file() {
         &[G_A],
         &[G_A],
     );
-    // The project governs nothing below the config: nothing is selected, and the
-    // note says why.
+    // The project governs nothing below the config: nothing is selected, and
+    // the note says why.
     write(r, G_LIB, &lib_config("\"include\": [\"lib\"]"));
     rebase(r, "the project governs nothing below");
     let before = records(r);
@@ -1401,8 +1405,8 @@ fn without_the_base_contents_every_file_that_consulted_the_project_is_seeded() {
         "{err}"
     );
 
-    // A third-party package the project extends, bumped in the lockfile: its config
-    // includes another directory now.
+    // A third-party package the project extends, bumped in the lockfile: its
+    // config includes another directory now.
     let d = governed();
     let r = d.path();
     let lock = |v: &str| {
@@ -3156,8 +3160,8 @@ fn fix55_a_path_without_a_status_may_have_made_its_directory() {
     assert_eq!(fix55_given(r, &from), none);
     std::fs::write(&list, format!("A\t{x}\n")).unwrap();
     assert_eq!(fix55_given(r, &from), [G_A, G_B]);
-    // A second file in the directory that is no path of the change: it was there,
-    // and so was the directory.
+    // A second file in the directory that is no path of the change: it was
+    // there, and so was the directory.
     write(r, "packages/app/base/old.ts", "export const old = 1;\n");
     assert_eq!(fix55_given(r, &["--changed", x]), none);
     // Both given: everything in the directory is a path of the change.
@@ -3195,8 +3199,8 @@ fn fix55_a_directory_that_one_of_two_merge_bases_lacks_is_made() {
         }
         fix55_extends_base(r);
         git(r, &["branch", "-M", "main"]);
-        // Two lines that each merge the other: `main` and `feature` have two merge
-        // bases.
+        // Two lines that each merge the other: `main` and `feature` have two
+        // merge bases.
         git(r, &["checkout", "-q", "-b", "feature"]);
         write(r, "packages/app/base/x.md", "one\n");
         rebase(r, "feature: a file in the directory");
@@ -3293,8 +3297,8 @@ fn fix55_a_manifest_field_that_no_config_load_reads() {
             &[G_A, G_B, G_C],
         );
         assert_eq!(tests(r), none, "{manifest}");
-        // Without the rule every reader of the manifest is selected: the test that the
-        // root config governs.
+        // Without the rule every reader of the manifest is selected: the test
+        // that the root config governs.
         assert_eq!(
             tests_env(r, &[("TURBO_TRACE_DEBUG_LOADER_VIEW", "0")]),
             [G_C],
@@ -3351,8 +3355,8 @@ fn fix55_the_exports_that_a_config_load_went_through_change() {
         &[G_A, G_B, G_C],
     );
     assert_eq!(tests(r), [G_C]);
-    // Without the rule the entry of `exports` is applied for the importers of the
-    // package, which the test is not: nothing was selected (before the
+    // Without the rule the entry of `exports` is applied for the importers of
+    // the package, which the test is not: nothing was selected (before the
     // fix).
     let none: [&str; 0] = [];
     assert_eq!(
@@ -3422,9 +3426,10 @@ fn fix55_a_directory_named_like_a_pattern_comes_and_goes() {
         );
         review_probe(r, s, &format!("fix55 directory {name} appears"), &before);
         assert_eq!(tests(r), [G_A, G_B], "{name}");
-        // The directory is there now. A file that comes next to it is no answer to
-        // "is `<name>` a directory?": the record names the directory, not every entry
-        // of `routes` (and `i` is not what the pattern `[id]` would match).
+        // The directory is there now. A file that comes next to it is no answer
+        // to "is `<name>` a directory?": the record names the
+        // directory, not every entry of `routes` (and `i` is not what
+        // the pattern `[id]` would match).
         rebase(r, "the directory is there");
         let before = records(r);
         write(r, "packages/app/routes/other.md", "nothing\n");

@@ -66,8 +66,9 @@ impl<'a> DepPath<'a> {
             } else if let Some(idx) = s.find('_') {
                 Some(&s[..idx])
             } else {
-                // if a dependency just has a single suffix we can't tell if it's
-                // a patch or peer hash return it in case it's a patch hash
+                // if a dependency just has a single suffix we can't tell if
+                // it's a patch or peer hash return it in case
+                // it's a patch hash
                 Some(s)
             }
         })

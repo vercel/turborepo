@@ -118,15 +118,16 @@ fn preprocess_paths_and_globs<S: AsRef<str>>(
 }
 
 pub fn fix_glob_pattern(pattern: &str) -> Cow<'_, str> {
-    // On Unix, Path::new(pattern).to_slash() is a no-op that returns Cow::Borrowed.
-    // Skip the roundtrip entirely on Unix to avoid the overhead.
+    // On Unix, Path::new(pattern).to_slash() is a no-op that returns
+    // Cow::Borrowed. Skip the roundtrip entirely on Unix to avoid the
+    // overhead.
     #[cfg(not(windows))]
     let p0: Cow<'_, str> = Cow::Borrowed(pattern);
 
     #[cfg(windows)]
     let p0: Cow<'_, str> = {
-        // path-slash strips trailing slashes from Windows paths, so we need to restore
-        // them.
+        // path-slash strips trailing slashes from Windows paths, so we need to
+        // restore them.
         let needs_trailing_slash = pattern.ends_with('/') || pattern.ends_with('\\');
         let Some(converted) = Path::new(pattern).to_slash() else {
             return Cow::Borrowed(pattern);
@@ -175,8 +176,9 @@ pub fn fix_glob_pattern(pattern: &str) -> Cow<'_, str> {
             Cow::Borrowed(pattern)
         }
         Cow::Borrowed(s) => {
-            // p3 is borrowed from an intermediate owned string (some regex matched).
-            // We need to allocate to return an owned copy.
+            // p3 is borrowed from an intermediate owned string (some regex
+            // matched). We need to allocate to return an owned
+            // copy.
             Cow::Owned(s.to_string())
         }
         Cow::Owned(s) => Cow::Owned(s),
@@ -245,8 +247,9 @@ fn add_trailing_double_star(exclude_paths: &mut Vec<String>, glob: &str) {
     } else if glob.ends_with("/**") {
         exclude_paths.push(glob.to_string());
     } else {
-        // Match Go globby behavior. If the glob doesn't already end in /**, add it
-        // We use the unix style operator as wax expects unix style paths
+        // Match Go globby behavior. If the glob doesn't already end in /**, add
+        // it We use the unix style operator as wax expects unix style
+        // paths
         exclude_paths.push(format!("{glob}/**"));
         exclude_paths.push(glob.to_string());
     }
@@ -423,7 +426,8 @@ impl FromStr for ValidatedGlob {
 
         #[cfg(not(windows))]
         {
-            // Fast path: check if cleaning is needed by looking for `.` or `..` segments
+            // Fast path: check if cleaning is needed by looking for `.` or `..`
+            // segments
             let needs_cleaning = needs_path_cleaning(s);
 
             let cleaned: Cow<'_, str> = if needs_cleaning {
@@ -444,7 +448,8 @@ impl FromStr for ValidatedGlob {
             // Strip leading slashes
             let without_leading_slash = cleaned.trim_start_matches('/');
 
-            // Only allocate for colon escaping if colons are present (rare case)
+            // Only allocate for colon escaping if colons are present (rare
+            // case)
             let result = if without_leading_slash.contains(':') {
                 without_leading_slash.replace(':', "\\:")
             } else {
@@ -1258,8 +1263,8 @@ fn try_decompose_shallow_wildcard(
         return None;
     }
 
-    // Require at least one suffix segment after the star — patterns like `dir/*`
-    // match files directly and need the full walker.
+    // Require at least one suffix segment after the star — patterns like
+    // `dir/*` match files directly and need the full walker.
     if star_idx + 1 >= segments.len() {
         return None;
     }
@@ -1295,7 +1300,8 @@ fn walk_compiled_globs(
     //    prefix dir, then each child is checked in parallel. This avoids the
     //    walkdir overhead for patterns like `packages/*/package.json` where a
     //    single glob walker would sequentially traverse hundreds of entries.
-    // 3. General variant — full wax directory walk (one rayon task per pattern).
+    // 3. General variant — full wax directory walk (one rayon task per
+    //    pattern).
     let mut literal_results: Vec<AbsoluteSystemPathBuf> = Vec::new();
     let mut shallow_wildcards: Vec<(PathBuf, PathBuf)> = compiled.shallow_wildcards.clone();
     let mut variant_globs: Vec<&Glob<'static>> = Vec::new();
@@ -3489,7 +3495,8 @@ mod test {
 
         #[test]
         fn shallow_wildcard_finds_symlinked_package() {
-            // Pattern: widgets/*/package.json (shallow wildcard optimization path)
+            // Pattern: widgets/*/package.json (shallow wildcard optimization
+            // path)
             let tmp = setup_symlinked_workspace();
             let root = AbsoluteSystemPathBuf::try_from(tmp.path()).unwrap();
 
@@ -3522,7 +3529,8 @@ mod test {
 
         #[test]
         fn doublestar_finds_symlinked_package() {
-            // Pattern: packages/**/package.json (general walk path with follow_links)
+            // Pattern: packages/**/package.json (general walk path with
+            // follow_links)
             let tmp = setup_symlinked_workspace();
             let root = AbsoluteSystemPathBuf::try_from(tmp.path()).unwrap();
 
@@ -3751,8 +3759,9 @@ mod test {
                 Settings::default().follow_links(),
             );
 
-            // Either succeeds with the real package or returns an error — neither
-            // is a hang or panic, which is the important part.
+            // Either succeeds with the real package or returns an error —
+            // neither is a hang or panic, which is the important
+            // part.
             match result {
                 Ok(paths) => {
                     let found: Vec<String> = paths

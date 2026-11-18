@@ -492,13 +492,13 @@ pub fn effects(
         ));
     }
 
-    // 2. Definition files: what a task's commands *are* (the script a step runs, a
-    //    file a
-    // step names, a test runner's config), recorded as `def:` entries. For a job,
-    // also what such a script imports inside the CI tooling area. Application
-    // code that a job script imports, or that a build or test command reads, is
-    // an input of the job, not a change of how it runs its tests: it is not
-    // followed here.
+    // 2. Definition files: what a task's commands *are* (the script a step
+    //    runs, a file a
+    // step names, a test runner's config), recorded as `def:` entries. For a
+    // job, also what such a script imports inside the CI tooling area.
+    // Application code that a job script imports, or that a build or test
+    // command reads, is an input of the job, not a change of how it runs
+    // its tests: it is not followed here.
     let rev = engine.reverse();
     let fwd = engine.forward();
     let mut runs = Runs::new(g);
@@ -527,8 +527,8 @@ pub fn effects(
             }
             let (succs, attrs) = fwd.neighbors(NodeId(n));
             for (&s, attr) in succs.iter().zip(attrs) {
-                // A directory listing or a manifest consulted during resolution is not a
-                // reference to the file's contents.
+                // A directory listing or a manifest consulted during resolution
+                // is not a reference to the file's contents.
                 if matches!(attr.kind(), RefKind::FsReadDir | RefKind::Manifest) {
                     continue;
                 }
@@ -547,8 +547,8 @@ pub fn effects(
         memo.insert(def.to_owned(), hit);
         hit
     };
-    // Package scripts (and other tasks) whose own definition file changed and that
-    // launch tests themselves: the task and the changed file.
+    // Package scripts (and other tasks) whose own definition file changed and
+    // that launch tests themselves: the task and the changed file.
     let mut launchers: BTreeMap<NodeId, String> = BTreeMap::new();
     let mut nodes: Vec<NodeId> = runs.recs.keys().copied().collect();
     nodes.sort_unstable();
@@ -580,10 +580,11 @@ pub fn effects(
             launchers.insert(n, changes[i].path.clone());
         }
     }
-    // Entries that read a dropped file through explicit references (file-to-file
-    // edges).
+    // Entries that read a dropped file through explicit references
+    // (file-to-file edges).
     if !fx.drop.is_empty() {
-        // node → predecessor on the way from a dropped file (itself for the file).
+        // node → predecessor on the way from a dropped file (itself for the
+        // file).
         let mut reach: HashMap<u32, u32> = HashMap::new();
         let mut queue: std::collections::VecDeque<u32> = Default::default();
         for c in changes.iter().filter(|c| fx.drop.contains(&c.path)) {
@@ -650,8 +651,9 @@ pub fn effects(
         .map(|(n, p)| (*n, p.clone()))
         .collect();
     for (j, path) in changed_tasks {
-        // A job runs its steps and everything they start in the environment it defines.
-        // A package script's definition files are those of its own command.
+        // A job runs its steps and everything they start in the environment it
+        // defines. A package script's definition files are those of its
+        // own command.
         let r = if job_set.contains(&j) {
             runs.of(j)
         } else {

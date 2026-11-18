@@ -122,7 +122,8 @@ fn setup_workspace(dir: &Path) {
     });
     for (package, _, identity) in PACKAGES {
         // Explicit per-identity overrides also defeat native library defaults
-        // (which may disable caching). There are no user-authored shared outputs.
+        // (which may disable caching). There are no user-authored shared
+        // outputs.
         config["tasks"][format!("{package}#build")] = json!({
             "cache": true,
             "outputs": [],

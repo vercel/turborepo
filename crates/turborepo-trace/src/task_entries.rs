@@ -121,7 +121,8 @@ pub(crate) fn collect(g: &Graph, globs: &[String], all: bool) -> NodeSet {
             turborepo_trace_tasks::glob::matches(p, short)
                 || (p.contains(':') && turborepo_trace_tasks::glob::matches(p, id))
         };
-        // A pattern whose task name is literal (`apps/web#dev`, `**#dev`) asks for it.
+        // A pattern whose task name is literal (`apps/web#dev`, `**#dev`) asks
+        // for it.
         let exact = globs.iter().any(|p| {
             let name = p.rsplit_once('#').map_or(p.as_str(), |x| x.1);
             (!turborepo_trace_tasks::glob::is_glob(p)

@@ -44,8 +44,8 @@ pub fn parse(src: &str) -> Result<Lockfile> {
         message: e.message,
     };
     let mut p = Parser::new(src);
-    // pnpm may prepend an "env lockfile" document (configDependencies); the main
-    // lockfile is the last document.
+    // pnpm may prepend an "env lockfile" document (configDependencies); the
+    // main lockfile is the last document.
     let docs = Parser::document_count(src);
     if docs > 1 {
         p.seek_document(docs - 1).map_err(syntax)?;
@@ -113,8 +113,8 @@ pub fn parse(src: &str) -> Result<Lockfile> {
                 }
             }
             "snapshots" => {
-                // Joined with `packages` after the whole document is read (sections may come in
-                // any order).
+                // Joined with `packages` after the whole document is read
+                // (sections may come in any order).
                 p.entries(0, |k, node| {
                     snapshots.push(package(
                         k.into_owned(),
@@ -249,8 +249,8 @@ fn importer(path: &str, node: &Node<'_>, major: Major) -> Importer {
 
 fn push_importer_deps(imp: &mut Importer, deps: &Node<'_>, kind: DepKind, major: Major) {
     for (name, d) in deps.entries() {
-        // `{specifier, version}`; very old single-project files map name → version
-        // directly.
+        // `{specifier, version}`; very old single-project files map name →
+        // version directly.
         let (specifier, reference) = match d {
             Node::Scalar(v) => (None, v.as_ref()),
             _ => (

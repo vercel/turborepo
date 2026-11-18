@@ -193,8 +193,9 @@ mod test {
 
     #[test]
     fn test_read_object_hashes() {
-        // Note that cwd can be different based on where the test suite is running from
-        // or if the test is launched in debug mode from VSCode
+        // Note that cwd can be different based on where the test suite is
+        // running from or if the test is launched in debug mode from
+        // VSCode
         let cwd = std::env::current_dir().unwrap();
         let cwd = AbsoluteSystemPathBuf::try_from(cwd).unwrap();
         let git_root = find_git_root(&cwd).unwrap();
@@ -326,10 +327,12 @@ mod test {
             .output()
             .unwrap();
 
-        // 128KB: spans multiple 64KB read buffers, exercising the streaming loop
+        // 128KB: spans multiple 64KB read buffers, exercising the streaming
+        // loop
         const MULTI_BUF: usize = 128 * 1024;
         let multi_buf_content = vec![b'A'; MULTI_BUF];
-        // Exactly 64KB: boundary where one read fills the buffer and the next returns 0
+        // Exactly 64KB: boundary where one read fills the buffer and the next
+        // returns 0
         const EXACT_BUF: usize = 64 * 1024;
         let exact_buf_content = vec![b'B'; EXACT_BUF];
 

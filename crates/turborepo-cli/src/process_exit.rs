@@ -17,21 +17,24 @@ pub fn exit(code: i32) -> ! {
 
         use windows_sys::Win32::System::Threading::{GetCurrentProcess, TerminateProcess};
 
-        // Preserve the stdio flushing normally performed by Rust's exit cleanup.
-        // As with that cleanup, output errors must not change the requested status.
+        // Preserve the stdio flushing normally performed by Rust's exit
+        // cleanup. As with that cleanup, output errors must not change
+        // the requested status.
         let _ = io::stdout().flush();
         let _ = io::stderr().flush();
 
-        // SAFETY: GetCurrentProcess returns a valid pseudo-handle with termination
-        // access. The cast preserves the full DWORD bit pattern, including negative
-        // i32 statuses. TerminateProcess deliberately skips DLL/TLS teardown:
-        // ExitProcess kills other threads first, so a TLS destructor can deadlock
-        // forever on a global mutex held by an already-killed worker.
+        // SAFETY: GetCurrentProcess returns a valid pseudo-handle with
+        // termination access. The cast preserves the full DWORD bit
+        // pattern, including negative i32 statuses. TerminateProcess
+        // deliberately skips DLL/TLS teardown: ExitProcess kills other
+        // threads first, so a TLS destructor can deadlock forever on a
+        // global mutex held by an already-killed worker.
         unsafe { TerminateProcess(GetCurrentProcess(), code as u32) };
 
-        // Successful self-termination never returns. If it fails, do not fall back
-        // to ExitProcess (including std::process::exit or normal main return).
-        // Rust's Windows abort uses fast-fail, not DLL/TLS process-exit cleanup.
+        // Successful self-termination never returns. If it fails, do not fall
+        // back to ExitProcess (including std::process::exit or normal
+        // main return). Rust's Windows abort uses fast-fail, not
+        // DLL/TLS process-exit cleanup.
         std::process::abort();
     }
 }
@@ -65,7 +68,8 @@ mod tests {
         fn drop(&mut self) {
             DROP_STARTED.store(true, Ordering::Release);
             // The file is already open: no TLS initialization, allocation, or
-            // unrelated locks in this destructor. A nonempty marker proves entry.
+            // unrelated locks in this destructor. A nonempty marker proves
+            // entry.
             let _ = self.0.write_all(b"TLS destructor entered");
             let _held = SHARED.lock().unwrap();
         }

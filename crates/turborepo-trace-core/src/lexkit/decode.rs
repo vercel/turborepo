@@ -188,8 +188,8 @@ pub fn decode<'a>(raw: &'a [u8], rules: EscapeRules) -> Result<Cow<'a, str>, Dec
                 out.push(char::from_u32(v).ok_or(DecodeError::BadEscape(esc_at))?);
             }
             _ => {
-                // Unknown escape. Re-decode the escaped character as UTF-8 so multi-byte
-                // characters survive.
+                // Unknown escape. Re-decode the escaped character as UTF-8 so
+                // multi-byte characters survive.
                 if rules.unknown_keeps_backslash {
                     out.push('\\');
                 }
@@ -315,7 +315,8 @@ mod tests {
         let py = EscapeRules::PYTHON;
         assert_eq!(decode(br"\101\0\12", py).unwrap(), "A\0\n");
         assert_eq!(decode(br"\1018", py).unwrap(), "A8");
-        // JS: `\0` is NUL, other digits are unknown escapes (dropped backslash).
+        // JS: `\0` is NUL, other digits are unknown escapes (dropped
+        // backslash).
         assert_eq!(js(br"\0\7").unwrap(), "\u{0}7");
     }
 

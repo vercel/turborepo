@@ -131,7 +131,8 @@ fn a_deploy_job_edit_selects_no_tests() {
 fn steering_edits_select_nothing() {
     let d = repo();
     let r = d.path();
-    // A comment, the path filter, the display names, a job-level `if`, concurrency.
+    // A comment, the path filter, the display names, a job-level `if`,
+    // concurrency.
     edit(
         r,
         QUALITY,
@@ -314,7 +315,8 @@ fn scripts_and_files_a_job_runs_count() {
     for j in ["deploy.yml#deploy", "deploy.yml#notify"] {
         assert!(jobs.iter().any(|x| x == j), "{j} in {jobs:?}");
     }
-    // The Node version file named by `node-version-file`: every job that installs.
+    // The Node version file named by `node-version-file`: every job that
+    // installs.
     git(r, &["checkout", "-q", "."]);
     edit(r, ".nvmrc", "22", "24");
     let (tests, _) = since(r);
@@ -404,7 +406,8 @@ fn application_code_a_job_script_imports_is_an_input_not_a_definition() {
     let (tests, jobs) = since(r);
     assert_eq!(tests, [B]);
     assert!(jobs.iter().any(|j| j == "nightly.yml#smoke"), "{jobs:?}");
-    // The same for a repository script outside `.github/` that imports a package.
+    // The same for a repository script outside `.github/` that imports a
+    // package.
     git(r, &["checkout", "-q", "."]);
     edit(r, "packages/a/src/a.js", "1", "3");
     let (tests, jobs) = since(r);
@@ -416,8 +419,8 @@ fn application_code_a_job_script_imports_is_an_input_not_a_definition() {
 fn a_job_that_only_builds_selects_no_tests_when_its_script_changes() {
     let d = repo();
     let r = d.path();
-    // The script names `turbo run build`, and the job runs a computed task: neither
-    // is evidence of a test launch.
+    // The script names `turbo run build`, and the job runs a computed task:
+    // neither is evidence of a test launch.
     edit(r, "scripts/scoring/index.mjs", "* 10", "* 20");
     let (tests, jobs) = since(r);
     assert_eq!(tests, Vec::<String>::new());
@@ -611,8 +614,8 @@ fn a_comment_that_names_a_test_runner_starts_no_tests() {
     let d = tempfile::tempdir().unwrap();
     let r = d.path();
     provisioned(r);
-    // The provisioning script is the definition of its task; its text names jest in
-    // a comment, which is not a launch.
+    // The provisioning script is the definition of its task; its text names
+    // jest in a comment, which is not a launch.
     edit(
         r,
         "scripts/provision/services/dynamo.ts",

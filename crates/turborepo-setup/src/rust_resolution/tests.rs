@@ -38,7 +38,8 @@ fn stable_resolves_to_the_exact_release_with_default_profile_parts() {
         [&Platform::MacosArm64, &Platform::LinuxX64Gnu]
     );
     let linux = parts(&tool, Platform::LinuxX64Gnu);
-    // rust-mingw is a profile member this host lacks, exactly as rustup skips it.
+    // rust-mingw is a profile member this host lacks, exactly as rustup skips
+    // it.
     assert_eq!(
         linux.keys().collect::<Vec<_>>(),
         ["cargo", "clippy-preview", "rust-std", "rustc"]
@@ -136,7 +137,8 @@ fn components_renames_and_targets_extend_every_recorded_host() {
         );
         assert!(parts.contains_key("clippy-preview"));
     }
-    // The macOS host also cross-targets Linux; Linux's own std is its host part.
+    // The macOS host also cross-targets Linux; Linux's own std is its host
+    // part.
     assert!(parts(&tool, Platform::MacosArm64).contains_key("rust-std-x86_64-unknown-linux-gnu"));
     assert_eq!(parts(&tool, Platform::LinuxX64Gnu).len(), 6);
 }

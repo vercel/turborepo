@@ -110,8 +110,8 @@ pub fn effects(
     if changed.is_empty() {
         return fx;
     }
-    // 3. The tasks that start them and run tests: from each starter of a changed
-    //    service
+    // 3. The tasks that start them and run tests: from each starter of a
+    //    changed service
     // up through the tasks that run or depend on it, as long as the task itself
     // runs no tests. The first task with tests on each way is the one whose
     // tests talk to the service; nothing is inherited beyond it.

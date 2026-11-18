@@ -611,7 +611,8 @@ impl Trace {
                 .lang
                 .and_then(|li| shared.langs.get(li))
                 .map(|l| l.id());
-            // Reached by a following kind but handled by no language (`.c`, `.s`): a leaf.
+            // Reached by a following kind but handled by no language (`.c`,
+            // `.s`): a leaf.
             if fnode.lang.is_none() {
                 n.parsed = false;
             }
@@ -666,7 +667,8 @@ impl Trace {
             vec![(ReasonKinds::empty(), Vec::new()); nodes.len()];
         let link_target = |id: &FileId| shared.symlinks.get(id).map(|t| *t);
         let mut edges = Vec::with_capacity(gathered.len());
-        // First edge (in sorted order) reaching each node, for outside-base reports.
+        // First edge (in sorted order) reaching each node, for outside-base
+        // reports.
         let mut first_ref: Vec<Option<(u32, crate::Span, Box<str>)>> = vec![None; nodes.len()];
         for (ei, (e, succ, links)) in gathered.into_iter().enumerate() {
             if let Some(&from) = index.get(&e.from) {
@@ -678,7 +680,8 @@ impl Trace {
                         first_ref[ti as usize] = Some((from, e.span, e.spec.clone()));
                     }
                 }
-                // Symlinks crossed: included with reason `resolve`, as nft does.
+                // Symlinks crossed: included with reason `resolve`, as nft
+                // does.
                 let mut via_link = Vec::new();
                 for l in &links {
                     if let Some(&li) = index.get(l) {
@@ -690,8 +693,9 @@ impl Trace {
                 }
                 for to in succ {
                     if let Some(&ti) = index.get(&to) {
-                        // A file reached through a file symlink hangs off the link, so
-                        // `why` shows the link; otherwise it hangs off the referencing file.
+                        // A file reached through a file symlink hangs off the
+                        // link, so `why` shows the
+                        // link; otherwise it hangs off the referencing file.
                         if !via_link.contains(&to) {
                             adj[from as usize].push((ti, Some(ei as u32)));
                         }
@@ -738,14 +742,15 @@ impl Trace {
             r.1.dedup();
         }
 
-        // Files outside the base are dropped from `nft`/`list` output: report each
-        // once, on the file that first references it (or on itself for entries
-        // and symlink targets reached without an edge).
+        // Files outside the base are dropped from `nft`/`list` output: report
+        // each once, on the file that first references it (or on itself
+        // for entries and symlink targets reached without an edge).
         let base = &shared.options.base;
         let mut outside = false;
         let mut root_hits: Vec<usize> = vec![0; shared.env_roots.len()];
-        // Below a language's environment root (site-packages, module cache, cargo
-        // registry): expected, reported once per root instead of per file.
+        // Below a language's environment root (site-packages, module cache,
+        // cargo registry): expected, reported once per root instead of
+        // per file.
         for n in nodes.iter_mut().filter(|n| !n.path.starts_with(base)) {
             if let Some(ri) = shared
                 .env_roots
@@ -987,8 +992,8 @@ impl Trace {
                 b.1.kind,
             ))
         });
-        // A reference with several targets (alternatives) yields one edge per target,
-        // all carrying the same record: report it once.
+        // A reference with several targets (alternatives) yields one edge per
+        // target, all carrying the same record: report it once.
         let mut seen = std::collections::HashSet::new();
         out.retain(|(f, u, _)| seen.insert((*f, *u)));
         out

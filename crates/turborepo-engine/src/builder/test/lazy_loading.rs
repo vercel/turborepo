@@ -824,8 +824,9 @@ fn root_internal_native_dependency_joins_the_closure_before_hashing() {
     let runtime = current_thread_runtime();
     let contributor = LazyNativeContributor::new(&repo_root);
     let full_calls = contributor.full_calls.clone();
-    // Root npm dependencies target package.json scopes. An explicit relationship
-    // from that package can still put a native scope in the transitive closure.
+    // Root npm dependencies target package.json scopes. An explicit
+    // relationship from that package can still put a native scope in the
+    // transitive closure.
     let root = PackageJson {
         dependencies: Some(
             [("bridge", "workspace:*")]

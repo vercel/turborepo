@@ -73,8 +73,8 @@ fn observations(rels: &[&str]) -> Vec<FileObs> {
 #[test]
 fn probes_and_config_reads_are_recorded_per_file() {
     let root = basic();
-    // Two files of the same package: the second hits the memoized package lookup,
-    // which must replay the observations.
+    // Two files of the same package: the second hits the memoized package
+    // lookup, which must replay the observations.
     let res = observations(&["app/src/main.rs", "app/src/cli.rs", "app/src/net/mod.rs"]);
     let (_, main, edges) = &res[0];
     // `mod net;`: `net.rs` was probed before `net/mod.rs` was found.

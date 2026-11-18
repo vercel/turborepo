@@ -1021,7 +1021,8 @@ fn reject_unsupported_local_sources(
             };
             let dependency = normalize_name(name);
             // uv sources override even direct references. Resolve the member's
-            // override before the root's, and validate only the effective source.
+            // override before the root's, and validate only the effective
+            // source.
             let source = manifest
                 .source(&dependency)
                 .map(|source| (source, &manifest_path))
@@ -3586,7 +3587,8 @@ mod test {
         });
         assert!(trusted_uv(host, &root, None).is_ok());
         assert!(trusted_uv(&bin.join("uv"), &root, Some(&bin)).is_ok());
-        // Repository content, including a lookalike generation, stays untrusted.
+        // Repository content, including a lookalike generation, stays
+        // untrusted.
         for uv in [
             root.as_std_path().join("uv"),
             root.as_std_path().join(".turbo/tools/generation-2/bin/uv"),

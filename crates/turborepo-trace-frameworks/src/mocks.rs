@@ -111,8 +111,8 @@ impl Cx<'_> {
     }
 
     fn resolve(&self, request: &str) -> Module {
-        // The first matching alias decides, as in the runner; its replacements are
-        // tried in order.
+        // The first matching alias decides, as in the runner; its replacements
+        // are tried in order.
         let hit = self.project.and_then(|p| p.resolution.apply(request));
         let requests: Vec<&str> = match &hit {
             Some(h) => h.requests.iter().map(String::as_str).collect(),
@@ -377,21 +377,22 @@ pub fn mock_inputs(
             Module::Unknown => Some((format!("{what}('{request}') does not resolve"), line)),
         }
     };
-    // A manual mock that jest finds by the request's name anywhere in the roots:
-    // not the one next to the module.
+    // A manual mock that jest finds by the request's name anywhere in the
+    // roots: not the one next to the module.
     let haste = |r: &str| project.is_some_and(|p| p.mocks.haste_mocks.iter().any(|(k, _)| k == r));
     let mine = |c: &MockCall| runner.is_empty() || c.api.runner == runner;
     let mut replaced: Vec<Replaced> = Vec::new();
     for c in scan.calls.iter().filter(|c| mine(c)) {
         let name = c.name();
-        // A helper's mock without a factory (a test's own are part of its framework
-        // inputs). The call loads nothing: the runner loads the manual mock, or the
-        // real module for an automock, when the module is first requested
-        // afterwards. For a first-party module that is a manual mock the tests
-        // load that request the module (`lazy_mocks`, below), or the module
-        // itself, which a test that requests it depends on anyway.
-        // `requireMock` loads at once, and a mock found by name or of a package
-        // is not tied to one module file: a dependency of the helper.
+        // A helper's mock without a factory (a test's own are part of its
+        // framework inputs). The call loads nothing: the runner loads
+        // the manual mock, or the real module for an automock, when the
+        // module is first requested afterwards. For a first-party
+        // module that is a manual mock the tests load that request the
+        // module (`lazy_mocks`, below), or the module itself, which a
+        // test that requests it depends on anyway. `requireMock` loads
+        // at once, and a mock found by name or of a package is not tied
+        // to one module file: a dependency of the helper.
         if !replaces
             && c.arg == MockArg::Bare
             && matches!(
@@ -445,10 +446,14 @@ pub fn mock_inputs(
                                     manual: Some(manual),
                                 });
                             } else if !replaces && !haste(r) {
-                                // In vitest the later call wins: a test's factory for the
-                                // module does not keep the manual mock out (in jest the
-                                // factory stays). The module is not cut for the tests
-                                // that load this file, so its edge to the mock is reached.
+                                // In vitest the later call wins: a test's
+                                // factory for the
+                                // module does not keep the manual mock out (in
+                                // jest the
+                                // factory stays). The module is not cut for the
+                                // tests
+                                // that load this file, so its edge to the mock
+                                // is reached.
                                 if runner != "jest" && !out.loaded_real.contains(&module) {
                                     out.loaded_real.push(module.clone());
                                 }
@@ -481,8 +486,9 @@ pub fn mock_inputs(
                 real(out, &name, r, c.line, false)
             }
             (Some(r), MockRole::Actual | MockRole::MockOf) => {
-                // In the factory of a mock of the same module (a partial mock): the
-                // factory runs when the module is requested.
+                // In the factory of a mock of the same module (a partial mock):
+                // the factory runs when the module is
+                // requested.
                 let in_own_factory = c.api.role == MockRole::Actual
                     && c.within.as_deref().is_some_and(|w| {
                         w == r
@@ -505,8 +511,9 @@ pub fn mock_inputs(
     for l in &scan.loose {
         let open = match &l.request {
             Some(r) if l.name != "deepUnmock" => {
-                // `x.mock('./m')` on a receiver that may be the runner's object: the manual
-                // mock next to the module, as for a call that is read.
+                // `x.mock('./m')` on a receiver that may be the runner's
+                // object: the manual mock next to the module,
+                // as for a call that is read.
                 if !replaces
                     && matches!(l.name.as_str(), "mock" | "doMock")
                     && !haste(r)
@@ -654,8 +661,8 @@ mod tests {
                 "{unknown}"
             );
         }
-        // A file of the repository that only wraps a hoisting transformer; one that
-        // compiles by itself; one that loads another file.
+        // A file of the repository that only wraps a hoisting transformer; one
+        // that compiles by itself; one that loads another file.
         let d = tempfile::tempdir().unwrap();
         std::fs::write(
             d.path().join("wrap.cjs"),
@@ -765,7 +772,8 @@ mod tests {
     #[test]
     fn a_helpers_mock_without_a_factory_loads_when_the_module_is_requested() {
         let d = project();
-        // `./n` has a manual mock, `./o` has none (an automock of the real module).
+        // `./n` has a manual mock, `./o` has none (an automock of the real
+        // module).
         let t = inputs(
             d.path(),
             "jest.mock('./n');\njest.doMock('./n');\njest.mock('./o');\nx.mock('./n');\n",
@@ -783,9 +791,9 @@ mod tests {
             .collect();
         assert_eq!(lazy, [("__mocks__/n.ts".to_owned(), "n.ts".to_owned())]);
         assert!(t.replaced.is_empty() && t.edges.is_empty() && t.entries.is_empty());
-        // The automock's source is loaded for real (no test's replacement of it holds),
-        // but not by the helper's own code; the call on an unknown receiver may be
-        // anything.
+        // The automock's source is loaded for real (no test's replacement of it
+        // holds), but not by the helper's own code; the call on an
+        // unknown receiver may be anything.
         assert_eq!(names(d.path(), t.loaded_real.clone()), ["o.ts", "n.ts"]);
         assert_eq!(names(d.path(), t.loaded_eager.clone()), ["n.ts"]);
         // What runs with the helper: `requireActual`, `requireMock`.
@@ -801,9 +809,9 @@ mod tests {
             ["m.ts", "o.ts", "n.ts"]
         );
         assert!(t.lazy_mocks.is_empty());
-        // A partial mock: the real module loads when the factory runs, at the first
-        // request for the module. In the factory of another module's mock: with the
-        // file.
+        // A partial mock: the real module loads when the factory runs, at the
+        // first request for the module. In the factory of another
+        // module's mock: with the file.
         let t = inputs(
             d.path(),
             "jest.mock('./m', () => ({ ...jest.requireActual('./m'), w: jest.requireActual('./o') \

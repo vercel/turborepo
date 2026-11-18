@@ -406,7 +406,8 @@ fn no_lock_records_clone_local_trust_that_a_committed_lock_never_inherits() {
     fs::write(f.owned.root().join("turbo.lock"), &lock).unwrap();
     assert!(trust.recorded().unwrap().unwrap().stale);
     assert!(trust.authorize(&locked_plan(&f)).unwrap().is_none());
-    // Setup from that lock records its digest instead, for the same environment.
+    // Setup from that lock records its digest instead, for the same
+    // environment.
     f.run(&empty, NO_LOCK).unwrap();
     assert_eq!(empty.hits(), 0);
     assert_eq!(current(&f).bin, installed.bin);

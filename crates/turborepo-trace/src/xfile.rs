@@ -371,9 +371,10 @@ impl GraphWorld<'_> {
         for e in self.g.out_edges(NodeId(source)) {
             let Some(to) = e.to else { continue };
             let (kind, flags) = (e.attr.kind(), e.attr.flags());
-            // A source file that reads the module's text cannot call into it. A task or
-            // another pseudo-file that takes it as an input may run a copy of it (a
-            // compiler's output), unless the edge says it only reads it.
+            // A source file that reads the module's text cannot call into it. A
+            // task or another pseudo-file that takes it as an input
+            // may run a copy of it (a compiler's output), unless
+            // the edge says it only reads it.
             if flags.intersects(RefFlags::TYPE_ONLY | RefFlags::DATA) || (js && reads_only(kind)) {
                 continue;
             }
@@ -403,8 +404,8 @@ impl GraphWorld<'_> {
     fn importers_from(&self, file: u32, sources: Vec<u32>) -> Vec<Importer> {
         let mut out: Vec<Importer> = Vec::new();
         for s in sources {
-            // The edges of one source are next to each other in `out`: a duplicate can only
-            // be among them.
+            // The edges of one source are next to each other in `out`: a
+            // duplicate can only be among them.
             let first = out.len();
             for &(to, at) in self.loads_of(s).iter() {
                 let imp = Importer { file: s, at };
@@ -424,8 +425,9 @@ impl GraphWorld<'_> {
 
     /// [`World::resolve`], computed.
     fn resolve_in(&self, file: u32, spec: &str) -> Vec<u32> {
-        // What one of the file's own references with that specifier resolves to (also
-        // through a test runner's alias: `<runner>:<source> <spec> -> <request>`).
+        // What one of the file's own references with that specifier resolves to
+        // (also through a test runner's alias: `<runner>:<source>
+        // <spec> -> <request>`).
         let aliased = |label: &str| {
             let (left, _) = label.split_once(" -> ")?;
             let (head, s) = left.rsplit_once(' ')?;
@@ -540,10 +542,10 @@ impl World for GraphWorld<'_> {
     }
 
     fn expect_importers(&self, files: &[u32]) {
-        // With the reverse adjacency at hand each answer is a lookup. Without it, one
-        // pass over the edges finds the sources of all these files, which is
-        // much less than reversing every edge (a replayed run asks about a few
-        // hundred modules).
+        // With the reverse adjacency at hand each answer is a lookup. Without
+        // it, one pass over the edges finds the sources of all these
+        // files, which is much less than reversing every edge (a
+        // replayed run asks about a few hundred modules).
         if self.rev.get().is_some() {
             return;
         }
@@ -574,9 +576,9 @@ impl World for GraphWorld<'_> {
                 }
             }
         }
-        // The edges of every source, read once each and on several threads (most of the
-        // work of a replayed run: thousands of test files import the helpers asked
-        // about).
+        // The edges of every source, read once each and on several threads
+        // (most of the work of a replayed run: thousands of test files
+        // import the helpers asked about).
         let mut todo: Vec<u32> = sources.values().flatten().copied().collect();
         todo.sort_unstable();
         todo.dedup();
@@ -635,8 +637,8 @@ impl World for GraphWorld<'_> {
 
     fn facts_source(&self, file: u32) -> Option<u128> {
         let n = NodeId(file);
-        // A file that is no source code has no facts whatever it contains; that is
-        // cheap to say again ([`World::facts_digest`]).
+        // A file that is no source code has no facts whatever it contains; that
+        // is cheap to say again ([`World::facts_digest`]).
         if !self.is_js(n) || self.transient.lock().is_ok_and(|t| t.contains(&file)) {
             return None;
         }
@@ -659,8 +661,9 @@ impl World for GraphWorld<'_> {
                     .unwrap_or_else(|| trace::facts_digest(Some(f))),
             };
         }
-        // Not loaded: a recorded run is being replayed, and this file is not the one it
-        // saw. Its facts come from its text; the facts cache is not read for it.
+        // Not loaded: a recorded run is being replayed, and this file is not
+        // the one it saw. Its facts come from its text; the facts cache
+        // is not read for it.
         trace::facts_digest(self.extract(n).flatten().as_ref())
     }
 
@@ -872,8 +875,8 @@ fn bound_key(mode: &str, earlier: &Patch) -> u128 {
         edges = edges.wrapping_add(xxh3_128(&b));
     }
     let mut h = xxhash_rust::xxh3::Xxh3::new();
-    // The layout of what is kept with the patch (the statistics, the closed tables,
-    // the consulted files).
+    // The layout of what is kept with the patch (the statistics, the closed
+    // tables, the consulted files).
     h.update(&[STATS as u8, 2]);
     h.update(&[codec::VERSION]);
     h.update(mode.as_bytes());
@@ -1069,8 +1072,9 @@ pub(crate) fn patch(g: &Graph, earlier: &Patch, stats: bool) -> Option<Patch> {
         let (patch, meta) = run();
         (patch, meta, Kept::Computed)
     } else {
-        // Stored for this graph; or stored for the graph before an edit that changed no
-        // file the run consulted, which makes it this graph's; or bound (replayed) now.
+        // Stored for this graph; or stored for the graph before an edit that
+        // changed no file the run consulted, which makes it this
+        // graph's; or bound (replayed) now.
         g.carried_patch("bound", key, carries_over, run)
     };
     if kept == Kept::Carried {
@@ -1132,8 +1136,8 @@ fn compute(g: &Graph, derived: HashMap<u32, Vec<u32>>, mode: &str) -> Bound {
         stats: [0; STATS],
         consulted: Some(Vec::new()),
     };
-    // The site files and the tests' working directories each take a pass over the
-    // graph: both at the same time.
+    // The site files and the tests' working directories each take a pass over
+    // the graph: both at the same time.
     let (roots, cwds) = std::thread::scope(|s| {
         let cwds = s.spawn(|| g.test_cwds());
         (site_files(g, select), cwds.join())
@@ -1158,9 +1162,9 @@ fn compute(g: &Graph, derived: HashMap<u32, Vec<u32>>, mode: &str) -> Bound {
         derived,
         memo: Memo::default(),
     };
-    // The run recorded when a graph in this directory was last bound: when it would
-    // ask the same questions of this graph and get the same answers, its result
-    // is this graph's ([`trace`]), and nothing is bound.
+    // The run recorded when a graph in this directory was last bound: when it
+    // would ask the same questions of this graph and get the same answers,
+    // its result is this graph's ([`trace`]), and nothing is bound.
     let kept = TraceFile::of(g, mode);
     let mut replayed = None;
     // The files the run saw, when it was recorded.
@@ -1255,13 +1259,14 @@ fn compute(g: &Graph, derived: HashMap<u32, Vec<u32>>, mode: &str) -> Bound {
             specs: t.specs.clone(),
         })
         .collect();
-    // Debug aid: `TURBO_TRACE_DEBUG_BIND_DEBUG=<part of a path>` prints the facts
-    // of the matching site files and what was bound for them.
+    // Debug aid: `TURBO_TRACE_DEBUG_BIND_DEBUG=<part of a path>` prints the
+    // facts of the matching site files and what was bound for them.
     if let Ok(part) = turborepo_trace_core::debug::var("BIND_DEBUG")
         && !part.is_empty()
     {
         use turborepo_trace_lang_js::xfile::show;
-        // `sinks`: every bound site with what was bound for it, grouped by supplier.
+        // `sinks`: every bound site with what was bound for it, grouped by
+        // supplier.
         if part == "sinks" {
             for &r in &roots {
                 let Some(f) = world.facts(r) else { continue };
@@ -1318,8 +1323,8 @@ fn compute(g: &Graph, derived: HashMap<u32, Vec<u32>>, mode: &str) -> Bound {
                                 .or_default() += 1;
                         }
                     }
-                    // Membership hubs (tasks that take the file as an input) are listed
-                    // as one line.
+                    // Membership hubs (tasks that take the file as an input)
+                    // are listed as one line.
                     let hubs = groups
                         .keys()
                         .filter(|k| k.0.starts_with("members:"))
@@ -1388,9 +1393,9 @@ fn compute(g: &Graph, derived: HashMap<u32, Vec<u32>>, mode: &str) -> Bound {
                 eprintln!("closed table {:?}", t.at);
             }
         }
-        // `TURBO_TRACE_DEBUG_BIND_FACTS=<part of a path>`: the facts of every file the
-        // binder consulted whose path matches (suppliers, modules that were
-        // followed).
+        // `TURBO_TRACE_DEBUG_BIND_FACTS=<part of a path>`: the facts of every
+        // file the binder consulted whose path matches (suppliers,
+        // modules that were followed).
         if let Ok(which) = turborepo_trace_core::debug::var("BIND_FACTS")
             && !which.is_empty()
         {

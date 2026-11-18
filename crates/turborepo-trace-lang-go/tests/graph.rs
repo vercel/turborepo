@@ -58,8 +58,8 @@ fn records_probes_memberships_and_identities() {
     }]);
     let fa = &out[0];
 
-    // The import of a first-party package: its directory is a membership, and the
-    // module lookup probed for go.mod files below the module root.
+    // The import of a first-party package: its directory is a membership, and
+    // the module lookup probed for go.mod files below the module root.
     let util = observed(fa, "example.com/basic/internal/util");
     assert!(
         util.listings
@@ -67,13 +67,13 @@ fn records_probes_memberships_and_identities() {
         "{util:?}"
     );
     assert!(util.reads.contains(&root.join("go.mod")), "{util:?}");
-    // Files excluded by a build constraint are read inputs (their constraint may
-    // change).
+    // Files excluded by a build constraint are read inputs (their constraint
+    // may change).
     assert!(util.reads.contains(&root.join("internal/util/tagged.go")));
     assert!(util.reads.contains(&root.join("internal/util/ignored.go")));
 
-    // A module cache package: probes for the vendor directory (not vendored) and
-    // the package's directory membership.
+    // A module cache package: probes for the vendor directory (not vendored)
+    // and the package's directory membership.
     let dep = observed(fa, "github.com/Upper/dep/sub");
     assert!(
         dep.missing.contains(&root.join("vendor/modules.txt")),
@@ -97,8 +97,8 @@ fn records_probes_memberships_and_identities() {
             .contains(&(root.clone(), "missing/*.txt".to_string()))
     );
 
-    // The same observations are reported again by a second file using the memoized
-    // steps.
+    // The same observations are reported again by a second file using the
+    // memoized steps.
     let out2 = t.analyze(vec![AnalyzeInput {
         path: root.join("version.go"),
         cached: None,

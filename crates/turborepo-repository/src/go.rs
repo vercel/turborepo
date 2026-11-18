@@ -657,8 +657,9 @@ fn module_package_inputs(
                         && std::fs::read_to_string(module_dir.join_component(value).as_std_path())
                             .map_or(true, |source| source.contains("//go:embed"))
                     {
-                        // Task-level build tags can activate embeds that go list
-                        // did not resolve. Do not guess their potential matches.
+                        // Task-level build tags can activate embeds that go
+                        // list did not resolve. Do not
+                        // guess their potential matches.
                         root_source_inputs = None;
                     }
                     let value = value.strip_prefix("all:").unwrap_or(value);
@@ -667,8 +668,9 @@ fn module_package_inputs(
                         && value.contains(['*', '?', '[', '\\'])
                     {
                         // Patterns may match a binary that does not exist yet.
-                        // Conservatively preserve both names instead of emulating
-                        // Go's pattern language or trusting only current matches.
+                        // Conservatively preserve both names instead of
+                        // emulating Go's pattern
+                        // language or trusting only current matches.
                         root_source_inputs = None;
                     } else if let Some(inputs) = &mut root_source_inputs {
                         inputs.insert(value.to_string());
@@ -714,7 +716,8 @@ fn module_package_inputs(
 fn tracked_source_files(repo_root: &AbsoluteSystemPath) -> Option<HashSet<AbsoluteSystemPathBuf>> {
     // One read-only index query for the entire workspace, never one per module.
     // Index membership is stable across missing, restored, or mutated binaries.
-    // If Git/index knowledge is unavailable, retain all potential source inputs.
+    // If Git/index knowledge is unavailable, retain all potential source
+    // inputs.
     let output = Command::new("git")
         .args(["ls-files", "--cached", "-z", "--"])
         .current_dir(repo_root.as_std_path())
@@ -1546,9 +1549,10 @@ pub fn native_tasks_for_module(module: &GoModule) -> Vec<crate::native_tasks::Na
 pub fn native_tasks_for_workspace() -> Vec<crate::native_tasks::NativeTask> {
     use crate::native_tasks::NativeTask;
 
-    // Verification runs per module so filtered and unfiltered invocations select
-    // the same tasks and share cache entries. Formatting is also module-scoped:
-    // go fmt does not support cross-module workspace patterns.
+    // Verification runs per module so filtered and unfiltered invocations
+    // select the same tasks and share cache entries. Formatting is also
+    // module-scoped: go fmt does not support cross-module workspace
+    // patterns.
     vec![NativeTask::contract_task(
         "build",
         NativeTaskContract::new(
@@ -2684,8 +2688,8 @@ mod tests {
             .collect();
         let relationships =
             relationships_from_mod_graph(graph, &module_paths, &HashMap::new()).unwrap();
-        // Go graph lookup keys stay full paths; only Turborepo relationship targets
-        // shorten.
+        // Go graph lookup keys stay full paths; only Turborepo relationship
+        // targets shorten.
         assert_eq!(
             relationships["example.com/team/api/v2"][0].target(),
             &RelationshipTarget::Internal("lib/v10".to_string())
@@ -3500,7 +3504,8 @@ mod tests {
                     .join_component("source.go")
                     .create_with_contents("package main\n")
                     .unwrap();
-                // dist is ordinary source input now, not an inferred output directory.
+                // dist is ordinary source input now, not an inferred output
+                // directory.
                 module_dir.join_component("dist").create_dir_all().unwrap();
                 module_dir
                     .join_components(&["dist", "data.txt"])
@@ -5322,7 +5327,8 @@ mod tests {
             assert!(scopes.contains(&PackageName::from(name)), "{scopes:?}");
         }
 
-        // Co-located scopes keep distinct identities and one physical directory.
+        // Co-located scopes keep distinct identities and one physical
+        // directory.
         let directory = |name: &str| {
             graph
                 .package_task_context(&PackageName::from(name))

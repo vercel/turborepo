@@ -152,9 +152,9 @@ const B_PLAIN: &str = "packages/b/test/plain.test.ts";
 fn an_alias_entry_selects_the_tests_that_load_an_importer_of_its_request() {
     let d = repo();
     let r = d.path();
-    // One more entry in an alias table: `server-only` now loads a stub. The test
-    // that loads the module importing it can tell; the other test of the
-    // package cannot.
+    // One more entry in an alias table: `server-only` now loads a stub. The
+    // test that loads the module importing it can tell; the other test of
+    // the package cannot.
     write(
         r,
         "packages/a/vitest.config.ts",
@@ -185,8 +185,8 @@ fn an_alias_entry_selects_the_tests_that_load_an_importer_of_its_request() {
 fn a_first_alias_block_is_an_alias_entry() {
     let d = repo();
     let r = d.path();
-    // The config had no `resolve` at all: the edit adds the block and the import of
-    // `node:url` its value needs.
+    // The config had no `resolve` at all: the edit adds the block and the
+    // import of `node:url` its value needs.
     write(r, "packages/b/vitest.config.ts", STUB_BLOCK);
     assert_eq!(since(r, &OFF), [B_PLAIN, B_SERVER]);
     assert_eq!(since(r, &[]), [B_SERVER]);

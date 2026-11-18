@@ -202,8 +202,9 @@ fn load_into(file: &Path, p: &mut TsProject, depth: usize) {
         if p.build_info.is_none() {
             p.build_info = path_opt("tsBuildInfoFile");
         }
-        // Inherited through `extends` like every compiler option (a shared base with
-        // `"noEmit": true` makes every app that extends it a type-check-only project).
+        // Inherited through `extends` like every compiler option (a shared base
+        // with `"noEmit": true` makes every app that extends it a
+        // type-check-only project).
         if p.no_emit.is_none()
             && let Some(ConfigVal::Bool(b)) = co.field("noEmit")
         {
@@ -217,8 +218,8 @@ fn load_into(file: &Path, p: &mut TsProject, depth: usize) {
     }
     if let Some(ext) = v.field("extends") {
         let (bases, _) = strings(&ext);
-        // `"extends": [a, b]`: later entries override earlier ones, so the last is read
-        // first (values already set win).
+        // `"extends": [a, b]`: later entries override earlier ones, so the last
+        // is read first (values already set win).
         for b in bases.into_iter().rev() {
             if !(b.starts_with('.') || b.starts_with('/')) {
                 p.packages.push(package_name(&b).to_string());
@@ -370,8 +371,9 @@ fn ts_unit(file: &Path, exact_emit: bool) -> TsUnit {
     if !exact_emit || !p.no_emit.unwrap_or(false) {
         let declaration_only = exact_emit && p.emit_declaration_only.unwrap_or(false);
         if !declaration_only {
-            // The project emits JavaScript: whoever imports the output runs copies of these
-            // sources, so what they load at run time (their uncertainty) is the importer's.
+            // The project emits JavaScript: whoever imports the output runs
+            // copies of these sources, so what they load at run
+            // time (their uncertainty) is the importer's.
             // A type-check or declaration-only project only reads them.
             u.emits_js = true;
         }
@@ -412,8 +414,9 @@ impl TsUnit {
         for pr in &self.problems {
             out.uncertain(UncertaintyKind::ParseIncomplete, pr.clone());
         }
-        // The files the project names (`files`, an `include` entry such as `build.ts`):
-        // compiled like its other sources, or only read (see `emits_js`).
+        // The files the project names (`files`, an `include` entry such as
+        // `build.ts`): compiled like its other sources, or only read
+        // (see `emits_js`).
         if self.emits_js {
             out.inputs.extend(self.inputs.iter().cloned());
         } else {
@@ -441,7 +444,8 @@ fn collect_ts_projects(
         return;
     }
     if seen.len() >= MAX_TS_PROJECTS {
-        // Dropping projects silently would drop their inputs: say so instead (once).
+        // Dropping projects silently would drop their inputs: say so instead
+        // (once).
         if seen.len() == MAX_TS_PROJECTS {
             seen.push(PathBuf::new());
             out.uncertain(
@@ -490,8 +494,9 @@ fn add_ts_projects(
     for f in files {
         collect_ts_projects(f, references, exact_emit, out, seen, &mut units);
     }
-    // A project is complete when it has no problem and every project it references
-    // was read and is complete (to a fixed point: references may form cycles).
+    // A project is complete when it has no problem and every project it
+    // references was read and is complete (to a fixed point: references may
+    // form cycles).
     let index: std::collections::HashMap<&Path, usize> = units
         .iter()
         .enumerate()
@@ -597,9 +602,10 @@ impl Recognizer for Tsc {
         let (memberships_before, inputs_before) = (out.memberships.len(), out.inputs.len());
         let pos = positionals(&args);
         let mut seen = Vec::new();
-        // Emit options on the command line override the configs (`tsc` option names are
-        // case-insensitive): the outputs are then not read from the configs exactly,
-        // and not a function of the project alone.
+        // Emit options on the command line override the configs (`tsc` option
+        // names are case-insensitive): the outputs are then not read
+        // from the configs exactly, and not a function of the project
+        // alone.
         let exact_emit = !cmd.args().any(|a| {
             let a = a.split('=').next().unwrap_or(a).to_ascii_lowercase();
             matches!(
@@ -622,8 +628,8 @@ impl Recognizer for Tsc {
             } else {
                 pos.iter().map(|p| tsconfig_path(cmd.path(p))).collect()
             };
-            // The compiler is part of what a project's outputs depend on: one part kind per
-            // compiler.
+            // The compiler is part of what a project's outputs depend on: one
+            // part kind per compiler.
             let kind = if prog == "tsc" {
                 TS_PROJECT.to_string()
             } else {
@@ -667,8 +673,9 @@ impl Recognizer for Tsc {
         }
         if flag(&args, &["--noEmit"]) {
             out.outputs.truncate(outputs_before);
-            // A type-check, whatever the configs say about emit: the projects' sources are
-            // only read (the compiler variants that run transformer plugins aside).
+            // A type-check, whatever the configs say about emit: the projects'
+            // sources are only read (the compiler variants that run
+            // transformer plugins aside).
             if matches!(prog, "tsc" | "tsgo" | "vue-tsc") {
                 for m in &mut out.memberships[memberships_before..] {
                     m.data = true;
@@ -1781,7 +1788,8 @@ impl Recognizer for Lint {
         }
         out.input(cmd.cwd.join("package.json"));
         let mut pos = positionals(&args);
-        // `biome check|lint|format|ci`, `markdownlint-cli2 …`, `dprint check|fmt`.
+        // `biome check|lint|format|ci`, `markdownlint-cli2 …`, `dprint
+        // check|fmt`.
         if matches!(prog, "biome" | "dprint")
             && let Some(first) = pos.first()
             && !first.contains('.')
@@ -1797,8 +1805,9 @@ impl Recognizer for Lint {
             out.membership(cmd.cwd.clone(), "**", format!("{prog} default files"));
         }
         if lint_writes(prog, cmd) {
-            // Formatters and `--fix` rewrite the files they check in place: recorded, but
-            // never a producer (`OutputKind::InPlace`).
+            // Formatters and `--fix` rewrite the files they check in place:
+            // recorded, but never a producer
+            // (`OutputKind::InPlace`).
             let mut targets: Vec<&str> = pos
                 .iter()
                 .copied()

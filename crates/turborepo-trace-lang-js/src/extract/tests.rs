@@ -1052,7 +1052,8 @@ fn require_resolve_with_options() {
             "require eve/package.json",
         ]
     );
-    // One alternative per entry; an entry in the file's own directory is the file.
+    // One alternative per entry; an entry in the file's own directory is the
+    // file.
     assert_eq!(
         refs("require.resolve('dep', { paths: [__dirname, path.join(__dirname, '../other')] });"),
         [
@@ -1098,7 +1099,8 @@ fn require_resolve_with_options() {
         let out = refs(&format!(
             "module.exports = (dir, opts, paths, rest) => {call};"
         ));
-        // The record shows the call (and, for a parameter, where the value comes from).
+        // The record shows the call (and, for a parameter, where the value
+        // comes from).
         let record = format!(
             "require <unknown> {{computed_specifier: {}",
             call.trim_end_matches(" || 0")
@@ -1324,8 +1326,8 @@ fn computed_require_of_a_json_file_is_a_read() {
     ] {
         assert_eq!(k(src), load, "{src}");
     }
-    // What can be said is a `require` reference as before: a literal, an evaluated
-    // literal, a known directory prefix (a membership).
+    // What can be said is a `require` reference as before: a literal, an
+    // evaluated literal, a known directory prefix (a membership).
     assert_eq!(k("require('./a.json')"), ["require ./a.json"]);
     assert_eq!(
         k("import { join } from 'node:path'; require(join(__dirname, 'data', 'a.json'))"),
@@ -1346,8 +1348,8 @@ fn computed_require_of_a_json_file_is_a_read() {
            '/a.json') }"),
         read
     );
-    // `require.resolve` finds a file and reads nothing: what is done with the path
-    // it returns is not known here.
+    // `require.resolve` finds a file and reads nothing: what is done with the
+    // path it returns is not known here.
     assert_eq!(
         k("export function dir(name: string) { return require.resolve(`${name}/package.json`) }"),
         load
@@ -1568,7 +1570,8 @@ readFileSync(fileURLToPath(`${import.meta.url}/../${x ? 'a.txt' : 'b.txt'}`))"
 
 #[test]
 fn deep_pass_assets() {
-    // Assigned, returned, passed to an untracked call, read through a global `fs`.
+    // Assigned, returned, passed to an untracked call, read through a global
+    // `fs`.
     let src = "
 const path = require('path');
 let p = path.join(__dirname, '.', 'a.txt');
@@ -1593,8 +1596,8 @@ x(cond ? path.join(__dirname, 'e.txt') : path.join(__dirname, 'f.txt'));
             "asset f.txt",
         ]
     );
-    // Never: the own directory, an ancestor, the file itself, a bare wildcard, or
-    // an expression the main pass already resolved.
+    // Never: the own directory, an ancestor, the file itself, a bare wildcard,
+    // or an expression the main pass already resolved.
     let src = "
 const path = require('path'); const fs = require('fs');
 console.log(__dirname, path.join(__dirname, '..'), __filename, path.join(__dirname, x));
@@ -1655,16 +1658,17 @@ fn deep_pass_require_wrappers() {
         "const reaction = (a, name) => { return require(name); }; reaction(1, './dep');",
         "const reaction = name => require(name); reaction('./dep');",
     ] {
-        // Every call of the wrapper is in the file: the value-flow pass binds its
-        // parameter.
+        // Every call of the wrapper is in the file: the value-flow pass binds
+        // its parameter.
         assert_eq!(fj(src), ["require ./dep"], "{src}");
     }
     assert_eq!(
         fj("function f (a) { const b = a + 1; return require(b); } f('./x');"),
         ["require ./x1"]
     );
-    // An exported wrapper can be called from elsewhere: the call in the file is a
-    // reference, the site itself stays open (and the wrapper rule still applies).
+    // An exported wrapper can be called from elsewhere: the call in the file is
+    // a reference, the site itself stays open (and the wrapper rule still
+    // applies).
     assert_eq!(
         fj("function load (name) { return require(name); } exports.load = load; load('./dep');"),
         [
@@ -1813,8 +1817,8 @@ fn module_strings_in_registry_positions() {
     ] {
         assert_eq!(full(src, Dialect::TS), none(), "{src}");
     }
-    // Not module paths: absolute paths, URLs, package specifiers, one segment, no
-    // letter.
+    // Not module paths: absolute paths, URLs, package specifiers, one segment,
+    // no letter.
     for src in [
         "const t = { a: '/v1/teams', b: 'https://x.dev/y', c: '@scope/pkg/x', d: 'single' };",
         "const t = ['a//b', 'a/b/', '1/2', 'a b/c', 'a/./b', '../..'];",

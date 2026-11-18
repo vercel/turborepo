@@ -384,7 +384,8 @@ fn deleted_shims_and_declaration_drift_never_download_and_setup_recovers() {
         "{error}"
     );
     assert_eq!(u.hits(), hits); // Run never downloads.
-    // The recommended setup also works in CI: frozen setup repairs from the lock.
+    // The recommended setup also works in CI: frozen setup repairs from the
+    // lock.
     f.run(&u, FROZEN).unwrap();
     assert!(select(&f).unwrap().is_some());
     assert_eq!(fs::read(f.owned.root().join("turbo.lock")).unwrap(), lock);

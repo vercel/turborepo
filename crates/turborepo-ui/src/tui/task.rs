@@ -144,7 +144,8 @@ impl TasksByStatus {
             .iter()
             .partition(|task| matches!(task.result(), TaskResult::Failure));
 
-        // We return errors last as they most likely have information users want to see
+        // We return errors last as they most likely have information users want
+        // to see
         success
             .into_iter()
             .map(|task| task.name())
@@ -172,8 +173,8 @@ impl TasksByStatus {
                 .map(|task| task.restart())
                 .chain(restarted_finished.into_iter().map(|task| task.restart())),
         );
-        // There is a chance that watch might attempt to restart a task that did not
-        // exist before.
+        // There is a chance that watch might attempt to restart a task that did
+        // not exist before.
         for task in &self.planned {
             tasks_to_restart.remove(task.name());
         }

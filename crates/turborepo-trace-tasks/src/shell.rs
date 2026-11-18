@@ -486,7 +486,8 @@ impl Lexer {
         if !(t.starts_with("cd ") || t.starts_with("dirname ")) || self.depth >= MAX_SUBST {
             return None;
         }
-        // A start directory no real path is below: a result below it is relative.
+        // A start directory no real path is below: a result below it is
+        // relative.
         const UNKNOWN_ROOT: &str = "/\u{1}unknown-cwd";
         const UNKNOWN: &str = "/\u{1}unknown-cwd/1/2/3/4/5/6/7/8/9/10/11/12/13/14/15/16";
         let mut p = Parser {
@@ -539,9 +540,9 @@ impl Lexer {
         let mut w = Word::default();
         let mut bare = true;
         let mut assign: Option<String> = None;
-        // The assignment does not give the variable a value this parser knows: an
-        // append (`NAME+=x`), an array element (`NAME[i]=x`) or an array
-        // (`NAME=(…)`).
+        // The assignment does not give the variable a value this parser knows:
+        // an append (`NAME+=x`), an array element (`NAME[i]=x`) or an
+        // array (`NAME=(…)`).
         let mut opaque = false;
         // Assignment prefix: NAME=, NAME+= or NAME[index]= with NAME unquoted.
         {
@@ -584,8 +585,8 @@ impl Lexer {
             }
         }
         if assign.is_some() && self.peek() == Some('(') {
-            // `NAME=( … )`: an array. Its elements are words, not commands; the parser
-            // does not track array values.
+            // `NAME=( … )`: an array. Its elements are words, not commands; the
+            // parser does not track array values.
             let a = self.i;
             self.i += 1;
             self.skip_array();
@@ -643,7 +644,8 @@ impl Lexer {
         let first = self.i;
         while let Some(c) = self.peek() {
             if Self::is_word_end(c) {
-                // `${…}` / `$(…)` are consumed by `dollar`, so a terminator here ends the word.
+                // `${…}` / `$(…)` are consumed by `dollar`, so a terminator
+                // here ends the word.
                 break;
             }
             match c {
@@ -910,8 +912,8 @@ impl Parser {
         // Words to skip until the next separator (`for x in …`).
         let mut skip_to_sep = false;
         let mut in_case = false;
-        // Inside `[[ … ]]`: `&&`, `||`, `<`, `>` and parentheses are operators of the
-        // test, not of the shell, so its words stay one command.
+        // Inside `[[ … ]]`: `&&`, `||`, `<`, `>` and parentheses are operators
+        // of the test, not of the shell, so its words stay one command.
         let mut in_test = false;
         let mut after_op = false;
         loop {
@@ -980,8 +982,9 @@ impl Parser {
                     pending_redir = Some(op);
                 }
                 Tok::ProcSubst(p) => {
-                    // `cmd <(other)`, `done < <(other)`: `other` runs, and the word is
-                    // the name of a pipe (never a file of the repository).
+                    // `cmd <(other)`, `done < <(other)`: `other` runs, and the
+                    // word is the name of a pipe (never a
+                    // file of the repository).
                     start.get_or_insert(p);
                     let redirected = pending_redir.take().is_some();
                     if depth >= MAX_NEST {
@@ -1028,15 +1031,17 @@ impl Parser {
                     if skip_to_sep {
                         continue;
                     }
-                    // `"${NAME[@]}"`: the words of the array, when it was assigned as a
-                    // literal (`cmd=(tool --flag); "${cmd[@]}" file`).
+                    // `"${NAME[@]}"`: the words of the array, when it was
+                    // assigned as a literal (`cmd=(tool
+                    // --flag); "${cmd[@]}" file`).
                     if assign.is_none()
                         && let Some(mut alts) = self.array_expansion(&word)
                         && (alts.len() == 1 || cur.argv.is_empty())
                         && let Some(last) = alts.pop()
                     {
-                        // An array given several literals, expanded as the command: the
-                        // last one takes the arguments that follow, the others run too.
+                        // An array given several literals, expanded as the
+                        // command: the last one takes
+                        // the arguments that follow, the others run too.
                         for argv in alts {
                             let text = argv
                                 .iter()
@@ -1084,7 +1089,8 @@ impl Parser {
                             _ => {}
                         }
                     }
-                    // `NAME=value` prefixes; the value may be quoted (`NODE_OPTIONS='--x y' tsc`).
+                    // `NAME=value` prefixes; the value may be quoted
+                    // (`NODE_OPTIONS='--x y' tsc`).
                     if at_cmd_start && let Some((name, val)) = assign {
                         start.get_or_insert(s);
                         end = e;
@@ -1337,7 +1343,8 @@ mod tests {
             ["gotestsum", "--format", "testdox", "--", "$1", "./pkg"]
         );
         assert!(c.argv[4].dynamic);
-        // An append may be conditional: as an argument the array is then not known.
+        // An append may be conditional: as an argument the array is then not
+        // known.
         let r = p("args=(-t x); args+=(--build-arg \"A=1\")\ndocker build \"${args[@]}\" .");
         assert_eq!(argv(&r.commands[0]), ["docker", "build", "${args[@]}", "."]);
         let r = p("args=(-t x)\ndocker build \"${args[@]}\" .");
@@ -1355,8 +1362,8 @@ mod tests {
                 vec!["pnpm", "dlx", "oxfmt@$v", "--write", "a.yaml"]
             ]
         );
-        // Not known: an element assignment, an append to an array that was never
-        // assigned.
+        // Not known: an element assignment, an append to an array that was
+        // never assigned.
         let r = p("a=(x y); a[0]=z; b+=(q)\nrun \"${a[@]}\" \"${b[@]}\"");
         let c = &r.commands[0];
         assert_eq!(argv(c), ["run", "${a[@]}", "${b[@]}"]);
@@ -1434,8 +1441,9 @@ mod tests {
             "A=$(cd -- \"$HERE/../..\" >/dev/null 2>&1; pwd -P); B=$(dirname \"$HERE\"); x $A $B",
         );
         assert_eq!(argv(&r.commands[0]), ["x", "/r", "/r/pkg"]);
-        // Not evaluated: a relative directory (the substitution's working directory is
-        // not known here), an unknown one, and any other command.
+        // Not evaluated: a relative directory (the substitution's working
+        // directory is not known here), an unknown one, and any other
+        // command.
         for s in [
             "x $(cd .. && pwd)",
             "x $(cd \"$NOPE/..\" && pwd)",
@@ -1509,8 +1517,8 @@ mod tests {
 
     #[test]
     fn unicode_and_control_whitespace_terminates() {
-        // Each used to loop forever: `is_word_end` stopped at them but `skip_blank`
-        // didn't skip them.
+        // Each used to loop forever: `is_word_end` stopped at them but
+        // `skip_blank` didn't skip them.
         for ws in ['\u{0b}', '\u{0c}', '\u{a0}', '\u{2028}', '\u{3000}'] {
             let src = format!("tsc{ws}-p{ws}tsconfig.json");
             let parsed = p(&src);

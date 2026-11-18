@@ -157,9 +157,9 @@ impl ResolvedConfigurationOptions for EnvVars {
         if remote_only.is_some_and(|t| t)
             && let Some(cache) = cache
         {
-            // If TURBO_REMOTE_ONLY and TURBO_CACHE result in the same behavior, remove
-            // REMOTE_ONLY to avoid deprecation warning or mixing of old/new
-            // cache flag error.
+            // If TURBO_REMOTE_ONLY and TURBO_CACHE result in the same behavior,
+            // remove REMOTE_ONLY to avoid deprecation warning or
+            // mixing of old/new cache flag error.
             if cache == CacheConfig::remote_only() {
                 remote_only = None;
             }
@@ -167,9 +167,10 @@ impl ResolvedConfigurationOptions for EnvVars {
         if remote_cache_read_only.is_some_and(|t| t)
             && let Some(cache) = cache
         {
-            // If TURBO_REMOTE_CACHE_READ_ONLY and TURBO_CACHE result in the same behavior,
-            // remove REMOTE_CACHE_READ_ONLY to avoid deprecation warning or
-            // mixing of old/new cache flag error.
+            // If TURBO_REMOTE_CACHE_READ_ONLY and TURBO_CACHE result in the
+            // same behavior, remove REMOTE_CACHE_READ_ONLY to avoid
+            // deprecation warning or mixing of old/new cache flag
+            // error.
             if cache == CacheConfig::remote_read_only() {
                 remote_cache_read_only = None;
             }
@@ -279,7 +280,8 @@ impl ResolvedConfigurationOptions for EnvVars {
 
         let experimental_otel = ExperimentalOtelOptions::from_env_map(&self.output_map)?;
 
-        // TURBO_LOG_FILE: "1"/"true" → default location, path string → custom path
+        // TURBO_LOG_FILE: "1"/"true" → default location, path string → custom
+        // path
         let log_file = self
             .output_map
             .get("structured_log_file")

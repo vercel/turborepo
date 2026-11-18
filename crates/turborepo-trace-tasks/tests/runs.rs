@@ -114,8 +114,8 @@ fn jobs_run_what_their_steps_start() {
         runs(&set, &root, "gha:.github/workflows/nightly.yml#smoke"),
         ["unknown"]
     );
-    // A script that calls `turbo run build`, and a computed task name: no evidence
-    // of a test launch.
+    // A script that calls `turbo run build`, and a computed task name: no
+    // evidence of a test launch.
     assert_eq!(
         runs(&set, &root, "gha:.github/workflows/scoring.yml#score"),
         ["computed"]
@@ -136,8 +136,9 @@ fn definition(set: &TaskSet, root: &Path, id: &str) -> Vec<String> {
 #[test]
 fn definition_files_are_what_a_command_is_not_what_it_reads() {
     let (root, set) = set();
-    // The script the step runs; not the application module or the helper it imports
-    // (the helper counts at query time, inside the script's directory).
+    // The script the step runs; not the application module or the helper it
+    // imports (the helper counts at query time, inside the script's
+    // directory).
     assert_eq!(
         definition(&set, &root, "gha:.github/workflows/scoring.yml#score"),
         [".nvmrc", "scripts/scoring/index.mjs"]
@@ -179,7 +180,8 @@ fn definitions_follow_local_actions() {
     );
     assert_eq!(files("metadata"), [".github/workflows/quality.yml"]);
 
-    // Editing the nested action changes the jobs that install, in every workflow.
+    // Editing the nested action changes the jobs that install, in every
+    // workflow.
     let nested = ".github/actions/setup-node/action.yml";
     let read_new = |p: &str| {
         let s = std::fs::read_to_string(root.join(p)).ok()?;

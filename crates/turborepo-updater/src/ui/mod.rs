@@ -9,7 +9,8 @@ pub fn message(text: &str) -> Result<(), UpdateNotifierError> {
     let size = Term::stdout().size_checked();
     let lines: Vec<&str> = text.split('\n').map(|line| line.trim()).collect();
 
-    // get the display width of each line so we can center it within the box later
+    // get the display width of each line so we can center it within the box
+    // later
     let lines_display_width = lines
         .iter()
         .map(|line| measure_text_width(line))

@@ -38,8 +38,8 @@ const SEPARATOR_CLASS_EXPRESSION: &str = main_separator_class_expression();
 const fn main_separator_class_expression() -> &'static str {
     use std::path::MAIN_SEPARATOR;
 
-    // TODO: This is based upon `regex_syntax::is_meta_character`, but that function
-    // is not       `const`. Perhaps that can be changed upstream.
+    // TODO: This is based upon `regex_syntax::is_meta_character`, but that
+    // function is not       `const`. Perhaps that can be changed upstream.
     const fn escape(x: char) -> &'static str {
         match x {
             '\\' | '.' | '+' | '*' | '?' | '(' | ')' | '|' | '[' | ']' | '{' | '}' | '^' | '$'
@@ -285,12 +285,14 @@ fn encode<'t, A, T>(
                         pattern.push_str(nsepexpr!("&&{0}"));
                     }
                     pattern.push(']');
-                    // Parse the class without compiling a complete `Regex`. The result may be
-                    // empty if separator subtraction removes every character in the class.
+                    // Parse the class without compiling a complete `Regex`. The
+                    // result may be empty if separator
+                    // subtraction removes every character in the class.
                     if class_matches_anything(&pattern) {
                         pattern.into()
                     } else {
-                        // If parsing fails or the class is empty, use `NEVER_EXPRESSION`, which
+                        // If parsing fails or the class is empty, use
+                        // `NEVER_EXPRESSION`, which
                         // matches nothing.
                         NEVER_EXPRESSION.into()
                     }

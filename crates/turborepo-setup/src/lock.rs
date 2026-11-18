@@ -270,8 +270,9 @@ impl Lock {
             {
                 return Err(Error::Invalid("expected exact release identity"));
             }
-            // Current builtins share npm exact identity. Other adapters own their
-            // normalization (Rust nightlies and Go prereleases are not npm ranges).
+            // Current builtins share npm exact identity. Other adapters own
+            // their normalization (Rust nightlies and Go
+            // prereleases are not npm ranges).
             if matches!(
                 tool.adapter.as_str(),
                 "node" | "npm" | "pnpm" | "yarn" | "bun"
@@ -333,7 +334,8 @@ impl Lock {
                             return Err(Error::Invalid("invalid artifact part name"));
                         }
                         validate_artifact(artifact)?;
-                        // Every other part keeps the SHA-256 its adapter verifies.
+                        // Every other part keeps the SHA-256 its adapter
+                        // verifies.
                         if artifact.sha512.is_some() && (tool.adapter != "pnpm" || part != "native")
                         {
                             return Err(Error::Invalid("only native pnpm parts may pin SHA-512"));

@@ -502,20 +502,21 @@ impl<'g, G: GraphView> Engine<'g, G> {
                 roots.entry(if r == "." { "" } else { r }).or_insert(p);
             }
         }
-        // What a load can target: a first-party file. A build task or a membership hub
-        // is a node of its package too, but no load brings it in; the walks
-        // still cross them (a file that imports what a task generates is
-        // affected through the task).
+        // What a load can target: a first-party file. A build task or a
+        // membership hub is a node of its package too, but no load
+        // brings it in; the walks still cross them (a file that imports
+        // what a task generates is affected through the task).
         let is_file =
             |n: NodeId| !g.is_external(n) && !g.lang(n).is_some_and(|l| l.starts_with("task"));
         let base = self.options().traversal;
         let runtime = base.without_flags(RefFlags::TYPE_ONLY);
         let empty = NodeSet::new(g.node_count());
         let rt = runtime_entries.unwrap_or(&empty);
-        // How an entry walks, as in the engine's passes: without type-only edges, with
-        // every edge, or as a build task (`crate::taskmode`: no byte reads, no
-        // listing-only links). What a change affects is taken with the wider
-        // filter for tasks.
+        // How an entry walks, as in the engine's passes: without type-only
+        // edges, with every edge, or as a build task
+        // (`crate::taskmode`: no byte reads, no listing-only links).
+        // What a change affects is taken with the wider filter for
+        // tasks.
         let mode_of = |n: NodeId| -> u8 {
             if crate::taskmode::is_task(g, n) {
                 2
@@ -537,7 +538,8 @@ impl<'g, G: GraphView> Engine<'g, G> {
             {
                 continue;
             }
-            // Entries of this mode that reach a bounded load and that nothing selected.
+            // Entries of this mode that reach a bounded load and that nothing
+            // selected.
             let (to_site, reached) = self.load_reach_up(&sites, walk.for_uncertainty());
             let candidates: Vec<NodeId> = reached
                 .iter()
@@ -600,7 +602,8 @@ impl<'g, G: GraphView> Engine<'g, G> {
             let rev = self.reverse();
             let unc = walk.for_uncertainty();
             let all_edges = unc.is_all();
-            // The packages that depend on an affected one, before any load fires: the rule.
+            // The packages that depend on an affected one, before any load
+            // fires: the rule.
             let affected: Vec<bool> = why.iter().map(Option::is_some).collect();
             let dependents = reach.dependents(&affected);
             loop {
@@ -718,8 +721,8 @@ impl<'g, G: GraphView> Engine<'g, G> {
                 } else if g.is_external(e) {
                     continue;
                 } else if !opts.loads_step {
-                    // The declared closure: the entry's package depends on an affected
-                    // package.
+                    // The declared closure: the entry's package depends on an
+                    // affected package.
                     if !dependents.get(p.0 as usize).copied().unwrap_or(false) {
                         continue;
                     }
@@ -738,8 +741,9 @@ impl<'g, G: GraphView> Engine<'g, G> {
                         .get(&chain(&to_fired, e)[0].0)
                         .is_some_and(|&q| closure[q as usize])
                 {
-                    // A load that fires for a package the entry's package depends on (a
-                    // helper's own declarations do not widen what the entry may load).
+                    // A load that fires for a package the entry's package
+                    // depends on (a helper's own
+                    // declarations do not widen what the entry may load).
                     stats.by_site += 1;
                     let witness = chain(&to_fired, e);
                     let q = fired_by.get(&witness[0].0).copied().unwrap_or(0);
@@ -905,7 +909,8 @@ impl<'g, G: GraphView> Engine<'g, G> {
             floor.insert(e);
         });
         report.entries = floor.len();
-        // The floor without the bound: these entries and the ones on the open floor.
+        // The floor without the bound: these entries and the ones on the open
+        // floor.
         let exempt = g.resolved_entries();
         let (mut open, mut per_entry): (Vec<NodeId>, Vec<NodeId>) = (Vec::new(), Vec::new());
         for &n in self.uncertain_nodes() {
@@ -988,8 +993,8 @@ impl<'g, G: GraphView> Engine<'g, G> {
                         )
                 })
                 .count();
-            // One step from where the loads are resolved: the loading files' packages
-            // first.
+            // One step from where the loads are resolved: the loading files'
+            // packages first.
             let mut pkgs: Vec<PackageId> = Vec::new();
             for f in self.loading_files(s, opts) {
                 let own = g.package(f);

@@ -154,8 +154,8 @@ fn segment_closures() {
             .route("page:app/[team]/settings/page.tsx")
             .unwrap(),
     );
-    // The sidebar slot renders its matching page, the modal slot its default; the
-    // intercepting photo modal is only on soft navigation.
+    // The sidebar slot renders its matching page, the modal slot its default;
+    // the intercepting photo modal is only on soft navigation.
     assert!(
         settings
             .files
@@ -356,11 +356,12 @@ fn fetch_sites() {
     // `getJson('/api/health')` through the derived wrapper.
     assert_eq!(stats.to_handler, 3, "{stats:?}");
     assert!(stats.external >= 2, "{stats:?}");
-    // Only `fetch(window.__ENDPOINT__)`: `fetch(endpoint)` forwards to the local
-    // `ping`, the SWR fetcher's `fetch(u)` to its caller, `getJson`'s
+    // Only `fetch(window.__ENDPOINT__)`: `fetch(endpoint)` forwards to the
+    // local `ping`, the SWR fetcher's `fetch(u)` to its caller, `getJson`'s
     // `fetch(url)` to `getJson`.
     assert_eq!(stats.unresolved, 1, "{stats:?}");
-    // ... and `postJson`'s and `getText`'s (return-type annotated) `fetch(url)`.
+    // ... and `postJson`'s and `getText`'s (return-type annotated)
+    // `fetch(url)`.
     assert_eq!(stats.forwarded, 5, "{stats:?}");
     assert!(
         resolved
@@ -542,8 +543,8 @@ const ALL: [&str; 8] = [
 fn select_route_content() {
     let s = setup();
     use ChangeKind::*;
-    // A component on the team settings page: the team spec, and the spec that may
-    // visit any route.
+    // A component on the team settings page: the team spec, and the spec that
+    // may visit any route.
     let r = run(&s, &[(Modified, "components/members.tsx")], |_| {});
     assert_eq!(
         names(&r),
@@ -592,9 +593,9 @@ fn select_handlers_via_fetch() {
         ),
         "{team:?}"
     );
-    // A handler nothing references statically: only specs reaching unresolved fetch
-    // sites. (route.spec reaches the settings page through `waitForURL`,
-    // dynamic.spec may visit any route.)
+    // A handler nothing references statically: only specs reaching unresolved
+    // fetch sites. (route.spec reaches the settings page through
+    // `waitForURL`, dynamic.spec may visit any route.)
     let r = run(&s, &[(Modified, "pages/api/hello.ts")], |_| {});
     assert_eq!(
         names(&r),
@@ -633,10 +634,10 @@ fn select_globals() {
 fn select_route_table_changes() {
     let s = setup();
     use ChangeKind::*;
-    // A new static route under /blog competes with /blog/[slug] where the slug is
-    // unknown (dynamic.spec.ts). blog.spec.ts visits `blogPath('hello')`, which
-    // evaluates to `/blog/hello` through the helper's parameter and cannot hit
-    // `/blog/featured`.
+    // A new static route under /blog competes with /blog/[slug] where the slug
+    // is unknown (dynamic.spec.ts). blog.spec.ts visits
+    // `blogPath('hello')`, which evaluates to `/blog/hello` through the
+    // helper's parameter and cannot hit `/blog/featured`.
     let r = run(&s, &[(Added, "app/blog/featured/page.tsx")], |_| {});
     assert_eq!(names(&r), BTreeSet::from(["dynamic.spec.ts"]), "{r:?}");
     // A new layout below [team] wraps the team routes.
@@ -672,7 +673,8 @@ fn select_tailwind() {
     use ChangeKind::*;
     let path = "components/price.tsx";
     let old = std::fs::read(s.root.join(path)).unwrap();
-    // Strict (the default): a scanned file regenerates the stylesheet → every spec.
+    // Strict (the default): a scanned file regenerates the stylesheet → every
+    // spec.
     let r = run(&s, &[(Modified, path)], |o| {
         o.tailwind = TailwindMode::Strict;
         o.contents = None;

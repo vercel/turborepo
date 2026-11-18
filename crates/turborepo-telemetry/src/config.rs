@@ -76,10 +76,11 @@ impl TelemetryConfig {
         settings = settings.add_source(File::new(config_path.as_str(), FileFormat::Json));
         let settings = settings.build();
 
-        // If this is a FileParse error, we assume something corrupted the file or
-        // its structure. In this case, because the telemetry config is intentionally
-        // isolated from other turborepo config, try to remove the entire config
-        // file and write a new one, otherwise return the error
+        // If this is a FileParse error, we assume something corrupted the file
+        // or its structure. In this case, because the telemetry config
+        // is intentionally isolated from other turborepo config, try to
+        // remove the entire config file and write a new one, otherwise
+        // return the error
         let config = match settings {
             Ok(settings) => settings.try_deserialize::<TelemetryConfigContents>()?,
             Err(err @ ConfigError::FileParse { .. }) => {

@@ -712,8 +712,9 @@ fn top_functions<'a>(program: &'a Program<'a>, text: &str) -> Vec<TopFn<'a>> {
             f.exports.push(exported);
         }
     }
-    // Functions that read the environment, directly or through another function of
-    // the file (by name, textually: a cheap filter, the evaluation decides).
+    // Functions that read the environment, directly or through another function
+    // of the file (by name, textually: a cheap filter, the evaluation
+    // decides).
     let body = |f: &TopFn<'a>| -> &str {
         let sp = f.f.span();
         text.get(sp.start as usize..sp.end as usize).unwrap_or("")
@@ -868,8 +869,9 @@ pub(super) fn collect<'a>(engine: &mut Engine<'a, '_>, nodes: &AstNodes<'a>) -> 
                     if p.computed || p.method || p.kind != PropertyKind::Init {
                         continue;
                     }
-                    // `{ X }` counts in an object built on another one (`{ ...process.env,
-                    // X }`): elsewhere it is a list of names more often than an environment.
+                    // `{ X }` counts in an object built on another one (`{
+                    // ...process.env, X }`): elsewhere it
+                    // is a list of names more often than an environment.
                     if p.shorthand && !spread {
                         continue;
                     }
@@ -932,7 +934,8 @@ pub(super) fn collect<'a>(engine: &mut Engine<'a, '_>, nodes: &AstNodes<'a>) -> 
                         let mut alts = Vec::new();
                         match (at_end, t.expressions.get(i)) {
                             (true, Some(e)) => {
-                                // `X=${v}`: the expression, when the value ends there.
+                                // `X=${v}`: the expression, when the value ends
+                                // there.
                                 let next = t.quasis.get(i + 1).map_or("", |q| q.value.raw.as_str());
                                 let ends = (next.is_empty() && i + 2 >= t.quasis.len())
                                     || next.starts_with([

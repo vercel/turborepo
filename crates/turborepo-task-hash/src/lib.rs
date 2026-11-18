@@ -220,9 +220,10 @@ impl PackageInputsHashes {
         // summary hash of each `FileHashes` is computed here too, once per
         // unique key, so distribution below never re-hashes for the many
         // tasks that share a key.
-        // EMFILE (too many open files) errors are handled via retry-with-backoff
-        // in the globwalk and hash_objects layers, so we can safely parallelize
-        // all keys on rayon without worrying about fd exhaustion.
+        // EMFILE (too many open files) errors are handled via
+        // retry-with-backoff in the globwalk and hash_objects layers,
+        // so we can safely parallelize all keys on rayon without
+        // worrying about fd exhaustion.
         let hash_span = tracing::info_span!("hash_unique_inputs").entered();
         let file_hash_results: Vec<Result<(Arc<FileHashes>, String), Error>> = unique_keys
             .into_par_iter()
@@ -1011,7 +1012,8 @@ impl TaskHashTracker {
                 .package_task_env_vars
                 .insert(task_id.clone(), env_vars);
             if let Some(framework) = framework_slug {
-                // Only pay for one extra clone when framework inference is active.
+                // Only pay for one extra clone when framework inference is
+                // active.
                 state
                     .package_task_framework
                     .insert(task_id.clone(), framework);
@@ -1319,7 +1321,8 @@ mod test {
                 &[],
             );
             let mut hashes = HashMap::new();
-            // The graph's own external fingerprints are used by final monorepo hashes.
+            // The graph's own external fingerprints are used by final monorepo
+            // hashes.
             hasher.set_external_deps_hash_cache(external_hashes.clone());
             for (package, id) in [("web", &task_id), ("other", &other_task_id)] {
                 let hash = hasher
@@ -2367,8 +2370,8 @@ mod test {
 
     #[test]
     fn test_hash_tracker_is_send_and_sync() {
-        // We need the tracker to implement these traits as multiple tasks will query
-        // and write to it
+        // We need the tracker to implement these traits as multiple tasks will
+        // query and write to it
         fn assert_send<T: Send>() {}
         fn assert_sync<T: Sync>() {}
         assert_send::<TaskHashTracker>();
@@ -2445,7 +2448,8 @@ mod test {
     fn test_hash_tracker_concurrent_read_write() {
         let tracker = TaskHashTracker::new(HashMap::new());
 
-        // Pre-create owned task IDs to avoid lifetime issues with TaskId borrows
+        // Pre-create owned task IDs to avoid lifetime issues with TaskId
+        // borrows
         let task_ids: Vec<TaskId<'static>> = (0..50)
             .map(|i| TaskId::new("pkg", &format!("task-{i}")).into_owned())
             .collect();
@@ -2470,8 +2474,9 @@ mod test {
             for _ in 0..4 {
                 s.spawn(move || {
                     for task_id in task_ids {
-                        // May or may not find the hash depending on timing — that's fine,
-                        // we're testing for absence of panics/deadlocks.
+                        // May or may not find the hash depending on timing —
+                        // that's fine, we're testing
+                        // for absence of panics/deadlocks.
                         let _ = tracker.hash(task_id);
                         let _ = tracker.env_vars(task_id);
                         let _ = tracker.cache_status(task_id);

@@ -98,9 +98,10 @@ fn factory_of_a_workspace_package_is_followed() {
         discovery_uncertainties(&inputs),
         Vec::<&FrameworkUncertainty>::new()
     );
-    // What is left is what the environment decides elsewhere (`CI`, `DEVTOOLS`, the
-    // base URL): notes on the factory's files, none on a field, each one once
-    // (the factory is evaluated for the import and again for the call).
+    // What is left is what the environment decides elsewhere (`CI`, `DEVTOOLS`,
+    // the base URL): notes on the factory's files, none on a field, each
+    // one once (the factory is evaluated for the import and again for the
+    // call).
     let all = uncertainties(&inputs);
     for (i, u) in all.iter().enumerate() {
         assert!(!all[..i].contains(u), "twice: {u:?}");
@@ -114,8 +115,8 @@ fn factory_of_a_workspace_package_is_followed() {
         );
     }
 
-    // The factory's projects. `testDir: './'` is the config file's directory. What
-    // the environment decides (`TEST_TYPE`) is united.
+    // The factory's projects. `testDir: './'` is the config file's directory.
+    // What the environment decides (`TEST_TYPE`) is united.
     let names: Vec<&str> = inputs.projects.iter().map(|p| p.name.as_str()).collect();
     assert_eq!(names, ["chromium", "firefox", "webkit"]);
     for p in &inputs.projects {
@@ -135,8 +136,8 @@ fn factory_of_a_workspace_package_is_followed() {
         ["**/*.e2e.ts", "**/*.spec.ts"]
     );
 
-    // `join(__dirname, '../../src', 'config/global-setup.ts')` is relative to the
-    // factory.
+    // `join(__dirname, '../../src', 'config/global-setup.ts')` is relative to
+    // the factory.
     let entries = &inputs.projects[0].global.entries;
     let entry = |role: InputRole| {
         entries
@@ -232,7 +233,8 @@ fn unknown_test_match_of_a_factory_is_reported() {
 fn define_config_of_an_installed_package_is_the_identity() {
     let root = fixture();
     let (inputs, _) = playwright::load_config(&root.join("apps/plain/playwright.config.ts"));
-    // `node_modules/@playwright/test` is a real directory there: never evaluated.
+    // `node_modules/@playwright/test` is a real directory there: never
+    // evaluated.
     assert_eq!(specs(&root, &inputs), ["apps/plain/e2e/login.e2e.ts"]);
     assert_eq!(uncertainties(&inputs), Vec::<&FrameworkUncertainty>::new());
     assert_eq!(files(&root, &inputs), ["apps/plain/playwright.config.ts"]);
@@ -246,7 +248,8 @@ fn define_config_of_an_installed_package_is_the_identity() {
 #[test]
 fn factory_that_cannot_be_found_is_reported() {
     let root = fixture();
-    // No `node_modules` link: `defineConfig(__dirname)` is `__dirname`, a string.
+    // No `node_modules` link: `defineConfig(__dirname)` is `__dirname`, a
+    // string.
     let (inputs, _) = playwright::load_config(&root.join("apps/unlinked/playwright.config.ts"));
     let unc = uncertainties(&inputs);
     assert!(
@@ -322,9 +325,9 @@ fn jest_and_vitest_do_not_follow_factories() {
 
 #[test]
 fn workspace_reached_through_a_link_keeps_the_callers_paths() {
-    // A workspace whose root is named through a symlink (`/tmp` on macOS, a linked
-    // checkout): the factory's files are reported under the root as the caller
-    // names it.
+    // A workspace whose root is named through a symlink (`/tmp` on macOS, a
+    // linked checkout): the factory's files are reported under the root as
+    // the caller names it.
     let tmp = tempfile::tempdir().unwrap();
     let real = tmp.path().join("real");
     let write = |p: &str, s: &str| {

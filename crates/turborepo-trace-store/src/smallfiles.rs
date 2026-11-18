@@ -112,8 +112,9 @@ impl SmallFiles {
                     },
                     _ => {
                         let bytes: Bytes = std::fs::read(path).ok().map(Arc::from);
-                        // Re-stat: a write between the stat and the read must not be cached
-                        // under the old stamp.
+                        // Re-stat: a write between the stat and the read must
+                        // not be cached under the old
+                        // stamp.
                         let same = std::fs::metadata(path).is_ok_and(|m| stamp(&m) == st);
                         let persist = persist && same && bytes.is_some();
                         if persist {

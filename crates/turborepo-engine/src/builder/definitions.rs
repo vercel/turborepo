@@ -199,7 +199,8 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
         )?;
 
         let Some(turbo_json) = turbo_json else {
-            // If there was no turbo.json in the workspace, fallback to the root turbo.json
+            // If there was no turbo.json in the workspace, fallback to the root
+            // turbo.json
             return Self::has_task_definition_in_run_inner(
                 loader,
                 &PackageName::Root,
@@ -220,21 +221,24 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
                 .unwrap_or(false);
 
             if has_extends_false && !task_def.has_config_beyond_extends() {
-                // Task is explicitly excluded via `extends: false` with no config
+                // Task is explicitly excluded via `extends: false` with no
+                // config
                 TaskDefinitionResult::excluded()
             } else {
-                // Task exists (either with `extends: false` + config, or normal definition)
+                // Task exists (either with `extends: false` + config, or normal
+                // definition)
                 TaskDefinitionResult::found()
             }
         };
 
-        // Check if this package's turbo.json has the task defined under various key
-        // formats
+        // Check if this package's turbo.json has the task defined under various
+        // key formats
         let base_task_name = TaskName::from(task_name.task());
         let check_base_task = matches!(workspace, PackageName::Root)
             || workspace == &PackageName::from(task_id.package());
 
-        // Try task keys in order of specificity: task_id, task_name, base_task_name
+        // Try task keys in order of specificity: task_id, task_name,
+        // base_task_name
         let task_def = turbo_json
             .tasks
             .get(&task_id_as_name)
@@ -262,7 +266,8 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
                 task_id,
                 visited,
             )?;
-            // If any package in the chain excluded this task, propagate that exclusion
+            // If any package in the chain excluded this task, propagate that
+            // exclusion
             if result.is_excluded() {
                 return Ok(TaskDefinitionResult::excluded());
             }
@@ -642,9 +647,9 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
     ) -> Result<Vec<(ProcessedTaskDefinition, bool)>, BuilderError> {
         let mut task_definitions = Vec::new();
 
-        // Find the first package in the chain (iterating in reverse from leaf to root)
-        // that has `extends: false` for this task. This stops inheritance from earlier
-        // packages.
+        // Find the first package in the chain (iterating in reverse from leaf
+        // to root) that has `extends: false` for this task. This stops
+        // inheritance from earlier packages.
         let mut extends_false_index: Option<usize> = None;
         for (index, turbo_json) in turbo_json_chain.iter().enumerate().rev() {
             if let Some(key) = configured_task_key(turbo_json, task_id, task_name)
@@ -732,8 +737,8 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
         Ok(task_definitions)
     }
 
-    // Provide the chain of turbo.json's to load to fully resolve all extends for a
-    // package turbo.json.
+    // Provide the chain of turbo.json's to load to fully resolve all extends
+    // for a package turbo.json.
     fn turbo_json_chain<'b>(
         &self,
         turbo_json_loader: &'b L,
@@ -772,7 +777,8 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
         while let Some((read_req, mut path)) = read_stack.pop() {
             let package_name = read_req.package_name();
 
-            // Check for cycle by seeing if this package is already in the current path
+            // Check for cycle by seeing if this package is already in the
+            // current path
             if let Some(cycle_index) = path.iter().position(|p: &PackageName| p == package_name) {
                 // Found a cycle - build the cycle portion for error
                 let mut cycle = path[cycle_index..]

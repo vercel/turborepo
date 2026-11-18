@@ -467,8 +467,8 @@ mod tests {
         // Nothing is being written below `b`.
         wait_for_cache_writes_in(b);
         assert!(!written.load(Ordering::SeqCst));
-        // Another waiter, for every graph, is already waiting when this thread starts
-        // to.
+        // Another waiter, for every graph, is already waiting when this thread
+        // starts to.
         let other = std::thread::spawn(wait_for_cache_writes);
         std::thread::sleep(std::time::Duration::from_millis(50));
         release.send(()).unwrap();

@@ -1358,8 +1358,9 @@ mod tests {
             }
         }
 
-        // Inject native observations and JS manifests at the graph boundary: no uv,
-        // Python, or assembled turbo executable is needed for this projection test.
+        // Inject native observations and JS manifests at the graph boundary: no
+        // uv, Python, or assembled turbo executable is needed for this
+        // projection test.
         let temp = tempdir().unwrap();
         let root = AbsoluteSystemPathBuf::try_from(temp.path()).unwrap();
         let native = |name: &str, display: &str| {
@@ -1684,7 +1685,8 @@ mod tests {
         let summary = factory.task_summary(task_id, None).unwrap();
         assert_eq!(summary.shared.hash_of_external_dependencies, expected);
         // No-lockfile JavaScript graphs remain explicitly unavailable/empty,
-        // never missing, so summaries preserve the empty serialized fingerprint.
+        // never missing, so summaries preserve the empty serialized
+        // fingerprint.
         assert_eq!(summary.shared.hash_of_external_dependencies, "");
     }
 

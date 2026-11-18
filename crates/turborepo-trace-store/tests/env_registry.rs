@@ -109,8 +109,9 @@ fn unevaluable_assignment_keeps_the_record_until_an_evaluator_answers() {
          path.resolve(__dirname, '../.tmp', `${prefix ?? ''}${randomUUID()}`);\n}\n",
     );
     let g = graph(&r);
-    // The class is exported: its constructor argument is bound by callers the file
-    // does not see, so the file's own facts cannot evaluate the assignment.
+    // The class is exported: its constructor argument is bound by callers the
+    // file does not see, so the file's own facts cannot evaluate the
+    // assignment.
     let (patch, stats) = g.env_patch(&[]);
     assert_eq!((stats.uses, stats.resolved), (1, 0), "{stats:?}");
     let p = Patched::new(&g, patch);
@@ -129,8 +130,8 @@ fn unevaluable_assignment_keeps_the_record_until_an_evaluator_answers() {
         asked
             .borrow_mut()
             .push((n, text[span[0] as usize..span[1] as usize].to_owned()));
-        // `<root>/.tmp/flags-<unknown>`, or below a temporary directory that a variable
-        // names.
+        // `<root>/.tmp/flags-<unknown>`, or below a temporary directory that a
+        // variable names.
         Some(EnvAnswer {
             alts: vec![
                 EnvAlt::Term(EnvTerm {
@@ -190,7 +191,8 @@ fn declared_values_and_known_variables() {
         p.memberships(client)
             .any(|m| m.dir == "fixtures" && m.pattern == "*.json")
     );
-    // `GITHUB_WORKSPACE` is the repository root; `HOME` is outside the repository.
+    // `GITHUB_WORKSPACE` is the repository root; `HOME` is outside the
+    // repository.
     assert!(depends_on(&p, "scripts/report.ts", "fixtures/flags.json"));
     assert!(!depends_on(&g, "scripts/report.ts", "fixtures/flags.json"));
     let report = p.node_by_path("scripts/report.ts").unwrap();

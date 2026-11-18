@@ -412,8 +412,8 @@ fn type_entries_reach_only_entries_that_type_check() {
         err.contains("0 importer(s) (+1 for type-checking entries only)"),
         "{err}"
     );
-    // `typesVersions`: the subpath it maps, and the root request (its types entry
-    // is mapped through all of it); not other subpaths.
+    // `typesVersions`: the subpath it maps, and the root request (its types
+    // entry is mapped through all of it); not other subpaths.
     edit(
         r,
         r#""util": ["src/util.d.ts"]"#,
@@ -453,8 +453,8 @@ fn shapes_outside_the_model_are_whole_file_changes() {
         "",
     );
     assert_ne!(no_exports, LIB);
-    // `exports` removed: every deep import changes meaning. The whole file counts,
-    // and so do the requests that no longer resolve.
+    // `exports` removed: every deep import changes meaning. The whole file
+    // counts, and so do the requests that no longer resolve.
     write(r, "packages/lib/package.json", &no_exports);
     assert_eq!(since(r), [EXTRA, FEAT, ROOT, UTIL, OWN_CFG, OWN_GEN, PLAIN]);
     let err = stats(r);

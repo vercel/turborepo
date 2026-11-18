@@ -1055,14 +1055,16 @@ impl ChildHandle {
                 result
             }
             ChildHandleImpl::Pty(child) => {
-                // TODO: we currently poll the child to see if it has finished yet which is less
-                // than ideal
+                // TODO: we currently poll the child to see if it has finished
+                // yet which is less than ideal
                 loop {
                     match child.try_wait() {
                         Ok(Some(status)) => {
-                            // portable_pty maps the status of being killed by a signal to a 1 exit
+                            // portable_pty maps the status of being killed by a
+                            // signal to a 1 exit
                             // code. The only way to tell if the task
-                            // exited normally with exit code 1 or got killed by a signal is to
+                            // exited normally with exit code 1 or got killed by
+                            // a signal is to
                             // display it as the signal will be included
                             // in the message.
                             let exit_code = if status.exit_code() == 1
@@ -1070,8 +1072,10 @@ impl ChildHandle {
                             {
                                 None
                             } else {
-                                // This is safe as the portable_pty::ExitStatus's exit code is just
-                                // converted from a i32 to an u32 before we get it
+                                // This is safe as the
+                                // portable_pty::ExitStatus's exit code is just
+                                // converted from a i32 to an u32 before we get
+                                // it
                                 Some(status.exit_code() as i32)
                             };
                             return Ok(exit_code);

@@ -207,8 +207,8 @@ const C: &str = "packages/x/test/c.test.ts";
 fn a_key_selects_the_route_module_at_the_caller() {
     let d = helper_repo();
     let r = d.path();
-    // Without binding, the helper depends on every table value: each user of the
-    // helper is selected when any route module changes.
+    // Without binding, the helper depends on every table value: each user of
+    // the helper is selected when any route module changes.
     assert_eq!(
         affected_unbound(r, "services/svc-a/src/routes.ts"),
         [A, B, C]
@@ -232,8 +232,8 @@ fn a_step_budget_that_runs_out_closes_nothing() {
     // (`TURBO_TRACE_DEBUG_BIND_STEPS` sets the share of one site file).
     // Wherever it stops, the site it was binding stays as it was: the helper
     // keeps its dependency on every table value. So with any budget
-    // the selection lies between the bound answer and the answer without binding,
-    // and never below the bound one.
+    // the selection lies between the bound answer and the answer without
+    // binding, and never below the bound one.
     let d = helper_repo();
     let r = d.path();
     let changes = [
@@ -436,8 +436,9 @@ fn a_module_path_parameter_belongs_to_the_caller() {
     // Without binding, the runner's `require(options.configPath)` is an open
     // record: every test that reaches it is selected on every change.
     assert_eq!(affected_unbound(r, "README.md"), [KNOWN, OTHER]);
-    // `other.test.ts` uses the namespace object as a value: it may call anything
-    // with anything, so the unknown module path is its own open record.
+    // `other.test.ts` uses the namespace object as a value: it may call
+    // anything with anything, so the unknown module path is its own open
+    // record.
     assert_eq!(affected(r, "README.md"), [OTHER]);
     // The caller that passes a path depends on that module and what it imports.
     assert_eq!(
@@ -697,7 +698,8 @@ fn kept_is_derived_from_nothing(r: &Path, what: &str) -> (&'static str, bool) {
     let kept = lines_env(r, &export, &[]);
     assert!(kept.iter().any(|l| l.contains("bound: ")), "{what}");
     assert_eq!(kept, lines_env(r, &export, &scratch), "{what}: the graph");
-    // The same shards with nothing kept: composed from them, bound from nothing.
+    // The same shards with nothing kept: composed from them, bound from
+    // nothing.
     let fresh = store_only(r);
     let dir = fresh.path().to_str().unwrap();
     let fresh_export = [
@@ -795,8 +797,8 @@ fn a_replayed_run_is_the_run_bound_from_nothing() {
         "packages/x/test/plain.test.ts",
         "test('plain', () => { expect(1).toBe(1); });\n",
     );
-    // (The store kept the composed graph, and the file is none the run consulted:
-    // the layer of the graph before the edit is taken as it is.)
+    // (The store kept the composed graph, and the file is none the run
+    // consulted: the layer of the graph before the edit is taken as it is.)
     assert_eq!(step("a test that does not use the helper"), "kept");
     assert!(reused.get());
     write(
@@ -849,7 +851,8 @@ fn a_replayed_run_is_the_run_bound_from_nothing() {
     assert_eq!(step("another caller is deleted"), "bound");
     write(r, B, &caller("{ extraRoutes: ['svc-b'], seed: false }"));
     assert_eq!(step("and comes back"), "bound");
-    // Hints: one that adds a module load to the helper, changed, and taken away.
+    // Hints: one that adds a module load to the helper, changed, and taken
+    // away.
     write(
         r,
         "hints.toml",
@@ -953,7 +956,8 @@ fn edit_sequences_keep_the_graph_the_shards_give() {
                     format!("a line below everything in {file}")
                 }
                 6 => {
-                    // (Not A: one caller always passes a key, so something stays bound.)
+                    // (Not A: one caller always passes a key, so something
+                    // stays bound.)
                     let (c, arg) = ([B, C][next(2)], ARGS[next(ARGS.len())]);
                     write(r, c, &caller(arg));
                     format!("{c} passes {arg:?}")
@@ -990,10 +994,10 @@ fn edit_sequences_keep_the_graph_the_shards_give() {
 
 #[test]
 fn a_closed_table_lends_no_names() {
-    // A test with a read whose path is not known is selected by every changed path
-    // that a file of its closure names (the string scan). The strings of a
-    // table that binding closed are not such names: they only reach the module
-    // loads the table is read for.
+    // A test with a read whose path is not known is selected by every changed
+    // path that a file of its closure names (the string scan). The strings
+    // of a table that binding closed are not such names: they only reach
+    // the module loads the table is read for.
     let d = helper_repo();
     let r = d.path();
     write(
@@ -1040,8 +1044,8 @@ fn a_closed_table_lends_no_names() {
         "{}",
         why()
     );
-    // The scan alone would select it: the helper is in its closure and holds the
-    // string.
+    // The scan alone would select it: the helper is in its closure and holds
+    // the string.
     assert!(
         lines_env(
             r,

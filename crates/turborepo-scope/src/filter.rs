@@ -35,7 +35,8 @@ impl PackageInference {
     // the pieces of a filter spec that we will infer. If turbo was invoked
     // somewhere between the root and packages, scope turbo invocations to the
     // packages below where turbo was invoked. If turbo was invoked at or within
-    // a package directory, scope the invocation to every package at that directory.
+    // a package directory, scope the invocation to every package at that
+    // directory.
     pub fn calculate(
         turbo_root: &AbsoluteSystemPath,
         pkg_inference_path: &AnchoredSystemPathBuf,
@@ -48,7 +49,8 @@ impl PackageInference {
         let full_inference_path = turbo_root.resolve(pkg_inference_path);
 
         // Keep every package at the most specific directory containing cwd.
-        // Different toolchains may contribute distinct identities at the same path.
+        // Different toolchains may contribute distinct identities at the same
+        // path.
         let mut best_match: Option<(Vec<String>, AnchoredSystemPathBuf)> = None;
 
         for (graph_name, package_path) in pkg_graph.package_scope_directories() {
@@ -60,14 +62,16 @@ impl PackageInference {
             };
             let pkg_path = turbo_root.resolve(package_path);
 
-            // Check if the inference path is inside this package (pkg_path is a prefix of
-            // full_inference_path)
+            // Check if the inference path is inside this package (pkg_path is a
+            // prefix of full_inference_path)
             let inferred_path_is_below = pkg_path.contains(&full_inference_path);
 
-            // We skip over the root package as the inferred path will always be below it
+            // We skip over the root package as the inferred path will always be
+            // below it
             if inferred_path_is_below && (&pkg_path as &AbsoluteSystemPath) != turbo_root {
-                // This package contains the inference path. Track it if it's a better
-                // (longer/more specific) match than what we've found so far.
+                // This package contains the inference path. Track it if it's a
+                // better (longer/more specific) match than what
+                // we've found so far.
                 let package_depth = package_path.components().count();
                 let is_better_match = match &best_match {
                     None => true,
@@ -85,7 +89,8 @@ impl PackageInference {
         }
 
         if let Some((mut package_names, directory_root)) = best_match {
-            // Selector expansion must not depend on contributor discovery order.
+            // Selector expansion must not depend on contributor discovery
+            // order.
             package_names.sort();
             return Self {
                 package_names,
@@ -109,8 +114,9 @@ impl PackageInference {
         }
 
         // Infer package names with no directory filter, or when navigating up
-        // (backwards compatibility). Local directory filters such as ./* instead
-        // explicitly select packages relative to the inferred directory.
+        // (backwards compatibility). Local directory filters such as ./*
+        // instead explicitly select packages relative to the inferred
+        // directory.
         let should_inject_names = !self.package_names.is_empty()
             && match selector.parent_dir.as_deref() {
                 None => true,
@@ -128,14 +134,15 @@ impl PackageInference {
                     ))
                 })?;
             selector.parent_dir = Some(
-                AnchoredSystemPathBuf::try_from(clean_parent_dir.as_str()).map_err(|_| {
+                AnchoredSystemPathBuf::from_str(clean_parent_dir.as_str()).map_err(|_| {
                     ResolutionError::InvalidSelector(InvalidSelectorError::InvalidAnchoredPath(
                         clean_parent_dir.clone(),
                     ))
                 })?,
             );
         } else if self.package_names.is_empty() {
-            // Outside a package, infer every package below the current directory.
+            // Outside a package, infer every package below the current
+            // directory.
             let mut parent_dir = self.directory_root.clone();
             parent_dir.push("**");
             selector.parent_dir = Some(parent_dir);
@@ -143,7 +150,8 @@ impl PackageInference {
 
         if should_inject_names {
             // Expand rather than inventing a name glob: each package keeps the
-            // original selector's dependency, exclusion, and Git-range modifiers.
+            // original selector's dependency, exclusion, and Git-range
+            // modifiers.
             Ok(self
                 .package_names
                 .iter()
@@ -213,7 +221,8 @@ impl<'a, T: GitChangeDetector> FilterResolver<'a, T> {
             return Ok((packages, FilterMode::AllPackages));
         }
 
-        // Parse selectors once — reused for both mode classification and resolution.
+        // Parse selectors once — reused for both mode classification and
+        // resolution.
         let selectors: Vec<TargetSelector> = patterns
             .iter()
             .map(|pattern| TargetSelector::from_str(pattern))
@@ -261,9 +270,10 @@ impl<'a, T: GitChangeDetector> FilterResolver<'a, T> {
                 return Ok((included, mode));
             }
 
-            // Resolve exclude selectors to the set of package names to subtract.
-            // Flip the exclude flag so filter_graph resolves them as normal
-            // includes — we just need the matching package names.
+            // Resolve exclude selectors to the set of package names to
+            // subtract. Flip the exclude flag so filter_graph
+            // resolves them as normal includes — we just need the
+            // matching package names.
             let exclude_names: HashSet<PackageName> = {
                 let as_includes: Vec<_> = exclude_sels
                     .into_iter()
@@ -404,8 +414,8 @@ impl<'a, T: GitChangeDetector> FilterResolver<'a, T> {
                 .collect()
         };
 
-        // We want to just collect the names, not the reasons, so when we check for
-        // inclusion we don't need to check the reason
+        // We want to just collect the names, not the reasons, so when we check
+        // for inclusion we don't need to check the reason
         let exclude: HashSet<PackageName> = self
             .filter_graph_with_selectors(exclude_selectors, &mut changes_by_range)?
             .into_keys()
@@ -492,9 +502,10 @@ impl<'a, T: GitChangeDetector> FilterResolver<'a, T> {
                     // dependent. The closure includes the dependents
                     // themselves, but they already carry the same inclusion
                     // reason via `walked_dependents`, which takes precedence
-                    // in the merge below. Like the dependency projection, the root
-                    // package's own dependencies count as implied
-                    // dependencies of every dependent.
+                    // in the merge below. Like the dependency projection, the
+                    // root package's own dependencies count
+                    // as implied dependencies of every
+                    // dependent.
                     if selector.include_dependencies && !dependents.is_empty() {
                         let dependent_dependencies = self
                             .pkg_graph
@@ -521,12 +532,14 @@ impl<'a, T: GitChangeDetector> FilterResolver<'a, T> {
                 if (selector.include_dependents || selector.include_dependencies)
                     && !selector.exclude_self
                 {
-                    // if we are including dependents or dependencies, and we are not excluding
-                    // ourselves, then we should add ourselves to the list of packages
+                    // if we are including dependents or dependencies, and we
+                    // are not excluding ourselves, then we
+                    // should add ourselves to the list of packages
                     walked_dependencies.insert(package, reason);
                 } else if !selector.include_dependencies && !selector.include_dependents {
-                    // if we are neither including dependents or dependencies, then
-                    // add  to the list of cherry picked packages
+                    // if we are neither including dependents or dependencies,
+                    // then add  to the list of cherry
+                    // picked packages
                     cherry_picked_packages.insert(package, reason);
                 }
             }
@@ -569,7 +582,8 @@ impl<'a, T: GitChangeDetector> FilterResolver<'a, T> {
     ) -> Result<HashMap<PackageName, PackageInclusionReason>, ResolutionError> {
         let mut entry_packages = HashMap::new();
 
-        // Compile glob pattern ONCE outside the loop to avoid O(n) compilation overhead
+        // Compile glob pattern ONCE outside the loop to avoid O(n) compilation
+        // overhead
         let parent_dir_matcher = selector
             .parent_dir
             .as_deref()
@@ -627,8 +641,8 @@ impl<'a, T: GitChangeDetector> FilterResolver<'a, T> {
         // than computing a forward dependency closure for every candidate
         // package: the changed set is typically far smaller than the package
         // count. The reverse filtering projection matches forward dependency
-        // semantics, including treating the root package's dependencies as implied
-        // dependencies of every package.
+        // semantics, including treating the root package's dependencies as
+        // implied dependencies of every package.
         let mut dependent_on_changed = HashSet::new();
         for changed_package in changed_packages.keys() {
             for ancestor in self
@@ -675,14 +689,15 @@ impl<'a, T: GitChangeDetector> FilterResolver<'a, T> {
 
         if let Some(globber) = parent_dir_globber.clone() {
             let (base, _) = globber.partition();
-            // wax takes a unix-like glob, but partition will return a system path.
-            // Keep leading `.` and `..` components while rejecting absolute paths.
+            // wax takes a unix-like glob, but partition will return a system
+            // path. Keep leading `.` and `..` components while
+            // rejecting absolute paths.
             let base = base.to_str().ok_or_else(|| {
                 ResolutionError::InvalidSelector(InvalidSelectorError::InvalidAnchoredPath(
                     base.to_string_lossy().into_owned(),
                 ))
             })?;
-            let base = AnchoredSystemPathBuf::try_from(base).map_err(|_| {
+            let base = AnchoredSystemPathBuf::from_str(base).map_err(|_| {
                 ResolutionError::InvalidSelector(InvalidSelectorError::InvalidAnchoredPath(
                     base.to_string(),
                 ))
@@ -1069,9 +1084,9 @@ mod test {
             change_detector,
         );
 
-        // TempDir's drop implementation will mark the folder as ready for cleanup
-        // which can lead to non-deterministic test results if the folder is removed
-        // before the test finishes.
+        // TempDir's drop implementation will mark the folder as ready for
+        // cleanup which can lead to non-deterministic test results if
+        // the folder is removed before the test finishes.
         (temp_folder, resolver)
     }
 
@@ -1198,7 +1213,7 @@ mod test {
         vec![
             TargetSelector {
                 parent_dir:
-    Some(AnchoredSystemPathBuf::try_from("packages/*").unwrap()),
+    Some(AnchoredSystemPathBuf::from_str("packages/*").unwrap()),
     ..Default::default()         }
         ],
         None,
@@ -1207,12 +1222,12 @@ mod test {
     )]
     #[test_case(
         vec![TargetSelector {
-            parent_dir: Some(AnchoredSystemPathBuf::try_from(if cfg!(windows) { "..\\packages\\*" } else { "../packages/*" }).unwrap()),
+            parent_dir: Some(AnchoredSystemPathBuf::from_str(if cfg!(windows) { "..\\packages\\*" } else { "../packages/*" }).unwrap()),
             ..Default::default()
         }],
         Some(PackageInference{
             package_names: Vec::new(),
-            directory_root: AnchoredSystemPathBuf::try_from("project-5").unwrap(),
+            directory_root: AnchoredSystemPathBuf::from_str("project-5").unwrap(),
         }),
         &["project-0", "project-1"] ;
         "select sibling directory"
@@ -1221,7 +1236,7 @@ mod test {
         vec![
             TargetSelector {
                 parent_dir:
-    Some(AnchoredSystemPathBuf::try_from("project-5/**").unwrap()),
+    Some(AnchoredSystemPathBuf::from_str("project-5/**").unwrap()),
     ..Default::default()         }
         ],
         None,
@@ -1232,7 +1247,7 @@ mod test {
         vec![
             TargetSelector {
                 parent_dir:
-    Some(AnchoredSystemPathBuf::try_from("project-5").unwrap()),
+    Some(AnchoredSystemPathBuf::from_str("project-5").unwrap()),
     ..Default::default()         }
         ],
         None,
@@ -1254,7 +1269,7 @@ mod test {
     #[test_case(
         vec![
             TargetSelector {
-                parent_dir: Some(AnchoredSystemPathBuf::try_from("packages/*").unwrap()),
+                parent_dir: Some(AnchoredSystemPathBuf::from_str("packages/*").unwrap()),
                 ..Default::default()
             },
             TargetSelector {
@@ -1270,7 +1285,7 @@ mod test {
     #[test_case(
         vec![
             TargetSelector {
-                parent_dir: Some(AnchoredSystemPathBuf::try_from(".").unwrap()),
+                parent_dir: Some(AnchoredSystemPathBuf::from_str(".").unwrap()),
                 ..Default::default()
             }
         ],
@@ -1282,7 +1297,7 @@ mod test {
         vec![],
         Some(PackageInference{
             package_names: Vec::new(),
-            directory_root: AnchoredSystemPathBuf::try_from("packages").unwrap(),
+            directory_root: AnchoredSystemPathBuf::from_str("packages").unwrap(),
         }),
         &["project-0", "project-1"] ;
         "select packages directory"
@@ -1291,7 +1306,7 @@ mod test {
         vec![],
         Some(PackageInference{
             package_names: vec!["project-0".to_string()],
-            directory_root: AnchoredSystemPathBuf::try_from("packages/project-0").unwrap(),
+            directory_root: AnchoredSystemPathBuf::from_str("packages/project-0").unwrap(),
         }),
         &["project-0"] ;
         "infer single package"
@@ -1300,7 +1315,7 @@ mod test {
         vec![],
         Some(PackageInference{
             package_names: vec!["project-0".to_string()],
-            directory_root: AnchoredSystemPathBuf::try_from("packages/project-0/src").unwrap(),
+            directory_root: AnchoredSystemPathBuf::from_str("packages/project-0/src").unwrap(),
         }),
         &["project-0"] ;
         "infer single package from subdirectory"
@@ -1459,7 +1474,7 @@ mod test {
             TestChangeDetector::new(&[]),
         );
         let packages = resolver.get_filtered_packages(vec![TargetSelector {
-            parent_dir: Some(AnchoredSystemPathBuf::try_from("pakcages/*").unwrap()),
+            parent_dir: Some(AnchoredSystemPathBuf::from_str("pakcages/*").unwrap()),
             ..Default::default()
         }]);
 
@@ -1480,7 +1495,7 @@ mod test {
         vec![
             TargetSelector {
                 git_range: Some(GitRange { from_ref: Some("HEAD~1".to_string()), to_ref: None, ..Default::default() }),
-                parent_dir: Some(AnchoredSystemPathBuf::try_from(".").unwrap()),
+                parent_dir: Some(AnchoredSystemPathBuf::from_str(".").unwrap()),
                 ..Default::default()
             }
         ],
@@ -1491,7 +1506,7 @@ mod test {
         vec![
             TargetSelector {
                 git_range: Some(GitRange { from_ref: Some("HEAD~1".to_string()), to_ref: None, ..Default::default() }),
-                parent_dir: Some(AnchoredSystemPathBuf::try_from("package-2").unwrap()),
+                parent_dir: Some(AnchoredSystemPathBuf::from_str("package-2").unwrap()),
                 ..Default::default()
             }
         ],
@@ -1545,7 +1560,7 @@ mod test {
         vec![
             TargetSelector {
                 git_range: Some(GitRange { from_ref: Some("HEAD~1".to_string()), to_ref: None, ..Default::default() }),
-                parent_dir: Some(AnchoredSystemPathBuf::try_from("package-*").unwrap()),
+                parent_dir: Some(AnchoredSystemPathBuf::from_str("package-*").unwrap()),
                 match_dependencies: true,             ..Default::default()
             }
         ],
@@ -1750,7 +1765,7 @@ mod test {
 
         let by_root_directory = resolver
             .get_filtered_packages(vec![TargetSelector {
-                parent_dir: Some(AnchoredSystemPathBuf::try_from(".").unwrap()),
+                parent_dir: Some(AnchoredSystemPathBuf::from_str(".").unwrap()),
                 ..Default::default()
             }])
             .unwrap();
@@ -1784,7 +1799,7 @@ mod test {
 
         let by_root_directory = resolver
             .get_filtered_packages(vec![TargetSelector {
-                parent_dir: Some(AnchoredSystemPathBuf::try_from(".").unwrap()),
+                parent_dir: Some(AnchoredSystemPathBuf::from_str(".").unwrap()),
                 ..Default::default()
             }])
             .unwrap();
@@ -2058,7 +2073,8 @@ mod test {
                 .unwrap();
             assert_eq!(selected.into_keys().collect::<HashSet<_>>(), expected);
 
-            // A nested package still takes precedence over every co-located parent.
+            // A nested package still takes precedence over every co-located
+            // parent.
             let inference = PackageInference::calculate(
                 &root,
                 &AnchoredSystemPathBuf::from_raw("apps/shared/child/src").unwrap(),
@@ -2257,15 +2273,15 @@ mod test {
             make_package_graph(&["apps/onprem/backend", "apps/onprem/web", "packages/shared"]);
 
         // Invoke from apps/onprem (a directory containing packages)
-        let inference_path = AnchoredSystemPathBuf::try_from("apps/onprem").unwrap();
+        let inference_path = AnchoredSystemPathBuf::from_str("apps/onprem").unwrap();
 
         // Run the calculation multiple times to verify determinism
         // (with the bug, different runs could give different results)
         for _ in 0..10 {
             let inference = PackageInference::calculate(turbo_root, &inference_path, &graph);
 
-            // We should NOT infer a specific package - we're in a directory that contains
-            // packages, not inside a specific package
+            // We should NOT infer a specific package - we're in a directory
+            // that contains packages, not inside a specific package
             assert!(
                 inference.package_names.is_empty(),
                 "Expected no package to be inferred when running from a directory containing \
@@ -2289,7 +2305,7 @@ mod test {
             make_package_graph(&["apps/onprem/backend", "apps/onprem/web", "packages/shared"]);
 
         // Invoke from inside apps/onprem/backend
-        let inference_path = AnchoredSystemPathBuf::try_from("apps/onprem/backend").unwrap();
+        let inference_path = AnchoredSystemPathBuf::from_str("apps/onprem/backend").unwrap();
         let inference = PackageInference::calculate(turbo_root, &inference_path, &graph);
 
         assert_eq!(
@@ -2299,11 +2315,11 @@ mod test {
         );
         assert_eq!(
             inference.directory_root,
-            AnchoredSystemPathBuf::try_from("apps/onprem/backend").unwrap()
+            AnchoredSystemPathBuf::from_str("apps/onprem/backend").unwrap()
         );
 
         // Invoke from a subdirectory inside apps/onprem/backend/src
-        let inference_path = AnchoredSystemPathBuf::try_from("apps/onprem/backend/src").unwrap();
+        let inference_path = AnchoredSystemPathBuf::from_str("apps/onprem/backend/src").unwrap();
         let inference = PackageInference::calculate(turbo_root, &inference_path, &graph);
 
         assert_eq!(
@@ -2313,7 +2329,7 @@ mod test {
         );
         assert_eq!(
             inference.directory_root,
-            AnchoredSystemPathBuf::try_from("apps/onprem/backend").unwrap()
+            AnchoredSystemPathBuf::from_str("apps/onprem/backend").unwrap()
         );
     }
 
@@ -2329,8 +2345,9 @@ mod test {
             "packages/shared",
         ]);
 
-        // When invoked from apps/web/ui/src, should infer apps/web/ui (the deepest)
-        let inference_path = AnchoredSystemPathBuf::try_from("apps/web/ui/src").unwrap();
+        // When invoked from apps/web/ui/src, should infer apps/web/ui (the
+        // deepest)
+        let inference_path = AnchoredSystemPathBuf::from_str("apps/web/ui/src").unwrap();
         let inference = PackageInference::calculate(turbo_root, &inference_path, &graph);
 
         assert_eq!(
@@ -2340,11 +2357,11 @@ mod test {
         );
         assert_eq!(
             inference.directory_root,
-            AnchoredSystemPathBuf::try_from("apps/web/ui").unwrap()
+            AnchoredSystemPathBuf::from_str("apps/web/ui").unwrap()
         );
 
         // When invoked from apps/web/src (outside ui), should infer apps/web
-        let inference_path = AnchoredSystemPathBuf::try_from("apps/web/src").unwrap();
+        let inference_path = AnchoredSystemPathBuf::from_str("apps/web/src").unwrap();
         let inference = PackageInference::calculate(turbo_root, &inference_path, &graph);
 
         assert_eq!(
@@ -2354,7 +2371,7 @@ mod test {
         );
         assert_eq!(
             inference.directory_root,
-            AnchoredSystemPathBuf::try_from("apps/web").unwrap()
+            AnchoredSystemPathBuf::from_str("apps/web").unwrap()
         );
     }
 
@@ -2379,7 +2396,7 @@ mod test {
             // Simulate running from apps/onprem
             Some(PackageInference {
                 package_names: Vec::new(),
-                directory_root: AnchoredSystemPathBuf::try_from("apps/onprem").unwrap(),
+                directory_root: AnchoredSystemPathBuf::from_str("apps/onprem").unwrap(),
             }),
             TestChangeDetector::new(&[]),
         );
@@ -2389,8 +2406,8 @@ mod test {
         //   (apps/onprem/*)
         // - ^... = exclude self, include dependencies
         //
-        // So this should select: packages/shared (dependency of backend and web)
-        // but NOT backend or web themselves (^ excludes self)
+        // So this should select: packages/shared (dependency of backend and
+        // web) but NOT backend or web themselves (^ excludes self)
         let selector = TargetSelector::from_str("{./*}^...").unwrap();
         let packages = resolver.get_filtered_packages(vec![selector]).unwrap();
 
@@ -2430,7 +2447,7 @@ mod test {
             &[],
             Some(PackageInference {
                 package_names: Vec::new(),
-                directory_root: AnchoredSystemPathBuf::try_from("apps/onprem").unwrap(),
+                directory_root: AnchoredSystemPathBuf::from_str("apps/onprem").unwrap(),
             }),
             TestChangeDetector::new(&[]),
         );
@@ -2496,13 +2513,14 @@ mod test {
             // because apps is a workspace at that path
             Some(PackageInference {
                 package_names: vec!["apps".to_string()],
-                directory_root: AnchoredSystemPathBuf::try_from("apps").unwrap(),
+                directory_root: AnchoredSystemPathBuf::from_str("apps").unwrap(),
             }),
             TestChangeDetector::new(&[]),
         );
 
-        // Filter "./*" means: packages matching "./*" relative to current directory
-        // (apps) This should resolve to "apps/*" and match app-a, app-b
+        // Filter "./*" means: packages matching "./*" relative to current
+        // directory (apps) This should resolve to "apps/*" and match
+        // app-a, app-b
         let selector = TargetSelector::from_str("./*").unwrap();
         let packages = resolver.get_filtered_packages(vec![selector]).unwrap();
 
@@ -2518,7 +2536,8 @@ mod test {
             packages.keys().collect::<Vec<_>>()
         );
 
-        // Should NOT include the apps package itself (it's at "apps", not "apps/*")
+        // Should NOT include the apps package itself (it's at "apps", not
+        // "apps/*")
         assert!(
             !packages.contains_key(&PackageName::from("apps")),
             "The 'apps' package itself should not match './*' filter"
@@ -2648,7 +2667,8 @@ mod test {
 
     #[test]
     fn filter_mode_affected_forces_explicit_selection() {
-        // Even with exclude-only patterns, affected overrides to ExplicitSelection.
+        // Even with exclude-only patterns, affected overrides to
+        // ExplicitSelection.
         let affected = Some((Some("main".to_string()), None));
         let mode = resolve_filter_mode_with_changes(
             &["!project-3"],
@@ -2663,9 +2683,10 @@ mod test {
     fn filter_mode_inference_forces_explicit_selection() {
         let inference = Some(PackageInference {
             package_names: vec!["project-0".to_string()],
-            directory_root: AnchoredSystemPathBuf::try_from("packages/project-0").unwrap(),
+            directory_root: AnchoredSystemPathBuf::from_str("packages/project-0").unwrap(),
         });
-        // Exclude-only patterns with inference should still be ExplicitSelection.
+        // Exclude-only patterns with inference should still be
+        // ExplicitSelection.
         let mode = resolve_filter_mode(&["!project-3"], &None, inference);
         assert_eq!(mode, FilterMode::ExplicitSelection);
     }

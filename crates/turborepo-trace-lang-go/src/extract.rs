@@ -308,7 +308,8 @@ impl<'s> Recognizer<'s, '_> {
     }
 
     fn run(&mut self) {
-        // Comment group tracking for the cgo preamble: (first, last) token index.
+        // Comment group tracking for the cgo preamble: (first, last) token
+        // index.
         let mut group: Option<(usize, usize)> = None;
         // The last four significant token indices, most recent first.
         let mut sig: [Option<usize>; 4] = [None; 4];
@@ -355,8 +356,9 @@ impl<'s> Recognizer<'s, '_> {
         if !self.toks[j].is_punct(self.src, b'(') {
             return self.import_spec(j, preamble);
         }
-        // Block: specs until `)`. Comments directly before a spec are its doc (the cgo
-        // preamble for `"C"`), else the declaration's doc applies.
+        // Block: specs until `)`. Comments directly before a spec are its doc
+        // (the cgo preamble for `"C"`), else the declaration's doc
+        // applies.
         let mut i = j + 1;
         let mut group: Option<(usize, usize)> = None;
         while i < self.toks.len() {
@@ -434,8 +436,8 @@ impl<'s> Recognizer<'s, '_> {
                     Cow::Borrowed(p) => default_binding(p),
                     Cow::Owned(_) => "",
                 };
-                // An import path written with escapes (legal, never seen in practice) binds
-                // no name for API matching.
+                // An import path written with escapes (legal, never seen in
+                // practice) binds no name for API matching.
                 if !b.is_empty() {
                     self.bindings.insert(b, path.clone());
                 }
@@ -874,7 +876,8 @@ impl<'s> Recognizer<'s, '_> {
             }) {
                 continue;
             }
-            // Targets: identifiers separated by commas, back to the start of the line.
+            // Targets: identifiers separated by commas, back to the start of
+            // the line.
             let mut j = if short { k - 1 } else { k };
             let mut targets: Vec<&'s [u8]> = Vec::new();
             let mut ok = true;
@@ -1027,9 +1030,10 @@ impl<'s> Recognizer<'s, '_> {
             if v.anchor != Some(GoAnchor::SrcDir) {
                 continue;
             }
-            // A literal path to a file is a reference to exactly that file. A directory is
-            // a base for something this call does not say: the names scan
-            // counts it as a use of the location instead (`crate::names`), with
+            // A literal path to a file is a reference to exactly that file. A
+            // directory is a base for something this call does not
+            // say: the names scan counts it as a use of the
+            // location instead (`crate::names`), with
             // the same test.
             let n = v.normalized();
             if n.as_str().is_some_and(crate::names::literal_file_path) {
@@ -1447,8 +1451,9 @@ func f(name string) {
 
     #[test]
     fn paths_joined_from_the_location_are_assets_wherever_they_are() {
-        // Returned by a helper (the real shape), passed to a function, bound to a name,
-        // and given to a tracked API: one reference each, none twice.
+        // Returned by a helper (the real shape), passed to a function, bound to
+        // a name, and given to a tracked API: one reference each, none
+        // twice.
         let src = r#"package a
 
 import (

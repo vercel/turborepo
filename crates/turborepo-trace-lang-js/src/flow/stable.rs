@@ -263,8 +263,10 @@ impl<'a, 's> Engine<'a, 's> {
                                 m.object.get_inner_expression(),
                                 Expression::ThisExpression(_)
                             );
-                            // `other.#x = v` writes the field of another instance (of any
-                            // class with a field of that name, as far as this scan knows).
+                            // `other.#x = v` writes the field of another
+                            // instance (of any
+                            // class with a field of that name, as far as this
+                            // scan knows).
                             f.this_writes.push(ThisWrite {
                                 class: if this {
                                     self.enclosing_class(node.id())
@@ -385,8 +387,9 @@ impl<'a, 's> Engine<'a, 's> {
                     };
                     let method = m.property.name.as_str();
                     let recv = m.object.get_inner_expression();
-                    // A tracked binding checks its own uses; a container created right there
-                    // (`new Set().add(x)`) has no alias yet.
+                    // A tracked binding checks its own uses; a container
+                    // created right there (`new Set().
+                    // add(x)`) has no alias yet.
                     let tracked = matches!(recv, Expression::Identifier(id) if self.tracked_root(id))
                         || is_fresh_container(recv, 0);
                     let copy = matches!(recv, Expression::CallExpression(inner)
@@ -548,9 +551,10 @@ impl<'a, 's> Engine<'a, 's> {
     /// the module docs).
     pub(super) fn stabilize(&mut self, sym: SymbolId, v: V<'a>) -> V<'a> {
         if self.checking.contains(&sym) || self.checking.len() >= 4 {
-            // The uses of this binding are not checked here (it is being checked further
-            // up, or the nesting bound is reached), so its own `push` / `set` calls are not
-            // part of the value: it can hold anything. The file-wide facts do not help,
+            // The uses of this binding are not checked here (it is being
+            // checked further up, or the nesting bound is reached),
+            // so its own `push` / `set` calls are not part of the
+            // value: it can hold anything. The file-wide facts do not help,
             // they leave out the mutations of tracked bindings.
             let open = V::unknown(Tag::Unknown, "", "container not evaluated");
             return join(v.into_leaves().into_iter().map(|l| match l {
@@ -572,7 +576,8 @@ impl<'a, 's> Engine<'a, 's> {
         self.checking.push(sym);
         let scoping = self.scoping;
         let (exported, frozen) = self.exported_frozen(sym);
-        // `Object.freeze` is shallow: importers can still change a nested container.
+        // `Object.freeze` is shallow: importers can still change a nested
+        // container.
         let nested = |v: &V<'a>| {
             v.leaves().iter().any(|l| match l {
                 V::Object(o) => o.props.iter().any(|(_, x)| x.has_container()),
@@ -589,7 +594,8 @@ impl<'a, 's> Engine<'a, 's> {
             None => false,
         };
         let mut taint = exported && !frozen;
-        // `binding.sort()`, `binding.reverse()`, `binding.shift()`: positions change.
+        // `binding.sort()`, `binding.reverse()`, `binding.shift()`: positions
+        // change.
         let mut reordered = false;
         // Properties whose value is handed to code that is not evaluated.
         let mut escapes: Vec<Option<String>> = Vec::new();
@@ -624,8 +630,9 @@ impl<'a, 's> Engine<'a, 's> {
                         }
                     }
                     Use::Method(name, args) => {
-                        // A method of the object literal itself (whatever its name: `set`,
-                        // `add`, `push` included): fine unless it can reach the object
+                        // A method of the object literal itself (whatever its
+                        // name: `set`, `add`, `push`
+                        // included): fine unless it can reach the object
                         // through `this`.
                         let own = v
                             .leaves()
@@ -670,8 +677,9 @@ impl<'a, 's> Engine<'a, 's> {
             }
         }
         self.checking.pop();
-        // An escaping property matters when it can hold a container: in the literal or
-        // assigned later (the assignments are known only now).
+        // An escaping property matters when it can hold a container: in the
+        // literal or assigned later (the assignments are known only
+        // now).
         for key in &escapes {
             let named = |k: &str| key.as_deref().is_none_or(|want| want == k);
             let in_literal = v.leaves().iter().any(|l| match l {
@@ -761,8 +769,8 @@ impl<'a, 's> Engine<'a, 's> {
         let scoping = self.scoping;
         for r in scoping.get_resolved_references(sym) {
             if !r.is_read() && self.sym.is_some() {
-                // A type position (cross-file facts only: the per-file pass judges it
-                // like any other use).
+                // A type position (cross-file facts only: the per-file pass
+                // judges it like any other use).
                 continue;
             }
             if !self.use_only_reads(r.node_id(), depth) {
@@ -941,15 +949,16 @@ impl<'a, 's> Engine<'a, 's> {
                 let Some(m) = key else {
                     return Use::Taint;
                 };
-                // `binding.add(a).add(b)`, `const s = binding.sort()`: the result is the
-                // container again.
+                // `binding.add(a).add(b)`, `const s = binding.sort()`: the
+                // result is the container again.
                 let result = if SELF_RETURNING.contains(&m.as_str()) {
                     self.result_use(gid)
                 } else {
                     Use::Read
                 };
-                // `binding.forEach((x, i, all) => all.push(y))`: an iteration callback gets
-                // the container as its last parameter.
+                // `binding.forEach((x, i, all) => all.push(y))`: an iteration
+                // callback gets the container as its last
+                // parameter.
                 let position = match m.as_str() {
                     "forEach" | "map" | "filter" | "find" | "findLast" | "findIndex"
                     | "findLastIndex" | "some" | "every" | "flatMap" => Some(2),
@@ -1210,8 +1219,8 @@ impl<'a, 's> Engine<'a, 's> {
             }
         }
         if (inits.is_empty() && params.is_empty()) || inits.len() > 32 {
-            // Never assigned in the class (injected by a decorator or a framework), or too
-            // many assignments to join.
+            // Never assigned in the class (injected by a decorator or a
+            // framework), or too many assignments to join.
             return self.unk(Tag::Unknown, "", span);
         }
         // Other activations: the frames of inlined calls do not apply.

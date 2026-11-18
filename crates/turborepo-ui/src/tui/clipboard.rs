@@ -117,8 +117,9 @@ fn copy_impl(s: &str, provider: &Provider) -> std::io::Result<()> {
                 .stdout(Stdio::null())
                 .stderr(Stdio::null())
                 .spawn()?;
-            // Do not exit early if we fail to write to the clipboard, make sure we attempt
-            // to wait on the clipboard to exit to avoid a zombie process.
+            // Do not exit early if we fail to write to the clipboard, make sure
+            // we attempt to wait on the clipboard to exit to avoid
+            // a zombie process.
             let write_result = match child.stdin.as_mut() {
                 Some(stdin) => std::io::Write::write_all(stdin, s.as_bytes()),
                 None => Err(std::io::Error::other(

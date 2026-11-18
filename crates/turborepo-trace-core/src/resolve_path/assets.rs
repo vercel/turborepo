@@ -220,8 +220,8 @@ impl AssetRules {
         if dir == cx.from_dir && !allow_own_dir {
             return Some("the referencing file's own directory".into());
         }
-        // `fs.readdirSync(__dirname)` lists the own directory even when it is also the
-        // cwd.
+        // `fs.readdirSync(__dirname)` lists the own directory even when it is
+        // also the cwd.
         if dir == cx.options.cwd && !(allow_own_dir && dir == cx.from_dir) {
             return Some("the runtime working directory".into());
         }
@@ -280,9 +280,10 @@ impl AssetRules {
         cx: &ResolveCx<'_>,
     ) -> Resolution {
         let path = normalize(&base.join(spec));
-        // Outside the repository, or inside it at this place only (an absolute path, a
-        // climb above the base that comes back in through the checkout's own name): not
-        // looked up where it lands, and read as the repository seen from another place.
+        // Outside the repository, or inside it at this place only (an absolute
+        // path, a climb above the base that comes back in through the
+        // checkout's own name): not looked up where it lands, and read
+        // as the repository seen from another place.
         if cx.is_host_path(&path) || cx.names_host_path(base, spec) {
             let host = host_reference(r, &path, spec, cx);
             let mut readings = self.readings(base, located, spec, spec, false, cx);
@@ -312,7 +313,8 @@ impl AssetRules {
                     .as_ref()
                     .is_some_and(|u| u.kind == UncertaintyKind::CaseMismatch);
                 if probe && !case_mismatch {
-                    // A probe of a missing path (`existsSync`) is normal: keep a quiet record.
+                    // A probe of a missing path (`existsSync`) is normal: keep
+                    // a quiet record.
                     return Resolution::target(Target::Unresolved);
                 }
                 res
@@ -327,8 +329,9 @@ impl AssetRules {
             return host_reference(r, dir, "", cx);
         }
         if let Some(why) = self.invalid_dir(dir, cx, r.kind == RefKind::FsReadDir) {
-            // Reading the cwd or an ancestor as a whole is not modelled; a plain fs probe
-            // of such a directory (`existsSync(process.cwd())`) is harmless.
+            // Reading the cwd or an ancestor as a whole is not modelled; a
+            // plain fs probe of such a directory
+            // (`existsSync(process.cwd())`) is harmless.
             if r.kind == RefKind::FsRead {
                 return Resolution::target(Target::Unresolved);
             }
@@ -343,9 +346,9 @@ impl AssetRules {
         let pattern = g.pattern.clone();
         let mut res = Resolution::target(g.into_target(cx));
         if truncated {
-            // Covered: a non-module reference reads contents below `dir` only, so the
-            // directory bounds every file it can read (the matches beyond the cap
-            // included).
+            // Covered: a non-module reference reads contents below `dir` only,
+            // so the directory bounds every file it can read (the
+            // matches beyond the cap included).
             let u = Uncertainty::new(
                 UncertaintyKind::PatternTooBroad,
                 r.span,
@@ -420,14 +423,15 @@ impl AssetRules {
         };
         if host_pattern_dir(&static_dir, base, first, cx) {
             let mut host = host_reference(r, &static_dir, first, cx);
-            // The static directory as the repository seen from another place: the pattern
-            // below each directory it may name.
+            // The static directory as the repository seen from another place:
+            // the pattern below each directory it may name.
             let prefix = static_prefix(first);
             let shown = format!("{first}*");
             let mut readings = self.readings(base, located, prefix, &shown, true, cx);
-            // A directory computed directly below a place the repository may be mounted at
-            // (`/app/${dir}/x.json`): mounted there, the path would be `*/x.json` from the
-            // root, a glob over the whole repository, and is not read that way. An
+            // A directory computed directly below a place the repository may be
+            // mounted at (`/app/${dir}/x.json`): mounted there, the
+            // path would be `*/x.json` from the root, a glob over
+            // the whole repository, and is not read that way. An
             // assumption, so the read keeps a record that `--strict` counts
             // ([`crate::output::MOUNT_READ_NOTE`]).
             if self.computed_below_mount(r, first, parts.len(), parts.get(1), cx)
@@ -435,9 +439,10 @@ impl AssetRules {
             {
                 host.uncertainty = Some(mount_record(r));
             }
-            // Mounted at the static directory itself: for a name that is computed as a
-            // whole (`'/app/' + name`). A pattern with more to it (`'/srv/x/' + v +
-            // '/node_modules/pkg/index.js'`) would be a glob over the whole repository.
+            // Mounted at the static directory itself: for a name that is
+            // computed as a whole (`'/app/' + name`). A pattern
+            // with more to it (`'/srv/x/' + v + '/node_modules/pkg/
+            // index.js'`) would be a glob over the whole repository.
             if first.ends_with('/') && parts.len() == 2 && matches!(parts[1], PatPart::Wild { .. })
             {
                 readings.extend(self.root_reading(prefix, &shown, cx));
@@ -454,8 +459,8 @@ impl AssetRules {
         if self.is_outside(cx, &static_dir) {
             return Resolution::target(Target::Unresolved);
         }
-        // nft's `validWildcard`: `<dir>/*` for the own dir, cwd, a marker dir or an
-        // ancestor.
+        // nft's `validWildcard`: `<dir>/*` for the own dir, cwd, a marker dir
+        // or an ancestor.
         let rest_is_wild = match first.rfind('/') {
             Some(i) => i + 1 == first.len(),
             None => first.is_empty(),
@@ -758,8 +763,8 @@ impl AssetRules {
         match spec {
             Specifier::Literal(s) => {
                 let p = normalize(&base.join(&**s));
-                // Outside, or inside at this place only: written as an absolute path or as a
-                // climb above the base.
+                // Outside, or inside at this place only: written as an absolute
+                // path or as a climb above the base.
                 if !cx.is_host_path(&p) && !cx.names_host_path(base, s) {
                     return None;
                 }
@@ -786,8 +791,9 @@ impl AssetRules {
                     let prefix = static_prefix(first);
                     let shown = format!("{first}*");
                     let mut readings = self.readings(base, located, prefix, &shown, true, cx);
-                    // (A directory computed directly below a place the repository may be
-                    // mounted at: see [`AssetRules::computed_below_mount`].)
+                    // (A directory computed directly below a place the
+                    // repository may be mounted at: see
+                    // [`AssetRules::computed_below_mount`].)
                     if is_probe_kind(r.kind)
                         && first.ends_with('/')
                         && parts.len() > 2
@@ -797,8 +803,9 @@ impl AssetRules {
                     {
                         host.uncertainty = Some(mount_record(r));
                     }
-                    // For a read, not a module load: a load by an absolute path keeps
-                    // the record of a module that may be the machine's.
+                    // For a read, not a module load: a load by an absolute path
+                    // keeps the record of a module that may
+                    // be the machine's.
                     if is_probe_kind(r.kind)
                         && first.ends_with('/')
                         && parts.len() == 2
@@ -892,9 +899,10 @@ pub fn host_reference(
 ) -> Resolution {
     let absolute = spelled.starts_with('/');
     if is_probe_kind(r.kind) {
-        // A read below a temporary directory that the code writes out: what is there
-        // was made at run time. An assumption (a build step may copy a file of
-        // the repository there), so it keeps a record that `--strict` counts.
+        // A read below a temporary directory that the code writes out: what is
+        // there was made at run time. An assumption (a build step may
+        // copy a file of the repository there), so it keeps a record
+        // that `--strict` counts.
         if absolute && is_temp_path(path) {
             return Resolution::unresolved(
                 Uncertainty::new(
@@ -930,9 +938,10 @@ pub fn host_reference(
         )
         .with_origin(Origin::Data)
     } else {
-        // What the text says is how the path is written, not where it lands: at the one
-        // place where an absolute path points into the checkout it is no path "outside
-        // the repository" (a shard shows it from the root on there).
+        // What the text says is how the path is written, not where it lands: at
+        // the one place where an absolute path points into the checkout
+        // it is no path "outside the repository" (a shard shows it from
+        // the root on there).
         let what = if absolute {
             "is an absolute path"
         } else if spelled.is_empty() {
@@ -1175,8 +1184,8 @@ fn alternatives(
     if out.targets.is_empty() {
         out.targets.push(Target::Unresolved);
     }
-    // Fs probes of missing branches stay quiet; module alternatives are conditional
-    // by nature.
+    // Fs probes of missing branches stay quiet; module alternatives are
+    // conditional by nature.
     if !(quiet && is_probe_kind(r.kind)) && out.uncertainty.is_none() {
         out.uncertainty = match &r.uncertainty {
             Some(u) => Some(u.clone()),
@@ -1247,8 +1256,8 @@ fn merge_scopes(a: &UncertaintyScope, b: &UncertaintyScope) -> UncertaintyScope 
     let below = |s: &UncertaintyScope| -> String {
         let rel = s.dir.strip_prefix(&dir).unwrap_or(&s.dir);
         let rel = rel.to_string_lossy();
-        // A directory name with glob syntax can't be written as a literal prefix: cover
-        // everything below the common ancestor instead.
+        // A directory name with glob syntax can't be written as a literal
+        // prefix: cover everything below the common ancestor instead.
         if rel.contains(['*', '?', '[', ']', '{', '}', ',']) {
             "**".to_owned()
         } else if rel.is_empty() {
@@ -1501,7 +1510,8 @@ mod tests {
                 pattern: p.into(),
             })
         };
-        // One wildcard for the whole rest: everything below the static directory.
+        // One wildcard for the whole rest: everything below the static
+        // directory.
         assert_eq!(glob_scope("/r/data/*"), s("/r/data", "**"));
         // Literal text narrows it: the same forms as the glob's memberships.
         assert_eq!(
@@ -1545,13 +1555,15 @@ mod tests {
             u.scope.as_ref().map(|s| &*s.pattern),
             Some("{*/package.json,*/**/*/package.json}")
         );
-        // An existence check or a listing: no scope, the kind of a complete expansion.
+        // An existence check or a listing: no scope, the kind of a complete
+        // expansion.
         r.flags = RefFlags::NAMES;
         let u = glob_uncertainty(&r, &g, 2);
         assert_eq!(u.kind, UncertaintyKind::PartialSpecifier);
         assert!(u.scope.is_none());
         assert!(u.detail.contains("truncated; names only"), "{}", u.detail);
-        // The extractor's own record keeps its kind (a cwd-relative path stays one).
+        // The extractor's own record keeps its kind (a cwd-relative path stays
+        // one).
         r.uncertainty = Some(rec(UncertaintyKind::CwdDependent, "dir"));
         let u = glob_uncertainty(&r, &g, 2);
         assert_eq!(u.kind, UncertaintyKind::CwdDependent);
@@ -1579,7 +1591,8 @@ mod tests {
         let partial = || rec(UncertaintyKind::PartialSpecifier, "2 matches");
         let open = || rec(UncertaintyKind::PatternTooBroad, "not expanded");
         let merge = |a: Option<Uncertainty>, b: Option<Uncertainty>| merge_branch_records(a, b);
-        // A truncated branch after a complete one keeps its scope, in either order.
+        // A truncated branch after a complete one keeps its scope, in either
+        // order.
         let m = merge(Some(partial()), Some(scoped("/r/data", "**"))).unwrap();
         assert_eq!(m.scope, scoped("/r/data", "**").scope);
         let m = merge(Some(scoped("/r/data", "**")), Some(partial())).unwrap();
@@ -1713,7 +1726,8 @@ mod tests {
             ] {
                 assert!(cx.is_host_path(Path::new(p)), "{p}");
             }
-            // The directories the checkout happens to live below are the machine's too.
+            // The directories the checkout happens to live below are the
+            // machine's too.
             for p in ["/work", "/"] {
                 assert!(cx.is_host_path(Path::new(p)), "{p}");
             }
@@ -1721,8 +1735,8 @@ mod tests {
             for p in ["/work/repo", "/work/repo/data", "/opt/modcache/m@v1/f"] {
                 assert!(!cx.is_host_path(Path::new(p)), "{p}");
             }
-            // A pattern above the base: host when spelled as an absolute path, not when it
-            // climbs there or starts at `/`.
+            // A pattern above the base: host when spelled as an absolute path,
+            // not when it climbs there or starts at `/`.
             let base = Path::new("/work/repo");
             let host = |dir: &str, first: &str| host_pattern_dir(Path::new(dir), base, first, cx);
             assert!(host("/work", "/work/"));
@@ -1731,8 +1745,9 @@ mod tests {
             assert!(!host("/work", "../"));
             assert!(!host("/", "/"));
             assert!(!host("/work/repo/data", "data/"));
-            // Inside the base at this place only: an absolute spelling, and a climb above
-            // the base that comes back in through the checkout's own name.
+            // Inside the base at this place only: an absolute spelling, and a
+            // climb above the base that comes back in through the
+            // checkout's own name.
             assert!(host("/work/repo/data", "/work/repo/data/"));
             assert!(host("/work/repo/data", "../repo/data/"));
             assert!(!host("/work/repo/data", "src/../data/"));
@@ -1742,7 +1757,8 @@ mod tests {
             assert_eq!(display_rel(Path::new("/"), cx), "../..");
             assert_eq!(display_rel(Path::new("/tmp/x"), cx), "/tmp/x");
         });
-        // A file outside the base (third-party code in a store) may name its neighbors.
+        // A file outside the base (third-party code in a store) may name its
+        // neighbors.
         with_cx(true, "/store/pkg/index.js", |cx| {
             assert!(!cx.is_host_path(Path::new("/store/pkg/data.json")));
         });
@@ -1756,9 +1772,10 @@ mod tests {
     fn host_references_by_kind() {
         let rules = AssetRules::new(PackageBoundary::NODE_MODULES);
         with_cx(true, "/work/repo/src/a.js", |cx| {
-            // Reads, listings and assets: an external reference, nothing else. Below a
-            // temporary directory that the code writes out: with the record of a path that
-            // is taken to name no file of the repository.
+            // Reads, listings and assets: an external reference, nothing else.
+            // Below a temporary directory that the code writes out:
+            // with the record of a path that is taken to name no
+            // file of the repository.
             for kind in [RefKind::FsRead, RefKind::FsReadDir, RefKind::Asset] {
                 let res = rules.resolve_path(&raw(kind, "/tmp/out"), "/tmp/out", cx);
                 assert_eq!(&res.targets[..], [Target::Unresolved], "{kind}");
@@ -1822,8 +1839,9 @@ mod tests {
                 (UncertaintyKind::ComputedSpecifier, Origin::Data)
             );
             assert!(u.scope.is_none());
-            // `host_reference_at`: literals and the static directory of patterns; nothing
-            // for a path inside the base or a pattern without a directory.
+            // `host_reference_at`: literals and the static directory of
+            // patterns; nothing for a path inside the base or a
+            // pattern without a directory.
             let base = Path::new("/work/repo/src");
             let lit = |s: &'static str| Specifier::Literal(s.into());
             let r = raw(RefKind::Require, "x");
@@ -1839,7 +1857,8 @@ mod tests {
                 },
             ]);
             assert!(host_reference_at(&r, &pat, base, cx).is_some());
-            // A pattern that climbs above the base is neither expanded nor external.
+            // A pattern that climbs above the base is neither expanded nor
+            // external.
             let pat = Specifier::Pattern(vec![
                 Part::Lit("../../".into()),
                 Part::Wild {
@@ -1897,24 +1916,27 @@ mod tests {
             let load = |spec| load_at(base, spec);
             let unresolved =
                 |text: &str| Some((UncertaintyKind::UnresolvedSpecifier, text.to_owned()));
-            // A relative path that leaves the repository is outside it, whatever the
-            // directories above are: not a temporary file below `/tmp`, not metadata below
-            // a directory called `.git`.
+            // A relative path that leaves the repository is outside it,
+            // whatever the directories above are: not a temporary
+            // file below `/tmp`, not metadata below a directory
+            // called `.git`.
             assert_eq!(load("../../sibling/x.js"), unresolved(LEAVES), "{base}");
             assert_eq!(
                 load("../../../../../../far.js"),
                 unresolved(LEAVES),
                 "{base}"
             );
-            // Also when the names above lead back in: the checkout is called `repo` here.
+            // Also when the names above lead back in: the checkout is called
+            // `repo` here.
             assert_eq!(load("../../repo/src/b.js"), unresolved(LEAVES), "{base}");
             // A temporary directory is one the source writes out.
             let temp = Some((UncertaintyKind::ComputedSpecifier, TEMP.to_owned()));
             assert_eq!(load("/tmp/out/bundle.js"), temp, "{base}");
             assert_eq!(load("/tmp/ci/repo/src/b.js"), temp, "{base}");
             assert_eq!(load("/usr/lib/addon.node"), unresolved(ABSOLUTE), "{base}");
-            // An absolute path into the checkout of one machine is not looked up there
-            // either, and the text does not call it a path outside the repository.
+            // An absolute path into the checkout of one machine is not looked
+            // up there either, and the text does not call it a path
+            // outside the repository.
             assert_eq!(load("/work/repo/src/b.js"), unresolved(ABSOLUTE), "{base}");
             // The repository's own metadata, and metadata the source names.
             assert_eq!(load("../.git/hooks/x.js"), unresolved(GIT), "{base}");
@@ -1956,7 +1978,8 @@ mod tests {
                     Some("x: starts at the filesystem root; not expanded".into()),
                     "{base}"
                 );
-                // A read below a host directory is an external reference: no record.
+                // A read below a host directory is an external reference: no
+                // record.
                 assert_eq!(detail("../../sibling/"), None, "{base}");
                 assert!(
                     host_reference_at(&r, &pat("../../sibling/"), cx.from_dir, cx).is_some(),

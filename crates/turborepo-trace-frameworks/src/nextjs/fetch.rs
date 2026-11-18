@@ -573,7 +573,8 @@ fn forward(
             }))
         }
         None => {
-            // An anonymous callback: forwarded if it is an argument of a URL site.
+            // An anonymous callback: forwarded if it is an argument of a URL
+            // site.
             let c = f.enclosing_call(fd.start)?;
             let mut start = c;
             while start >= 2
@@ -635,12 +636,13 @@ pub(crate) fn scan_jsx(ev: &Eval<'_, '_>, f: &Rc<JsFile>, apis: &[UrlApi]) -> Ve
         let known = jsx
             .iter()
             .find(|a| a.module.as_deref() == module.as_deref() && a.name == name);
-        // A component that is given an `href` is a link of the app: a wrapper that
-        // hands its props to `next/link` (`<Link {...props}>`), a link or
-        // button of a design system, a package's component. Where it sends the
-        // visitor is the attribute at its use, whatever the component does with
-        // it, so the use is the site; nothing is assumed about names other than
-        // `href`, the DOM's own.
+        // A component that is given an `href` is a link of the app: a wrapper
+        // that hands its props to `next/link` (`<Link {...props}>`), a
+        // link or button of a design system, a package's component.
+        // Where it sends the visitor is the attribute at its use,
+        // whatever the component does with it, so the use is the site;
+        // nothing is assumed about names other than `href`, the DOM's
+        // own.
         let component = tag.contains('.') || tag.starts_with(|c: char| c.is_ascii_uppercase());
         let (attr, kind, prefix) = match known {
             Some(a) => (
@@ -703,7 +705,8 @@ pub(crate) fn scan_jsx(ev: &Eval<'_, '_>, f: &Rc<JsFile>, apis: &[UrlApi]) -> Ve
                 let start_off = v as u32 + 1;
                 let a_tok = f.toks.iter().position(|t| t.start >= start_off);
                 let Some(a_tok) = a_tok else { continue };
-                // The opening brace token may or may not exist; use the expression end.
+                // The opening brace token may or may not exist; use the
+                // expression end.
                 let b_tok = f.expr_end(a_tok, f.toks.len());
                 if b_tok <= a_tok {
                     continue;
@@ -713,8 +716,8 @@ pub(crate) fn scan_jsx(ev: &Eval<'_, '_>, f: &Rc<JsFile>, apis: &[UrlApi]) -> Ve
             _ => continue,
         };
         let (urls, unresolved) = if all_unknown(&tpls) {
-            // `<form action={serverAction}>`: a function (a server action reached by
-            // import), not a URL.
+            // `<form action={serverAction}>`: a function (a server action
+            // reached by import), not a URL.
             if attr == "action" {
                 continue;
             }

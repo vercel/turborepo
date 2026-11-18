@@ -206,9 +206,10 @@ fn trace_side(ws: &Workspace) -> BTreeMap<(String, String), (Declared, bool)> {
                         .insert(format!("!{}", normalize(&o.path.join(x)).to_string_lossy()));
                 }
             }
-            // Contributions with one id are merged (the root's definition and the
-            // package's, or the root's `<package>#<task>`), as the task graph merges
-            // them: a union where turbo takes the more specific one.
+            // Contributions with one id are merged (the root's definition and
+            // the package's, or the root's `<package>#<task>`), as
+            // the task graph merges them: a union where turbo takes
+            // the more specific one.
             let key = (pkg.rel.clone(), t.name.clone());
             let several = out.contains_key(&key);
             let entry = out
@@ -233,7 +234,8 @@ fn depends_on_and_outputs_cover_turbos_task_definitions() {
         let dir = tempfile::tempdir().unwrap();
         setup::copy_fixture(&name, dir.path()).unwrap();
         setup::setup_git(dir.path()).unwrap();
-        // A workspace turbo can resolve: the fixture's package manager, else npm.
+        // A workspace turbo can resolve: the fixture's package manager, else
+        // npm.
         let manifest = std::fs::read_to_string(dir.path().join("package.json")).unwrap_or_default();
         if !manifest.is_empty() && !manifest.contains("\"packageManager\"") {
             setup::setup_package_manager(dir.path(), "npm@10.5.0").unwrap();
@@ -264,7 +266,8 @@ fn depends_on_and_outputs_cover_turbos_task_definitions() {
                 continue;
             };
             let covered = t.depends_on.is_subset(&o.depends_on) && t.outputs.is_subset(&o.outputs);
-            // Outputs the trace adds for nested packages are exclusions (`!<nested>/**`).
+            // Outputs the trace adds for nested packages are exclusions
+            // (`!<nested>/**`).
             let extra_outputs: BTreeSet<&String> = o
                 .outputs
                 .difference(&t.outputs)

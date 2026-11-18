@@ -269,8 +269,8 @@ static KW_LAST: [u16; 256] = {
 /// the rest dispatches on length and compares at most a few candidates.
 #[inline(always)]
 pub(crate) fn keyword(s: &[u8]) -> Kw {
-    // Bit `len` of `KW_FIRST[first byte]` (`KW_LAST[last byte]`) is set iff some
-    // keyword of that length starts (ends) with that byte.
+    // Bit `len` of `KW_FIRST[first byte]` (`KW_LAST[last byte]`) is set iff
+    // some keyword of that length starts (ends) with that byte.
     let (Some(&first), Some(&last), len) = (s.first(), s.last(), s.len()) else {
         return Kw::None;
     };

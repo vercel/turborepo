@@ -67,8 +67,8 @@ pub fn panic_handler(panic_info: &std::panic::PanicHookInfo) {
         method: "Panic",
         backtrace: Backtrace::force_capture().to_string(),
     });
-    // If we're in CI we don't persist the backtrace to a temp file as this is hard
-    // to retrieve.
+    // If we're in CI we don't persist the backtrace to a temp file as this is
+    // hard to retrieve.
     let should_persist = !turborepo_ci::is_ci() && turborepo_ci::Vendor::infer().is_none();
 
     let report_message = if should_persist {

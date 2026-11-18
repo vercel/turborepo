@@ -146,8 +146,8 @@ fn depinfo_differential() {
         target.display()
     );
 
-    // One trace from every crate root (dependency crates included through Package
-    // edges).
+    // One trace from every crate root (dependency crates included through
+    // Package edges).
     let roots: BTreeSet<PathBuf> = infos.iter().map(|d| d.root.clone()).collect();
     let roots: Vec<PathBuf> = roots.into_iter().filter(|r| r.is_file()).collect();
     let tracer = Tracer::builder()
@@ -180,8 +180,9 @@ fn depinfo_differential() {
         {
             uncertain_files.insert(from.clone());
         }
-        // Module tree plus the workspace `Cargo.toml` (a build-phase manifest): rustc's
-        // dep-info lists it when a crate inherits `[workspace.package]` fields.
+        // Module tree plus the workspace `Cargo.toml` (a build-phase manifest):
+        // rustc's dep-info lists it when a crate inherits
+        // `[workspace.package]` fields.
         let manifest = e.kind == RefKind::Manifest
             && e.phase == turborepo_trace_core::Phase::Build
             && &*e.spec == "workspace Cargo.toml";

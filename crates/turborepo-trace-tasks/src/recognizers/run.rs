@@ -574,7 +574,8 @@ impl Recognizer for GoRun {
                 }
                 let mut pos = positionals(&args);
                 if sub == "run" {
-                    // Only the package/files before the program's own arguments.
+                    // Only the package/files before the program's own
+                    // arguments.
                     let n = pos.iter().take_while(|p| p.ends_with(".go")).count().max(1);
                     pos.truncate(n);
                 }
@@ -631,8 +632,8 @@ pub fn go_package_arg(base: &Path, p: &str, out: &mut TaskSpec) -> bool {
         out.membership(d, "*.go", "go package directory");
         false
     } else {
-        // An import path: local module packages are handled by the Go plugin when
-        // traced as a dependency; remote ones are toolchain.
+        // An import path: local module packages are handled by the Go plugin
+        // when traced as a dependency; remote ones are toolchain.
         out.tool("go", p.split('@').next().unwrap_or(p));
         p.contains('@')
     }

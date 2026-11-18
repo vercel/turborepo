@@ -1796,7 +1796,8 @@ snapshots:
     fn test_scanner_comment_and_crlf_handling() {
         // Full-line comments are meaning-preserving to skip.
         assert_scanner_matches_serde("lockfileVersion: '9.0'\n# a comment\nimporters:\n  .: {}\n");
-        // Inline comments are outside the scanner subset but fine for later tiers.
+        // Inline comments are outside the scanner subset but fine for later
+        // tiers.
         let inline_comment = "lockfileVersion: '9.0'\nimporters:\n  .: {}\nx: y # trailing\n";
         assert!(parse_with_scanner(inline_comment).is_none());
         assert_fast_matches_serde(inline_comment);

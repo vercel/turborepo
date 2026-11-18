@@ -243,8 +243,8 @@ const NODEPS: [(&str, &str); 1] = [("TURBO_TRACE_DEBUG_CONFIG_FIELDS", "nodeps")
 fn consumers_without_an_import() {
     let d = repo();
     let r = d.path();
-    // The JSX runtime: `react` is used by every JSX file, with no import to show
-    // it.
+    // The JSX runtime: `react` is used by every JSX file, with no import to
+    // show it.
     set(r, "react", Some("18.1.0"));
     assert_eq!(since_env(r, &NODEPS), [BABEL, BUTTON, PLAIN, USES]);
     assert_eq!(since(r), [BUTTON]);
@@ -276,9 +276,9 @@ fn a_dependency_nobody_references_selects_nothing() {
         err.contains("none found for gone-lib (not linked, probed or named in the package"),
         "{err}"
     );
-    // Bumped or added with the lockfile: what the install changes is the lockfile
-    // diff's to say (a peer of another dependency); no file of the package
-    // names it.
+    // Bumped or added with the lockfile: what the install changes is the
+    // lockfile diff's to say (a peer of another dependency); no file of the
+    // package names it.
     set(r, "unreferenced", Some("2.0.0"));
     assert!(since(r).is_empty());
     set(r, "brand-new", Some("1.0.0"));
@@ -307,8 +307,8 @@ fn a_dependency_nobody_references_selects_nothing() {
 fn unknown_consumers_keep_the_whole_file() {
     let d = repo();
     let r = d.path();
-    // Named by a tool's config (`.babelrc`): the tool applies to files that have no
-    // edge to its config, so who consumes the plugin is not known.
+    // Named by a tool's config (`.babelrc`): the tool applies to files that
+    // have no edge to its config, so who consumes the plugin is not known.
     set(r, "macros-thing", Some("1.1.0"));
     assert_eq!(since(r), [BABEL, BUTTON, PLAIN, USES]);
     let err = stats(r);
@@ -334,8 +334,8 @@ fn unknown_consumers_keep_the_whole_file() {
     git(r, &["commit", "-q", "-m", "config imports"]);
     set(r, "used-lib", Some("1.2.0"));
     assert_eq!(since(r), [BABEL, USES]);
-    // A range edit without a lockfile change: nothing says what an install would
-    // do.
+    // A range edit without a lockfile change: nothing says what an install
+    // would do.
     git(r, &["checkout", "-q", "--", "."]);
     let mut deps = BASE.to_vec();
     deps.retain(|(n, _)| *n != "unreferenced");

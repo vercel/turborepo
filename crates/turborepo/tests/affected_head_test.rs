@@ -156,7 +156,8 @@ fn explicit_head_lockfile_comparison_is_independent_of_checkout() {
     // A newer local lockfile must not introduce B-only dependencies at A.
     fs::write(root.join("pnpm-lock.yaml"), lockfile("2.0.0", true)).unwrap();
     assert_eq!(query_names(root, &base, Some(&head)), ["//", "a", "app"]);
-    // Machine-local settings unrelated to resolution must not force all packages.
+    // Machine-local settings unrelated to resolution must not force all
+    // packages.
     fs::write(root.join(".npmrc"), "script-shell=bash\n").unwrap();
     assert_eq!(query_names(root, &base, Some(&head)), ["//", "a", "app"]);
     fs::remove_file(root.join(".npmrc")).unwrap();
@@ -184,7 +185,8 @@ fn explicit_head_lockfile_comparison_is_independent_of_checkout() {
             git(root, &["add", "pnpm-lock.yaml"]);
         }
         assert_eq!(query_names(root, &later, Some(&later)), ["//", "b"]);
-        // An explicit ref-to-ref filter ignores local edits, including staged edits.
+        // An explicit ref-to-ref filter ignores local edits, including staged
+        // edits.
         let filter = format!("--filter=[{later}...{later}]");
         let committed = run_turbo(root, &["run", "build", &filter, "--dry=json"]);
         assert!(

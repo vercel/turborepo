@@ -182,9 +182,9 @@ fn map_url(
         Outcome::Routes | Outcome::NotFound => {}
     }
     let mut ids: Vec<&String> = mm.candidates.iter().chain(&mm.routes).collect();
-    // Same refinements as `select::resolve_sites`: a literal segment that names a
-    // static route directory goes there, and a data request targets a handler
-    // (a page only when the URL names it by a static segment).
+    // Same refinements as `select::resolve_sites`: a literal segment that names
+    // a static route directory goes there, and a data request targets a
+    // handler (a page only when the URL names it by a static segment).
     if !nav && mm.via.is_empty() {
         let mut prefix: Vec<&String> = Vec::new();
         for (i, seg) in u.segs.iter().enumerate() {
@@ -234,8 +234,8 @@ fn map_url(
             out.push(t);
         }
     }
-    // A page request: the middleware that runs for the path can rewrite it behind a
-    // prefix.
+    // A page request: the middleware that runs for the path can rewrite it
+    // behind a prefix.
     if matches!(kind, InvokeKind::Navigation | InvokeKind::Redirect)
         && mm.ambiguities.contains(&Ambiguity::Middleware)
     {
@@ -278,8 +278,8 @@ fn map_url(
             pattern,
         });
     } else if out.is_empty() {
-        // No route of this app serves it: a backend behind the same origin (platform
-        // rewrites), or a 404.
+        // No route of this app serves it: a backend behind the same origin
+        // (platform rewrites), or a 404.
         out.push(Target::External {
             origin: String::new(),
             pattern,
@@ -375,8 +375,8 @@ pub(crate) fn map_sites_kept(
                 SiteTarget::Unknown(r) => push(Target::Unknown(r.clone()), None),
             }
         }
-        // A route that another alternative of the site targets by precedence is not
-        // wide.
+        // A route that another alternative of the site targets by precedence is
+        // not wide.
         wide.retain(|(t, _)| !targets.iter().any(|(x, _)| x == t));
         out.push(MappedSite {
             site: i,
@@ -485,10 +485,10 @@ pub(crate) fn prepare(
 ) -> Prepared {
     let (keep_sites, keep_strings) = (&reached.sites, &reached.strings);
     let mut mapped = map_sites_kept(app, sites, trpc, opts, keep_sites, &reached.middleware);
-    // A pattern that is a prefix glued to an unknown path (`/api${path}`: a wrapper
-    // that adds a prefix, called with an unknown URL) is an unknown target too;
-    // under the bound it reaches the routes of `prefix + s` for the URL-like
-    // strings `s` of the closure.
+    // A pattern that is a prefix glued to an unknown path (`/api${path}`: a
+    // wrapper that adds a prefix, called with an unknown URL) is an unknown
+    // target too; under the bound it reaches the routes of `prefix + s` for
+    // the URL-like strings `s` of the closure.
     let mut prefixes: Vec<Vec<String>> = vec![Vec::new()];
     if opts.bound_unknown {
         for (i, site) in sites.iter().enumerate() {
@@ -515,8 +515,8 @@ pub(crate) fn prepare(
             }
         }
     }
-    // URL-like strings: the handler routes each one matches (alone, and after each
-    // prefix).
+    // URL-like strings: the handler routes each one matches (alone, and after
+    // each prefix).
     let string_routes: Vec<Vec<String>> = {
         let m = app.matcher().with_context(opts.context.clone());
         let keys: HashMap<&str, (String, &Route)> = app
@@ -535,8 +535,9 @@ pub(crate) fn prepare(
         let own = [opts.context.host.clone()];
         let no_mw = MiddlewareFacts::default();
         let mut cache: HashMap<UrlPat, Vec<String>> = HashMap::new();
-        // Handlers by their first segment: a string that overlaps no handler and that
-        // no rule rewrites matches none, without asking the matcher.
+        // Handlers by their first segment: a string that overlaps no handler
+        // and that no rule rewrites matches none, without asking the
+        // matcher.
         let mut by_first: HashMap<&str, Vec<&Route>> = HashMap::new();
         let mut dynamic_first: Vec<&Route> = Vec::new();
         for r in app

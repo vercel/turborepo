@@ -81,7 +81,8 @@ fn ambient_files_are_ignored_even_when_empty_invalid_or_nonfiles() -> TestResult
         assert!(fixture.check().is_ok(), "{}", path.display());
         fs::remove_dir(&path)?;
     }
-    // Ambient registry configuration cannot override or invalidate applied mirrors.
+    // Ambient registry configuration cannot override or invalidate applied
+    // mirrors.
     fs::write(
         fixture.root.join("turbo.json"),
         r#"{"setup":{"mirrors":{"npmRegistry":"https://mirror.invalid/npm"}}}"#,
@@ -329,8 +330,8 @@ fn lexical_and_canonical_invocation_ancestors_are_both_checked() -> TestResult {
 fn invalid_locations_and_owned_boundary_escapes_are_rejected() -> TestResult {
     let fixture = Fixture::new()?;
     let outside = tempfile::tempdir()?;
-    // PathBuf::join normalizes `..` on Windows verbatim paths; keep the traversal
-    // literal.
+    // PathBuf::join normalizes `..` on Windows verbatim paths; keep the
+    // traversal literal.
     let parent_traversal = |base: &Path| {
         let mut path = base.as_os_str().to_os_string();
         path.push(std::path::MAIN_SEPARATOR_STR);

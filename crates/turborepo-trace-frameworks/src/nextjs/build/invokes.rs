@@ -477,7 +477,8 @@ mod tests {
 
     #[test]
     fn relation_json_shape() {
-        // The shape agreed with the static extraction (extra fields are ignored).
+        // The shape agreed with the static extraction (extra fields are
+        // ignored).
         let json = r#"{"version":1,"stats":{"sites":3},"sites":{},"routes":{"app/report/page":[
             {"kind":"fetch","target":{"route":"app/api/report-data/route"},"file":"app/report/page.tsx","line":4,"method":"GET","via":["fetch"]},
             {"kind":"swr","target":{"external":{"origin":"https://api.example.com","pattern":"/v1/x"}},"file":"a.ts","line":1},

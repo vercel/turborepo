@@ -12,9 +12,10 @@ use std::{
 };
 
 fn manifest_dir() -> PathBuf {
-    // Prefer the runtime env var, which nextest sets when using --workspace-remap
-    // (e.g. running archived tests on a different machine). Fall back to the
-    // compile-time value for normal `cargo test` runs.
+    // Prefer the runtime env var, which nextest sets when using
+    // --workspace-remap (e.g. running archived tests on a different
+    // machine). Fall back to the compile-time value for normal `cargo test`
+    // runs.
     match std::env::var("CARGO_MANIFEST_DIR") {
         Ok(dir) => PathBuf::from(dir),
         Err(_) => PathBuf::from(env!("CARGO_MANIFEST_DIR")),
@@ -213,7 +214,8 @@ pub fn install_deps(
 ) -> Result<(), anyhow::Error> {
     let pm_name = package_manager.split('@').next().unwrap_or(package_manager);
 
-    // Build the PATH with the corepack directory so the correct PM version is used
+    // Build the PATH with the corepack directory so the correct PM version is
+    // used
     let path_env = prepend_to_path(corepack_dir);
 
     match pm_name {
@@ -459,8 +461,9 @@ where
             Ok(()) => break,
             Err(e) => {
                 let lock_exists = e.kind() == ErrorKind::AlreadyExists;
-                // Windows can report access denied while another test process is
-                // removing the directory lock. Treat it as contention and retry.
+                // Windows can report access denied while another test process
+                // is removing the directory lock. Treat it as
+                // contention and retry.
                 let access_denied_during_lock_transition =
                     cfg!(windows) && e.kind() == ErrorKind::PermissionDenied;
                 if !lock_exists && !access_denied_during_lock_transition {

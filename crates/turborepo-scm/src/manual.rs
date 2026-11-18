@@ -404,8 +404,8 @@ pub(crate) fn get_input_file_hashes_without_git<S: AsRef<str>>(
         }
     }
 
-    // If we're including default files, we need to walk again, but this time with
-    // git_ignore enabled
+    // If we're including default files, we need to walk again, but this time
+    // with git_ignore enabled
     if include_default_files {
         walker_builder.filter_entry(bounded_entry_filter(
             &full_package_path,
@@ -457,7 +457,8 @@ pub(crate) fn get_input_file_hashes_without_git<S: AsRef<str>>(
                 continue;
             }
 
-            // Skip files already hashed in the first walk to avoid redundant I/O.
+            // Skip files already hashed in the first walk to avoid redundant
+            // I/O.
             if hashes.contains_key(&relative_path) {
                 continue;
             }
@@ -867,11 +868,12 @@ mod tests {
     #[test]
     fn test_nested_package_paths_in_parent_gitignore_are_applied() {
         // A root .gitignore can ignore a path nested more than one level inside
-        // a package (e.g. "child-dir/libA/logs/exec"). Git-based hashing applies
-        // such patterns, and the manual walk must match: with ignore 0.4.22 they
-        // were silently dropped when the walk was rooted at the package
-        // directory, so per-run files under the "ignored" path leaked into the
-        // package's hashes and the affected tasks missed the cache on every run.
+        // a package (e.g. "child-dir/libA/logs/exec"). Git-based hashing
+        // applies such patterns, and the manual walk must match: with
+        // ignore 0.4.22 they were silently dropped when the walk was
+        // rooted at the package directory, so per-run files under the
+        // "ignored" path leaked into the package's hashes and the
+        // affected tasks missed the cache on every run.
         let (_tmp, turbo_root) = tmp_dir();
         let pkg_path = AnchoredSystemPathBuf::from_raw("child-dir/libA").unwrap();
 
@@ -924,7 +926,8 @@ mod tests {
         let pkg_dir = turbo_root.resolve(&pkg_path);
         pkg_dir.create_dir_all().unwrap();
 
-        // Create files: one matched by the explicit include, one only in defaults
+        // Create files: one matched by the explicit include, one only in
+        // defaults
         let shared_file = pkg_dir.join_component("shared.ts");
         shared_file.create_with_contents("shared content").unwrap();
 
@@ -985,8 +988,9 @@ mod tests {
 
     #[test]
     fn test_include_default_files_with_exclusion() {
-        // Verify that exclusions work correctly when include_default_files=true:
-        // excluded files should not appear even if the default walk finds them.
+        // Verify that exclusions work correctly when
+        // include_default_files=true: excluded files should not appear
+        // even if the default walk finds them.
         let (_tmp, turbo_root) = tmp_dir();
         let pkg_path = AnchoredSystemPathBuf::from_raw("lib").unwrap();
         let pkg_dir = turbo_root.resolve(&pkg_path);
@@ -1064,7 +1068,8 @@ mod tests {
             hashes.contains_key(&RelativeUnixPathBuf::new("src/utils/helper.ts").unwrap()),
             "src/utils/helper.ts should be present"
         );
-        // package.json and turbo.json are auto-added when includes are specified
+        // package.json and turbo.json are auto-added when includes are
+        // specified
         assert!(
             !hashes.contains_key(&RelativeUnixPathBuf::new("readme.md").unwrap()),
             "readme.md should NOT be present"
@@ -1124,7 +1129,8 @@ mod tests {
 
         // 128KB: spans multiple 64KB read buffers
         let multi_buf_content = vec![b'A'; 128 * 1024];
-        // Exactly 64KB: boundary where one read fills the buffer and the next returns 0
+        // Exactly 64KB: boundary where one read fills the buffer and the next
+        // returns 0
         let exact_buf_content = vec![b'B'; 64 * 1024];
 
         let cases: Vec<(&str, Vec<u8>)> = vec![

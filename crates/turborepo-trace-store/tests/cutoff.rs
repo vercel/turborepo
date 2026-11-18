@@ -163,8 +163,8 @@ fn refresh_equals_cold_with(root: &Path, what: &str, langs: &[Arc<dyn Language>]
                 .take(8)
                 .map(|l| format!("only fresh: {}", l.trim())),
         );
-        // For a look at the whole difference: both exports, written where the variable
-        // says.
+        // For a look at the whole difference: both exports, written where the
+        // variable says.
         if let Some(dir) = std::env::var_os("TURBO_TRACE_DEBUG_CUTOFF_DUMP") {
             let dir = std::path::PathBuf::from(dir);
             let _ = std::fs::write(dir.join("refreshed.json"), &got_json);
@@ -260,8 +260,8 @@ fn a_file_added_below_a_shared_hub_rekeys_no_package() {
     // Only the root package (it lists its own directory) may be traced again.
     assert!(rep.traced <= 1, "traced {} shards", rep.traced);
 
-    // The composed graph expands the hub from the walked files: the new file is a
-    // member.
+    // The composed graph expands the hub from the walked files: the new file is
+    // a member.
     let g = Graph::open(&r.join(".turbotrace")).unwrap();
     use turborepo_trace_graph::GraphView;
     let hub = (0..g.node_count())
@@ -314,9 +314,9 @@ fn a_listing_that_code_reads_still_rekeys() {
 fn a_third_party_member_of_a_hub_rekeys_it() {
     let (_t, r) = canonical_tmp();
     hub_fixture(&r);
-    // A Go module vendored in the repository: its files are walked, members of the
-    // hub, and files of a third-party package (the hub stores their edges
-    // itself, `HubRec::skip`).
+    // A Go module vendored in the repository: its files are walked, members of
+    // the hub, and files of a third-party package (the hub stores their
+    // edges itself, `HubRec::skip`).
     write(
         &r,
         "go.mod",
@@ -775,10 +775,10 @@ fn workspace(r: &Path) {
     write(r, "packages/b/package.json", B_MANIFESTS[0]);
     write(r, "packages/b/src/index.ts", "export default 2;\n");
     write(r, "packages/b/src/other.ts", "export default 3;\n");
-    // Configs that some `TSCONFIGS` extend, always there: one of the linked package
-    // `b` that extends `./chained` (`chained.json`; `DIRS` has a directory of
-    // that name), and one next to a directory whose name reads as a pattern
-    // (`DIRS`: `[cfg]`).
+    // Configs that some `TSCONFIGS` extend, always there: one of the linked
+    // package `b` that extends `./chained` (`chained.json`; `DIRS` has a
+    // directory of that name), and one next to a directory whose name reads
+    // as a pattern (`DIRS`: `[cfg]`).
     write(r, "packages/b/chain.json", r#"{"extends":"./chained"}"#);
     write(
         r,
@@ -838,8 +838,9 @@ fn a_deleted_or_added_file_retraces_the_files_that_looked_for_it() {
         rep.kept_files,
         rep.analyzed_files
     );
-    // `./util` goes: a file of the package is gone, and the package is traced as a
-    // whole (a lookup that found the file may have left no record of it).
+    // `./util` goes: a file of the package is gone, and the package is traced
+    // as a whole (a lookup that found the file may have left no record of
+    // it).
     std::fs::remove_file(r.join("packages/a/src/util.ts")).unwrap();
     let rep = refresh_equals_cold(&r, "an imported file is deleted");
     assert_eq!(rep.kept_files, 0, "kept {}", rep.kept_files);
@@ -860,8 +861,8 @@ fn what_was_there_and_is_gone_keeps_no_file() {
     let rep = refresh_equals_cold(&r, "a file nothing reached is deleted");
     assert_eq!(rep.traced, 1, "one package");
     assert_eq!(rep.kept_files, 0, "a file of the package is gone");
-    // The same file added again: what appears is covered by what each file looked
-    // for.
+    // The same file added again: what appears is covered by what each file
+    // looked for.
     write(&r, "packages/a/src/alias.ts", "export const v = 1;\n");
     let rep = refresh_equals_cold(&r, "the file is back");
     assert!(rep.kept_files >= 6, "kept {}", rep.kept_files);
@@ -872,8 +873,9 @@ fn what_was_there_and_is_gone_keeps_no_file() {
     let rep = refresh_equals_cold(&r, "a reached file of another package is deleted");
     assert_eq!(rep.kept_files, 0, "a reached file is gone");
 
-    // The place of a package link: an installed package, and the link of `c` to the
-    // workspace package `a` (`c` has a file that imports nothing through it).
+    // The place of a package link: an installed package, and the link of `c` to
+    // the workspace package `a` (`c` has a file that imports nothing
+    // through it).
     let (_t, r) = built_workspace();
     apply(&r, &Edit::Uninstall);
     let rep = refresh_equals_cold(&r, "a linked package is uninstalled");
@@ -884,9 +886,9 @@ fn what_was_there_and_is_gone_keeps_no_file() {
     assert_eq!(rep.traced, 1, "one package");
     assert_eq!(rep.kept_files, 0, "the place of a link is gone");
 
-    // A manifest that files of other packages reached: the manifest of `a`, for the
-    // file of `c` and the file of the root that import `a`. Each of the two
-    // packages has another file that reached nothing of `a`.
+    // A manifest that files of other packages reached: the manifest of `a`, for
+    // the file of `c` and the file of the root that import `a`. Each of the
+    // two packages has another file that reached nothing of `a`.
     let (_t, r) = built_workspace();
     std::fs::remove_file(r.join("packages/a/package.json")).unwrap();
     let rep = refresh_equals_cold(&r, "the manifest of an imported package is deleted");
@@ -929,7 +931,8 @@ fn a_changed_config_retraces_its_readers() {
     let rep = refresh_equals_cold(&r, "the task pipeline changes");
     assert_eq!(rep.analyzed_files, 0, "only tasks are computed again");
     assert!(rep.kept_files > 0, "kept {}", rep.kept_files);
-    // The lockfile: a dependency the importer did not have, then a version bump.
+    // The lockfile: a dependency the importer did not have, then a version
+    // bump.
     write(&r, "packages/a/package.json", A_MANIFESTS[1]);
     refresh_equals_cold(&r, "a dependency entry is added");
     lodash(&r, "4.17.30", "sha512-new");
@@ -1322,7 +1325,8 @@ fn apply(r: &Path, e: &Edit) {
         Edit::FileLink(i) => {
             let (link, target) = FILE_LINKS[*i];
             if r.join(link).is_dir() && !r.join(link).is_symlink() {
-                // (The setup file as a directory, `PATHS`: the link takes its place.)
+                // (The setup file as a directory, `PATHS`: the link takes its
+                // place.)
                 remove(r, link);
             }
             symlink(r, target, link);
@@ -1802,14 +1806,14 @@ fn a_load_next_to_a_module_follows_the_lockfile_link() {
         );
         g.contains(not_known)
     };
-    // No lockfile entry for the importer; then a package of the repository takes
-    // the name.
+    // No lockfile entry for the importer; then a package of the repository
+    // takes the name.
     let open = step(&load, "the load");
     assert!(!open, "no entry");
     let open = step(&Edit::ManifestB(4), "a package takes the name");
     assert!(!open, "the name alone");
-    // The lockfile links the importer to it, then to the registry package, then to
-    // it again.
+    // The lockfile links the importer to it, then to the registry package, then
+    // to it again.
     let open = step(
         &Edit::LeftPad(true),
         "the lockfile links the package of the repository",
@@ -1825,9 +1829,9 @@ fn a_load_next_to_a_module_follows_the_lockfile_link() {
     // The lockfile goes.
     let open = step(&Edit::Lock(false), "no lockfile");
     assert!(!open, "no lockfile");
-    // Other orders, and a module searched from another package of the repository
-    // (`packages/c`, whose importer has the registry entry): compared with a cold
-    // build.
+    // Other orders, and a module searched from another package of the
+    // repository (`packages/c`, whose importer has the registry entry):
+    // compared with a cold build.
     replay(
         "a package loses the name",
         &[Edit::ManifestB(4), load.clone(), Edit::ManifestB(0)],
@@ -1864,8 +1868,8 @@ fn a_load_next_to_a_module_follows_the_lockfile_link() {
 /// (`turborepo_trace_core::record::key`).
 #[test]
 fn a_referenced_project_that_changes_retraces_the_files_that_consulted_it() {
-    // Whether the export of the refreshed graph (which is the cold build's) has the
-    // record of a project reference that was skipped.
+    // Whether the export of the refreshed graph (which is the cold build's) has
+    // the record of a project reference that was skipped.
     let skipped = |r: &Path| {
         export(&r.join(".turbotrace"))
             .0
@@ -1882,8 +1886,8 @@ fn a_referenced_project_that_changes_retraces_the_files_that_consulted_it() {
         let rep = refresh_equals_cold(&r, &format!("{what}: after {last:?}"));
         (rep, skipped(&r))
     };
-    // The config of `packages/a` governs its files and references the project of
-    // `packages/b`, which loads.
+    // The config of `packages/a` governs its files and references the project
+    // of `packages/b`, which loads.
     let governs = [Edit::Referenced(Some(0)), Edit::Tsconfig(Some(6))];
     // The project's own config is deleted.
     let (_, record) = run(&governs, &Edit::Referenced(None), "the project goes");
@@ -1940,8 +1944,8 @@ fn a_referenced_project_that_changes_retraces_the_files_that_consulted_it() {
             Edit::Generated(None),
         ],
     );
-    // The linked package comes to have an `exports` map that does not export the
-    // config: the project does not load, by the package's manifest (a
+    // The linked package comes to have an `exports` map that does not export
+    // the config: the project does not load, by the package's manifest (a
     // 4,000-case run found it for the project's own files).
     replay(
         "a package that a project extends through comes to export something else",
@@ -2040,10 +2044,10 @@ fn what_a_config_load_read_is_recorded() {
             Edit::Generated(None),
         ],
     );
-    // A link: the config is read where the link leads. A link that comes to lead to
-    // the same bytes at another place is another config (its `baseUrl` is
-    // relative to where it lies), and no content that was read says so: where
-    // the link leads is recorded.
+    // A link: the config is read where the link leads. A link that comes to
+    // lead to the same bytes at another place is another config (its
+    // `baseUrl` is relative to where it lies), and no content that was read
+    // says so: where the link leads is recorded.
     let via_base_url = Edit::Write(5, vec![LINES.len() - 2, LINES.len() - 1]);
     replay(
         "an extends through a link that comes to lead elsewhere",
@@ -2103,8 +2107,8 @@ fn a_directory_that_was_looked_into_and_goes_retraces_the_files_that_looked() {
             Edit::Dir(0, Some(true)),
         ],
     );
-    // A project reference: the same loader, and the records are key observations
-    // and probes of the files below the referencing config.
+    // A project reference: the same loader, and the records are key
+    // observations and probes of the files below the referencing config.
     replay(
         "the directory a reference names goes and comes",
         &[
@@ -2122,8 +2126,9 @@ fn a_directory_that_was_looked_into_and_goes_retraces_the_files_that_looked() {
             Edit::Dir(1, None),
         ],
     );
-    // A module: `import './missing'` looks for the name with every extension, and
-    // inside a directory of the name for its manifest and its index files.
+    // A module: `import './missing'` looks for the name with every extension,
+    // and inside a directory of the name for its manifest and its index
+    // files.
     replay(
         "the directory a module request names goes and comes",
         &[
@@ -2135,8 +2140,8 @@ fn a_directory_that_was_looked_into_and_goes_retraces_the_files_that_looked() {
             Edit::Dir(3, None),
         ],
     );
-    // A file takes the directory's place (the request as written names it), and the
-    // directory the file's.
+    // A file takes the directory's place (the request as written names it), and
+    // the directory the file's.
     replay(
         "a file takes the place of the directory a module request names",
         &[
@@ -2146,8 +2151,8 @@ fn a_directory_that_was_looked_into_and_goes_retraces_the_files_that_looked() {
             Edit::Dir(3, Some(false)),
         ],
     );
-    // A directory of a linked package, asked about by the path through the link:
-    // the record is at the real directory.
+    // A directory of a linked package, asked about by the path through the
+    // link: the record is at the real directory.
     replay(
         "the directory next to the base of a linked package's config comes and goes",
         &[
@@ -2231,9 +2236,9 @@ fn a_file_takes_the_place_of_a_directory_named_like_an_index_or_a_mapped_file() 
     std::fs::remove_dir(r.join("packages/a/src/sub/index.ts")).unwrap();
     write(&r, "packages/a/src/sub/index.ts", "export {};\n");
     refresh_equals_cold(&r, "the index file takes its place");
-    // A directory that the lookup enters is no such name: `sub/index.ts/` again,
-    // with the manifest of `sub` naming it as `main` (asked as a file, then
-    // entered).
+    // A directory that the lookup enters is no such name: `sub/index.ts/`
+    // again, with the manifest of `sub` naming it as `main` (asked as a
+    // file, then entered).
     std::fs::remove_file(r.join("packages/a/src/sub/index.ts")).unwrap();
     std::fs::create_dir_all(r.join("packages/a/src/sub/index.ts")).unwrap();
     write(
@@ -2336,8 +2341,8 @@ fn a_linked_directory_above_a_place_that_was_looked_at() {
             Edit::Link(10, false),
         ],
     );
-    // The link is no entry of the package that looks: nothing but the answer "not
-    // there, from the root on" changes for it when the link appears.
+    // The link is no entry of the package that looks: nothing but the answer
+    // "not there, from the root on" changes for it when the link appears.
     replay(
         "a config behind a linked directory of another package",
         &[
@@ -2390,7 +2395,8 @@ fn a_link_to_nothing_appears_where_a_config_was_looked_for() {
     refresh_equals_cold(&r, "the config extends a link that is not there");
     symlink(&r, "../../nothing.json", "packages/a/tsconfig.link.json");
     refresh_equals_cold(&r, "a link to nothing appears there");
-    // What it leads to comes, and goes; the link leads elsewhere; the link goes.
+    // What it leads to comes, and goes; the link leads elsewhere; the link
+    // goes.
     write(&r, "nothing.json", "{}");
     refresh_equals_cold(&r, "the place the link leads to has a config");
     std::fs::remove_file(r.join("nothing.json")).unwrap();
@@ -2469,8 +2475,8 @@ fn a_framework_config_at_another_place_keeps_no_file() {
 /// that depend on it are traced again, with or without a test in the package.
 #[test]
 fn a_preset_that_comes_or_goes_retraces_the_files_its_config_governs() {
-    // The imports of a file that is no test (`lib.ts`: `@lib/util`) come to resolve
-    // through the preset's module mapper.
+    // The imports of a file that is no test (`lib.ts`: `@lib/util`) come to
+    // resolve through the preset's module mapper.
     replay(
         "a preset with a module mapper appears",
         &[Edit::Jest(Some(6)), Edit::Preset(Some(0))],
@@ -2596,8 +2602,8 @@ fn a_manifest_with_a_jest_key_above_a_nearer_manifest_keeps_no_file() {
             Edit::ManifestAt(1, Some(0)),
         ],
     );
-    // A file reads its nearest manifest and looks for it where there is none: these
-    // are its own.
+    // A file reads its nearest manifest and looks for it where there is none:
+    // these are its own.
     replay(
         "a manifest with a jest key appears next to a file, with a test below it",
         &[w(6, &[]), w(19, &[]), Edit::ManifestAt(0, Some(0))],
@@ -2659,9 +2665,9 @@ fn the_root_manifest_comes_to_have_a_jest_key() {
         mapped(&r),
         "the mapper of the manifest's jest key is applied"
     );
-    // The file it maps to goes and comes back: a record of the importer. (The edge
-    // stays, to the manifest that says the kind of the importer's module; the
-    // mapped file is a path that was looked for.)
+    // The file it maps to goes and comes back: a record of the importer. (The
+    // edge stays, to the manifest that says the kind of the importer's
+    // module; the mapped file is a path that was looked for.)
     apply(&r, &Edit::Delete(14));
     refresh_equals_cold(&r, "a module mapper: the mapped file goes");
     apply(&r, &Edit::Write(14, vec![]));
@@ -2990,8 +2996,8 @@ fn a_file_that_a_vendored_module_comes_to_own_is_another_target() {
         r#"{"name":"root","private":true,"workspaces":["packages/*"]}"#,
     );
     write(&r, "packages/a/package.json", r#"{"name":"a"}"#);
-    // A first-party file reads a data file below `vendor/`: an edge to a file of
-    // the root package.
+    // A first-party file reads a data file below `vendor/`: an edge to a file
+    // of the root package.
     write(
         &r,
         "packages/a/src/index.ts",
@@ -3020,10 +3026,11 @@ fn a_file_that_a_vendored_module_comes_to_own_is_another_target() {
     ];
     build_with(&opts(&r, &r.join(".turbotrace")), &langs).unwrap();
     let before = package_keys(&r);
-    // The directory becomes a vendored Go module (`vendor/modules.txt` appears):
-    // the data file is a file of a third-party package now, and a new trace
-    // links the package instead of the path. The file is still there and the
-    // root package still contains it: only what owns it has changed.
+    // The directory becomes a vendored Go module (`vendor/modules.txt`
+    // appears): the data file is a file of a third-party package now, and a
+    // new trace links the package instead of the path. The file is still
+    // there and the root package still contains it: only what owns it has
+    // changed.
     write(
         &r,
         "vendor/modules.txt",
@@ -3042,8 +3049,8 @@ fn a_file_that_a_vendored_module_comes_to_own_is_another_target() {
 #[test]
 fn a_dependency_entry_retraces_no_file() {
     let (_t, r) = built_workspace();
-    // `b` gains a dependency entry and a script: its importers in `a` and the root
-    // resolve through its manifest, and read none of that.
+    // `b` gains a dependency entry and a script: its importers in `a` and the
+    // root resolve through its manifest, and read none of that.
     write(
         &r,
         "packages/b/package.json",
@@ -3099,7 +3106,8 @@ fn a_directory_that_a_relative_request_names_comes_to_answer() {
     refresh_equals_cold(&r, "the directory's manifest goes");
     apply(&r, &Edit::ManifestC(1));
     refresh_equals_cold(&r, "a manifest with another entry appears");
-    // The directory comes to answer by an index file, whatever the manifest says.
+    // The directory comes to answer by an index file, whatever the manifest
+    // says.
     apply(&r, &Edit::PackageC(true));
     apply(&r, &Edit::Write(20, vec![]));
     refresh_equals_cold(&r, "an index file answers");
@@ -3237,8 +3245,8 @@ mod loads {
         write(&r, "jest.config.js", CONFIGS_AT[7]);
         write(&r, "packages/d", PATHS[5].1[0]);
         build(&opts(&r, &r.join(".turbotrace")), &langs()).unwrap();
-        // No file of a package is added or goes: the directory holds a file no language
-        // traces.
+        // No file of a package is added or goes: the directory holds a file no
+        // language traces.
         std::fs::remove_file(r.join("packages/d")).unwrap();
         write(&r, "packages/d/notes.md", "# d\n");
         refresh_equals_cold(&r, "the listed path is a directory");
@@ -3791,10 +3799,10 @@ mod runners {
             "cargo-test rs/src/lib.rs",
             "cargo-test rs/tests/it.rs",
         ];
-        // A pytest test is a file of the Python language. Without it the pytest steps
-        // below still compare a refresh with a fresh build: the tree has the project,
-        // its packaging task and its markers, whose files no compiled language
-        // claims.
+        // A pytest test is a file of the Python language. Without it the pytest
+        // steps below still compare a refresh with a fresh build: the
+        // tree has the project, its packaging task and its markers,
+        // whose files no compiled language claims.
         for want in want {
             assert!(tests.iter().any(|t| t == want), "{want}: {tests:?}");
         }
@@ -5839,8 +5847,8 @@ mod root_manifest_and_links {
                 "module.exports = { setupFiles: ['<rootDir>/setup.link.js'] };\n",
             );
             symlink(r, "../../nothing1.js", "packages/a/setup.link.js");
-            // A package of `node_modules` that is a link to nothing, and a manifest whose
-            // `main` is one.
+            // A package of `node_modules` that is a link to nothing, and a
+            // manifest whose `main` is one.
             write(
                 r,
                 "packages/c/src/e.ts",

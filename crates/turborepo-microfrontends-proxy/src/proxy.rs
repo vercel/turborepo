@@ -185,7 +185,7 @@ fn create_generic_error_response(error: ProxyError) -> Response<BoxedBody> {
 
     let mut response = Response::new(
         Full::new(Bytes::from(body_text))
-            .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync>)
+            .map_err(|e| e as Box<dyn std::error::Error + Send + Sync>)
             .boxed(),
     );
     *response.status_mut() = status;

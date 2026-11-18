@@ -326,8 +326,8 @@ impl Drop for StreamOwner {
 extern "C" fn release_context(info: *const libc::c_void) {
     // Safety:
     // - The [documentation] for `FSEventStreamContext` states that `release` is
-    //   only called when the stream is deallocated, so it is safe to convert `info`
-    //   back into a box and drop it.
+    //   only called when the stream is deallocated, so it is safe to convert
+    //   `info` back into a box and drop it.
     //
     // [docs]: https://developer.apple.com/documentation/coreservices/fseventstreamcontext?language=objc
     unsafe {
@@ -471,8 +471,8 @@ impl FsEventWatcher {
             let mut err: cf::CFErrorRef = ptr::null_mut();
             let cf_path = cf::str_path_to_cfstring_ref(str_path, &mut err);
             if cf_path.is_null() {
-                // Most likely the directory was deleted, or permissions changed,
-                // while the above code was running.
+                // Most likely the directory was deleted, or permissions
+                // changed, while the above code was running.
                 cf::CFRelease(err as cf::CFRef);
                 return Err(Error::path_not_found().add_path(path.into()));
             }
@@ -555,8 +555,8 @@ impl FsEventWatcher {
                         return;
                     }
 
-                    // the calling to CFRunLoopRun will be terminated by CFRunLoopStop call in
-                    // drop()
+                    // the calling to CFRunLoopRun will be terminated by
+                    // CFRunLoopStop call in drop()
                     if rl_tx.send(Ok(CFSendWrapper(cur_runloop))).is_err() {
                         fs::FSEventStreamStop(stream_ref);
                         return;
@@ -633,7 +633,8 @@ unsafe fn callback_impl(
         let event_id = unsafe { *event_ids.add(p) };
         latest_event_id.fetch_max(event_id, Ordering::Release);
         // SAFETY: The FSEvents path is a NUL-terminated byte string valid for
-        // this callback. Preserve its bytes because Unix paths need not be UTF-8.
+        // this callback. Preserve its bytes because Unix paths need not be
+        // UTF-8.
         let raw_path = unsafe { CStr::from_ptr(*event_paths.add(p)) };
 
         let path = PathBuf::from(OsStr::from_bytes(raw_path.to_bytes()));
@@ -817,7 +818,8 @@ impl TestVolume {
 
         let disk = String::from_utf8_lossy(&output.stdout).trim().to_string();
 
-        // Format the disk - if this fails, we need to detach the disk we created
+        // Format the disk - if this fails, we need to detach the disk we
+        // created
         let status = Command::new("diskutil")
             .args(["erasevolume", "APFS", name, &disk])
             .status()

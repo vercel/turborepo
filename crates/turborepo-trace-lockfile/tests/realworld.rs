@@ -54,8 +54,8 @@ fn load(dir: &Path, version: &str) -> Lockfile {
     let mut lock = turborepo_trace_lockfile::parse_named(real, &src)
         .unwrap_or_else(|e| panic!("{}: {e}", path.display()));
     if lock.format() == turborepo_trace_lockfile::LockfileFormat::YarnClassic {
-        // yarn.lock v1 has no importers: rebuild them from the manifests the script
-        // writes.
+        // yarn.lock v1 has no importers: rebuild them from the manifests the
+        // script writes.
         let (express, _) = versions(version);
         let a = format!(
             r#"{{"name": "@rw/a", "dependencies": {{"express": "{express}", "@rw/b": "*"}}}}"#
@@ -125,8 +125,9 @@ fn package_manager_bumps() {
             assert_eq!(express.version, versions(v).0, "{pm} {v}");
         }
 
-        // v1 -> v2: direct bump of express; path-to-regexp moves with it. Nothing
-        // depends on express, so the closure set equals the identity set.
+        // v1 -> v2: direct bump of express; path-to-regexp moves with it.
+        // Nothing depends on express, so the closure set equals the
+        // identity set.
         let d = diff(&v1, &v2);
         let a = d.affected_packages();
         assert_eq!(
@@ -209,8 +210,8 @@ fn big_lockfile_parses_and_diffs() {
     for imp in lock.importers() {
         for e in &imp.dependencies {
             if let Target::Importer(p) = &e.target {
-                // Links may point outside the workspace (`link:../outside`); inside ones must
-                // exist.
+                // Links may point outside the workspace (`link:../outside`);
+                // inside ones must exist.
                 if !p.starts_with("..") {
                     assert!(
                         lock.importer(p).is_some(),

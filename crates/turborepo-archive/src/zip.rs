@@ -142,7 +142,8 @@ pub(super) fn extract_zip(bytes: &[u8], tree: &mut Tree) -> Result<(), Error> {
         // (not content indexed), a search-indexing hint that is never applied.
         let dos = attributes & 0xffff & if host == 3 { !0x4000 } else { !0 };
         if !matches!(host, 0 | 3) || dos & !0x2037 != 0 {
-            // DOS reparse/volume/device attributes and unknown hosts are unsafe.
+            // DOS reparse/volume/device attributes and unknown hosts are
+            // unsafe.
             return Err(Error::UnsupportedEntry);
         }
         let mode = if host == 3 { attributes >> 16 } else { 0 };

@@ -124,9 +124,10 @@ impl Resolution {
                 return None;
             }
 
-            // Since we have already checked the ident portion of the locator for equality
-            // we can avoid an allocation caused by constructing a locator by just checking
-            // the reference portion.
+            // Since we have already checked the ident portion of the locator
+            // for equality we can avoid an allocation caused by
+            // constructing a locator by just checking the reference
+            // portion.
             if let Some(desc) = &from.description
                 && !Self::eq_with_protocol(&locator.reference, desc, "npm:")
             {
@@ -192,8 +193,9 @@ impl Resolution {
                 if let Some(stripped_reference) = reference.strip_prefix(default_protocol) {
                     stripped_reference == incomplete_reference
                 } else {
-                    // The reference doesn't use the default protocol so adding it to the incomplete
-                    // reference would result in the references being different
+                    // The reference doesn't use the default protocol so adding
+                    // it to the incomplete reference would
+                    // result in the references being different
                     false
                 }
             }
@@ -345,8 +347,8 @@ mod test {
 
     #[test]
     fn test_patch_resolution_with_npm_protocol_selector() {
-        // Resolution selectors may include `npm:` while the manifest range doesn't.
-        // See https://github.com/vercel/turborepo/issues/14336
+        // Resolution selectors may include `npm:` while the manifest range
+        // doesn't. See https://github.com/vercel/turborepo/issues/14336
         let resolution = parse_resolution("debug@npm:^4.0.0").unwrap();
         let dependency = resolution.reduce_dependency(
             "patch:debug@npm%3A4.4.3#~/.yarn/patches/debug-npm-4.4.3.patch",

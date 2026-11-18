@@ -99,8 +99,8 @@ impl Workspace {
                 member_dirs.contains(dir).then_some((f, dir))
             })
             .collect();
-        // Member manifests are read in parallel (thousands in big monorepos), in file
-        // order.
+        // Member manifests are read in parallel (thousands in big monorepos),
+        // in file order.
         use rayon::prelude::*;
         packages.par_extend(members.par_iter().map(|(f, dir)| {
             let name = read_json(&root.join(f))
@@ -144,8 +144,9 @@ impl Workspace {
         });
         for (_, def) in lang {
             if def.root.is_empty() {
-                // The repo root is already a package; name it after the language manifest
-                // unless a root `package.json` names it.
+                // The repo root is already a package; name it after the
+                // language manifest unless a root
+                // `package.json` names it.
                 if packages[0].manifest.is_none() {
                     packages[0].name = def.name;
                     packages[0].manifest = def.manifest;
@@ -261,8 +262,9 @@ impl WorkspaceMembers for DeclaredMembers {
             .filter_map(|f| {
                 let dir = f.strip_suffix("/package.json")?;
                 let d = dir.as_bytes();
-                // A member pattern names directories: match it on its own, without a
-                // basename shortcut (`Glob` matches slash-free patterns against the last
+                // A member pattern names directories: match it on its own,
+                // without a basename shortcut (`Glob` matches
+                // slash-free patterns against the last
                 // component).
                 let matches = |g: &Glob| {
                     if g.as_str().contains('/') {
@@ -480,7 +482,8 @@ mod tests {
         assert_eq!(w.owner("svc/internal/x.go"), 3);
         assert_eq!(w.owner("svc/vendor/x/y.go"), 3);
 
-        // Without a root package.json the root takes the language manifest's name.
+        // Without a root package.json the root takes the language manifest's
+        // name.
         std::fs::remove_file(r.join("package.json")).unwrap();
         names.pop();
         let w = Workspace::discover(r, &names);

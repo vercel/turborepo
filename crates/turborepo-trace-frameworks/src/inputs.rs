@@ -803,17 +803,18 @@ impl DiscoveryMatcher<'_> {
         if !self.d.roots.iter().any(|r| path.starts_with(r)) {
             return None;
         }
-        // The path as text, cut where the repository's part starts. The offset is one
-        // of the path's bytes: a name that is not UTF-8 is replaced on each
-        // side of it.
+        // The path as text, cut where the repository's part starts. The offset
+        // is one of the path's bytes: a name that is not UTF-8 is
+        // replaced on each side of it.
         use turborepo_trace_core::os::OsStrExt;
         let raw = path.as_os_str().as_bytes();
         let cut = self.local_offset(path).min(raw.len());
         let above = String::from_utf8_lossy(&raw[..cut]);
         let abs = format!("{above}{}", String::from_utf8_lossy(&raw[cut..]));
-        // An installed package: for jest by the whole path (its file map leaves out a
-        // checkout below a `node_modules` directory), for every other runner by the
-        // part of the path that is the repository's.
+        // An installed package: for jest by the whole path (its file map leaves
+        // out a checkout below a `node_modules` directory), for every
+        // other runner by the part of the path that is the
+        // repository's.
         let from = if self.d.absolute { 0 } else { above.len() };
         if abs[from..].contains("/node_modules/") {
             return None;

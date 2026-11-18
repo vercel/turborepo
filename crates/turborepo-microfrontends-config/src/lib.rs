@@ -243,8 +243,8 @@ impl MicrofrontendsConfigs {
         package_name: &PackageName,
         mut turbo_json: Result<TurboJson, LoaderError>,
     ) -> Result<TurboJson, LoaderError> {
-        // We add all of the microfrontend configurations as global dependencies so any
-        // changes will invalidate all tasks.
+        // We add all of the microfrontend configurations as global dependencies
+        // so any changes will invalidate all tasks.
         // TODO: Move this to only apply to packages that are part of the
         // microfrontends. This will require us operating on task definitions
         // instead of `turbo.json`s which currently isn't feasible.
@@ -266,12 +266,14 @@ impl MicrofrontendsConfigs {
             ..
         }) = self.package_turbo_json_update(package_name)
         {
-            // If using Turborepo's built-in proxy, don't add proxy task to task graph
+            // If using Turborepo's built-in proxy, don't add proxy task to task
+            // graph
             if use_turborepo_proxy {
                 return turbo_json;
             }
 
-            // We need to modify turbo.json, use default one if there isn't one present
+            // We need to modify turbo.json, use default one if there isn't one
+            // present
             let mut turbo_json = turbo_json.or_else(|err| {
                 if err.is_no_turbo_json() {
                     Ok(TurboJson::default())
@@ -280,14 +282,16 @@ impl MicrofrontendsConfigs {
                 }
             })?;
 
-            // If the current package contains the proxy task, then add that definition
+            // If the current package contains the proxy task, then add that
+            // definition
             if proxy.package() == package_name.as_str() {
                 turbo_json.with_proxy(self.mfe_package);
             }
 
             if let Some(dev) = dev {
-                // If this package has a dev task that's part of the MFE, then we make sure the
-                // proxy gets included in the task graph.
+                // If this package has a dev task that's part of the MFE, then
+                // we make sure the proxy gets included in the
+                // task graph.
                 turbo_json.with_task(
                     TaskName::from(dev.task()).into_owned(),
                     &proxy.as_task_name(),
@@ -345,7 +349,8 @@ impl MicrofrontendsConfigs {
 
             dev_task.or(proxy_owner)
         });
-        // We invert the standard comparing order so higher versions are prioritized
+        // We invert the standard comparing order so higher versions are
+        // prioritized
         results.sorted_by(|a, b| b.version.cmp(a.version)).next()
     }
 
@@ -469,8 +474,8 @@ impl PackageGraphResult {
         // We sort packages to ensure deterministic behavior
         let sorted_packages = packages.sorted_by(|(a, _), (b, _)| a.cmp(b));
         for (package_name, config) in sorted_packages {
-            // Check if this package is the @vercel/microfrontends package itself (workspace
-            // package)
+            // Check if this package is the @vercel/microfrontends package
+            // itself (workspace package)
             if package_name == MICROFRONTENDS_PACKAGE {
                 mfe_package = Some(MICROFRONTENDS_PACKAGE);
             }
@@ -497,18 +502,21 @@ impl PackageGraphResult {
                     turborepo_microfrontends::Error::JsonParse(msg)
                         if msg.contains("Found an unknown key") =>
                     {
-                        // Only allow unknown keys if this package has @vercel/microfrontends
+                        // Only allow unknown keys if this package has
+                        // @vercel/microfrontends
                         // dependency
                         let has_mfe_dep = package_has_mfe_dependency
                             .get(package_name)
                             .copied()
                             .unwrap_or(false);
                         if has_mfe_dep {
-                            // Package uses @vercel/microfrontends, so Vercel-specific fields are
+                            // Package uses @vercel/microfrontends, so
+                            // Vercel-specific fields are
                             // allowed
                             Ok(None)
                         } else {
-                            // Package doesn't use @vercel/microfrontends, reject Vercel-specific
+                            // Package doesn't use @vercel/microfrontends,
+                            // reject Vercel-specific
                             // fields
                             Err(err)
                         }
@@ -531,10 +539,11 @@ impl PackageGraphResult {
                 .copied()
                 .unwrap_or(false);
             info.use_turborepo_proxy = mfe_package.is_none() && !pkg_has_mfe_dep;
-            // Application names do not have to correspond to packages in this workspace.
-            // This is common in polyrepo configurations where routes point at
-            // applications hosted in other repositories. A differing package
-            // name, however, comes from an explicit `packageName` mapping and
+            // Application names do not have to correspond to packages in this
+            // workspace. This is common in polyrepo configurations
+            // where routes point at applications hosted in other
+            // repositories. A differing package name, however,
+            // comes from an explicit `packageName` mapping and
             // is expected to identify a local workspace package.
             referenced_packages.extend(
                 info.tasks
@@ -821,8 +830,8 @@ mod test {
         )
         .unwrap();
 
-        // When @vercel/microfrontends package is present, use_turborepo_proxy should be
-        // false
+        // When @vercel/microfrontends package is present, use_turborepo_proxy
+        // should be false
         let result_with_mfe_package = PackageGraphResult::new(
             HashSet::default(),
             vec![
@@ -846,8 +855,8 @@ mod test {
             "use_turborepo_proxy should be false when @vercel/microfrontends is present"
         );
 
-        // When @vercel/microfrontends package is NOT present, use_turborepo_proxy
-        // should be true
+        // When @vercel/microfrontends package is NOT present,
+        // use_turborepo_proxy should be true
         let result_without_mfe_package = PackageGraphResult::new(
             HashSet::default(),
             vec![("web", Ok(Some(config)))].into_iter(),
@@ -1037,8 +1046,8 @@ mod test {
         )
         .unwrap();
 
-        // When a package depends on @vercel/microfrontends, use_turborepo_proxy should
-        // be false
+        // When a package depends on @vercel/microfrontends, use_turborepo_proxy
+        // should be false
         let mut mfe_dependencies = HashMap::new();
         mfe_dependencies.insert("web", true);
 
@@ -1059,8 +1068,8 @@ mod test {
             "use_turborepo_proxy should be false when package depends on @vercel/microfrontends"
         );
 
-        // When package does NOT depend on @vercel/microfrontends, use_turborepo_proxy
-        // should be true
+        // When package does NOT depend on @vercel/microfrontends,
+        // use_turborepo_proxy should be true
         let result_without_dependency = PackageGraphResult::new(
             HashSet::default(),
             vec![("web", Ok(Some(config)))].into_iter(),
@@ -1152,7 +1161,8 @@ mod test {
         );
         assert!(result.is_ok(), "Config in root app package should succeed");
 
-        // Config in "docs" package (not the root route app) - now allowed for polyrepo
+        // Config in "docs" package (not the root route app) - now allowed for
+        // polyrepo
         let result = PackageGraphResult::new(
             HashSet::from_iter(["web", "docs"].iter().copied()),
             vec![("docs", Ok(Some(config)))].into_iter(),
@@ -1394,8 +1404,9 @@ mod test {
         // - "app" package DOES have @vercel/microfrontends dependency
         // The config should be accepted because ANY package has the dependency.
         //
-        // In from_disk, we pre-compute any_has_mfe_dep and pass it to all config loads,
-        // so the config gets parsed leniently even if its own package lacks the dep.
+        // In from_disk, we pre-compute any_has_mfe_dep and pass it to all
+        // config loads, so the config gets parsed leniently even if its
+        // own package lacks the dep.
         let config_with_vercel_fields = MfeConfig::from_str_with_mfe_dep(
             &serde_json::to_string_pretty(&json!({
                 "version": "1",

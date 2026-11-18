@@ -281,8 +281,8 @@ impl RootObservation {
         }
         // A native workspace may contain package.json solely for repository
         // metadata. Keep JS-only validation unchanged, but do not manufacture a
-        // JavaScript graph participant (and require a JS package manager) for an
-        // otherwise native-only root.
+        // JavaScript graph participant (and require a JS package manager) for
+        // an otherwise native-only root.
         let has_native_workspace = !self.plan.native_workspaces.is_empty();
         Ok((
             self.javascript
@@ -664,7 +664,8 @@ mod tests {
         let root = AbsoluteSystemPathBuf::try_from(temp.path()).unwrap();
         let manifest = fixture(&root, &id);
         if let Some(contents) = package_json {
-            // Even malformed JavaScript is irrelevant to native root eligibility.
+            // Even malformed JavaScript is irrelevant to native root
+            // eligibility.
             write(&root, "package.json", contents);
         }
         let registry = Registry::new([id.clone()]);

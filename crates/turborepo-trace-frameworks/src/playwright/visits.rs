@@ -223,8 +223,8 @@ impl Ctx<'_, '_> {
         soft: bool,
         text: &str,
     ) {
-        // An argument the evaluator has no value for at all (a `let` that a hook
-        // assigns) is as unknown as one it gives up on.
+        // An argument the evaluator has no value for at all (a `let` that a
+        // hook assigns) is as unknown as one it gives up on.
         let no_value = tpls.is_empty() && matches!(kind, VisitKind::Goto | VisitKind::Request);
         if no_value || all_unknown(tpls) {
             self.out.unresolved.push(UnresolvedNav {
@@ -681,9 +681,9 @@ pub fn extract_visits_cached(
     };
     ctx.scan_file(&f, true);
     // Helper modules (not page objects), breadth first.
-    // Two levels of whatever the spec imports; further (a helper package behind its
-    // index files) only through barrels and modules that import Playwright,
-    // which is where a helper that navigates lives.
+    // Two levels of whatever the spec imports; further (a helper package behind
+    // its index files) only through barrels and modules that import
+    // Playwright, which is where a helper that navigates lives.
     let depth = if opts.helper_depth == 0 {
         MAX_HELPER_DEPTH
     } else {
@@ -716,7 +716,8 @@ pub fn extract_visits_cached(
                 if !h.classes.is_empty() {
                     continue;
                 }
-                // What a helper contributes does not depend on the spec that imports it.
+                // What a helper contributes does not depend on the spec that
+                // imports it.
                 let found = cache.0.borrow().get(&p).cloned();
                 let found = match found {
                     Some(f) => f,

@@ -182,8 +182,9 @@ pub const ADAPTERS: [&str; 11] = [
 ];
 
 impl ExecutionSnapshot {
-    // Lock bounds, canonical option ordering and executable collision checks are
-    // trusted here; adapter-specific semantic validation still precedes activation.
+    // Lock bounds, canonical option ordering and executable collision checks
+    // are trusted here; adapter-specific semantic validation still precedes
+    // activation.
     pub fn select(
         lock: &Lock,
         context: ExecutionContext,

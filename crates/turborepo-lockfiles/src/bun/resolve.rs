@@ -57,7 +57,8 @@ impl BunLockfile {
             VersionSpec::Semver(spec_str) => {
                 // Parse both the requirement and the version
                 let Ok(req) = VersionReq::parse(&spec_str) else {
-                    // If we can't parse the requirement, be lenient and accept it
+                    // If we can't parse the requirement, be lenient and accept
+                    // it
                     return true;
                 };
 
@@ -120,10 +121,11 @@ impl BunLockfile {
         resolved_version: &str,
     ) -> Result<Option<crate::Package>, crate::Error> {
         // When an override is active, the overridden version is authoritative
-        // and should always be accepted regardless of the original version spec.
-        // For example, if a package declares `"lightningcss": "1.30.2"` but the
-        // root package.json overrides it to `"1.30.1"`, the resolved version
-        // 1.30.1 must be accepted even though it doesn't satisfy `^1.30.2`.
+        // and should always be accepted regardless of the original version
+        // spec. For example, if a package declares `"lightningcss":
+        // "1.30.2"` but the root package.json overrides it to
+        // `"1.30.1"`, the resolved version 1.30.1 must be accepted even
+        // though it doesn't satisfy `^1.30.2`.
         let has_override = override_version != resolved_version;
 
         // Try workspace-scoped first

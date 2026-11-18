@@ -163,9 +163,9 @@ fn analyze(
             any: facts.writes_any_prop(),
             arrays: facts.array_mutation(),
         };
-        // Every call is evaluated before any value is described: a value handed to a
-        // callee can be changed by it, which is part of the description of every read
-        // through that value.
+        // Every call is evaluated before any value is described: a value handed
+        // to a callee can be changed by it, which is part of the
+        // description of every read through that value.
         cx.eval_calls();
         cx.imports_and_exports();
         cx.record_unrecorded();
@@ -530,8 +530,8 @@ impl<'a> Cx<'a, '_> {
             .into_iter()
             .map(|(i, pos)| (self.pending_callee(i, depth), pos))
             .collect();
-        // A callee that takes a large expression to describe is not worth asking: the
-        // read is repeated at every use of the object.
+        // A callee that takes a large expression to describe is not worth
+        // asking: the read is repeated at every use of the object.
         if by
             .iter()
             .any(|(c, _)| matches!(c, X::Const(JsVal::Unknown(_))) || size(c) > MAX_CALLEE_X)
@@ -549,7 +549,8 @@ impl<'a> Cx<'a, '_> {
         if let Some(x) = self.callee_memo.get(&i) {
             return x.clone();
         }
-        // A callee that is itself read through an object it is handed (`o.fix()`).
+        // A callee that is itself read through an object it is handed
+        // (`o.fix()`).
         if self.callee_busy.contains(&i) {
             return unknown("callee");
         }
@@ -631,8 +632,9 @@ impl<'a> Cx<'a, '_> {
     }
 
     fn node_x(&mut self, id: u32, depth: u32) -> X {
-        // Nodes are shared (a DAG); an expression is a tree. Every copy counts against
-        // the size bound, so a deeply shared node cannot unfold exponentially.
+        // Nodes are shared (a DAG); an expression is a tree. Every copy counts
+        // against the size bound, so a deeply shared node cannot unfold
+        // exponentially.
         if let Some((x, n)) = self.memo.get(&id) {
             if *n > self.room {
                 self.room = 0;
@@ -678,7 +680,8 @@ impl<'a> Cx<'a, '_> {
                         })
                         .collect(),
                 };
-                // Each of the reads on the way can see something that was changed.
+                // Each of the reads on the way can see something that was
+                // changed.
                 let mut alts = vec![x];
                 let kinds: Vec<Option<String>> = match &alts[0] {
                     X::Reach { steps, .. } => steps
@@ -691,8 +694,8 @@ impl<'a> Cx<'a, '_> {
                         .collect(),
                     _ => Vec::new(),
                 };
-                // Asked of every node of the walk that the file hands on: they are parts
-                // of what the walk reads.
+                // Asked of every node of the walk that the file hands on: they
+                // are parts of what the walk reads.
                 let mut family: Vec<u32> = vec![id];
                 let mut tainted: Vec<u32> = self.taints.keys().copied().collect();
                 tainted.extend(self.taint_unknown.iter().copied());
@@ -793,7 +796,8 @@ impl<'a> Cx<'a, '_> {
                 }
                 let mut open = o.open.as_ref().map(|x| Box::new(self.value_x(x, d)));
                 if o.map && open.is_none() {
-                    // A `Map`: its elements are entries, which the object form does not show.
+                    // A `Map`: its elements are entries, which the object form
+                    // does not show.
                     open = Some(Box::new(unknown("map entries")));
                 }
                 let facts = self.eng.facts();
@@ -1039,8 +1043,8 @@ impl<'a> Cx<'a, '_> {
                 _ => return,
             }
         };
-        // The exported value is reachable through `module.exports` from now on: the
-        // file's untracked writes apply to it.
+        // The exported value is reachable through `module.exports` from now on:
+        // the file's untracked writes apply to it.
         self.exported = true;
         let value = match self.eng.site(&a.right) {
             Some(v) => self.value_max(&v.shared(), MAX_EXPORT_X),
@@ -1101,7 +1105,8 @@ impl<'a> Cx<'a, '_> {
                 }
             };
             let Some(sym) = sym else {
-                // A binding that cannot be followed: anything may happen to the module.
+                // A binding that cannot be followed: anything may happen to the
+                // module.
                 push_unique(&mut imp.escapes, "*".to_owned());
                 imp.writes = true;
                 continue;
@@ -1301,7 +1306,8 @@ impl<'a> Cx<'a, '_> {
             if !s.open_end && end != s.expr.end {
                 continue;
             }
-            // The argument as an expression, for the conditions around the site.
+            // The argument as an expression, for the conditions around the
+            // site.
             let arg: Option<&'a Expression<'a>> = match t {
                 Target::Arg(a) => {
                     let a: &'a Argument<'a> = a;
@@ -1320,8 +1326,8 @@ impl<'a> Cx<'a, '_> {
                 Target::New(n) => self.eng.site_new(n),
             };
             let Some(v) = v else { continue };
-            // Only the alternatives that depend on holes: the others are the file's own
-            // references.
+            // Only the alternatives that depend on holes: the others are the
+            // file's own references.
             let mut alts = Vec::new();
             let mut unknowns = Vec::new();
             for l in v.leaves() {
@@ -1331,8 +1337,9 @@ impl<'a> Cx<'a, '_> {
                         alts.push(x);
                     }
                 } else if partly_unknown(&x) {
-                    // A value with an unknown part: the site's record can stand for it
-                    // too, so the record has to stay.
+                    // A value with an unknown part: the site's record can stand
+                    // for it too, so the record has to
+                    // stay.
                     let x = match x {
                         X::Const(JsVal::Unknown(_)) => x,
                         _ => unknown("a partly unknown value"),
@@ -1345,11 +1352,13 @@ impl<'a> Cx<'a, '_> {
             if alts.is_empty() {
                 continue;
             }
-            // An unknown alternative of the file itself stays part of the value: it can be
-            // what the symbolic evaluation gave up on (a recursion through a parameter
-            // that does not settle), and then the alternatives above are not all there is.
+            // An unknown alternative of the file itself stays part of the
+            // value: it can be what the symbolic evaluation gave up
+            // on (a recursion through a parameter that does not
+            // settle), and then the alternatives above are not all there is.
             alts.extend(unknowns);
-            // A resolved site is only worth binding when a key selects among its values.
+            // A resolved site is only worth binding when a key selects among
+            // its values.
             if !s.param && !alts.iter().any(has_index) {
                 continue;
             }
@@ -1397,8 +1406,8 @@ impl<'a> Cx<'a, '_> {
                 AstKind::VariableDeclaration(v) if v.kind == VariableDeclarationKind::Const
             ),
             AstKind::FormalParameter(_) => {
-                // The function the parameter belongs to: an arrow function has no
-                // `arguments` of its own.
+                // The function the parameter belongs to: an arrow function has
+                // no `arguments` of its own.
                 for k in nodes.ancestor_kinds(decl) {
                     match k {
                         AstKind::ArrowFunctionExpression(_) => return true,
@@ -1730,7 +1739,7 @@ impl<'a> Cx<'a, '_> {
                 if !c
                     .arguments
                     .iter()
-                    .any(|a| a.as_expression().is_some_and(&is))
+                    .any(|a| a.as_expression().is_some_and(is))
                 {
                     return false;
                 }
@@ -2022,8 +2031,8 @@ impl<'a> Cx<'a, '_> {
             self.mark_unrecorded(callee);
         }
         if self.calls_overflow {
-            // Unrecorded calls: every imported binding may be used in a way the facts
-            // do not show.
+            // Unrecorded calls: every imported binding may be used in a way the
+            // facts do not show.
             for i in &mut self.out.imports {
                 push_unique(&mut i.escapes, "*".to_owned());
             }
@@ -2138,9 +2147,9 @@ impl<'a> Cx<'a, '_> {
                 m.object.get_inner_expression(),
                 Expression::Identifier(i) if i.name == "Array" && self.symbol_of(i).is_none()
             );
-        // The positions of the elements (and of the list itself) among the arguments of
-        // the function, the position of the function among the arguments of the call,
-        // and the expression of the list.
+        // The positions of the elements (and of the list itself) among the
+        // arguments of the function, the position of the function among
+        // the arguments of the call, and the expression of the list.
         let (positions, at, list): (&[u32], usize, Option<&'a Expression<'a>>) = match name {
             "from" if array_from => (&[0], 1, c.arguments.first().and_then(|a| a.as_expression())),
             "map" | "filter" | "forEach" | "find" | "findLast" | "findIndex" | "findLastIndex"
@@ -2253,14 +2262,17 @@ impl<'a> Cx<'a, '_> {
                     record = v.as_ref().is_some_and(|v| self.external(v));
                     let symbolic = v.as_ref().is_some_and(|v| self.symbolic(v));
                     if symbolic && !record {
-                        // A method of an object read from a hole: not a call to record,
-                        // but what it is handed is.
+                        // A method of an object read from a hole: not a call to
+                        // record, but what it is handed
+                        // is.
                         self.unrecorded.push(callee);
                     }
                     if !symbolic {
-                        // A member of a builtin module is what it is, a function of the
-                        // file gets aliases; anything else can keep or change what it is
-                        // handed, and if it starts at an imported binding it is a use
+                        // A member of a builtin module is what it is, a
+                        // function of the
+                        // file gets aliases; anything else can keep or change
+                        // what it is handed, and if it
+                        // starts at an imported binding it is a use
                         // the facts do not show.
                         let (builtin, local) = match &v {
                             Some(v) => (
@@ -2310,9 +2322,10 @@ impl<'a> Cx<'a, '_> {
                     self.taint(r, Some((ix, vals.len() as u32)), 0);
                 }
             }
-            // A method called on an object (`o.fix()`) gets it as `this` and can change it;
-            // a function that was merely read from an object (`const { before } = opts;
-            // before(cb)`) does not. Builtin readers and adders are part of the file-wide
+            // A method called on an object (`o.fix()`) gets it as `this` and
+            // can change it; a function that was merely read from
+            // an object (`const { before } = opts; before(cb)`)
+            // does not. Builtin readers and adders are part of the file-wide
             // scan of writes.
             let method = match callee.get_inner_expression() {
                 Expression::StaticMemberExpression(m) => {
@@ -2664,8 +2677,8 @@ impl<'a> Cx<'a, '_> {
         let mut holes: Vec<u32> = Vec::new();
         for s in &self.out.sinks {
             hole_funcs(&s.value, &mut holes);
-            // The callees that guard the site: a function of the file is asked whether
-            // it is a test for a string.
+            // The callees that guard the site: a function of the file is asked
+            // whether it is a test for a string.
             for (callee, _) in &s.string_tests {
                 callee.funcs(&mut todo);
             }
@@ -2679,8 +2692,9 @@ impl<'a> Cx<'a, '_> {
             if let Some(r) = &c.rest {
                 hole_funcs(r, &mut holes);
             }
-            // Functions handed to a callee (a `merge` option, a callback): the callee may
-            // call them with an object, and what they do to it is in their facts.
+            // Functions handed to a callee (a `merge` option, a callback): the
+            // callee may call them with an object, and what they do
+            // to it is in their facts.
             c.args.iter().for_each(|a| a.funcs(&mut todo));
         }
         for e in &self.out.exports {

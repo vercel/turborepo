@@ -137,8 +137,9 @@ impl Inputs {
             None => dir.clone(),
         };
         self.directory(&common)?;
-        // Git resolves core.worktree, includes and worktree config; do not parse
-        // its grammar here. Empty read-only fixture boundaries have no HEAD.
+        // Git resolves core.worktree, includes and worktree config; do not
+        // parse its grammar here. Empty read-only fixture boundaries
+        // have no HEAD.
         if self.record(&dir.join("HEAD"), false, true)?.is_some() {
             let output = git.toplevel(
                 marker

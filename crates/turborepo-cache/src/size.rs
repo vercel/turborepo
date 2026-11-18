@@ -63,7 +63,8 @@ pub fn parse_human_size(input: &str) -> Result<u64, SizeParseError> {
         }
     };
 
-    // Use exact integer arithmetic when possible, fall back to f64 for fractions
+    // Use exact integer arithmetic when possible, fall back to f64 for
+    // fractions
     if num_part.contains('.') {
         let n: f64 = num_part
             .parse()

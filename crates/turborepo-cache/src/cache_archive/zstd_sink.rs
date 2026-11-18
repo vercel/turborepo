@@ -277,7 +277,8 @@ mod tests {
         reference.write_all(&data)?;
         let reference = reference.finish()?;
 
-        // Inline only, inline then threaded, and threaded after the first write.
+        // Inline only, inline then threaded, and threaded after the first
+        // write.
         for threshold in [usize::MAX, 2 * CHUNK_SIZE, 0] {
             assert!(
                 compress_with(&data, threshold)? == reference,

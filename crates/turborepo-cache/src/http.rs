@@ -2059,9 +2059,9 @@ mod test {
         let address = listener.local_addr().unwrap();
         let server = tokio::spawn(async move {
             let (mut socket, _) = listener.accept().await.unwrap();
-            // Drain the request before closing the socket: on Windows, dropping a
-            // socket with unread data can reset the connection before reqwest sees
-            // the response status.
+            // Drain the request before closing the socket: on Windows, dropping
+            // a socket with unread data can reset the connection
+            // before reqwest sees the response status.
             let mut request = Vec::new();
             while !request.ends_with(b"\r\n\r\n") {
                 let mut byte = [0];

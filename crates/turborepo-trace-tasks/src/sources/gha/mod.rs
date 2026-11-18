@@ -88,7 +88,8 @@ impl TaskSource for Workflows {
     }
 
     fn ci_side_effects(&self) -> bool {
-        // A job's writes become a later commit, not files other jobs' tests read.
+        // A job's writes become a later commit, not files other jobs' tests
+        // read.
         true
     }
 
@@ -342,7 +343,8 @@ fn workflow(root: &Path, file: &Path, out: &mut Vec<DiscoveredTask>) {
         }
         let (prefix, rest) = crate::glob::split_static_prefix(p);
         if rest.is_empty() {
-            // A literal path: a directory covers everything below it, a file only itself.
+            // A literal path: a directory covers everything below it, a file
+            // only itself.
             let abs = fsx::join(root, prefix);
             if fsx::is_dir(&abs) {
                 filters.membership(abs, "**", PATHS_REASON);
@@ -434,7 +436,8 @@ fn reusable_workflow(root: &Path, uses: &str, t: &mut DiscoveredTask) {
                             },
                             "gha reusable workflow",
                         );
-                        // The caller runs what the called jobs run (`needs:` does not).
+                        // The caller runs what the called jobs run (`needs:`
+                        // does not).
                         t.spec.runs_task(TaskRef::Id {
                             id: job_id(&rel, j),
                         });
@@ -533,7 +536,8 @@ impl StepsCx<'_> {
                     for (k, v) in w {
                         if let Some(s) = scalar(v) {
                             if !uses.starts_with("./") {
-                                // A third-party action given a command (`command: pnpm test`
+                                // A third-party action given a command
+                                // (`command: pnpm test`
                                 // of a retry action) runs it.
                                 crate::runs::scan_text(
                                     &s,
@@ -569,8 +573,8 @@ impl StepsCx<'_> {
         }
         let Some(local) = uses.strip_prefix("./") else {
             base.spec.tool("gha", uses);
-            // `with:` values naming repository files (`node-version-file: .nvmrc`,
-            // `cache-dependency-path: pnpm-lock.yaml`).
+            // `with:` values naming repository files (`node-version-file:
+            // .nvmrc`, `cache-dependency-path: pnpm-lock.yaml`).
             for v in with.values() {
                 for line in v.lines() {
                     let line = line.trim();

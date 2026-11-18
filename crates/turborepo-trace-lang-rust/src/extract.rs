@@ -114,8 +114,8 @@ pub fn extract<'s>(src: &'s [u8], cx: &ExtractCx<'_>, out: &mut RefSink<'s>) {
             .file_name()
             .map(|n| String::from_utf8_lossy(n.as_bytes()).into_owned())
             .unwrap_or_default();
-        // By the path below the repository root: a checkout below a directory called
-        // `tests` holds more than tests.
+        // By the path below the repository root: a checkout below a directory
+        // called `tests` holds more than tests.
         let in_test_dir = cx.options.local(cx.path).components().any(|c| {
             let c = c.as_os_str();
             c == "tests" || c == "benches"
@@ -363,8 +363,8 @@ impl<'a> Rec<'a> {
     fn matching(&self, open: usize) -> usize {
         let mut depth = 0usize;
         let lim = (open + MAX_ARG_TOKENS).min(self.toks.len());
-        for j in open..lim {
-            match self.toks[j].kind {
+        for (j, tok) in self.toks.iter().enumerate().take(lim).skip(open) {
+            match tok.kind {
                 TokKind::Punct(b'(' | b'[' | b'{') => depth += 1,
                 TokKind::Punct(b')' | b']' | b'}') => {
                     depth = depth.saturating_sub(1);
@@ -383,8 +383,14 @@ impl<'a> Rec<'a> {
         let mut out = Vec::new();
         let mut depth = 0usize;
         let mut start = open + 1;
-        for j in open + 1..close.min(self.toks.len()) {
-            match self.toks[j].kind {
+        for (j, tok) in self
+            .toks
+            .iter()
+            .enumerate()
+            .take(close.min(self.toks.len()))
+            .skip(open + 1)
+        {
+            match tok.kind {
                 TokKind::Punct(b'(' | b'[' | b'{') => depth += 1,
                 TokKind::Punct(b')' | b']' | b'}') => depth = depth.saturating_sub(1),
                 TokKind::Punct(b',') if depth == 0 => {
@@ -462,8 +468,9 @@ impl<'a> Rec<'a> {
                     }
                     if self.punct(i + 1, b'!') && self.punct(i + 2, b'[') {
                         i = self.inner_attr(i + 2);
-                        // Inner attributes belong to the enclosing scope: flush after the
-                        // last one, before outer attributes of the next item (whose `cfg`
+                        // Inner attributes belong to the enclosing scope: flush
+                        // after the last one, before
+                        // outer attributes of the next item (whose `cfg`
                         // must not apply to `#![doc = include_str!(…)]`).
                         if !(self.punct(i, b'#') && self.punct(i + 1, b'!')) {
                             self.flush_attr_refs(out);
@@ -475,8 +482,8 @@ impl<'a> Rec<'a> {
                     self.open(c, None);
                 }
                 TokKind::Punct(c @ (b'}' | b')' | b']')) => {
-                    // Pop to the matching opener within a few levels; a stray closer is
-                    // ignored (error recovery).
+                    // Pop to the matching opener within a few levels; a stray
+                    // closer is ignored (error recovery).
                     if let Some(k) = self.scopes.iter().rev().take(4).position(|s| s.close == c) {
                         let keep = self.scopes.len() - 1 - k;
                         let chain = self.scopes.get(keep).and_then(|s| s.chain);
@@ -614,8 +621,8 @@ impl<'a> Rec<'a> {
         let info = self.attr_info(open + 1, close);
         self.doc_embeds(&info.embeds);
         let depth = self.depth();
-        // `if #[cfg(a)] {` (cfg_if!): the branch also requires that earlier branches of
-        // an `else if` chain did not match.
+        // `if #[cfg(a)] {` (cfg_if!): the branch also requires that earlier
+        // branches of an `else if` chain did not match.
         let if_chain = (open >= 2 && self.keyword(open - 2, "if")).then(|| {
             match (
                 open >= 4 && self.keyword(open - 3, "else"),
@@ -668,8 +675,14 @@ impl<'a> Rec<'a> {
     /// uncapped: the main loop skips the attribute, so this stays linear).
     fn attr_close(&self, open: usize) -> usize {
         let mut depth = 0usize;
-        for j in open..self.toks.len() {
-            match self.toks[j].kind {
+        for (j, tok) in self
+            .toks
+            .iter()
+            .enumerate()
+            .take(self.toks.len())
+            .skip(open)
+        {
+            match tok.kind {
                 TokKind::Punct(b'(' | b'[' | b'{') => depth += 1,
                 TokKind::Punct(b')' | b']' | b'}') => {
                     depth = depth.saturating_sub(1);
@@ -751,8 +764,9 @@ impl<'a> Rec<'a> {
             }
             "test" | "bench" => info.test = true,
             "doc" if self.punct(j, b'=') => {
-                // `include_str!`/`include_bytes!` anywhere in the value, also nested in
-                // `concat!("```\n", include_str!("../examples/x.rs"), "```")`.
+                // `include_str!`/`include_bytes!` anywhere in the value, also
+                // nested in `concat!("```\n",
+                // include_str!("../examples/x.rs"), "```")`.
                 let mut k = j + 1;
                 while k + 2 < end {
                     if matches!(self.ident(k), Some("include_str" | "include_bytes"))
@@ -772,7 +786,8 @@ impl<'a> Rec<'a> {
                 }
             }
             "folder" if self.punct(j, b'=') => {
-                // rust-embed: relative to the crate root; `$CARGO_MANIFEST_DIR` interpolation.
+                // rust-embed: relative to the crate root; `$CARGO_MANIFEST_DIR`
+                // interpolation.
                 if let Some(s) = self.tok(j + 1).and_then(|t| t.text(self.src)) {
                     let span = self.span(start, end.saturating_sub(1));
                     self.attr_embed(&s, RelBase::CrateRoot, span);
@@ -959,8 +974,8 @@ impl<'a> Rec<'a> {
         let mut depth = 0usize;
         let mut eq = None;
         let mut end = None;
-        for j in at + 1..lim {
-            match self.toks[j].kind {
+        for (j, tok) in self.toks.iter().enumerate().take(lim).skip(at + 1) {
+            match tok.kind {
                 TokKind::Punct(b'(' | b'[' | b'{') => depth += 1,
                 TokKind::Punct(b')' | b']' | b'}') => {
                     if depth == 0 {
@@ -1039,8 +1054,9 @@ impl<'a> Rec<'a> {
                     None => Ev::unknown(format!("{name}!()")),
                 };
                 let r = self.path_ref(RefKind::Embed, ev, RelBase::FileDir, span, flags);
-                // `include!` splices Rust source: the included file is parsed as part of the
-                // module tree too (it can declare modules and embed further files).
+                // `include!` splices Rust source: the included file is parsed
+                // as part of the module tree too (it can
+                // declare modules and embed further files).
                 if name == "include"
                     && r.base != Base::Language(OUT_DIR)
                     && !matches!(r.spec, Specifier::Unknown)
@@ -1162,8 +1178,9 @@ impl<'a> Rec<'a> {
                 continue;
             }
             if let Some(dir) = instr("rustc-link-search") {
-                // `[KIND=]PATH`: the directory the linker searches (native libraries built or
-                // vendored by the build script).
+                // `[KIND=]PATH`: the directory the linker searches (native
+                // libraries built or vendored by the build
+                // script).
                 let dir = match dir.split_once('=') {
                     Some(("native" | "crate" | "dependency" | "framework" | "all", d)) => d,
                     _ => dir,
@@ -1245,8 +1262,8 @@ impl<'a> Rec<'a> {
         if i > 0 && self.keyword(i - 1, "fn") {
             return;
         }
-        // `pkg_config::probe_library("x")` / `Config::new().probe("x")` in build
-        // scripts: a system library found through pkg-config.
+        // `pkg_config::probe_library("x")` / `Config::new().probe("x")` in
+        // build scripts: a system library found through pkg-config.
         if self.build_script
             && (name == "probe_library" || (name == "probe" && i > 0 && self.punct(i - 1, b'.')))
             && let Some(flags) = self.flags()
@@ -1305,7 +1322,8 @@ impl<'a> Rec<'a> {
             _ => RelBase::Cwd,
         };
         let span = self.span(i, close.min(self.toks.len().saturating_sub(1)));
-        // `Library::new("libfoo.so")`: a bare name is searched on the library path.
+        // `Library::new("libfoo.so")`: a bare name is searched on the library
+        // path.
         let bare = e.kind == RefKind::SharedLib
             && ev.anchor == Anchor::Rel
             && ev.val.as_str().is_some_and(|s| !s.contains('/'));

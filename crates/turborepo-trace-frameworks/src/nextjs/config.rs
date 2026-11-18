@@ -613,7 +613,8 @@ impl NextConfig {
                             {
                                 return None;
                             }
-                            // Internal rules Next adds for trailing slashes and basePath.
+                            // Internal rules Next adds for trailing slashes and
+                            // basePath.
                             if r.get("internal").and_then(|x| x.as_bool()) == Some(true) {
                                 return None;
                             }

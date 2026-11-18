@@ -94,9 +94,9 @@ pub(crate) fn all_transitive_closures_dp_indexed<L: Lockfile + ?Sized>(
         })
     };
 
-    // 1. Direct dependencies stay workspace-resolved, mirroring the legacy walk's
-    //    root handling (including `ignore_missing_packages`). Workspaces may
-    //    resolve in parallel; interning stays sequential.
+    // 1. Direct dependencies stay workspace-resolved, mirroring the legacy
+    //    walk's root handling (including `ignore_missing_packages`). Workspaces
+    //    may resolve in parallel; interning stays sequential.
     let parallel = resolver.parallel();
     let workspace_list: Vec<(&String, &BTreeMap<String, String>)> = workspaces.iter().collect();
     let resolved_roots = par_map(&workspace_list, parallel, |&(workspace, unresolved)| {
@@ -126,8 +126,8 @@ pub(crate) fn all_transitive_closures_dp_indexed<L: Lockfile + ?Sized>(
 
     // 2. Global graph: level-synchronous BFS from all roots, resolving each
     //    distinct (name, version) edge once. Each level fetches the frontier's
-    //    dependency maps and resolves its not-yet-seen edges (in parallel when the
-    //    resolver asks for it), then interns results and records adjacency
+    //    dependency maps and resolves its not-yet-seen edges (in parallel when
+    //    the resolver asks for it), then interns results and records adjacency
     //    sequentially.
     let mut adjacency: Vec<Vec<u32>> = vec![Vec::new(); packages.len()];
     // `name\0version` -> target, probed through a reused key buffer so a

@@ -443,14 +443,15 @@ pub trait CancelWalk {
 pub struct WalkCancellation<'i, I>(&'i mut I);
 
 impl<'i, I> WalkCancellation<'i, I> {
-    // TODO: This module should not allow this at all and `WalkCancellation`, much
-    // like       `Product`, should not be possible to construct outside of the
-    // module. Instead,       client code should rely solely on combinators, but
-    // this requires RPITIT to write       combinators with arbitrary output
-    // types (like unnameable `FnMut`s).
+    // TODO: This module should not allow this at all and `WalkCancellation`,
+    // much like       `Product`, should not be possible to construct
+    // outside of the module. Instead,       client code should rely solely
+    // on combinators, but this requires RPITIT to write       combinators
+    // with arbitrary output types (like unnameable `FnMut`s).
     //
-    //       RPITIT is slated to land at the end of December of 2023. Remove this
-    // and implement       iterators using pure combinators when that happens.
+    //       RPITIT is slated to land at the end of December of 2023. Remove
+    // this and implement       iterators using pure combinators when that
+    // happens.
     pub(in crate::walk) fn unchecked(tree: &'i mut I) -> Self {
         WalkCancellation(tree)
     }
@@ -462,8 +463,8 @@ where
 {
     fn cancel_walk_tree(self) {
         // Client code is only able to move a `WalkCancellation` into
-        // `Separation::filter_map_tree`, at which point the filtered item should be the
-        // current item of the iterator.
+        // `Separation::filter_map_tree`, at which point the filtered item
+        // should be the current item of the iterator.
         self.0.cancel_walk_tree()
     }
 }

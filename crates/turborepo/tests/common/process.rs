@@ -80,7 +80,8 @@ pub mod unix {
             stat.rsplit_once(") ")
                 .is_some_and(|(_, fields)| fields.starts_with('Z'))
         }) {
-            // Container init processes do not always reap killed descendants promptly.
+            // Container init processes do not always reap killed descendants
+            // promptly.
             return false;
         }
 

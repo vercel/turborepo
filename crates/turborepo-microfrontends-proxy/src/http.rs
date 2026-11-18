@@ -160,7 +160,7 @@ pub(crate) fn build_error_response(
         .header("Content-Type", "text/html; charset=utf-8")
         .body(
             Full::new(Bytes::from(html))
-                .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync>)
+                .map_err(|e| e as Box<dyn std::error::Error + Send + Sync>)
                 .boxed(),
         )
         .map_err(ProxyError::Http)?;
@@ -231,14 +231,15 @@ fn normalize_fallback_url(
     let normalized_path = if path.is_empty() { "/" } else { path };
 
     // Use join() to safely combine base with path
-    // This automatically normalizes .. segments and prevents directory traversal
+    // This automatically normalizes .. segments and prevents directory
+    // traversal
     let final_url = base_url
         .join(normalized_path)
         .map_err(|e| format!("Invalid path for fallback URL: {e}"))?;
 
     // Security check: verify the host hasn't changed
-    // This prevents attacks using absolute URLs or protocol-relative URLs in the
-    // path
+    // This prevents attacks using absolute URLs or protocol-relative URLs in
+    // the path
     let final_host = final_url.host().ok_or("Final URL must have a host")?;
     if final_host != original_host {
         return Err("Path must not change the fallback host".into());
@@ -257,7 +258,7 @@ mod tests {
     #[test]
     fn test_boxed_body_type() {
         let body = Full::new(Bytes::from("test"))
-            .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Send + Sync>)
+            .map_err(|e| e as Box<dyn std::error::Error + Send + Sync>)
             .boxed();
 
         assert_eq!(
@@ -321,7 +322,8 @@ mod tests {
         // Test basic path traversal attempt with ../
         let result = normalize_fallback_url("example.com", "/docs/../etc/passwd");
         assert!(result.is_ok());
-        // The url crate normalizes this to /etc/passwd (which is still on example.com)
+        // The url crate normalizes this to /etc/passwd (which is still on
+        // example.com)
         assert_eq!(result.unwrap(), "https://example.com/etc/passwd");
 
         // Test multiple .. segments

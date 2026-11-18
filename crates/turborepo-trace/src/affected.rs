@@ -291,8 +291,8 @@ fn parse_changes(text: &str, root: &Path, bare: &mut Vec<String>) -> Result<Vec<
         if line.trim().is_empty() {
             continue;
         }
-        // NUL-separated `git diff --name-status -z`: status and paths are separate
-        // items.
+        // NUL-separated `git diff --name-status -z`: status and paths are
+        // separate items.
         let line = if nul && is_status(line) && !line.contains('\t') {
             let n = if line.starts_with('R') || line.starts_with('C') {
                 2
@@ -316,7 +316,8 @@ fn parse_changes(text: &str, root: &Path, bare: &mut Vec<String>) -> Result<Vec<
             let cs = ChangeSet::from_name_status(&line).map_err(|e| anyhow::anyhow!("{e}"))?;
             out.extend(cs.files);
         } else {
-            // A path without a status: what it was before is not known (`bare`).
+            // A path without a status: what it was before is not known
+            // (`bare`).
             let p = line.trim();
             let kind = if root.join(p).exists() {
                 ChangeKind::Modified
@@ -378,10 +379,10 @@ pub(crate) fn collect_entries(
             }
             continue;
         }
-        // A spec that names a file is that file, whatever characters its name has: a
-        // route directory `[slug]` is a character class to the matcher and
-        // `{a,b}` an alternation, so as a pattern the path of
-        // `app/[slug]/page.test.tsx` matches nothing.
+        // A spec that names a file is that file, whatever characters its name
+        // has: a route directory `[slug]` is a character class to the
+        // matcher and `{a,b}` an alternation, so as a pattern the path
+        // of `app/[slug]/page.test.tsx` matches nothing.
         let named = is_glob(e)
             .then(|| rel_to_root(root, &cwd, e))
             .flatten()
@@ -654,8 +655,8 @@ pub(crate) fn cmd_affected_for(
         }
         return affected(cmd, out, host);
     }
-    // The selection document: whatever fails, the caller gets a document that says
-    // the full set runs and why.
+    // The selection document: whatever fails, the caller gets a document that
+    // says the full set runs and why.
     let (mode, mode_source, note) = crate::selection::resolve_mode(cmd.mode);
     if let Some(n) = note {
         eprintln!("turbo trace: {n}");
@@ -713,16 +714,17 @@ fn affected(cmd: AffectedCmd, out: &mut dyn Write, host: Option<&Host>) -> Resul
              --tasks <glob>"
         );
     }
-    // A host's change source: its base is the merge base its changes are against
-    // (or the ref, for a history with several), resolved here as for `--since`.
+    // A host's change source: its base is the merge base its changes are
+    // against (or the ref, for a history with several), resolved here as
+    // for `--since`.
     let source_base = cmd.change_source.as_ref().and_then(|s| s.base());
     let since = if cmd.change_source.is_some() {
         source_base.as_deref()
     } else {
         cmd.since.as_deref().filter(|s| !s.is_empty())
     };
-    // The base: the merge base of the revision and HEAD (lockdiff::Git). Everything
-    // below that reads the base reads it through `git`.
+    // The base: the merge base of the revision and HEAD (lockdiff::Git).
+    // Everything below that reads the base reads it through `git`.
     let git = match since {
         Some(rev) => Some(
             Git::new(&root, rev, lockdiff::exact_base(cmd.exact_base))
@@ -807,7 +809,8 @@ fn affected(cmd: AffectedCmd, out: &mut dyn Write, host: Option<&Host>) -> Resul
                 git.as_ref().map(|g| {
                     s.spawn(move || {
                         let t0 = Instant::now();
-                        // The tracked list for the untracked scan, alongside the diff.
+                        // The tracked list for the untracked scan, alongside
+                        // the diff.
                         let ls = std::thread::scope(|s2| {
                             let ls = prefetch_ls
                                 .then(|| s2.spawn(|| lockdiff::Git::tracked_files(root_ref)));
@@ -842,12 +845,13 @@ fn affected(cmd: AffectedCmd, out: &mut dyn Write, host: Option<&Host>) -> Resul
         let tracked = diff.map(|h| h.join().unwrap_or_else(|p| std::panic::resume_unwind(p)));
         opened.map(|(g, r)| (g, r, tracked))
     })?;
-    // A path given without a status can't say "added": an existing path the graph
-    // has no node for may be new. Only as an addition does it match the
-    // listings that have no edge for it (a listing truncated at `--max-glob`, a
-    // listing resolved per test). (Whether its directory is new is another
-    // question, and one that a node does not answer: the refreshed graph has a
-    // node for a source file that is new. See crate::dirchange.)
+    // A path given without a status can't say "added": an existing path the
+    // graph has no node for may be new. Only as an addition does it match
+    // the listings that have no edge for it (a listing truncated at
+    // `--max-glob`, a listing resolved per test). (Whether its directory is
+    // new is another question, and one that a node does not answer: the
+    // refreshed graph has a node for a source file that is new. See
+    // crate::dirchange.)
     for c in changes.iter_mut() {
         if c.kind == ChangeKind::Modified
             && bare.contains(&c.path)
@@ -877,8 +881,8 @@ fn affected(cmd: AffectedCmd, out: &mut dyn Write, host: Option<&Host>) -> Resul
             changes.retain(|c| !c.path.starts_with(&o));
         }
     }
-    // The graph directory is not part of a source's changes either (an untracked
-    // `.turbotrace` is an added path to git).
+    // The graph directory is not part of a source's changes either (an
+    // untracked `.turbotrace` is an added path to git).
     if cmd.change_source.is_some() {
         let (_, out_dir) = cmd.loc.resolve()?;
         if let Some(p) = std::fs::canonicalize(&out_dir)
@@ -912,7 +916,8 @@ fn affected(cmd: AffectedCmd, out: &mut dyn Write, host: Option<&Host>) -> Resul
         .strict_eval(cmd.strict_eval)
         .strict(cmd.strict);
     let aopts = opts.affected.clone();
-    // Under --strict a working-directory path keeps its reading from the repository
+    // Under --strict a working-directory path keeps its reading from the
+    // repository
     // root (`turborepo_trace_store::Graph::set_cwd_root_always`).
     g.set_cwd_root_always(cmd.strict);
     // Working-directory-relative references resolved per test (same node ids as
@@ -921,8 +926,8 @@ fn affected(cmd: AffectedCmd, out: &mut dyn Write, host: Option<&Host>) -> Resul
     turborepo_trace_core::timing::mark("affected: derived layer");
     let engine = Engine::with_options(&dg, opts);
 
-    // 3. Lockfiles and manifests, while the graph's tables and the engine's indexes
-    //    load.
+    // 3. Lockfiles and manifests, while the graph's tables and the engine's
+    //    indexes load.
     let (fx, t_fx, t_warm, t_prepare) = std::thread::scope(|s| {
         let warm = s.spawn(|| {
             let t = Instant::now();
@@ -938,10 +943,10 @@ fn affected(cmd: AffectedCmd, out: &mut dyn Write, host: Option<&Host>) -> Resul
         (fx, t_fx, t_warm, t_prepare)
     });
     turborepo_trace_core::timing::mark("affected: lockfiles | tables + engine indexes");
-    // A vitest config whose alias entries changed selects the tests that can load a
-    // file with an affected request (crate::aliasdiff). For the workflow layer
-    // below, such a config is not a changed definition of the script that runs
-    // the tests.
+    // A vitest config whose alias entries changed selects the tests that can
+    // load a file with an affected request (crate::aliasdiff). For the
+    // workflow layer below, such a config is not a changed definition of
+    // the script that runs the tests.
     let (alias_drop, alias_seeds, alias_notes) = {
         let a = crate::aliasdiff::effects(&engine, &root, &changes, git.as_ref(), &|p| {
             fx.drop.contains(p) || steer.is_steering(p)
@@ -965,7 +970,8 @@ fn affected(cmd: AffectedCmd, out: &mut dyn Write, host: Option<&Host>) -> Resul
     fx.notes.extend(alias_notes);
     fx.notes.extend(wf.notes.iter().cloned());
     fx.drop.extend(wf.drop.iter().cloned());
-    // Config files whose changed fields decide who is affected (crate::configdiff).
+    // Config files whose changed fields decide who is affected
+    // (crate::configdiff).
     let lockfile_diffed = fx.drop.iter().any(|p| {
         matches!(
             p.rsplit('/').next(),
@@ -1013,8 +1019,8 @@ fn affected(cmd: AffectedCmd, out: &mut dyn Write, host: Option<&Host>) -> Resul
         fx.notes.extend(n.notes);
         (n.drop, n.seeds)
     };
-    // A tsconfig whose project references changed is no input change for tests that
-    // only transpile (crate::tsconfigdiff).
+    // A tsconfig whose project references changed is no input change for tests
+    // that only transpile (crate::tsconfigdiff).
     let tsfx = crate::tsconfigdiff::effects(&engine, &root, &changes, git.as_ref(), &|p| {
         fx.drop.contains(p)
             || cfx.drop.contains(p)
@@ -1022,8 +1028,8 @@ fn affected(cmd: AffectedCmd, out: &mut dyn Write, host: Option<&Host>) -> Resul
             || alias_drop.contains(p)
             || steer.is_steering(p)
     });
-    // A referenced tsconfig project that governed a file at the base and does not
-    // now is no input of the file in this graph (crate::tsgovern).
+    // A referenced tsconfig project that governed a file at the base and does
+    // not now is no input of the file in this graph (crate::tsgovern).
     let tsfx = {
         let mut tsfx = tsfx;
         let packages: Vec<crate::tsgovern::ChangedPackage<'_>> = fx
@@ -1076,10 +1082,10 @@ fn affected(cmd: AffectedCmd, out: &mut dyn Write, host: Option<&Host>) -> Resul
     for p in &fx.packages {
         cs.push_scoped(p.package, p.importers.clone());
     }
-    // Directories the change made or removed: no file of the diff names them, and a
-    // lookup that asked for one by name has another answer (crate::dirchange). Of
-    // every change: a file that a rule above took out of the change set is
-    // there or gone all the same.
+    // Directories the change made or removed: no file of the diff names them,
+    // and a lookup that asked for one by name has another answer
+    // (crate::dirchange). Of every change: a file that a rule above took
+    // out of the change set is there or gone all the same.
     let origin = crate::dirchange::Origin {
         bare: &bare,
         before: &[],
@@ -1114,8 +1120,8 @@ fn affected(cmd: AffectedCmd, out: &mut dyn Write, host: Option<&Host>) -> Resul
     let t_entries = t_entries0.elapsed();
     turborepo_trace_core::timing::mark("affected: entries");
     let t_eval0 = Instant::now();
-    // With a base revision, modified files that only reach entries through barrels
-    // whose names they don't provide are skipped (crate::barrel).
+    // With a base revision, modified files that only reach entries through
+    // barrels whose names they don't provide are skipped (crate::barrel).
     let outcome = crate::barrel::evaluate(
         &engine,
         &root,
@@ -1133,14 +1139,16 @@ fn affected(cmd: AffectedCmd, out: &mut dyn Write, host: Option<&Host>) -> Resul
             },
             mocks: &|needles| {
                 g.map_facts(turborepo_trace_lang_js::mocks::MOCK_FACT_TAG, &|n, f| {
-                    // A call with a computed module name has `null` after its method;
-                    // any other call matters only when its text has one of the names.
+                    // A call with a computed module name has `null` after its
+                    // method; any other call matters only
+                    // when its text has one of the names.
                     if !f.contains("\",null,") && !needles.iter().any(|n| f.contains(n.as_str())) {
                         return None;
                     }
                     let scan = turborepo_trace_lang_js::mocks::MockScan::decode(f)?;
-                    // Also the uses that are not a call the scan can read: a mock call
-                    // on another receiver names a module just the same.
+                    // Also the uses that are not a call the scan can read: a
+                    // mock call on another receiver names a
+                    // module just the same.
                     let requests = scan
                         .calls
                         .iter()
@@ -1171,8 +1179,9 @@ fn affected(cmd: AffectedCmd, out: &mut dyn Write, host: Option<&Host>) -> Resul
     let steering_reach = crate::steering::reach(&engine, &steer, &steering_changes);
     crate::steering::merge(&g, &steering_reach, &entries.set, &mut report);
     if steering_only {
-        // The loads of steering files are open here, as before: nothing else changed,
-        // so no package is affected that could bound them (crate::loads).
+        // The loads of steering files are open here, as before: nothing else
+        // changed, so no package is affected that could bound them
+        // (crate::loads).
         crate::steering::floor(
             &engine,
             &steer,
@@ -1181,8 +1190,8 @@ fn affected(cmd: AffectedCmd, out: &mut dyn Write, host: Option<&Host>) -> Resul
             &mut report,
         );
         report.policy = policy;
-        // An entry outside the graph can only be affected if it is a steering file
-        // itself.
+        // An entry outside the graph can only be affected if it is a steering
+        // file itself.
         entries.missing.retain(|m| steer.is_steering(m));
     }
     // Changed workflow jobs and the tests they run (crate::workflows).
@@ -1207,16 +1216,17 @@ fn affected(cmd: AffectedCmd, out: &mut dyn Write, host: Option<&Host>) -> Resul
     fx.notes.extend(svc.notes.iter().cloned());
     // Changed paths that code loaded with a computed read names (crate::names).
     let names_stats = if aopts.named && !engine.named_sites(&aopts).is_empty() {
-        // Repo steering files count only through explicit references (crate::steering):
-        // like the uncertainty floor, a name is not one.
+        // Repo steering files count only through explicit references
+        // (crate::steering): like the uncertainty floor, a name is not
+        // one.
         let named_changes: Vec<Change> = changes
             .iter()
             .filter(|c| !steer.is_steering(&c.path))
             .cloned()
             .collect();
         let cache_dir = turborepo_trace_store::cache_dir(&cmd.loc.resolve()?.1);
-        // No analysis closes tables yet (the cross-file binding will pass its tables
-        // here).
+        // No analysis closes tables yet (the cross-file binding will pass its
+        // tables here).
         let layer = crate::names::build(
             &g,
             &engine,
@@ -1234,7 +1244,8 @@ fn affected(cmd: AffectedCmd, out: &mut dyn Write, host: Option<&Host>) -> Resul
             .unwrap_or_else(|| turborepo_trace_graph::NodeSet::new(g.node_count()));
         let t_runtime = t.elapsed();
         if let Some(top) = cmd.names_report {
-            // Which names select how many entries, before the names are merged in.
+            // Which names select how many entries, before the names are merged
+            // in.
             let already: std::collections::HashSet<u32> = report
                 .entries
                 .iter()
@@ -1310,8 +1321,9 @@ fn affected(cmd: AffectedCmd, out: &mut dyn Write, host: Option<&Host>) -> Resul
                 eprintln!("  {:9} {:10}  {}", r.inclusive, r.exclusive, g.path(r.node));
             }
         }
-        // The same for what Next.js configs load (crate::nextconfigdiff), when a read
-        // that names bound runs while one of them loads: in the same pass.
+        // The same for what Next.js configs load (crate::nextconfigdiff), when
+        // a read that names bound runs while one of them loads: in the
+        // same pass.
         let mut also = None;
         if let Some(p) = next_loads.as_mut()
             && p.holds(&engine, &engine.named_sites(&aopts))
@@ -1346,9 +1358,9 @@ fn affected(cmd: AffectedCmd, out: &mut dyn Write, host: Option<&Host>) -> Resul
     } else {
         String::new()
     };
-    // Loads with an unknown target select an entry only when the change can reach
-    // them (crate::loads). Like the floor and the names, repo steering files do
-    // not count.
+    // Loads with an unknown target select an entry only when the change can
+    // reach them (crate::loads). Like the floor and the names, repo
+    // steering files do not count.
     let loads_applied = {
         let load_paths: Vec<Change> = changes
             .iter()
@@ -1361,8 +1373,8 @@ fn affected(cmd: AffectedCmd, out: &mut dyn Write, host: Option<&Host>) -> Resul
             .unwrap_or_else(|| NodeSet::new(g.node_count()));
         // A manifest or a layout file before the change (crate::loads::lent).
         let base = |path: &str| git.as_ref().and_then(|g| g.show(path));
-        // The same for what Next.js configs load (crate::nextconfigdiff), when a load
-        // with an unknown target runs while one of them loads.
+        // The same for what Next.js configs load (crate::nextconfigdiff), when
+        // a load with an unknown target runs while one of them loads.
         if let Some(p) = next_loads.as_mut()
             && p.holds(&engine, &engine.declared_sites(&eval_opts))
         {
@@ -1507,9 +1519,10 @@ fn affected(cmd: AffectedCmd, out: &mut dyn Write, host: Option<&Host>) -> Resul
             .iter()
             .map(|e| (g.path(e.entry), e))
             .collect();
-        // `--explain` makes the files it names entries. The selection, which runs
-        // without them, lists a file that looks like a test and is no entry as an
-        // unknown test: it always runs, whatever its trace would say.
+        // `--explain` makes the files it names entries. The selection, which
+        // runs without them, lists a file that looks like a test and is
+        // no entry as an unknown test: it always runs, whatever its
+        // trace would say.
         let unknown_tests: NodeSet = {
             let mut plain = cmd.entries.clone();
             plain.extend(cmd.entries_opt.iter().cloned());
@@ -1538,7 +1551,8 @@ fn affected(cmd: AffectedCmd, out: &mut dyn Write, host: Option<&Host>) -> Resul
                     "affected {rel}: an unknown test, which always runs: it looks like a test \
                      file, and no configuration of the test frameworks asked for lists it"
                 )?;
-                // Not a test here, and one in a checkout elsewhere: the place decides.
+                // Not a test here, and one in a checkout elsewhere: the place
+                // decides.
                 if let Some(note) = crate::lint::above_root_note(&root, &rel) {
                     writeln!(out, "  assumed: {note}")?;
                 }
@@ -1578,7 +1592,8 @@ fn affected(cmd: AffectedCmd, out: &mut dyn Write, host: Option<&Host>) -> Resul
                     turborepo_trace_graph::output::write_temp_assumption(&notes, out)?;
                     turborepo_trace_graph::output::write_mount_assumption(&notes, out)?;
                     write_cwd_assumed(&g, e.entry, out)?;
-                    // A test only by a pattern's reading above the repository root.
+                    // A test only by a pattern's reading above the repository
+                    // root.
                     if let Some(note) = crate::lint::above_root_note(&root, &rel) {
                         writeln!(out, "  assumed: {note}")?;
                     }
@@ -1617,7 +1632,8 @@ fn affected(cmd: AffectedCmd, out: &mut dyn Write, host: Option<&Host>) -> Resul
                 }
                 None => {
                     writeln!(out, "{rel}: not an entry in the graph")?;
-                    // No test here, and one in a checkout elsewhere: the place decides.
+                    // No test here, and one in a checkout elsewhere: the place
+                    // decides.
                     if let Some(note) = crate::lint::above_root_note(&root, &rel) {
                         writeln!(out, "  assumed: {note}")?;
                     }

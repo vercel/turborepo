@@ -5,6 +5,8 @@
 //! This enables linked worktrees to share the local cache with the main
 //! worktree.
 
+use std::str::FromStr;
+
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 
 use crate::Error;
@@ -63,7 +65,7 @@ impl WorktreeInfo {
 
             // Resolve the gitdir path (may be relative to the worktree root)
             let gitdir = if std::path::Path::new(gitdir_path).is_absolute() {
-                AbsoluteSystemPathBuf::try_from(gitdir_path)?
+                AbsoluteSystemPathBuf::from_str(gitdir_path)?
             } else {
                 let resolved = worktree_root.as_std_path().join(gitdir_path);
                 AbsoluteSystemPathBuf::try_from(resolved.as_path())?.to_realpath()?
@@ -78,13 +80,14 @@ impl WorktreeInfo {
             let commondir_rel = commondir_content.trim();
 
             let git_common_path = if std::path::Path::new(commondir_rel).is_absolute() {
-                AbsoluteSystemPathBuf::try_from(commondir_rel)?
+                AbsoluteSystemPathBuf::from_str(commondir_rel)?
             } else {
                 let resolved = gitdir.as_std_path().join(commondir_rel);
                 AbsoluteSystemPathBuf::try_from(resolved.as_path())?.to_realpath()?
             };
 
-            // The main worktree root is the parent of the common .git directory.
+            // The main worktree root is the parent of the common .git
+            // directory.
             let main_worktree_root = git_common_path
                 .parent()
                 .map(|p| p.to_owned())
@@ -134,7 +137,7 @@ pub fn resolve_git_dir(worktree_root: &AbsoluteSystemPath) -> Result<AbsoluteSys
         .trim();
 
     if std::path::Path::new(gitdir_path).is_absolute() {
-        Ok(AbsoluteSystemPathBuf::try_from(gitdir_path)?)
+        Ok(AbsoluteSystemPathBuf::from_str(gitdir_path)?)
     } else {
         let resolved = worktree_root.as_std_path().join(gitdir_path);
         Ok(AbsoluteSystemPathBuf::try_from(resolved.as_path())?.to_realpath()?)
@@ -176,7 +179,7 @@ mod tests {
         git_common_dir: &str,
     ) -> Result<AbsoluteSystemPathBuf, Error> {
         let git_common_path = if std::path::Path::new(git_common_dir).is_absolute() {
-            AbsoluteSystemPathBuf::try_from(git_common_dir).unwrap()
+            AbsoluteSystemPathBuf::from_str(git_common_dir).unwrap()
         } else {
             let resolved = cwd.as_std_path().join(git_common_dir);
             AbsoluteSystemPathBuf::try_from(resolved.as_path())
@@ -359,10 +362,11 @@ mod tests {
 
     #[test]
     fn test_linked_worktree_outside_main_repo() {
-        // Reproduces the real-world scenario where the worktree lives at a sibling
-        // path (e.g. ~/Vercel/front-worktree/branch) rather than inside the main
-        // repo (~/Vercel/front). git_root must resolve to the worktree root so
-        // that path anchoring works correctly in the SCM layer.
+        // Reproduces the real-world scenario where the worktree lives at a
+        // sibling path (e.g. ~/Vercel/front-worktree/branch) rather
+        // than inside the main repo (~/Vercel/front). git_root must
+        // resolve to the worktree root so that path anchoring works
+        // correctly in the SCM layer.
         let (_tmp_main, repo_root) = tmp_dir();
         let (_tmp_wt, worktree_parent) = tmp_dir();
         setup_repository(&repo_root);
@@ -445,7 +449,7 @@ mod tests {
         let mut lines = stdout.lines();
 
         let toplevel = lines.next().unwrap().trim();
-        let worktree_root = AbsoluteSystemPathBuf::try_from(toplevel)?;
+        let worktree_root = AbsoluteSystemPathBuf::from_str(toplevel)?;
 
         let git_common_dir = lines.next().unwrap().trim().to_string();
 

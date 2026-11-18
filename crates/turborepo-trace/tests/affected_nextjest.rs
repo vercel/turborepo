@@ -119,9 +119,9 @@ fn the_next_config_and_the_test_env_files_are_inputs_of_the_tests() {
 fn without_a_base_revision_a_module_the_next_config_loads_counts() {
     let d = repo();
     let r = d.path();
-    // `--changed` names a path and nothing else: whether the module did more than
-    // define route rules before the edit cannot be shown, so the config's
-    // process loaded a module that changed.
+    // `--changed` names a path and nothing else: whether the module did more
+    // than define route rules before the edit cannot be shown, so the
+    // config's process loaded a module that changed.
     assert_eq!(selected(r, "apps/site/config/redirects.mjs"), SITE_TEST);
 }
 
@@ -213,9 +213,9 @@ fn app() -> tempfile::TempDir {
 fn a_route_rule_of_the_next_config_is_not_an_input_of_the_tests() {
     let d = app();
     let r = d.path();
-    // One rule of `rewrites()` goes away. `next/jest` loads the config and never
-    // calls `rewrites()`: the jest config it returns is the same. The test that
-    // imports the config calls it.
+    // One rule of `rewrites()` goes away. `next/jest` loads the config and
+    // never calls `rewrites()`: the jest config it returns is the same. The
+    // test that imports the config calls it.
     write(
         r,
         "apps/site/next.config.mjs",
@@ -406,7 +406,8 @@ fn what_the_next_config_loads_is_an_input_of_the_tests() {
     write(r, "apps/site/config/data.json", "{ \"name\": \"other\" }\n");
     assert_eq!(since(r, &[]), SITE_TEST);
     reset(r);
-    // A change that is only in types and comments is no change of a loaded module.
+    // A change that is only in types and comments is no change of a loaded
+    // module.
     write(
         r,
         "apps/site/config/shared.mjs",
@@ -463,7 +464,8 @@ fn a_module_only_route_functions_use_is_not_an_input() {
     assert!(since(r, &[]).is_empty());
     assert_eq!(since(r, &all), SITE_TEST);
     reset(r);
-    // The edit makes loading the module do something: the tests' process sees it.
+    // The edit makes loading the module do something: the tests' process sees
+    // it.
     write(
         r,
         ROUTES,
@@ -482,7 +484,8 @@ fn a_module_only_route_functions_use_is_not_an_input() {
     );
     assert_eq!(since(r, &[]), SITE_TEST);
     reset(r);
-    // A module only a route function uses, whose load sets a variable: it counts.
+    // A module only a route function uses, whose load sets a variable: it
+    // counts.
     write(
         r,
         "apps/site/config/flagged.mjs",
@@ -491,8 +494,8 @@ fn a_module_only_route_functions_use_is_not_an_input() {
     );
     assert_eq!(since(r, &[]), SITE_TEST);
     reset(r);
-    // A module that starts to load a package: what loading a package does is not
-    // known.
+    // A module that starts to load a package: what loading a package does is
+    // not known.
     write(
         r,
         "apps/site/config/paths.mjs",
@@ -576,11 +579,12 @@ fn a_helper_that_reads_the_application_inside_a_function() {
     );
     write(r, "apps/site/zones.jsonc", "{ \"zones\": [\"blog\"] }\n");
     assert!(since(r, &[]).is_empty(), "{}", stats(r, &[]));
-    // Nor does the config's location name what the helper's function lists (a read
-    // with a computed path, bounded by names): no such read runs when the
-    // config loads.
+    // Nor does the config's location name what the helper's function lists (a
+    // read with a computed path, bounded by names): no such read runs when
+    // the config loads.
     assert!(since_default(r).is_empty(), "{}", stats(r, &[]));
-    // Counting every load, the helper is affected through what its function reads.
+    // Counting every load, the helper is affected through what its function
+    // reads.
     assert_eq!(since(r, &all), SITE_TEST);
     reset(r);
     std::fs::remove_dir_all(r.join("apps/site/app/blog")).unwrap();
@@ -609,8 +613,8 @@ fn a_helper_that_reads_the_application_inside_a_function() {
         ),
     );
     assert_eq!(since(r, &[]), SITE_TEST);
-    // The helper starts to call its function when it loads: what the function reads
-    // is read at load, and nothing about the helper is left out.
+    // The helper starts to call its function when it loads: what the function
+    // reads is read at load, and nothing about the helper is left out.
     write(
         r,
         "apps/site/zones.mjs",
@@ -635,9 +639,9 @@ fn a_file_the_config_reads_in_the_working_directory() {
     let d = repo();
     let r = d.path();
     write(r, ".gitignore", ".turbo/trace/\n");
-    // As in a real application's config: a file of the working directory, read when
-    // the config loads. The config loads in the jest process, whose working
-    // directory is the tests'.
+    // As in a real application's config: a file of the working directory, read
+    // when the config loads. The config loads in the jest process, whose
+    // working directory is the tests'.
     write(
         r,
         "apps/site/next.config.mjs",
@@ -713,8 +717,9 @@ fn a_computed_path_in_the_working_directory_is_bounded_by_names() {
     let d = repo();
     let r = d.path();
     write(r, ".gitignore", ".turbo/trace/\n");
-    // The name is not known: which file of the working directory the config reads
-    // is open, and so is whether a change in the package reaches the tests.
+    // The name is not known: which file of the working directory the config
+    // reads is open, and so is whether a change in the package reaches the
+    // tests.
     write(
         r,
         "apps/site/next.config.mjs",
@@ -735,8 +740,8 @@ fn a_computed_path_in_the_working_directory_is_bounded_by_names() {
     assert_eq!(since(r, &[]), SITE_TEST, "{}", stats(r, &[]));
     assert!(since(r, &[("TURBO_TRACE_DEBUG_CONFIG_IMPORTS", "0")]).is_empty());
     reset(r);
-    // The working directory is a name too, of every path in it: as for a test with
-    // such a read, any file of the application counts.
+    // The working directory is a name too, of every path in it: as for a test
+    // with such a read, any file of the application counts.
     write(r, "apps/site/lib/b.ts", "export const b = 3;\n");
     assert_eq!(since_default(r), SITE_TEST, "{}", stats(r, &[]));
     reset(r);

@@ -237,7 +237,8 @@ fn current_native_self_local_and_copied_local_startup_preserve_root_config() {
         assert_eq!(report.shortfall(&requirement), None);
         for mode in ["strict", "loose"] {
             let mode_arg = format!("--env-mode={mode}");
-            // Relative path is invocation-relative, then crosses a root-cwd handoff.
+            // Relative path is invocation-relative, then crosses a root-cwd
+            // handoff.
             let (code, text) = invoke(
                 &f,
                 entry,
@@ -330,7 +331,8 @@ fn current_native_self_local_and_copied_local_startup_preserve_root_config() {
         fs::remove_file(&result_file).unwrap();
         fs::remove_file(&local).unwrap();
     }
-    // An installed package whose native binary disappeared is not an absent pin.
+    // An installed package whose native binary disappeared is not an absent
+    // pin.
     let (code, text) = invoke(
         &f,
         &binary,

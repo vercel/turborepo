@@ -131,8 +131,8 @@ fn a_changed_shader_selects_what_loads_it_through_other_shaders() {
     write(r, "node_modules/vitest/index.js", "module.exports = {};\n");
     sources(r);
 
-    // The loader plugin compiles the shaders; their imports are edges, so nothing
-    // is uncertain.
+    // The loader plugin compiles the shaders; their imports are edges, so
+    // nothing is uncertain.
     assert!(affected(r, "README.md").is_empty());
     let report = ok(r, &["floor", "--tests", "vitest"]);
     assert!(
@@ -152,8 +152,9 @@ fn a_changed_shader_selects_what_loads_it_through_other_shaders() {
     assert!(affected(r, "src/shaders/unused.wgsl").is_empty());
     assert_eq!(affected(r, "src/a.ts"), ["src/a.test.ts"]);
 
-    // An import that does not resolve is a record of the shader: what loads it is
-    // uncertain until the file exists, and the file then is one of its shaders.
+    // An import that does not resolve is a record of the shader: what loads it
+    // is uncertain until the file exists, and the file then is one of its
+    // shaders.
     write(
         r,
         "src/shaders/deep.wgsl",

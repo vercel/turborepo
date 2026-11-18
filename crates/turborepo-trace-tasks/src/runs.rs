@@ -278,8 +278,8 @@ pub fn scan_unsupported_shell(line: &str, repo_root: &Path, out: &mut TaskSpec) 
 /// through another package (`^x`), which then run in other packages than the
 /// selected ones; `pkg#x` entries name their package.
 fn turbo_pipeline(repo_root: &Path, name: &str) -> Vec<(Option<String>, String, bool)> {
-    // Not recorded: every task of a turbo repository is keyed by the root config
-    // already.
+    // Not recorded: every task of a turbo repository is keyed by the root
+    // config already.
     let Some((_, Some(doc))) =
         turborepo_trace_core::record::pause(|| crate::sources::turbo::read_turbo(repo_root))
     else {
@@ -300,7 +300,8 @@ fn turbo_pipeline(repo_root: &Path, name: &str) -> Vec<(Option<String>, String, 
             continue;
         }
         seen.push((n.clone(), up));
-        // The definition for every package, and any package-specific one (`web#build`).
+        // The definition for every package, and any package-specific one
+        // (`web#build`).
         for (key, def) in tasks {
             let applies = key == &n || key.rsplit_once('#').is_some_and(|(_, k)| k == n);
             if !applies {
@@ -397,8 +398,8 @@ pub fn observe(
                 continue;
             }
         };
-        // turbo passes the words after `--` on to the tasks (`turbo build -- --mode
-        // "$M"`): they are arguments, not task names.
+        // turbo passes the words after `--` on to the tasks (`turbo build --
+        // --mode "$M"`): they are arguments, not task names.
         if recognizer == "turbo" {
             let split = cmd.argv.iter().position(|w| w.text == "--");
             let passed_on = split.is_some_and(|i| {
@@ -410,8 +411,9 @@ pub fn observe(
             }
         }
         if computed(&name) {
-            // Which task runs is decided at run time: a test task if the command says so,
-            // else only for a task that is otherwise known to run tests.
+            // Which task runs is decided at run time: a test task if the
+            // command says so, else only for a task that is
+            // otherwise known to run tests.
             let reason = format!("`{}` runs a computed task", rep.text.trim());
             if rep.text.contains("test") {
                 out.runs_unknown(reason);
@@ -448,16 +450,16 @@ pub fn observe(
         out.test_run("node-test", cmd.cwd.clone());
         return;
     }
-    // 3. Scripts run by an interpreter: the script defines the task; its text may
-    //    start tests.
+    // 3. Scripts run by an interpreter: the script defines the task; its text
+    //    may start tests.
     if SCRIPT_RUNNERS.contains(&recognizer) {
         let entries: Vec<_> = out.entries[m.entries.min(out.entries.len())..]
             .iter()
             .map(|e| (e.path.clone(), e.lang))
             .collect();
         for (p, lang) in entries {
-            // An installed package, by the path below the root (the root may be below a
-            // directory called `node_modules`).
+            // An installed package, by the path below the root (the root may be
+            // below a directory called `node_modules`).
             if p.strip_prefix(cx.repo_root).map_or(true, |rel| {
                 rel.components().any(|c| c.as_os_str() == "node_modules")
             }) {
@@ -531,8 +533,8 @@ mod tests {
             launch_word("execa('pnpm', ['run', 'test:unit'])"),
             Some(("pnpm", Launch::Any))
         );
-        // A task runner alone is no evidence of a test launch: a build or scoring
-        // script.
+        // A task runner alone is no evidence of a test launch: a build or
+        // scoring script.
         assert_eq!(
             launch_word("execSync('turbo run build --filter=web')"),
             None

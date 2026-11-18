@@ -160,8 +160,8 @@ pub(crate) fn scan_actions(files: &Files<'_>, paths: &[PathBuf]) -> Vec<Site> {
                 via: vec![via],
             });
         };
-    // The names an action can be imported under: an import of another name is not
-    // one.
+    // The names an action can be imported under: an import of another name is
+    // not one.
     let mut action_names: HashSet<String> = HashSet::new();
     let mut any_module = false;
     for p in paths {
@@ -225,8 +225,8 @@ pub(crate) fn scan_actions(files: &Files<'_>, paths: &[PathBuf]) -> Vec<Site> {
                 Imported::Named(n) => n.clone(),
                 _ => "default".to_string(),
             };
-            // The module the import names, or the module that declares the export behind a
-            // barrel.
+            // The module the import names, or the module that declares the
+            // export behind a barrel.
             if is_action_module(&first) {
                 let (g, n) = files
                     .resolve_export(&first, &export)

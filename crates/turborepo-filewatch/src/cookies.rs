@@ -106,8 +106,8 @@ impl<T> PartialOrd for CookiedRequest<T> {
 
 impl<T> Ord for CookiedRequest<T> {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        // Lower serials should be sorted higher, since the heap pops the highest values
-        // first
+        // Lower serials should be sorted higher, since the heap pops the
+        // highest values first
         other.serial.cmp(&self.serial)
     }
 }
@@ -201,9 +201,11 @@ impl CookieWriter {
             let root = cookie_root.to_owned();
             async move {
                 if source.ready().await.is_err() {
-                    // here we need to wait for confirmation that the watching end is ready
-                    // before we start sending requests. this has the side effect of not
-                    // enabling the cookie writing mechanism until the watcher is ready
+                    // here we need to wait for confirmation that the watching
+                    // end is ready before we start sending
+                    // requests. this has the side effect of not
+                    // enabling the cookie writing mechanism until the watcher
+                    // is ready
                     return;
                 }
 
@@ -241,7 +243,8 @@ impl CookieWriter {
         &self,
         request: T,
     ) -> Result<CookiedRequest<T>, CookieError> {
-        // we need to write the cookie from a single task so as to serialize them
+        // we need to write the cookie from a single task so as to serialize
+        // them
         tokio::time::timeout(self.timeout, self.cookie_request_inner(request, None)).await?
     }
 
@@ -607,8 +610,8 @@ mod test {
             .unwrap();
 
         // Expect 2 rpcs to be ready. We don't know which ones they will be
-        // but we also don't care. We don't have ordering semantics on the client
-        // side.
+        // but we also don't care. We don't have ordering semantics on the
+        // client side.
         join_set.join_next().await.unwrap().unwrap();
         join_set.join_next().await.unwrap().unwrap();
 

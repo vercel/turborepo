@@ -214,7 +214,8 @@ fn statement(src: &[u8], after: usize, bare: bool) -> Stmt<'_> {
 /// Finds the import lines of a shader module. Linear; never panics.
 pub fn scan<'s>(src: &'s [u8], out: &mut RefSink<'s>) {
     let mut i = 0;
-    // Only trivia since the start of the file or the end of a statement or line.
+    // Only trivia since the start of the file or the end of a statement or
+    // line.
     let mut start = true;
     while i < src.len() {
         let b = src[i];
@@ -258,7 +259,8 @@ pub fn scan<'s>(src: &'s [u8], out: &mut RefSink<'s>) {
                     continue;
                 }
                 start = false;
-                // `export fn`, `export struct`, ...: a declaration, read on as code.
+                // `export fn`, `export struct`, ...: a declaration, read on as
+                // code.
                 if !import && !matches!(src.get(skip_trivia(src, i)), Some(b'{' | b'*')) {
                     continue;
                 }
@@ -418,8 +420,8 @@ mod tests {
             refs("import super::scene::{ Scene, project };\n"),
             ["! import super"]
         );
-        // No `from`, a string that does not end on its line, an empty specifier, the
-        // end of the file.
+        // No `from`, a string that does not end on its line, an empty
+        // specifier, the end of the file.
         assert_eq!(refs("import { a } \"./a.wgsl\";"), ["! import { a } \""]);
         assert_eq!(
             refs("import { a } from \"./a.wgsl\nfn f() {}"),
@@ -436,7 +438,8 @@ mod tests {
             refs("import a::b;\nimport { c } from \"./c.wgsl\";\n"),
             ["import ./c.wgsl", "! import a"]
         );
-        // Preprocessor lines that include a file; other directives are skipped whole.
+        // Preprocessor lines that include a file; other directives are skipped
+        // whole.
         assert_eq!(
             refs(
                 "#import \"./common.wgsl\"\n  #include <noise>\n#define import 1\n#if X\nfn f() \
@@ -449,8 +452,8 @@ mod tests {
             refs("import { a }\nimport { b } from \"./b.wgsl\"\nimport { c } from \"./c.wgsl\""),
             ["import ./b.wgsl", "import ./c.wgsl", "! import { a }\n"]
         );
-        // A re-export with a string it cannot read; an export list at the end of the
-        // file is none.
+        // A re-export with a string it cannot read; an export list at the end
+        // of the file is none.
         assert_eq!(
             refs("export { a } from \"./a.wgsl\nfn f() {}"),
             ["! export { a } from \"./a.wgsl"]

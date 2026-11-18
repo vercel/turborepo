@@ -855,16 +855,16 @@ fn matching(at: At<'_>, want: &Wanted<'_>, f: &mut dyn FnMut(&Entry)) {
         } else {
             format!("{}/{name}", at.rel)
         };
-        // Which segments can come next after this name (node-glob: a `**` does not go
-        // on behind a link to a directory).
+        // Which segments can come next after this name (node-glob: a `**` does
+        // not go on behind a link to a directory).
         let node_glob = want.links == Links::NodeGlob;
         let states = if node_glob {
             want.step(at.states, &name, e.link)
         } else {
             at.states
         };
-        // Behind a link, node-glob matches only what no `**` had to go through a link
-        // for.
+        // Behind a link, node-glob matches only what no `**` had to go through
+        // a link for.
         if levels.is_none_or(|n| at.depth + 1 == n)
             && want.literal.is_none_or(|l| rel.contains(l))
             && glob.matches(&rel)
@@ -892,9 +892,10 @@ fn matching(at: At<'_>, want: &Wanted<'_>, f: &mut dyn FnMut(&Entry)) {
             }
             continue;
         }
-        // A link: entered where the runner's library enters a link to a directory. What
-        // it leads to is asked about whether or not that is a directory now: a link to
-        // a file, or to nothing, may come to lead to one.
+        // A link: entered where the runner's library enters a link to a
+        // directory. What it leads to is asked about whether or not
+        // that is a directory now: a link to a file, or to nothing, may
+        // come to lead to one.
         let enters = match want.links {
             Links::Skip => false,
             Links::Follow => true,
@@ -1215,8 +1216,8 @@ mod tests {
             // So are the directories the checkout lives below.
             assert!(!t.fx_is_dir());
             assert!(read_dir(&t).is_none());
-            // A declared root (a language's module cache) and an installed package belong
-            // to the project.
+            // A declared root (a language's module cache) and an installed
+            // package belong to the project.
             assert!(t.join("store/s.txt").fx_is_file());
             assert!(host.join("node_modules/pkg/package.json").fx_is_file());
         });
@@ -1305,8 +1306,8 @@ mod tests {
         );
         assert_eq!(log.parts.len(), 1);
         assert_eq!(log.parts[0].1.asked, [t.join("p.txt")]);
-        // Nothing is logged outside `with_log`, and a nested log is the outer one's
-        // too.
+        // Nothing is logged outside `with_log`, and a nested log is the outer
+        // one's too.
         assert!(t.join("a.txt").fx_is_file());
         let (_, outer) = with_log(|| {
             let (_, inner) = with_log(|| t.join("a.txt").fx_is_file());
@@ -1343,7 +1344,8 @@ mod tests {
                 .collect()
         };
         let glob = |pattern: &str, dirs: bool| {
-            // (A walk that enters no link; the libraries that do: `tests/projects.rs`.)
+            // (A walk that enters no link; the libraries that do:
+            // `tests/projects.rs`.)
             let (found, log) =
                 with_log(|| expand_glob(&format!("{}/{pattern}", t.display()), dirs, Links::Skip));
             assert_eq!(log.listed.len(), 1, "{:?}", log.listed);
@@ -1351,7 +1353,8 @@ mod tests {
             let asked = rel(log.asked);
             (rel(found), rel(vec![dir]).remove(0), listed, asked)
         };
-        // Directories one level down: a link to a directory is one, and is asked about.
+        // Directories one level down: a link to a directory is one, and is
+        // asked about.
         let (found, dir, listed, asked) = glob("packages/*", true);
         assert_eq!(found, ["packages/a", "packages/b", "packages/link"]);
         assert_eq!((dir.as_str(), listed.as_str()), ("packages", "*"));
@@ -1363,7 +1366,8 @@ mod tests {
             (dir.as_str(), listed.as_str()),
             ("packages", "*/jest.config.js")
         );
-        // Braces are a listing's syntax; an extglob is not, and everything is listed.
+        // Braces are a listing's syntax; an extglob is not, and everything is
+        // listed.
         let (found, _, listed, _) = glob("{packages,elsewhere}/*", true);
         assert_eq!(
             found,

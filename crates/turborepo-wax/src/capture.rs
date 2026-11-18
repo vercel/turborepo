@@ -32,8 +32,7 @@ impl<'m, 't> From<&'m BorrowedText<'t>> for OwnedText {
     fn from(captures: &'m BorrowedText<'t>) -> Self {
         let matched = captures
             .get(0)
-            .map(|capture| capture.as_str())
-            .unwrap_or_default()
+            .map_or_default(|capture| capture.as_str())
             .into();
         let ranges = captures
             .iter()
@@ -154,10 +153,9 @@ impl<'t> MatchedText<'t> {
     /// [`Program`]: crate::Program
     pub fn complete(&self) -> &str {
         match &self.inner {
-            MaybeOwnedText::Borrowed(captures) => captures
-                .get(0)
-                .map(|capture| capture.as_str())
-                .unwrap_or_default(),
+            MaybeOwnedText::Borrowed(captures) => {
+                captures.get(0).map_or_default(|capture| capture.as_str())
+            }
             MaybeOwnedText::Owned(captures) => captures.matched.as_ref(),
         }
     }

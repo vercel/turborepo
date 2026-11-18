@@ -292,7 +292,7 @@ fn hash_file_inputs(
             .external_file_inputs(package)
             .map_err(|error| context(error.to_string()))?;
         for path in &paths {
-            validate_file_input(repo_root, path).map_err(&context)?;
+            validate_file_input(repo_root, path).map_err(context)?;
             used_paths
                 .entry(path.clone())
                 .or_insert(package.key.as_str());

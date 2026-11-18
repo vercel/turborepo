@@ -42,7 +42,8 @@ pub fn scan_generators(cx: &RecognizeCx<'_>, t: &Target<'_>, out: &mut TaskSpec)
         }
     }
     if !any {
-        // A missing schema or one without generators: the default client location.
+        // A missing schema or one without generators: the default client
+        // location.
         let dir = if fsx::is_dir(&main) {
             main.clone()
         } else {

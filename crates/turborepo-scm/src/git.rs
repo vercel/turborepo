@@ -36,7 +36,8 @@ impl SCM {
     ) -> (Option<String>, Option<String>) {
         match self {
             Self::Git(git) => git.get_current_branch_and_sha().unwrap_or_else(|_| {
-                // Preserve partial results for unusual states such as an unborn branch.
+                // Preserve partial results for unusual states such as an unborn
+                // branch.
                 (git.get_current_branch().ok(), git.get_current_sha().ok())
             }),
             Self::Manual(_) => (None, None),
@@ -515,8 +516,9 @@ impl GitRepo {
             return Err(Error::git_error("git returned unexpected revision output"));
         }
 
-        // Match `git branch --show-current`: only a local branch is reported, without
-        // its `refs/heads/` prefix. Detached HEAD and other symbolic refs are empty.
+        // Match `git branch --show-current`: only a local branch is reported,
+        // without its `refs/heads/` prefix. Detached HEAD and other
+        // symbolic refs are empty.
         let branch = branch
             .strip_prefix("refs/heads/")
             .unwrap_or_default()
@@ -786,9 +788,9 @@ impl GitRepo {
          * The name of the base ref or target branch of the pull request in a
          * workflow run.
          *
-         * This variable only has a value when the event that triggers a workflow run
-         * is either `pull_request` or `pull_request_target`.
-         * For example, `main`
+         * This variable only has a value when the event that triggers a
+         * workflow run is either `pull_request` or
+         * `pull_request_target`. For example, `main`
          *
          * So environment variable is empty in a regular commit
          */
@@ -894,8 +896,8 @@ impl GitRepo {
 
         let valid_from = self.resolve_base(from_commit, CIEnv::new())?;
 
-        // If a to commit is not specified for `diff-tree` it will change the comparison
-        // to be between the provided commit and it's parent
+        // If a to commit is not specified for `diff-tree` it will change the
+        // comparison to be between the provided commit and it's parent
         let to_commit = to_commit.unwrap_or("HEAD");
         Self::validate_git_ref(to_commit)?;
         let mut args = vec!["diff-tree", "-r", "--name-only", "--no-commit-id", "-z"];
@@ -906,8 +908,8 @@ impl GitRepo {
 
         args.extend(["--end-of-options", &valid_from, to_commit]);
 
-        // We only care about non-tracked files if we haven't specified both ends up the
-        // comparison
+        // We only care about non-tracked files if we haven't specified both
+        // ends up the comparison
         if !include_uncommitted {
             let output = self.execute_git_command(&args, pathspec)?;
             self.add_files_from_stdout(&mut files, turbo_root, output)?;
@@ -919,8 +921,8 @@ impl GitRepo {
         // run concurrently. Results are applied, and errors reported, in the
         // same order as running them one after another.
         std::thread::scope(|scope| {
-            // Add untracked files or unstaged changes, i.e. files that are not in git at
-            // all
+            // Add untracked files or unstaged changes, i.e. files that are not
+            // in git at all
             let ls_files = scope.spawn(|| {
                 self.execute_git_command(
                     &[
@@ -1559,8 +1561,8 @@ mod tests {
             commit_file(&repo_path, Path::new("baz.js"), Some(&second_commit_sha));
 
         // Move HEAD back to merge base without resetting the working tree.
-        // `git reset --soft` moves HEAD but keeps the index and working tree intact,
-        // matching the old git2 `set_head_detached` behavior.
+        // `git reset --soft` moves HEAD but keeps the index and working tree
+        // intact, matching the old git2 `set_head_detached` behavior.
         run_git(&repo_path, &["reset", "--soft", &second_commit_sha]);
         let fourth_file = repo_root.path().join("qux.js");
         fs::write(fourth_file, "let w = 3;")?;
@@ -1839,7 +1841,8 @@ mod tests {
         let second_commit_sha =
             commit_file(&repo_path, Path::new("bar.js"), Some(&first_commit_sha));
 
-        // Test that only second file is marked as changed when we check commit range
+        // Test that only second file is marked as changed when we check commit
+        // range
         let files = changed_files(
             repo_root.path().to_path_buf(),
             turbo_root.to_path_buf(),
@@ -1854,7 +1857,8 @@ mod tests {
         let new_file = repo_root.path().join("subdir").join("baz.js");
         fs::write(new_file, "let x = 2;")?;
 
-        // The new directory and files are not yet committed, they shouldn't show up.
+        // The new directory and files are not yet committed, they shouldn't
+        // show up.
         let files = changed_files(
             repo_root.path().to_path_buf(),
             repo_root.path().to_path_buf(),
@@ -1864,7 +1868,8 @@ mod tests {
         )?;
         assert_eq!(files, HashSet::from(["bar.js".to_string()]));
 
-        // Since we are only specifying the first commit, the new file should show up
+        // Since we are only specifying the first commit, the new file should
+        // show up
         let files = changed_files(
             repo_root.path().to_path_buf(),
             repo_root.path().to_path_buf(),
@@ -1884,7 +1889,8 @@ mod tests {
             Some(&second_commit_sha),
         );
 
-        // Test that `turbo_root` filters out files not in the specified directory
+        // Test that `turbo_root` filters out files not in the specified
+        // directory
         let files = changed_files(
             repo_root.path().to_path_buf(),
             repo_root.path().join("subdir"),
@@ -1910,8 +1916,8 @@ mod tests {
         let new_file = repo_root.path().join("bar.js");
         fs::write(new_file, "let y = 1;")?;
 
-        // Test that uncommitted file is marked as changed with the parameters that Go
-        // will pass
+        // Test that uncommitted file is marked as changed with the parameters
+        // that Go will pass
         let files = changed_files(
             repo_root.path().to_path_buf(),
             repo_root.path().to_path_buf(),
@@ -1925,14 +1931,15 @@ mod tests {
     }
 
     // Tests that we can use a subdir as the turbo_root path
-    // (occurs when the monorepo is nested inside a subdirectory of git repository)
+    // (occurs when the monorepo is nested inside a subdirectory of git
+    // repository)
     #[test]
     fn test_changed_files_with_subdir_as_turbo_root() -> Result<(), Error> {
         let (repo_root, repo_path) = setup_repository(None)?;
 
         fs::create_dir(repo_root.path().join("subdir"))?;
-        // Create additional nested directory to test that we return a system path
-        // and not a normalized unix path
+        // Create additional nested directory to test that we return a system
+        // path and not a normalized unix path
         fs::create_dir(repo_root.path().join("subdir").join("src"))?;
 
         let file = repo_root.path().join("subdir").join("foo.js");
@@ -2291,7 +2298,8 @@ mod tests {
         let root = AbsoluteSystemPathBuf::try_from(repo_root.path()).unwrap();
 
         // WARNING:
-        // if you do not make a commit, git will show you that you have no branches.
+        // if you do not make a commit, git will show you that you have no
+        // branches.
         let file = root.join_component("todo.txt");
         file.create_with_contents("1. explain why async Rust is good")?;
         let _first_commit = commit_file(&repo_path, Path::new("todo.txt"), None);
@@ -2317,7 +2325,8 @@ mod tests {
         let (repo_root, repo_path) = setup_repository(None)?;
         let root = AbsoluteSystemPathBuf::try_from(repo_root.path()).unwrap();
 
-        // Test various Unicode filenames that should be properly handled with -z flag
+        // Test various Unicode filenames that should be properly handled with
+        // -z flag
         let test_files = vec![
             "测试文件.txt",      // Chinese
             "テストファイル.js", // Japanese
@@ -2550,7 +2559,8 @@ mod tests {
         ; "first commit has a parent"
     )]
     fn test_get_github_base_ref(test_case: TestCase, expected: Option<&str>) -> Result<(), Error> {
-        // note: we must bind here because otherwise the temporary file will be dropped
+        // note: we must bind here because otherwise the temporary file will be
+        // dropped
         let temp_file = if test_case.env.github_event_path.is_ok() {
             let temp_file = NamedTempFile::new().expect("Failed to create temporary file");
             fs::write(temp_file.path(), test_case.event_json)
@@ -3278,8 +3288,9 @@ mod tests {
         let turbo_root = AbsoluteSystemPathBuf::try_from(turbo_root_dir.path()).unwrap();
         let repo = make_git_repo(&git_root);
 
-        // Path is valid and relative, but when joined with git_root it produces an
-        // absolute path that isn't under turbo_root — reanchoring fails.
+        // Path is valid and relative, but when joined with git_root it produces
+        // an absolute path that isn't under turbo_root — reanchoring
+        // fails.
         let stdout = b"some/file.txt\0".to_vec();
         let mut files = HashSet::new();
         let result = repo.add_files_from_stdout(&mut files, &turbo_root, stdout);
@@ -3300,8 +3311,8 @@ mod tests {
         new_file.create_with_contents("new content")?;
 
         // Use a turbo_root that is NOT a subdirectory of the git root.
-        // The turbo_root_relative_to_git_root check at the start of changed_files
-        // will fail, producing Error::Path.
+        // The turbo_root_relative_to_git_root check at the start of
+        // changed_files will fail, producing Error::Path.
         let separate_dir = tempfile::tempdir()?;
         let bad_turbo_root = AbsoluteSystemPathBuf::try_from(separate_dir.path()).unwrap();
         let scm = SCM::new(&root);

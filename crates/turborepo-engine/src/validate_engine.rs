@@ -173,7 +173,8 @@ impl Engine<Built, TaskDefinition> {
                     }
                 }
 
-                // check if the package for the task defines an executable native task
+                // check if the package for the task defines an executable
+                // native task
                 let package_name = PackageName::from(task_id.package().to_string());
                 let Some(_context) = package_graph.package_task_context(&package_name) else {
                     return Err(ValidateError::MissingPackageJson {
@@ -225,8 +226,8 @@ fn validate_interactive(
     engine: &Engine<Built, TaskDefinition>,
     ui_mode: UIMode,
 ) -> Vec<ValidateError> {
-    // If experimental_ui is being used, then we don't need check for interactive
-    // tasks
+    // If experimental_ui is being used, then we don't need check for
+    // interactive tasks
     if matches!(ui_mode, UIMode::Tui) {
         return Vec::new();
     }
@@ -271,7 +272,8 @@ mod test {
             turborepo_repository::discovery::DiscoveryResponse,
             turborepo_repository::discovery::Error,
         > {
-            // our workspace has three packages, two of which have a build script
+            // our workspace has three packages, two of which have a build
+            // script
             let workspaces = [("a", true), ("b", true), ("c", false)]
                 .into_iter()
                 .map(|(name, had_build)| {
@@ -431,10 +433,11 @@ mod test {
 
     #[tokio::test]
     async fn issue_4291() {
-        // we had an issue where our engine validation would reject running persistent
-        // tasks if the number of _total packages_ exceeded the concurrency limit,
-        // rather than the number of package that had that task. in this test, we
-        // set up a workspace with three packages, two of which have a persistent build
+        // we had an issue where our engine validation would reject running
+        // persistent tasks if the number of _total packages_ exceeded
+        // the concurrency limit, rather than the number of package that
+        // had that task. in this test, we set up a workspace with three
+        // packages, two of which have a persistent build
         // task. we expect concurrency limit 1 to fail, but 2 and 3 to pass.
 
         let tmp = tempfile::TempDir::with_prefix("issue_4291").unwrap();
@@ -476,8 +479,8 @@ mod test {
             .validate(&graph, 2, UIMode::Stream, true)
             .expect_err("not enough");
 
-        // we have two persistent tasks, and a slot for all other tasks, so this should
-        // pass
+        // we have two persistent tasks, and a slot for all other tasks, so this
+        // should pass
         engine
             .validate(&graph, 3, UIMode::Stream, true)
             .expect("ok");

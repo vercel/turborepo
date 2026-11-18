@@ -156,8 +156,8 @@ impl<G: GraphView> Engine<'_, G> {
     ) -> (AffectedReport, PruneReport) {
         let all = self.options().traversal;
         let g = self.graph();
-        // Build tasks are evaluated in task mode (`crate::taskmode`), everything else
-        // below.
+        // Build tasks are evaluated in task mode (`crate::taskmode`),
+        // everything else below.
         if let Some((tasks, rest)) = crate::taskmode::split(g, entries) {
             let out = self.affected_pass(changes, &tasks, opts, barrels, all, true);
             if rest.is_empty() {

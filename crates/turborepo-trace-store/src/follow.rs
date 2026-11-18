@@ -159,7 +159,8 @@ pub(crate) fn build_third_party(
                 }
             };
             for (lid, lroot) in links {
-                // Workspace links and lockfile-only links (nothing installed to trace).
+                // Workspace links and lockfile-only links (nothing installed to
+                // trace).
                 if lid.1.is_empty() || lroot.is_empty() || done.contains_key(&lid) || lid == id {
                     continue;
                 }

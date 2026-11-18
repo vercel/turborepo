@@ -6,7 +6,7 @@
 //! For more, see the [LSP specification](https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/)
 //! as well as the architecture documentation in `packages/turbo-vsc`.
 
-#![feature(box_patterns)]
+#![feature(deref_patterns)]
 // miette's derive macro causes false positives for this lint
 #![allow(unused_assignments)]
 #![deny(clippy::all)]
@@ -434,7 +434,9 @@ impl LanguageServer for Backend {
 
             let daemon = match daemon {
                 Ok(daemon) => daemon,
-                Err(DaemonConnectorError::Handshake(box DaemonError::VersionMismatch(message))) => {
+                Err(DaemonConnectorError::Handshake(
+                    deref!(DaemonError::VersionMismatch(message)),
+                )) => {
                     self.client
                         .show_message(
                             MessageType::ERROR,
@@ -487,9 +489,10 @@ impl LanguageServer for Backend {
                     *lock_or_recover(&self.pidlock) = Some(lock);
                 }
                 Err(pidlock::PidlockError::AlreadyOwned) => {
-                    // Another LSP instance (e.g., another VSCode window) already holds the lock.
-                    // This lock is only used for exclusive optimize features, so proceed without
-                    // it.
+                    // Another LSP instance (e.g., another VSCode window)
+                    // already holds the lock. This lock is
+                    // only used for exclusive optimize features, so proceed
+                    // without it.
                     self.client
                         .log_message(
                             MessageType::INFO,
@@ -651,8 +654,8 @@ impl LanguageServer for Backend {
                     .log_message(MessageType::WARNING, e.to_string())
                     .await;
 
-                // there aren't really any other errors we can return here, other than
-                // an internal error
+                // there aren't really any other errors we can return here,
+                // other than an internal error
                 let mut error = Error::internal_error();
                 error.message = "failed to get package list from the daemon".into();
                 return Err(error);
@@ -1000,8 +1003,9 @@ impl Backend {
 
         let mut diagnostics = vec![];
 
-        // ParseResult cannot be sent across threads, so we must ensure it is dropped
-        // before we send the diagnostics. easiest way is just to scope it
+        // ParseResult cannot be sent across threads, so we must ensure it is
+        // dropped before we send the diagnostics. easiest way is just
+        // to scope it
         {
             let parse =
                 jsonc_parser::parse_to_ast(&contents, &Default::default(), &Default::default());
@@ -1092,7 +1096,8 @@ impl Backend {
                                 });
                                 suffix
                             } else {
-                                // prevent task from depending on itself, if it is not a '^' task
+                                // prevent task from depending on itself, if it
+                                // is not a '^' task
                                 if string.value == property.name.as_str() {
                                     diagnostics.push(Diagnostic {
                                         message: "A task cannot depend on itself.".to_string(),

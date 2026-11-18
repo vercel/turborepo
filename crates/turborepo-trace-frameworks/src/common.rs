@@ -138,8 +138,8 @@ impl<'a> Reader<'a> {
 
     /// Records an uncertainty for `field`.
     pub fn report(&mut self, field: &str, kind: UncertaintyKind, detail: String) {
-        // One record per construct: an unknown spread makes every field unknown for the
-        // same reason; list the fields on one record.
+        // One record per construct: an unknown spread makes every field unknown
+        // for the same reason; list the fields on one record.
         if let Some(u) = self
             .unc
             .iter_mut()
@@ -285,9 +285,11 @@ pub fn config_values(
         match v {
             ConfigVal::Str(Value::Str(s)) if s.starts_with('/') => {
                 out.push(fsx::normalize(Path::new(s)));
-                // A mapper or alias replacement with group references (`<dir>/$1`, written
-                // `${path.resolve(__dirname, 'services')}/$1`): the directory before the
-                // first reference is the path the config names.
+                // A mapper or alias replacement with group references
+                // (`<dir>/$1`, written
+                // `${path.resolve(__dirname, 'services')}/$1`): the directory
+                // before the first reference is the path the
+                // config names.
                 if let Some(i) = s.find('$')
                     && let Some(j) = s[..i].rfind('/')
                     && j > 0
@@ -351,8 +353,8 @@ pub fn config_values(
     consumed.retain(|p| !other.contains(p));
     consumed.sort();
     consumed.dedup();
-    // Reporter references: the values of the reporter fields, and the imports whose
-    // bindings are used only there.
+    // Reporter references: the values of the reporter fields, and the imports
+    // whose bindings are used only there.
     let mut runner: Vec<(u32, u32)> = loaded
         .properties
         .iter()
@@ -369,9 +371,9 @@ pub fn config_values(
                     .all(|&u| runner.iter().any(|&(a, b)| a <= u && u < b))
         })
         .collect();
-    // Helper modules the evaluator loaded only for such an import (the specifier is
-    // written once in the file), with what they loaded in turn, unless another
-    // load reaches them.
+    // Helper modules the evaluator loaded only for such an import (the
+    // specifier is written once in the file), with what they loaded in
+    // turn, unless another load reaches them.
     let quoted = |spec: &str| {
         ['\'', '"', '`']
             .iter()

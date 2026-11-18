@@ -89,7 +89,8 @@ fn a_relative_path_is_relative_to_the_root_when_the_command_runs_elsewhere() {
         ],
     );
     assert_eq!(out.trim(), "src/a.test.js");
-    // From a directory of the repository: relative to that directory, as before.
+    // From a directory of the repository: relative to that directory, as
+    // before.
     let out = run(
         &repo.join("src"),
         &[

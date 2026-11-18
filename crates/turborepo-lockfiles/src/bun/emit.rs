@@ -61,16 +61,17 @@ impl BunLockfile {
     /// Add trailing commas to JSON values before closing brackets/braces
     /// Handles strings, numbers, booleans, nulls, and nested structures
     fn add_trailing_commas(json: &str) -> String {
-        // Match: any JSON value (string, number, boolean, null, ] or }) followed by
-        // newline+whitespace and then a closing bracket/brace
-        // Pattern covers:
+        // Match: any JSON value (string, number, boolean, null, ] or })
+        // followed by newline+whitespace and then a closing
+        // bracket/brace Pattern covers:
         // - Strings ending with "
         // - Numbers ending with digits
         // - Booleans: true, false
         // - Null: null
         // - Nested closings: ] or }
         let re = regex!(r#"("|true|false|null|\d|[\]}])\n(\s*)([\]}])"#);
-        // Run multiple passes until no more changes (handles deeply nested structures)
+        // Run multiple passes until no more changes (handles deeply nested
+        // structures)
         let mut result = json.to_string();
         loop {
             let new_result = re.replace_all(&result, "$1,\n$2$3").to_string();
@@ -197,8 +198,9 @@ impl BunLockfile {
                     serde_json::to_string(&entry.info.as_ref().unwrap_or(&PackageInfo::default()))?;
                 let checksum_json = serde_json::to_string(entry.checksum.as_deref().unwrap_or(""))?;
 
-                // Bun's format differs from serde_json: objects need padding spaces,
-                // 3-element arrays get expanded with trailing commas, others stay compact
+                // Bun's format differs from serde_json: objects need padding
+                // spaces, 3-element arrays get expanded with
+                // trailing commas, others stay compact
                 let info_json_spaced = self.format_info_json(&info_json);
 
                 // GitHub and git packages have 3 elements (no registry)
@@ -218,7 +220,8 @@ impl BunLockfile {
                         )),
                     }
                 } else {
-                    // npm packages: [ident, registry, info, checksum] - 4 elements
+                    // npm packages: [ident, registry, info, checksum] - 4
+                    // elements
                     let registry_json =
                         serde_json::to_string(entry.registry.as_deref().unwrap_or(""))?;
                     output.push_str(&format!(
@@ -405,7 +408,8 @@ impl BunLockfile {
 
         let trimmed_content = array_content.trim_matches(|c: char| c == ',' || c.is_whitespace());
 
-        // Bun uses compact arrays without trailing commas inside package entries
+        // Bun uses compact arrays without trailing commas inside package
+        // entries
         format!("[{}]", self.format_array_content(trimmed_content))
     }
 

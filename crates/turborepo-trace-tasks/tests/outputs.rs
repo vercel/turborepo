@@ -86,8 +86,8 @@ fn snapshot() {
 fn ci_job_is_never_a_producer() {
     let (root, set) = set();
     let job = task(&set, CRON);
-    // The job still depends on the whole repo (`jq` is unknown): a valid `--tasks`
-    // entry.
+    // The job still depends on the whole repo (`jq` is unknown): a valid
+    // `--tasks` entry.
     assert!(
         job.spec
             .memberships
@@ -104,8 +104,8 @@ fn ci_job_is_never_a_producer() {
         ]
     );
     assert!(job.spec.outputs.iter().all(|o| !o.links_producer()));
-    // Nothing produces the root manifest, so tests reaching it do not reach every
-    // file.
+    // Nothing produces the root manifest, so tests reaching it do not reach
+    // every file.
     let producers: Vec<String> = set
         .producers_of(&root.join("package.json"))
         .iter()
@@ -117,8 +117,8 @@ fn ci_job_is_never_a_producer() {
 #[test]
 fn in_place_edits_do_not_link() {
     let (root, set) = set();
-    // The same steps in a package script: the existing manifest is edited in place,
-    // the temporary file is an artifact.
+    // The same steps in a package script: the existing manifest is edited in
+    // place, the temporary file is an artifact.
     assert_eq!(
         outputs(&set, &root, "task:.#bump"),
         [
@@ -142,8 +142,8 @@ fn in_place_edits_do_not_link() {
 #[test]
 fn generated_and_declared_outputs_link() {
     let (root, set) = set();
-    // A code generator's output links, even when committed (`src/generated/api.ts`
-    // exists).
+    // A code generator's output links, even when committed
+    // (`src/generated/api.ts` exists).
     assert_eq!(
         outputs(&set, &root, "task:.#gen"),
         [("src/generated/api.ts".to_string(), OutputKind::Generated)]
@@ -234,7 +234,8 @@ fn declared_outputs_are_scoped_to_their_package() {
             ("packages/server/dist/**".to_string(), OutputKind::Declared),
         ]
     );
-    // `echo` only: the task writes nothing, so none of its declared outputs link.
+    // `echo` only: the task writes nothing, so none of its declared outputs
+    // link.
     let cache = outputs(&set, &root, "task:.#cache-tsbuildinfo-files");
     assert!(
         cache
@@ -309,7 +310,8 @@ fn tsc_build_outputs_belong_to_their_project() {
     let ui = part("packages/ui/tsconfig.json");
     let o = |s: &str| s.to_string();
 
-    // The root solution: every output is owned by its project, none by the task.
+    // The root solution: every output is owned by its project, none by the
+    // task.
     let solution = linking_outputs(&set, &root, "task:.#build:ts-debug");
     assert_eq!(
         solution,
@@ -348,8 +350,8 @@ fn tsc_build_outputs_belong_to_their_project() {
             t.spec.memberships
         );
     }
-    // The part of `packages/ui`: its own config chain and sources, and the project
-    // it references. Nothing of the apps.
+    // The part of `packages/ui`: its own config chain and sources, and the
+    // project it references. Nothing of the apps.
     let p = t
         .spec
         .parts
@@ -384,12 +386,12 @@ fn tsc_build_outputs_belong_to_their_project() {
     );
     assert!(p.toolchain.iter().any(|t| t.name == "typescript"));
 
-    // An app's `tsc -b` (turbo `dependsOn: ["typegen", "^build", "^type-check"]`):
-    // the packages' outputs belong to the packages' projects. So does the app's
-    // own project: `web` has no `typegen` script, and the tasks of other
-    // packages (`^build`) don't write into this one. Every output belongs to a
-    // part; none links to the task, so an importer does not inherit the task's
-    // dependency chain.
+    // An app's `tsc -b` (turbo `dependsOn: ["typegen", "^build",
+    // "^type-check"]`): the packages' outputs belong to the packages'
+    // projects. So does the app's own project: `web` has no `typegen`
+    // script, and the tasks of other packages (`^build`) don't write into
+    // this one. Every output belongs to a part; none links to the task, so
+    // an importer does not inherit the task's dependency chain.
     let web = linking_outputs(&set, &root, "task:apps/web#type-check");
     assert!(
         web.contains(&(o("packages/icons/dist"), icons.clone())),

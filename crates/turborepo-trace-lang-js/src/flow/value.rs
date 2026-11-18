@@ -274,7 +274,8 @@ pub(crate) fn join<'a>(vals: impl IntoIterator<Item = V<'a>>) -> V<'a> {
     let mut over = false;
     for v in vals {
         for l in v.into_leaves() {
-            // Split string-level alternatives so that every leaf is a single value.
+            // Split string-level alternatives so that every leaf is a single
+            // value.
             match l {
                 V::Js(j) if has_alts(&j) => {
                     for x in crate::extract::evaluator::split_alts(j) {

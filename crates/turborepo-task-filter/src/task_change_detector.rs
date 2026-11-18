@@ -614,8 +614,9 @@ mod tests {
         let a_build = TaskId::new("lib-a", "build");
         let engine = make_engine(&[(a_build.clone(), default_def())], &[]);
 
-        // MockDiscovery returns PackageManager::Npm → lockfile is package-lock.json.
-        // Watch mode has no base snapshot, so the change cannot be scoped.
+        // MockDiscovery returns PackageManager::Npm → lockfile is
+        // package-lock.json. Watch mode has no base snapshot, so the
+        // change cannot be scoped.
         let result = affected_task_ids(&engine, &pkg_graph, &changed(&["package-lock.json"]), &[]);
         assert_eq!(result.len(), 1);
         assert!(result.contains(&a_build));

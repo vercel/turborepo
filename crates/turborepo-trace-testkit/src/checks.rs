@@ -631,9 +631,10 @@ pub fn check_linear_time(lang: &dyn Language, cfg: &Config) -> Result<(), Failur
             small = unit.repeat(n);
         }
         let big = unit.repeat(8 * n);
-        // Interleave small and big runs and keep the minimum of each across all trials,
-        // so a burst of noise (other processes, a migration to an efficiency
-        // core) has to hit every big run to cause a failure.
+        // Interleave small and big runs and keep the minimum of each across all
+        // trials, so a burst of noise (other processes, a migration to
+        // an efficiency core) has to hit every big run to cause a
+        // failure.
         let deadline = Instant::now() + Duration::from_secs(20);
         let (mut min_small, mut min_big) = (Duration::MAX, Duration::MAX);
         let mut ratio = f64::INFINITY;
@@ -646,7 +647,8 @@ pub fn check_linear_time(lang: &dyn Language, cfg: &Config) -> Result<(), Failur
                 ok = true;
                 break;
             }
-            // Clearly super-linear (quadratic scores ~64x): do not keep re-measuring.
+            // Clearly super-linear (quadratic scores ~64x): do not keep
+            // re-measuring.
             if (trial >= 5 && ratio > 3.0 * cfg.linear_max_ratio) || Instant::now() > deadline {
                 break;
             }

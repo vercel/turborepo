@@ -720,7 +720,8 @@ godebug default=go1.21
                 .contains("github.com/a/b@v1.3.0")
         );
         assert_eq!(d.affected_packages().identity_changed.len(), 1);
-        // Changing a replacement target is an identity change of the replaced module.
+        // Changing a replacement target is an identity change of the replaced
+        // module.
         let new_mod = MOD.replace("github.com/fork/d v0.1.1", "github.com/fork/d v0.1.2");
         let new_sum = format!("{SUM}github.com/fork/d v0.1.2 h1:F2=\n");
         let d = diff(&old, &parse(&new_mod, Some(&new_sum)).unwrap());
@@ -729,7 +730,8 @@ godebug default=go1.21
                 .identity_changed
                 .contains("github.com/c/d@v0.1.0")
         );
-        // A go.sum hash change alone (tampering, re-tag) is an identity change too.
+        // A go.sum hash change alone (tampering, re-tag) is an identity change
+        // too.
         let d = diff(&old, &parse(MOD, Some(&SUM.replace("AAA", "BBB"))).unwrap());
         assert!(
             d.affected_packages()

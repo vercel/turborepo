@@ -71,7 +71,8 @@ impl User {
         // SAFETY: a token handle this function now exclusively owns.
         let token = unsafe { OwnedHandle::from_raw_handle(token) };
         let mut needed = 0;
-        // SAFETY: size query without a buffer; the expected failure sets needed.
+        // SAFETY: size query without a buffer; the expected failure sets
+        // needed.
         unsafe {
             GetTokenInformation(token.as_raw_handle(), TokenUser, null_mut(), 0, &mut needed)
         };

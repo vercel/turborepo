@@ -367,7 +367,8 @@ fn dynamic_module_patterns_glob_and_follow() {
 #[test]
 fn dynamic_fs_reads_readdir_and_cwd() {
     let run = dynamic_run(Tracer::builder());
-    // `__dirname` reads: literal and pattern (from main.js and from lib/helper.js).
+    // `__dirname` reads: literal and pattern (from main.js and from
+    // lib/helper.js).
     assert!(run.has("data/config.json"));
     assert!(run.has("data/users.json"));
     assert!(!run.has("data/notes.txt"));
@@ -391,7 +392,8 @@ fn dynamic_fs_reads_readdir_and_cwd() {
             .any(|e| e.spec.as_ref() == "./data/optional.json"
                 && matches!(e.to, turborepo_trace_core::Target::Unresolved))
     );
-    // `path.join(__dirname, name)` would be the whole directory: refused, as nft.
+    // `path.join(__dirname, name)` would be the whole directory: refused, as
+    // nft.
     let (kind, detail) = run.uncertainty_for("./*").unwrap();
     assert_eq!(kind, UncertaintyKind::PatternTooBroad);
     assert!(detail.contains("own directory"), "{detail}");
@@ -607,8 +609,8 @@ fn special_native_loaders_linux() {
         .expect("nobin record");
     assert_eq!(nobin.1, UncertaintyKind::UnresolvedSpecifier);
     assert!(nobin.3.contains("no native addon"), "{}", nobin.3);
-    // A directly required addon pulls in its package's shared libraries, not nested
-    // node_modules or other platforms' libraries.
+    // A directly required addon pulls in its package's shared libraries, not
+    // nested node_modules or other platforms' libraries.
     assert!(run.has(&nm("direct-addon/build/Release/direct.node")));
     assert!(run.has(&nm("direct-addon/lib/libdirect.so")));
     assert!(!run.has(&nm("direct-addon/lib/libdirect.dylib")));

@@ -1968,7 +1968,8 @@ mod tests {
         ] {
             let mut run = affected_packages_query_run(root, true, false, &[]).await;
             // Only the taskless package appears in the legacy map. Its global
-            // reason applies to raw task owners, but it must not join the result.
+            // reason applies to raw task owners, but it must not join the
+            // result.
             Arc::get_mut(&mut run).unwrap().affected_packages = HashMap::from([(
                 PackageName::from("no-tasks"),
                 PackageInclusionReason::All(reason),

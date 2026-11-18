@@ -115,8 +115,9 @@ impl RustResolver {
             let b = base.join(leaf).join("mod.rs");
             cx.fs.is_file(&b).then_some(b)
         };
-        // A file reached through `#[path]` from a file this resolver has not seen
-        // (graph mode) owns its directory too: fall back to the mod-rs rule.
+        // A file reached through `#[path]` from a file this resolver has not
+        // seen (graph mode) owns its directory too: fall back to the
+        // mod-rs rule.
         let found = attempt(owned).or_else(|| (!owned).then(|| attempt(true)).flatten());
         match found {
             Some(p) => {
@@ -163,7 +164,8 @@ impl RustResolver {
         cx: &ResolveCx<'_>,
     ) -> Resolution {
         if r.kind == RefKind::Asset {
-            // An anchored path value bound to a name (the shared anchored-asset policy).
+            // An anchored path value bound to a name (the shared anchored-asset
+            // policy).
             return ASSET_RULES.resolve_anchored_asset(r, spec, base, MissingAsset::Report, cx);
         }
         match spec {
@@ -236,8 +238,8 @@ impl RustResolver {
             .unwrap_or(&dirs[0])
             .clone();
         let mut res = self.resolve_file(r, &dir, cx);
-        // Templates include and extend each other by name: the whole directory is an
-        // input.
+        // Templates include and extend each other by name: the whole directory
+        // is an input.
         if cx.fs.is_dir(&dir) {
             res.extra.push(ExtraEdge::new(
                 RefKind::Embed,
@@ -315,8 +317,8 @@ impl Resolver for RustResolver {
     fn resolve(&self, r: &RawRef<'_>, from: FileId, cx: &ResolveCx<'_>) -> Resolution {
         let res = self.resolve_base(r, from, cx);
         if r.kind == RefKind::SharedLib {
-            // `Library::new`: keep the extractor's cwd/loader-path record for a missing
-            // library.
+            // `Library::new`: keep the extractor's cwd/loader-path record for a
+            // missing library.
             return explain_missing(r, res);
         }
         res
@@ -358,8 +360,9 @@ impl Resolver for RustResolver {
                 );
             }
             for f in &ws.config.files {
-                // Ancestor configs above the trace base still drive source replacement,
-                // but only configs inside it are reported as inputs.
+                // Ancestor configs above the trace base still drive source
+                // replacement, but only configs inside it are
+                // reported as inputs.
                 if f.starts_with(&cx.options.base) && !f.starts_with(self.project.cargo_home()) {
                     out.push(
                         ExtraEdge::new(
@@ -408,8 +411,9 @@ impl Resolver for RustResolver {
                         match &d.identity {
                             Some(id) => {
                                 let name = format!("{}@{}", id.name, id.version);
-                                // What pins it: the lockfile, else the manifest that
-                                // declares the requirement.
+                                // What pins it: the lockfile, else the manifest
+                                // that declares
+                                // the requirement.
                                 let ws = self.project.workspace_of(&pkg);
                                 let pin = match (&ws.lock_path, id.version.as_str()) {
                                     (Some(l), v) if v != "*" => l.clone(),
@@ -508,10 +512,10 @@ impl Resolver for RustResolver {
                 pins: vec![lock],
             });
         }
-        // No loaded workspace graph links this crate yet (for example when a cached
-        // result is validated before anything was traced): the crate's own
-        // manifest names it, and the caller fills the integrity from
-        // `Cargo.lock`.
+        // No loaded workspace graph links this crate yet (for example when a
+        // cached result is validated before anything was traced): the
+        // crate's own manifest names it, and the caller fills the
+        // integrity from `Cargo.lock`.
         let dir = if fs.is_dir(path) {
             path
         } else {

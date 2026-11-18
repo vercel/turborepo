@@ -1,4 +1,4 @@
-use std::{backtrace::Backtrace, time::Duration};
+use std::{backtrace::Backtrace, str::FromStr, time::Duration};
 
 use camino::Utf8Path;
 use serde::{Deserialize, Serialize};
@@ -249,7 +249,7 @@ impl FSCache {
         buf.push_str("-meta.json");
 
         let meta = CacheMetadata::read(
-            &AbsoluteSystemPathBuf::try_from(buf.as_str())
+            &AbsoluteSystemPathBuf::from_str(buf.as_str())
                 .map_err(|_| CacheError::ConfigCacheInvalidBase)?,
         );
 
@@ -281,7 +281,8 @@ impl FSCache {
             .join_component(&format!("{hash}-manifest.json"));
         let _ = manifest.write_atomic(&manifest_path);
 
-        // Write metadata file atomically using write-to-temp-then-rename pattern
+        // Write metadata file atomically using write-to-temp-then-rename
+        // pattern
         let metadata_path = self
             .cache_directory
             .join_component(&format!("{hash}-meta.json"));
@@ -806,7 +807,8 @@ mod test {
         // Perform multiple reads while write is happening
         for _ in 0..10 {
             let result = cache_read.fetch(repo_root_path, hash);
-            // Should either succeed with valid data or fail cleanly - no corruption
+            // Should either succeed with valid data or fail cleanly - no
+            // corruption
             if let Ok(Some((metadata, _))) = result {
                 // Duration should be either old or new value
                 assert!(
@@ -1077,7 +1079,8 @@ mod test {
             .create_with_contents(r#"{"hash":"fresh_def456","duration":50}"#)
             .unwrap();
 
-        // Create an orphaned temp file and backdate it past the 1-hour threshold
+        // Create an orphaned temp file and backdate it past the 1-hour
+        // threshold
         let tmp_file = cache_dir.join_component(".some_hash.tar.zst.12345.0.tmp");
         tmp_file.create_with_contents("orphaned temp").unwrap();
         let two_hours_ago = filetime::FileTime::from_system_time(
@@ -1617,7 +1620,8 @@ mod test {
 
         let stable_mtime_before = stable_file.symlink_metadata()?.modified()?;
 
-        // Ensure a measurable mtime gap so the overwrite (if any) is detectable.
+        // Ensure a measurable mtime gap so the overwrite (if any) is
+        // detectable.
         std::thread::sleep(Duration::from_millis(50));
 
         // Modify the changing file so the manifest fast-path fails.

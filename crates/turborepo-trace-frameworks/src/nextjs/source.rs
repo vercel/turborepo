@@ -178,7 +178,8 @@ fn is_route_file(f: &JsFile) -> bool {
     let stem = f.path.file_stem().and_then(|s| s.to_str()).unwrap_or("");
     SEGMENT_FILES.contains(&stem)
         || f.path.parent().is_some_and(|p| {
-            // A `pages` directory of the repository, not one the checkout lives below.
+            // A `pages` directory of the repository, not one the checkout lives
+            // below.
             crate::fsx::local(p)
                 .components()
                 .any(|c| c.as_os_str() == "pages")
@@ -204,8 +205,8 @@ fn module_level_export(f: &JsFile, func: usize) -> bool {
 /// a request: no code calls the function.
 pub fn request_entry(f: &JsFile, func: usize) -> bool {
     let fd = &f.funcs[func];
-    // A server action: an export of a `'use server'` module, or a function whose
-    // body starts with the directive.
+    // A server action: an export of a `'use server'` module, or a function
+    // whose body starts with the directive.
     if f.directive.as_deref() == Some("use server") && module_level_export(f, func) {
         return true;
     }
@@ -421,7 +422,8 @@ impl<'a, 'r> Walk<'a, 'r> {
                 parts.push((s, o));
                 s = o + 1;
             }
-            // Known text in a concatenation: the code gives the value its shape.
+            // Known text in a concatenation: the code gives the value its
+            // shape.
             if parts.iter().any(|&(x, y)| {
                 y == x + 1
                     && matches!(f.kind(x), TokKind::Str | TokKind::Template)
@@ -560,8 +562,8 @@ impl<'a, 'r> Walk<'a, 'r> {
             }
         }
         let Some((x, y)) = call else {
-            // A value and what is read from it: `params.get('next')`, `location.href`,
-            // `res.json()`.
+            // A value and what is read from it: `params.get('next')`,
+            // `location.href`, `res.json()`.
             return self.name(f, name, i, &members, field || !members.is_empty(), depth);
         };
         // Something is read from the call's result (`build(x).url`).
@@ -574,7 +576,8 @@ impl<'a, 'r> Walk<'a, 'r> {
                 .unwrap_or_default()
         };
         if is_new {
-            // `new URL(x, base)`, `new URLSearchParams(x)`: what they are built from.
+            // `new URL(x, base)`, `new URLSearchParams(x)`: what they are built
+            // from.
             return if matches!(name, "URL" | "URLSearchParams" | "Request") {
                 of_args(self)
             } else {
@@ -888,7 +891,8 @@ mod tests {
     fn whole_values() {
         let s = |code: &str| src("/app/components/x.tsx", code, "sink");
         let nav = "import { useParams, useSearchParams } from 'next/navigation';\n";
-        // A request value that fills a segment of a URL the code writes is not the URL.
+        // A request value that fills a segment of a URL the code writes is not
+        // the URL.
         assert_eq!(
             s(&format!(
                 "{nav}function C() {{ const {{ id }} = useParams(); \
@@ -947,7 +951,8 @@ mod tests {
             s("function C() { sink(new URL(localStorage.getItem('u')!).pathname) }"),
             Source::Storage
         );
-        // A member of an object the code assembles is one of the object's contents.
+        // A member of an object the code assembles is one of the object's
+        // contents.
         assert_eq!(
             s(
                 "function parse(q) { return { client: { logo: q.logo }, ok: true }; }\nfunction \
@@ -959,7 +964,8 @@ mod tests {
             s("function C() { const { u } = { u: localStorage.getItem('u'), v: 1 }; sink(u) }"),
             Source::Storage
         );
-        // What a function returns can include its argument next to other things.
+        // What a function returns can include its argument next to other
+        // things.
         assert_eq!(
             s(
                 "async function load(q) { const r = await fetch('/meta'); const meta = await \

@@ -115,7 +115,8 @@ fn node_multistage() {
         "{build_deps:?}"
     );
     assert!(build_deps.contains(&format!("{df}#deps")));
-    // The context was inferred as the repo root; `COPY . .` honours .dockerignore.
+    // The context was inferred as the repo root; `COPY . .` honours
+    // .dockerignore.
     let build = set.get(&format!("{df}#build").parse().unwrap()).unwrap();
     let m = build
         .spec
@@ -125,8 +126,8 @@ fn node_multistage() {
         .expect("COPY . membership");
     assert_eq!(m.dir, root);
     assert!(m.exclude.iter().any(|e| e.contains("docs")));
-    // `docker build -f apps/web/Dockerfile .` links to the task; another context
-    // inlines.
+    // `docker build -f apps/web/Dockerfile .` links to the task; another
+    // context inlines.
     assert_eq!(deps(&set, "task:.#docker:web"), [df]);
     assert_eq!(
         deps(&set, "task:.#docker:web:build-stage"),
@@ -160,8 +161,8 @@ fn compose() {
     let api = set
         .get(&"docker:compose.yaml#api".parse().unwrap())
         .unwrap();
-    // `args` from the merge key and the service: APP=api; target runtime includes
-    // build.
+    // `args` from the merge key and the service: APP=api; target runtime
+    // includes build.
     assert!(copies(&api.spec, "api/package.json"));
     assert!(api.spec.toolchain.iter().any(|t| t.name == "node:22-slim"));
     assert!(

@@ -63,7 +63,8 @@ fn fork_copy_drop_cannot_unlock_surviving_parent() {
     let address = std::ptr::addr_of_mut!(owner) as usize;
     let (root_probe, writer_probe) = probes(root.path());
     // SAFETY: Unix WriterStorage contains only File handles, no heap fields.
-    // The fork copy alone is destroyed, allocation-free, before acknowledgement.
+    // The fork copy alone is destroyed, allocation-free, before
+    // acknowledgement.
     let mut child = unsafe {
         InheritedChild::spawn_with(
             &[retained_root.as_raw_fd(), retained_writer.as_raw_fd()],
@@ -163,7 +164,8 @@ fn fork_copy_transfer_preserves_acquiring_pid() {
     let address = std::ptr::addr_of_mut!(guard) as usize;
     let probe = File::open(root.path()).unwrap();
     // SAFETY: ptr::read moves only the child's copy of a heap-free borrowed
-    // guard; transfer disarms it. Parent storage stays valid until acknowledgement.
+    // guard; transfer disarms it. Parent storage stays valid until
+    // acknowledgement.
     let mut child = unsafe {
         InheritedChild::spawn_with(&[file.as_raw_fd()], move || {
             let copied = std::ptr::read(address as *const AcquiredLock<'_>);

@@ -506,7 +506,8 @@ impl Subscriber {
         graph_features: RepositoryGraphFeatures,
         future_flags: FutureFlags,
     ) -> Self {
-        // Try to canonicalize the custom path to match what the file watcher reports
+        // Try to canonicalize the custom path to match what the file watcher
+        // reports
         let normalized_custom_path = custom_turbo_json_path.map(|path| {
             // Check if the custom turbo.json path is outside the repository
             if repo_root.anchor(&path).is_err() {
@@ -588,8 +589,9 @@ impl Subscriber {
         };
 
         // TurboJsonReader overwrites parsed future flags with its supplied
-        // flags. Read the root config directly first to obtain this generation's
-        // flags, and reject invalid selected config rather than reuse an old plan.
+        // flags. Read the root config directly first to obtain this
+        // generation's flags, and reject invalid selected config rather
+        // than reuse an old plan.
         let selected_config = match RawTurboJson::read(&self.repo_root, &config_path, true)
             .and_then(|raw| raw.map(TurboJson::try_from).transpose())
         {
@@ -938,8 +940,9 @@ impl Subscriber {
         // idle watcher waits for changes instead of polling for them.
         let changes_pending = Notify::new();
 
-        // This just processes the events and puts the changed files into a `Trie`.
-        // Must be fast to avoid lagging the file events channel.
+        // This just processes the events and puts the changed files into a
+        // `Trie`. Must be fast to avoid lagging the file events
+        // channel.
         let event_fut = async {
             loop {
                 match file_events.recv().await {
@@ -989,8 +992,9 @@ impl Subscriber {
             };
 
             // Macro to avoid repeating the rediscover+reinit+rebuild-mapper
-            // pattern. The borrow checker prevents extracting this into a method
-            // because `change_mapper` borrows from `repo_state`.
+            // pattern. The borrow checker prevents extracting this into a
+            // method because `change_mapper` borrows from
+            // `repo_state`.
             macro_rules! rediscover {
                 ($self:expr, $repo_state:ident, $change_mapper:ident) => {{
                     let Some(new_state) = $self.rediscover_and_reinit().await else {
@@ -1073,8 +1077,9 @@ impl Subscriber {
                 };
                 last_batch_at = Some(tokio::time::Instant::now());
 
-                // Dropped events leave the change set unknown. Diffing against the
-                // hash baselines recovers it, and gitignored files never appear in it.
+                // Dropped events leave the change set unknown. Diffing against
+                // the hash baselines recovers it, and
+                // gitignored files never appear in it.
                 let (trie, hashes_verified) = match changed_files {
                     ChangedFiles::Some(trie) => (*trie, false),
                     ChangedFiles::All => match self
@@ -1137,10 +1142,12 @@ impl Subscriber {
                     ) => {
                         let mut filtered_pkgs: HashSet<WorkspacePackage> =
                             filtered_pkgs.into_keys().collect();
-                        // Only propagate root package changes when the config defines
-                        // root tasks; otherwise the event just creates output noise.
-                        // In single-package mode the root IS the only package, so
-                        // all changes must propagate regardless.
+                        // Only propagate root package changes when the config
+                        // defines root tasks; otherwise
+                        // the event just creates output noise.
+                        // In single-package mode the root IS the only package,
+                        // so all changes must propagate
+                        // regardless.
                         if !self.single_package && filtered_pkgs.contains(&root_pkg) {
                             let keep_root =
                                 repo_state.root_turbo_json.as_ref().is_some_and(|turbo| {
@@ -1196,6 +1203,7 @@ mod test {
     use std::{
         collections::HashSet,
         path::PathBuf,
+        str::FromStr,
         sync::{
             Arc, RwLock,
             atomic::{AtomicBool, Ordering},
@@ -1229,7 +1237,7 @@ mod test {
     use crate::repository_graph::RepositoryGraphFeatures;
 
     fn anchored(s: &str) -> AnchoredSystemPathBuf {
-        AnchoredSystemPathBuf::try_from(s).unwrap()
+        AnchoredSystemPathBuf::from_str(s).unwrap()
     }
 
     fn gitignore_from_lines(root: &str, lines: &[&str]) -> ignore::gitignore::Gitignore {
@@ -1478,7 +1486,8 @@ mod test {
                 let contents = if enabled {
                     r#"{"futureFlags":{"experimentalCargoWorkspaces":true,"watchUsingTaskInputs":true},"tasks":{"build":{}}}"#
                 } else {
-                    // Removing flags must reset them, not retain old enablement.
+                    // Removing flags must reset them, not retain old
+                    // enablement.
                     r#"{"tasks":{"build":{}}}"#
                 };
                 config_path
@@ -2024,9 +2033,10 @@ mod test {
 
     #[tokio::test]
     async fn classify_gitignore_only_change_maps_to_root_package() {
-        // .gitignore changes are handled by the caller before classify_changed_files.
-        // If the trie still contains the .gitignore path, classify treats it as a
-        // normal root-package file change (since .gitignore lives in the repo root).
+        // .gitignore changes are handled by the caller before
+        // classify_changed_files. If the trie still contains the
+        // .gitignore path, classify treats it as a normal root-package
+        // file change (since .gitignore lives in the repo root).
         let f = ClassifyFixture::new().await;
         let gitignore_path = f.repo_root.join_component(".gitignore");
         let mut trie = Trie::new();
@@ -2978,10 +2988,12 @@ mod test {
                 ..FutureFlags::default()
             }),
         );
-        // Use the original receiver so a fast startup cannot discard Rediscover.
+        // Use the original receiver so a fast startup cannot discard
+        // Rediscover.
         let rx = &mut handle.watcher.package_change_events_rx;
-        // Startup rediscovery is emitted after the initial graph and per-package
-        // hash baselines are ready, so source edits below do not race initialization.
+        // Startup rediscovery is emitted after the initial graph and
+        // per-package hash baselines are ready, so source edits below
+        // do not race initialization.
         assert!(matches!(
             recv_event(rx, Duration::from_secs(10)).await,
             Some(PackageChangeEvent::Rediscover)
@@ -3012,7 +3024,8 @@ mod test {
             );
         }
 
-        // Both identities must also retain their own unchanged-content baseline.
+        // Both identities must also retain their own unchanged-content
+        // baseline.
         let event = make_notify_event_from(&[&source]);
         handle.hash_events_tx.send(Ok(event.clone())).unwrap();
         handle.file_events_tx.send(Ok(event)).unwrap();
@@ -3028,7 +3041,8 @@ mod test {
         let initial = recv_event(&mut rx, Duration::from_secs(2)).await;
         assert!(matches!(initial, Some(PackageChangeEvent::Rediscover)));
         // The initial Rediscover is published after the hash baseline is ready.
-        // The paused clock makes the negative assertion independent of wall time.
+        // The paused clock makes the negative assertion independent of wall
+        // time.
 
         let unchanged_file = repo_root.join_components(&["packages", "a", "index.ts"]);
         unchanged_file

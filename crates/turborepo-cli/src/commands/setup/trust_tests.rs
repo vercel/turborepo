@@ -198,7 +198,8 @@ fn moved_and_same_path_recloned_roots_cannot_reuse_records() {
         let moved = f.owned.root().with_file_name("moved-repo");
         fs::rename(f.owned.root(), &moved).unwrap();
         let root = if same_path {
-            // Keep the old inode alive, and recreate a clone at its former path.
+            // Keep the old inode alive, and recreate a clone at its former
+            // path.
             fs::create_dir(f.owned.root()).unwrap();
             fs::write(f.owned.root().join("turbo.lock"), f.lock.to_string()).unwrap();
             fs::rename(moved.join(".turbo"), f.owned.root().join(".turbo")).unwrap();

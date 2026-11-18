@@ -188,7 +188,8 @@ fn propose(
         mode,
         request.offline,
         |resolution| {
-            // Setup's own resolver, so the proposal is the candidate it would write.
+            // Setup's own resolver, so the proposal is the candidate it would
+            // write.
             provision::resolve(&runtime, resolution, &upstream, &store)
         },
         |candidate| {

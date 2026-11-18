@@ -866,7 +866,8 @@ fn pnpm_direct_command(
     // npm installs pnpm next to its shim. Prefer the native executable so
     // Ctrl+C does not leave cmd.exe waiting at its batch termination prompt.
     let pnpm_exe = bin_dir.join("node_modules").join("pnpm").join("pnpm.exe");
-    // Match the full template to preserve Corepack and custom launcher behavior.
+    // Match the full template to preserve Corepack and custom launcher
+    // behavior.
     if pnpm_exe.is_file()
         && std::fs::read_to_string(package_manager_binary).is_ok_and(|shim| {
             shim.lines()
@@ -945,9 +946,10 @@ impl<P: PackageDiscovery + Send + Sync> RepositoryContributor for JavaScriptCont
             let workspace_root =
                 WorkspaceRoot::new(package_manager.command(), self.repo_root.clone());
             // Parse manifests in parallel; manifest parsing dominates discovery
-            // time on large repositories. A handful of manifests parse faster on
-            // the calling thread than fanned out across the rayon pool, where
-            // every woken worker also allocates in its own memory region.
+            // time on large repositories. A handful of manifests parse faster
+            // on the calling thread than fanned out across the
+            // rayon pool, where every woken worker also allocates
+            // in its own memory region.
             let _span = tracing::info_span!("manifest_parse").entered();
             let packages = turborepo_rayon_compat::block_in_place(|| {
                 let parse = |workspace: discovery::WorkspaceData| -> Result<_, Error> {
