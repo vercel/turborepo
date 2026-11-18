@@ -1,5 +1,3 @@
-const { defineConfig } = require('@acme/playwright/config');
+const { defineConfig } = require('@acme/browser-kit/preset');
 
-const config = defineConfig(__dirname);
-
-export default config;
+export default defineConfig(__dirname);

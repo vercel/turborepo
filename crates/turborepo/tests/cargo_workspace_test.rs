@@ -2085,3 +2085,292 @@ fn test_affected_tasks_include_implicit_cargo_commands() {
             .any(|task| task["name"] == "lint" && task["package"]["name"] == "app")
     );
 }
+
+const LEFT_PAD_LOCK_ENTRY: &str = r#""node_modules/left-pad": {
+      "version": "1.0.0",
+      "resolved": "https://registry.npmjs.org/left-pad/-/left-pad-1.0.0.tgz",
+      "integrity": "sha512-left-pad-1.0.0",
+      "dev": true
+    },
+    "node_modules/js-pkg""#;
+
+fn setup_root_dependency_monorepo(dir: &Path, affected_using_task_inputs: Option<bool>) {
+    use serde_json::json;
+
+    setup_cargo_monorepo(dir);
+    let package_json = dir.join("package.json");
+    let mut root: serde_json::Value =
+        serde_json::from_slice(&fs::read(&package_json).unwrap()).unwrap();
+    root["devDependencies"] = json!({"js-pkg": "*", "left-pad": "1.0.0"});
+    root["scripts"] = json!({"lint": "echo lint"});
+    fs::write(&package_json, serde_json::to_vec_pretty(&root).unwrap()).unwrap();
+
+    let lockfile = dir.join("package-lock.json");
+    let lock = fs::read_to_string(&lockfile)
+        .unwrap()
+        .replace(
+            r#""workspaces": ["packages/**"]
+    },"#,
+            r#""workspaces": ["packages/**"],
+      "devDependencies": {"js-pkg": "*", "left-pad": "1.0.0"}
+    },"#,
+        )
+        .replace(r#""node_modules/js-pkg""#, LEFT_PAD_LOCK_ENTRY);
+    assert!(lock.contains("left-pad-1.0.0.tgz"), "lockfile edit applied");
+    fs::write(&lockfile, lock).unwrap();
+    fs::write(
+        dir.join("packages/js-pkg/index.js"),
+        "module.exports = 1;\n",
+    )
+    .unwrap();
+
+    let mut config = json!({
+        "futureFlags": {"experimentalCargoWorkspaces": true},
+        "tasks": {
+            "build": {"outputs": ["dist/**"], "dependsOn": ["^build"]},
+            "app#build": {"dependsOn": ["^build"], "inputs": ["src/**"]},
+            "acme#build": {
+                "dependsOn": ["^build"],
+                "inputs": ["Cargo.toml", "Cargo.lock", "crates/**"]
+            },
+            "//#lint": {}
+        }
+    });
+    if let Some(flag) = affected_using_task_inputs {
+        config["futureFlags"]["affectedUsingTaskInputs"] = json!(flag);
+    }
+    fs::write(dir.join("turbo.json"), config.to_string()).unwrap();
+    let gitignore = fs::read_to_string(dir.join(".gitignore")).unwrap();
+    fs::write(
+        dir.join(".gitignore"),
+        format!("{gitignore}\n.test-home/\n"),
+    )
+    .unwrap();
+
+    let commit = std::process::Command::new("git")
+        .args(["add", "-A"])
+        .current_dir(dir)
+        .output()
+        .unwrap();
+    assert_command_success(&commit, "stage root dependency fixture");
+    let commit = std::process::Command::new("git")
+        .args(["commit", "-m", "Add root dependencies", "--quiet"])
+        .current_dir(dir)
+        .output()
+        .unwrap();
+    assert_command_success(&commit, "commit root dependency fixture");
+}
+
+fn dry_run_task_hashes(dir: &Path, args: &[&str]) -> std::collections::BTreeMap<String, String> {
+    let output = run_turbo(dir, args);
+    assert_command_success(&output, "dry run");
+    let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    json["tasks"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|task| {
+            (
+                task["taskId"].as_str().unwrap().to_string(),
+                task["hash"].as_str().unwrap().to_string(),
+            )
+        })
+        .collect()
+}
+
+fn assert_hash_change(
+    before: &std::collections::BTreeMap<String, String>,
+    after: &std::collections::BTreeMap<String, String>,
+    task: &str,
+    expect_changed: bool,
+    context: &str,
+) {
+    let before_hash = before
+        .get(task)
+        .unwrap_or_else(|| panic!("{task} in {before:?}"));
+    let after_hash = after
+        .get(task)
+        .unwrap_or_else(|| panic!("{task} in {after:?}"));
+    assert_eq!(
+        before_hash != after_hash,
+        expect_changed,
+        "{task}: {context} (before {before_hash}, after {after_hash})"
+    );
+}
+
+const ROOT_DEPENDENCY_DRY_RUN: &[&str] = &["run", "build", "//#lint", "--dry=json"];
+
+#[test]
+fn test_root_javascript_dependency_does_not_change_cargo_task_hashes() {
+    let tempdir = cargo_tempdir();
+    let dir = tempdir.path();
+    setup_root_dependency_monorepo(dir, None);
+    let before = dry_run_task_hashes(dir, ROOT_DEPENDENCY_DRY_RUN);
+
+    fs::write(
+        dir.join("packages/js-pkg/index.js"),
+        "module.exports = 2;\n",
+    )
+    .unwrap();
+    let after = dry_run_task_hashes(dir, ROOT_DEPENDENCY_DRY_RUN);
+
+    for task in ["app#build", "lib-a#build"] {
+        assert_hash_change(
+            &before,
+            &after,
+            task,
+            false,
+            "Cargo tasks must not consume root JavaScript dependencies",
+        );
+    }
+    for task in ["js-pkg#build", "//#lint"] {
+        assert_hash_change(
+            &before,
+            &after,
+            task,
+            true,
+            "JavaScript and root tasks still consume root JavaScript dependencies",
+        );
+    }
+}
+
+#[test]
+fn test_root_external_dependency_bump_does_not_change_cargo_task_hashes() {
+    let tempdir = cargo_tempdir();
+    let dir = tempdir.path();
+    setup_root_dependency_monorepo(dir, None);
+    let before = dry_run_task_hashes(dir, ROOT_DEPENDENCY_DRY_RUN);
+
+    for file in ["package.json", "package-lock.json"] {
+        let path = dir.join(file);
+        let contents = fs::read_to_string(&path)
+            .unwrap()
+            .replace(r#""left-pad": "1.0.0""#, r#""left-pad": "1.1.0""#)
+            .replace(
+                r#""version": "1.0.0",
+      "resolved": "https://registry.npmjs.org/left-pad/-/left-pad-1.0.0.tgz""#,
+                r#""version": "1.1.0",
+      "resolved": "https://registry.npmjs.org/left-pad/-/left-pad-1.1.0.tgz""#,
+            );
+        fs::write(path, contents).unwrap();
+    }
+    let after = dry_run_task_hashes(dir, ROOT_DEPENDENCY_DRY_RUN);
+
+    for task in ["app#build", "lib-a#build"] {
+        assert_hash_change(
+            &before,
+            &after,
+            task,
+            false,
+            "Cargo tasks must not consume root external dependencies",
+        );
+    }
+    for task in ["js-pkg#build", "//#lint"] {
+        assert_hash_change(
+            &before,
+            &after,
+            task,
+            true,
+            "JavaScript and root tasks still consume root external dependencies",
+        );
+    }
+}
+
+#[test]
+fn test_root_javascript_dependency_change_does_not_affect_cargo_tasks() {
+    use serde_json::json;
+
+    for flag in [None, Some(false), Some(true)] {
+        let tempdir = cargo_tempdir();
+        let dir = tempdir.path();
+        setup_root_dependency_monorepo(dir, flag);
+        fs::write(
+            dir.join("packages/js-pkg/index.js"),
+            "module.exports = 2;\n",
+        )
+        .unwrap();
+
+        let query = |query: &str| -> serde_json::Value {
+            let output = run_turbo(dir, &["query", query]);
+            assert_command_success(&output, "affected query");
+            let result: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+            assert!(result.get("errors").is_none(), "{result}");
+            result
+        };
+        let affected_run = || -> Vec<String> {
+            let output = run_turbo_with_env(
+                dir,
+                &["run", "build", "--affected", "--dry=json"],
+                &[("TURBO_SCM_BASE", "HEAD")],
+            );
+            assert_command_success(&output, "affected dry run");
+            let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+            json["tasks"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|task| task["taskId"].as_str().unwrap().to_string())
+                .collect()
+        };
+
+        let packages =
+            query(r#"{ affectedPackages(base: "HEAD") { items { name reason { __typename } } } }"#);
+        assert_eq!(
+            packages["data"]["affectedPackages"]["items"],
+            json!([
+                {"name": "//", "reason": {"__typename": "RootInternalDepChanged"}},
+                {"name": "js-pkg", "reason": {"__typename": "RootInternalDepChanged"}},
+            ]),
+            "affectedUsingTaskInputs={flag:?}"
+        );
+
+        let tasks = query(
+            r#"{ affectedTasks(base: "HEAD", tasks: ["build"]) { items { name package { name } reason { __typename ... on TaskAllChanged { description } } } } }"#,
+        );
+        let changed: Vec<String> = tasks["data"]["affectedTasks"]["items"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|task| task["reason"]["description"] != "required by an affected task")
+            .map(|task| {
+                format!(
+                    "{}#{}",
+                    task["package"]["name"].as_str().unwrap(),
+                    task["name"].as_str().unwrap()
+                )
+            })
+            .collect();
+        assert!(
+            changed.contains(&"js-pkg#build".to_string()),
+            "js-pkg#build is affected, affectedUsingTaskInputs={flag:?}: {tasks}"
+        );
+        for task in ["app#build", "lib-a#build", "lib-a-test-util#build"] {
+            assert!(
+                !changed.contains(&task.to_string()),
+                "{task} is not affected, affectedUsingTaskInputs={flag:?}: {tasks}"
+            );
+        }
+
+        let selected = affected_run();
+        assert!(
+            selected.contains(&"js-pkg#build".to_string()),
+            "--affected selects js-pkg#build, affectedUsingTaskInputs={flag:?}: {selected:?}"
+        );
+        assert!(
+            !selected.contains(&"app#build".to_string()),
+            "--affected must not select app#build, affectedUsingTaskInputs={flag:?}: {selected:?}"
+        );
+
+        fs::write(
+            dir.join("crates/app/src/main.rs"),
+            "fn main() { println!(\"changed\"); }\n",
+        )
+        .unwrap();
+        let selected = affected_run();
+        assert!(
+            selected.contains(&"app#build".to_string()),
+            "a Cargo source edit still selects app#build, affectedUsingTaskInputs={flag:?}: \
+             {selected:?}"
+        );
+    }
+}

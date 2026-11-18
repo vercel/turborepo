@@ -39,8 +39,8 @@
 //!
 //! ```toml
 //! [[env]]
-//! name = "FLAGS_DATAFILE"
-//! values = ["fixtures/flags.json"]      # relative to the repository root; globs allowed
+//! name = "FIXTURE_FILE"
+//! values = ["fixtures/sample.json"]      # relative to the repository root; globs allowed
 //! ```
 //!
 //! Hints are declarations: they are trusted. A hint that leaves out

@@ -555,28 +555,28 @@ mod tests {
         Named::Readers(fields.iter().map(|s| (*s).to_owned()).collect())
     }
 
-    /// The shape of a real app config: an object literal in a variable, handed
-    /// to wrappers of several packages before it is exported.
+    /// An app config built in steps: an object literal in a variable, handed to
+    /// wrappers of several packages before it is exported.
     const WRAPPED: &str = r#"
 import path from 'node:path';
 import { withPlugin } from 'plugin/next';
 import { withOther } from '@acme/other';
 
-const isDev = process.env.NODE_ENV === 'development';
+const isLocal = process.env.NODE_ENV !== 'production';
 
 const nextConfig = {
   reactStrictMode: true,
   transpilePackages:
-    // packages with untranspiled code
+    // compiled from source
     [
       '@acme/ui',
-      '@flow/web-shared',
-      'react-tweet',
+      '@acme/shared-ui',
+      'md-render',
     ]
       .concat(
-        isDev
+        isLocal
           ? []
-          : // bundled for production
+          : // release builds only
             [
               'prod-only',
               ...(process.env.EXTRA ? ['extra-lib'] : []),
@@ -600,8 +600,8 @@ const nextConfig = {
 Object.assign(nextConfig.experimental, { optimizePackageImports: ['late-lib'] });
 
 let config = withOther(withPlugin(nextConfig));
-if (process.env.TOOLBAR !== 'off') {
-  config = require('toolbar-pkg/next')()(config);
+if (process.env.INSPECTOR !== 'off') {
+  config = require('inspector-pkg/next')()(config);
 }
 export default config;
 "#;
@@ -609,11 +609,11 @@ export default config;
     #[test]
     fn next_fields_that_only_importers_consume() {
         assert_eq!(
-            next(WRAPPED, "@flow/web-shared"),
+            next(WRAPPED, "@acme/shared-ui"),
             importers(&["transpilePackages[]"])
         );
         assert_eq!(
-            next(WRAPPED, "react-tweet"),
+            next(WRAPPED, "md-render"),
             importers(&["transpilePackages[]"])
         );
         // The lists the value is put together from: a `concat` argument under a
@@ -781,7 +781,7 @@ export default config;
         };
         assert_eq!(linked("plugin"), importers(&[]));
         assert_eq!(linked("@acme/other"), importers(&[]));
-        assert_eq!(linked("toolbar-pkg"), importers(&[]));
+        assert_eq!(linked("inspector-pkg"), importers(&[]));
         assert!(matches!(next(WRAPPED, "plugin"), Named::Readers(_)));
         // A re-export is an edge too.
         let src = "export { helper } from 'pkg/helper';\nexport default {};";

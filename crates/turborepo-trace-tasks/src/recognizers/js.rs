@@ -232,7 +232,7 @@ fn load_into(file: &Path, p: &mut TsProject, depth: usize) {
 }
 
 /// Projects one `tsc -b` walks at most; beyond, the task is marked incomplete
-/// (a solution tsconfig in a large monorepo references 105 projects).
+/// (a solution tsconfig of a big workspace can reference a hundred or more).
 const MAX_TS_PROJECTS: usize = 1024;
 
 /// What one tsconfig project contributes to a task: its inputs, and what `tsc`
@@ -1878,17 +1878,16 @@ mod tests {
     const BASE: &str = r#"{
   "compilerOptions": {
     "composite": true,
-    "outDir": "${configDir}/dist",
-    "tsBuildInfoFile": "${configDir}/dist/tsbuildinfo.json"
+    "tsBuildInfoFile": "${configDir}/out/.tsbuildinfo",
+    "outDir": "${configDir}/out"
   },
-  "exclude": ["${configDir}/node_modules", "${configDir}/dist"]
+  "exclude": ["${configDir}/out", "${configDir}/node_modules"]
 }"#;
 
-    /// Seen in a large monorepo: `@acme/typescript-config/package-bundler.json`
-    /// writes `"outDir": "${configDir}/dist"` and excludes
-    /// `${configDir}/node_modules`. Left literal, the outputs landed in
-    /// `<pkg>/node_modules/.../${configDir}/dist` and the excludes never
-    /// matched, so the `**/*` membership covered `node_modules` and `dist`, and
+    /// A shared base config can write `"outDir": "${configDir}/out"` and
+    /// exclude `${configDir}/node_modules`. Left literal, the outputs landed in
+    /// `<pkg>/node_modules/.../${configDir}/out` and the excludes never
+    /// matched, so the `**/*` membership covered `node_modules` and `out`, and
     /// `tsc -b` became the producer of the whole package for every test
     /// importing it.
     #[test]
@@ -1898,28 +1897,28 @@ mod tests {
             (
                 "pkg",
                 "@acme/ts-config/pkg.json",
-                "packages/jwt/node_modules/@acme/ts-config/pkg.json",
+                "packages/tokens/node_modules/@acme/ts-config/pkg.json",
             ),
         ] {
             let leaf = format!(r#"{{ "extends": "{extends}" }}"#);
             let root = tree(
                 name,
                 &[
-                    ("packages/jwt/tsconfig.json", leaf.as_str()),
-                    ("packages/jwt/src/index.ts", "export {}"),
+                    ("packages/tokens/tsconfig.json", leaf.as_str()),
+                    ("packages/tokens/src/index.ts", "export {}"),
                     (base_path, BASE),
                 ],
             );
-            let pkg = root.join("packages/jwt");
+            let pkg = root.join("packages/tokens");
             let mut out = TaskSpec::default();
             add_ts_project(&pkg.join("tsconfig.json"), true, &mut out, &mut Vec::new());
             let outs: Vec<&Path> = out.outputs.iter().map(|o| o.path.as_path()).collect();
             assert!(
-                outs.contains(&pkg.join("dist").as_path()),
+                outs.contains(&pkg.join("out").as_path()),
                 "{name}: {outs:?}"
             );
             assert!(
-                outs.contains(&pkg.join("dist/tsbuildinfo.json").as_path()),
+                outs.contains(&pkg.join("out/.tsbuildinfo").as_path()),
                 "{name}: {outs:?}"
             );
             assert!(
@@ -1938,7 +1937,7 @@ mod tests {
                 m.exclude.contains(&"node_modules/**".to_string()),
                 "{name}: {m:?}"
             );
-            assert!(m.exclude.contains(&"dist/**".to_string()), "{name}: {m:?}");
+            assert!(m.exclude.contains(&"out/**".to_string()), "{name}: {m:?}");
             assert!(
                 m.exclude
                     .iter()
@@ -1951,7 +1950,7 @@ mod tests {
 
     /// `tsc -b` over a solution tsconfig with more than 64 references: every
     /// project counts. (The walk used to stop silently after 64 projects,
-    /// dropping `apps/web` from a large monorepo's root `tsc -b`.)
+    /// dropping the later ones from a root `tsc -b`.)
     #[test]
     fn many_project_references_are_all_read() {
         let n = 70;

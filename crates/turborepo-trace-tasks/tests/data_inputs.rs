@@ -1,9 +1,8 @@
 //! Which inputs a task only reads, as opposed to the files it runs or compiles
 //! into its outputs ([`Membership::data`], [`TaskSpec::data_inputs`]). Fixture:
-//! `fixtures/tasks/data-inputs/` (see its README), in the shape of a large
-//! internal monorepo where the uncertainty of a script that a `tsc -b`
-//! type-check merely lists put every importer of the package on the "always
-//! selected" floor.
+//! `fixtures/tasks/data-inputs/` (see its README): without the distinction, the
+//! uncertainty of a script that a `tsc -b` type-check merely lists would put
+//! every importer of the package on the "always selected" floor.
 
 // Test code: helpers outside `#[test]` functions unwrap and expect as the tests do.
 #![allow(clippy::unwrap_used, clippy::expect_used)]
@@ -68,7 +67,7 @@ fn a_type_check_only_reads_its_project_and_its_declared_inputs() {
     // package and type-checks the project. It runs none of those files and
     // emits no JavaScript made from them: neither the `include` directory nor
     // the file the `include` names.
-    let id = "task:packages/assets#type-check";
+    let id = "task:packages/assets#check-types";
     assert_eq!(
         memberships(&set, &root, id),
         [
@@ -205,8 +204,8 @@ fn outputs(set: &TaskSet, root: &Path, id: &str) -> Vec<(String, OutputKind, boo
 /// declared outputs are a cache list, and its own projects' outputs link to the
 /// task as well only when a task of the same package may feed or rewrite them.
 /// (Linked to the task, an importer of `dist/index.js` inherited the task's
-/// whole dependency chain: on a large internal monorepo, every upstream build
-/// script reached through turbo `^build`.)
+/// whole dependency chain: every upstream build script reached through turbo
+/// `^build`.)
 #[test]
 fn a_task_of_tsc_parts_produces_what_its_parts_write() {
     use OutputKind::{Artifact, CacheOnly, Declared};
@@ -215,18 +214,18 @@ fn a_task_of_tsc_parts_produces_what_its_parts_write() {
     let set = discover(&ws, &Options::default());
     let o = |p: &str, kind, part| (p.to_owned(), kind, part);
 
-    // `tsc -b` type-check, turbo `outputs: ["node_modules/.cache/tsbuildinfo.json",
-    // "dist"]` and `dependsOn: ["typegen", "^build", "^type-check"]`; the
-    // package has no `typegen`.
+    // `tsc -b` type-check, turbo `outputs: ["dist",
+    // "node_modules/.cache/tsc.tsbuildinfo"]` and `dependsOn: ["^build",
+    // "^check-types", "codegen"]`; the package has no `codegen`.
     assert_eq!(
-        outputs(&set, &root, "task:packages/assets#type-check"),
+        outputs(&set, &root, "task:packages/assets#check-types"),
         [
             o("packages/assets/dist", CacheOnly, false),
             o("packages/assets/dist/**/*.d.*ts", Artifact, true),
             o("packages/assets/dist/**/*.d.*ts.map", Artifact, true),
-            o("packages/assets/dist/tsbuildinfo.json", Artifact, true),
+            o("packages/assets/dist/.tsbuildinfo", Artifact, true),
             o(
-                "packages/assets/node_modules/.cache/tsbuildinfo.json",
+                "packages/assets/node_modules/.cache/tsc.tsbuildinfo",
                 CacheOnly,
                 false
             ),
@@ -235,11 +234,11 @@ fn a_task_of_tsc_parts_produces_what_its_parts_write() {
     // `tsc --build --force`, turbo `outputs: ["dist/**"]`, `dependsOn: ["^build"]`
     // with an upstream package: the JavaScript in `dist` is the project's.
     assert_eq!(
-        outputs(&set, &root, "task:packages/analytics#build"),
+        outputs(&set, &root, "task:packages/reporting#build"),
         [
-            o("packages/analytics/dist", Artifact, true),
-            o("packages/analytics/dist/**", CacheOnly, false),
-            o("packages/analytics/dist/tsbuildinfo.json", Artifact, true),
+            o("packages/reporting/dist", Artifact, true),
+            o("packages/reporting/dist/**", CacheOnly, false),
+            o("packages/reporting/dist/.tsbuildinfo", Artifact, true),
         ]
     );
     // `pnpm typegen && tsc -b` with a `typegen` script in the package: it may
@@ -251,8 +250,8 @@ fn a_task_of_tsc_parts_produces_what_its_parts_write() {
             o("packages/typed/dist", Artifact, false),
             o("packages/typed/dist", Artifact, true),
             o("packages/typed/dist/**", Declared, false),
-            o("packages/typed/dist/tsbuildinfo.json", Artifact, false),
-            o("packages/typed/dist/tsbuildinfo.json", Artifact, true),
+            o("packages/typed/dist/.tsbuildinfo", Artifact, false),
+            o("packages/typed/dist/.tsbuildinfo", Artifact, true),
         ]
     );
 }

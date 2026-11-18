@@ -9,10 +9,10 @@
 //! environment), and every position that is not a decided field, is consumed by
 //! whatever reads the config, as for an edit of the config.
 //!
-//! The Next.js config has the shape of a real application's: an object literal
-//! in a variable, handed to wrappers from several packages before it is
-//! exported, so the exported value cannot be evaluated. One pin per field of
-//! the module's tables; the rules are argued from the tools' documentation, and
+//! The Next.js config is built in steps: an object literal in a variable,
+//! handed to wrappers from several packages before it is exported, so the
+//! exported value cannot be evaluated. One pin per field of the module's
+//! tables; the rules are argued from the tools' documentation, and
 //! a runtime oracle (outside this repository) runs one field of each kind for
 //! real.
 //!
@@ -66,7 +66,7 @@ const VITEAPP: &str = "apps/viteapp";
 
 const SITE_DEPS: &[&str] = &[
     "@acme/other",
-    "@flow/web-shared",
+    "@acme/shared-ui",
     "date-lib",
     "icons-lib",
     "loader-pkg",
@@ -168,35 +168,34 @@ fn set(r: &Path, bumped: &str) {
     );
 }
 
-const NEXT_JEST_CONFIG: &str = "import nextJest from 'next/jest';\nimport type { Config } from \
-                                'jest';\n\nconst customConfig: Config = {\n  testEnvironment: \
-                                'node',\n  testMatch: ['./**/*.test.{ts,tsx}'],\n};\n\nexport \
-                                default async (): Promise<Config> => {\n  const config = (await \
-                                nextJest({ dir: __dirname })(customConfig)()) as Config;\n  \
-                                return config;\n};\n";
+const NEXT_JEST_CONFIG: &str =
+    "import type { Config } from 'jest';\nimport nextJest from 'next/jest';\n\nconst own: Config \
+     = {\n  testMatch: ['**/*.test.{ts,tsx}'],\n  testEnvironment: 'node',\n};\n\nexport default \
+     async (): Promise<Config> => {\n  const wrapped = (await nextJest({ dir: __dirname \
+     })(own)()) as Config;\n  return wrapped;\n};\n";
 
-/// The shape of a real application's config (names changed): the object is a
-/// variable, a later statement extends it, and wrappers of four packages (one
-/// under a condition, loaded with `require`) stand between it and the export.
+/// An application's config: the object is a variable, a later statement extends
+/// it, and wrappers of four packages (one under a condition, loaded with
+/// `require`) stand between it and the export.
 const NEXT_CONFIG: &str = r#"import path from 'node:path';
 import { withPlugin } from 'plugin-pkg/next';
 import { withOther } from '@acme/other';
 
-const isDev = process.env.NODE_ENV === 'development';
+const isLocal = process.env.NODE_ENV !== 'production';
 
 const nextConfig = {
   reactStrictMode: true,
   transpilePackages:
-    // These packages ship code that needs compiling.
+    // compiled from source
     [
       '@acme/ui',
-      '@flow/web-shared',
+      '@acme/shared-ui',
       'unimported-lib',
     ]
       .concat(
-        isDev
+        isLocal
           ? []
-          : // These packages are bundled for production.
+          : // release builds only
             ['prod-lib'],
       ),
   serverExternalPackages: ['native-lib'],
@@ -279,7 +278,7 @@ fn repo() -> tempfile::TempDir {
     // A Next.js application tested through next/jest.
     write(r, "apps/site/jest.config.ts", NEXT_JEST_CONFIG);
     write(r, "apps/site/next.config.mjs", NEXT_CONFIG);
-    importer(r, SITE, "flow", "ts", Some("@flow/web-shared"));
+    importer(r, SITE, "flow", "ts", Some("@acme/shared-ui"));
     importer(r, SITE, "icons", "ts", Some("icons-lib"));
     importer(r, SITE, "native", "ts", Some("native-lib"));
     importer(r, SITE, "lodash", "ts", Some("lodash-lib"));
@@ -360,11 +359,11 @@ fn a_package_next_transpiles_is_consumed_by_its_importers() {
     let d = repo();
     let r = d.path();
     // The fixture's site: named in `transpilePackages`, imported by one module.
-    assert_eq!(bump(r, "@flow/web-shared"), [FLOW]);
+    assert_eq!(bump(r, "@acme/shared-ui"), [FLOW]);
     let err = stats(r);
     assert!(
         err.contains(
-            "apps/site/next.config.mjs names @flow/web-shared in transpilePackages[]: counted for \
+            "apps/site/next.config.mjs names @acme/shared-ui in transpilePackages[]: counted for \
              the files that load it"
         ),
         "{err}"
@@ -380,7 +379,7 @@ fn a_package_next_transpiles_is_consumed_by_its_importers() {
     assert!(
         err.contains(
             "whole-file change: changed dependenc(ies) whose consumers are not known: \
-             @flow/web-shared"
+             @acme/shared-ui"
         ),
         "{err}"
     );

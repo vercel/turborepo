@@ -1,10 +1,9 @@
 //! Type-only bare imports without `node_modules`: `import type {X} from
-//! 'retry'` where the importer only declares `@types/retry` resolves to the
-//! `@types/retry` package node through the lockfile (as TypeScript resolves
+//! 'semver'` where the importer only declares `@types/semver` resolves to the
+//! `@types/semver` package node through the lockfile (as TypeScript resolves
 //! it), with no `unresolved_specifier`. A runtime import of the same undeclared
-//! name stays unresolved and uncertain. (On a large monorepo, one such
-//! import in `published-packages/cosmosdb` kept 2,218 jest tests on the
-//! uncertainty floor.)
+//! name stays unresolved and uncertain. (Left unresolved, one such type import
+//! puts every test that reaches its file on the uncertainty floor.)
 
 // Test code: helpers outside `#[test]` functions unwrap and expect as the tests do.
 #![allow(clippy::unwrap_used, clippy::expect_used)]
@@ -31,18 +30,18 @@ fn type_only_imports_fall_back_to_definitely_typed() {
     write(
         &r,
         "packages/a/package.json",
-        r#"{"name":"a","version":"1.0.0","devDependencies":{"@types/retry":"0.12.2","@types/scope__lib":"1.0.0"}}"#,
+        r#"{"name":"a","version":"1.0.0","devDependencies":{"@types/semver":"7.5.8","@types/scope__lib":"1.0.0"}}"#,
     );
     write(
         &r,
         "packages/a/src/types.ts",
-        "import type { OperationOptions } from 'retry';\nimport type { L } from \
-         '@scope/lib';\nexport type O = OperationOptions | L;\n",
+        "import type { ReleaseType } from 'semver';\nimport type { L } from '@scope/lib';\nexport \
+         type O = ReleaseType | L;\n",
     );
     write(
         &r,
         "packages/a/src/runtime.ts",
-        "import retry from 'retry';\nexport const r = retry;\n",
+        "import semver from 'semver';\nexport const v = semver.valid;\n",
     );
     write(
         &r,
@@ -52,19 +51,19 @@ importers:
   .: {}
   packages/a:
     devDependencies:
-      '@types/retry':
-        specifier: 0.12.2
-        version: 0.12.2
+      '@types/semver':
+        specifier: 7.5.8
+        version: 7.5.8
       '@types/scope__lib':
         specifier: 1.0.0
         version: 1.0.0
 packages:
-  '@types/retry@0.12.2':
+  '@types/semver@7.5.8':
     resolution: {integrity: sha512-types}
   '@types/scope__lib@1.0.0':
     resolution: {integrity: sha512-scoped}
 snapshots:
-  '@types/retry@0.12.2': {}
+  '@types/semver@7.5.8': {}
   '@types/scope__lib@1.0.0': {}
 "#,
     );
@@ -86,7 +85,7 @@ snapshots:
         .map(|n| g.path(n))
         .collect();
     assert!(
-        targets.contains(&"node_modules/@types/retry@0.12.2"),
+        targets.contains(&"node_modules/@types/semver@7.5.8"),
         "{targets:?}"
     );
     assert!(
@@ -99,7 +98,7 @@ snapshots:
         .collect();
     assert!(unc.is_empty(), "{unc:?}");
 
-    // Runtime imports don't fall back: `retry` itself is not installed.
+    // Runtime imports don't fall back: `semver` itself is not installed.
     let runtime = g.node_by_path("packages/a/src/runtime.ts").unwrap();
     assert!(
         !g.out_edges(runtime)
@@ -108,7 +107,7 @@ snapshots:
     );
     assert!(
         g.uncertainties(runtime)
-            .any(|u| u.detail.contains("'retry'")),
+            .any(|u| u.detail.contains("'semver'")),
         "a runtime import of an undeclared package stays uncertain"
     );
 }

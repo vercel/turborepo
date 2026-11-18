@@ -817,8 +817,8 @@ fn the_digest_computed_without_a_build_is_the_builds() {
 /// changes what a trace records, although no path anything probed exists yet. A
 /// refresh has to notice, or a shard kept across the change (in a store, or in
 /// an artifact packed before it) differs from the one a fresh build writes.
-/// Found on a real monorepo: `/// <reference types="@types/x" />` in a package
-/// whose `node_modules/@types` appeared with a workspace link.
+/// For example `/// <reference types="@types/x" />` in a package whose
+/// `node_modules/@types` appears with a workspace link.
 #[test]
 fn a_marker_or_scope_directory_that_appears_retraces_its_walk_ups() {
     let t = tempfile::tempdir().unwrap();

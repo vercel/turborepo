@@ -11,11 +11,11 @@ use super::{
     LOADS, ROUTES, Repo,
 };
 
-const HELPER: &str = "helpers/setup-endpoint.ts";
-const INDEX: (&str, &str) = ("helpers/index.ts", "export * from './setup-endpoint';\n");
-const A: &str = "import { setupEndpoint } from '@scope/helpers';\nconst { client } = \
-                 setupEndpoint({ extraRoutes: ['svc-a'] });\n";
-const B: &str = "import { setupEndpoint } from '@scope/helpers';\nsetupEndpoint();\n";
+const HELPER: &str = "helpers/start-service.ts";
+const INDEX: (&str, &str) = ("helpers/index.ts", "export * from './start-service';\n");
+const A: &str = "import { startService } from '@scope/helpers';\nconst { client } = \
+                 startService({ extraRoutes: ['svc-a'] });\n";
+const B: &str = "import { startService } from '@scope/helpers';\nstartService();\n";
 
 fn repo(files: &[(&str, &str)]) -> Repo {
     let mut r = Repo::new(files);
@@ -104,8 +104,8 @@ fn a_comment_in_a_caller_changes_nothing() {
 fn a_changed_argument_of_a_caller_is_bound_again() {
     let (_, t) = record(&repo(&base()), &[HELPER]);
     let mut files = base();
-    files[1].1 = "import { setupEndpoint } from '@scope/helpers';\nconst { client } = \
-                  setupEndpoint({ extraRoutes: ['svc-b'] });\n";
+    files[1].1 = "import { startService } from '@scope/helpers';\nconst { client } = \
+                  startService({ extraRoutes: ['svc-b'] });\n";
     assert_eq!(replayed(&t, &repo(&files), &[HELPER]), None);
 }
 
@@ -114,8 +114,8 @@ fn a_call_that_moved_to_another_line_is_bound_again() {
     // The line is part of the result (where the supplier passes the value).
     let (_, t) = record(&repo(&base()), &[HELPER]);
     let mut files = base();
-    files[1].1 = "import { setupEndpoint } from '@scope/helpers';\n\nconst { client } = \
-                  setupEndpoint({ extraRoutes: ['svc-a'] });\n";
+    files[1].1 = "import { startService } from '@scope/helpers';\n\nconst { client } = \
+                  startService({ extraRoutes: ['svc-a'] });\n";
     let r = repo(&files);
     assert_eq!(replayed(&t, &r, &[HELPER]), None);
     let (b, _) = record(&r, &[HELPER]);
@@ -131,7 +131,7 @@ fn a_new_caller_and_a_deleted_caller_are_bound_again() {
     let mut files = base();
     files.push((
         "pkg/c.test.ts",
-        "import { setupEndpoint } from '@scope/helpers';\nsetupEndpoint({ extraRoutes: ['svc-b'] \
+        "import { startService } from '@scope/helpers';\nstartService({ extraRoutes: ['svc-b'] \
          });\n",
     ));
     let more = repo(&files);
@@ -219,7 +219,7 @@ fn sequences_of_edits_replay_or_rebind() {
         }),
         ("argument of a caller", |f| {
             if let Some(i) = f.iter().position(|x| x.0 == "pkg/b.test.ts") {
-                f[i].1 = "import { setupEndpoint } from '@scope/helpers';\nsetupEndpoint({ \
+                f[i].1 = "import { startService } from '@scope/helpers';\nstartService({ \
                           extraRoutes: ['svc-b'] });\n";
             }
         }),
@@ -227,8 +227,8 @@ fn sequences_of_edits_replay_or_rebind() {
             if !f.iter().any(|x| x.0 == "pkg/c.test.ts") {
                 f.push((
                     "pkg/c.test.ts",
-                    "import { loadRoutes } from \
-                     '@scope/helpers';\nloadRoutes([process.argv[2]]);\n",
+                    "import { collectTables } from \
+                     '@scope/helpers';\ncollectTables([process.argv[2]]);\n",
                 ));
             }
         }),

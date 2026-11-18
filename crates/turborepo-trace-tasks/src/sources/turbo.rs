@@ -810,7 +810,7 @@ mod tests {
                 "declared /r/t/s **/dist/**/* true"
             ]
         );
-        // A root task `//#cache-tsbuildinfo-files`: outputs in other packages only.
+        // A root task `//#keep-buildinfo`: outputs in other packages only.
         let nested = [PathBuf::from("/r/apps/a"), PathBuf::from("/r/apps/b")];
         let v = scope_outputs(
             vec![

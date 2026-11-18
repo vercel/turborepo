@@ -1,4 +1,4 @@
-import { defineProject } from '@acme/playwright/project';
+import { defineProject } from '@acme/browser-kit/project';
 
 export default defineProject({
   testMatch: ['<rootDir>/src/**/*.test.ts'],

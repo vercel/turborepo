@@ -4,6 +4,7 @@
   "noUpdateNotifier": true,
   "futureFlags": {
     "experimentalCargoWorkspaces": true,
+    "experimentalSetup": true,
     "experimentalTaskCommand": true
   },
   // The following are used by tools such as pnpm, gh actions to setup pnpm, etc.
@@ -69,7 +70,8 @@
     },
     "turborepo-crates#format": {
       "cache": true,
-      "command": ["cargo", "fmt", "--check"]
+      "command": ["cargo", "fmt", "--check"],
+      "tags": ["ci"]
     },
     // Match the stricter cargo alias used by the Rust lint CI job.
     "turborepo-crates#lint": {
@@ -100,19 +102,38 @@
     },
     "//#lint": {
       "inputs": ["!pnpm-lock.yaml"],
-      "command": ["pnpm", "exec", "oxlint", "--deny-warnings", "."]
+      // Every nested oxlint config lives under the ignored examples/ directory,
+      // and oxlint still loads them, so it fails on example-only dependencies.
+      "command": [
+        "pnpm",
+        "exec",
+        "oxlint",
+        "--disable-nested-config",
+        "--deny-warnings",
+        "."
+      ],
+      "tags": ["ci"]
     },
     "//#lint:fix": {
-      "command": ["pnpm", "exec", "oxlint", "--fix", "."]
+      "command": [
+        "pnpm",
+        "exec",
+        "oxlint",
+        "--disable-nested-config",
+        "--fix",
+        "."
+      ]
     },
     "//#format": {
-      "command": ["pnpm", "exec", "oxfmt", "--check"]
+      "command": ["pnpm", "exec", "oxfmt", "--check"],
+      "tags": ["ci"]
     },
     "//#format:fix": {
       "command": ["pnpm", "exec", "oxfmt", "."]
     },
     "//#check:toml": {
-      "command": ["pnpm", "exec", "taplo", "format", "--check"]
+      "command": ["pnpm", "exec", "taplo", "format", "--check"],
+      "tags": ["ci"]
     },
     "//#fix:toml": {
       "command": ["pnpm", "exec", "taplo", "format"]

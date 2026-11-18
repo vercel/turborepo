@@ -215,7 +215,7 @@ fn hub_fixture(r: &Path) {
             r,
             &format!("packages/{p}/package.json"),
             &format!(
-                r#"{{"name":"{p}","version":"1.0.0","scripts":{{"clean-code":"knip --directory ../.. --workspace packages/{p}"}}}}"#
+                r#"{{"name":"{p}","version":"1.0.0","scripts":{{"unused":"knip --directory ../.. --workspace packages/{p}"}}}}"#
             ),
         );
         write(
@@ -1330,7 +1330,7 @@ fn apply(r: &Path, e: &Edit) {
         Edit::Knip(on) => put(
             "packages/b/package.json",
             Some(if *on {
-                r#"{"name":"b","main":"src/index.ts","scripts":{"clean-code":"knip --directory ../.. --workspace packages/b"}}"#
+                r#"{"name":"b","main":"src/index.ts","scripts":{"unused":"knip --directory ../.. --workspace packages/b"}}"#
             } else {
                 B_MANIFESTS[0]
             }),

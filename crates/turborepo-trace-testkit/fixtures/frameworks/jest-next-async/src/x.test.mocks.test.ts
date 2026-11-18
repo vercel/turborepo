@@ -1,1 +1,0 @@
-test('ignored by testPathIgnorePatterns', () => {});

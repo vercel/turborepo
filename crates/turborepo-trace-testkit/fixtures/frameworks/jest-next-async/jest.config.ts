@@ -1,38 +1,32 @@
-// The shape of `apps/web/jest.config.ts` in a large monorepo (M1): an async default export
-// wrapping `nextJest({ dir })(customConfig)()`, which then swaps next's SWC transformer for
-// a transformer of its own in the resolved config's `transform`.
-import nextJest from 'next/jest';
+// An async default export around `nextJest({ dir })(own)()`, which then replaces next's SWC
+// transformer with a transformer of its own in the resolved config's `transform`.
 import type { Config } from 'jest';
+import nextJest from 'next/jest';
 
-const customConfig: Config = {
-  setupFilesAfterEnv: ['<rootDir>/test/setup.ts'],
+const own: Config = {
+  testPathIgnorePatterns: ['/__samples__/'],
+  testMatch: ['**/*.test.{ts,tsx}'],
+  setupFilesAfterEnv: ['<rootDir>/test/after-env.ts'],
   testEnvironment: 'jsdom',
-  testMatch: ['./**/*.test.{ts,tsx}'],
-  testPathIgnorePatterns: ['/node_modules/', 'test.mocks'],
 };
 
 export default async (): Promise<Config> => {
-  const config = (await nextJest({ dir: __dirname })(customConfig)()) as Config;
-  const finalConfig = {
-    ...config,
+  const wrapped = (await nextJest({ dir: __dirname })(own)()) as Config;
+  return {
+    ...wrapped,
     transform: Object.fromEntries(
-      Object.entries(config.transform ?? {}).map(([pattern, transformer]) => {
+      Object.entries(wrapped.transform ?? {}).map(([glob, entry]) => {
         if (
-          Array.isArray(transformer) &&
-          transformer[0] ===
-            require.resolve('next/dist/build/swc/jest-transformer')
+          Array.isArray(entry) &&
+          entry[0] === require.resolve('next/dist/build/swc/jest-transformer')
         ) {
-          return [
-            pattern,
-            ['<rootDir>/test/compiler-transformer.cjs', transformer[1]],
-          ];
+          return [glob, ['<rootDir>/test/swc-wrap.cjs', entry[1]]];
         }
-        return [pattern, transformer];
+        return [glob, entry];
       }),
     ),
-    transformIgnorePatterns: (config.transformIgnorePatterns ?? []).filter(
-      (pattern) => !pattern.includes('node_modules'),
+    transformIgnorePatterns: (wrapped.transformIgnorePatterns ?? []).filter(
+      (p) => !p.includes('node_modules'),
     ),
   };
-  return finalConfig;
 };

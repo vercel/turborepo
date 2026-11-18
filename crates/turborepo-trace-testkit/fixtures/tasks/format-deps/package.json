@@ -3,9 +3,9 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "fmt-select": "oxfmt --write --ignore-path .gitignore --no-error-on-unmatched-pattern",
+    "format:files": "oxfmt --no-error-on-unmatched-pattern --write",
     "fmt": "oxfmt .",
-    "fmt:all": "pnpm fmt-select \"**/*.{js,ts,json}\"",
+    "fmt:all": "pnpm format:files \"**/*.{js,ts,json}\"",
     "fmt:check": "oxfmt --check .",
     "lint:fix": "oxlint --fix"
   }

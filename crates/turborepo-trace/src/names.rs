@@ -659,7 +659,7 @@ pub(crate) fn build<V: GraphView>(
         });
     }
     let t_facts = t.elapsed();
-    let cache: PathBuf = cache_dir.join("names-data");
+    let cache: PathBuf = cache_dir.join(turborepo_trace_store::cache_file::NAMES_DATA);
     let (data, data_scanned) = data_facts(g, engine, root, &cache);
     let mut data_files = 0;
     for e in &data {

@@ -37,7 +37,7 @@ fn task_hasher_for_inputs<'a>(
         package_inputs,
         run_opts,
         env,
-        "global-hash",
+        &crate::global_hash::TEST_GLOBAL_HASHES,
         repo_root,
         EnvironmentVariableMap::default(),
         &[],

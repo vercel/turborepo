@@ -180,7 +180,7 @@ fn compose() {
     );
 }
 
-/// `RUN` command recognition over a real repository's Dockerfiles:
+/// `RUN` command recognition over the Dockerfiles of a repository you name:
 /// `TURBO_TRACE_DEBUG_DOCKER_COVERAGE=<repo> cargo test -p
 /// turborepo-trace-tasks --test docker -- --ignored --nocapture`.
 #[test]

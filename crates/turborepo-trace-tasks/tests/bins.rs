@@ -104,7 +104,7 @@ fn linked() {
             .configs
             .contains(&root.join("packages/app/jest.unit.config.js"))
     );
-    assert!(has_entry(t, &root, "tools/test-dd/bin/jest-dd.js"));
+    assert!(has_entry(t, &root, "tools/ci-runners/bin/jest-ci.js"));
     assert!(t.spec.toolchain.iter().any(|tc| tc.name == "jest"));
     // Only through the workspace `bin` field (no `.bin` entry): vitest; strong
     // evidence: tsc.
@@ -139,7 +139,7 @@ fn linked() {
     // A stale `.bin` shim (target gone) falls back to the workspace `bin` field.
     let t = get(&set, "task:packages/app#test:vitest");
     assert_eq!(t.commands[0].recognizer, Some("bin-wrapper"));
-    assert!(has_entry(t, &root, "tools/test-dd/bin/vitest-dd.js"));
+    assert!(has_entry(t, &root, "tools/ci-runners/bin/vitest-ci.js"));
     // A known tool package under another bin name: forwarded to the tool's
     // recognizer.
     let t = get(&set, "task:packages/app#typecheck");

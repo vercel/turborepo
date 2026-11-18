@@ -5,12 +5,12 @@
 //! A package has scripts that are not part of that: a dev server, a watch mode,
 //! the `--fix` variant of a check. They depend on the same files as their
 //! counterparts (the fix variant runs the check), so every change that selects
-//! the check selected them too, and on a large repository they are a fifth of
-//! the report.
+//! the check selected them too, and on a big repository they can be a large
+//! part of the report.
 //!
 //! By default a glob therefore leaves out the tasks that are **run by hand by
 //! their nature**: the name has a `dev`, `start`, `serve`, `preview`, `watch`
-//! or `fix` segment (`dev:ts`, `unit-test-watch`, `clean-code:fix`). A task
+//! or `fix` segment (`dev:types`, `spec-watch`, `unused:fix`). A task
 //! that the repository's automation runs stays: a CI job or an install
 //! lifecycle script reaches it through task dependencies or by naming it (`pnpm
 //! format:fix` in a workflow step). A pattern that names the task (no wildcard
@@ -150,11 +150,11 @@ mod tests {
     fn names_of_tasks_run_by_hand() {
         for name in [
             "dev",
-            "dev:ts",
+            "dev:types",
             "start",
-            "unit-test-watch",
+            "spec-watch",
             "test:watch",
-            "clean-code:fix",
+            "unused:fix",
             "format-fix",
             "serve",
         ] {
@@ -164,10 +164,10 @@ mod tests {
             "build",
             "test",
             "typecheck",
-            "clean-code",
-            "lint:check-env",
+            "unused",
+            "lint:env",
             "fixture:read",
-            "devx-report",
+            "devices-report",
             "restart-check",
             "ci:build",
             "lint",

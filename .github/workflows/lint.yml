@@ -63,7 +63,8 @@ jobs:
           echo "$RUNNER_TEMP/cargo-deny" >> "$GITHUB_PATH"
           "$RUNNER_TEMP/cargo-deny/cargo-deny" --version
 
-      - name: Check quality
+      - name: Check Rust quality
+        # Vercel CI runs the JavaScript, TOML, docs, and Rust format checks from `quality`.
         # Manually set TURBO_API to an empty string to override Hetzner env
         run: |
-          TURBO_API= pnpm dlx turbo run quality --env-mode=strict
+          TURBO_API= pnpm dlx turbo run turborepo-crates#lint turborepo-crates#check:licenses --env-mode=strict

@@ -1,0 +1,7 @@
+syntax = "proto3";
+
+package relay.v1;
+
+message Frame {
+  bytes payload = 1;
+}

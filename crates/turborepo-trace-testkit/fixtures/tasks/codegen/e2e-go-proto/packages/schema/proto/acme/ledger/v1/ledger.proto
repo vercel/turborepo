@@ -1,0 +1,8 @@
+syntax = "proto3";
+
+package acme.ledger.v1;
+
+message Entry {
+  string account = 1;
+  int64 cents = 2;
+}

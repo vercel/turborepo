@@ -5,12 +5,14 @@
     "build": {
       "dependsOn": ["^build"],
       "outputs": ["dist/**"],
-      "command": ["pnpm", "run", "build"]
+      "command": ["pnpm", "run", "build"],
+      "tags": ["ci"]
     },
     "test": {
       "dependsOn": ["build"],
       "passThroughEnv": ["!CI"],
-      "command": ["pnpm", "exec", "jest"]
+      "command": ["pnpm", "exec", "jest"],
+      "tags": ["ci"]
     },
     "lint:prettier": {
       "command": [
@@ -22,6 +24,9 @@
         "--cache",
         "--ignore-path=../../.prettierignore"
       ]
+    },
+    "check-types": {
+      "tags": ["ci"]
     }
   }
 }

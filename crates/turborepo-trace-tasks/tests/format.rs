@@ -1,7 +1,7 @@
 //! In-place formatting scripts as task dependencies
 //! ([`turborepo_trace_tasks::format`]). Fixture: `fixtures/tasks/format-deps/`,
-//! with the shape of a real service whose `generate` script formats what it
-//! generated through a root script (`pnpm -w fmt-select "$ROOT/src/gen"`):
+//! with a service whose `generate` script formats what it generated through a
+//! root script (`pnpm -w format:files "$PWD/src/gen"`):
 //! the root script, a formatter without path arguments, depends on the whole
 //! repository.
 
@@ -51,7 +51,7 @@ fn the_root_format_script_depends_on_the_repository() {
     let (root, set) = set();
     // The formatter is recognized (no unknown command); without path arguments its
     // file set is its working directory: the repository.
-    for id in ["task:.#fmt-select", "task:.#fmt", "task:.#fmt:check"] {
+    for id in ["task:.#format:files", "task:.#fmt", "task:.#fmt:check"] {
         let t = task(&set, id);
         assert!(t.spec.uncertainties.is_empty(), "{id}: {:?}", t.spec);
         assert!(
@@ -65,7 +65,7 @@ fn the_root_format_script_depends_on_the_repository() {
     }
     // Write mode rewrites in place: recorded, never a producer.
     assert!(
-        task(&set, "task:.#fmt-select")
+        task(&set, "task:.#format:files")
             .spec
             .outputs
             .iter()
@@ -83,7 +83,7 @@ fn the_root_format_script_depends_on_the_repository() {
             .collect::<Vec<_>>(),
         [(
             &TaskRef::Local {
-                name: "fmt-select".into()
+                name: "format:files".into()
             },
             true
         )]
@@ -93,15 +93,15 @@ fn the_root_format_script_depends_on_the_repository() {
 #[test]
 fn a_generator_does_not_depend_on_the_formatter_it_calls() {
     let (_, set) = set();
-    // The real shape: the generate script runs a shell script that formats its
+    // The generate script runs a shell script that formats its
     // output directory through the root script.
-    let tun = task(&set, "task:svc/tun#generate");
+    let relay = task(&set, "task:svc/relay#generate");
     assert!(
-        tun.spec.outputs.iter().any(|o| o.links_producer()),
+        relay.spec.outputs.iter().any(|o| o.links_producer()),
         "{:?}",
-        tun.spec.outputs
+        relay.spec.outputs
     );
-    assert_eq!(root_deps(&set, "task:svc/tun#generate"), []);
+    assert_eq!(root_deps(&set, "task:svc/relay#generate"), []);
     // `gen && pnpm -w fmt`, with a formatter that takes the whole repository.
     assert_eq!(root_deps(&set, "task:svc/api#generate"), []);
 }
@@ -123,6 +123,6 @@ fn checks_linters_and_tasks_without_outputs_keep_the_dependency() {
     // formatter's.
     assert_eq!(
         root_deps(&set, "task:svc/chk#format"),
-        [("fmt-select".to_owned(), true)]
+        [("format:files".to_owned(), true)]
     );
 }

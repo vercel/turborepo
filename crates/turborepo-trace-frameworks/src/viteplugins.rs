@@ -179,7 +179,7 @@ mod tests {
     fn loader_plugins_are_scoped_to_their_modules() {
         let v = ConfigVal::Arr(vec![
             call("react()", "@vitejs/plugin-react"),
-            call("wgslVitePlugin({ minify: true })", "@vgpu/wgsl/loader-vite"),
+            call("wgsl()", "@vgpu/wgsl/loader-vite"),
         ]);
         assert!(unmodelled(&v).is_empty(), "{:?}", unmodelled(&v));
         assert_eq!(

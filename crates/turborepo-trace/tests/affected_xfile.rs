@@ -68,35 +68,35 @@ fn affected_unbound(root: &Path, changed: &str) -> Vec<String> {
 const HELPER: &str = r#"import { existsSync } from 'fs';
 import { join } from 'path';
 
-const ROUTES_BY_SERVICE = {
+const TABLES = {
   'svc-a': 'services/svc-a/src/routes',
   'svc-b': 'services/svc-b/src/routes.ts',
 };
 
-export type ServiceName = keyof typeof ROUTES_BY_SERVICE;
+export type ServiceName = keyof typeof TABLES;
 
-function localRoutes(): string | undefined {
-  const custom = join(process.cwd(), 'src', 'routes.ts');
-  if (existsSync(custom)) {
-    return process.cwd() + '/src/routes';
+function ownTable(): string | undefined {
+  const own = join(process.cwd(), 'src', 'routes.ts');
+  if (existsSync(own)) {
+    return `${process.cwd()}/src/routes`;
   }
 }
 
-export function loadRoutes(extra: ServiceName[] = []) {
+export function collectTables(extra: ServiceName[] = []) {
   const paths = new Set<string>();
-  const local = localRoutes();
+  const local = ownTable();
   if (local) {
     paths.add(local);
   }
   for (const name of extra) {
-    if (!ROUTES_BY_SERVICE[name]) {
-      throw new Error(`Invalid value: ${name}`);
+    if (!TABLES[name]) {
+      throw new Error(`no table for `);
     }
-    paths.add(ROUTES_BY_SERVICE[name]);
+    paths.add(TABLES[name]);
   }
   let merged: unknown[] = [];
-  for (const routePath of paths) {
-    const loaded = require(routePath);
+  for (const tablePath of paths) {
+    const loaded = require(tablePath);
     merged = [...merged, ...loaded.routes];
   }
   return { routes: merged };
@@ -107,19 +107,19 @@ interface Opts {
   seed?: boolean;
 }
 
-export function setupEndpoint(opts: Opts = {}) {
+export function startService(opts: Opts = {}) {
   const { extraRoutes = [] } = opts;
-  const definition = loadRoutes(extraRoutes);
+  const definition = collectTables(extraRoutes);
   return { definition, seed: opts.seed ?? true };
 }
 "#;
 
 /// ```text
-/// packages/helpers/{index.ts (barrel), setup-endpoint.ts, jest.config.js (maps services/*)}
+/// packages/helpers/{index.ts (barrel), start-service.ts, jest.config.js (maps services/*)}
 /// services/svc-a/src/{routes.ts → handler.ts}, services/svc-b/src/routes.ts
-/// packages/x/test/a.test.ts      setupEndpoint({ extraRoutes: ['svc-a'] })
-/// packages/x/test/b.test.ts      setupEndpoint({ extraRoutes: ['svc-b'] })
-/// packages/x/test/c.test.ts      setupEndpoint()
+/// packages/x/test/a.test.ts      startService({ extraRoutes: ['svc-a'] })
+/// packages/x/test/b.test.ts      startService({ extraRoutes: ['svc-b'] })
+/// packages/x/test/c.test.ts      startService()
 /// packages/x/test/plain.test.ts  does not use the helper
 /// ```
 fn helper_repo() -> tempfile::TempDir {
@@ -140,9 +140,9 @@ fn helper_repo() -> tempfile::TempDir {
     write(
         r,
         "packages/helpers/index.ts",
-        "export * from './setup-endpoint';\n",
+        "export * from './start-service';\n",
     );
-    write(r, "packages/helpers/setup-endpoint.ts", HELPER);
+    write(r, "packages/helpers/start-service.ts", HELPER);
     for s in ["svc-a", "svc-b"] {
         write(
             r,
@@ -174,21 +174,21 @@ fn helper_repo() -> tempfile::TempDir {
     write(
         r,
         "packages/x/test/a.test.ts",
-        "import { setupEndpoint } from '../../helpers';\nconst { definition } = setupEndpoint({ \
+        "import { startService } from '../../helpers';\nconst { definition } = startService({ \
          extraRoutes: ['svc-a'] });\ntest('a', () => { expect(definition).toBeDefined(); });\n",
     );
     write(
         r,
         "packages/x/test/b.test.ts",
-        "import { setupEndpoint } from '../../helpers';\nconst { definition } = setupEndpoint({ \
+        "import { startService } from '../../helpers';\nconst { definition } = startService({ \
          extraRoutes: ['svc-b'], seed: false });\ntest('b', () => { \
          expect(definition).toBeDefined(); });\n",
     );
     write(
         r,
         "packages/x/test/c.test.ts",
-        "import { setupEndpoint } from '../../helpers';\nconst { definition } = \
-         setupEndpoint();\ntest('c', () => { expect(definition).toBeDefined(); });\n",
+        "import { startService } from '../../helpers';\nconst { definition } = \
+         startService();\ntest('c', () => { expect(definition).toBeDefined(); });\n",
     );
     write(
         r,
@@ -222,7 +222,7 @@ fn a_key_selects_the_route_module_at_the_caller() {
     assert_eq!(affected(r, "services/svc-a/src/handler.ts"), [A]);
     assert_eq!(affected(r, "services/svc-b/src/routes.ts"), [B]);
     // The helper itself still selects all its users; an unrelated file none.
-    assert_eq!(affected(r, "packages/helpers/setup-endpoint.ts"), [A, B, C]);
+    assert_eq!(affected(r, "packages/helpers/start-service.ts"), [A, B, C]);
     assert!(affected(r, "README.md").is_empty());
 }
 
@@ -240,7 +240,7 @@ fn a_step_budget_that_runs_out_closes_nothing() {
         "services/svc-a/src/routes.ts",
         "services/svc-a/src/handler.ts",
         "services/svc-b/src/routes.ts",
-        "packages/helpers/setup-endpoint.ts",
+        "packages/helpers/start-service.ts",
         "README.md",
     ];
     let run = |changed: &str, steps: &str| -> (Vec<String>, bool) {
@@ -313,8 +313,8 @@ fn new_callers_are_bound_on_refresh() {
     write(
         r,
         "packages/x/test/d.test.ts",
-        "import { loadRoutes } from '../../helpers';\nconst definition = \
-         loadRoutes([process.argv[2] as any]);\ntest('d', () => { \
+        "import { collectTables } from '../../helpers';\nconst definition = \
+         collectTables([process.argv[2] as any]);\ntest('d', () => { \
          expect(definition).toBeDefined(); });\n",
     );
     const D: &str = "packages/x/test/d.test.ts";
@@ -324,8 +324,8 @@ fn new_callers_are_bound_on_refresh() {
     write(
         r,
         "packages/x/test/e.test.ts",
-        "import { setupEndpoint } from '../../helpers';\nconst variants = \
-         [setupEndpoint];\ntest('e', () => { variants.forEach((s) => s()); });\n",
+        "import { startService } from '../../helpers';\nconst variants = \
+         [startService];\ntest('e', () => { variants.forEach((s) => s()); });\n",
     );
     const E: &str = "packages/x/test/e.test.ts";
     assert_eq!(affected(r, "services/svc-b/src/routes.ts"), [B, D, E]);
@@ -333,7 +333,7 @@ fn new_callers_are_bound_on_refresh() {
     write(
         r,
         "packages/x/test/b.test.ts",
-        "import { setupEndpoint } from '../../helpers';\nconst { definition } = setupEndpoint({ \
+        "import { startService } from '../../helpers';\nconst { definition } = startService({ \
          seed: false });\ntest('b', () => { expect(definition).toBeDefined(); });\n",
     );
     assert_eq!(affected(r, "services/svc-b/src/routes.ts"), [D, E]);
@@ -344,20 +344,20 @@ fn an_escape_in_the_helper_keeps_the_table_on_the_helper() {
     let d = helper_repo();
     let r = d.path();
     assert_eq!(affected(r, "services/svc-a/src/routes.ts"), [A]);
-    // The helper hands `loadRoutes` to code the analysis does not follow: its
+    // The helper hands `collectTables` to code the analysis does not follow: its
     // callers are no longer all known, so every table value stays a dependency
     // of the helper.
     write(
         r,
-        "packages/helpers/setup-endpoint.ts",
+        "packages/helpers/start-service.ts",
         &HELPER.replace(
             "interface Opts {",
-            "export const registry = [loadRoutes];\n\ninterface Opts {",
+            "export const registry = [collectTables];\n\ninterface Opts {",
         ),
     );
     assert_eq!(affected(r, "services/svc-a/src/routes.ts"), [A, B, C]);
     // And back.
-    write(r, "packages/helpers/setup-endpoint.ts", HELPER);
+    write(r, "packages/helpers/start-service.ts", HELPER);
     assert_eq!(affected(r, "services/svc-a/src/routes.ts"), [A]);
 }
 
@@ -598,7 +598,7 @@ fn the_bound_patch_is_kept_with_the_graph() {
     write(
         r,
         C,
-        "import { setupEndpoint } from '../../helpers';\nconst { definition } = setupEndpoint({ \
+        "import { startService } from '../../helpers';\nconst { definition } = startService({ \
          extraRoutes: ['svc-b'] });\ntest('c', () => { expect(definition).toBeDefined(); });\n",
     );
     let (after, line) = run("services/svc-b/src/routes.ts");
@@ -767,8 +767,8 @@ fn a_replayed_run_is_the_run_bound_from_nothing() {
     };
     let caller = |arg: &str| {
         format!(
-            "import {{ setupEndpoint }} from '../../helpers';\nconst {{ definition }} = \
-             setupEndpoint({arg});\ntest('t', () => {{ expect(definition).toBeDefined(); }});\n"
+            "import {{ startService }} from '../../helpers';\nconst {{ definition }} = \
+             startService({arg});\ntest('t', () => {{ expect(definition).toBeDefined(); }});\n"
         )
     };
     assert_eq!(step("the first query"), "bound");
@@ -825,20 +825,20 @@ fn a_replayed_run_is_the_run_bound_from_nothing() {
     );
     write(
         r,
-        "packages/helpers/setup-endpoint.ts",
+        "packages/helpers/start-service.ts",
         &HELPER.replace(
             "'svc-b': 'services/svc-b/src/routes.ts'",
             "'svc-b': 'services/svc-a/src/routes'",
         ),
     );
     assert_eq!(step("the callee's table"), "bound");
-    write(r, "packages/helpers/setup-endpoint.ts", HELPER);
+    write(r, "packages/helpers/start-service.ts", HELPER);
     assert_eq!(step("the callee's table, back"), "bound");
     write(
         r,
         "packages/x/test/d.test.ts",
-        "import { loadRoutes } from '../../helpers';\nconst definition = \
-         loadRoutes([process.argv[2] as any]);\ntest('d', () => { \
+        "import { collectTables } from '../../helpers';\nconst definition = \
+         collectTables([process.argv[2] as any]);\ntest('d', () => { \
          expect(definition).toBeDefined(); });\n",
     );
     assert_eq!(step("a new caller"), "bound");
@@ -853,7 +853,7 @@ fn a_replayed_run_is_the_run_bound_from_nothing() {
     write(
         r,
         "hints.toml",
-        "[[hint]]\nfiles = \"packages/helpers/setup-endpoint.ts\"\ndepends-on = \
+        "[[hint]]\nfiles = \"packages/helpers/start-service.ts\"\ndepends-on = \
          [\"services/svc-b/src/routes.ts\"]\n",
     );
     step("a hint");
@@ -908,7 +908,7 @@ fn edit_sequences_keep_the_graph_the_shards_give() {
         A,
         B,
         C,
-        "packages/helpers/setup-endpoint.ts",
+        "packages/helpers/start-service.ts",
         "packages/helpers/index.ts",
         "services/svc-a/src/routes.ts",
         "services/svc-a/src/handler.ts",
@@ -923,8 +923,8 @@ fn edit_sequences_keep_the_graph_the_shards_give() {
     const EXTRA: &str = "packages/x/test/e.test.ts";
     let caller = |arg: &str| {
         format!(
-            "import {{ setupEndpoint }} from '../../helpers';\nconst {{ definition }} = \
-             setupEndpoint({arg});\ntest('t', () => {{ expect(definition).toBeDefined(); }});\n"
+            "import {{ startService }} from '../../helpers';\nconst {{ definition }} = \
+             startService({arg});\ntest('t', () => {{ expect(definition).toBeDefined(); }});\n"
         )
     };
     let mut seen = std::collections::BTreeSet::new();

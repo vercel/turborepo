@@ -1,0 +1,8 @@
+{
+  "extends": "./base.json",
+  "compilerOptions": {
+    "incremental": true,
+    "tsBuildInfoFile": "${configDir}/node_modules/.cache/tsc.tsbuildinfo"
+  },
+  "exclude": ["${configDir}/node_modules"]
+}

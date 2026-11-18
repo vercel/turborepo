@@ -7,7 +7,7 @@ interface Store {
 }
 type Handle = {
   run?: <T>(
-    fn: (signal?: AbortSignal) => Promise<T>,
+    job: (stop?: AbortSignal) => Promise<T>,
     options?: { retries: number },
   ) => Promise<Result<T>>;
 };

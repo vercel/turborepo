@@ -6,7 +6,7 @@
     },
     "typegen": {},
     "type-check": {
-      "dependsOn": ["typegen", "^build", "^type-check"]
+      "dependsOn": ["^build", "^type-check", "typegen"]
     },
     "test": {
       "dependsOn": ["^build"]

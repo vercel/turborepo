@@ -639,22 +639,22 @@ mod tests {
             assert!(!is_tsconfig(f), "{f}");
         }
         assert_eq!(
-            join("packages/gate", "../otel").as_deref(),
-            Some("packages/otel")
+            join("packages/ledger", "../metrics").as_deref(),
+            Some("packages/metrics")
         );
         assert_eq!(
-            join("packages/gate", "./sub/x.json").as_deref(),
-            Some("packages/gate/sub/x.json")
+            join("packages/ledger", "./sub/x.json").as_deref(),
+            Some("packages/ledger/sub/x.json")
         );
         assert_eq!(join("", "a").as_deref(), Some("a"));
         assert_eq!(join("a", "../.."), None);
         assert_eq!(join("a", "/abs"), None);
-        assert!(nested("packages/gate", "packages/gate"));
-        assert!(nested("packages/gate/sub", "packages/gate"));
-        assert!(nested("packages", "packages/gate"));
-        assert!(nested("", "packages/gate"));
-        assert!(!nested("packages/gate", "packages/otel"));
-        assert!(!nested("packages/gate", "packages/gate-2"));
+        assert!(nested("packages/ledger", "packages/ledger"));
+        assert!(nested("packages/ledger/sub", "packages/ledger"));
+        assert!(nested("packages", "packages/ledger"));
+        assert!(nested("", "packages/ledger"));
+        assert!(!nested("packages/ledger", "packages/metrics"));
+        assert!(!nested("packages/ledger", "packages/ledger-2"));
     }
 
     #[test]

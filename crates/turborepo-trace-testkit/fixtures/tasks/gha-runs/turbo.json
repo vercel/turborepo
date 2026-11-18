@@ -1,6 +1,6 @@
 {
   "tasks": {
-    "ci:checks": { "dependsOn": ["test", "typecheck"] },
+    "ci:verify": { "dependsOn": ["test", "typecheck"] },
     "test": {},
     "typecheck": {}
   }

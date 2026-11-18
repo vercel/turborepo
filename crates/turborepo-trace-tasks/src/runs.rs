@@ -160,7 +160,7 @@ pub fn launch_word(text: &str) -> Option<(&'static str, Launch)> {
 
 /// A turbo pipeline task named on a line with `turbo` that runs a test task
 /// (its `dependsOn` closure in the root config has a task with `test` in its
-/// name): `turbo ci:checks`.
+/// name): `turbo ci:verify`.
 fn turbo_test_task(text: &str, repo_root: &Path) -> Option<String> {
     for line in text.lines().filter(|l| has_word(l, "turbo")) {
         let words = line
@@ -537,7 +537,7 @@ mod tests {
             launch_word("execSync('turbo run build --filter=web')"),
             None
         );
-        assert_eq!(launch_word("timeout 60 turbo ci:checks"), None);
+        assert_eq!(launch_word("timeout 60 turbo ci:verify"), None);
         assert_eq!(
             launch_word("turbo run test --filter=web"),
             Some(("turbo", Launch::Any))

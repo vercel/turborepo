@@ -171,6 +171,32 @@ pub(crate) fn calculate_affected_tasks_with_packages(
         })
         .collect();
 
+    let root_dependency_changed_packages: HashMap<&str, &PackageName> = affected_packages
+        .iter()
+        .filter_map(|(package_name, reason)| match reason {
+            PackageInclusionReason::RootInternalDepChanged { root_internal_dep } => {
+                Some((package_name.as_str(), root_internal_dep))
+            }
+            _ => None,
+        })
+        .collect();
+    if !root_dependency_changed_packages.is_empty() {
+        for task_id in run.task_ids() {
+            if let Some(root_internal_dep) =
+                root_dependency_changed_packages.get(task_id.package.as_str())
+            {
+                affected.insert(
+                    task_id,
+                    TaskChangeReason::AllTasksChanged {
+                        description: format!(
+                            "root internal dependency changed: {root_internal_dep}"
+                        ),
+                    },
+                );
+            }
+        }
+    }
+
     if !lockfile_changed_packages.is_empty() {
         for task_id in run.task_ids() {
             if lockfile_changed_packages.contains(task_id.package.as_str()) {
