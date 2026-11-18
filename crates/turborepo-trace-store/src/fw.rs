@@ -975,8 +975,6 @@ impl<'a> Fw<'a> {
                         uncertainty: None,
                     })
                 } else {
-                    // A link that leads to nothing: the file it would lead to is a probe
-                    // too, so that the file's coming selects the test.
                     if inside && *real != *p {
                         obs.missing.push(real.to_path_buf());
                     }
