@@ -304,7 +304,20 @@ jobs:
 
       # turbo.lock makes `turbo run` require `turbo setup` in every job.
       - name: Install managed tools
+        if: runner.os != 'Windows'
         run: turbo setup --tools-only
+
+      # Managed tasks use a Cargo home inside the tool store. On Windows, that
+      # path is too long for Cargo to check out Git dependencies, and Cargo
+      # fails with "path too long". This job removes turbo.lock on Windows, and
+      # its tasks use the tools on PATH. `--skip-worktree` hides the removal
+      # from Git, so the checkout stays clean.
+      - name: Run tasks without managed tools
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          git update-index --skip-worktree turbo.lock
+          rm turbo.lock
 
       # The nextest invocation (and its excludes) lives in turbo.json as
       # the turborepo-crates#test command; dogfooding the task command
