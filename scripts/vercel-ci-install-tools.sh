@@ -5,7 +5,7 @@
 # `node_modules/.bin` on each task's PATH. So the tools go under
 # `node_modules/.vercel-ci`, and small wrappers in `node_modules/.bin` expose them.
 #
-# - turbo: this repository has no turbo dependency, so CI installs the latest release.
+# - turbo: this repository has no turbo dependency, so CI installs the latest canary.
 # - cargo and rustc: `futureFlags.experimentalCargoWorkspaces` makes every turbo
 #   command run `cargo metadata`, so turbo can't start without them.
 set -euo pipefail
@@ -17,7 +17,7 @@ export RUSTUP_HOME="$tools/rustup"
 export CARGO_HOME="$tools/cargo"
 mkdir -p "$tools" "$bin"
 
-npm install --prefix "$tools/turbo" --no-save --no-audit --no-fund --no-package-lock turbo@latest
+npm install --prefix "$tools/turbo" --no-save --no-audit --no-fund --no-package-lock turbo@canary
 
 curl --proto '=https' --tlsv1.2 -fsSL https://sh.rustup.rs |
   sh -s -- -y --no-modify-path --profile minimal --default-toolchain none
