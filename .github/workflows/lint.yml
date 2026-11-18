@@ -65,7 +65,6 @@ jobs:
 
       - name: Check Rust quality
         # Vercel CI runs the JavaScript, TOML, docs, and Rust format checks from `quality`.
-        # turbo.lock makes `turbo run` require `turbo setup` in every job.
         # Manually set TURBO_API to an empty string to override Hetzner env
         run: |
           pnpm dlx turbo setup --tools-only

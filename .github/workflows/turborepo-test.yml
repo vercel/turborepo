@@ -156,7 +156,6 @@ jobs:
       - name: Install Global Turbo
         uses: ./.github/actions/install-global-turbo
 
-      # turbo.lock makes `turbo run` require `turbo setup` in every job.
       - name: Install managed tools
         run: turbo setup --tools-only
 
@@ -302,7 +301,6 @@ jobs:
       - name: Install Global Turbo
         uses: ./.github/actions/install-global-turbo
 
-      # turbo.lock makes `turbo run` require `turbo setup` in every job.
       - name: Install managed tools
         if: runner.os != 'Windows'
         run: turbo setup --tools-only
@@ -376,7 +374,6 @@ jobs:
       - name: Install Global Turbo
         uses: ./.github/actions/install-global-turbo
 
-      # turbo.lock makes `turbo run` require `turbo setup` in every job.
       - name: Install managed tools
         run: turbo setup --tools-only
 
@@ -450,7 +447,6 @@ jobs:
       - name: Install Global Turbo
         uses: ./.github/actions/install-global-turbo
 
-      # turbo.lock makes `turbo run` require `turbo setup` in every job.
       - name: Install managed tools
         run: turbo setup --tools-only
 
