@@ -277,7 +277,11 @@ pub(crate) fn get_input_file_hashes_without_git<S: AsRef<str>>(
         );
     }
     let has_inclusions = !external_inclusions.is_empty();
-    if has_inclusions {
+    // Exclusions alone select only the package configs, plus the default files
+    // when requested, matching the git hasher. Walking the whole package here
+    // would hash gitignored files the default walk can't remove.
+    let has_only_exclusions = !has_inclusions && !external_exclusions.is_empty();
+    if has_inclusions || (has_only_exclusions && include_configs && !include_default_files) {
         for name in globwalk::PACKAGE_CONFIG_INPUTS
             .iter()
             .filter(|_| include_configs)
@@ -341,7 +345,7 @@ pub(crate) fn get_input_file_hashes_without_git<S: AsRef<str>>(
         turbo_root,
         (!has_local_inclusions).then(|| git_metadata_path.clone()),
     ));
-    let walker = (!has_inclusions).then(|| {
+    let walker = (!has_inclusions && !has_only_exclusions).then(|| {
         walker_builder
             .follow_links(true)
             .sort_by_file_name(|a, b| a.cmp(b))
@@ -1018,6 +1022,49 @@ mod tests {
         );
     }
 
+    /// Regression test for https://github.com/vercel/turborepo/issues/15059
+    /// Exclusion-only inputs must not hash gitignored files, matching the git
+    /// hasher.
+    #[test_case(true, &["package.json", "src/index.ts"] ; "with default files")]
+    #[test_case(false, &["package.json"] ; "without default files")]
+    fn test_exclusion_only_inputs_respect_gitignore(
+        include_default_files: bool,
+        expected_files: &[&str],
+    ) {
+        let (_tmp, turbo_root) = tmp_dir();
+        turbo_root
+            .join_component(".gitignore")
+            .create_with_contents("node_modules\ndist\n")
+            .unwrap();
+        let pkg_path = AnchoredSystemPathBuf::from_raw("apps/web").unwrap();
+        let pkg_dir = turbo_root.resolve(&pkg_path);
+        for (path, contents) in [
+            ("package.json", "{}"),
+            ("src/index.ts", "export {}"),
+            ("src/index.test.ts", "test"),
+            ("dist/out.js", "output"),
+            ("node_modules/dep/index.js", "dependency"),
+        ] {
+            let file = pkg_dir.join_unix_path(RelativeUnixPath::new(path).unwrap());
+            file.ensure_dir().unwrap();
+            file.create_with_contents(contents).unwrap();
+        }
+
+        let hashes = get_package_file_hashes_without_git(
+            &turbo_root,
+            &pkg_path,
+            &["!**/*.test.ts"],
+            include_default_files,
+            None,
+            None,
+        )
+        .unwrap();
+
+        let mut files: Vec<_> = hashes.keys().map(|path| path.as_str()).collect();
+        files.sort();
+        assert_eq!(files, expected_files);
+    }
+
     /// Regression test for https://github.com/vercel/turborepo/issues/9574
     /// Directory names as inputs (e.g. "src") should match all files inside.
     #[test]
@@ -1317,10 +1364,10 @@ mod tests {
         std::os::unix::fs::symlink(outside_root.as_std_path(), src.join_component("outside"))
             .unwrap();
 
-        let hashes = get_package_file_hashes_without_git(
+        let hashes = get_package_file_hashes_without_git::<&str>(
             &turbo_root,
             &AnchoredSystemPathBuf::from_raw("packages/a").unwrap(),
-            &["!**/*.md"],
+            &[],
             false,
             None,
             None,
@@ -1359,10 +1406,10 @@ mod tests {
         std::os::unix::fs::symlink("..", package.join_components(&["src", "parent"])).unwrap();
 
         for include_default_files in [false, true] {
-            let hashes = get_package_file_hashes_without_git(
+            let hashes = get_package_file_hashes_without_git::<&str>(
                 &turbo_root,
                 &AnchoredSystemPathBuf::from_raw("packages/a").unwrap(),
-                &["!**/*.md"],
+                &[],
                 include_default_files,
                 None,
                 None,
