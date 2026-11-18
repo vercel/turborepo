@@ -1,0 +1,7 @@
+{
+  "name": "e2e-python",
+  "private": true,
+  "scripts": {
+    "proto": "python -m grpc_tools.protoc -I protos --python_out=app/gen --grpc_python_out=app/gen protos/greeter.proto"
+  }
+}

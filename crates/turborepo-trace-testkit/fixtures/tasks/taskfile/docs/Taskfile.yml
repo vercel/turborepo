@@ -1,0 +1,5 @@
+version: '3'
+tasks:
+  build:
+    cmds: [mkdocs build -f docs/mkdocs.yml]
+    sources: ['docs/**/*.md']

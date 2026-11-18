@@ -1,0 +1,12 @@
+{
+  // The default app has no routing; docs-app serves its paths.
+  "applications": {
+    "next-app": {},
+    "docs-app": {
+      "routing": [
+        { "paths": ["/guides/:path*"] },
+        { "group": "beta", "flag": "new-help", "paths": ["/help"] },
+      ],
+    },
+  },
+}

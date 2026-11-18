@@ -1,0 +1,316 @@
+---
+source: crates/turborepo-trace-tasks/tests/bins.rs
+expression: "dump(&root, &set)"
+---
+## task:packages/web#built
+{
+  "commands": [
+    "built-cli [bin] Partial"
+  ],
+  "spec": {
+    "configs": [
+      "packages/web/package.json",
+      "tools/built/package.json"
+    ],
+    "entries": [
+      {
+        "path": "tools/built/dist/cli.js",
+        "lang": "js"
+      }
+    ],
+    "memberships": [
+      {
+        "dir": "packages/web",
+        "pattern": "**",
+        "reason": "`built-cli` not fully recognized"
+      },
+      {
+        "dir": "packages/web",
+        "pattern": "**",
+        "reason": "uncertain task"
+      },
+      {
+        "dir": "tools/built",
+        "pattern": "**",
+        "reason": "bin `built-cli` target not built"
+      }
+    ],
+    "uncertainties": [
+      {
+        "kind": "generated_file",
+        "detail": "bin `built-cli` (workspace bin) → `tools/built/dist/cli.js` does not exist"
+      }
+    ]
+  }
+}
+
+## task:packages/web#codegen
+{
+  "commands": [
+    "gen schema.json > src/generated/api.js [bin] Full"
+  ],
+  "spec": {
+    "inputs": [
+      "packages/web/schema.json"
+    ],
+    "outputs": [
+      {
+        "path": "packages/web/src/generated/api.js",
+        "kind": "artifact"
+      }
+    ],
+    "configs": [
+      "packages/web/package.json",
+      "tools/gen/package.json"
+    ],
+    "entries": [
+      {
+        "path": "tools/gen/bin/gen.js",
+        "lang": "js"
+      }
+    ]
+  }
+}
+
+## task:packages/web#py
+{
+  "commands": [
+    "uv run webgen --schema schema.json [console-script] Full"
+  ],
+  "spec": {
+    "inputs": [
+      "packages/web/schema.json"
+    ],
+    "configs": [
+      "packages/web/package.json",
+      "packages/web/pyproject.toml"
+    ],
+    "entries": [
+      {
+        "path": "packages/web/src/webgen/cli.py",
+        "lang": "python"
+      }
+    ],
+    "toolchain": [
+      {
+        "ecosystem": "pypi",
+        "name": "uv"
+      }
+    ]
+  }
+}
+
+## task:packages/web#py:missing
+{
+  "commands": [
+    "webgen-missing [console-script] Partial"
+  ],
+  "spec": {
+    "configs": [
+      "packages/web/package.json",
+      "packages/web/pyproject.toml"
+    ],
+    "entries": [
+      {
+        "path": "packages/web/webgen/missing.py",
+        "lang": "python"
+      }
+    ],
+    "memberships": [
+      {
+        "dir": "packages/web",
+        "pattern": "**",
+        "reason": "`webgen-missing` not fully recognized"
+      },
+      {
+        "dir": "packages/web",
+        "pattern": "**",
+        "reason": "uncertain task"
+      }
+    ],
+    "uncertainties": [
+      {
+        "kind": "unresolved_specifier",
+        "detail": "console script `webgen-missing` = `webgen.missing:main`: module file not found"
+      }
+    ]
+  }
+}
+
+## task:packages/web#test
+{
+  "commands": [
+    "jest-dd -c jest.unit.config.js [bin-wrapper] Partial"
+  ],
+  "spec": {
+    "inputs": [
+      "packages/web/jest.config.cjs",
+      "packages/web/jest.config.cts",
+      "packages/web/jest.config.js",
+      "packages/web/jest.config.json",
+      "packages/web/jest.config.mjs",
+      "packages/web/jest.config.mts",
+      "packages/web/jest.config.ts"
+    ],
+    "configs": [
+      "packages/web/jest.unit.config.js",
+      "packages/web/package.json",
+      "tools/test-dd/package.json"
+    ],
+    "entries": [
+      {
+        "path": "packages/web/jest.unit.config.js",
+        "lang": "js"
+      },
+      {
+        "path": "tools/test-dd/bin/jest-dd.js",
+        "lang": "js"
+      }
+    ],
+    "memberships": [
+      {
+        "dir": "packages/web",
+        "pattern": "**",
+        "reason": "`jest-dd` not fully recognized"
+      },
+      {
+        "dir": "packages/web",
+        "pattern": "**",
+        "reason": "uncertain task"
+      },
+      {
+        "dir": "packages/web",
+        "pattern": "**/*.{js,mjs,cjs,jsx,ts,mts,cts,tsx,json,node}",
+        "reason": "jest test files"
+      },
+      {
+        "dir": "packages/web",
+        "pattern": "**/__mocks__/**",
+        "reason": "manual mocks (jest haste map)"
+      }
+    ],
+    "toolchain": [
+      {
+        "ecosystem": "npm",
+        "name": "jest"
+      },
+      {
+        "ecosystem": "npm",
+        "name": "jest-environment-node"
+      }
+    ],
+    "uncertainties": [
+      {
+        "kind": "unknown_command",
+        "detail": "`jest-dd` runs `jest` (inferred from `tools/test-dd/bin/jest-dd.js`, strong evidence)"
+      }
+    ],
+    "runs": [
+      {
+        "kind": "tests",
+        "framework": "jest",
+        "dir": "packages/web"
+      }
+    ],
+    "definition": [
+      "packages/web/jest.unit.config.js"
+    ]
+  }
+}
+
+## task:packages/web#tp
+{
+  "commands": [
+    "tp-only build [bin-package] Partial"
+  ],
+  "spec": {
+    "configs": [
+      "packages/web/package.json"
+    ],
+    "memberships": [
+      {
+        "dir": "packages/web",
+        "pattern": "**",
+        "reason": "`tp-only` not fully recognized"
+      },
+      {
+        "dir": "packages/web",
+        "pattern": "**",
+        "reason": "uncertain task"
+      }
+    ],
+    "toolchain": [
+      {
+        "ecosystem": "npm",
+        "name": "tp-only"
+      }
+    ],
+    "uncertainties": [
+      {
+        "kind": "unknown_command",
+        "detail": "`tp-only` from third-party package `tp-only` (not installed): inputs not modelled"
+      }
+    ]
+  }
+}
+
+## task:packages/web#unknown
+{
+  "commands": [
+    "no-such-tool [-] Unknown"
+  ],
+  "spec": {
+    "configs": [
+      "packages/web/package.json"
+    ],
+    "memberships": [
+      {
+        "dir": "packages/web",
+        "pattern": "**",
+        "reason": "uncertain task"
+      },
+      {
+        "dir": "packages/web",
+        "pattern": "**",
+        "reason": "unknown command `no-such-tool`"
+      }
+    ],
+    "uncertainties": [
+      {
+        "kind": "unknown_command",
+        "detail": "no-such-tool"
+      }
+    ]
+  }
+}
+
+## task:tools/built#build
+{
+  "commands": [
+    "tsc -p . [tsc] Full"
+  ],
+  "spec": {
+    "configs": [
+      "tools/built/package.json",
+      "tools/built/tsconfig.json"
+    ],
+    "memberships": [
+      {
+        "dir": "tools/built",
+        "pattern": "**/*",
+        "exclude": [
+          "node_modules/**",
+          "bower_components/**",
+          "jspm_packages/**"
+        ],
+        "reason": "tsconfig include"
+      }
+    ],
+    "toolchain": [
+      {
+        "ecosystem": "npm",
+        "name": "typescript"
+      }
+    ]
+  }
+}

@@ -1,0 +1,194 @@
+---
+source: crates/turborepo-trace-lang-go/tests/fixtures.rs
+expression: json
+---
+{
+  "version": 1,
+  "base": "<fixture>",
+  "entries": [
+    {
+      "path": "main.go",
+      "files": [
+        "go.mod",
+        "locales/en.json",
+        "main.go",
+        "profiles/release.ini"
+      ]
+    }
+  ],
+  "files": [
+    {
+      "path": "go.mod",
+      "reasons": [
+        "manifest"
+      ],
+      "parents": [
+        "main.go"
+      ],
+      "parsed": false
+    },
+    {
+      "path": "locales/en.json",
+      "reasons": [
+        "asset"
+      ],
+      "parents": [
+        "main.go"
+      ],
+      "parsed": false
+    },
+    {
+      "path": "main.go",
+      "reasons": [
+        "initial"
+      ],
+      "parents": [],
+      "parsed": true,
+      "lang": "go"
+    },
+    {
+      "path": "profiles/release.ini",
+      "reasons": [
+        "asset"
+      ],
+      "parents": [
+        "main.go"
+      ],
+      "parsed": false
+    }
+  ],
+  "edges": [
+    {
+      "from": "main.go",
+      "kind": "manifest",
+      "phase": "build",
+      "flags": [],
+      "spec": "go.mod",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "go.mod"
+      }
+    },
+    {
+      "from": "main.go",
+      "kind": "import",
+      "phase": "build",
+      "flags": [],
+      "spec": "fmt",
+      "span": [
+        100,
+        105
+      ],
+      "line": 5,
+      "target": {
+        "type": "builtin",
+        "name": "fmt"
+      }
+    },
+    {
+      "from": "main.go",
+      "kind": "import",
+      "phase": "build",
+      "flags": [],
+      "spec": "os",
+      "span": [
+        107,
+        111
+      ],
+      "line": 6,
+      "target": {
+        "type": "builtin",
+        "name": "os"
+      }
+    },
+    {
+      "from": "main.go",
+      "kind": "import",
+      "phase": "build",
+      "flags": [],
+      "spec": "path/filepath",
+      "span": [
+        113,
+        128
+      ],
+      "line": 7,
+      "target": {
+        "type": "builtin",
+        "name": "path/filepath"
+      }
+    },
+    {
+      "from": "main.go",
+      "kind": "fs_read",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "locales/en.json",
+      "span": [
+        259,
+        260
+      ],
+      "line": 15,
+      "target": {
+        "type": "file",
+        "path": "locales/en.json"
+      },
+      "uncertainty": "cwd_dependent"
+    },
+    {
+      "from": "main.go",
+      "kind": "fs_read",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "profiles/release.ini",
+      "span": [
+        283,
+        326
+      ],
+      "line": 16,
+      "target": {
+        "type": "file",
+        "path": "profiles/release.ini"
+      },
+      "uncertainty": "cwd_dependent"
+    }
+  ],
+  "uncertainties": [
+    {
+      "file": "main.go",
+      "kind": "cwd_dependent",
+      "detail": "locales/en.json is relative to the working directory",
+      "spec": "locales/en.json",
+      "span": [
+        259,
+        260
+      ],
+      "line": 15,
+      "col": 22
+    },
+    {
+      "file": "main.go",
+      "kind": "cwd_dependent",
+      "detail": "profiles/release.ini is relative to the working directory",
+      "spec": "profiles/release.ini",
+      "span": [
+        283,
+        326
+      ],
+      "line": 16,
+      "col": 22
+    }
+  ],
+  "symlinks": {},
+  "stats": {
+    "entries": 1,
+    "files": 4,
+    "parsed_files": 1,
+    "edges": 6,
+    "uncertainties": 2
+  }
+}

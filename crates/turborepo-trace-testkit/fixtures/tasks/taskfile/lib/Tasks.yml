@@ -1,0 +1,6 @@
+version: '3'
+tasks:
+  compile:
+    cmds: [tsc -p tsconfig.json]
+    sources: ['src/*.ts']
+    generates: ['out/*.js']

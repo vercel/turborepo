@@ -1,0 +1,18 @@
+x-build-args: &build-args
+  NODE_VERSION: "22"
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: api/Dockerfile
+      target: ${API_TARGET:-runtime}
+      args:
+        <<: *build-args
+        APP: api
+    ports: ["3000:3000"]
+  worker:
+    build: ./worker
+    depends_on: [api, redis]
+  redis:
+    image: redis:7

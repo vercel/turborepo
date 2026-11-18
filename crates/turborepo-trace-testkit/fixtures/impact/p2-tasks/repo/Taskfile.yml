@@ -1,0 +1,18 @@
+version: '3'
+
+tasks:
+  gen:schema:
+    desc: Generate src/generated/schema.js from the JSON schemas.
+    cmds:
+      - node scripts/gen-schema.js
+    sources:
+      - schema/*.json
+    generates:
+      - src/generated/schema.js
+
+  gen:version:
+    desc: Generate src/generated/version.js with the xtask.
+    cmds:
+      - cargo xtask codegen
+    generates:
+      - src/generated/version.js

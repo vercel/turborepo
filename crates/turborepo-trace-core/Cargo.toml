@@ -1,0 +1,30 @@
+[package]
+name = "turborepo-trace-core"
+version = "0.1.0"
+edition = { workspace = true }
+license = "MIT"
+description = "Core data model, scheduler, fs cache, graph and outputs for `turbo trace`"
+publish = false
+
+[features]
+# The `TURBO_TRACE_DEBUG_*` switches (`debug`, listed in the README): timings, dumps and
+# A/B switches for measurements and tests. Off, every switch reads as unset (its default).
+debug-knobs = []
+
+[dependencies]
+bitflags = { workspace = true }
+dashmap = { workspace = true }
+fixedbitset = { workspace = true }
+memchr = { workspace = true }
+rayon = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+smallvec = { workspace = true }
+thiserror = { workspace = true }
+xxhash-rust = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
+
+[lints]
+workspace = true

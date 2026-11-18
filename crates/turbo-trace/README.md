@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Import dependency tracing for JavaScript and TypeScript files. Discovers and tracks module imports across a codebase. Powers `turbo boundaries` functionality.
+Import dependency tracing for JavaScript and TypeScript files. Discovers and tracks module imports across a codebase. It is the import tracer behind `turbo boundaries` and `turbo query`'s file queries. The `turbo trace` command is separate: it lives in the `turborepo-trace` crates.
 
 ## Architecture
 

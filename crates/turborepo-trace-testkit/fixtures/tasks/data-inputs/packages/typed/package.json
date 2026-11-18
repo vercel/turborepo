@@ -1,0 +1,11 @@
+{
+  "name": "@acme/typed",
+  "version": "1.0.0",
+  "exports": {
+    ".": "./dist/index.js"
+  },
+  "scripts": {
+    "typegen": "node scripts/typegen.mjs",
+    "build": "pnpm typegen && tsc -b"
+  }
+}

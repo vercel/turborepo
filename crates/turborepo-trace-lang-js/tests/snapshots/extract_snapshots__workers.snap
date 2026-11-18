@@ -1,0 +1,27 @@
+---
+source: crates/turborepo-trace-lang-js/tests/extract_snapshots.rs
+expression: "render(\"workers.mjs\")"
+---
+2:1 import "node:worker_threads"
+    span: import { Worker } from 'node:worker_threads'
+3:1 import "child_process"
+    span: import * as cp from 'child_process'
+4:1 import "node:child_process"
+    span: import { fork } from 'node:child_process'
+5:1 import "path"
+    span: import path from 'path'
+7:1 worker "worker.js"
+    span: new Worker(new URL('./worker.js', import.meta.url))
+8:1 worker "pool/*.mjs"
+    span: new Worker(path.join(import.meta.dirname, 'pool', `${kind}.mjs`))
+    uncertainty: partial_specifier "kind"
+9:1 child_process "./scripts/child.js" @cwd
+    span: cp.fork('./scripts/child.js')
+    uncertainty: cwd_dependent "'./scripts/child.js'"
+10:1 child_process "child2.js"
+    span: fork(path.resolve(import.meta.dirname, 'child2.js')
+13:14 fs_read "pkg/module_bg.wasm"
+    span: new URL('./pkg/module_bg.wasm', import.meta.url)
+14:26 fs_read "fonts/*.woff2"
+    span: new URL(`./fonts/${weight}.woff2`, import.meta.url)
+    uncertainty: partial_specifier "weight"

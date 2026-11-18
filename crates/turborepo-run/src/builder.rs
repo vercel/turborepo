@@ -462,6 +462,9 @@ pub struct RunBuilder {
     // cache provenance. Skip the repository-wide work that only serves those consumers.
     skip_repo_index_and_scm_state: bool,
     skip_external_dependencies: bool,
+    // Change-detection queries a command makes through `Run::scm` itself after the build
+    // (`turbo trace`), started with the scope's own queries. They do not narrow the scope.
+    change_prefetch: Vec<turborepo_scm::git::ChangedFilesRequest>,
     // In watch mode, partial reruns may reuse the package graph built by the
     // previous full run instead of rediscovering the workspace, re-reading
     // every manifest, and re-parsing the lockfile. Only sound when the caller
@@ -513,6 +516,7 @@ impl RunBuilder {
             changed_files_for_watch: None,
             skip_repo_index_and_scm_state: false,
             skip_external_dependencies: false,
+            change_prefetch: Vec::new(),
             shared_pkg_graph: None,
             managed_environment,
         })
@@ -520,6 +524,19 @@ impl RunBuilder {
 
     pub fn skip_repo_index_and_scm_state(mut self) -> Self {
         self.skip_repo_index_and_scm_state = true;
+        self
+    }
+
+    /// Starts `requests` on the SCM as soon as it exists, overlapping package
+    /// graph construction, as the queries of `--affected` are. For a command
+    /// that makes the same `SCM::changed_files` calls itself through
+    /// [`crate::Run::scm`] once the run is built; unlike `--affected`, they do
+    /// not narrow the packages of the run.
+    pub fn prefetch_changed_files(
+        mut self,
+        requests: Vec<turborepo_scm::git::ChangedFilesRequest>,
+    ) -> Self {
+        self.change_prefetch.extend(requests);
         self
     }
 
@@ -964,7 +981,8 @@ impl RunBuilder {
 
     /// The change-detection queries scope resolution will make for
     /// `--affected` and git-range `--filter`s, with the same arguments, so
-    /// they can start before the package graph exists.
+    /// they can start before the package graph exists, and those of
+    /// [`Self::prefetch_changed_files`].
     fn change_prefetch_requests(&self) -> Vec<turborepo_scm::git::ChangedFilesRequest> {
         let scope_opts = &self.opts.scope_opts;
         let affected = scope_opts
@@ -980,6 +998,7 @@ impl RunBuilder {
                 range.merge_base,
             ))
         });
+        let requested = self.change_prefetch.iter().cloned();
         affected
             .chain(filters)
             .map(
@@ -993,6 +1012,7 @@ impl RunBuilder {
                     }
                 },
             )
+            .chain(requested)
             .collect()
     }
 

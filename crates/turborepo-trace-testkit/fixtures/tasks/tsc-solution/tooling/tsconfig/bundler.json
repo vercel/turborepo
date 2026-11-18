@@ -1,0 +1,13 @@
+{
+  "extends": "./base.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "emitDeclarationOnly": true,
+    "outDir": "${configDir}/dist",
+    "declaration": true,
+    "declarationMap": true,
+    "composite": true,
+    "tsBuildInfoFile": "${configDir}/dist/tsbuildinfo.json"
+  },
+  "exclude": ["${configDir}/node_modules", "${configDir}/dist"]
+}

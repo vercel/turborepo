@@ -1,0 +1,8 @@
+{
+  "name": "pkgjson",
+  "codegen": {
+    "schema": "./schema.ts",
+    "require": ["ts-node/register", "./codegen-setup.js"],
+    "generates": { "dist/schema.graphql": { "plugins": ["schema-ast"] } }
+  }
+}

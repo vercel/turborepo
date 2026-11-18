@@ -1,0 +1,44 @@
+version = 3
+
+[[package]]
+name = "dep-a"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "aaaa000000000000000000000000000000000000000000000000000000000000"
+
+[[package]]
+name = "dep-b"
+version = "3.1.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bbbb000000000000000000000000000000000000000000000000000000000000"
+dependencies = [
+ "dep-a",
+]
+
+[[package]]
+name = "gitdep"
+version = "0.1.0"
+source = "git+https://github.com/example/gitws?branch=main#abcdef0123456789abcdef0123456789abcdef01"
+
+[[package]]
+name = "regapp"
+version = "0.3.0"
+dependencies = [
+ "dep-a",
+ "dep-b",
+ "gitdep",
+ "serde_like",
+ "winonly",
+]
+
+[[package]]
+name = "serde_like"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cccc000000000000000000000000000000000000000000000000000000000000"
+
+[[package]]
+name = "winonly"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dddd000000000000000000000000000000000000000000000000000000000000"

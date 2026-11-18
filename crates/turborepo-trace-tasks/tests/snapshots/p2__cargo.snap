@@ -1,0 +1,507 @@
+---
+source: crates/turborepo-trace-tasks/tests/p2.rs
+expression: "render(&set, &root, &[\"cargo\", \"task\"])"
+---
+## task:.#check
+{
+  "sources": [
+    "npm"
+  ],
+  "files": [
+    "package.json"
+  ],
+  "deps": [
+    "cargo:.:lint"
+  ],
+  "commands": [
+    "cargo lint [cargo-alias] Full"
+  ],
+  "spec": {
+    "inputs": [
+      ".cargo/config",
+      ".cargo/config.toml",
+      ".clippy.toml",
+      ".rustfmt.toml",
+      "clippy.toml",
+      "rust-toolchain",
+      "rust-toolchain.toml",
+      "rustfmt.toml"
+    ],
+    "configs": [
+      ".cargo/config.toml",
+      "Cargo.lock",
+      "Cargo.toml",
+      "package.json"
+    ],
+    "memberships": [
+      {
+        "dir": ".",
+        "pattern": "**/*.rs",
+        "reason": "cargo workspace sources"
+      },
+      {
+        "dir": ".",
+        "pattern": "**/Cargo.toml",
+        "reason": "cargo workspace manifests"
+      },
+      {
+        "dir": ".",
+        "pattern": "**/{build.rs,*.proto,*.c,*.h}",
+        "reason": "cargo build inputs"
+      }
+    ],
+    "task_deps": [
+      {
+        "target": {
+          "kind": "id",
+          "id": "cargo:.:lint"
+        },
+        "reason": "cargo alias"
+      }
+    ],
+    "toolchain": [
+      {
+        "ecosystem": "system",
+        "name": "cargo"
+      }
+    ],
+    "runs": [
+      {
+        "kind": "task",
+        "target": {
+          "kind": "id",
+          "id": "cargo:.:lint"
+        }
+      }
+    ]
+  }
+}
+
+## task:.#codegen
+{
+  "sources": [
+    "npm"
+  ],
+  "files": [
+    "package.json"
+  ],
+  "deps": [
+    "cargo:.:xtask"
+  ],
+  "commands": [
+    "cargo xtask codegen [cargo-alias] Full"
+  ],
+  "spec": {
+    "inputs": [
+      ".cargo/config",
+      ".cargo/config.toml",
+      ".clippy.toml",
+      ".rustfmt.toml",
+      "clippy.toml",
+      "rust-toolchain",
+      "rust-toolchain.toml",
+      "rustfmt.toml"
+    ],
+    "outputs": [
+      {
+        "path": "target",
+        "kind": "artifact"
+      }
+    ],
+    "configs": [
+      ".cargo/config.toml",
+      "Cargo.lock",
+      "Cargo.toml",
+      "package.json",
+      "xtask/Cargo.toml"
+    ],
+    "entries": [
+      {
+        "path": "xtask/src/main.rs",
+        "lang": "rust"
+      }
+    ],
+    "memberships": [
+      {
+        "dir": ".",
+        "pattern": "**/*.rs",
+        "reason": "cargo workspace sources"
+      },
+      {
+        "dir": ".",
+        "pattern": "**/Cargo.toml",
+        "reason": "cargo workspace manifests"
+      },
+      {
+        "dir": ".",
+        "pattern": "**/{build.rs,*.proto,*.c,*.h}",
+        "reason": "cargo build inputs"
+      }
+    ],
+    "task_deps": [
+      {
+        "target": {
+          "kind": "id",
+          "id": "cargo:.:xtask"
+        },
+        "reason": "cargo alias"
+      }
+    ],
+    "toolchain": [
+      {
+        "ecosystem": "system",
+        "name": "cargo"
+      }
+    ],
+    "runs": [
+      {
+        "kind": "task",
+        "target": {
+          "kind": "id",
+          "id": "cargo:.:xtask"
+        }
+      }
+    ]
+  }
+}
+
+## cargo:.:b
+{
+  "sources": [
+    "cargo"
+  ],
+  "files": [
+    ".cargo/config.toml"
+  ],
+  "deps": [],
+  "commands": [
+    "cargo build -p app [cargo] Full"
+  ],
+  "spec": {
+    "inputs": [
+      ".cargo/config",
+      ".cargo/config.toml",
+      ".clippy.toml",
+      ".rustfmt.toml",
+      "clippy.toml",
+      "rust-toolchain",
+      "rust-toolchain.toml",
+      "rustfmt.toml"
+    ],
+    "outputs": [
+      {
+        "path": "target",
+        "kind": "artifact"
+      }
+    ],
+    "configs": [
+      ".cargo/config.toml",
+      "Cargo.lock",
+      "Cargo.toml",
+      "crates/app/Cargo.toml"
+    ],
+    "entries": [
+      {
+        "path": "crates/app/src/main.rs",
+        "lang": "rust"
+      }
+    ],
+    "memberships": [
+      {
+        "dir": ".",
+        "pattern": "**/*.rs",
+        "reason": "cargo workspace sources"
+      },
+      {
+        "dir": ".",
+        "pattern": "**/Cargo.toml",
+        "reason": "cargo workspace manifests"
+      },
+      {
+        "dir": ".",
+        "pattern": "**/{build.rs,*.proto,*.c,*.h}",
+        "reason": "cargo build inputs"
+      }
+    ],
+    "toolchain": [
+      {
+        "ecosystem": "system",
+        "name": "cargo"
+      }
+    ]
+  }
+}
+
+## cargo:.:gen
+{
+  "sources": [
+    "cargo"
+  ],
+  "files": [
+    ".cargo/config.toml"
+  ],
+  "deps": [
+    "cargo:.:xtask"
+  ],
+  "commands": [
+    "cargo xtask codegen [cargo-alias] Full"
+  ],
+  "spec": {
+    "inputs": [
+      ".cargo/config",
+      ".cargo/config.toml",
+      ".clippy.toml",
+      ".rustfmt.toml",
+      "clippy.toml",
+      "rust-toolchain",
+      "rust-toolchain.toml",
+      "rustfmt.toml"
+    ],
+    "outputs": [
+      {
+        "path": "target",
+        "kind": "artifact"
+      }
+    ],
+    "configs": [
+      ".cargo/config.toml",
+      "Cargo.lock",
+      "Cargo.toml",
+      "xtask/Cargo.toml"
+    ],
+    "entries": [
+      {
+        "path": "xtask/src/main.rs",
+        "lang": "rust"
+      }
+    ],
+    "memberships": [
+      {
+        "dir": ".",
+        "pattern": "**/*.rs",
+        "reason": "cargo workspace sources"
+      },
+      {
+        "dir": ".",
+        "pattern": "**/Cargo.toml",
+        "reason": "cargo workspace manifests"
+      },
+      {
+        "dir": ".",
+        "pattern": "**/{build.rs,*.proto,*.c,*.h}",
+        "reason": "cargo build inputs"
+      }
+    ],
+    "task_deps": [
+      {
+        "target": {
+          "kind": "id",
+          "id": "cargo:.:xtask"
+        },
+        "reason": "cargo alias"
+      }
+    ],
+    "toolchain": [
+      {
+        "ecosystem": "system",
+        "name": "cargo"
+      }
+    ],
+    "runs": [
+      {
+        "kind": "task",
+        "target": {
+          "kind": "id",
+          "id": "cargo:.:xtask"
+        }
+      }
+    ]
+  }
+}
+
+## cargo:.:lint
+{
+  "sources": [
+    "cargo"
+  ],
+  "files": [
+    ".cargo/config.toml"
+  ],
+  "deps": [],
+  "commands": [
+    "cargo clippy --all-targets -- -D warnings [cargo] Full"
+  ],
+  "spec": {
+    "inputs": [
+      ".cargo/config",
+      ".cargo/config.toml",
+      ".clippy.toml",
+      ".rustfmt.toml",
+      "clippy.toml",
+      "rust-toolchain",
+      "rust-toolchain.toml",
+      "rustfmt.toml"
+    ],
+    "configs": [
+      ".cargo/config.toml",
+      "Cargo.lock",
+      "Cargo.toml"
+    ],
+    "memberships": [
+      {
+        "dir": ".",
+        "pattern": "**/*.rs",
+        "reason": "cargo workspace sources"
+      },
+      {
+        "dir": ".",
+        "pattern": "**/Cargo.toml",
+        "reason": "cargo workspace manifests"
+      },
+      {
+        "dir": ".",
+        "pattern": "**/{build.rs,*.proto,*.c,*.h}",
+        "reason": "cargo build inputs"
+      }
+    ],
+    "toolchain": [
+      {
+        "ecosystem": "system",
+        "name": "cargo"
+      }
+    ]
+  }
+}
+
+## cargo:.:t
+{
+  "sources": [
+    "cargo"
+  ],
+  "files": [
+    ".cargo/config.toml"
+  ],
+  "deps": [],
+  "commands": [
+    "cargo test --workspace [cargo] Full"
+  ],
+  "spec": {
+    "inputs": [
+      ".cargo/config",
+      ".cargo/config.toml",
+      ".clippy.toml",
+      ".rustfmt.toml",
+      "clippy.toml",
+      "rust-toolchain",
+      "rust-toolchain.toml",
+      "rustfmt.toml"
+    ],
+    "configs": [
+      ".cargo/config.toml",
+      "Cargo.lock",
+      "Cargo.toml"
+    ],
+    "memberships": [
+      {
+        "dir": ".",
+        "pattern": "**/*.rs",
+        "reason": "cargo workspace sources"
+      },
+      {
+        "dir": ".",
+        "pattern": "**/Cargo.toml",
+        "reason": "cargo workspace manifests"
+      },
+      {
+        "dir": ".",
+        "pattern": "**/{build.rs,*.proto,*.c,*.h}",
+        "reason": "cargo build inputs"
+      },
+      {
+        "dir": ".",
+        "pattern": "**/{tests,benches,fixtures,testdata,snapshots}/**",
+        "reason": "cargo test data"
+      }
+    ],
+    "toolchain": [
+      {
+        "ecosystem": "system",
+        "name": "cargo"
+      }
+    ],
+    "runs": [
+      {
+        "kind": "tests",
+        "framework": "cargo-test",
+        "dir": "."
+      }
+    ]
+  }
+}
+
+## cargo:.:xtask
+{
+  "sources": [
+    "cargo"
+  ],
+  "files": [
+    ".cargo/config.toml"
+  ],
+  "deps": [],
+  "commands": [
+    "cargo run -p xtask -- [cargo] Full"
+  ],
+  "spec": {
+    "inputs": [
+      ".cargo/config",
+      ".cargo/config.toml",
+      ".clippy.toml",
+      ".rustfmt.toml",
+      "clippy.toml",
+      "rust-toolchain",
+      "rust-toolchain.toml",
+      "rustfmt.toml"
+    ],
+    "outputs": [
+      {
+        "path": "target",
+        "kind": "artifact"
+      }
+    ],
+    "configs": [
+      ".cargo/config.toml",
+      "Cargo.lock",
+      "Cargo.toml",
+      "xtask/Cargo.toml"
+    ],
+    "entries": [
+      {
+        "path": "xtask/src/main.rs",
+        "lang": "rust"
+      }
+    ],
+    "memberships": [
+      {
+        "dir": ".",
+        "pattern": "**/*.rs",
+        "reason": "cargo workspace sources"
+      },
+      {
+        "dir": ".",
+        "pattern": "**/Cargo.toml",
+        "reason": "cargo workspace manifests"
+      },
+      {
+        "dir": ".",
+        "pattern": "**/{build.rs,*.proto,*.c,*.h}",
+        "reason": "cargo build inputs"
+      }
+    ],
+    "toolchain": [
+      {
+        "ecosystem": "system",
+        "name": "cargo"
+      }
+    ]
+  }
+}

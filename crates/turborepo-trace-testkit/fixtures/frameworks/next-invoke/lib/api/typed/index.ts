@@ -1,0 +1,1 @@
+export { typedFetch } from './client';

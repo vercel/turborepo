@@ -21,7 +21,7 @@ use crate::{
     cli::error::print_potential_tasks,
     commands::{
         CommandBase, bin, boundaries, config, daemon, docs, exec, generate, get_mfe_port, hook,
-        info, link, login, logout, ls, managed, prune, query, run, setup, telemetry, unlink,
+        info, link, login, logout, ls, managed, prune, query, run, setup, telemetry, trace, unlink,
     },
     get_version,
 };
@@ -39,7 +39,8 @@ pub use args::{
     AffectedArgs, Args, BoundariesIgnore, Command, ContinueModeArg, DaemonCommand, DryRunModeArg,
     EnvModeArg, ExecutionArgs, GenerateCommand, GenerateWorkspaceArgs, GeneratorCustomArgs,
     GraphOutput, HookShell, LogOrderArg, LogPrefixArg, LsArgs, NonEmptyPath, OutputFormat,
-    OutputLogsModeArg, PrintEnv, QuerySubcommand, RunArgs, SetupArgs, TelemetryCommand, Verbosity,
+    OutputLogsModeArg, PrintEnv, QuerySubcommand, RunArgs, SetupArgs, TelemetryCommand,
+    TraceAffectedArgs, TraceCommand, Verbosity,
 };
 pub(crate) use configuration::resolve_configuration_from_args;
 
@@ -425,6 +426,16 @@ pub fn run(
         return exec::run(&repo_root, &cli_args, command, color_config);
     }
 
+    // `turbo trace` is experimental: without TURBO_EXPERIMENTAL_TRACE,
+    // `Args::new` already parsed `turbo trace ...` as `turbo run trace ...`.
+    // Arguments built another way stop here, before telemetry, agent guidance,
+    // worker runtimes or any repository discovery.
+    if matches!(cli_args.command, Some(Command::Trace { .. }))
+        && let Some(exit_code) = trace::refuse_unless_enabled()
+    {
+        return Ok(exit_code);
+    }
+
     // Initialize rayon's global pool before the tokio runtime so we
     // control thread count and avoid lazy initialization during a hot path.
     init_rayon_pool();
@@ -567,6 +578,15 @@ async fn run_main(
             let base = CommandBase::new(cli_args.clone(), repo_root, version, color_config)?;
 
             Ok(boundaries::run(base, event, ignore, reason).await?)
+        }
+        Command::Trace { command } => {
+            let event = CommandEventBuilder::new("trace").with_parent(&root_telemetry);
+            let command = command.clone();
+
+            event.track_call();
+            let base = CommandBase::new(cli_args.clone(), repo_root, version, color_config)?;
+
+            Ok(trace::run(base, &cli_args, event, command).await?)
         }
         #[allow(unused_variables)]
         Command::Daemon {

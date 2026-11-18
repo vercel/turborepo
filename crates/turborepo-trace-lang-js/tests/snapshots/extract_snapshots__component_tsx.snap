@@ -1,0 +1,14 @@
+---
+source: crates/turborepo-trace-lang-js/tests/extract_snapshots.rs
+expression: "render(\"component.tsx\")"
+---
+1:1 import "react"
+    span: import React, { useState } from 'react'
+2:1 import "./props" [type_only]
+    span: import type { Props } from './props'
+3:1 import "./styles.module.css"
+    span: import styles from './styles.module.css'
+11:33 dynamic_import "./lazy-panel" [lazy]
+    span: import('./lazy-panel')
+21:30 require "./in-attribute"
+    span: require('./in-attribute')

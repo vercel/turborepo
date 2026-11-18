@@ -1,0 +1,13 @@
+schema:
+  - schema/*.graphqls
+exec:
+  filename: generated/generated.go
+  package: generated
+model:
+  filename: model/models_gen.go
+resolver:
+  layout: follow-schema
+  dir: resolvers
+autobind:
+  - example.com/gen/store
+  - github.com/acme/types

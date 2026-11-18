@@ -1,0 +1,1197 @@
+---
+source: crates/turborepo-trace-lang-go/tests/fixtures.rs
+expression: json
+---
+{
+  "version": 1,
+  "base": "<fixture>",
+  "entries": [
+    {
+      "path": "internal/util/util.go",
+      "files": [
+        "go.mod",
+        "go.sum",
+        "internal/util/asm_amd64.s",
+        "internal/util/asm_arm64.s",
+        "internal/util/ignored.go",
+        "internal/util/tagged.go",
+        "internal/util/util.go",
+        "internal/util/util_darwin_arm64.go",
+        "internal/util/util_linux.go",
+        "internal/util/util_windows.go",
+        "lib/go.mod"
+      ]
+    }
+  ],
+  "files": [
+    {
+      "path": "go.mod",
+      "reasons": [
+        "manifest"
+      ],
+      "parents": [
+        "internal/util/ignored.go",
+        "internal/util/tagged.go",
+        "internal/util/util.go",
+        "internal/util/util_darwin_arm64.go",
+        "internal/util/util_linux.go",
+        "internal/util/util_windows.go"
+      ],
+      "parsed": false
+    },
+    {
+      "path": "go.sum",
+      "reasons": [
+        "manifest"
+      ],
+      "parents": [
+        "internal/util/ignored.go",
+        "internal/util/tagged.go",
+        "internal/util/util.go",
+        "internal/util/util_darwin_arm64.go",
+        "internal/util/util_linux.go",
+        "internal/util/util_windows.go"
+      ],
+      "parsed": false
+    },
+    {
+      "path": "internal/util/asm_amd64.s",
+      "reasons": [
+        "dependency"
+      ],
+      "parents": [
+        "internal/util/ignored.go",
+        "internal/util/tagged.go",
+        "internal/util/util.go",
+        "internal/util/util_darwin_arm64.go",
+        "internal/util/util_linux.go",
+        "internal/util/util_windows.go"
+      ],
+      "parsed": false
+    },
+    {
+      "path": "internal/util/asm_arm64.s",
+      "reasons": [
+        "dependency"
+      ],
+      "parents": [
+        "internal/util/ignored.go",
+        "internal/util/tagged.go",
+        "internal/util/util.go",
+        "internal/util/util_darwin_arm64.go",
+        "internal/util/util_linux.go",
+        "internal/util/util_windows.go"
+      ],
+      "parsed": false
+    },
+    {
+      "path": "internal/util/ignored.go",
+      "reasons": [
+        "dependency"
+      ],
+      "parents": [
+        "internal/util/tagged.go",
+        "internal/util/util.go",
+        "internal/util/util_darwin_arm64.go",
+        "internal/util/util_linux.go",
+        "internal/util/util_windows.go"
+      ],
+      "parsed": true,
+      "lang": "go"
+    },
+    {
+      "path": "internal/util/tagged.go",
+      "reasons": [
+        "dependency"
+      ],
+      "parents": [
+        "internal/util/ignored.go",
+        "internal/util/util.go",
+        "internal/util/util_darwin_arm64.go",
+        "internal/util/util_linux.go",
+        "internal/util/util_windows.go"
+      ],
+      "parsed": true,
+      "lang": "go"
+    },
+    {
+      "path": "internal/util/util.go",
+      "reasons": [
+        "initial",
+        "dependency"
+      ],
+      "parents": [
+        "internal/util/ignored.go",
+        "internal/util/tagged.go",
+        "internal/util/util_darwin_arm64.go",
+        "internal/util/util_linux.go",
+        "internal/util/util_windows.go"
+      ],
+      "parsed": true,
+      "lang": "go"
+    },
+    {
+      "path": "internal/util/util_darwin_arm64.go",
+      "reasons": [
+        "dependency"
+      ],
+      "parents": [
+        "internal/util/ignored.go",
+        "internal/util/tagged.go",
+        "internal/util/util.go",
+        "internal/util/util_linux.go",
+        "internal/util/util_windows.go"
+      ],
+      "parsed": true,
+      "lang": "go"
+    },
+    {
+      "path": "internal/util/util_linux.go",
+      "reasons": [
+        "dependency"
+      ],
+      "parents": [
+        "internal/util/ignored.go",
+        "internal/util/tagged.go",
+        "internal/util/util.go",
+        "internal/util/util_darwin_arm64.go",
+        "internal/util/util_windows.go"
+      ],
+      "parsed": true,
+      "lang": "go"
+    },
+    {
+      "path": "internal/util/util_windows.go",
+      "reasons": [
+        "dependency"
+      ],
+      "parents": [
+        "internal/util/ignored.go",
+        "internal/util/tagged.go",
+        "internal/util/util.go",
+        "internal/util/util_darwin_arm64.go",
+        "internal/util/util_linux.go"
+      ],
+      "parsed": true,
+      "lang": "go"
+    },
+    {
+      "path": "lib/go.mod",
+      "reasons": [
+        "manifest"
+      ],
+      "parents": [
+        "internal/util/ignored.go",
+        "internal/util/tagged.go",
+        "internal/util/util.go",
+        "internal/util/util_darwin_arm64.go",
+        "internal/util/util_linux.go",
+        "internal/util/util_windows.go"
+      ],
+      "parsed": false
+    }
+  ],
+  "edges": [
+    {
+      "from": "internal/util/ignored.go",
+      "kind": "package",
+      "phase": "build",
+      "flags": [
+        "conditional"
+      ],
+      "spec": "asm_arm64.s (other targets: file name asm_arm64.s is for another target than linux/amd64)",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "internal/util/asm_arm64.s"
+      }
+    },
+    {
+      "from": "internal/util/ignored.go",
+      "kind": "package",
+      "phase": "build",
+      "flags": [
+        "conditional"
+      ],
+      "spec": "util_darwin_arm64.go (other targets: file name util_darwin_arm64.go is for another target than linux/amd64)",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "internal/util/util_darwin_arm64.go"
+      }
+    },
+    {
+      "from": "internal/util/ignored.go",
+      "kind": "package",
+      "phase": "build",
+      "flags": [
+        "conditional"
+      ],
+      "spec": "util_windows.go (other targets: file name util_windows.go is for another target than linux/amd64)",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "internal/util/util_windows.go"
+      }
+    },
+    {
+      "from": "internal/util/ignored.go",
+      "kind": "package",
+      "phase": "build",
+      "flags": [],
+      "spec": "package (cgo, assembly and object files)",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "glob",
+        "pattern": "internal/util/*.[chsS]*",
+        "matches": [
+          "internal/util/asm_amd64.s"
+        ],
+        "truncated": false
+      }
+    },
+    {
+      "from": "internal/util/ignored.go",
+      "kind": "package",
+      "phase": "build",
+      "flags": [],
+      "spec": "package",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "glob",
+        "pattern": "internal/util/*.go",
+        "matches": [
+          "internal/util/tagged.go",
+          "internal/util/util.go",
+          "internal/util/util_linux.go"
+        ],
+        "truncated": false
+      }
+    },
+    {
+      "from": "internal/util/ignored.go",
+      "kind": "manifest",
+      "phase": "build",
+      "flags": [],
+      "spec": "go.mod",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "go.mod"
+      }
+    },
+    {
+      "from": "internal/util/ignored.go",
+      "kind": "manifest",
+      "phase": "build",
+      "flags": [],
+      "spec": "go.sum",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "go.sum"
+      }
+    },
+    {
+      "from": "internal/util/ignored.go",
+      "kind": "manifest",
+      "phase": "build",
+      "flags": [],
+      "spec": "go.mod",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "lib/go.mod"
+      }
+    },
+    {
+      "from": "internal/util/ignored.go",
+      "kind": "import",
+      "phase": "build",
+      "flags": [
+        "conditional"
+      ],
+      "spec": "example.com/basic/internal/never",
+      "span": [
+        40,
+        74
+      ],
+      "line": 5,
+      "target": {
+        "type": "unresolved"
+      },
+      "uncertainty": "unresolved_specifier"
+    },
+    {
+      "from": "internal/util/tagged.go",
+      "kind": "package",
+      "phase": "build",
+      "flags": [
+        "conditional"
+      ],
+      "spec": "asm_arm64.s (other targets: file name asm_arm64.s is for another target than linux/amd64)",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "internal/util/asm_arm64.s"
+      }
+    },
+    {
+      "from": "internal/util/tagged.go",
+      "kind": "package",
+      "phase": "build",
+      "flags": [
+        "conditional"
+      ],
+      "spec": "ignored.go (other targets: //go:build ignore)",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "internal/util/ignored.go"
+      }
+    },
+    {
+      "from": "internal/util/tagged.go",
+      "kind": "package",
+      "phase": "build",
+      "flags": [
+        "conditional"
+      ],
+      "spec": "util_darwin_arm64.go (other targets: file name util_darwin_arm64.go is for another target than linux/amd64)",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "internal/util/util_darwin_arm64.go"
+      }
+    },
+    {
+      "from": "internal/util/tagged.go",
+      "kind": "package",
+      "phase": "build",
+      "flags": [
+        "conditional"
+      ],
+      "spec": "util_windows.go (other targets: file name util_windows.go is for another target than linux/amd64)",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "internal/util/util_windows.go"
+      }
+    },
+    {
+      "from": "internal/util/tagged.go",
+      "kind": "package",
+      "phase": "build",
+      "flags": [],
+      "spec": "package (cgo, assembly and object files)",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "glob",
+        "pattern": "internal/util/*.[chsS]*",
+        "matches": [
+          "internal/util/asm_amd64.s"
+        ],
+        "truncated": false
+      }
+    },
+    {
+      "from": "internal/util/tagged.go",
+      "kind": "package",
+      "phase": "build",
+      "flags": [],
+      "spec": "package",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "glob",
+        "pattern": "internal/util/*.go",
+        "matches": [
+          "internal/util/util.go",
+          "internal/util/util_linux.go"
+        ],
+        "truncated": false
+      }
+    },
+    {
+      "from": "internal/util/tagged.go",
+      "kind": "manifest",
+      "phase": "build",
+      "flags": [],
+      "spec": "go.mod",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "go.mod"
+      }
+    },
+    {
+      "from": "internal/util/tagged.go",
+      "kind": "manifest",
+      "phase": "build",
+      "flags": [],
+      "spec": "go.sum",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "go.sum"
+      }
+    },
+    {
+      "from": "internal/util/tagged.go",
+      "kind": "manifest",
+      "phase": "build",
+      "flags": [],
+      "spec": "go.mod",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "lib/go.mod"
+      }
+    },
+    {
+      "from": "internal/util/tagged.go",
+      "kind": "import",
+      "phase": "build",
+      "flags": [
+        "conditional"
+      ],
+      "spec": "example.com/basic/internal/never",
+      "span": [
+        45,
+        79
+      ],
+      "line": 5,
+      "target": {
+        "type": "unresolved"
+      },
+      "uncertainty": "unresolved_specifier"
+    },
+    {
+      "from": "internal/util/util.go",
+      "kind": "package",
+      "phase": "build",
+      "flags": [
+        "conditional"
+      ],
+      "spec": "asm_arm64.s (other targets: file name asm_arm64.s is for another target than linux/amd64)",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "internal/util/asm_arm64.s"
+      }
+    },
+    {
+      "from": "internal/util/util.go",
+      "kind": "package",
+      "phase": "build",
+      "flags": [
+        "conditional"
+      ],
+      "spec": "ignored.go (other targets: //go:build ignore)",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "internal/util/ignored.go"
+      }
+    },
+    {
+      "from": "internal/util/util.go",
+      "kind": "package",
+      "phase": "build",
+      "flags": [
+        "conditional"
+      ],
+      "spec": "util_darwin_arm64.go (other targets: file name util_darwin_arm64.go is for another target than linux/amd64)",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "internal/util/util_darwin_arm64.go"
+      }
+    },
+    {
+      "from": "internal/util/util.go",
+      "kind": "package",
+      "phase": "build",
+      "flags": [
+        "conditional"
+      ],
+      "spec": "util_windows.go (other targets: file name util_windows.go is for another target than linux/amd64)",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "internal/util/util_windows.go"
+      }
+    },
+    {
+      "from": "internal/util/util.go",
+      "kind": "package",
+      "phase": "build",
+      "flags": [],
+      "spec": "package (cgo, assembly and object files)",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "glob",
+        "pattern": "internal/util/*.[chsS]*",
+        "matches": [
+          "internal/util/asm_amd64.s"
+        ],
+        "truncated": false
+      }
+    },
+    {
+      "from": "internal/util/util.go",
+      "kind": "package",
+      "phase": "build",
+      "flags": [],
+      "spec": "package",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "glob",
+        "pattern": "internal/util/*.go",
+        "matches": [
+          "internal/util/tagged.go",
+          "internal/util/util_linux.go"
+        ],
+        "truncated": false
+      }
+    },
+    {
+      "from": "internal/util/util.go",
+      "kind": "manifest",
+      "phase": "build",
+      "flags": [],
+      "spec": "go.mod",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "go.mod"
+      }
+    },
+    {
+      "from": "internal/util/util.go",
+      "kind": "manifest",
+      "phase": "build",
+      "flags": [],
+      "spec": "go.sum",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "go.sum"
+      }
+    },
+    {
+      "from": "internal/util/util.go",
+      "kind": "manifest",
+      "phase": "build",
+      "flags": [],
+      "spec": "go.mod",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "lib/go.mod"
+      }
+    },
+    {
+      "from": "internal/util/util.go",
+      "kind": "import",
+      "phase": "build",
+      "flags": [],
+      "spec": "strings",
+      "span": [
+        21,
+        30
+      ],
+      "line": 3,
+      "target": {
+        "type": "builtin",
+        "name": "strings"
+      }
+    },
+    {
+      "from": "internal/util/util_darwin_arm64.go",
+      "kind": "package",
+      "phase": "build",
+      "flags": [
+        "conditional"
+      ],
+      "spec": "asm_arm64.s (other targets: file name asm_arm64.s is for another target than linux/amd64)",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "internal/util/asm_arm64.s"
+      }
+    },
+    {
+      "from": "internal/util/util_darwin_arm64.go",
+      "kind": "package",
+      "phase": "build",
+      "flags": [
+        "conditional"
+      ],
+      "spec": "ignored.go (other targets: //go:build ignore)",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "internal/util/ignored.go"
+      }
+    },
+    {
+      "from": "internal/util/util_darwin_arm64.go",
+      "kind": "package",
+      "phase": "build",
+      "flags": [
+        "conditional"
+      ],
+      "spec": "util_windows.go (other targets: file name util_windows.go is for another target than linux/amd64)",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "internal/util/util_windows.go"
+      }
+    },
+    {
+      "from": "internal/util/util_darwin_arm64.go",
+      "kind": "package",
+      "phase": "build",
+      "flags": [],
+      "spec": "package (cgo, assembly and object files)",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "glob",
+        "pattern": "internal/util/*.[chsS]*",
+        "matches": [
+          "internal/util/asm_amd64.s"
+        ],
+        "truncated": false
+      }
+    },
+    {
+      "from": "internal/util/util_darwin_arm64.go",
+      "kind": "package",
+      "phase": "build",
+      "flags": [],
+      "spec": "package",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "glob",
+        "pattern": "internal/util/*.go",
+        "matches": [
+          "internal/util/tagged.go",
+          "internal/util/util.go",
+          "internal/util/util_linux.go"
+        ],
+        "truncated": false
+      }
+    },
+    {
+      "from": "internal/util/util_darwin_arm64.go",
+      "kind": "manifest",
+      "phase": "build",
+      "flags": [],
+      "spec": "go.mod",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "go.mod"
+      }
+    },
+    {
+      "from": "internal/util/util_darwin_arm64.go",
+      "kind": "manifest",
+      "phase": "build",
+      "flags": [],
+      "spec": "go.sum",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "go.sum"
+      }
+    },
+    {
+      "from": "internal/util/util_darwin_arm64.go",
+      "kind": "manifest",
+      "phase": "build",
+      "flags": [],
+      "spec": "go.mod",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "lib/go.mod"
+      }
+    },
+    {
+      "from": "internal/util/util_linux.go",
+      "kind": "package",
+      "phase": "build",
+      "flags": [
+        "conditional"
+      ],
+      "spec": "asm_arm64.s (other targets: file name asm_arm64.s is for another target than linux/amd64)",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "internal/util/asm_arm64.s"
+      }
+    },
+    {
+      "from": "internal/util/util_linux.go",
+      "kind": "package",
+      "phase": "build",
+      "flags": [
+        "conditional"
+      ],
+      "spec": "ignored.go (other targets: //go:build ignore)",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "internal/util/ignored.go"
+      }
+    },
+    {
+      "from": "internal/util/util_linux.go",
+      "kind": "package",
+      "phase": "build",
+      "flags": [
+        "conditional"
+      ],
+      "spec": "util_darwin_arm64.go (other targets: file name util_darwin_arm64.go is for another target than linux/amd64)",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "internal/util/util_darwin_arm64.go"
+      }
+    },
+    {
+      "from": "internal/util/util_linux.go",
+      "kind": "package",
+      "phase": "build",
+      "flags": [
+        "conditional"
+      ],
+      "spec": "util_windows.go (other targets: file name util_windows.go is for another target than linux/amd64)",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "internal/util/util_windows.go"
+      }
+    },
+    {
+      "from": "internal/util/util_linux.go",
+      "kind": "package",
+      "phase": "build",
+      "flags": [],
+      "spec": "package (cgo, assembly and object files)",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "glob",
+        "pattern": "internal/util/*.[chsS]*",
+        "matches": [
+          "internal/util/asm_amd64.s"
+        ],
+        "truncated": false
+      }
+    },
+    {
+      "from": "internal/util/util_linux.go",
+      "kind": "package",
+      "phase": "build",
+      "flags": [],
+      "spec": "package",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "glob",
+        "pattern": "internal/util/*.go",
+        "matches": [
+          "internal/util/tagged.go",
+          "internal/util/util.go"
+        ],
+        "truncated": false
+      }
+    },
+    {
+      "from": "internal/util/util_linux.go",
+      "kind": "manifest",
+      "phase": "build",
+      "flags": [],
+      "spec": "go.mod",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "go.mod"
+      }
+    },
+    {
+      "from": "internal/util/util_linux.go",
+      "kind": "manifest",
+      "phase": "build",
+      "flags": [],
+      "spec": "go.sum",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "go.sum"
+      }
+    },
+    {
+      "from": "internal/util/util_linux.go",
+      "kind": "manifest",
+      "phase": "build",
+      "flags": [],
+      "spec": "go.mod",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "lib/go.mod"
+      }
+    },
+    {
+      "from": "internal/util/util_windows.go",
+      "kind": "package",
+      "phase": "build",
+      "flags": [
+        "conditional"
+      ],
+      "spec": "asm_arm64.s (other targets: file name asm_arm64.s is for another target than linux/amd64)",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "internal/util/asm_arm64.s"
+      }
+    },
+    {
+      "from": "internal/util/util_windows.go",
+      "kind": "package",
+      "phase": "build",
+      "flags": [
+        "conditional"
+      ],
+      "spec": "ignored.go (other targets: //go:build ignore)",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "internal/util/ignored.go"
+      }
+    },
+    {
+      "from": "internal/util/util_windows.go",
+      "kind": "package",
+      "phase": "build",
+      "flags": [
+        "conditional"
+      ],
+      "spec": "util_darwin_arm64.go (other targets: file name util_darwin_arm64.go is for another target than linux/amd64)",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "internal/util/util_darwin_arm64.go"
+      }
+    },
+    {
+      "from": "internal/util/util_windows.go",
+      "kind": "package",
+      "phase": "build",
+      "flags": [],
+      "spec": "package (cgo, assembly and object files)",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "glob",
+        "pattern": "internal/util/*.[chsS]*",
+        "matches": [
+          "internal/util/asm_amd64.s"
+        ],
+        "truncated": false
+      }
+    },
+    {
+      "from": "internal/util/util_windows.go",
+      "kind": "package",
+      "phase": "build",
+      "flags": [],
+      "spec": "package",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "glob",
+        "pattern": "internal/util/*.go",
+        "matches": [
+          "internal/util/tagged.go",
+          "internal/util/util.go",
+          "internal/util/util_linux.go"
+        ],
+        "truncated": false
+      }
+    },
+    {
+      "from": "internal/util/util_windows.go",
+      "kind": "manifest",
+      "phase": "build",
+      "flags": [],
+      "spec": "go.mod",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "go.mod"
+      }
+    },
+    {
+      "from": "internal/util/util_windows.go",
+      "kind": "manifest",
+      "phase": "build",
+      "flags": [],
+      "spec": "go.sum",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "go.sum"
+      }
+    },
+    {
+      "from": "internal/util/util_windows.go",
+      "kind": "manifest",
+      "phase": "build",
+      "flags": [],
+      "spec": "go.mod",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "lib/go.mod"
+      }
+    }
+  ],
+  "uncertainties": [
+    {
+      "file": "internal/util/ignored.go",
+      "kind": "unresolved_specifier",
+      "detail": "package example.com/basic/internal/never is not in main module example.com/basic",
+      "spec": "example.com/basic/internal/never",
+      "span": [
+        40,
+        74
+      ],
+      "line": 5,
+      "col": 8
+    },
+    {
+      "file": "internal/util/tagged.go",
+      "kind": "unresolved_specifier",
+      "detail": "package example.com/basic/internal/never is not in main module example.com/basic",
+      "spec": "example.com/basic/internal/never",
+      "span": [
+        45,
+        79
+      ],
+      "line": 5,
+      "col": 8
+    }
+  ],
+  "symlinks": {},
+  "stats": {
+    "entries": 1,
+    "files": 11,
+    "parsed_files": 6,
+    "edges": 54,
+    "uncertainties": 2
+  }
+}

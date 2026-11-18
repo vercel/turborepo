@@ -1,0 +1,207 @@
+---
+source: crates/turborepo-trace-frameworks/tests/nextjs.rs
+expression: "redact(serde_json::to_string_pretty(&v).unwrap(), root)"
+---
+[
+  {
+    "file": "<fixture>/components/members.tsx",
+    "line": 8,
+    "api": "swr:default",
+    "kind": "fetch",
+    "urls": [
+      "/api/teams/*/members"
+    ],
+    "unresolved": [],
+    "routes": [
+      "route:app/api/teams/[teamId]/members/route.ts"
+    ],
+    "external": 0,
+    "rewritten": 0
+  },
+  {
+    "file": "<fixture>/components/members.tsx",
+    "line": 8,
+    "api": "fetch",
+    "kind": "fetch",
+    "urls": [],
+    "unresolved": [],
+    "routes": [],
+    "external": 0,
+    "rewritten": 0
+  },
+  {
+    "file": "<fixture>/components/members.tsx",
+    "line": 10,
+    "api": "fetch",
+    "kind": "fetch",
+    "urls": [
+      "/api/health"
+    ],
+    "unresolved": [],
+    "routes": [
+      "route:app/api/health/route.ts"
+    ],
+    "external": 0,
+    "rewritten": 0
+  },
+  {
+    "file": "<fixture>/components/members.tsx",
+    "line": 11,
+    "api": "fetch",
+    "kind": "fetch",
+    "urls": [
+      "https://api.example.com/v1/teams"
+    ],
+    "unresolved": [],
+    "routes": [],
+    "external": 1,
+    "rewritten": 0
+  },
+  {
+    "file": "<fixture>/components/members.tsx",
+    "line": 12,
+    "api": "fetch",
+    "kind": "fetch",
+    "urls": [
+      "/api/v1/projects"
+    ],
+    "unresolved": [],
+    "routes": [],
+    "external": 1,
+    "rewritten": 1
+  },
+  {
+    "file": "<fixture>/components/members.tsx",
+    "line": 13,
+    "api": "fetch",
+    "kind": "fetch",
+    "urls": [],
+    "unresolved": [],
+    "routes": [],
+    "external": 0,
+    "rewritten": 0
+  },
+  {
+    "file": "<fixture>/components/members.tsx",
+    "line": 15,
+    "api": "fetch",
+    "kind": "fetch",
+    "urls": [],
+    "unresolved": [
+      "window.__ENDPOINT__"
+    ],
+    "routes": [],
+    "external": 0,
+    "rewritten": 0
+  },
+  {
+    "file": "<fixture>/components/members.tsx",
+    "line": 18,
+    "api": "next/navigation:useRouter().push",
+    "kind": "navigation",
+    "urls": [
+      "/*/photo/1"
+    ],
+    "unresolved": [],
+    "routes": [
+      "page:app/[team]/@modal/(.)photo/[id]/page.tsx",
+      "page:app/[team]/photo/[id]/page.tsx",
+      "page:app/docs-local/[...path]/page.tsx",
+      "page:app/shop/[[...filters]]/page.tsx"
+    ],
+    "external": 0,
+    "rewritten": 0
+  },
+  {
+    "file": "<fixture>/components/nav.tsx",
+    "line": 4,
+    "api": "<Link href>",
+    "kind": "navigation",
+    "urls": [
+      "/about"
+    ],
+    "unresolved": [],
+    "routes": [
+      "page:app/(marketing)/about/page.tsx",
+      "pages:pages/about.tsx"
+    ],
+    "external": 0,
+    "rewritten": 0
+  },
+  {
+    "file": "<fixture>/components/nav.tsx",
+    "line": 4,
+    "api": "<Link href>",
+    "kind": "navigation",
+    "urls": [
+      "/blog/new"
+    ],
+    "unresolved": [],
+    "routes": [
+      "page:app/blog/new/page.tsx"
+    ],
+    "external": 0,
+    "rewritten": 0
+  },
+  {
+    "file": "<fixture>/lib/api.ts",
+    "line": 2,
+    "api": "fetch",
+    "kind": "fetch",
+    "urls": [],
+    "unresolved": [],
+    "routes": [],
+    "external": 0,
+    "rewritten": 0
+  },
+  {
+    "file": "<fixture>/lib/api.ts",
+    "line": 6,
+    "api": "fetch",
+    "kind": "fetch",
+    "urls": [],
+    "unresolved": [],
+    "routes": [],
+    "external": 0,
+    "rewritten": 0
+  },
+  {
+    "file": "<fixture>/lib/api.ts",
+    "line": 9,
+    "api": "fetch",
+    "kind": "fetch",
+    "urls": [],
+    "unresolved": [],
+    "routes": [],
+    "external": 0,
+    "rewritten": 0
+  },
+  {
+    "file": "<fixture>/app/[team]/page.tsx",
+    "line": 6,
+    "api": "fetch",
+    "kind": "fetch",
+    "urls": [
+      "/api/settings"
+    ],
+    "unresolved": [],
+    "routes": [],
+    "external": 0,
+    "rewritten": 0
+  },
+  {
+    "file": "<fixture>/app/[team]/page.tsx",
+    "line": 4,
+    "api": "getJson (wraps fetch)",
+    "kind": "fetch",
+    "urls": [
+      "/api/health"
+    ],
+    "unresolved": [],
+    "routes": [
+      "route:app/api/health/route.ts"
+    ],
+    "external": 0,
+    "rewritten": 0
+  }
+]

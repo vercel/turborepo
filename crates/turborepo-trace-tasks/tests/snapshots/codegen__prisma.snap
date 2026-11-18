@@ -1,0 +1,481 @@
+---
+source: crates/turborepo-trace-tasks/tests/codegen.rs
+expression: family(stringify! (prisma))
+---
+$ prisma generate
+# prisma [prisma] Full
+{
+  "inputs": [
+    "prisma/schema.prisma"
+  ],
+  "outputs": [
+    {
+      "path": "src/zod",
+      "kind": "generated"
+    }
+  ],
+  "output_packages": [
+    {
+      "ecosystem": "npm",
+      "name": ".prisma/client"
+    },
+    {
+      "ecosystem": "npm",
+      "name": "@prisma/client"
+    }
+  ],
+  "configs": [
+    "package.json",
+    "prisma.config.ts"
+  ],
+  "toolchain": [
+    {
+      "ecosystem": "npm",
+      "name": "@prisma/client"
+    },
+    {
+      "ecosystem": "npm",
+      "name": "prisma"
+    },
+    {
+      "ecosystem": "npm",
+      "name": "zod-prisma-types"
+    }
+  ]
+}
+
+$ prisma migrate dev --name init
+# prisma [prisma] Full
+{
+  "inputs": [
+    "prisma/schema.prisma"
+  ],
+  "outputs": [
+    {
+      "path": "prisma/migrations",
+      "kind": "generated"
+    },
+    {
+      "path": "src/zod",
+      "kind": "generated"
+    }
+  ],
+  "output_packages": [
+    {
+      "ecosystem": "npm",
+      "name": ".prisma/client"
+    },
+    {
+      "ecosystem": "npm",
+      "name": "@prisma/client"
+    }
+  ],
+  "configs": [
+    "package.json",
+    "prisma.config.ts"
+  ],
+  "entries": [
+    {
+      "path": "prisma/seed.ts",
+      "lang": "js"
+    }
+  ],
+  "memberships": [
+    {
+      "dir": "prisma/migrations",
+      "pattern": "**",
+      "reason": "prisma migrations"
+    }
+  ],
+  "toolchain": [
+    {
+      "ecosystem": "npm",
+      "name": "@prisma/client"
+    },
+    {
+      "ecosystem": "npm",
+      "name": "prisma"
+    },
+    {
+      "ecosystem": "npm",
+      "name": "tsx"
+    },
+    {
+      "ecosystem": "npm",
+      "name": "zod-prisma-types"
+    }
+  ],
+  "env": [
+    "DATABASE_URL"
+  ],
+  "definition": [
+    "prisma/seed.ts"
+  ]
+}
+
+$ prisma migrate deploy
+# prisma [prisma] Full
+{
+  "inputs": [
+    "prisma/schema.prisma"
+  ],
+  "configs": [
+    "package.json",
+    "prisma.config.ts"
+  ],
+  "memberships": [
+    {
+      "dir": "prisma/migrations",
+      "pattern": "**",
+      "reason": "prisma migrations"
+    }
+  ],
+  "toolchain": [
+    {
+      "ecosystem": "npm",
+      "name": "prisma"
+    }
+  ],
+  "env": [
+    "DATABASE_URL"
+  ]
+}
+
+$ prisma db push --skip-generate
+# prisma [prisma] Full
+{
+  "inputs": [
+    "prisma/schema.prisma"
+  ],
+  "configs": [
+    "package.json",
+    "prisma.config.ts"
+  ],
+  "toolchain": [
+    {
+      "ecosystem": "npm",
+      "name": "prisma"
+    }
+  ],
+  "env": [
+    "DATABASE_URL"
+  ]
+}
+
+$ prisma db seed
+# prisma [prisma] Full
+{
+  "inputs": [
+    "prisma/schema.prisma"
+  ],
+  "configs": [
+    "package.json",
+    "prisma.config.ts"
+  ],
+  "entries": [
+    {
+      "path": "prisma/seed.ts",
+      "lang": "js"
+    }
+  ],
+  "toolchain": [
+    {
+      "ecosystem": "npm",
+      "name": "prisma"
+    },
+    {
+      "ecosystem": "npm",
+      "name": "tsx"
+    }
+  ],
+  "definition": [
+    "prisma/seed.ts"
+  ]
+}
+
+$ prisma format
+# prisma [prisma] Full
+{
+  "inputs": [
+    "prisma/schema.prisma"
+  ],
+  "outputs": [
+    {
+      "path": "prisma/schema.prisma",
+      "kind": "generated"
+    }
+  ],
+  "configs": [
+    "package.json",
+    "prisma.config.ts"
+  ],
+  "toolchain": [
+    {
+      "ecosystem": "npm",
+      "name": "prisma"
+    }
+  ]
+}
+
+$ prisma generate --schema alt/schema.prisma
+# prisma [prisma] Full
+{
+  "inputs": [
+    "alt/schema.prisma"
+  ],
+  "outputs": [
+    {
+      "path": "src/generated/prisma",
+      "kind": "generated"
+    }
+  ],
+  "configs": [
+    "package.json",
+    "prisma.config.ts"
+  ],
+  "toolchain": [
+    {
+      "ecosystem": "npm",
+      "name": "@prisma/client"
+    },
+    {
+      "ecosystem": "npm",
+      "name": "prisma"
+    }
+  ]
+}
+
+$ prisma generate --schema multi/schema
+# prisma [prisma] Full
+{
+  "output_packages": [
+    {
+      "ecosystem": "npm",
+      "name": ".prisma/client"
+    },
+    {
+      "ecosystem": "npm",
+      "name": "@prisma/client"
+    }
+  ],
+  "configs": [
+    "package.json",
+    "prisma.config.ts"
+  ],
+  "memberships": [
+    {
+      "dir": "multi/schema",
+      "pattern": "**/*.prisma",
+      "reason": "prisma schema folder"
+    }
+  ],
+  "toolchain": [
+    {
+      "ecosystem": "npm",
+      "name": "@prisma/client"
+    },
+    {
+      "ecosystem": "npm",
+      "name": "prisma"
+    }
+  ]
+}
+
+$ cd cfg && prisma generate
+# prisma [prisma] Full
+{
+  "inputs": [
+    "cfg/db/schema.prisma"
+  ],
+  "outputs": [
+    {
+      "path": "cfg/generated/client",
+      "kind": "generated"
+    }
+  ],
+  "configs": [
+    "cfg/prisma.config.ts",
+    "package.json"
+  ],
+  "entries": [
+    {
+      "path": "cfg/prisma.config.ts",
+      "lang": "js"
+    }
+  ],
+  "toolchain": [
+    {
+      "ecosystem": "npm",
+      "name": "@prisma/client"
+    },
+    {
+      "ecosystem": "npm",
+      "name": "prisma"
+    }
+  ]
+}
+
+$ cd cfg && prisma migrate reset --force
+# prisma [prisma] Full
+{
+  "inputs": [
+    "cfg/db/schema.prisma"
+  ],
+  "outputs": [
+    {
+      "path": "cfg/generated/client",
+      "kind": "generated"
+    }
+  ],
+  "configs": [
+    "cfg/prisma.config.ts",
+    "package.json"
+  ],
+  "entries": [
+    {
+      "path": "cfg/db/seed.js",
+      "lang": "js"
+    },
+    {
+      "path": "cfg/prisma.config.ts",
+      "lang": "js"
+    }
+  ],
+  "memberships": [
+    {
+      "dir": "cfg/db/migrations",
+      "pattern": "**",
+      "reason": "prisma migrations"
+    }
+  ],
+  "toolchain": [
+    {
+      "ecosystem": "npm",
+      "name": "@prisma/client"
+    },
+    {
+      "ecosystem": "npm",
+      "name": "prisma"
+    }
+  ],
+  "definition": [
+    "cfg/db/seed.js"
+  ]
+}
+
+$ cd envcfg && prisma generate
+# prisma [prisma] Partial
+{
+  "inputs": [
+    "envcfg/prisma/schema.prisma",
+    "envcfg/schema.prisma"
+  ],
+  "output_packages": [
+    {
+      "ecosystem": "npm",
+      "name": ".prisma/client"
+    },
+    {
+      "ecosystem": "npm",
+      "name": "@prisma/client"
+    }
+  ],
+  "configs": [
+    "envcfg/prisma.config.ts",
+    "package.json"
+  ],
+  "entries": [
+    {
+      "path": "envcfg/prisma.config.ts",
+      "lang": "js"
+    }
+  ],
+  "memberships": [
+    {
+      "dir": ".",
+      "pattern": "**",
+      "reason": "`prisma` not fully recognized"
+    },
+    {
+      "dir": "envcfg",
+      "pattern": "**",
+      "reason": "code generator config not fully known"
+    },
+    {
+      "dir": "envcfg/prisma/schema",
+      "pattern": "**/*.prisma",
+      "reason": "prisma schema folder"
+    }
+  ],
+  "toolchain": [
+    {
+      "ecosystem": "npm",
+      "name": "@prisma/client"
+    },
+    {
+      "ecosystem": "npm",
+      "name": "prisma"
+    }
+  ],
+  "uncertainties": [
+    {
+      "kind": "env_dependent",
+      "detail": "prisma.config `schema`: process.env.PRISMA_SCHEMA"
+    }
+  ]
+}
+
+$ prisma generate --schema weird/schema.prisma
+# prisma [prisma] Partial
+{
+  "inputs": [
+    "weird/schema.prisma"
+  ],
+  "configs": [
+    "package.json",
+    "prisma.config.ts"
+  ],
+  "memberships": [
+    {
+      "dir": ".",
+      "pattern": "**",
+      "reason": "`prisma` not fully recognized"
+    },
+    {
+      "dir": "weird",
+      "pattern": "**",
+      "reason": "code generator config not fully known"
+    }
+  ],
+  "toolchain": [
+    {
+      "ecosystem": "npm",
+      "name": "@prisma/client"
+    },
+    {
+      "ecosystem": "npm",
+      "name": "prisma"
+    },
+    {
+      "ecosystem": "npm",
+      "name": "prisma-erd-generator"
+    }
+  ],
+  "uncertainties": [
+    {
+      "kind": "generated_file",
+      "detail": "prisma generator `erd` (`prisma-erd-generator`) has no output and no known default"
+    }
+  ]
+}
+
+$ npx prisma studio
+# prisma [prisma] Ignored
+{
+  "toolchain": [
+    {
+      "ecosystem": "npm",
+      "name": "prisma"
+    }
+  ]
+}

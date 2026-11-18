@@ -1,0 +1,369 @@
+---
+source: crates/turborepo-trace-tasks/tests/codegen.rs
+expression: family(stringify! (openapi))
+---
+$ openapi-typescript openapi.yaml -o src/api/schema.d.ts
+# openapi-typescript [openapi-typescript] Full
+{
+  "inputs": [
+    "openapi.yaml",
+    "schemas/common.yaml",
+    "schemas/pet.yaml"
+  ],
+  "outputs": [
+    {
+      "path": "src/api/schema.d.ts",
+      "kind": "generated"
+    }
+  ],
+  "toolchain": [
+    {
+      "ecosystem": "npm",
+      "name": "openapi-typescript"
+    }
+  ]
+}
+
+$ openapi-typescript
+# openapi-typescript [openapi-typescript] Full
+{
+  "inputs": [
+    "openapi.yaml",
+    "schemas/common.yaml",
+    "schemas/pet.yaml"
+  ],
+  "outputs": [
+    {
+      "path": "src/api/main.ts",
+      "kind": "generated"
+    }
+  ],
+  "configs": [
+    "redocly.yaml"
+  ],
+  "toolchain": [
+    {
+      "ecosystem": "npm",
+      "name": "openapi-typescript"
+    }
+  ]
+}
+
+$ openapi-typescript https://example.com/openapi.json -o src/remote.ts
+# openapi-typescript [openapi-typescript] Partial
+{
+  "outputs": [
+    {
+      "path": "src/remote.ts",
+      "kind": "generated"
+    }
+  ],
+  "memberships": [
+    {
+      "dir": ".",
+      "pattern": "**",
+      "reason": "`openapi-typescript` not fully recognized"
+    },
+    {
+      "dir": ".",
+      "pattern": "**",
+      "reason": "code generator config not fully known"
+    }
+  ],
+  "toolchain": [
+    {
+      "ecosystem": "npm",
+      "name": "openapi-typescript"
+    }
+  ],
+  "uncertainties": [
+    {
+      "kind": "env_dependent",
+      "detail": "remote spec `https://example.com/openapi.json`"
+    }
+  ]
+}
+
+$ openapi-generator-cli generate -i openapi.yaml -g typescript-axios -o src/gen/axios -t templates
+# openapi-generator-cli [openapi-generator] Full
+{
+  "inputs": [
+    "openapi.yaml",
+    "schemas/common.yaml",
+    "schemas/pet.yaml",
+    "src/gen/axios/.openapi-generator-ignore"
+  ],
+  "outputs": [
+    {
+      "path": "src/gen/axios",
+      "kind": "generated"
+    }
+  ],
+  "configs": [
+    "openapitools.json"
+  ],
+  "memberships": [
+    {
+      "dir": "templates",
+      "pattern": "**",
+      "reason": "openapi-generator templates"
+    }
+  ],
+  "toolchain": [
+    {
+      "ecosystem": "npm",
+      "name": "@openapitools/openapi-generator-cli"
+    }
+  ]
+}
+
+$ openapi-generator-cli generate
+# openapi-generator-cli [openapi-generator] Full
+{
+  "inputs": [
+    "openapi.yaml",
+    "schemas/common.yaml",
+    "schemas/pet.yaml",
+    "src/gen/v1/.openapi-generator-ignore"
+  ],
+  "outputs": [
+    {
+      "path": "src/gen/v1",
+      "kind": "generated"
+    }
+  ],
+  "configs": [
+    "openapitools.json"
+  ],
+  "toolchain": [
+    {
+      "ecosystem": "npm",
+      "name": "@openapitools/openapi-generator-cli"
+    }
+  ]
+}
+
+$ openapi-generator generate -c gen-config.yaml -g go
+# openapi-generator [openapi-generator] Full
+{
+  "inputs": [
+    "gen/cfg/.openapi-generator-ignore",
+    "openapi.yaml",
+    "schemas/common.yaml",
+    "schemas/pet.yaml"
+  ],
+  "outputs": [
+    {
+      "path": "gen/cfg",
+      "kind": "generated"
+    }
+  ],
+  "configs": [
+    "gen-config.yaml"
+  ],
+  "toolchain": [
+    {
+      "ecosystem": "system",
+      "name": "openapi-generator"
+    }
+  ]
+}
+
+$ orval
+# orval [orval] Full
+{
+  "inputs": [
+    "openapi.yaml",
+    "schemas/common.yaml",
+    "schemas/pet.yaml"
+  ],
+  "outputs": [
+    {
+      "path": "src",
+      "pattern": "simple.*",
+      "kind": "generated"
+    },
+    {
+      "path": "src/orval",
+      "kind": "generated"
+    },
+    {
+      "path": "src/orval/model",
+      "kind": "generated"
+    },
+    {
+      "path": "src/simple.ts",
+      "kind": "generated"
+    }
+  ],
+  "configs": [
+    "orval.config.ts"
+  ],
+  "entries": [
+    {
+      "path": "orval.config.ts",
+      "lang": "js"
+    }
+  ],
+  "toolchain": [
+    {
+      "ecosystem": "npm",
+      "name": "orval"
+    }
+  ]
+}
+
+$ orval --project simple
+# orval [orval] Full
+{
+  "inputs": [
+    "openapi.yaml",
+    "schemas/common.yaml",
+    "schemas/pet.yaml"
+  ],
+  "outputs": [
+    {
+      "path": "src",
+      "pattern": "simple.*",
+      "kind": "generated"
+    },
+    {
+      "path": "src/simple.ts",
+      "kind": "generated"
+    }
+  ],
+  "configs": [
+    "orval.config.ts"
+  ],
+  "entries": [
+    {
+      "path": "orval.config.ts",
+      "lang": "js"
+    }
+  ],
+  "toolchain": [
+    {
+      "ecosystem": "npm",
+      "name": "orval"
+    }
+  ]
+}
+
+$ openapi-ts
+# openapi-ts [hey-api] Full
+{
+  "inputs": [
+    "openapi.yaml",
+    "schemas/common.yaml",
+    "schemas/pet.yaml"
+  ],
+  "outputs": [
+    {
+      "path": "src/client",
+      "kind": "generated"
+    }
+  ],
+  "configs": [
+    "openapi-ts.config.ts"
+  ],
+  "entries": [
+    {
+      "path": "openapi-ts.config.ts",
+      "lang": "js"
+    }
+  ],
+  "toolchain": [
+    {
+      "ecosystem": "npm",
+      "name": "@hey-api/openapi-ts"
+    }
+  ]
+}
+
+$ openapi-ts -i openapi.yaml -o src/client2
+# openapi-ts [hey-api] Full
+{
+  "inputs": [
+    "openapi.yaml",
+    "schemas/common.yaml",
+    "schemas/pet.yaml"
+  ],
+  "outputs": [
+    {
+      "path": "src/client2",
+      "kind": "generated"
+    }
+  ],
+  "toolchain": [
+    {
+      "ecosystem": "npm",
+      "name": "@hey-api/openapi-ts"
+    }
+  ]
+}
+
+$ swagger-typescript-api -p openapi.yaml -o src/sta -n PetApi.ts
+# swagger-typescript-api [swagger-typescript-api] Full
+{
+  "inputs": [
+    "openapi.yaml",
+    "schemas/common.yaml",
+    "schemas/pet.yaml"
+  ],
+  "outputs": [
+    {
+      "path": "src/sta/PetApi.ts",
+      "kind": "generated"
+    }
+  ],
+  "toolchain": [
+    {
+      "ecosystem": "npm",
+      "name": "swagger-typescript-api"
+    }
+  ]
+}
+
+$ swagger-typescript-api generate --path openapi.yaml --output src/sta-mod --modular
+# swagger-typescript-api [swagger-typescript-api] Full
+{
+  "inputs": [
+    "openapi.yaml",
+    "schemas/common.yaml",
+    "schemas/pet.yaml"
+  ],
+  "outputs": [
+    {
+      "path": "src/sta-mod",
+      "kind": "generated"
+    }
+  ],
+  "toolchain": [
+    {
+      "ecosystem": "npm",
+      "name": "swagger-typescript-api"
+    }
+  ]
+}
+
+$ openapi --input openapi.yaml --output src/codegen --client fetch
+# openapi [openapi-typescript-codegen] Full
+{
+  "inputs": [
+    "openapi.yaml",
+    "schemas/common.yaml",
+    "schemas/pet.yaml"
+  ],
+  "outputs": [
+    {
+      "path": "src/codegen",
+      "kind": "generated"
+    }
+  ],
+  "toolchain": [
+    {
+      "ecosystem": "npm",
+      "name": "openapi-typescript-codegen"
+    }
+  ]
+}

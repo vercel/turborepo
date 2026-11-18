@@ -1,0 +1,19 @@
+{
+  "name": "@bins/web",
+  "version": "1.0.0",
+  "scripts": {
+    "codegen": "gen schema.json > src/generated/api.js",
+    "test": "jest-dd -c jest.unit.config.js",
+    "built": "built-cli",
+    "tp": "tp-only build",
+    "py": "uv run webgen --schema schema.json",
+    "py:missing": "webgen-missing",
+    "unknown": "no-such-tool"
+  },
+  "devDependencies": {
+    "@bins/built": "workspace:*",
+    "@bins/gen": "workspace:*",
+    "@bins/test-dd": "workspace:*",
+    "tp-only": "1.0.0"
+  }
+}

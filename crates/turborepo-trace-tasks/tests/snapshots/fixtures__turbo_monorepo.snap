@@ -1,0 +1,1005 @@
+---
+source: crates/turborepo-trace-tasks/tests/fixtures.rs
+expression: out
+---
+## task:.#build
+{
+  "sources": [
+    "npm",
+    "turbo"
+  ],
+  "deps": [
+    "task:apps/web#build",
+    "task:packages/db#build",
+    "task:packages/ui#build"
+  ],
+  "commands": [
+    "turbo run build [turbo] Full"
+  ],
+  "spec": {
+    "data_inputs": [
+      ".env",
+      "tsconfig.base.json"
+    ],
+    "outputs": [
+      {
+        "path": ".next",
+        "pattern": "**",
+        "exclude": [
+          "cache/**"
+        ],
+        "kind": "declared"
+      },
+      {
+        "path": "dist",
+        "pattern": "**",
+        "kind": "declared"
+      }
+    ],
+    "configs": [
+      "package.json",
+      "turbo.json"
+    ],
+    "task_deps": [
+      {
+        "target": {
+          "kind": "local",
+          "name": "codegen"
+        },
+        "reason": "turbo dependsOn"
+      },
+      {
+        "target": {
+          "kind": "upstream",
+          "name": "build"
+        },
+        "reason": "turbo dependsOn ^"
+      },
+      {
+        "target": {
+          "kind": "all",
+          "name": "build"
+        },
+        "reason": "turbo run"
+      }
+    ],
+    "toolchain": [
+      {
+        "ecosystem": "npm",
+        "name": "turbo"
+      }
+    ],
+    "env": [
+      "CI"
+    ],
+    "runs": [
+      {
+        "kind": "task",
+        "target": {
+          "kind": "all",
+          "name": "build"
+        }
+      },
+      {
+        "kind": "task",
+        "target": {
+          "kind": "all",
+          "name": "codegen"
+        }
+      }
+    ]
+  }
+}
+
+## task:.#format
+{
+  "sources": [
+    "npm",
+    "turbo"
+  ],
+  "deps": [],
+  "commands": [
+    "prettier --write . [lint] Full"
+  ],
+  "spec": {
+    "inputs": [
+      "package.json"
+    ],
+    "data_inputs": [
+      ".env",
+      "tsconfig.base.json"
+    ],
+    "outputs": [
+      {
+        "path": ".",
+        "kind": "in_place"
+      }
+    ],
+    "configs": [
+      "package.json",
+      "turbo.json"
+    ],
+    "memberships": [
+      {
+        "dir": ".",
+        "pattern": "**",
+        "reason": "prettier files",
+        "data": true
+      }
+    ],
+    "toolchain": [
+      {
+        "ecosystem": "npm",
+        "name": "prettier"
+      }
+    ],
+    "env": [
+      "CI"
+    ]
+  }
+}
+
+## task:.#prepare
+{
+  "sources": [
+    "npm"
+  ],
+  "deps": [],
+  "commands": [
+    "husky [-] Unknown"
+  ],
+  "spec": {
+    "configs": [
+      "package.json"
+    ],
+    "memberships": [
+      {
+        "dir": ".",
+        "pattern": "**",
+        "reason": "uncertain task",
+        "own": true
+      },
+      {
+        "dir": ".",
+        "pattern": "**",
+        "reason": "unknown command `husky`",
+        "own": true
+      }
+    ],
+    "uncertainties": [
+      {
+        "kind": "unknown_command",
+        "detail": "husky"
+      }
+    ]
+  }
+}
+
+## task:.#test
+{
+  "sources": [
+    "npm",
+    "turbo"
+  ],
+  "deps": [
+    "task:.#build",
+    "task:packages/ui#test"
+  ],
+  "commands": [
+    "turbo run test --filter=./packages/* [turbo] Full"
+  ],
+  "spec": {
+    "data_inputs": [
+      ".env",
+      "tsconfig.base.json"
+    ],
+    "configs": [
+      "package.json",
+      "turbo.json"
+    ],
+    "memberships": [
+      {
+        "dir": ".",
+        "pattern": "**",
+        "exclude": [
+          "README.md"
+        ],
+        "reason": "turbo inputs",
+        "data": true
+      },
+      {
+        "dir": "test",
+        "pattern": "**",
+        "reason": "turbo inputs",
+        "data": true
+      }
+    ],
+    "task_deps": [
+      {
+        "target": {
+          "kind": "local",
+          "name": "build"
+        },
+        "reason": "turbo dependsOn"
+      },
+      {
+        "target": {
+          "kind": "package",
+          "package": "./packages/*",
+          "name": "test"
+        },
+        "reason": "turbo run"
+      }
+    ],
+    "toolchain": [
+      {
+        "ecosystem": "npm",
+        "name": "turbo"
+      }
+    ],
+    "env": [
+      "CI",
+      "TEST_SHARD"
+    ],
+    "runs": [
+      {
+        "kind": "task",
+        "target": {
+          "kind": "package",
+          "package": "./packages/*",
+          "name": "build"
+        }
+      },
+      {
+        "kind": "task",
+        "target": {
+          "kind": "package",
+          "package": "./packages/*",
+          "name": "codegen"
+        }
+      },
+      {
+        "kind": "task",
+        "target": {
+          "kind": "package",
+          "package": "./packages/*",
+          "name": "test"
+        }
+      },
+      {
+        "kind": "task",
+        "target": {
+          "kind": "all",
+          "name": "build"
+        }
+      },
+      {
+        "kind": "task",
+        "target": {
+          "kind": "all",
+          "name": "codegen"
+        }
+      }
+    ]
+  }
+}
+
+## task:apps/web#build
+{
+  "sources": [
+    "npm",
+    "turbo"
+  ],
+  "deps": [
+    "task:packages/db#build",
+    "task:packages/ui#build"
+  ],
+  "commands": [
+    "next build [next] Full"
+  ],
+  "spec": {
+    "inputs": [
+      "apps/web/instrumentation-client.cjs",
+      "apps/web/instrumentation-client.cts",
+      "apps/web/instrumentation-client.js",
+      "apps/web/instrumentation-client.jsx",
+      "apps/web/instrumentation-client.mjs",
+      "apps/web/instrumentation-client.mts",
+      "apps/web/instrumentation-client.ts",
+      "apps/web/instrumentation-client.tsx",
+      "apps/web/instrumentation.cjs",
+      "apps/web/instrumentation.cts",
+      "apps/web/instrumentation.js",
+      "apps/web/instrumentation.jsx",
+      "apps/web/instrumentation.mjs",
+      "apps/web/instrumentation.mts",
+      "apps/web/instrumentation.ts",
+      "apps/web/instrumentation.tsx",
+      "apps/web/microfrontends.json",
+      "apps/web/microfrontends.jsonc",
+      "apps/web/middleware.js",
+      "apps/web/middleware.jsx",
+      "apps/web/middleware.mjs",
+      "apps/web/middleware.ts",
+      "apps/web/middleware.tsx",
+      "apps/web/next.config.cjs",
+      "apps/web/next.config.cts",
+      "apps/web/next.config.js",
+      "apps/web/next.config.mts",
+      "apps/web/next.config.ts",
+      "apps/web/proxy.js",
+      "apps/web/proxy.mjs",
+      "apps/web/proxy.ts",
+      "apps/web/src/middleware.js",
+      "apps/web/src/middleware.ts",
+      "apps/web/src/proxy.js",
+      "apps/web/src/proxy.ts"
+    ],
+    "data_inputs": [
+      ".env",
+      "apps/web/next.config.mjs",
+      "tsconfig.base.json"
+    ],
+    "outputs": [
+      {
+        "path": "apps/web/.next",
+        "kind": "artifact"
+      },
+      {
+        "path": "apps/web/.next",
+        "pattern": "**",
+        "exclude": [
+          "cache/**"
+        ],
+        "kind": "declared"
+      },
+      {
+        "path": "apps/web/dist",
+        "pattern": "**",
+        "kind": "declared"
+      }
+    ],
+    "configs": [
+      "apps/web/app/layout.tsx",
+      "apps/web/next.config.mjs",
+      "apps/web/package.json",
+      "apps/web/tsconfig.json",
+      "apps/web/turbo.json",
+      "tsconfig.base.json",
+      "turbo.json"
+    ],
+    "entries": [
+      {
+        "path": "apps/web/app/layout.tsx",
+        "lang": "js"
+      },
+      {
+        "path": "apps/web/app/page.tsx",
+        "lang": "js"
+      },
+      {
+        "path": "apps/web/next.config.mjs",
+        "lang": "js"
+      }
+    ],
+    "memberships": [
+      {
+        "dir": "apps/web",
+        "pattern": ".env*",
+        "reason": "env files (listed, never read)"
+      },
+      {
+        "dir": "apps/web/app",
+        "pattern": "**",
+        "reason": "turbo inputs",
+        "data": true
+      },
+      {
+        "dir": "apps/web/app",
+        "pattern": "**/*",
+        "reason": "tsconfig include"
+      },
+      {
+        "dir": "apps/web/app",
+        "pattern": "**/{page,route,layout,template,loading,error,not-found,forbidden,unauthorized,default,global-error,global-not-found}.{tsx,ts,jsx,js}",
+        "reason": "App Router special files (the route table)"
+      },
+      {
+        "dir": "apps/web/content",
+        "pattern": "**",
+        "reason": "turbo inputs",
+        "data": true
+      },
+      {
+        "dir": "apps/web/public",
+        "pattern": "**",
+        "reason": "public/ assets are served by URL"
+      }
+    ],
+    "task_deps": [
+      {
+        "target": {
+          "kind": "local",
+          "name": "codegen"
+        },
+        "reason": "turbo dependsOn"
+      },
+      {
+        "target": {
+          "kind": "upstream",
+          "name": "build"
+        },
+        "reason": "turbo dependsOn ^"
+      }
+    ],
+    "toolchain": [
+      {
+        "ecosystem": "npm",
+        "name": "next"
+      }
+    ],
+    "env": [
+      "CI",
+      "NEXT_PUBLIC_*",
+      "NEXT_PUBLIC_API_URL",
+      "NODE_ENV"
+    ]
+  }
+}
+
+## task:apps/web#dev
+{
+  "sources": [
+    "npm"
+  ],
+  "deps": [],
+  "commands": [
+    "next dev [next] Full"
+  ],
+  "spec": {
+    "inputs": [
+      "apps/web/instrumentation-client.cjs",
+      "apps/web/instrumentation-client.cts",
+      "apps/web/instrumentation-client.js",
+      "apps/web/instrumentation-client.jsx",
+      "apps/web/instrumentation-client.mjs",
+      "apps/web/instrumentation-client.mts",
+      "apps/web/instrumentation-client.ts",
+      "apps/web/instrumentation-client.tsx",
+      "apps/web/instrumentation.cjs",
+      "apps/web/instrumentation.cts",
+      "apps/web/instrumentation.js",
+      "apps/web/instrumentation.jsx",
+      "apps/web/instrumentation.mjs",
+      "apps/web/instrumentation.mts",
+      "apps/web/instrumentation.ts",
+      "apps/web/instrumentation.tsx",
+      "apps/web/microfrontends.json",
+      "apps/web/microfrontends.jsonc",
+      "apps/web/middleware.js",
+      "apps/web/middleware.jsx",
+      "apps/web/middleware.mjs",
+      "apps/web/middleware.ts",
+      "apps/web/middleware.tsx",
+      "apps/web/next.config.cjs",
+      "apps/web/next.config.cts",
+      "apps/web/next.config.js",
+      "apps/web/next.config.mts",
+      "apps/web/next.config.ts",
+      "apps/web/proxy.js",
+      "apps/web/proxy.mjs",
+      "apps/web/proxy.ts",
+      "apps/web/src/middleware.js",
+      "apps/web/src/middleware.ts",
+      "apps/web/src/proxy.js",
+      "apps/web/src/proxy.ts"
+    ],
+    "configs": [
+      "apps/web/app/layout.tsx",
+      "apps/web/next.config.mjs",
+      "apps/web/package.json",
+      "apps/web/tsconfig.json",
+      "tsconfig.base.json"
+    ],
+    "entries": [
+      {
+        "path": "apps/web/app/layout.tsx",
+        "lang": "js"
+      },
+      {
+        "path": "apps/web/app/page.tsx",
+        "lang": "js"
+      },
+      {
+        "path": "apps/web/next.config.mjs",
+        "lang": "js"
+      }
+    ],
+    "memberships": [
+      {
+        "dir": "apps/web",
+        "pattern": ".env*",
+        "reason": "env files (listed, never read)"
+      },
+      {
+        "dir": "apps/web/app",
+        "pattern": "**/*",
+        "reason": "tsconfig include"
+      },
+      {
+        "dir": "apps/web/app",
+        "pattern": "**/{page,route,layout,template,loading,error,not-found,forbidden,unauthorized,default,global-error,global-not-found}.{tsx,ts,jsx,js}",
+        "reason": "App Router special files (the route table)"
+      },
+      {
+        "dir": "apps/web/public",
+        "pattern": "**",
+        "reason": "public/ assets are served by URL"
+      }
+    ],
+    "toolchain": [
+      {
+        "ecosystem": "npm",
+        "name": "next"
+      }
+    ],
+    "env": [
+      "NEXT_PUBLIC_*",
+      "NODE_ENV"
+    ]
+  }
+}
+
+## task:apps/web#lint
+{
+  "sources": [
+    "npm",
+    "turbo"
+  ],
+  "deps": [],
+  "commands": [
+    "next lint [next] Full"
+  ],
+  "spec": {
+    "data_inputs": [
+      ".env",
+      "apps/web/eslint.config.js",
+      "tsconfig.base.json"
+    ],
+    "configs": [
+      "apps/web/next.config.mjs",
+      "apps/web/package.json",
+      "apps/web/turbo.json",
+      "turbo.json"
+    ],
+    "entries": [
+      {
+        "path": "apps/web/next.config.mjs",
+        "lang": "js"
+      }
+    ],
+    "memberships": [
+      {
+        "dir": "apps/web/app",
+        "pattern": "**",
+        "reason": "next lint default dirs"
+      },
+      {
+        "dir": "apps/web/components",
+        "pattern": "**",
+        "reason": "next lint default dirs"
+      },
+      {
+        "dir": "apps/web/lib",
+        "pattern": "**",
+        "reason": "next lint default dirs"
+      },
+      {
+        "dir": "apps/web/pages",
+        "pattern": "**",
+        "reason": "next lint default dirs"
+      },
+      {
+        "dir": "apps/web/src",
+        "pattern": "**",
+        "reason": "next lint default dirs"
+      },
+      {
+        "dir": "apps/web/src",
+        "pattern": "**/*.ts",
+        "reason": "turbo inputs",
+        "data": true
+      }
+    ],
+    "toolchain": [
+      {
+        "ecosystem": "npm",
+        "name": "next"
+      }
+    ],
+    "env": [
+      "CI"
+    ]
+  }
+}
+
+## task:packages/db#build
+{
+  "sources": [
+    "npm",
+    "turbo"
+  ],
+  "deps": [
+    "task:packages/db#codegen",
+    "task:packages/db#prebuild"
+  ],
+  "commands": [
+    "tsc [tsc] Full"
+  ],
+  "spec": {
+    "data_inputs": [
+      ".env",
+      "tsconfig.base.json"
+    ],
+    "outputs": [
+      {
+        "path": "packages/db/.next",
+        "pattern": "**",
+        "exclude": [
+          "cache/**"
+        ],
+        "kind": "declared"
+      },
+      {
+        "path": "packages/db/dist",
+        "kind": "artifact"
+      },
+      {
+        "path": "packages/db/dist",
+        "pattern": "**",
+        "kind": "declared"
+      }
+    ],
+    "configs": [
+      "packages/db/package.json",
+      "packages/db/tsconfig.json",
+      "turbo.json"
+    ],
+    "memberships": [
+      {
+        "dir": "packages/db/src",
+        "pattern": "**/*",
+        "reason": "tsconfig include"
+      }
+    ],
+    "task_deps": [
+      {
+        "target": {
+          "kind": "local",
+          "name": "codegen"
+        },
+        "reason": "turbo dependsOn"
+      },
+      {
+        "target": {
+          "kind": "local",
+          "name": "prebuild"
+        },
+        "reason": "pre hook"
+      },
+      {
+        "target": {
+          "kind": "upstream",
+          "name": "build"
+        },
+        "reason": "turbo dependsOn ^"
+      }
+    ],
+    "toolchain": [
+      {
+        "ecosystem": "npm",
+        "name": "typescript"
+      }
+    ],
+    "env": [
+      "CI"
+    ]
+  }
+}
+
+## task:packages/db#codegen
+{
+  "sources": [
+    "npm",
+    "turbo"
+  ],
+  "deps": [],
+  "commands": [
+    "node scripts/gen.mjs [node] Full"
+  ],
+  "spec": {
+    "data_inputs": [
+      ".env",
+      "tsconfig.base.json"
+    ],
+    "outputs": [
+      {
+        "path": "packages/db/src/generated",
+        "pattern": "**",
+        "kind": "declared"
+      }
+    ],
+    "configs": [
+      "packages/db/package.json",
+      "turbo.json"
+    ],
+    "entries": [
+      {
+        "path": "packages/db/scripts/gen.mjs",
+        "lang": "js"
+      }
+    ],
+    "env": [
+      "CI"
+    ],
+    "definition": [
+      "packages/db/scripts/gen.mjs"
+    ]
+  }
+}
+
+## task:packages/db#prebuild
+{
+  "sources": [
+    "npm"
+  ],
+  "deps": [
+    "task:packages/db#codegen"
+  ],
+  "commands": [
+    "npm run codegen [package-manager] Full"
+  ],
+  "spec": {
+    "configs": [
+      "packages/db/package.json"
+    ],
+    "task_deps": [
+      {
+        "target": {
+          "kind": "local",
+          "name": "codegen"
+        },
+        "reason": "npm run"
+      }
+    ],
+    "runs": [
+      {
+        "kind": "task",
+        "target": {
+          "kind": "local",
+          "name": "codegen"
+        }
+      }
+    ]
+  }
+}
+
+## task:packages/ui#build
+{
+  "sources": [
+    "npm",
+    "turbo"
+  ],
+  "deps": [
+    "task:packages/db#build"
+  ],
+  "commands": [
+    "tsc -p tsconfig.build.json [tsc] Full"
+  ],
+  "spec": {
+    "data_inputs": [
+      ".env",
+      "tsconfig.base.json"
+    ],
+    "outputs": [
+      {
+        "path": "packages/ui/.next",
+        "pattern": "**",
+        "exclude": [
+          "cache/**"
+        ],
+        "kind": "declared"
+      },
+      {
+        "path": "packages/ui/dist",
+        "kind": "artifact"
+      },
+      {
+        "path": "packages/ui/dist",
+        "pattern": "**",
+        "kind": "declared"
+      }
+    ],
+    "configs": [
+      "packages/ui/package.json",
+      "packages/ui/tsconfig.build.json",
+      "tsconfig.base.json",
+      "turbo.json"
+    ],
+    "memberships": [
+      {
+        "dir": "packages/ui/src",
+        "pattern": "**/*",
+        "reason": "tsconfig include"
+      }
+    ],
+    "task_deps": [
+      {
+        "target": {
+          "kind": "local",
+          "name": "codegen"
+        },
+        "reason": "turbo dependsOn"
+      },
+      {
+        "target": {
+          "kind": "upstream",
+          "name": "build"
+        },
+        "reason": "turbo dependsOn ^"
+      }
+    ],
+    "toolchain": [
+      {
+        "ecosystem": "npm",
+        "name": "typescript"
+      }
+    ],
+    "env": [
+      "CI"
+    ]
+  }
+}
+
+## task:packages/ui#lint
+{
+  "sources": [
+    "npm",
+    "turbo"
+  ],
+  "deps": [],
+  "commands": [
+    "eslint src [lint] Full"
+  ],
+  "spec": {
+    "inputs": [
+      "packages/ui/package.json"
+    ],
+    "data_inputs": [
+      ".env",
+      "packages/ui/eslint.config.js",
+      "tsconfig.base.json"
+    ],
+    "configs": [
+      "packages/ui/package.json",
+      "turbo.json"
+    ],
+    "memberships": [
+      {
+        "dir": "packages/ui/src",
+        "pattern": "**",
+        "reason": "eslint files",
+        "data": true
+      },
+      {
+        "dir": "packages/ui/src",
+        "pattern": "**/*.ts",
+        "reason": "turbo inputs",
+        "data": true
+      }
+    ],
+    "toolchain": [
+      {
+        "ecosystem": "npm",
+        "name": "eslint"
+      }
+    ],
+    "env": [
+      "CI"
+    ]
+  }
+}
+
+## task:packages/ui#test
+{
+  "sources": [
+    "npm",
+    "turbo"
+  ],
+  "deps": [
+    "task:packages/ui#build"
+  ],
+  "commands": [
+    "vitest run [vitest] Full"
+  ],
+  "spec": {
+    "inputs": [
+      "packages/ui/vite.config.cjs",
+      "packages/ui/vite.config.cts",
+      "packages/ui/vite.config.js",
+      "packages/ui/vite.config.mjs",
+      "packages/ui/vite.config.mts",
+      "packages/ui/vite.config.ts",
+      "packages/ui/vitest.config.cjs",
+      "packages/ui/vitest.config.cts",
+      "packages/ui/vitest.config.js",
+      "packages/ui/vitest.config.mjs",
+      "packages/ui/vitest.config.mts",
+      "packages/ui/vitest.config.ts",
+      "packages/ui/vitest.workspace.js",
+      "packages/ui/vitest.workspace.json",
+      "packages/ui/vitest.workspace.ts"
+    ],
+    "data_inputs": [
+      ".env",
+      "tsconfig.base.json"
+    ],
+    "configs": [
+      "packages/ui/package.json",
+      "turbo.json"
+    ],
+    "memberships": [
+      {
+        "dir": "packages/ui",
+        "pattern": "**",
+        "exclude": [
+          "README.md"
+        ],
+        "reason": "turbo inputs",
+        "data": true
+      },
+      {
+        "dir": "packages/ui",
+        "pattern": "**/*.{js,jsx,ts,tsx,mjs,cjs,mts,cts,snap}",
+        "reason": "vitest default sources"
+      },
+      {
+        "dir": "packages/ui",
+        "pattern": "**/*.{test,spec}.{js,jsx,ts,tsx,mjs,cjs,mts,cts}",
+        "reason": "vitest default test files"
+      },
+      {
+        "dir": "packages/ui/test",
+        "pattern": "**",
+        "reason": "turbo inputs",
+        "data": true
+      }
+    ],
+    "task_deps": [
+      {
+        "target": {
+          "kind": "local",
+          "name": "build"
+        },
+        "reason": "turbo dependsOn"
+      }
+    ],
+    "toolchain": [
+      {
+        "ecosystem": "npm",
+        "name": "vitest"
+      }
+    ],
+    "env": [
+      "CI",
+      "TEST_SHARD"
+    ],
+    "runs": [
+      {
+        "kind": "tests",
+        "framework": "vitest",
+        "dir": "packages/ui"
+      }
+    ]
+  }
+}

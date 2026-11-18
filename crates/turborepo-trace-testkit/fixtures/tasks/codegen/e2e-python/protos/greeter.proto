@@ -1,0 +1,9 @@
+syntax = "proto3";
+
+package greeter;
+
+import "common.proto";
+
+message Hello {
+  Name name = 1;
+}

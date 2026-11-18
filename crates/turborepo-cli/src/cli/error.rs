@@ -29,6 +29,9 @@ pub enum Error {
     #[error(transparent)]
     Boundaries(#[from] turborepo_boundaries::Error),
     #[error(transparent)]
+    #[diagnostic(transparent)]
+    Trace(#[from] turborepo_trace::Error),
+    #[error(transparent)]
     Path(#[from] turbopath::PathError),
     #[error(transparent)]
     #[diagnostic(transparent)]

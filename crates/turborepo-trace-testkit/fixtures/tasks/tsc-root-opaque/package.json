@@ -1,0 +1,11 @@
+{
+  "name": "tsc-root-opaque",
+  "private": true,
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "node scripts/gen.js && tsc -b",
+    "type-check": "tsc -b"
+  }
+}

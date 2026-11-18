@@ -35,6 +35,8 @@ turborepo-platform = { workspace = true }
 turborepo-setup = { path = "../turborepo-setup", features = ["test-support"] }
 turborepo-shim = { workspace = true }
 turborepo-tool-install = { path = "../turborepo-tool-install" }
+# `trace_task_definitions_test` compares the trace's reading of `turbo.json` with turbo's.
+turborepo-trace-tasks = { workspace = true }
 which = { workspace = true }
 
 [target.'cfg(any(target_os = "linux", target_os = "macos"))'.dev-dependencies]

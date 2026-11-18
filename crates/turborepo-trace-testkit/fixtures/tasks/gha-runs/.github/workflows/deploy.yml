@@ -1,0 +1,22 @@
+name: Deploy
+on:
+  push:
+    branches: [main]
+
+concurrency: deploy
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/install
+      - run: pnpm exec turbo build --filter=@acme/a -- --mode "$DEPLOY_MODE"
+      - run: ./.github/scripts/deploy.sh production
+
+  notify:
+    needs: deploy
+    runs-on: ubuntu-latest
+    steps:
+      - run: curl -fsS -X POST "$WEBHOOK" -d "deployed ${{ github.sha }}"

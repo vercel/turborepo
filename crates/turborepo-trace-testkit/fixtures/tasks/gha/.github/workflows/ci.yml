@@ -1,0 +1,60 @@
+name: CI
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'src/**'
+      - 'package.json'
+      - '!src/**/*.md'
+  pull_request:
+    paths-ignore:
+      - 'docs/**'
+
+env:
+  NODE_ENV: test
+
+jobs:
+  setup:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache-dependency-path: pnpm-lock.yaml
+      - uses: ./.github/actions/setup
+        with:
+          install-dir: tools
+
+  build:
+    needs: setup
+    runs-on: ubuntu-latest
+    steps:
+      - run: pnpm turbo run build
+      - run: node scripts/check.js
+        working-directory: tools
+      - uses: actions/cache@v4
+        with:
+          key: deps-${{ hashFiles('**/pnpm-lock.yaml') }}
+          path: node_modules
+
+  test:
+    needs: [build]
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        shard: [1]
+    defaults:
+      run:
+        working-directory: tools
+    steps:
+      - run: |
+          echo "${{ github.sha }}"
+          ./run-tests.sh ${{ matrix.shard }}
+      - name: python step
+        shell: python
+        run: print("hi")
+      - run: echo ${{ steps.x.outputs.y }}
+
+  reuse:
+    uses: ./.github/workflows/release.yml

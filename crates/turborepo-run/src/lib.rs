@@ -672,6 +672,11 @@ impl Run {
         &self.repo.scm
     }
 
+    /// The run's cache (local, remote, signing and `--cache` as configured).
+    pub fn run_cache(&self) -> &Arc<RunCache> {
+        &self.services.run_cache
+    }
+
     pub fn root_turbo_json(&self) -> &TurboJson {
         &self.repo.root_turbo_json
     }

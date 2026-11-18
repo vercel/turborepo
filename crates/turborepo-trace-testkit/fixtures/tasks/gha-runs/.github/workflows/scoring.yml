@@ -1,0 +1,14 @@
+name: Scoring
+on:
+  workflow_dispatch:
+
+jobs:
+  # Runs a repository script that imports application code and calls turbo to build:
+  # not a test job.
+  score:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/install
+      - run: node scripts/scoring/index.mjs
+      - run: pnpm run "$SCORE_TASK"

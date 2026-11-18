@@ -1,0 +1,12 @@
+[package]
+name = "regdep"
+version = "1.0.0"
+edition = "2021"
+
+[dependencies]
+optdep = { version = "0.1", optional = true }
+
+[features]
+default = ["std"]
+std = []
+extra = ["dep:optdep"]

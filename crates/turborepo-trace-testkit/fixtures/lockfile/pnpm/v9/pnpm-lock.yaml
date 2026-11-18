@@ -1,0 +1,158 @@
+lockfileVersion: '9.0'
+
+settings:
+  autoInstallPeers: true
+  excludeLinksFromLockfile: false
+
+catalogs:
+  default:
+    react:
+      specifier: ^18.3.0
+      version: 18.3.1
+
+overrides:
+  ms@<2.1.2: 2.1.2
+
+patchedDependencies:
+  left-pad@1.3.0: 5c1e9ad2c1a4c4d0b2e0d3e95c1f7d0f8d34d1b0c2e5f2bcae7d4e0f9d1b2a3c
+
+importers:
+
+  .:
+    devDependencies:
+      typescript:
+        specifier: ^5.4.0
+        version: 5.4.5
+
+  packages/app:
+    dependencies:
+      '@fx/lib':
+        specifier: workspace:*
+        version: link:../lib
+      debug:
+        specifier: 4.3.4
+        version: 4.3.4
+      react:
+        specifier: 'catalog:'
+        version: 18.3.1
+      react-dom:
+        specifier: ^18.3.1
+        version: 18.3.1(react@18.3.1)
+      string-width-cjs:
+        specifier: npm:string-width@4.2.3
+        version: string-width@4.2.3
+    optionalDependencies:
+      fsevents:
+        specifier: ^2.3.3
+        version: 2.3.3
+
+  packages/lib:
+    dependencies:
+      left-pad:
+        specifier: 1.3.0
+        version: 1.3.0(patch_hash=5c1e9ad2c1a4c4d0b2e0d3e95c1f7d0f8d34d1b0c2e5f2bcae7d4e0f9d1b2a3c)
+      ms:
+        specifier: ^2.1.3
+        version: 2.1.3
+      tarball-pkg:
+        specifier: https://codeload.github.com/fx/tarball-pkg/tar.gz/abc123
+        version: https://codeload.github.com/fx/tarball-pkg/tar.gz/abc123
+
+packages:
+
+  debug@4.3.4:
+    resolution: {integrity: sha512-debug434==}
+    engines: {node: '>=6.0'}
+    peerDependencies:
+      supports-color: '*'
+    peerDependenciesMeta:
+      supports-color:
+        optional: true
+
+  fsevents@2.3.3:
+    resolution: {integrity: sha512-fsevents233==}
+    engines: {node: ^8.16.0 || ^10.6.0 || >=11.0.0}
+    os: [darwin]
+
+  js-tokens@4.0.0:
+    resolution: {integrity: sha512-jstokens400==}
+
+  left-pad@1.3.0:
+    resolution: {integrity: sha512-leftpad130==}
+    deprecated: use String.prototype.padStart()
+
+  loose-envify@1.4.0:
+    resolution: {integrity: sha512-looseenvify140==}
+    hasBin: true
+
+  ms@2.1.2:
+    resolution: {integrity: sha512-ms212==}
+
+  ms@2.1.3:
+    resolution: {integrity: sha512-ms213==}
+
+  react-dom@18.3.1:
+    resolution: {integrity: sha512-reactdom1831==}
+    peerDependencies:
+      react: ^18.3.1
+
+  react@18.3.1:
+    resolution: {integrity: sha512-react1831==}
+    engines: {node: '>=0.10.0'}
+
+  scheduler@0.23.2:
+    resolution: {integrity: sha512-scheduler0232==}
+
+  string-width@4.2.3:
+    resolution: {integrity: sha512-stringwidth423==}
+    engines: {node: '>=8'}
+
+  tarball-pkg@https://codeload.github.com/fx/tarball-pkg/tar.gz/abc123:
+    resolution: {tarball: https://codeload.github.com/fx/tarball-pkg/tar.gz/abc123}
+    version: 0.1.0
+
+  typescript@5.4.5:
+    resolution: {integrity: sha512-typescript545==}
+    engines: {node: '>=14.17'}
+    hasBin: true
+
+snapshots:
+
+  debug@4.3.4:
+    dependencies:
+      ms: 2.1.2
+
+  fsevents@2.3.3:
+    optional: true
+
+  js-tokens@4.0.0: {}
+
+  left-pad@1.3.0(patch_hash=5c1e9ad2c1a4c4d0b2e0d3e95c1f7d0f8d34d1b0c2e5f2bcae7d4e0f9d1b2a3c): {}
+
+  loose-envify@1.4.0:
+    dependencies:
+      js-tokens: 4.0.0
+
+  ms@2.1.2: {}
+
+  ms@2.1.3: {}
+
+  react-dom@18.3.1(react@18.3.1):
+    dependencies:
+      loose-envify: 1.4.0
+      react: 18.3.1
+      scheduler: 0.23.2
+
+  react@18.3.1:
+    dependencies:
+      loose-envify: 1.4.0
+
+  scheduler@0.23.2:
+    dependencies:
+      loose-envify: 1.4.0
+
+  string-width@4.2.3: {}
+
+  tarball-pkg@https://codeload.github.com/fx/tarball-pkg/tar.gz/abc123: {}
+
+  typescript@5.4.5: {}

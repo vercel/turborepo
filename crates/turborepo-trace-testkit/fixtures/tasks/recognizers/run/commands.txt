@@ -1,0 +1,15 @@
+node scripts/gen.mjs schema.json
+node -r dotenv/config --env-file=.env.local scripts/gen.mjs
+tsx watch scripts/seed.ts
+ts-node --project tsconfig.json scripts/seed
+node -e "console.log(1)"
+node --test
+python3 scripts/x.py
+python -m tools.gen --out x
+python -m pytest tests
+go run ./cmd/server
+go build -o bin/server ./cmd/server
+./scripts/build.sh
+deno run --allow-read scripts/seed.ts
+bun scripts/seed.ts
+uv run python scripts/x.py

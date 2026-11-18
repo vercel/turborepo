@@ -1,0 +1,21 @@
+version: "2"
+plugins:
+  - name: py
+    wasm:
+      url: https://downloads.sqlc.dev/plugin/sqlc-gen-python_1.2.0.wasm
+sql:
+  - engine: postgresql
+    schema: db/migrations
+    queries: db/queries
+    gen:
+      go:
+        package: db
+        out: internal/db
+        emit_interface: true
+  - engine: postgresql
+    schema: db/schema.sql
+    queries:
+      - db/queries/users.sql
+    codegen:
+      - plugin: py
+        out: gen/py

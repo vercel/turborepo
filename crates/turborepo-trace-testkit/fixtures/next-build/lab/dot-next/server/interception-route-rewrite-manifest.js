@@ -1,0 +1,1 @@
+self.__INTERCEPTION_ROUTE_REWRITE_MANIFEST="[{\"source\":\"/photos/photo/:nxtPid\",\"destination\":\"/photos/(.)photo/:nxtPid\",\"has\":[{\"type\":\"header\",\"key\":\"next-url\",\"value\":\"/photos(?:/.*)?\"}],\"regex\":\"^/photos/photo/(?<nxtPid>[^/]+?)(?:/)?$\"}]";

@@ -1,0 +1,3 @@
+mod inner {
+    mod deep;
+}

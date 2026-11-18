@@ -1,0 +1,545 @@
+---
+source: crates/turborepo-trace-tasks/tests/make.rs
+expression: s
+---
+## make:.:all
+{
+  "sources": [
+    "make"
+  ],
+  "deps": [
+    "make:.:build",
+    "make:.:generate",
+    "make:.:test"
+  ],
+  "lines": [],
+  "commands": [],
+  "spec": {
+    "configs": [
+      "Makefile"
+    ],
+    "task_deps": [
+      {
+        "target": {
+          "kind": "id",
+          "id": "make:.:build"
+        },
+        "reason": "make prerequisite"
+      },
+      {
+        "target": {
+          "kind": "id",
+          "id": "make:.:generate"
+        },
+        "reason": "make prerequisite"
+      },
+      {
+        "target": {
+          "kind": "id",
+          "id": "make:.:test"
+        },
+        "reason": "make prerequisite"
+      }
+    ]
+  }
+}
+
+## make:.:assets
+{
+  "sources": [
+    "make"
+  ],
+  "deps": [
+    "task:.#build"
+  ],
+  "lines": [
+    "npm run build"
+  ],
+  "commands": [
+    "npm run build [package-manager] Full"
+  ],
+  "spec": {
+    "configs": [
+      "Makefile"
+    ],
+    "task_deps": [
+      {
+        "target": {
+          "kind": "local",
+          "name": "build"
+        },
+        "reason": "npm run"
+      }
+    ],
+    "runs": [
+      {
+        "kind": "task",
+        "target": {
+          "kind": "local",
+          "name": "build"
+        }
+      }
+    ]
+  }
+}
+
+## make:.:bin/server
+{
+  "sources": [
+    "make"
+  ],
+  "deps": [
+    "make:.:internal/api/gen.go"
+  ],
+  "lines": [
+    "mkdir -p bin",
+    "go build -ldflags \"-X main.version=__make_shell__\" -o bin/server ./cmd/server"
+  ],
+  "commands": [
+    "mkdir -p bin [touch] Ignored",
+    "go build -ldflags \"-X main.version=__make_shell__\" -o bin/server ./cmd/server [go] Full"
+  ],
+  "spec": {
+    "inputs": [
+      "cmd/server/main.go",
+      "go.mod",
+      "go.sum",
+      "internal/api/api.go",
+      "internal/api/api_test.go"
+    ],
+    "outputs": [
+      {
+        "path": "bin/server",
+        "kind": "declared"
+      }
+    ],
+    "configs": [
+      "Makefile",
+      "go.mod",
+      "go.sum"
+    ],
+    "entries": [
+      {
+        "path": "cmd/server",
+        "lang": "go"
+      }
+    ],
+    "memberships": [
+      {
+        "dir": "cmd/server",
+        "pattern": "*.go",
+        "reason": "go package directory"
+      },
+      {
+        "dir": "cmd/server",
+        "pattern": "*.go",
+        "reason": "make $(wildcard)"
+      },
+      {
+        "dir": "internal",
+        "pattern": "*/*.go",
+        "reason": "make $(wildcard)"
+      }
+    ],
+    "task_deps": [
+      {
+        "target": {
+          "kind": "id",
+          "id": "make:.:internal/api/gen.go"
+        },
+        "reason": "make prerequisite"
+      }
+    ],
+    "toolchain": [
+      {
+        "ecosystem": "system",
+        "name": "go"
+      }
+    ],
+    "definition": [
+      "cmd/server"
+    ]
+  }
+}
+
+## make:.:build
+{
+  "sources": [
+    "make"
+  ],
+  "deps": [
+    "make:.:bin/server"
+  ],
+  "lines": [],
+  "commands": [],
+  "spec": {
+    "configs": [
+      "Makefile"
+    ],
+    "task_deps": [
+      {
+        "target": {
+          "kind": "id",
+          "id": "make:.:bin/server"
+        },
+        "reason": "make prerequisite"
+      }
+    ]
+  }
+}
+
+## make:.:clean
+{
+  "sources": [
+    "make"
+  ],
+  "deps": [],
+  "lines": [
+    "rm -rf bin"
+  ],
+  "commands": [
+    "rm -rf bin [noop] Ignored"
+  ],
+  "spec": {
+    "configs": [
+      "Makefile"
+    ]
+  }
+}
+
+## make:.:generate
+{
+  "sources": [
+    "make"
+  ],
+  "deps": [
+    "make:.:internal/api/gen.go"
+  ],
+  "lines": [],
+  "commands": [],
+  "spec": {
+    "configs": [
+      "Makefile"
+    ],
+    "task_deps": [
+      {
+        "target": {
+          "kind": "id",
+          "id": "make:.:internal/api/gen.go"
+        },
+        "reason": "make prerequisite"
+      }
+    ]
+  }
+}
+
+## make:.:image
+{
+  "sources": [
+    "make"
+  ],
+  "deps": [
+    "make:.:build",
+    "docker:Dockerfile"
+  ],
+  "lines": [
+    "docker build -t server:__make_shell__ ."
+  ],
+  "commands": [
+    "docker build -t server:__make_shell__ . [docker] Full"
+  ],
+  "spec": {
+    "configs": [
+      "Dockerfile",
+      "Makefile"
+    ],
+    "task_deps": [
+      {
+        "target": {
+          "kind": "id",
+          "id": "make:.:build"
+        },
+        "reason": "make prerequisite"
+      },
+      {
+        "target": {
+          "kind": "id",
+          "id": "docker:Dockerfile"
+        },
+        "reason": "docker build"
+      }
+    ],
+    "toolchain": [
+      {
+        "ecosystem": "system",
+        "name": "docker"
+      }
+    ],
+    "runs": [
+      {
+        "kind": "task",
+        "target": {
+          "kind": "id",
+          "id": "docker:Dockerfile"
+        }
+      }
+    ]
+  }
+}
+
+## make:.:internal/api/gen.go
+{
+  "sources": [
+    "make"
+  ],
+  "deps": [],
+  "lines": [
+    "node scripts/gen.mjs api/openapi.yaml > internal/api/gen.go"
+  ],
+  "commands": [
+    "node scripts/gen.mjs api/openapi.yaml > internal/api/gen.go [node] Full"
+  ],
+  "spec": {
+    "inputs": [
+      "api/openapi.yaml",
+      "scripts/gen.mjs"
+    ],
+    "outputs": [
+      {
+        "path": "internal/api/gen.go",
+        "kind": "generated"
+      }
+    ],
+    "configs": [
+      "Makefile"
+    ],
+    "entries": [
+      {
+        "path": "scripts/gen.mjs",
+        "lang": "js"
+      }
+    ],
+    "definition": [
+      "scripts/gen.mjs"
+    ]
+  }
+}
+
+## make:.:lint
+{
+  "sources": [
+    "make"
+  ],
+  "deps": [],
+  "lines": [
+    "golangci-lint run --out-format github-actions ./..."
+  ],
+  "commands": [
+    "golangci-lint run --out-format github-actions ./... [-] Unknown"
+  ],
+  "spec": {
+    "configs": [
+      "Makefile"
+    ],
+    "memberships": [
+      {
+        "dir": ".",
+        "pattern": "**",
+        "reason": "makefile not fully understood"
+      },
+      {
+        "dir": ".",
+        "pattern": "**",
+        "reason": "uncertain task"
+      },
+      {
+        "dir": ".",
+        "pattern": "**",
+        "reason": "unknown command `golangci-lint`"
+      }
+    ],
+    "uncertainties": [
+      {
+        "kind": "conditional_resolution",
+        "detail": "ifeq ($(CI),true)"
+      },
+      {
+        "kind": "unknown_command",
+        "detail": "golangci-lint"
+      }
+    ]
+  }
+}
+
+## make:.:test
+{
+  "sources": [
+    "make"
+  ],
+  "deps": [
+    "make:.:generate"
+  ],
+  "lines": [
+    "go test -race ./..."
+  ],
+  "commands": [
+    "go test -race ./... [gotest] Full"
+  ],
+  "spec": {
+    "configs": [
+      "Makefile",
+      "go.mod",
+      "go.sum"
+    ],
+    "memberships": [
+      {
+        "dir": ".",
+        "pattern": "**/*.go",
+        "reason": "go packages (./...)"
+      },
+      {
+        "dir": ".",
+        "pattern": "**/*.{c,h,s,S,cc,cpp,hpp,m,swig,syso}",
+        "reason": "go package sources"
+      },
+      {
+        "dir": ".",
+        "pattern": "**/testdata/**",
+        "reason": "go test testdata"
+      }
+    ],
+    "task_deps": [
+      {
+        "target": {
+          "kind": "id",
+          "id": "make:.:generate"
+        },
+        "reason": "make prerequisite"
+      }
+    ],
+    "toolchain": [
+      {
+        "ecosystem": "system",
+        "name": "go"
+      }
+    ],
+    "runs": [
+      {
+        "kind": "tests",
+        "framework": "gotest",
+        "dir": "."
+      }
+    ]
+  }
+}
+
+## docker:Dockerfile
+{
+  "sources": [
+    "docker"
+  ],
+  "deps": [
+    "docker:Dockerfile#1"
+  ],
+  "lines": [],
+  "commands": [],
+  "spec": {
+    "configs": [
+      ".dockerignore",
+      "Dockerfile",
+      "Dockerfile.dockerignore"
+    ],
+    "task_deps": [
+      {
+        "target": {
+          "kind": "id",
+          "id": "docker:Dockerfile#1"
+        },
+        "reason": "final stage"
+      }
+    ]
+  }
+}
+
+## docker:Dockerfile#1
+{
+  "sources": [
+    "docker"
+  ],
+  "deps": [
+    "docker:Dockerfile#build"
+  ],
+  "lines": [],
+  "commands": [],
+  "spec": {
+    "configs": [
+      ".dockerignore",
+      "Dockerfile",
+      "Dockerfile.dockerignore"
+    ],
+    "task_deps": [
+      {
+        "target": {
+          "kind": "id",
+          "id": "docker:Dockerfile#build"
+        },
+        "reason": "docker stage"
+      }
+    ],
+    "toolchain": [
+      {
+        "ecosystem": "docker",
+        "name": "gcr.io/distroless/base"
+      }
+    ]
+  }
+}
+
+## docker:Dockerfile#build
+{
+  "sources": [
+    "docker"
+  ],
+  "deps": [],
+  "lines": [],
+  "commands": [],
+  "spec": {
+    "configs": [
+      ".dockerignore",
+      "Dockerfile",
+      "Dockerfile.dockerignore"
+    ],
+    "memberships": [
+      {
+        "dir": ".",
+        "pattern": "{cmd,cmd/**}",
+        "reason": "COPY cmd"
+      },
+      {
+        "dir": ".",
+        "pattern": "{go.mod,go.mod/**}",
+        "reason": "COPY go.mod"
+      },
+      {
+        "dir": ".",
+        "pattern": "{go.sum,go.sum/**}",
+        "reason": "COPY go.sum"
+      },
+      {
+        "dir": ".",
+        "pattern": "{internal,internal/**}",
+        "reason": "COPY internal"
+      }
+    ],
+    "toolchain": [
+      {
+        "ecosystem": "docker",
+        "name": "golang:1.22"
+      },
+      {
+        "ecosystem": "system",
+        "name": "go"
+      }
+    ]
+  }
+}

@@ -1,0 +1,19 @@
+cd color && stringer -type=Color,Shade
+cd color && go tool stringer -type Color -output color_names.go
+cd color && enumer -type=Color
+cd store && mockgen -source=store.go -destination=../mocks/mock_store.go -package=mocks
+mockgen -destination=mocks/mock_reflect.go example.com/gen/store Store
+mockgen -destination=mocks/ext.go github.com/aws/aws-sdk-go/service/s3/s3iface S3API
+cd api && oapi-codegen -config oapi.yaml spec.yaml
+cd api && go run github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen@v2.4.1 -generate types -package api -o types.gen.go spec.yaml
+cd ent && go run -mod=mod entgo.io/ent/cmd/ent generate ./schema
+cd di && wire
+cd graph && go run github.com/99designs/gqlgen generate
+cd ej && easyjson -all model.go
+go generate ./color
+go generate ./...
+go run github.com/vektra/mockery/v2
+cd api && go run ../tools/gen -schema spec.yaml -output=schema.gen.go -package api
+go run example.com/gen/tools/gen -o data/table.go
+cd tools && go run ./gen
+cd api && go-jsonschema --only-models -p api spec.yaml -o models.gen.go

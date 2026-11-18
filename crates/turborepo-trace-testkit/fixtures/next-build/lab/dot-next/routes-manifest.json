@@ -1,0 +1,237 @@
+{
+  "version": 3,
+  "pages404": true,
+  "appType": "hybrid",
+  "caseSensitive": false,
+  "basePath": "",
+  "redirects": [
+    {
+      "source": "/:path+/",
+      "destination": "/:path+",
+      "internal": true,
+      "priority": true,
+      "statusCode": 308,
+      "regex": "^(?:/((?:[^/]+?)(?:/(?:[^/]+?))*))/$"
+    },
+    {
+      "source": "/old-about",
+      "destination": "/about",
+      "statusCode": 307,
+      "regex": "^(?!/_next)/old-about(?:/)?$"
+    }
+  ],
+  "headers": [
+    {
+      "source": "/about",
+      "headers": [
+        {
+          "key": "x-lab",
+          "value": "about"
+        }
+      ],
+      "regex": "^/about(?:/)?$"
+    }
+  ],
+  "onMatchHeaders": [],
+  "rewrites": {
+    "beforeFiles": [
+      {
+        "source": "/photos/photo/:nxtPid",
+        "destination": "/photos/(.)photo/:nxtPid",
+        "has": [
+          {
+            "type": "header",
+            "key": "next-url",
+            "value": "/photos(?:/.*)?"
+          }
+        ],
+        "regex": "^/photos/photo(?:/([^/]+?))(?:/)?$"
+      }
+    ],
+    "afterFiles": [
+      {
+        "source": "/p/:slug",
+        "destination": "/blog/:slug",
+        "regex": "^/p(?:/([^/]+?))(?:/)?$"
+      }
+    ],
+    "fallback": []
+  },
+  "dynamicRoutes": [
+    {
+      "page": "/api/items/[id]",
+      "regex": "^/api/items/([^/]+?)(?:/)?$",
+      "routeKeys": {
+        "nxtPid": "nxtPid"
+      },
+      "namedRegex": "^/api/items/(?<nxtPid>[^/]+?)(?:/)?$"
+    },
+    {
+      "page": "/blog/[slug]",
+      "regex": "^/blog/([^/]+?)(?:/)?$",
+      "routeKeys": {
+        "nxtPslug": "nxtPslug"
+      },
+      "namedRegex": "^/blog/(?<nxtPslug>[^/]+?)(?:/)?$"
+    },
+    {
+      "page": "/legacy/[id]",
+      "regex": "^/legacy/([^/]+?)(?:/)?$",
+      "routeKeys": {
+        "nxtPid": "nxtPid"
+      },
+      "namedRegex": "^/legacy/(?<nxtPid>[^/]+?)(?:/)?$"
+    },
+    {
+      "page": "/photos/(.)photo/[id]",
+      "regex": "^/photos/\\(\\.\\)photo/([^/]+?)(?:/)?$",
+      "routeKeys": {
+        "nxtPid": "nxtPid"
+      },
+      "namedRegex": "^/photos/\\(\\.\\)photo/(?<nxtPid>[^/]+?)(?:/)?$"
+    },
+    {
+      "page": "/photos/photo/[id]",
+      "regex": "^/photos/photo/([^/]+?)(?:/)?$",
+      "routeKeys": {
+        "nxtPid": "nxtPid"
+      },
+      "namedRegex": "^/photos/photo/(?<nxtPid>[^/]+?)(?:/)?$"
+    }
+  ],
+  "staticRoutes": [
+    {
+      "page": "/",
+      "regex": "^/(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/(?:/)?$"
+    },
+    {
+      "page": "/_not-found",
+      "regex": "^/_not\\-found(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/_not\\-found(?:/)?$"
+    },
+    {
+      "page": "/about",
+      "regex": "^/about(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/about(?:/)?$"
+    },
+    {
+      "page": "/api/hello",
+      "regex": "^/api/hello(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/hello(?:/)?$"
+    },
+    {
+      "page": "/api/old",
+      "regex": "^/api/old(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/old(?:/)?$"
+    },
+    {
+      "page": "/api/report-data",
+      "regex": "^/api/report\\-data(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/api/report\\-data(?:/)?$"
+    },
+    {
+      "page": "/blog",
+      "regex": "^/blog(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/blog(?:/)?$"
+    },
+    {
+      "page": "/computed",
+      "regex": "^/computed(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/computed(?:/)?$"
+    },
+    {
+      "page": "/dashboard",
+      "regex": "^/dashboard(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/dashboard(?:/)?$"
+    },
+    {
+      "page": "/dashboard/settings",
+      "regex": "^/dashboard/settings(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/dashboard/settings(?:/)?$"
+    },
+    {
+      "page": "/go",
+      "regex": "^/go(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/go(?:/)?$"
+    },
+    {
+      "page": "/go/next",
+      "regex": "^/go/next(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/go/next(?:/)?$"
+    },
+    {
+      "page": "/idioms",
+      "regex": "^/idioms(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/idioms(?:/)?$"
+    },
+    {
+      "page": "/legacy",
+      "regex": "^/legacy(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/legacy(?:/)?$"
+    },
+    {
+      "page": "/photos",
+      "regex": "^/photos(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/photos(?:/)?$"
+    },
+    {
+      "page": "/pricing",
+      "regex": "^/pricing(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/pricing(?:/)?$"
+    },
+    {
+      "page": "/report",
+      "regex": "^/report(?:/)?$",
+      "routeKeys": {},
+      "namedRegex": "^/report(?:/)?$"
+    }
+  ],
+  "dataRoutes": [
+    {
+      "page": "/legacy",
+      "dataRouteRegex": "^/_next/data/Al\\-SShdjXUxDRuupQCSZm/legacy\\.json$"
+    },
+    {
+      "page": "/legacy/[id]",
+      "routeKeys": {
+        "nxtPid": "nxtPid"
+      },
+      "dataRouteRegex": "^/_next/data/Al\\-SShdjXUxDRuupQCSZm/legacy/([^/]+?)\\.json$",
+      "namedDataRouteRegex": "^/_next/data/Al\\-SShdjXUxDRuupQCSZm/legacy/(?<nxtPid>[^/]+?)\\.json$"
+    }
+  ],
+  "rsc": {
+    "header": "rsc",
+    "varyHeader": "rsc, next-router-state-tree, next-router-prefetch, next-router-segment-prefetch",
+    "prefetchHeader": "next-router-prefetch",
+    "didPostponeHeader": "x-nextjs-postponed",
+    "contentTypeHeader": "text/x-component",
+    "suffix": ".rsc",
+    "prefetchSegmentHeader": "next-router-segment-prefetch",
+    "prefetchSegmentSuffix": ".segment.rsc",
+    "prefetchSegmentDirSuffix": ".segments",
+    "clientParamParsing": false,
+    "dynamicRSCPrerender": false
+  },
+  "rewriteHeaders": {
+    "pathHeader": "x-nextjs-rewritten-path",
+    "queryHeader": "x-nextjs-rewritten-query"
+  }
+}

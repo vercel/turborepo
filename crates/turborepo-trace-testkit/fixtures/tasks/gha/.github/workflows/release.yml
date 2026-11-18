@@ -1,0 +1,7 @@
+on: workflow_call
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: docker://alpine:3.20
+      - run: npm publish

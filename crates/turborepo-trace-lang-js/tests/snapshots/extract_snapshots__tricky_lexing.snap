@@ -1,0 +1,38 @@
+---
+source: crates/turborepo-trace-lang-js/tests/extract_snapshots.rs
+expression: "render(\"tricky_lexing.js\")"
+---
+2:22 require "./after-division"
+    span: require('./after-division')
+3:18 require "./after-regex-with-quote"
+    span: require('./after-regex-with-quote')
+4:20 require "./after-regex-with-class"
+    span: require('./after-regex-with-class')
+5:33 require "./after-regex-with-backtick"
+    span: require('./after-regex-with-backtick')
+6:22 require "./after-if-regex"
+    span: require('./after-if-regex')
+8:10 require "./after-call-division"
+    span: require('./after-call-division')
+9:30 require "./nested-template-sub"
+    span: require('./nested-template-sub')
+10:45 require "./after-object-in-template"
+    span: require('./after-object-in-template')
+12:27 require "./after-object-division"
+    span: require('./after-object-division')
+13:18 require "./after-block-regex"
+    span: require('./after-block-regex')
+14:14 require "./after-postfix"
+    span: require('./after-postfix')
+15:50 require "./after-keyword-props"
+    span: require('./after-keyword-props')
+16:47 require "./in-switch"
+    span: require('./in-switch')
+17:10 require "./in-label"
+    span: require('./in-label')
+18:29 require "./after-numbers"
+    span: require('./after-numbers')
+19:33 require "./after-unicode"
+    span: require('./after-unicode')
+20:60 require "./after-private"
+    span: require('./after-private')

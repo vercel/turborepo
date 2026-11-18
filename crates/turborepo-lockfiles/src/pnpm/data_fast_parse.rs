@@ -1349,6 +1349,12 @@ mod tests {
             "structural scanner must accept this input"
         );
         assert_fast_matches_serde(yaml);
+        // A checkout's line endings must not change parser selection or YAML
+        // semantics, including block-scalar newline normalization.
+        let crlf = yaml.replace("\r\n", "\n").replace('\n', "\r\n");
+        assert!(parse_with_scanner(&crlf).is_some());
+        assert_fast_matches_serde(&crlf);
+        assert_eq!(parse(yaml.as_bytes()), parse(crlf.as_bytes()));
     }
 
     fn assert_falls_back(yaml: &str) {
@@ -1790,14 +1796,24 @@ snapshots:
     fn test_scanner_comment_and_crlf_handling() {
         // Full-line comments are meaning-preserving to skip.
         assert_scanner_matches_serde("lockfileVersion: '9.0'\n# a comment\nimporters:\n  .: {}\n");
-        // Inline comments and CRLF are outside the scanner subset but fine
-        // for the later tiers.
+        // Inline comments are outside the scanner subset but fine for later tiers.
         let inline_comment = "lockfileVersion: '9.0'\nimporters:\n  .: {}\nx: y # trailing\n";
         assert!(parse_with_scanner(inline_comment).is_none());
         assert_fast_matches_serde(inline_comment);
         let crlf = "lockfileVersion: '9.0'\r\nimporters:\r\n  .: {}\r\n";
-        assert!(parse_with_scanner(crlf).is_none());
-        assert_fast_matches_serde(crlf);
+        assert_scanner_matches_serde(crlf);
+
+        // Mixed LF/CRLF and no final newline are also ordinary YAML.
+        assert_scanner_matches_serde("lockfileVersion: '9.0'\r\nimporters:\n  .: {}");
+        // Do not strip a bare CR, embedded or at EOF, as if it were CRLF.
+        for yaml in [
+            "lockfileVersion: '9.0'\nimporters:\n  .: {}\r",
+            "lockfileVersion: '9.0'\nimporters:\n  .: {}\r\r\n",
+            "lockfileVersion: '9.0'\nimporters:\n  .: {}\nx: 'a\rb'\n",
+            "lockfileVersion: '9.0'\nimporters:\n  .: {}\nx: |-\n  a\rb\n",
+        ] {
+            assert!(parse_with_scanner(yaml).is_none());
+        }
     }
 
     #[test]

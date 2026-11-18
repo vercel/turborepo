@@ -1,0 +1,18 @@
+cp -r assets dist/assets
+cat header.txt src/body.txt > dist/out.txt
+rsync -av --exclude=node_modules assets/ dist/
+mkdir -p dist && rm -rf build
+shx cp header.txt dist/
+tar czf dist/a.tgz assets
+echo done && sleep 1
+eslint src --max-warnings 0
+prettier --check .
+cross-env NODE_ENV=production dotenv -e .env.prod -- node build.js
+FOO=bar some-unknown-tool --flag
+npm run lint && pnpm --filter @acme/web run build && yarn workspace web test
+run-s 'x' lint
+concurrently "npm:x" "tsc -w" "unknown-dev-server"
+turbo run build --filter=./apps/*
+for f in *.txt; do cat $f; done
+echo $(git rev-parse HEAD) > version.txt
+pnpm build && yarn lint

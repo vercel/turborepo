@@ -1,0 +1,13 @@
+openapi-typescript openapi.yaml -o src/api/schema.d.ts
+openapi-typescript
+openapi-typescript https://example.com/openapi.json -o src/remote.ts
+openapi-generator-cli generate -i openapi.yaml -g typescript-axios -o src/gen/axios -t templates
+openapi-generator-cli generate
+openapi-generator generate -c gen-config.yaml -g go
+orval
+orval --project simple
+openapi-ts
+openapi-ts -i openapi.yaml -o src/client2
+swagger-typescript-api -p openapi.yaml -o src/sta -n PetApi.ts
+swagger-typescript-api generate --path openapi.yaml --output src/sta-mod --modular
+openapi --input openapi.yaml --output src/codegen --client fetch
