@@ -696,10 +696,11 @@ pub fn write_names_assumption<G: GraphView>(
             w,
             "  assumed: a Go string with parent steps (\"../x\") is taken from the working \
              directory the test starts in, or a directory below it: it is not joined onto a path \
-             that climbs above it or leads elsewhere (a directory another package finds from its \
-             own location, an environment variable), and the process does not change its working \
-             directory (os.Chdir, also in the init of an imported package) (--strict does not \
-             assume it)"
+             that another package builds above it or elsewhere (a directory another package finds \
+             from its own location, an environment variable), and no other package changes the \
+             working directory (os.Chdir in the init of an imported package); what the files of \
+             the test's own package do to the base or the working directory is followed (--strict \
+             does not assume it)"
         )?;
     }
     Ok(())

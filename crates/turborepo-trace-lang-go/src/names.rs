@@ -32,19 +32,24 @@
 //! ([`Name::climbs_from_cwd`](turborepo_trace_core::names::Name::climbs_from_cwd)):
 //! its own steps plus every other parent step of the file (its other `..`
 //! segments and its `filepath.Dir` calls), which can raise the base it is
-//! joined onto. The query names the rest at those directories, in whatever
-//! package they are, the rest completed with an extension there too
-//! (`"../../shared/golden" + ".json"`), and the shape anywhere below the
-//! working directory and inside the package like any other string
-//! (`turborepo_trace_graph::names`, "Strings that climb from the working
-//! directory"). This assumes:
+//! joined onto. The query adds the parent steps of the other Go files of the
+//! package (the files of the directory), whose strings and calls can be that
+//! base too (`const Fixtures = "../../../fixtures"` in one file,
+//! `filepath.Join(Fixtures, "../shared/a.json")` in another). It names the
+//! rest at those directories, in whatever package they are, the rest
+//! continued within its last segment there too (`"../../shared/golden" +
+//! ".json"`, `"../../shared/app." + env + ".yaml"`), and the shape, continued
+//! too, anywhere below the working directory, and inside the package like any
+//! other string (`turborepo_trace_graph::names`, "Strings that climb from the
+//! working directory"). This assumes:
 //!
 //! > A Go string that climbs with parent steps is taken from the working
 //! > directory the test starts in, or from a directory below it: it is not
-//! > joined onto another path that climbs above the working directory or leads
-//! > elsewhere (a directory that another package finds from its own location,
-//! > the value of an environment variable), and the process does not change its
-//! > working directory (`os.Chdir`, also in the `init` of an imported package).
+//! > joined onto a path that another package builds above the working directory
+//! > or elsewhere (a directory that another package finds from its own
+//! > location, the value of an environment variable), and no other package
+//! > changes the working directory (`os.Chdir` in the `init` of an imported
+//! > package).
 //!
 //! The file's own location names its own places ([`crate::anchors`]), and the
 //! consecutive literal arguments of one `filepath.Join` call are one string.
@@ -55,10 +60,15 @@
 //!   parent step (`"../a/b/../c"`) or a hole before the name (`"../%s/data"`);
 //! - every climbing string of a file that calls `filepath.Dir` in a loop;
 //! - every climbing string of a package (the files of one directory) in which a
-//!   file calls `Chdir` (`os.Chdir`, `t.Chdir`, a `TestMain` that moves) or
-//!   holds a string that only climbs (`"../.."`, `const Root = "../.."`,
-//!   `filepath.Join("..", "..")`): such a string can be the base of the others
+//!   file calls `Chdir` (`os.Chdir`, `t.Chdir`, a `TestMain` that moves), holds
+//!   a string that only climbs (`"../.."`, `const Root = "../.."`,
+//!   `filepath.Join("..", "..")`), calls `filepath.Dir` in a loop (an upward
+//!   search for `go.mod`), or follows its own location above its directory
+//!   (`filepath.Join(filepath.Dir(file), "..", "..")` from `runtime.Caller`):
+//!   such a base can be joined to the strings of the other files
 //!   ([`Names::moves_base`](turborepo_trace_core::names::Names::moves_base)).
+//!   The parent steps of a file without names count for the others too: its
+//!   fact is kept for them.
 //!
 //! A call that changes the working directory (not into a temporary directory,
 //! [`chdir_calls`]) moves every relative path of the directory's files, the
@@ -806,7 +816,16 @@ pub fn names_with(src: &[u8], test_file: bool, follow: bool) -> turborepo_trace_
     for l in &s.literals {
         collect(&mut c, l, raise, s.chdir || s.dir_in_loop);
     }
-    c.names.moves_base |= s.chdir;
+    // What can be the base of a climbing string of another file of the package, and
+    // climb further than that file's parent steps say: a `Chdir`, a `filepath.Dir`
+    // loop, the file's own location followed above its directory
+    // (`filepath.Join(filepath.Dir(file), "..", "..")`; those parent steps are no
+    // string of the file).
+    c.names.moves_base |= s.chdir
+        || s.dir_in_loop
+        || followed
+            .as_ref()
+            .is_some_and(|f| f.entries.iter().any(|a| a.rel.starts_with("..")));
     // A call that changes the working directory (not into a temporary directory):
     // the relative paths of the directory's files can go anywhere.
     c.names.chdir = s.chdir && !chdir_calls(src).is_empty();
@@ -1002,6 +1021,11 @@ func load(dir string) {
             "package p\nvar r = filepath.Join(\"..\", \"..\")\n",
             "package p\nvar r, _ = filepath.Abs(\"../..\")\n",
             "package p\nfunc TestMain(m *testing.M) {\n\tos.Chdir(dir)\n}\n",
+            // A loop of `filepath.Dir` calls, and the file's location followed above its
+            // directory: a base of the other files' strings that climbs further.
+            "package p\nfunc root(d string) string {\n\tfor {\n\t\td = filepath.Dir(d)\n\t}\n}\n",
+            "package p\nfunc root() string {\n\t_, file, _, _ := runtime.Caller(0)\n\treturn \
+             filepath.Join(filepath.Dir(file), \"..\", \"..\")\n}\n",
         ] {
             let n = names(src.as_bytes(), false);
             assert!(n.moves_base, "{src}");

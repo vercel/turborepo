@@ -189,7 +189,9 @@ impl Language for GoLanguage {
             .and_then(|n| n.to_str())
             .is_some_and(|n| n.ends_with("_test.go"));
         let names = names::names_with(src, test_file, anchors_enabled());
-        if !names.is_empty() {
+        // The parent steps of a file without names still raise how far the climbing
+        // strings of the other files of its package can climb.
+        if !names.is_empty() || names.ups > 0 {
             out.fact(names.encode());
         }
     }

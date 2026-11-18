@@ -1740,9 +1740,11 @@ mod tests {
         // With: the directory, and no parent step is left to apply to it.
         let n = names(src.as_bytes(), false);
         assert_eq!((n.anchor, n.ups), (None, 0));
+        // The location followed above its directory can be the base of a climbing
+        // string of another file of the package: the file is marked.
         assert_eq!(
             n.encode(),
-            "names:0,0,0,0,0\n7\tfixtures\n@L\t7\t../../../../fixtures\t**"
+            "names:0,0,0,0,0,1\n7\tfixtures\n@L\t7\t../../../../fixtures\t**"
         );
         assert!(!n.names[0].climbs);
         // Parent steps elsewhere in the file still count, for every entry.

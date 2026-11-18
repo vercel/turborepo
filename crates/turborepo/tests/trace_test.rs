@@ -1027,7 +1027,7 @@ fn assert_climb_assumed(files: &[(&str, &str)], changed: &str, test: &str) {
     let text = stdout(&output);
     assert!(
         text.contains("a directory another package finds from its own location")
-            && text.contains("also in the init of an imported package"),
+            && text.contains("os.Chdir in the init of an imported package"),
         "{text}"
     );
 }
@@ -1680,8 +1680,6 @@ func TestGolden(t *testing.T) {
 /// package is not marked.
 #[cfg(unix)]
 #[test]
-#[ignore = "known gap: a climbing base built on runtime.Caller in a sibling file does not mark the \
-            package"]
 fn go_climbing_string_on_the_location_of_a_sibling_file() {
     assert_climb_selects(
         &[
@@ -1821,8 +1819,6 @@ func TestShared(t *testing.T) {
 /// names nothing marks the package.
 #[cfg(unix)]
 #[test]
-#[ignore = "known gap: a climbing base that also names a directory, in a sibling file, raises no \
-            other string of the package"]
 fn go_climbing_string_on_a_climbing_directory_constant_of_a_sibling_file() {
     assert_climb_selects(
         &[
@@ -1859,7 +1855,6 @@ func TestShared(t *testing.T) {
 /// file of the package: the loop keeps the plain mark only for its own file.
 #[cfg(unix)]
 #[test]
-#[ignore = "known gap: a loop of filepath.Dir calls in a sibling file does not mark the package"]
 fn go_climbing_string_after_a_dir_loop_in_a_sibling_file() {
     assert_climb_selects(
         &[

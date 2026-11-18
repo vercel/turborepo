@@ -383,7 +383,12 @@ fn file_names(
 ///   directory's Go files names anywhere too: after the change a relative path
 ///   is taken from elsewhere, a literal one too;
 /// - otherwise they name their rest at the directories they climb to, and their
-///   shape below the working directory (continued, both).
+///   shape below the working directory (continued, both). How far a string
+///   climbs is raised by the parent steps of the directory's other Go files
+///   (`turborepo_trace_core::names::Names::ups`): a string or a `filepath.Dir`
+///   call of another file can be its base (`const Fixtures =
+///   "../../../fixtures"` next to `filepath.Join(Fixtures,
+///   "../shared/a.json")`).
 fn settle(g: &Graph, files: &mut [FileNames]) {
     let dir = |n: NodeId| {
         let p = g.path(n);
@@ -400,6 +405,14 @@ fn settle(g: &Graph, files: &mut [FileNames]) {
         .filter(|f| f.chdir)
         .filter_map(|f| dir(f.node))
         .collect();
+    // The parent steps of every directory's Go files.
+    let mut ups: std::collections::HashMap<&str, u32> = std::collections::HashMap::new();
+    for f in files.iter() {
+        if let Some(d) = dir(f.node) {
+            let u = ups.entry(d).or_default();
+            *u = u.saturating_add(f.ups);
+        }
+    }
     for f in files.iter_mut() {
         let Some(d) = dir(f.node) else { continue };
         if changed.contains(d) {
@@ -417,7 +430,9 @@ fn settle(g: &Graph, files: &mut [FileNames]) {
             }
             continue;
         }
+        let others = ups.get(d).copied().unwrap_or(0).saturating_sub(f.ups);
         for (shape, line, k, _) in names {
+            let k = k.saturating_add(others).min(facts::MAX_UPS);
             f.cwd_climbs.extend(climb_places(&shape, line, k));
         }
     }

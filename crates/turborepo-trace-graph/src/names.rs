@@ -143,15 +143,19 @@
 //!
 //! > A string that climbs from the working directory is taken from the
 //! > working directory the process starts in, or from a directory below it: it
-//! > is not joined onto another path that climbs above the working directory or
-//! > leads elsewhere (a directory that another package finds from its own
-//! > location, the value of an environment variable), and the process does not
-//! > change its working directory (also not in the initialization of a package
-//! > it imports).
+//! > is not joined onto a path that another package builds above the working
+//! > directory or elsewhere (a directory that another package finds from its
+//! > own location, the value of an environment variable), and no other package
+//! > changes the working directory (in the initialization of a package the
+//! > process imports).
 //!
 //! The file's own location names its own places; a string joined onto a path
 //! that the same call spells with literals is one string. What the plugin sees
-//! of a further climb it does not mark this way (see its documentation).
+//! of a further climb in the files of the string's own package it does not
+//! mark this way (see its documentation): their parent steps raise how far the
+//! string climbs, a base of theirs that climbs further makes it name its shape
+//! anywhere, and a change of the working directory there makes every name of
+//! the package name anywhere.
 //!
 //! # Who runs a process
 //!
@@ -190,9 +194,11 @@
 //! # What the bound does not cover
 //!
 //! Under the package assumption, a path into another package that nothing in
-//! the code locates (see above), and a string that climbs from the working
-//! directory joined onto a base that leads above it or elsewhere, or used
-//! after the process changed its working directory.
+//! the code locates (see above); a string that climbs from the working
+//! directory joined onto a base that another package builds above it or
+//! elsewhere, or used after another package changed the working directory; and
+//! after a change of the working directory in a package, a path that a string
+//! of another package names (it is still held to its package).
 //!
 //! A path whose pieces are in none of the indexed files: strings of third-party
 //! packages and of generated files that were not on disk, text from the
