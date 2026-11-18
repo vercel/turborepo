@@ -184,3 +184,79 @@ fn uv_projects_that_declare_pytest_have_a_test_task() {
         test.spec.runs
     );
 }
+
+#[test]
+fn go_modules_have_the_tasks_turbo_derives() {
+    let root = repo(
+        "go",
+        &[
+            (
+                "turbo.json",
+                r#"{ "futureFlags": { "experimentalGoWorkspaces": true }, "tasks": { "build": { "outputs": ["dist/**"] }, "api#build": { "dependsOn": ["^build"] } } }"#,
+            ),
+            (
+                "go.work",
+                "go 1.22\n\nuse (\n\t./apps/api\n\t./packages/lib\n)\n",
+            ),
+            ("apps/api/go.mod", "module example.com/api\n\ngo 1.22\n"),
+            (
+                "apps/api/main.go",
+                "// Command api.\npackage main\n\nfunc main() {}\n",
+            ),
+            ("apps/api/main_test.go", "package main\n"),
+            ("apps/api/internal/x/x.go", "package x\n"),
+            (
+                "packages/lib/go.mod",
+                "module example.com/lib/v2\n\ngo 1.22\n",
+            ),
+            ("packages/lib/lib.go", "package lib\n"),
+            ("packages/lib/cmd/a/main.go", "package main\n"),
+            ("packages/lib/cmd/b/main.go", "package main\n"),
+            ("tools/other/go.mod", "module example.com/other\n"),
+            ("tools/other/main.go", "package main\n"),
+        ],
+    );
+    let set = tasks(&root, &[".", "apps/api", "packages/lib", "tools/other"]);
+    assert_eq!(
+        names(&set, "apps/api"),
+        ["build", "dev", "format", "lint", "test"]
+    );
+    // Two main packages: nothing to run, and the build selects every package.
+    assert_eq!(
+        names(&set, "packages/lib"),
+        ["build", "format", "lint", "test"]
+    );
+    assert_eq!(get(&set, "packages/lib", "build").lines, ["go build ./..."]);
+    // Not used by the `go.work`.
+    assert!(names(&set, "tools/other").is_empty());
+    let build = get(&set, "apps/api", "build");
+    assert_eq!(build.lines, ["go build ."]);
+    let outputs: Vec<&Path> = build
+        .spec
+        .outputs
+        .iter()
+        .map(|o| o.path.as_path())
+        .collect();
+    for o in [root.join("apps/api/api"), root.join("apps/api/dist")] {
+        assert!(outputs.contains(&o.as_path()), "{o:?} not in {outputs:?}");
+    }
+    // `api#build` (turbo's name of the module's package) applies.
+    assert!(
+        build
+            .spec
+            .task_deps
+            .iter()
+            .any(|d| matches!(&d.target, TaskRef::Upstream { name } if name == "build")),
+        "{:?}",
+        build.spec.task_deps
+    );
+    let test = get(&set, "apps/api", "test");
+    assert!(
+        test.spec.runs.iter().any(|r| matches!(
+            r,
+            TestRun::Tests { framework, .. } if framework == "gotest"
+        )),
+        "{:?}",
+        test.spec.runs
+    );
+}

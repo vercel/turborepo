@@ -30,6 +30,30 @@
 //! the same tests as the crates' tasks, and are not read: the trace has no
 //! package for them besides the root's.
 //!
+//! Go (`experimentalGoWorkspaces`, a `go.work` at the repository root): every
+//! module the `go.work` uses gets turbo's tasks, run in the module's directory
+//! (turbo's name of the package is the module path's last element, with a
+//! trailing major version kept: `api/v2`):
+//!
+//! | Task | Command |
+//! |---|---|
+//! | `build` | `go build <main package>`, else `go build ./...` |
+//! | `test` | `go test ./...` |
+//! | `lint` | `go vet ./...` |
+//! | `format` | `go fmt ./...` |
+//! | `dev` (a module with one main package) | `go run <main package>` |
+//!
+//! turbo asks `go list` for the main packages; here a package is a directory of
+//! the module (not `testdata`, `vendor`, `.`- or `_`-prefixed, nor another
+//! module) with a `.go` file that is no test, and it is a main package when one
+//! of those files says `package main` (build constraints are not evaluated). A
+//! module with exactly one main package is runnable: its build writes the
+//! binary into the module's directory (`<dir>/<name>`, `<name>.exe`), which is
+//! an output of the task. What the scan asked of the tree (the directories it
+//! listed, the files it looked at) keys the package's tasks
+//! ([`super::with_decided_by`]), and is no input of them; a `.go` file whose
+//! package clause changes alone does not discover the tasks again.
+//!
 //! uv (`experimentalPythonWorkspaces`, a `pyproject.toml` at the repository
 //! root): `turbo trace` does not analyze Python, so only the tasks that start
 //! tests are read, so that they are reported as tasks the selection does not
@@ -61,6 +85,7 @@ pub struct Native;
 struct Flags {
     cargo: bool,
     python: bool,
+    go: bool,
 }
 
 fn flags(root: &Path) -> Flags {
@@ -72,6 +97,7 @@ fn flags(root: &Path) -> Flags {
     Flags {
         cargo: on("experimentalCargoWorkspaces"),
         python: on("experimentalPythonWorkspaces"),
+        go: on("experimentalGoWorkspaces"),
     }
 }
 
@@ -99,6 +125,201 @@ fn project_at(root: &Path, dir: &Path) -> Option<(String, toml::Table)> {
     Some((name, m))
 }
 
+/// The directories (repository-relative) a `go.work` uses.
+fn go_work_uses(text: &str) -> Vec<String> {
+    let mut out = Vec::new();
+    let mut block = false;
+    for line in text.lines() {
+        let line = line.split("//").next().unwrap_or("").trim();
+        let entry = if block {
+            if line == ")" {
+                block = false;
+                continue;
+            }
+            line
+        } else if let Some(rest) = line.strip_prefix("use") {
+            let rest = rest.trim();
+            if rest == "(" {
+                block = true;
+                continue;
+            }
+            if rest.is_empty() || !line[3..].starts_with([' ', '\t']) {
+                continue;
+            }
+            rest
+        } else {
+            continue;
+        };
+        let entry = entry.trim_matches('"');
+        if !entry.is_empty() {
+            out.push(super::norm_rel(entry));
+        }
+    }
+    out
+}
+
+/// The module in `dir`, if it is a native package: its module path.
+fn module_at(root: &Path, dir: &Path) -> Option<String> {
+    let work = fsx::read_to_string(root.join("go.work")).ok()?;
+    let rel = repo_rel(root, dir);
+    if !go_work_uses(&work).contains(&rel) {
+        return None;
+    }
+    let m = fsx::read_to_string(dir.join("go.mod")).ok()?;
+    m.lines().find_map(|l| {
+        let rest = l.trim().strip_prefix("module")?;
+        let path = rest.trim().trim_matches('"');
+        (rest.starts_with([' ', '\t']) && !path.is_empty()).then(|| path.to_owned())
+    })
+}
+
+/// `vN` with N >= 2 and no leading zero (Go's major version element).
+fn is_version_element(e: &str) -> bool {
+    e.strip_prefix('v').is_some_and(|v| {
+        !v.is_empty() && v != "1" && !v.starts_with('0') && v.bytes().all(|b| b.is_ascii_digit())
+    })
+}
+
+/// turbo's name of a Go module's package: the last element of the module path,
+/// with a trailing major version kept (`example.com/api/v2`: `api/v2`).
+fn go_package_name(module: &str) -> String {
+    let Some((prefix, last)) = module.rsplit_once('/') else {
+        return module.to_owned();
+    };
+    if is_version_element(last) {
+        module[prefix.rfind('/').map_or(0, |i| i + 1)..].to_owned()
+    } else {
+        last.to_owned()
+    }
+}
+
+/// The name `go build` gives the binary of the package at `import`: its last
+/// element, skipping a trailing major version.
+fn binary_name(import: &str) -> String {
+    let mut parts = import.rsplit('/');
+    let last = parts.next().unwrap_or(import);
+    if is_version_element(last) {
+        parts.next().unwrap_or(last).to_owned()
+    } else {
+        last.to_owned()
+    }
+}
+
+/// The main packages of the module in `dir` (`.` or `./<rel>`), sorted.
+fn main_packages(dir: &Path) -> Vec<String> {
+    fn walk(module: &Path, d: &Path, out: &mut Vec<String>) {
+        let Some(entries) = fsx::read_dir(d) else {
+            return;
+        };
+        let mut main = false;
+        for (p, is_dir) in &entries {
+            let name = p.file_name().and_then(|n| n.to_str()).unwrap_or("");
+            if *is_dir {
+                if name.starts_with(['.', '_'])
+                    || matches!(name, "testdata" | "vendor")
+                    || fsx::is_file(&p.join("go.mod"))
+                {
+                    continue;
+                }
+                walk(module, p, out);
+            } else if !main
+                && name.ends_with(".go")
+                && !name.ends_with("_test.go")
+                && !name.starts_with(['.', '_'])
+                && fsx::read_to_string(p).is_ok_and(|src| package_clause(&src) == Some("main"))
+            {
+                main = true;
+            }
+        }
+        if main {
+            let rel = d
+                .strip_prefix(module)
+                .map(|r| r.to_string_lossy().replace('\\', "/"));
+            out.push(match rel {
+                Ok(r) if !r.is_empty() => format!("./{r}"),
+                _ => ".".to_owned(),
+            });
+        }
+    }
+    let mut out = Vec::new();
+    walk(dir, dir, &mut out);
+    out.sort();
+    out
+}
+
+/// The package name of a Go source file's `package` clause.
+fn package_clause(src: &str) -> Option<&str> {
+    let mut in_block = false;
+    for line in src.lines() {
+        let mut l = line.trim();
+        if in_block {
+            match l.find("*/") {
+                Some(i) => {
+                    in_block = false;
+                    l = l[i + 2..].trim();
+                }
+                None => continue,
+            }
+        }
+        if l.starts_with("/*") {
+            match l.find("*/") {
+                Some(i) => l = l[i + 2..].trim(),
+                None => {
+                    in_block = true;
+                    continue;
+                }
+            }
+        }
+        if l.is_empty() || l.starts_with("//") {
+            continue;
+        }
+        let rest = l.strip_prefix("package")?;
+        return rest
+            .trim_start()
+            .split(|c: char| c.is_whitespace() || c == ';' || c == '/')
+            .next()
+            .filter(|n| !n.is_empty());
+    }
+    None
+}
+
+/// The tasks turbo derives for the Go module `module` in `dir`.
+fn go_tasks(cx: &SourceCx<'_>, dir: &Path, module: &str) -> Vec<DiscoveredTask> {
+    let manifest = dir.join("go.mod");
+    let mains = main_packages(dir);
+    let target = (mains.len() == 1).then(|| mains[0].clone());
+    let task = |name: &str, line: String| {
+        let mut t = DiscoveredTask::new(cx.script_id(name), name, dir);
+        t.lines.push(line);
+        t.files.push(manifest.clone());
+        t
+    };
+    let mut build = task(
+        "build",
+        format!("go build {}", target.as_deref().unwrap_or("./...")),
+    );
+    if let Some(target) = &target {
+        let import = match target.as_str() {
+            "." => module.to_owned(),
+            t => format!("{module}/{}", t.trim_start_matches("./")),
+        };
+        let name = binary_name(&import);
+        for n in [name.clone(), format!("{name}.exe")] {
+            build.spec.output(dir.join(n));
+        }
+    }
+    let mut out = vec![
+        build,
+        task("test", "go test ./...".to_owned()),
+        task("lint", "go vet ./...".to_owned()),
+        task("format", "go fmt ./...".to_owned()),
+    ];
+    if let Some(target) = &target {
+        out.push(task("dev", format!("go run {target}")));
+    }
+    out
+}
+
 /// turbo's name of the native package in `dir` (the crate's or the project's
 /// name), when the root `turbo.json` turns its kind on and `dir` has no
 /// `package.json`.
@@ -112,6 +333,11 @@ pub fn package_name(root: &Path, dir: &Path) -> Option<String> {
         .flatten()
         .or_else(|| f.python.then(|| project_at(root, dir)).flatten())
         .map(|(name, _)| name)
+        .or_else(|| {
+            f.go.then(|| module_at(root, dir))
+                .flatten()
+                .map(|m| go_package_name(&m))
+        })
 }
 
 /// Whether the crate in `dir` has a binary target (`src/main.rs`, `src/bin/`,
@@ -178,10 +404,11 @@ impl TaskSource for Native {
             return Vec::new();
         }
         let f = flags(root);
-        if !(f.cargo || f.python) {
+        if !(f.cargo || f.python || f.go) {
             return Vec::new();
         }
         let mut out = Vec::new();
+        let mut go = Vec::new();
         let mut task = |name: &str, line: String, file: &Path, cwd: &Path| {
             let mut t = DiscoveredTask::new(cx.script_id(name), name, cwd);
             t.lines.push(line);
@@ -224,6 +451,16 @@ impl TaskSource for Native {
                 }
             }
         }
+        if f.go
+            && no_package_json
+            && let Some(module) = module_at(root, dir)
+        {
+            // The scan's listings and reads key the tasks and are no input of them.
+            let found = turborepo_trace_core::record::pause(|| {
+                super::with_decided_by(|| go_tasks(cx, dir, &module))
+            });
+            go = found;
+        }
         if f.python {
             let manifest = dir.join("pyproject.toml");
             let pytest = |m: &toml::Table| declared(m).iter().any(|d| d == "pytest");
@@ -258,6 +495,7 @@ impl TaskSource for Native {
                 );
             }
         }
+        out.extend(go);
         out
     }
 }
@@ -274,5 +512,21 @@ mod tests {
         )
         .unwrap();
         assert_eq!(declared(&m), ["pytest", "requests", "ruff"]);
+    }
+
+    #[test]
+    fn go_names_and_clauses() {
+        assert_eq!(go_package_name("example.com/api/v2"), "api/v2");
+        assert_eq!(go_package_name("example.com/api"), "api");
+        assert_eq!(binary_name("example.com/api/v2"), "api");
+        assert_eq!(
+            package_clause("/* a\n b */\n// c\npackage main // x\n"),
+            Some("main")
+        );
+        assert_eq!(package_clause("package lib;"), Some("lib"));
+        assert_eq!(
+            go_work_uses("go 1.22\nuse ./a\nuse (\n\t./b // c\n\t\"./c\"\n)\n"),
+            ["a", "b", "c"]
+        );
     }
 }

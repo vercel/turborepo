@@ -9,13 +9,14 @@
 //! where a package `turbo.json` or a root `<package>#<task>` adds to it (the
 //! trace unions their values instead of taking the more specific one). The
 //! trace's packages are those of its graph: the `package.json` workspaces and
-//! the crates and Python projects. turbo's native packages (Cargo crates, uv
-//! projects) have tasks turbo derives from the toolchain; the trace reads those
-//! of crates (`sources/native.rs`), and an output turbo derives for one (the
-//! binary of `cargo build`) is covered when it lies in what the trace reads the
-//! task's command to write. Of uv projects it reads only the tasks that start
-//! tests (`turbo trace` does not analyze Python): their other tasks are listed,
-//! not compared.
+//! the crates, Go modules and Python projects. turbo's native packages (Cargo
+//! crates, Go modules, uv projects) have tasks turbo derives from the
+//! toolchain; the trace reads those of crates and Go modules
+//! (`sources/native.rs`), and an output turbo derives for one (the binary of
+//! `cargo build` or `go build`) is covered when it lies in what the trace reads
+//! the task's command to write. Of uv projects it reads only the tasks that
+//! start tests (`turbo trace` does not analyze Python): their other tasks are
+//! listed, not compared.
 
 mod common;
 
@@ -176,8 +177,8 @@ fn turbo_side(
 }
 
 /// The trace's packages: the `package.json` workspaces, and the directories
-/// with a `Cargo.toml` or a `pyproject.toml` (the graph's crates and Python
-/// projects).
+/// with a `Cargo.toml`, a `pyproject.toml` or a `go.mod` (the graph's crates,
+/// Python projects and Go modules).
 fn trace_workspace(root: &Path) -> Workspace {
     fn walk(root: &Path, dir: &Path, out: &mut Vec<String>) {
         let Ok(rd) = std::fs::read_dir(dir) else {
@@ -193,7 +194,10 @@ fn trace_workspace(root: &Path) -> Workspace {
                 ) {
                     walk(root, &p, out);
                 }
-            } else if matches!(name.to_str(), Some("Cargo.toml" | "pyproject.toml")) {
+            } else if matches!(
+                name.to_str(),
+                Some("Cargo.toml" | "pyproject.toml" | "go.mod")
+            ) {
                 let rel = dir.strip_prefix(root).unwrap().to_string_lossy();
                 out.push(if rel.is_empty() {
                     ".".into()
