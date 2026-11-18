@@ -349,6 +349,10 @@ jobs:
         with:
           turbo-version: ${{ inputs.ci-tag-override || '' }}
 
+      # turbo.lock makes `turbo run` require `turbo setup` in every job.
+      - name: Install managed tools
+        run: turbo setup --tools-only
+
       - name: Run JS Package Tests
         run: turbo run check-types test --filter="./packages/*" --filter="!@turbo/repository" --color
 
@@ -613,6 +617,10 @@ jobs:
 
       - name: Ensure npm version
         run: npm install -g npm@11.5.1
+
+      # turbo.lock makes `turbo run` require `turbo setup` in every job.
+      - name: Install managed tools
+        run: turbo setup --tools-only
 
       - name: Build release tool
         run: turbo run build --filter=@turbo/releaser

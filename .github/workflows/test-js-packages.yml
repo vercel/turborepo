@@ -64,6 +64,12 @@ jobs:
       - name: Install Global Turbo
         uses: ./.github/actions/install-global-turbo
 
+      # turbo.lock pins one Node.js version for every task that turbo runs.
+      # This job tests the Node.js version from the matrix, so it removes
+      # turbo.lock, and its tasks use the tools on PATH.
+      - name: Run tasks without managed tools
+        run: rm turbo.lock
+
       - name: Run tests
         # We manually set TURBO_API to an empty string to override Hetzner env
         # @turbo/repository has its own native build matrix in the Test workflow.
