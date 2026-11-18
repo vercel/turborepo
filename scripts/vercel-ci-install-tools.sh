@@ -4,11 +4,6 @@
 # toolchain and the dependencies. `futureFlags.experimentalCargoWorkspaces`
 # makes every turbo command run `cargo metadata`, so turbo needs that toolchain.
 #
-# Vercel CI snapshots the whole drive that holds the repository, so both
-# directories below reach every task cell:
-# - `.vercel-ci-runtime` is Vercel CI's runtime prefix. Its `node_modules/.bin`
-#   is on the PATH of the planning step and of every task.
-# - `.turbo-tools` is the turbo tool store, which must be outside the repository.
 set -euo pipefail
 
 drive="$(dirname "$(pwd)")"
