@@ -584,6 +584,56 @@ fn vitest_new_test_file_selects_itself() {
     assert_selects(&selected, &[new_test], &[VITEST_FORMAT, VITEST_SLUG]);
 }
 
+/// A `.ignore` file (read by search tools, not by git or the test runners)
+/// hides a test file and a source file. The runner still runs the test and
+/// loads the source: an untracked test it hides selects itself, and an edit
+/// of the source selects the test that imports it.
+#[cfg(unix)]
+#[test]
+fn vitest_files_hidden_by_a_dot_ignore_file_are_traced() {
+    let dir = fixture("trace_vitest");
+    let r = dir.path();
+    let new_test = "packages/web/test/extra.test.ts";
+    let uses_hidden = "packages/web/test/hidden.test.ts";
+    fs::write(
+        r.join(".ignore"),
+        "packages/web/test/extra.test.ts\npackages/web/src/hidden.ts\n",
+    )
+    .unwrap();
+    fs::write(
+        r.join("packages/web/src/hidden.ts"),
+        "export const hidden = 1;\n",
+    )
+    .unwrap();
+    fs::write(
+        r.join(uses_hidden),
+        "import { expect, test } from \"vitest\";\nimport { hidden } from \
+         \"../src/hidden\";\n\ntest(\"hidden\", () => {\n  expect(hidden).toBe(1);\n});\n",
+    )
+    .unwrap();
+    git(r, &["add", "-A"]);
+    git(r, &["commit", "-m", "hidden files", "--quiet"]);
+
+    fs::write(
+        r.join("packages/web/src/hidden.ts"),
+        "export const hidden = 2;\n",
+    )
+    .unwrap();
+    let selected = affected(r, &["--base", "HEAD"]);
+    assert_selects(&selected, &[uses_hidden], &[VITEST_FORMAT, VITEST_TITLE]);
+
+    git(r, &["checkout", "--", "."]);
+    fs::write(
+        r.join(new_test),
+        "import { expect, test } from \"vitest\";\nimport { formatCount } from \
+         \"../src/format\";\n\ntest(\"one\", () => {\n  expect(formatCount(1)).toBe(\"1 \
+         item\");\n});\n",
+    )
+    .unwrap();
+    let selected = affected(r, &["--base", "HEAD"]);
+    assert_selects(&selected, &[new_test], &[uses_hidden, VITEST_FORMAT]);
+}
+
 #[cfg(unix)]
 #[test]
 fn vitest_json_is_byte_stable() {
