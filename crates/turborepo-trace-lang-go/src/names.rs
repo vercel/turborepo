@@ -223,7 +223,7 @@ fn probe_fn(name: &[u8], receiver: Option<&[u8]>) -> bool {
 
 /// Whether `s` is a literal path to a file: made of `.`, `..` and plain
 /// segments, the last one a file name with an extension
-/// (`schemas/job.schema.json`, `../../data/a.sql`).
+/// (`specs/order.json`, `../../data/a.sql`).
 ///
 /// A literal path from the file's own location is a reference to exactly that
 /// file when it looks like this ([`crate::extract`] emits it, and the names
@@ -940,14 +940,14 @@ func load(dir string) {
         assert_eq!(
             climbing(
                 r#"package p
-func schemaPath() string {
-	_, thisFile, _, _ := runtime.Caller(0)
-	return filepath.Join(filepath.Dir(thisFile), "..", "..", "schemas", "job.schema.json")
+func specFile() string {
+	_, self, _, _ := runtime.Caller(0)
+	return filepath.Join(filepath.Dir(self), "..", "..", "specs", "order.json")
 }
 var x = "fixtures/a.json"
 "#
             ),
-            [own("schemas/job.schema.json", 0), own("fixtures/a.json", 0)]
+            [own("specs/order.json", 0), own("fixtures/a.json", 0)]
         );
     }
 
@@ -987,20 +987,20 @@ func root() string {
 
     #[test]
     fn a_literal_path_from_the_location_is_not_a_use_of_it() {
-        // The real shape: a helper that returns a file four directories up.
+        // A helper that returns a file two directories up.
         let src = r#"package p
-func schemaPath(t *testing.T) string {
-	_, thisFile, _, ok := runtime.Caller(0)
-	if !ok {
-		t.Fatalf("no caller")
+func specFile(t *testing.T) string {
+	_, self, _, found := runtime.Caller(0)
+	if !found {
+		t.Fatal("caller unknown")
 	}
-	return filepath.Join(filepath.Dir(thisFile), "..", "..", "schemas", "job.schema.json")
+	return filepath.Join(filepath.Dir(self), "..", "..", "specs", "order.json")
 }
 "#;
         let s = strings(src.as_bytes());
         assert_eq!((s.location, s.parents), (None, 0));
         // The parent steps are gone from the literal: they move nothing else.
-        assert_eq!(values(src), ["schemas/job.schema.json"]);
+        assert_eq!(values(src), ["specs/order.json"]);
         // A path that only goes up, names a directory, or continues with something
         // unknown, uses the location.
         let dir = r#"package p

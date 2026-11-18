@@ -1,13 +1,10 @@
-// A jest config for unit tests of the Playwright helpers, next to the Playwright specs.
-// No `*.test.ts` file exists yet, so jest finds nothing here; the `*.spec.ts` files belong
-// to Playwright.
+// Unit tests of the Playwright helpers sit next to the Playwright specs. There is no
+// `*.test.ts` file yet, so jest finds nothing; the `*.spec.ts` files are Playwright's.
 import type { Config } from 'jest';
 
-const jestConfig: Config = {
+const unit: Config = {
+  transform: { '^.+\\.ts$': '@swc/jest' },
   testMatch: ['<rootDir>/**/*.test.ts'],
-  transform: {
-    '^.+\\.ts$': '@swc/jest',
-  },
 };
 
-module.exports = jestConfig;
+export default unit;

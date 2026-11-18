@@ -1,0 +1,27 @@
+name: Batch
+on:
+  workflow_call:
+    inputs:
+      slice:
+        description: One slice of the packages, as JSON
+        type: string
+        required: true
+      node-version:
+        description: Node version
+        type: string
+        default: '22'
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      SCOPE: ${{ fromJson(inputs.slice).scope }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install
+        uses: ./.github/actions/install
+        with:
+          node-version: ${{ inputs.node-version }}
+      - name: Verify
+        run: pnpm exec turbo ci:verify $SCOPE --continue --output-logs=errors-only

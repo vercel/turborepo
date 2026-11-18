@@ -6,36 +6,36 @@ import (
 	"strconv"
 )
 
-// ParentPID reads /proc/<pid>/stat.
-func ParentPID(pid int) string {
-	data, err := os.ReadFile(fmt.Sprintf("/proc/%d/stat", pid))
+// StatLine returns the /proc/<pid>/stat line of a process.
+func StatLine(pid int) string {
+	raw, err := os.ReadFile(fmt.Sprintf("/proc/%d/stat", pid))
 	if err != nil {
 		return ""
 	}
-	return string(data)
+	return string(raw)
 }
 
-func environ(pid int) []byte {
-	data, _ := os.ReadFile("/proc/" + strconv.Itoa(pid) + "/environ")
-	return data
+func envOf(pid int) []byte {
+	raw, _ := os.ReadFile("/proc/" + strconv.Itoa(pid) + "/environ")
+	return raw
 }
 
-func reap() int {
-	entries, err := os.ReadDir("/proc")
+func countProcesses() int {
+	list, err := os.ReadDir("/proc")
 	if err != nil {
-		return 0
+		return -1
 	}
-	return len(entries)
+	return len(list)
 }
 
-func shell() string {
-	if _, err := os.Stat("/bin/bash"); err == nil {
+func loginShell() string {
+	if info, err := os.Stat("/bin/bash"); err == nil && !info.IsDir() {
 		return "/bin/bash"
 	}
-	data, _ := os.ReadFile("/etc/passwd")
-	return string(data)
+	users, _ := os.ReadFile("/etc/passwd")
+	return string(users)
 }
 
 func main() {
-	fmt.Println(ParentPID(1), len(environ(1)), reap(), shell())
+	fmt.Println(StatLine(1), len(envOf(1)), countProcesses(), loginShell())
 }

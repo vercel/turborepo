@@ -18,7 +18,7 @@
 //! | Found | Spec | Recognition |
 //! |---|---|---|
 //! | first-party JS bin | the target file as a JS `entry` (its closure and fs reads are traced), existing-file arguments as inputs, the bin package's `package.json` as config | `Full` (`Partial` plus a cwd membership if the bin reads relative to the cwd) |
-//! | first-party bin wrapping a known tool ([`wrapper`]) | the above, plus the remaining argv forwarded to the tool's recognizer (`jest-dd -c x` → jest with config `x`) and an `unknown_command` uncertainty naming the inference | `Partial` |
+//! | first-party bin wrapping a known tool ([`wrapper`]) | the above, plus the remaining argv forwarded to the tool's recognizer (`jest-ci -c x` → jest with config `x`) and an `unknown_command` uncertainty naming the inference | `Partial` |
 //! | first-party Python bin (shebang) / shell bin | Python entry / `Auto` entry plus uncertainty | `Full` / `Partial` |
 //! | bin target missing (a build output) | the entry as a probe, the bin package as a membership, a `generated_file` uncertainty | `Partial` |
 //! | third-party bin | `tool` (`npm:<package>`, lockfile-diffed), existing-file arguments, uncertainty (inputs not modelled) | `Partial` |

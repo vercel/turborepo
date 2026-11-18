@@ -5,9 +5,8 @@
 //! frameworks (an embedded config). Most edits of a manifest touch what
 //! resolution never reads: a dependency entry, a script, the description. A
 //! graph build that keyed every file that resolved through a manifest by the
-//! manifest's whole contents traced all of them again for such an edit: on
-//! real repositories, nine in ten files re-traced between two
-//! neighbouring commits read nothing else that changed.
+//! manifest's whole contents traced all of them again for such an edit, though
+//! most of those files read nothing else that changed.
 //!
 //! So resolution does not get the file. It gets [`view`]: the manifest without
 //! its [`INERT_FIELDS`]. Whatever resolution computes is then a function of the

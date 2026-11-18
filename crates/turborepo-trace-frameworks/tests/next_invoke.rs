@@ -199,35 +199,35 @@ fn relation_snapshot() {
     );
 }
 
-/// The wrapper that adds a base and an `/api` prefix behind `startsWith`
+/// The wrapper that adds an origin and an `/api` prefix behind `startsWith`
 /// guards, and calls `fetch` from a callback through a second function: its
 /// call sites are the sites.
 #[test]
 fn fetch_wrapper_with_guards() {
     let s = setup();
     // No site inside the wrapper: its callers carry the URLs.
-    assert!(sites_of(&s, "lib/api/fetch-api.ts").is_empty());
+    assert!(sites_of(&s, "lib/http/client.ts").is_empty());
     let items = sites_of(&s, "components/items.tsx");
-    // `apiFetch(API_ROUTES.HEALTH)`: an object-constant member, already under
+    // `request(ROUTES.health)`: an object-constant member, already under
     // `/api`.
     assert!(
         items.iter().any(|l| l.contains("/api/health")
             && !l.contains("/api/api/")
-            && l.contains("[apiFetch > apiFetchInternal > fetch]")),
+            && l.contains("[request > send > fetch]")),
         "{items:#?}"
     );
-    // `apiFetch(`${API_ITEMS_VERSION('v1')}/${id}`, { method: 'DELETE' })`: a
-    // function constant, and the method through `{ ...opts, headers }`.
+    // `request(`${itemsPath('v1')}/${id}`, { method: 'DELETE' })`: a
+    // function constant, and the method through `{ ...init, headers }`.
     assert!(
         items
             .iter()
             .any(|l| l.contains(" DELETE ") && l.contains("/api/v1/items/*")),
         "{items:#?}"
     );
-    // `apiFetch('/v9/projects')`: the prefix is added; no route serves it.
+    // `request('/v3/reports')`: the prefix is added; no route serves it.
     let backend = invoked(&s, "app/settings/page");
     assert!(
-        backend.contains(&"fetch external /api/v9/projects".to_string()),
+        backend.contains(&"fetch external /api/v3/reports".to_string()),
         "{backend:#?}"
     );
     assert!(
@@ -243,7 +243,7 @@ fn fetch_wrapper_with_guards() {
 fn typed_client_through_barrel() {
     let s = setup();
     let items = sites_of(&s, "components/items.tsx");
-    let typed: Vec<&String> = items.iter().filter(|l| l.contains("typedFetch")).collect();
+    let typed: Vec<&String> = items.iter().filter(|l| l.contains("callPath")).collect();
     assert_eq!(typed.len(), 1, "{items:#?}");
     assert!(typed[0].contains("/api/v1/items/*"), "{typed:#?}");
     assert!(!typed[0].contains("unknown"), "{typed:#?}");
@@ -269,37 +269,37 @@ fn swr_keys_and_fetchers() {
         card[0].contains(" swr ") && card[0].contains("/api/teams/*"),
         "{card:#?}"
     );
-    // `useLazySWR(team ? membersKey(team.id) : null, async (url) => fetch(url,
+    // `useDeferredSWR(team ? membersKey(team.id) : null, async (url) => fetch(url,
     // …))`.
     let members = sites_of(&s, "components/members.tsx");
     assert_eq!(members.len(), 1, "{members:#?}");
     assert!(members[0].contains("/api/teams/*/members"), "{members:#?}");
-    // `useLazySWR(`/api/dash?…`, async (endpoint) => apiFetch(endpoint, …))`.
+    // `useDeferredSWR(`/api/dash?…`, async (path) => request(path, …))`.
     let dash = sites_of(&s, "components/dash.tsx");
     assert_eq!(dash.len(), 1, "{dash:#?}");
     assert!(
         dash[0].contains("/api/dash") && !dash[0].contains("unknown"),
         "{dash:#?}"
     );
-    // `useLazySWR(url, fetchJobsPage)` with `url = useMemo(() =>
-    // `${API_ROUTES.JOBS}?…`)`.
+    // `useDeferredSWR(url, loadJobs)` with `url = useMemo(() =>
+    // `${ROUTES.jobs}?…`)`.
     let jobs = sites_of(&s, "components/jobs.tsx");
     assert_eq!(jobs.len(), 1, "{jobs:#?}");
     assert!(
-        jobs[0].contains("/api/jobs") && jobs[0].contains("fetchJobsPage"),
+        jobs[0].contains("/api/jobs") && jobs[0].contains("loadJobs"),
         "{jobs:#?}"
     );
-    // `useTypedSWR('/v1/items/{id}', …)`: the hook's fetcher builds the URL from
+    // `usePathSWR('/v1/items/{id}', …)`: the hook's fetcher builds the URL from
     // the hook's parameter.
     let items = sites_of(&s, "components/items.tsx");
     assert!(
         items.iter().any(|l| l.contains(" swr ")
-            && l.contains("useTypedSWR")
+            && l.contains("usePathSWR")
             && l.contains("/api/v1/items/*")),
         "{items:#?}"
     );
     // The wrapper hooks themselves have no site.
-    assert!(sites_of(&s, "lib/api/swr.ts").is_empty());
+    assert!(sites_of(&s, "lib/http/hooks.ts").is_empty());
 
     let team = invoked(&s, "app/teams/[teamId]/page");
     assert_eq!(

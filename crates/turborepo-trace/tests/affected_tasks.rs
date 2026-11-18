@@ -114,7 +114,7 @@ fn edit(root: &Path, rel: &str, from: &str, to: &str) {
     std::fs::write(p, s.replace(from, to)).unwrap();
 }
 
-/// Regression for build-task hubs of a large monorepo. Every `tsc -b` whose
+/// Regression for build-task hubs. Every `tsc -b` whose
 /// reference closure contains a package "produced" that package's `dist/`: the
 /// root solution build (every source of the repository) and every app's
 /// `type-check`. So an edit of any page of one app selected every test that
@@ -127,7 +127,7 @@ fn tsc_build_outputs_link_to_their_project() {
     let d = tsc_solution();
     let r = d.path();
     // Unrelated edits select nothing: a page of an app, a README. (Both reached
-    // every consumer of a `dist/` through `task:.#build:ts-debug`.)
+    // every consumer of a `dist/` through `task:.#tsc:all`.)
     assert!(affected(r, &["apps/web/app/page.tsx"]).is_empty());
     assert!(affected(r, &["README.md"]).is_empty());
     // A source of one app selects its own test only (`apps/docs#type-check`
@@ -161,13 +161,13 @@ fn tsc_build_outputs_link_to_their_project() {
             &[CARD, SLUG, ICON_BUTTON, VERSION][..],
         ),
         (
-            "tooling/tsconfig/built.json",
+            "config/ts/library.json",
             "\"declaration\": true,",
             "\"declaration\": true, \"strict\": true,",
             &[CARD, SLUG, ICON_BUTTON, VERSION][..],
         ),
         (
-            "tooling/tsconfig/bundler.json",
+            "config/ts/declarations.json",
             "\"declaration\": true,",
             "\"declaration\": true, \"strict\": true,",
             &[CARD, SLUG][..],
@@ -206,10 +206,7 @@ fn tsc_build_outputs_link_to_their_project() {
             .any(|l| l == "tsproject:packages/icons/tsconfig.json"),
         "{deps}"
     );
-    assert!(
-        !deps.lines().any(|l| l == "task:.#build:ts-debug"),
-        "{deps}"
-    );
+    assert!(!deps.lines().any(|l| l == "task:.#tsc:all"), "{deps}");
     assert!(!deps.lines().any(|l| l.starts_with("apps/docs/")), "{deps}");
     // The solution task still depends on everything (a valid `--tasks` entry).
     let tasks = harness(
@@ -217,12 +214,12 @@ fn tsc_build_outputs_link_to_their_project() {
         &[
             "affected",
             "--tasks",
-            "task:.#build:ts-debug",
+            "task:.#tsc:all",
             "--changed",
             "apps/web/app/page.tsx",
         ],
     );
-    assert_eq!(tasks.trim(), "task:.#build:ts-debug");
+    assert_eq!(tasks.trim(), "task:.#tsc:all");
 }
 
 fn write(root: &Path, rel: &str, content: &str) {
@@ -341,7 +338,7 @@ fn data_inputs() -> tempfile::TempDir {
             .join("../turborepo-trace-testkit/fixtures/tasks/data-inputs"),
         r,
     );
-    for p in ["analytics", "assets", "gen", "lib", "tool", "typed"] {
+    for p in ["assets", "reporting", "gen", "lib", "tool", "typed"] {
         link(
             r,
             "apps/web",
@@ -356,14 +353,14 @@ fn data_inputs() -> tempfile::TempDir {
 /// its outputs, whether they reach the task through a membership or as a named
 /// input file.
 ///
-/// Seen in a large monorepo: a package's tsconfig lists its build script next
-/// to `src` (`"include": ["src", "build.ts"]`), and the script loads a module
-/// with computed file reads. Every `tsc -b` type-check that reaches the project
-/// took the script as a plain input file, so the tests that import anything
-/// those type-checks declare were selected on every change. The project only
-/// emits declarations: `tsc` reads the script, nothing runs it and no output is
-/// code made from it. Likewise for the files turbo hashes (`inputs: ["
-/// $TURBO_DEFAULT$", "$TURBO_ROOT$/tsconfig.json"]`).
+/// A package's tsconfig can list a script next to `src` (`"include": ["src",
+/// "tools/upload.ts"]`), and the script can load a module with computed file
+/// reads. If every `tsc -b` type-check that reaches the project took the script
+/// as a plain input file, the tests that import anything those type-checks
+/// declare would be selected on every change. The project only emits
+/// declarations: `tsc` reads the script, nothing runs it and no output is code
+/// made from it. Likewise for the files turbo hashes (`inputs:
+/// ["$TURBO_ROOT$/tsconfig.json", "$TURBO_DEFAULT$"]`).
 ///
 /// What keeps flowing: a script the task runs (`gen`), sources a compiler emits
 /// as JavaScript that the consumer then runs (`lib`), and the package of an
@@ -394,7 +391,7 @@ fn files_a_task_only_reads_do_not_lend_their_uncertainty() {
     // test file inside the turbo inputs and the type-checked project, and the
     // file the project's `include` names) are only hashed and type-checked, and
     // the `build` task compiles none of them.
-    // Not `analytics` either: its `tsc --build` depends on the upstream build of
+    // Not `reporting` either: its `tsc --build` depends on the upstream build of
     // `packages/gen` (turbo `^build`), which runs the uncertain script, but a task
     // of another package doesn't write into this one, and the sources import
     // nothing of it. The importer is linked to the project, not to the task and
@@ -412,7 +409,7 @@ fn files_a_task_only_reads_do_not_lend_their_uncertainty() {
     ] {
         assert_eq!(selected(file), [GEN, ICON, LIB, TOOL, TYPED], "{file}");
     }
-    // The script is only one of the `type-check` task's turbo inputs. The task
+    // The script is only one of the `check-types` task's turbo inputs. The task
     // writes what its project writes (its declared `dist` is a cache list), so
     // the script is nothing to the importers of the package. The task itself
     // still depends on it.
@@ -423,31 +420,31 @@ fn files_a_task_only_reads_do_not_lend_their_uncertainty() {
         &[
             "affected",
             "--tasks",
-            "task:packages/assets#type-check",
+            "task:packages/assets#check-types",
             "--changed",
             script,
         ],
     );
-    assert_eq!(tasks.trim(), "task:packages/assets#type-check");
+    assert_eq!(tasks.trim(), "task:packages/assets#check-types");
     // What a project emits still depends on its sources and its configuration.
-    const ANALYTICS: &str = "apps/web/lib/analytics.test.ts";
+    const REPORTING: &str = "apps/web/lib/reporting.test.ts";
     for file in [
-        "packages/analytics/src/index.ts",
-        "packages/analytics/tsconfig.json",
+        "packages/reporting/src/index.ts",
+        "packages/reporting/tsconfig.json",
     ] {
-        assert_eq!(selected(file), [ANALYTICS, GEN, LIB, TOOL, TYPED], "{file}");
+        assert_eq!(selected(file), [GEN, LIB, REPORTING, TOOL, TYPED], "{file}");
     }
 }
 
 /// A committed file that a task writes is just a file when nothing in the
 /// repository runs the task (and that automation can be read: a workflow runs
-/// the tests): the tests read the committed bytes. (Seen in a large monorepo: a
-/// generator that fetches content types from a CMS and renders 482 checked-in
-/// source files is run by hand; its renderer has computed reads, and every test
-/// that imports one of those files was selected on every change.) The link to
-/// the producer stays whenever something regenerates the file (a test script,
-/// an install script or a CI job depends on the generator or runs it, directly
-/// or through other tasks), and for a file that is not in the checkout.
+/// the tests): the tests read the committed bytes. (A generator that is run by
+/// hand and renders checked-in source files with computed reads would otherwise
+/// select every test that imports one of those files on every change.) The link
+/// to the producer stays whenever something regenerates the file (a test
+/// script, an install script or a CI job depends on the generator or runs it,
+/// directly or through other tasks), and for a file that is not in the
+/// checkout.
 #[test]
 fn committed_outputs_of_a_task_nothing_runs_are_just_files() {
     const TEST: &str = "apps/web/lib/entry.test.ts";

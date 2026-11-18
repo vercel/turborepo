@@ -33,7 +33,7 @@ fn every_task_reaches_a_shared_hub() {
             &r,
             &format!("packages/{p}/package.json"),
             &format!(
-                r#"{{"name":"{p}","version":"1.0.0","scripts":{{"clean-code":"knip --directory ../.. --workspace packages/{p}"}}}}"#
+                r#"{{"name":"{p}","version":"1.0.0","scripts":{{"unused":"knip --directory ../.. --workspace packages/{p}"}}}}"#
             ),
         );
         write(
@@ -58,7 +58,7 @@ fn every_task_reaches_a_shared_hub() {
     let tasks: Vec<_> = ["a", "b", "c"]
         .iter()
         .map(|p| {
-            g.node_by_path(&format!("task:packages/{p}#clean-code"))
+            g.node_by_path(&format!("task:packages/{p}#unused"))
                 .unwrap_or_else(|| panic!("task of {p}"))
         })
         .collect();

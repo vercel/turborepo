@@ -9,42 +9,42 @@ import (
 	"testing"
 )
 
-// harness is what the tests of this package share: the directory of the service under test.
+// harness holds what the tests of this package share: the service they look at.
 type harness struct {
-	apiDir string
+	svcDir string
 }
 
-// newHarness finds the repository from the location of this file (e2e → repository), so
-// that the tests run wherever `go test` is started.
+// newHarness locates the repository one directory above this file, wherever `go test`
+// runs.
 func newHarness(t *testing.T) *harness {
 	t.Helper()
 	_, file, _, ok := runtime.Caller(0)
 	if !ok {
-		t.Fatal("cannot determine the current file")
+		t.Fatal("no caller information")
 	}
 	root := filepath.Clean(filepath.Join(filepath.Dir(file), ".."))
-	if real, err := filepath.EvalSymlinks(root); err == nil {
-		root = real
+	if resolved, err := filepath.EvalSymlinks(root); err == nil {
+		root = resolved
 	}
-	// A child process that runs at the root reads nothing for this process.
+	// A child process started at the root reads nothing on behalf of this one.
 	cmd := exec.Command("sh", "-c", "pwd")
 	cmd.Dir = root
 	out, err := cmd.Output()
 	if err != nil {
-		t.Fatalf("pwd in %s: %v", root, err)
+		t.Fatalf("sh in %s: %v", root, err)
 	}
-	if strings.TrimSpace(string(out)) != root {
-		t.Logf("pwd says %s, the harness %s", out, root)
+	if got := strings.TrimSpace(string(out)); got != root {
+		t.Logf("child at %s, harness at %s", got, root)
 	}
-	return &harness{apiDir: filepath.Join(root, "services", "svc-a")}
+	return &harness{svcDir: filepath.Join(root, "services", "svc-a")}
 }
 
-// read reads a file of the service.
+// read returns a file of the service.
 func (h *harness) read(t *testing.T, name string) []byte {
 	t.Helper()
-	data, err := os.ReadFile(filepath.Join(h.apiDir, name))
+	b, err := os.ReadFile(filepath.Join(h.svcDir, name))
 	if err != nil {
-		t.Fatalf("read %s: %v", name, err)
+		t.Fatal(err)
 	}
-	return data
+	return b
 }

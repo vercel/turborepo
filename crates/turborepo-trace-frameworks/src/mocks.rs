@@ -659,10 +659,10 @@ mod tests {
         let d = tempfile::tempdir().unwrap();
         std::fs::write(
             d.path().join("wrap.cjs"),
-            "const { transformSync } = require('@babel/core');\nconst { createTransformer } = \
-             require('next/dist/build/swc/jest-transformer');\nconst v = \
-             require('next/package.json').version;\nconst { createHash } = \
-             require('node:crypto');\nmodule.exports = { createTransformer };\n",
+            "const crypto = require('node:crypto');\nconst babel = require('@babel/core');\nconst \
+             nextVersion = require('next/package.json').version;\nconst { createTransformer } = \
+             require('next/dist/build/swc/jest-transformer');\nmodule.exports = { \
+             createTransformer };\n",
         )
         .unwrap();
         std::fs::write(

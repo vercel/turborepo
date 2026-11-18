@@ -242,7 +242,7 @@ fn find_mark(reason: &str) -> Option<(usize, usize)> {
 }
 
 /// The origin of an unknown value whose unknown parts have `reasons`, and a
-/// payload for the record detail (`env TMP_FOLDER`, `parameter load#0`).
+/// payload for the record detail (`env SCRATCH_DIR`, `parameter load#0`).
 ///
 /// The classes the policy may ignore (`Param`, `Env`, `Argv`) are only reported
 /// when every unknown part has one of them; a part of any other origin wins, in
@@ -289,15 +289,15 @@ mod tests {
 
     #[test]
     fn marks_round_trip() {
-        let r = mark(Tag::Env, "TMP_FOLDER", "process.env.TMP_FOLDER");
-        assert_eq!(&*r, "@env[TMP_FOLDER] process.env.TMP_FOLDER");
-        assert_eq!(strip(&r), "process.env.TMP_FOLDER");
-        assert_eq!(combine([&*r]), (Origin::Env, "env TMP_FOLDER".to_owned()));
+        let r = mark(Tag::Env, "SCRATCH_DIR", "process.env.SCRATCH_DIR");
+        assert_eq!(&*r, "@env[SCRATCH_DIR] process.env.SCRATCH_DIR");
+        assert_eq!(strip(&r), "process.env.SCRATCH_DIR");
+        assert_eq!(combine([&*r]), (Origin::Env, "env SCRATCH_DIR".to_owned()));
         assert!(has_tag(&r, Tag::Env));
         assert!(!has_tag(&r, Tag::Param));
         // Merged reasons keep every mark.
         let merged = format!("{r} {}", mark(Tag::Param, "f#0", "name"));
-        assert_eq!(strip(&merged), "process.env.TMP_FOLDER name");
+        assert_eq!(strip(&merged), "process.env.SCRATCH_DIR name");
         assert_eq!(combine([merged.as_str()]).0, Origin::Env);
     }
 

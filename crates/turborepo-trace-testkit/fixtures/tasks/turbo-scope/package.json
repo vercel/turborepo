@@ -5,8 +5,8 @@
     "packages/*"
   ],
   "scripts": {
-    "cache-tsbuildinfo-files": "echo \"Dummy script so Turborepo has a target for caching tsbuildinfo files.\"",
-    "stamp": "echo built > stamp.txt"
+    "stamp": "echo built > stamp.txt",
+    "keep-buildinfo": "echo \"Nothing to run: this task only gives the cache a place for the build info.\""
   },
   "devDependencies": {
     "turbo": "2.0.0"

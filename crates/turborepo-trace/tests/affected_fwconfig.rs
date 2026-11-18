@@ -92,7 +92,7 @@ const alias = [
   {
     find: 'server-only',
     replacement: fileURLToPath(
-      new URL('./test/server-only-stub.ts', import.meta.url),
+      new URL('./test/stubs/server-only.ts', import.meta.url),
     ),
   },
   {
@@ -108,7 +108,7 @@ export default defineConfig({
 "#,
     );
     write(r, "vitest-setup.ts", "export {};\n");
-    write(r, "test/server-only-stub.ts", "export {};\n");
+    write(r, "test/stubs/server-only.ts", "export {};\n");
     write(r, "test/font-stub.ts", "export default () => ({});\n");
     write(r, "lib/util.ts", "export const util = 1;\n");
     write(r, "lib/other.ts", "export const other = 1;\n");
@@ -155,7 +155,7 @@ export default defineConfig({
     // The stubs the other aliases name select the tests that import the aliased
     // module, not every test of the config.
     assert_eq!(
-        affected(r, "vitest", &["test/server-only-stub.ts"]),
+        affected(r, "vitest", &["test/stubs/server-only.ts"]),
         ["lib/util.test.ts"]
     );
     assert_eq!(
@@ -206,7 +206,7 @@ fn vitest_alias_target_directory_is_not_a_dependency_of_every_test() {
     );
 }
 
-/// The same for the shapes of a real app config: `new URL('./lib',
+/// The same for an app config with `new URL('./lib',
 /// import.meta.url)`, alias files, `require.resolve(x, { paths: [dir] })` and
 /// an alias `customResolver` that is `require.resolve` of its argument. An
 /// uncertain file below an alias directory does not make the tests that never
@@ -245,9 +245,7 @@ export default defineConfig({
       {
         find: /^@acme\/content\/(.+)$/,
         replacement: '@acme/content/$1',
-        customResolver: (specifier: string): string => {
-          return require.resolve(specifier);
-        },
+        customResolver: (id: string): string => require.resolve(id),
       },
       { find: '@', replacement: path.resolve(__dirname, './src') },
       {
@@ -450,10 +448,9 @@ fn vitest_plugins_known_loader_and_unknown() {
             "vitest.config.ts",
             &format!(
                 "import {{ defineConfig }} from 'vitest/config';\nimport react from \
-                 '@vitejs/plugin-react';\nimport wgslVitePlugin from \
-                 '@vgpu/wgsl/loader-vite';\nimport custom from 'vite-plugin-custom';\n\nexport \
-                 default defineConfig({{\n  plugins: [{plugins}],\n  test: {{ environment: \
-                 'jsdom' }},\n}});\n"
+                 '@vitejs/plugin-react';\nimport wgsl from '@vgpu/wgsl/loader-vite';\nimport \
+                 custom from 'vite-plugin-custom';\n\nexport default defineConfig({{\n  plugins: \
+                 [{plugins}],\n  test: {{ environment: 'jsdom' }},\n}});\n"
             ),
         );
         write(r, "src/a.ts", "export const a = 1;\n");
@@ -481,7 +478,7 @@ fn vitest_plugins_known_loader_and_unknown() {
     assert!(affected(r, "vitest", &["README.md"]).is_empty());
     assert_eq!(affected(r, "vitest", &["src/a.ts"]), ["src/a.test.ts"]);
     // With the shader loader, the same.
-    let d = repo("react(), wgslVitePlugin({ minify: true })", PLAIN);
+    let d = repo("react(), wgsl()", PLAIN);
     let r = d.path();
     assert!(affected(r, "vitest", &["README.md"]).is_empty());
     assert_eq!(
@@ -490,7 +487,7 @@ fn vitest_plugins_known_loader_and_unknown() {
     );
     // A shader with an `#import` line: the test that loads it is uncertain (what
     // that line includes is not traced), the others are not.
-    let d = repo("react(), wgslVitePlugin({ minify: true })", INCLUDES);
+    let d = repo("react(), wgsl()", INCLUDES);
     let r = d.path();
     assert_eq!(
         affected(r, "vitest", &["README.md"]),
@@ -690,35 +687,35 @@ fn jest_exact_test_match_that_finds_nothing() {
     write(
         r,
         "playwright/jest.config.ts",
-        "import type { Config } from 'jest';\n\nconst jestConfig: Config = {\n  testMatch: \
-         ['<rootDir>/**/*.test.ts'],\n  transform: {\n    '^.+\\\\.ts$': '@swc/jest',\n  \
-         },\n};\n\nmodule.exports = jestConfig;\n",
+        "import type { Config } from 'jest';\n\nconst unit: Config = {\n  transform: { \
+         '^.+\\\\.ts$': '@swc/jest' },\n  testMatch: ['<rootDir>/**/*.test.ts'],\n};\n\nexport \
+         default unit;\n",
     );
     write(
         r,
-        "playwright/shared/selectors.ts",
+        "playwright/support/locators.ts",
         "export const selectors = { login: '#login' };\n",
     );
     write(
         r,
         "playwright/e2e/login.spec.ts",
-        "import { selectors } from '../shared/selectors';\ntest('login', () => \
+        "import { selectors } from '../support/locators';\ntest('login', () => \
          expect(selectors).toBeDefined());\n",
     );
     assert_eq!(affected(r, "jest", &["src/a.ts"]), ["src/a.test.ts"]);
     assert!(affected(r, "jest", &["README.md"]).is_empty());
-    assert!(affected(r, "jest", &["playwright/shared/selectors.ts"]).is_empty());
+    assert!(affected(r, "jest", &["playwright/support/locators.ts"]).is_empty());
     assert!(affected(r, "jest", &["playwright/e2e/login.spec.ts"]).is_empty());
     // A unit test of the helpers appears: it is a jest test of that config.
     write(
         r,
-        "playwright/shared/selectors.test.ts",
-        "import { selectors } from './selectors';\ntest('s', () => \
+        "playwright/support/locators.test.ts",
+        "import { selectors } from './locators';\ntest('s', () => \
          expect(selectors).toBeDefined());\n",
     );
     assert_eq!(
-        affected(r, "jest", &["playwright/shared/selectors.ts"]),
-        ["playwright/shared/selectors.test.ts"]
+        affected(r, "jest", &["playwright/support/locators.ts"]),
+        ["playwright/support/locators.test.ts"]
     );
 }
 
@@ -764,7 +761,7 @@ fn jest_resolver_that_only_changes_conditions() {
             "module.exports = { resolver: '<rootDir>/jest.resolver.cjs' };\n",
         );
         write(r, "jest.resolver.cjs", resolver);
-        package(r, "tree-walker", &[]);
+        package(r, "esm-only-pkg", &[]);
         // A workspace package, linked into node_modules.
         write(
             r,
@@ -779,7 +776,7 @@ fn jest_resolver_that_only_changes_conditions() {
             r.join("node_modules/@site/shared"),
         )
         .unwrap();
-        write(r, "src/a.js", "module.exports = require('tree-walker');\n");
+        write(r, "src/a.js", "module.exports = require('esm-only-pkg');\n");
         write(
             r,
             "src/a.test.js",
@@ -795,14 +792,14 @@ fn jest_resolver_that_only_changes_conditions() {
     };
     let conditions = |requests: &str| {
         format!(
-            "module.exports = (request, options) =>\n  options.defaultResolver(request, {{\n    \
-             ...options,\n    conditions: {requests} ? [...(options.conditions ?? []), 'import'] \
-             : options.conditions,\n  }});\n"
+            "module.exports = (id, ctx) =>\n  ctx.defaultResolver(id, {{\n    ...ctx,\n    \
+             conditions: {requests} ? [...(ctx.conditions ?? []), 'import'] : ctx.conditions,\n  \
+             }});\n"
         )
     };
     let all = ["src/a.test.js", "src/b.test.js", "src/c.test.js"];
     // Only an installed package: nothing is uncertain.
-    let d = repo(&conditions("request === 'tree-walker'"));
+    let d = repo(&conditions("id === 'esm-only-pkg'"));
     let r = d.path();
     assert!(affected(r, "jest", &["README.md"]).is_empty());
     assert_eq!(affected(r, "jest", &["src/a.js"]), ["src/a.test.js"]);
@@ -812,7 +809,7 @@ fn jest_resolver_that_only_changes_conditions() {
     #[cfg(unix)]
     {
         let d = repo(&conditions(
-            "request === 'tree-walker' || request === '@site/shared'",
+            "id === 'esm-only-pkg' || id === '@site/shared'",
         ));
         assert_eq!(
             affected(d.path(), "jest", &["README.md"]),

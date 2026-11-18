@@ -1,24 +1,23 @@
 'use client';
 
-import { useLazySWR } from '../lib/api/swr';
-import { apiFetch } from '../lib/api/fetch-api';
+import { useDeferredSWR } from '../lib/http/hooks';
+import { request } from '../lib/http/client';
 
 export function Dash({ slug }: { slug: string }) {
-  const { data } = useLazySWR<Record<string, unknown>>(
-    `/api/dash?teamId=${slug}`,
-    async (endpoint: string) => {
+  const { data } = useDeferredSWR<{ [key: string]: unknown }>(
+    `/api/dash?owner=${slug}`,
+    async (path: string) => {
       try {
-        const data = await apiFetch<Record<string, unknown>>(endpoint, {
-          headers: { accept: 'application/json' },
+        const body = await request<{ [key: string]: unknown }>(path, {
+          headers: { 'x-requested-with': 'dash' },
         });
-        return data || {};
-      } catch (error) {
-        throw error;
+        return body ?? {};
+      } catch (err) {
+        console.error(err);
+        throw err;
       }
     },
-    {
-      revalidateOnFocus: false,
-    },
+    { revalidateOnFocus: false },
   );
   return <pre>{JSON.stringify(data)}</pre>;
 }

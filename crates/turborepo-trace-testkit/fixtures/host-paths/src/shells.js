@@ -1,9 +1,10 @@
-// A helper that probes candidate shells and skips the missing ones.
+// Lists the shells this machine has, in order of preference.
 const { existsSync } = require('node:fs');
-const candidateShells = ['/bin/sh', '/bin/bash', '/bin/dash'];
-const found = [];
-for (const shell of candidateShells) {
-  const skip = !existsSync(shell);
-  if (!skip) found.push(shell);
+const preferred = ['/bin/sh', '/bin/bash', '/bin/dash'];
+const available = [];
+for (const candidate of preferred) {
+  if (existsSync(candidate)) {
+    available.push(candidate);
+  }
 }
-module.exports = { found };
+module.exports = { available };

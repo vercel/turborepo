@@ -428,10 +428,10 @@ mod tests {
     #[test]
     fn pnpm_yaml() {
         let y = "packages:\n  - 'apps/*'\n  - \"packages/**\" # all\n  - \
-                 '!services/copper'\n\nminimumReleaseAge: 2880\ncatalog:\n  - nope\n";
+                 '!services/sandbox'\n\nminimumReleaseAge: 1440\ncatalog:\n  - nope\n";
         assert_eq!(
             pnpm_packages(y),
-            ["apps/*", "packages/**", "!services/copper"]
+            ["apps/*", "packages/**", "!services/sandbox"]
         );
         assert_eq!(pnpm_packages("packages: [a/*, 'b']\n"), ["a/*", "b"]);
     }
@@ -497,7 +497,7 @@ mod tests {
             "pnpm-workspace.yaml",
             "apps/web/package.json",
             "apps/web/src/a.ts",
-            "services/copper/package.json",
+            "services/sandbox/package.json",
             "packages/x/package.json",
             "packages/x/test/fixture/package.json",
             "tests/package.json",
@@ -512,7 +512,7 @@ mod tests {
         std::fs::write(
             r.join("pnpm-workspace.yaml"),
             "packages:\n  - 'apps/*'\n  - 'packages/*'\n  - 'services/*'\n  - \
-             '!services/copper'\n  - tests\n",
+             '!services/sandbox'\n  - tests\n",
         )
         .unwrap();
         let files: Vec<String> = files.iter().map(|s| s.to_string()).collect();
@@ -533,7 +533,7 @@ mod tests {
         );
         assert_eq!(w.owner("apps/web/src/a.ts"), 1);
         assert_eq!(w.owner("packages/x/test/fixture/package.json"), 2);
-        assert_eq!(w.owner("services/copper/a.ts"), 0);
+        assert_eq!(w.owner("services/sandbox/a.ts"), 0);
         assert_eq!(w.owner("x.ts"), 0);
     }
 }

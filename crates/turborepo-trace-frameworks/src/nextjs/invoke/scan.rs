@@ -74,7 +74,7 @@ struct Inner {
 }
 
 /// An API that passes a key to a fetcher callback: a table entry, or a function
-/// that forwards a key and a fetcher parameter to one (`useLazySWR(key,
+/// that forwards a key and a fetcher parameter to one (`useDeferredSWR(key,
 /// fetcher)`).
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 enum FetcherApi {
@@ -1860,7 +1860,7 @@ fn url_strings(ev: &Eval<'_, '_>, f: &Rc<JsFile>, out: &mut Vec<UrlString>) {
                 if let Some(c) = f.closer(t) {
                     let raw = f.toks[t].text(&f.src);
                     // Only templates that start with `/`, or with a name followed by `/`
-                    // (a constant base: `${API_TEAMS}/${id}`).
+                    // (a constant base: `${TEAMS_PATH}/${id}`).
                     let base_hole = raw.len() >= 2 && raw[1] == b'$' && {
                         let mut k = t + 1;
                         while f.kind(k) == TokKind::Ident

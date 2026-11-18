@@ -1,5 +1,4 @@
-//! Tests of the environment facts ([`super::env`]). The shapes come from real
-//! repositories, with the names changed.
+//! Tests of the environment facts ([`super::env`]).
 
 use turborepo_trace_core::{
     Origin,
@@ -69,16 +68,15 @@ fn var(name: &str) -> EnvPart {
     EnvPart::Var(EnvName::Name(name.to_owned()))
 }
 
-/// `readFile(getEnv(NAME, DEFAULT))` with a helper imported from a workspace
+/// `readFile(envOr(NAME, DEFAULT))` with a helper imported from a workspace
 /// package.
 #[test]
 fn use_through_an_imported_helper() {
     let fs = facts(
         "client.ts",
-        "import { readFile } from 'node:fs/promises';\nimport { getEnv } from '@acme/env';\nconst \
-         DEFAULT_TOKEN_PATH = '/var/run/secrets/widget/tokens/token';\nexport async function \
-         token() {\n  return readFile(getEnv('WIDGET_OIDC_TOKEN_PATH', DEFAULT_TOKEN_PATH), \
-         'utf8');\n}\n",
+        "import { envOr } from '@acme/settings';\nimport { readFile } from \
+         'node:fs/promises';\nconst CERT = '/etc/ssl/acme/client.pem';\nexport async function \
+         clientCert() {\n  return readFile(envOr('ACME_CLIENT_CERT', CERT), 'utf8');\n}\n",
     );
     let us = uses(&fs);
     assert_eq!(us.len(), 1, "{fs:?}");
@@ -88,13 +86,10 @@ fn use_through_an_imported_helper() {
     let c = &value.calls[0];
     assert_eq!(
         (c.module.as_str(), c.export.as_str()),
-        ("@acme/env", "getEnv")
+        ("@acme/settings", "envOr")
     );
-    assert_eq!(c.args[0].value, [lit("WIDGET_OIDC_TOKEN_PATH")]);
-    assert_eq!(
-        c.args[1].value,
-        [lit("/var/run/secrets/widget/tokens/token")]
-    );
+    assert_eq!(c.args[0].value, [lit("ACME_CLIENT_CERT")]);
+    assert_eq!(c.args[1].value, [lit("/etc/ssl/acme/client.pem")]);
 }
 
 /// The helper call bound to a constant first, and a helper with a callback
@@ -103,17 +98,17 @@ fn use_through_an_imported_helper() {
 fn use_through_a_const_and_a_callback() {
     let fs = facts(
         "client.ts",
-        "import fs from 'node:fs';\nimport { assertEnv, getEnvCallback } from '@acme/env';\nconst \
-         tokenFile = assertEnv('WIDGET_TOKEN_FILE');\nexport const a = () => \
-         fs.readFileSync(tokenFile, 'utf8');\nexport const b = () => \
-         fs.readFileSync(getEnvCallback('B_FILE', () => '/etc/b'), 'utf8');\n",
+        "import fs from 'node:fs';\nimport { required, envOrElse } from '@acme/settings';\nconst \
+         keyFile = required('SIGNING_KEY_FILE');\nexport const a = () => fs.readFileSync(keyFile, \
+         'utf8');\nexport const b = () => fs.readFileSync(envOrElse('B_FILE', () => '/etc/b'), \
+         'utf8');\n",
     );
     let us = uses(&fs);
     assert_eq!(us.len(), 2, "{fs:?}");
-    assert_eq!(us[0].2.calls[0].export, "assertEnv");
-    assert_eq!(us[0].2.calls[0].args[0].value, [lit("WIDGET_TOKEN_FILE")]);
+    assert_eq!(us[0].2.calls[0].export, "required");
+    assert_eq!(us[0].2.calls[0].args[0].value, [lit("SIGNING_KEY_FILE")]);
     let cb = &us[1].2.calls[0];
-    assert_eq!(cb.export, "getEnvCallback");
+    assert_eq!(cb.export, "envOrElse");
     assert_eq!(cb.args[1].value, []);
     assert_eq!(cb.args[1].returns, Some(vec![lit("/etc/b")]));
 }
@@ -123,17 +118,16 @@ fn use_through_a_const_and_a_callback() {
 fn use_of_a_variable_through_a_const_and_a_guard() {
     let fs = facts(
         "client.ts",
-        "import { readFileSync } from 'node:fs';\nconst testDatafilePath = \
-         process.env.FLAGS_TEST_DATAFILE;\nconst testDatafile = testDatafilePath\n  ? \
-         JSON.parse(readFileSync(testDatafilePath, 'utf8'))\n  : undefined;\nexport { \
-         testDatafile };\n",
+        "import { readFileSync } from 'node:fs';\nconst pricesPath = \
+         process.env.PRICES_FIXTURE;\nexport const prices = pricesPath\n  ? \
+         JSON.parse(readFileSync(pricesPath, 'utf8'))\n  : [];\n",
     );
     let us = uses(&fs);
     assert_eq!(us.len(), 1, "{fs:?}");
     assert_eq!(us[0].1, Origin::Env);
     assert_eq!(
         us[0].2.alts,
-        [term(EnvBase::Str, vec![var("FLAGS_TEST_DATAFILE")])]
+        [term(EnvBase::Str, vec![var("PRICES_FIXTURE")])]
     );
 }
 
@@ -174,14 +168,14 @@ fn assignments() {
     let fs = facts(
         "setup.test.ts",
         "import path from 'node:path';\nimport { vi } from 'vitest';\nimport { spawn } from \
-         'node:child_process';\nconst original = process.env.FLAGS_TEST_DATAFILE;\nbeforeEach(() \
-         => {\n  process.env.FLAGS_TEST_DATAFILE = '/tmp/testserver-flags.json';\n  \
+         'node:child_process';\nconst original = process.env.PRICES_FIXTURE;\nbeforeEach(() => \
+         {\n  process.env.PRICES_FIXTURE = '/tmp/prices-fixture.json';\n  \
          process.env['FIXTURE_FILE'] = path.join(__dirname, 'fixtures', 'a.json');\n  \
          vi.stubEnv('STUBBED_FILE', path.resolve(__dirname, \
-         '../data/b.json'));\n});\nafterEach(() => { process.env.FLAGS_TEST_DATAFILE = original; \
-         });\nclass Server {\n  private readonly flagsFile = path.join(__dirname, \
-         'flags.json');\n  async getTestEnv() {\n    return { SERVER_DATAFILE: this.flagsFile, \
-         SERVER_KEY: 'fake' };\n  }\n}\nspawn('node', ['x.js'], { env: { ...process.env, \
+         '../data/b.json'));\n});\nafterEach(() => { process.env.PRICES_FIXTURE = original; \
+         });\nclass Harness {\n  private readonly catalog = path.join(__dirname, \
+         'catalog.json');\n  async childEnv() {\n    return { HARNESS_CATALOG: this.catalog, \
+         HARNESS_TOKEN: 'fake' };\n  }\n}\nspawn('node', ['x.js'], { env: { ...process.env, \
          CHILD_CONFIG: computeIt() } });\nexecSync('SHELL_FILE=./conf/c.json node \
          run.js');\nprocess.env.NOT_A_PATH = undefined;\n",
     );
@@ -193,11 +187,11 @@ fn assignments() {
         got.iter().filter(|g| g.0 == name).map(|g| &g.2).collect()
     };
     assert_eq!(
-        find("FLAGS_TEST_DATAFILE"),
+        find("PRICES_FIXTURE"),
         [
-            &vec![lit("/tmp/testserver-flags.json")],
+            &vec![lit("/tmp/prices-fixture.json")],
             // Restoring the saved value: the variable itself.
-            &vec![term(EnvBase::Str, vec![var("FLAGS_TEST_DATAFILE")])],
+            &vec![term(EnvBase::Str, vec![var("PRICES_FIXTURE")])],
         ],
         "{got:?}"
     );
@@ -216,13 +210,13 @@ fn assignments() {
         )]]
     );
     assert_eq!(
-        find("SERVER_DATAFILE"),
+        find("HARNESS_CATALOG"),
         [&vec![term(
             EnvBase::FileDir,
-            vec![EnvPart::Lit("flags.json".into())]
+            vec![EnvPart::Lit("catalog.json".into())]
         )]]
     );
-    assert_eq!(find("SERVER_KEY"), [&vec![lit("fake")]]);
+    assert_eq!(find("HARNESS_TOKEN"), [&vec![lit("fake")]]);
     assert!(matches!(
         find("CHILD_CONFIG").as_slice(),
         [alts] if matches!(alts.as_slice(), [EnvAlt::Unknown(_)])
@@ -231,10 +225,7 @@ fn assignments() {
     // Never a path: not recorded.
     assert!(find("NOT_A_PATH").is_empty());
     // The line of the first assignment.
-    assert_eq!(
-        got.iter().find(|g| g.0 == "FLAGS_TEST_DATAFILE").unwrap().1,
-        6
-    );
+    assert_eq!(got.iter().find(|g| g.0 == "PRICES_FIXTURE").unwrap().1, 6);
 }
 
 /// Assertions and test names are not assignments; a temporary path is outside
@@ -259,48 +250,43 @@ fn not_assignments() {
 fn helpers() {
     let fs = facts(
         "index.ts",
-        "export function assertEnvOr(...names: string[]): string {\n  for (const name of names) \
-         {\n    const value = process.env[name];\n    if (value) {\n      return value;\n    }\n  \
-         }\n  if (process.env.INJECT_FAKE_ENV_VARS === 'true') {\n    return names[0] ?? \
-         'FAKE_ENV_VAR';\n  }\n  throw new Error(`Missing ${names.join(', ')}`);\n}\nexport \
-         function assertEnv(name: string): string {\n  return assertEnvOr(name);\n}\nexport \
-         function getEnv(name: string, fallback: string): string {\n  const value = \
-         process.env[name];\n  if (!value) {\n    warn(name, fallback);\n    return fallback;\n  \
-         }\n  return value;\n}\nexport function getEnvCallback(name: string, fallback: () => \
-         string): string {\n  const value = process.env[name];\n  if (!value) {\n    const \
-         fallbackValue = fallback();\n    warn(name, fallbackValue);\n    return fallbackValue;\n  \
-         }\n  return value;\n}\nexport function isTesting(): boolean {\n  return \
-         process.env.NODE_ENV === 'test';\n}\nexport function upper(name: string): string {\n  \
-         return (process.env[name] ?? '').toUpperCase();\n}\nfunction warn(a: string, b: string) \
-         {}\n",
+        "export function firstSet(...keys: string[]): string {\n  for (const key of keys) {\n    \
+         const found = process.env[key];\n    if (found) {\n      return found;\n    }\n  }\n  \
+         if (process.env.ENV_PLACEHOLDERS === '1') {\n    return keys[0] ?? 'PLACEHOLDER';\n  \
+         }\n  throw new Error('none of ' + keys.join(' / ') + ' is set');\n}\nexport function \
+         required(key: string): string {\n  return firstSet(key);\n}\nexport function envOr(key: \
+         string, otherwise: string): string {\n  const found = process.env[key];\n  if (!found) \
+         {\n    note(key);\n    return otherwise;\n  }\n  return found;\n}\nexport function \
+         envOrElse(key: string, otherwise: () => string): string {\n  const found = \
+         process.env[key];\n  if (!found) {\n    const computed = otherwise();\n    note(key);\n    \
+         return computed;\n  }\n  return found;\n}\nexport function inTests(): boolean {\n  \
+         return process.env.CI_STAGE === 'unit';\n}\nexport function upper(key: string): string \
+         {\n  return (process.env[key] ?? '').toUpperCase();\n}\nfunction note(key: string) {}\n",
     );
     let arg_var = |i: u32| term(EnvBase::Str, vec![EnvPart::Var(EnvName::Arg(i))]);
     let arg = |i: u32| term(EnvBase::Str, vec![EnvPart::Arg(i)]);
     assert_eq!(
-        helper(&fs, "getEnv").map(|v| v.alts.clone()),
+        helper(&fs, "envOr").map(|v| v.alts.clone()),
         Some(vec![arg(1), arg_var(0)]),
         "{fs:?}"
     );
     assert_eq!(
-        helper(&fs, "getEnvCallback").map(|v| v.alts.clone()),
+        helper(&fs, "envOrElse").map(|v| v.alts.clone()),
         Some(vec![
             term(EnvBase::Str, vec![EnvPart::ArgCall(1)]),
             arg_var(0)
         ])
     );
-    let any = helper(&fs, "assertEnv").expect("assertEnv").alts.clone();
+    let any = helper(&fs, "required").expect("required").alts.clone();
     assert!(any.contains(&arg_var(0)), "{any:?}");
     assert!(any.contains(&arg(0)), "{any:?}");
-    assert!(any.contains(&lit("FAKE_ENV_VAR")), "{any:?}");
-    let or = helper(&fs, "assertEnvOr")
-        .expect("assertEnvOr")
-        .alts
-        .clone();
+    assert!(any.contains(&lit("PLACEHOLDER")), "{any:?}");
+    let or = helper(&fs, "firstSet").expect("firstSet").alts.clone();
     for i in 0..4 {
         assert!(or.contains(&arg_var(i)), "{or:?}");
     }
     // Not a string, and a derived value: no helper.
-    assert_eq!(helper(&fs, "isTesting"), None);
+    assert_eq!(helper(&fs, "inTests"), None);
     assert_eq!(helper(&fs, "upper"), None);
 }
 

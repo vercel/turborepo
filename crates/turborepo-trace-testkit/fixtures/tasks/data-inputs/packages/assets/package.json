@@ -9,8 +9,8 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
-    "type-check": "tsc -b",
-    "icons:visual-tests": "node scripts/visual/extract.mjs",
+    "check-types": "tsc -b",
+    "visual:extract": "node scripts/visual/extract.mjs",
     "upload": "node tools/upload.ts"
   }
 }

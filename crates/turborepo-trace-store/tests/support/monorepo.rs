@@ -19,7 +19,7 @@
 //! - imports of `./generated/schema` in `codegen` packages: gitignored
 //!   generated files that a task output covers.
 //!
-//! The defaults describe a large monorepo at full scale (1500 packages, about
+//! The defaults describe a big workspace at full scale (1500 packages, about
 //! 50k files); [`Monorepo::scaled`] divides that.
 
 use std::{fmt::Write as _, fs, io, path::Path};
@@ -259,7 +259,7 @@ impl Monorepo {
             "jest.config.js",
             "// Root jest config, extended by every package.\nmodule.exports = {\n  transform: { \
              '^.+\\\\.(t|j)sx?$': '@swc/jest' },\n  modulePathIgnorePatterns: \
-             ['<rootDir>/.*/__mocks__'],\n  setupFilesAfterEnv: [],\n};\n",
+             ['<rootDir>/.+/__mocks__'],\n  setupFilesAfterEnv: [],\n};\n",
             &mut st,
         )?;
         put(

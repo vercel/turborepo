@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 
-import { apiFetch } from '../lib/api/fetch-api';
+import { request } from '../lib/http/client';
 
 // The URL comes from the request, although the text of the argument (`next`) does not say so.
 export function Next() {
@@ -29,5 +29,5 @@ export function Computed(props: { client: { query: string } }) {
 
 // A wrapper that adds a prefix, called with a path from storage.
 export function Last() {
-  return <button onClick={() => apiFetch(sessionStorage.getItem('last')!)}>last</button>;
+  return <button onClick={() => request(sessionStorage.getItem('last')!)}>last</button>;
 }

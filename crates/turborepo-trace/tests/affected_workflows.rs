@@ -107,8 +107,8 @@ fn since(root: &Path) -> (Vec<String>, Vec<String>) {
 const A: &str = "packages/a/src/a.test.js";
 const B: &str = "packages/b/src/b.test.js";
 const E2E: &str = "tools/e2e/flow.test.js";
-const QUALITY: &str = ".github/workflows/quality.yml";
-const CHECKS: &str = ".github/workflows/checks.yml";
+const REVIEW: &str = ".github/workflows/review.yml";
+const BATCH: &str = ".github/workflows/batch.yml";
 const DEPLOY: &str = ".github/workflows/deploy.yml";
 
 #[test]
@@ -134,27 +134,27 @@ fn steering_edits_select_nothing() {
     // A comment, the path filter, the display names, a job-level `if`, concurrency.
     edit(
         r,
-        QUALITY,
-        "name: Quality",
-        "# CI for pull requests\nname: Quality checks",
+        REVIEW,
+        "name: Review",
+        "# CI for pull requests\nname: Review checks",
     );
     edit(
         r,
-        QUALITY,
+        REVIEW,
         "      - 'packages/**'",
         "      - 'packages/**'\n      - 'tools/**'",
     );
     edit(
         r,
-        QUALITY,
+        REVIEW,
         "    name: Test packages",
         "    name: Unit tests\n    if: github.actor != 'bot'",
     );
     edit(
         r,
-        CHECKS,
-        "name: Checks",
-        "name: Checks\nconcurrency: checks-${{ github.ref }}",
+        BATCH,
+        "name: Batch",
+        "name: Batch\nconcurrency: batch-${{ github.ref }}",
     );
     edit(r, DEPLOY, "branches: [main]", "branches: [main, release]");
     let (tests, jobs) = since(r);
@@ -169,17 +169,17 @@ fn the_test_job_selects_the_tests_it_runs() {
     // The runner image of the e2e job: only the e2e tests.
     edit(
         r,
-        QUALITY,
+        REVIEW,
         "  e2e:\n    runs-on: ubuntu-latest",
         "  e2e:\n    runs-on: ubuntu-24.04",
     );
     let (tests, jobs) = since(r);
     assert_eq!(tests, [E2E]);
-    assert_eq!(jobs, ["quality.yml#e2e", "quality.yml#summary"]);
+    assert_eq!(jobs, ["review.yml#e2e", "review.yml#summary"]);
     let why = run(r, &["affected", "--since", "HEAD", "--explain", E2E]);
     assert_eq!(
         why[0],
-        format!("affected {E2E}: modified {QUALITY} (read or probed) at gha:{QUALITY}#e2e → {E2E}")
+        format!("affected {E2E}: modified {REVIEW} (read or probed) at gha:{REVIEW}#e2e → {E2E}")
     );
 }
 
@@ -188,16 +188,16 @@ fn a_reusable_workflow_reaches_its_callers() {
     let d = repo();
     let r = d.path();
     // The default Node version of the reusable test workflow.
-    edit(r, CHECKS, "default: '22'", "default: '24'");
+    edit(r, BATCH, "default: '22'", "default: '24'");
     let (tests, jobs) = since(r);
-    // `turbo ci:checks $FILTERS` has a computed word: every test.
+    // `turbo ci:verify $SCOPE` has a computed word: every test.
     assert_eq!(tests, [A, B, E2E]);
     assert_eq!(
         jobs,
         [
-            "checks.yml#checks",
-            "quality.yml#summary",
-            "quality.yml#test-packages"
+            "batch.yml#run",
+            "review.yml#summary",
+            "review.yml#test-packages"
         ]
     );
 }
@@ -209,13 +209,13 @@ fn the_call_site_and_its_inputs_count() {
     // The caller passes another input: the called jobs run differently.
     edit(
         r,
-        QUALITY,
-        "      shard: ${{ toJson(matrix.shard) }}",
-        "      shard: ${{ toJson(matrix.shard) }}\n      node-version: '20'",
+        REVIEW,
+        "      slice: ${{ toJson(matrix.slice) }}",
+        "      slice: ${{ toJson(matrix.slice) }}\n      node-version: '20'",
     );
     let (tests, jobs) = since(r);
     assert_eq!(tests, [A, B, E2E]);
-    assert_eq!(jobs, ["quality.yml#summary", "quality.yml#test-packages"]);
+    assert_eq!(jobs, ["review.yml#summary", "review.yml#test-packages"]);
 }
 
 #[test]
@@ -233,14 +233,14 @@ fn a_nested_local_action_selects_the_tests_of_the_jobs_that_use_it() {
     assert_eq!(
         jobs,
         [
-            "checks.yml#checks",
+            "batch.yml#run",
             "deploy.yml#deploy",
             "deploy.yml#notify",
             "nightly.yml#smoke",
-            "quality.yml#e2e",
-            "quality.yml#lint",
-            "quality.yml#summary",
-            "quality.yml#test-packages",
+            "review.yml#e2e",
+            "review.yml#lint",
+            "review.yml#summary",
+            "review.yml#test-packages",
             "scoring.yml#score",
         ]
     );
@@ -262,12 +262,12 @@ fn a_job_with_mapped_tests_only() {
     // Remove the computed word: the turbo pipeline maps to the package tests.
     edit(
         r,
-        CHECKS,
-        "turbo ci:checks $FILTERS --continue",
-        "turbo ci:checks --continue",
+        BATCH,
+        "turbo ci:verify $SCOPE --continue",
+        "turbo ci:verify --continue",
     );
     git(r, &["commit", "-qam", "static filters"]);
-    edit(r, CHECKS, "timeout-minutes: 30", "timeout-minutes: 45");
+    edit(r, BATCH, "timeout-minutes: 30", "timeout-minutes: 45");
     let (tests, _) = since(r);
     // Every package with a `test` script, through the pipeline's dependsOn.
     assert_eq!(tests, [A, B, E2E]);
@@ -275,12 +275,12 @@ fn a_job_with_mapped_tests_only() {
     git(r, &["checkout", "-q", "."]);
     edit(
         r,
-        CHECKS,
-        "turbo ci:checks --continue",
-        "turbo ci:checks --filter=@acme/a --continue",
+        BATCH,
+        "turbo ci:verify --continue",
+        "turbo ci:verify --filter=@acme/a --continue",
     );
     git(r, &["commit", "-qam", "one package"]);
-    edit(r, CHECKS, "timeout-minutes: 30", "timeout-minutes: 45");
+    edit(r, BATCH, "timeout-minutes: 30", "timeout-minutes: 45");
     let (tests, _) = since(r);
     assert_eq!(tests, [A]);
 }
@@ -289,15 +289,15 @@ fn a_job_with_mapped_tests_only() {
 fn scripts_and_files_a_job_runs_count() {
     let d = repo();
     let r = d.path();
-    // A module imported by the script of the `metadata` job, which the test job
+    // A module imported by the script of the `plan` job, which the test job
     // needs.
     edit(r, ".github/scripts/weights.mjs", "a: 2", "a: 3");
     let (tests, jobs) = since(r);
     assert_eq!(tests, [A, B, E2E]);
     for j in [
-        "quality.yml#metadata",
-        "quality.yml#summary",
-        "quality.yml#test-packages",
+        "review.yml#plan",
+        "review.yml#summary",
+        "review.yml#test-packages",
     ] {
         assert!(jobs.iter().any(|x| x == j), "{j} in {jobs:?}");
     }
@@ -370,7 +370,7 @@ fn without_a_base_revision_every_job_of_a_changed_file_counts() {
             "gha:.github/workflows/deploy.yml#notify"
         ]
     );
-    let tests = run(r, &["affected", "--tests", "jest", "--changed", QUALITY]);
+    let tests = run(r, &["affected", "--tests", "jest", "--changed", REVIEW]);
     assert_eq!(
         tests,
         [A, B, E2E],
@@ -511,49 +511,47 @@ fn provisioned(r: &Path) {
         "package.json",
         r#"{"name":"root","private":true,"workspaces":["packages/*","scripts/*","tools/*"],"devDependencies":{"turbo":"2.0.0","jest":"29.0.0","tsx":"4.0.0"}}"#,
     );
-    write("turbo.json", r#"{"tasks":{"test":{},"dynamo":{}}}"#);
+    write("turbo.json", r#"{"tasks":{"test":{},"db:up":{}}}"#);
     write(
         "jest.config.js",
         "module.exports = { testMatch: ['**/*.test.js'] };\n",
     );
     // The wrapper every package runs its tests with.
     write(
-        "tools/test-dd/package.json",
-        r#"{"name":"@acme/test-dd","version":"1.0.0","bin":{"jest-dd":"./bin/jest-dd.js"}}"#,
+        "tools/ci-runners/package.json",
+        r#"{"name":"@acme/ci-runners","version":"1.0.0","bin":{"jest-ci":"./bin/jest-ci.js"}}"#,
     );
     write(
-        "tools/test-dd/bin/jest-dd.js",
-        "#!/usr/bin/env node\nconst { runTestRunner } = require('../utils');\n\nrunTestRunner({ \
-         runner: 'jest', session: 'unit-tests-jest' });\n",
+        "tools/ci-runners/bin/jest-ci.js",
+        "#!/usr/bin/env node\nconst { launch } = require('../lib/launch');\n\nlaunch({ label: \
+         'unit', tool: 'jest' });\n",
     );
     write(
-        "tools/test-dd/utils.js",
-        "const { spawn } = require('child_process');\n\nfunction runTestRunner({ runner, session \
-         }) {\n  const env = { ...process.env, SESSION: session };\n  const child = spawn('pnpm', \
-         ['exec', runner, ...process.argv.slice(2)], { stdio: 'inherit', env });\n  \
-         child.on('exit', (code) => process.exit(code ?? 1));\n}\n\nmodule.exports = { \
-         runTestRunner };\n",
+        "tools/ci-runners/lib/launch.js",
+        "const { spawn } = require('child_process');\n\nfunction launch({ label, tool }) {\n  \
+         const env = Object.assign({}, process.env, { CI_REPORT_LABEL: label });\n  spawn('pnpm', \
+         ['exec', tool, ...process.argv.slice(2)], { env, stdio: 'inherit' }).on('exit', (status) \
+         => process.exit(status === null ? 1 : status));\n}\n\nmodule.exports = { launch };\n",
     );
     // The provisioning script: starts a database container and waits for it.
     write(
         "scripts/provision/package.json",
-        r#"{"name":"@acme/provision","version":"1.0.0","scripts":{"dynamo":"tsx ./services/dynamo.ts"}}"#,
+        r#"{"name":"@acme/provision","version":"1.0.0","scripts":{"db:up":"tsx ./services/postgres.ts"}}"#,
     );
     write(
-        "scripts/provision/services/dynamo.ts",
+        "scripts/provision/services/postgres.ts",
         "import { execFileSync } from 'node:child_process';\n\nexport function start(): void {\n  \
-         // Tables are not created here: that happens in\n  // the shared jest beforeAll table \
-         setup. Probing the port gates readiness.\n  execFileSync('docker', ['compose', 'up', \
-         '-d', 'dynamo']);\n}\n\nstart();\n",
+         // Only the container; each jest suite migrates its own schema.\n  \
+         execFileSync('docker', ['compose', 'up', '-d', 'postgres']);\n}\n\nstart();\n",
     );
     // The storage package: its tests need the database.
     write(
         "packages/store/package.json",
-        r#"{"name":"@acme/store","version":"1.0.0","scripts":{"test":"jest-dd"}}"#,
+        r#"{"name":"@acme/store","version":"1.0.0","scripts":{"test":"jest-ci"}}"#,
     );
     write(
         "packages/store/turbo.json",
-        r#"{"extends":["//"],"tasks":{"test":{"dependsOn":["@acme/provision#dynamo"]}}}"#,
+        r#"{"extends":["//"],"tasks":{"test":{"dependsOn":["@acme/provision#db:up"]}}}"#,
     );
     write("packages/store/src/store.js", "exports.get = () => 1;\n");
     write(
@@ -563,7 +561,7 @@ fn provisioned(r: &Path) {
     // A package without that dependency.
     write(
         "packages/other/package.json",
-        r#"{"name":"@acme/other","version":"1.0.0","scripts":{"test":"jest-dd"}}"#,
+        r#"{"name":"@acme/other","version":"1.0.0","scripts":{"test":"jest-ci"}}"#,
     );
     write("packages/other/src/other.js", "exports.x = 1;\n");
     write(
@@ -615,7 +613,7 @@ fn a_comment_that_names_a_test_runner_starts_no_tests() {
     // a comment, which is not a launch.
     edit(
         r,
-        "scripts/provision/services/dynamo.ts",
+        "scripts/provision/services/postgres.ts",
         "'up', '-d'",
         "'up', '--wait', '-d'",
     );
@@ -626,14 +624,14 @@ fn a_comment_that_names_a_test_runner_starts_no_tests() {
     git(r, &["checkout", "-q", "."]);
     edit(
         r,
-        "scripts/provision/services/dynamo.ts",
+        "scripts/provision/services/postgres.ts",
         "start();",
         "start();\nexecFileSync('jest', ['--ci']);",
     );
     git(r, &["commit", "-qam", "the script runs jest"]);
     edit(
         r,
-        "scripts/provision/services/dynamo.ts",
+        "scripts/provision/services/postgres.ts",
         "'--ci'",
         "'--ci', '--bail'",
     );
@@ -651,8 +649,8 @@ fn a_changed_job_still_selects_what_its_tasks_depend_on() {
     edit(
         r,
         "packages/store/turbo.json",
-        r#""@acme/provision#dynamo""#,
-        r#""@acme/provision#dynamo", "@acme/other#test""#,
+        r#""@acme/provision#db:up""#,
+        r#""@acme/provision#db:up", "@acme/other#test""#,
     );
     git(r, &["commit", "-qam", "store tests depend on other tests"]);
     // The job's environment is that of everything turbo starts for it.
