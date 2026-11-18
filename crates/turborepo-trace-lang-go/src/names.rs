@@ -60,6 +60,18 @@
 //!   `filepath.Join("..", "..")`): such a string can be the base of the others
 //!   ([`Names::moves_base`](turborepo_trace_core::names::Names::moves_base)).
 //!
+//! A call that changes the working directory (not into a temporary directory,
+//! [`chdir_calls`]) moves every relative path of the directory's files, the
+//! literal reads of its test files too, which are otherwise taken from the
+//! package directory. The extractor records it as a read with an unknown path
+//! ([`crate::extract::CHDIR_DETAIL`]), which every test of the directory
+//! reaches: `--strict` opens it, and by default it is bounded by names. The
+//! file is marked
+//! ([`Names::chdir`](turborepo_trace_core::names::Names::chdir)),
+//! and every name of the directory's Go files then names its shape anywhere,
+//! not only inside the package. What a string of another package names after
+//! the change is still held to its package.
+//!
 //! What is left out, because the string never becomes a path:
 //!
 //! - the arguments after the first of a `strings` / `bytes` function that only
@@ -391,6 +403,63 @@ fn location_literal(
         k += 2;
     }
     (punct(k, b')') && literal_file_path(&path)).then_some(k)
+}
+
+/// The calls of the Go file `src` that change the working directory: a call of
+/// a function called `Chdir` (`os.Chdir(dir)`, `t.Chdir(dir)`, on any
+/// receiver) whose first argument is not below a temporary directory
+/// ([`crate::temp`]: what a test reads there after it is no repository file).
+/// The span of each `Chdir`. A declaration of a function or method called
+/// `Chdir` is not a call.
+pub fn chdir_calls(src: &[u8]) -> Vec<turborepo_trace_core::Span> {
+    if memchr::memmem::find(src, b"Chdir").is_none() {
+        return Vec::new();
+    }
+    let (toks, _) = tokenize(src);
+    let sig: Vec<usize> = (0..toks.len()).filter(|&i| !toks[i].is_comment()).collect();
+    let roots = TempRoots::possible(src).then(|| TempRoots::of(src, &toks));
+    let tok = |k: usize| toks[sig[k]];
+    let mut out = Vec::new();
+    for k in 0..sig.len() {
+        if !(tok(k).is_ident(src, b"Chdir")
+            && sig.get(k + 1).is_some_and(|&i| toks[i].is_punct(src, b'(')))
+        {
+            continue;
+        }
+        // `func Chdir(` and `func (r T) Chdir(` declare it.
+        let declared = k > 0
+            && (tok(k - 1).is_ident(src, b"func")
+                || (tok(k - 1).is_punct(src, b')') && {
+                    let mut depth = 0i32;
+                    let mut j = k - 1;
+                    loop {
+                        let t = tok(j);
+                        if t.is_punct(src, b')') {
+                            depth += 1;
+                        } else if t.is_punct(src, b'(') {
+                            depth -= 1;
+                            if depth == 0 {
+                                break j > 0 && tok(j - 1).is_ident(src, b"func");
+                            }
+                        }
+                        if j == 0 {
+                            break false;
+                        }
+                        j -= 1;
+                    }
+                }));
+        if declared {
+            continue;
+        }
+        if roots
+            .as_ref()
+            .is_some_and(|r| r.call_below_temp(src, &toks, sig[k + 1]))
+        {
+            continue;
+        }
+        out.push(tok(k).span);
+    }
+    out
 }
 
 /// The path-relevant facts of the Go file `src`.
@@ -738,6 +807,9 @@ pub fn names_with(src: &[u8], test_file: bool, follow: bool) -> turborepo_trace_
         collect(&mut c, l, raise, s.chdir || s.dir_in_loop);
     }
     c.names.moves_base |= s.chdir;
+    // A call that changes the working directory (not into a temporary directory):
+    // the relative paths of the directory's files can go anywhere.
+    c.names.chdir = s.chdir && !chdir_calls(src).is_empty();
     let mut names = c.finish();
     names.ups = (names.ups + s.parents).min(MAX_UPS);
     match followed {
@@ -949,6 +1021,45 @@ var x = "fixtures/a.json"
             ),
             [own("specs/order.json", 0), own("fixtures/a.json", 0)]
         );
+    }
+
+    #[test]
+    fn calls_that_change_the_working_directory() {
+        let calls = |src: &str| chdir_calls(src.as_bytes()).len();
+        assert_eq!(
+            calls("package p\nfunc TestMain(m *testing.M) {\n\tos.Chdir(\"../..\")\n}\n"),
+            1
+        );
+        assert_eq!(
+            calls("package p\nfunc TestX(t *testing.T) {\n\tt.Chdir(dir)\n}\n"),
+            1
+        );
+        // Into a temporary directory: what is read there is no repository file.
+        assert_eq!(
+            calls(
+                "package p\nfunc TestX(t *testing.T) {\n\tt.Chdir(t.TempDir())\n\tdir := \
+                 t.TempDir()\n\tos.Chdir(dir)\n}\n"
+            ),
+            0
+        );
+        // A declaration is no call.
+        assert_eq!(
+            calls(
+                "package p\nfunc Chdir(dir string) error { return nil }\nfunc (f *fs) Chdir(dir \
+                 string) error { return nil }\n"
+            ),
+            0
+        );
+        let n = names(
+            b"package p\nfunc TestX(t *testing.T) {\n\tt.Chdir(dir)\n}\n",
+            true,
+        );
+        assert!(n.chdir && n.moves_base);
+        let n = names(
+            b"package p\nfunc TestX(t *testing.T) {\n\tt.Chdir(t.TempDir())\n}\n",
+            true,
+        );
+        assert!(!n.chdir && n.moves_base);
     }
 
     #[test]

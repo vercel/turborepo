@@ -1397,8 +1397,6 @@ func TestShared(t *testing.T) {
 /// that `--strict` could open.
 #[cfg(unix)]
 #[test]
-#[ignore = "known gap: a literal relative read is resolved from the package directory although the \
-            package calls Chdir; --strict loses the test too"]
 fn go_literal_read_after_chdir_in_the_test_main_of_a_sibling_file() {
     assert_climb_selects(
         &[
@@ -1439,6 +1437,138 @@ func TestShared(t *testing.T) {
         "shared/defaults.json",
         "services/billing/moved/moved_test.go",
     );
+}
+
+/// `t.Chdir` in the test itself, then a literal relative read: the read is
+/// taken from where the test moved, and `--explain` says why it is selected.
+#[cfg(unix)]
+#[test]
+fn go_literal_read_after_t_chdir_in_the_same_test() {
+    let files: &[(&str, &str)] = &[(
+        "services/billing/tchdir/tchdir_test.go",
+        r#"package tchdir
+
+import (
+	"os"
+	"testing"
+)
+
+func TestShared(t *testing.T) {
+	t.Chdir("../..")
+	if _, err := os.ReadFile("../shared/defaults.json"); err != nil {
+		t.Fatal(err)
+	}
+}
+"#,
+    )];
+    let test = "services/billing/tchdir/tchdir_test.go";
+    assert_climb_selects(files, "shared/defaults.json", test);
+    let dir = climb_fixture_with(files);
+    let output = trace(
+        dir.path(),
+        &[
+            "affected",
+            "--changed",
+            "shared/defaults.json",
+            "--explain",
+            test,
+        ],
+    );
+    assert!(output.status.success(), "{}", stderr(&output));
+    let text = stdout(&output);
+    assert!(
+        text.contains("shared/defaults.json") && text.contains("tchdir_test.go:9"),
+        "{text}"
+    );
+}
+
+/// A literal read that does not climb, after `os.Chdir` to the repository
+/// root in a sibling file: `shared/x.json` is no file of the package, and the
+/// package assumption does not hold it there.
+#[cfg(unix)]
+#[test]
+fn go_plain_literal_read_after_chdir_to_the_root_in_a_sibling_file() {
+    assert_climb_selects(
+        &[
+            ("shared/x.json", "{}\n"),
+            (
+                "services/billing/rooted/main_test.go",
+                r#"package rooted
+
+import (
+	"os"
+	"testing"
+)
+
+func TestMain(m *testing.M) {
+	if err := os.Chdir("../../.."); err != nil {
+		panic(err)
+	}
+	os.Exit(m.Run())
+}
+"#,
+            ),
+            (
+                "services/billing/rooted/rooted_test.go",
+                r#"package rooted
+
+import (
+	"os"
+	"testing"
+)
+
+func TestShared(t *testing.T) {
+	if _, err := os.ReadFile("shared/x.json"); err != nil {
+		t.Fatal(err)
+	}
+}
+"#,
+            ),
+        ],
+        "shared/x.json",
+        "services/billing/rooted/rooted_test.go",
+    );
+}
+
+/// `t.Chdir(t.TempDir())`: what the test reads after it is below a temporary
+/// directory, no repository file. The literal reads of the package stay taken
+/// from the package directory.
+#[cfg(unix)]
+#[test]
+fn go_chdir_into_a_temporary_directory_keeps_literal_reads_exact() {
+    let files: &[(&str, &str)] = &[
+        ("shared/x.json", "{}\n"),
+        (
+            "services/billing/tmpwd/tmpwd_test.go",
+            r#"package tmpwd
+
+import (
+	"os"
+	"testing"
+)
+
+func TestTemp(t *testing.T) {
+	if _, err := os.ReadFile("testdata/in.json"); err != nil {
+		t.Fatal(err)
+	}
+	t.Chdir(t.TempDir())
+	if err := os.WriteFile("out.json", nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+}
+"#,
+        ),
+        ("services/billing/tmpwd/testdata/in.json", "{}\n"),
+    ];
+    let dir = climb_fixture_with(files);
+    let test = "services/billing/tmpwd/tmpwd_test.go";
+    let selected = affected(dir.path(), &["--changed", "shared/x.json", "--strict"]);
+    assert_selects(&selected, &[], &[test]);
+    let selected = affected(
+        dir.path(),
+        &["--changed", "services/billing/tmpwd/testdata/in.json"],
+    );
+    assert_selects(&selected, &[test], &[]);
 }
 
 /// `"../../../shared/app." + env + ".yaml"`: the climbing string ends inside

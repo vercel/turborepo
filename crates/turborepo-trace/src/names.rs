@@ -208,6 +208,9 @@ struct FileNames {
     /// The file can move the base of its package's relative paths
     /// (`turborepo_trace_core::names::Names::moves_base`).
     moves_base: bool,
+    /// The file changes the working directory
+    /// (`turborepo_trace_core::names::Names::chdir`).
+    chdir: bool,
     cwd: Option<u32>,
     test_path: Option<u32>,
     ups: u32,
@@ -240,6 +243,7 @@ fn file_names(
         cwd_climbs: Vec::new(),
         cwd_shapes: Vec::new(),
         moves_base: d.moves_base,
+        chdir: d.chdir,
         cwd: None,
         test_path: None,
         ups: 0,
@@ -336,7 +340,10 @@ fn file_names(
 /// Go files in a directory where some Go file can move the base
 /// (`turborepo_trace_core::names::Names::moves_base`: a `Chdir`, a string
 /// that only climbs): their shapes name anywhere again, as a string that climbs
-/// from where nothing says.
+/// from where nothing says. Where a Go file changes the working directory
+/// (`turborepo_trace_core::names::Names::chdir`), every name of the
+/// directory's Go files names anywhere: after the change a relative path is
+/// taken from elsewhere, a literal one too.
 fn unanchor(g: &Graph, files: &mut [FileNames]) {
     let dir = |n: NodeId| {
         let p = g.path(n);
@@ -351,8 +358,19 @@ fn unanchor(g: &Graph, files: &mut [FileNames]) {
     if moved.is_empty() {
         return;
     }
+    let changed: HashSet<&str> = files
+        .iter()
+        .filter(|f| f.chdir)
+        .filter_map(|f| dir(f.node))
+        .collect();
     for f in files.iter_mut() {
-        if f.cwd_shapes.is_empty() || !dir(f.node).is_some_and(|d| moved.contains(d)) {
+        let Some(d) = dir(f.node) else { continue };
+        if changed.contains(d) {
+            for s in &mut f.shapes {
+                s.3 = true;
+            }
+        }
+        if f.cwd_shapes.is_empty() || !moved.contains(d) {
             continue;
         }
         for &i in &f.cwd_shapes {
