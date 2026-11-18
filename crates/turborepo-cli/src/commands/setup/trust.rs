@@ -264,7 +264,7 @@ impl TrustStore {
         &self.store
     }
 
-    /// The repository's private `CARGO_HOME`, beside its record.
+    /// The repository's private `CARGO_HOME`.
     pub(super) fn cargo_home(&self) -> PathBuf {
         self.store.cargo_home(&self.root)
     }

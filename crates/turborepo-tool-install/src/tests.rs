@@ -477,6 +477,14 @@ fn launchers_run_other_trees_without_an_inherited_environment_and_leave_cargo_ho
         f.store.activate(&root, selection.key()),
         Err(Error::UnsafePath)
     ));
+    // Never a Cargo home whose private parent setup has not created: Cargo
+    // would create both for every user to read.
+    fs::remove_file(f.store.cargo_home(&root)).unwrap();
+    fs::remove_dir(f.store.cargo_homes()).unwrap();
+    assert!(matches!(
+        f.store.activate(&root, selection.key()),
+        Err(Error::NotInstalled(_))
+    ));
 }
 
 /// The tree key, as the store names directories, without exposing it.

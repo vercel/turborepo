@@ -21,12 +21,14 @@ fn a_store_is_created_private_and_keys_each_repository_by_its_canonical_root() {
     assert_eq!(UserStore::at(&path, repo.path()).unwrap(), store);
 
     let root = fs::canonicalize(repo.path()).unwrap();
-    let digest = hex::encode(Sha256::digest(root.as_os_str().as_encoded_bytes()));
-    let state = store.root().join("repos").join(&digest[..32]);
-    assert_eq!(store.repo(&root), state);
-    assert_eq!(store.cargo_home(&root), state.join("cargo-home"));
+    let name = hex::encode(Sha256::digest(root.as_os_str().as_encoded_bytes()));
+    assert_eq!(store.repo(&root), store.root().join("repos").join(&name));
+    assert_eq!(
+        store.cargo_home(&root),
+        store.root().join("cargo").join(&name[..32])
+    );
     assert!(
-        !store.repos().exists(),
+        !store.repos().exists() && !store.cargo_homes().exists(),
         "locating creates no repository state"
     );
 }
@@ -50,7 +52,7 @@ fn the_cargo_home_leaves_room_for_git_dependencies_on_windows() {
     let cargo_home = store.cargo_home(Path::new("C:/repository"));
     let name = CARGO_HOME_AND_NAME.saturating_sub(cargo_home.as_os_str().len());
     assert!(
-        name >= 32,
+        name >= 40,
         "a Git dependency's repository name can be at most {name} characters"
     );
 }

@@ -268,6 +268,8 @@ impl UserStore {
         for dir in ["tmp", "trees", "envs", "repos"] {
             directory(&self.root.join(dir))?;
         }
+        // Setup creates each Cargo home without its parents.
+        directory(&self.cargo_homes())?;
         Ok(SetupSession {
             store: self,
             repo,
@@ -307,6 +309,15 @@ impl UserStore {
                     VarValue::Tree(reference) => self.tree_path(&selection, &dir, reference),
                     VarValue::Word(word) => word.into(),
                     VarValue::RepoCargoHome => {
+                        // Setup creates the homes' directory private. Cargo
+                        // would create a missing one that others can read,
+                        // and a later setup would reject it.
+                        match real_directory(&self.cargo_homes()) {
+                            Err(Error::Io(e)) if e.kind() == io::ErrorKind::NotFound => {
+                                return Err(Error::NotInstalled("Cargo home".into()));
+                            }
+                            result => result?,
+                        }
                         let home = self.cargo_home(repo);
                         // Cargo creates a missing home on first use; a link or
                         // a file there would redirect a private one.
