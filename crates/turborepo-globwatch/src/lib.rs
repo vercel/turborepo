@@ -200,8 +200,8 @@ impl GlobWatcher {
         let flush_dir = Arc::new(flush_dir);
         let flush = Arc::new(Mutex::new(HashMap::<u64, oneshot::Sender<()>>::new()));
 
-        // Wait until we have watched the flush directory, before we start processing
-        // events
+        // Wait until we have watched the flush directory, before we start
+        // processing events
 
         // we need to map this to the correct error type
         let setup_stream = setup_handle
@@ -240,9 +240,12 @@ impl GlobWatcher {
                     async move {
                         match f {
                             Either::Left(mut e) => {
-                                // if we receive an event for a file in the flush dir, we need to
-                                // remove it from the events list, and send a signal to the flush
-                                // requester. flushes should not be considered as events.
+                                // if we receive an event for a file in the
+                                // flush dir, we need to
+                                // remove it from the events list, and send a
+                                // signal to the flush
+                                // requester. flushes should not be considered
+                                // as events.
                                 for flush_id in e
                                     .paths
                                     .extract_if(.., |p| p.starts_with(flush_dir.as_path()))
@@ -263,13 +266,15 @@ impl GlobWatcher {
                                         }
                                     };
                                     if let Some(tx) = flush.remove(&flush_id) {
-                                        // if this fails, it just means the requester has gone away
+                                        // if this fails, it just means the
+                                        // requester has gone away
                                         // and we can ignore it
                                         tx.send(()).ok();
                                     }
                                 }
 
-                                // if we have any paths left on the event, yield it
+                                // if we have any paths left on the event, yield
+                                // it
                                 if !e.paths.is_empty() {
                                     event!(parent: &span, Level::TRACE, "yielding {:?}", e);
                                     Some(Ok(e))

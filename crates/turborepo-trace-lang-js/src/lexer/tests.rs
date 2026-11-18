@@ -184,7 +184,8 @@ fn template_literals() {
             (K::Ident, "g".into()),
         ]
     );
-    // Objects and blocks inside substitutions, strings with backticks and braces.
+    // Objects and blocks inside substitutions, strings with backticks and
+    // braces.
     assert_eq!(
         of(
             "`${ {a: '}`'} }${ function() { return '`' } }` x",
@@ -295,8 +296,8 @@ fn regex_after_paren_and_brace() {
 
 #[test]
 fn regex_bodies() {
-    // Classes may contain unescaped `/`; escapes; quotes and backticks are plain
-    // bytes.
+    // Classes may contain unescaped `/`; escapes; quotes and backticks are
+    // plain bytes.
     assert_eq!(regexes("x = /[/]'\"`/ + 1"), vec!["/[/]'\"`/"]);
     assert_eq!(regexes(r"x = /a\/b/ + 1"), vec![r"/a\/b/"]);
     assert_eq!(regexes(r"x = /[\]/]/ + 1"), vec![r"/[\]/]/"]);
@@ -647,7 +648,8 @@ fn js_jsx_heuristic() {
     let src = "export default () => <div className='x'>it's {name}</div>; y / 2";
     assert_eq!(of(src, Dialect::JS, K::Jsx).len(), 1);
     no_error(src, Dialect::JS);
-    // Flow-style generic arrow: JSX never closes, the heuristic reports failure.
+    // Flow-style generic arrow: JSX never closes, the heuristic reports
+    // failure.
     let (_, lx) = lex_all("const f = <T>(x: T): T => x;\nimport 'a'", Dialect::JS);
     assert!(lx.jsx_failed());
     // With JSX off, it lexes as plain tokens.

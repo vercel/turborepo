@@ -360,9 +360,10 @@ impl JsResolver {
             if ts {
                 o.extensions = exts(TS_EXTENSIONS, trace.include_types);
             }
-            // `paths` are only applied when a tsconfig option is set; the config itself is
-            // discovered by `Tsconfigs` and passed per resolution (`resolve_with_context`).
-            // `Auto` makes oxc use the passed config as is, and `resolve()` ignores it.
+            // `paths` are only applied when a tsconfig option is set; the
+            // config itself is discovered by `Tsconfigs` and passed
+            // per resolution (`resolve_with_context`). `Auto` makes
+            // oxc use the passed config as is, and `resolve()` ignores it.
             if opts.tsconfig {
                 o.tsconfig = Some(TsconfigDiscovery::Auto);
             }
@@ -641,8 +642,9 @@ impl JsResolver {
             if in_node_modules(cx.fs, &real) {
                 return true;
             }
-            // The directory holding the `node_modules` the link was found in (the first
-            // one of the path that is no part of where the checkout lives).
+            // The directory holding the `node_modules` the link was found in
+            // (the first one of the path that is no part of where
+            // the checkout lives).
             let bytes = path.as_os_str().as_bytes();
             let from = cx.fs.local_offset(path);
             let Some(i) = memchr::memmem::find(&bytes[from..], b"/node_modules/") else {
@@ -703,7 +705,8 @@ impl JsResolver {
             return self.resolve_module_string(spec, cx);
         }
         if let Some(mut res) = self.host_module(r, spec, cx) {
-            // As for every module reference: the referencing file's own package scope.
+            // As for every module reference: the referencing file's own package
+            // scope.
             if let Some(m) = record::pause(|| self.nearest_package_json(cx.fs, cx.from_dir)) {
                 res.manifests.insert(0, cx.intern(&m));
             }
@@ -795,11 +798,14 @@ impl JsResolver {
                     return Resolution::file(cx.intern(&path));
                 }
                 // The string names an existing file that is no module (`input:
-                // './openapi.yaml'` in a tool's config): no edge. The result still depends
-                // on the file being there: once it is gone, the lookup records probes for
-                // the path and its module extensions. That dependency is recorded as the
-                // file's membership of its directory, so deleting the file re-traces this
-                // one (a refreshed graph equals a fresh build) and editing it does not.
+                // './openapi.yaml'` in a tool's config): no edge. The result
+                // still depends on the file being there: once
+                // it is gone, the lookup records probes for the
+                // path and its module extensions. That dependency is recorded
+                // as the file's membership of its directory, so
+                // deleting the file re-traces this
+                // one (a refreshed graph equals a fresh build) and editing it
+                // does not.
                 if path != cx.from_path
                     && let (Some(parent), Some(name)) = (path.parent(), path.file_name())
                 {
@@ -822,10 +828,10 @@ impl JsResolver {
         let Some(base) = cx.base_dir(&r.base) else {
             return unsupported_base(r);
         };
-        // Anchors: relative or absolute paths at the base; a bare prefix where the
-        // governing tsconfig's `paths` / `baseUrl` put it, and inside the
-        // package directory. Each is the pattern's first literal (`None`: as
-        // written) and the directory it starts in.
+        // Anchors: relative or absolute paths at the base; a bare prefix where
+        // the governing tsconfig's `paths` / `baseUrl` put it, and
+        // inside the package directory. Each is the pattern's first
+        // literal (`None`: as written) and the directory it starts in.
         let mut anchors: Vec<(Option<String>, PathBuf)> = vec![(None, base.into_owned())];
         if let Some(PatPart::Lit(first)) = parts.first() {
             match spec_kind(first) {
@@ -855,9 +861,11 @@ impl JsResolver {
                     let name = package_name(first).to_string();
                     let complete = first.len() > name.len() && first.as_bytes()[name.len()] == b'/';
                     if !complete {
-                        // The package name itself is partial (`'@img/sharp-' + platform`). nft
-                        // does not expand non-relative wildcard requires; neither do we, since
-                        // the glob would span all of node_modules.
+                        // The package name itself is partial (`'@img/sharp-' +
+                        // platform`). nft
+                        // does not expand non-relative wildcard requires;
+                        // neither do we, since the glob
+                        // would span all of node_modules.
                         let what = format!(
                             "pattern {}: package name not known statically; not expanded",
                             r.spec
@@ -865,10 +873,12 @@ impl JsResolver {
                         return Resolution::unresolved(not_expanded(r, what));
                     }
                     anchors.clear();
-                    // The prefix as an alias of the governing tsconfig (`@/guides/` under
-                    // `"@/*": ["./src/*"]`): the pattern continues below each mapped
-                    // directory. The module resolver tries those first and the package
-                    // after them, so both are expanded.
+                    // The prefix as an alias of the governing tsconfig
+                    // (`@/guides/` under `"@/*": ["./src/*"
+                    // ]`): the pattern continues below each mapped
+                    // directory. The module resolver tries those first and the
+                    // package after them, so both are
+                    // expanded.
                     match self.governing(cx).map(|ts| paths_prefix(&ts, first)) {
                         Some(PathsPrefix::Ambiguous(key)) => {
                             return Resolution::unresolved(not_expanded(
@@ -974,18 +984,21 @@ impl JsResolver {
         let result = match &r.base {
             // Per-file resolution: applies the governing tsconfig's `paths`/`baseUrl`.
             Base::FileDir => {
-                // An absolute path is not a module name: `paths` and `baseUrl` do not apply
-                // to it (oxc would try `<baseUrl>/<absolute path>` and its extensions, probes
+                // An absolute path is not a module name: `paths` and `baseUrl`
+                // do not apply to it (oxc would try
+                // `<baseUrl>/<absolute path>` and its extensions, probes
                 // that hold the checkout's location).
                 let governing = match spec_kind(spec) {
                     SpecKind::Absolute => None,
                     _ => self.governing(cx),
                 };
                 let tsconfig = governing.as_deref();
-                // Where the checkout lies decides this resolution when the config gives
-                // aliases ([`record::aliased`]): the fact is on the reference's own record,
-                // so whatever takes the record (a runner's request resolved for a virtual
-                // file, a link resolved into a package) takes the fact with it.
+                // Where the checkout lies decides this resolution when the
+                // config gives aliases ([`record::aliased`]):
+                // the fact is on the reference's own record, so
+                // whatever takes the record (a runner's request resolved for a
+                // virtual file, a link resolved into a package)
+                // takes the fact with it.
                 if tsconfig.is_some_and(gives_aliases) {
                     record::aliased();
                 }
@@ -1013,9 +1026,10 @@ impl JsResolver {
             // there is none. The walk records it (`record_node_modules_walk`).
             Err(e) => {
                 let mut res = self.unresolved(r, spec, &e, cx);
-                // Below a `node_modules` directory the config's `paths`, `baseUrl` and
-                // `rootDirs` were not applied: what the resolution probed does not bound
-                // the import (the file an alias names was not looked at).
+                // Below a `node_modules` directory the config's `paths`,
+                // `baseUrl` and `rootDirs` were not applied:
+                // what the resolution probed does not bound the
+                // import (the file an alias names was not looked at).
                 if matches!(r.base, Base::FileDir)
                     && spec_kind(spec) != SpecKind::Absolute
                     && let Some(ts) = self.aliases_not_applied(cx)
@@ -1029,7 +1043,8 @@ impl JsResolver {
                 res
             }
         };
-        // Legacy `main`/file resolution next to `exports` (nft without `exportsOnly`).
+        // Legacy `main`/file resolution next to `exports` (nft without
+        // `exportsOnly`).
         if let Some(legacy) = &self.legacy
             && is_package_spec(spec)
             && res.targets.iter().any(|t| matches!(t, Target::File(_)))
@@ -1056,7 +1071,8 @@ impl JsResolver {
                 && let Some(root) = pkg_json.parent()
             {
                 let sub_path = normalize(&root.join(sub));
-                // Not found as a file probe of the subpath itself (`pkg/sub.js`).
+                // Not found as a file probe of the subpath itself
+                // (`pkg/sub.js`).
                 let via_dir = path.starts_with(&sub_path)
                     || !path
                         .as_os_str()
@@ -1080,8 +1096,9 @@ impl JsResolver {
         if self.browser {
             self.browser_remap(cx, &mut res);
         }
-        // The referencing file's own package scope (`type`, `imports`, self-reference).
-        // Its lookup chain is recorded once per file, by `file_edges`.
+        // The referencing file's own package scope (`type`, `imports`,
+        // self-reference). Its lookup chain is recorded once per file,
+        // by `file_edges`.
         if let Some(m) = record::pause(|| self.nearest_package_json(fs, cx.from_dir)) {
             res.manifests.insert(0, cx.intern(&m));
         }
@@ -1316,7 +1333,8 @@ impl JsResolver {
         }
         let id = cx.intern(path);
         let mut res = Resolution::file(id);
-        // Package root manifest (`exports`, `main`), then the target's own scope.
+        // Package root manifest (`exports`, `main`), then the target's own
+        // scope.
         if is_package_spec(spec)
             && let Some(m) = package_root_json(cx.fs, spec, &res, cx)
         {
@@ -1339,8 +1357,8 @@ impl JsResolver {
         e: &ResolveError,
         cx: &ResolveCx<'_>,
     ) -> Resolution {
-        // A relative path that exists only with different casing: works on macOS,
-        // breaks on Linux. Report it with its target.
+        // A relative path that exists only with different casing: works on
+        // macOS, breaks on Linux. Report it with its target.
         if matches!(spec_kind(spec), SpecKind::Relative | SpecKind::Absolute)
             && let Some(base) = cx.base_dir(&r.base)
         {
@@ -1353,7 +1371,8 @@ impl JsResolver {
             {
                 return probe;
             }
-            // `./types` with only `types.d.ts` on disk: nothing exists at runtime.
+            // `./types` with only `types.d.ts` on disk: nothing exists at
+            // runtime.
             let dts = normalize(&base.join(format!("{spec}.d.ts")));
             if !self.include_types && cx.fs.is_file(&dts) {
                 return Resolution::unresolved(Uncertainty::new(
@@ -1444,8 +1463,8 @@ impl Resolver for JsResolver {
                 res.targets.push(Target::Unresolved);
             }
         }
-        // A path value emitted as an asset (the extractor's deep pass) that names a
-        // directory: including every file below it is a guess.
+        // A path value emitted as an asset (the extractor's deep pass) that
+        // names a directory: including every file below it is a guess.
         if r.kind == RefKind::Asset
             && res.uncertainty.is_none()
             && let Specifier::Literal(s) = &r.spec
@@ -1460,8 +1479,8 @@ impl Resolver for JsResolver {
                 ),
             ));
         }
-        // Loader packages (`bindings`, `node-gyp-build`, ...): find the addon they
-        // load.
+        // Loader packages (`bindings`, `node-gyp-build`, ...): find the addon
+        // they load.
         if module_system(r).is_some() && !r.flags.contains(RefFlags::TYPE_ONLY) {
             let mut loaders = Vec::new();
             literal_package_specs(&r.spec, &mut loaders);
@@ -1483,24 +1502,26 @@ impl Resolver for JsResolver {
         if let Some(t) = &self.tsconfigs
             && is_js_or_ts_file(cx.from_path)
         {
-            // Discovery for the file, once: what it consulted is recorded, and reported
-            // where it failed to load.
+            // Discovery for the file, once: what it consulted is recorded, and
+            // reported where it failed to load.
             let walk = record::pause(|| {
                 let pkg = self.nearest_package_json_memo(cx.fs, cx.from_dir);
                 t.walk(cx.fs, cx.from_path, pkg.as_deref().and_then(Path::parent))
             });
             if recording {
                 self.record_tsconfig_chain(t, &walk, cx);
-                // Whether the place of the checkout decides the file's records: a fact of
-                // the file's record, at every place ([`record::aliased`]).
+                // Whether the place of the checkout decides the file's records:
+                // a fact of the file's record, at every place
+                // ([`record::aliased`]).
                 if walk.config.as_deref().is_some_and(gives_aliases) {
                     record::aliased();
                 }
             }
             self.config_errors(&walk, cx, &mut out);
-            // Every import of the file may resolve elsewhere than the resolver says (an
-            // alias that names a file of the repository where an installed package
-            // answered, or nothing): one open record for the file.
+            // Every import of the file may resolve elsewhere than the resolver
+            // says (an alias that names a file of the repository
+            // where an installed package answered, or nothing): one
+            // open record for the file.
             if let Some(ts) = self.aliases_not_applied(cx) {
                 out.push(
                     ExtraEdge::new(
@@ -1519,11 +1540,11 @@ impl Resolver for JsResolver {
                 );
             }
         }
-        // (The same fact for a file of the language without a JS or TS extension, which
-        // a config governs as the nearest one in its package: a script with a
-        // `node` shebang. No graph build of the tests traces one as a file of a
-        // package, so no case shows this line; it keeps the fact complete for
-        // one that does.)
+        // (The same fact for a file of the language without a JS or TS
+        // extension, which a config governs as the nearest one in its
+        // package: a script with a `node` shebang. No graph build of
+        // the tests traces one as a file of a package, so no case shows
+        // this line; it keeps the fact complete for one that does.)
         if recording
             && self.tsconfigs.is_some()
             && !is_js_or_ts_file(cx.from_path)
@@ -1531,8 +1552,8 @@ impl Resolver for JsResolver {
         {
             record::aliased();
         }
-        // The file's own package scope, needed even without references (nft emits the
-        // `package.json` boundary of every module).
+        // The file's own package scope, needed even without references (nft
+        // emits the `package.json` boundary of every module).
         if let Some(m) = self.nearest_package_json(cx.fs, cx.from_dir) {
             out.push(ExtraEdge::new(
                 RefKind::Manifest,
@@ -1592,9 +1613,9 @@ fn oxc_resolve(
         At::File(d, tsconfig) => oxc.resolve_with_context(d, spec, tsconfig, &mut ctx),
         At::Dir(d) => oxc.resolve_with_context(d, spec, None, &mut ctx),
     });
-    // `package.json` and `node_modules` lookups are memoized inside oxc and only
-    // logged on the first call; both are recorded deterministically here
-    // instead.
+    // `package.json` and `node_modules` lookups are memoized inside oxc and
+    // only logged on the first call; both are recorded deterministically
+    // here instead.
     let mut missing: Vec<PathBuf> = ctx
         .missing_dependencies
         .into_iter()
@@ -1615,29 +1636,32 @@ fn oxc_resolve(
     let asked = matches!(spec_kind(spec), SpecKind::Relative | SpecKind::Absolute)
         .then(|| normalize(&base.join(spec)));
     for m in &missing {
-        // A directory probed as a file, or a file probed as a directory, exists: adding
-        // files below it is covered by the probes made inside it.
+        // A directory probed as a file, or a file probed as a directory,
+        // exists: adding files below it is covered by the probes made
+        // inside it.
         let Some(there) = record::pause(|| fs.stat(m)) else {
             record::missing(m);
             continue;
         };
-        // Not so for a directory with the name of a file the lookup tried next to the
-        // request (`x.ts/` for `./x`): it asked "is this a file?", got a no and went on
-        // to the next name, and nothing was asked inside. That no is an answer
-        // like any other, and a file that takes the directory's place is
-        // another: the name is recorded as not found, and what is there is part
+        // Not so for a directory with the name of a file the lookup tried next
+        // to the request (`x.ts/` for `./x`): it asked "is this a
+        // file?", got a no and went on to the next name, and nothing
+        // was asked inside. That no is an answer like any other, and a
+        // file that takes the directory's place is another: the name is
+        // recorded as not found, and what is there is part
         // of the record's state. (The request as written is another matter: a
         // directory of that name is entered, when no file answers first.)
         let tried_as_a_file = there.kind == turborepo_trace_core::fs::FileKind::Dir
             && asked
                 .as_ref()
                 .is_some_and(|a| m != a && m.parent() == a.parent());
-        // The same answer anywhere else the lookup tried a name with an extension: an
-        // index file of a directory it entered (`x/index.ts/`), a file next to the
-        // target of a mapping or of a package's entry (`src/x.ts/` for `@/x`). A
-        // directory is one of those when the lookup asked nothing inside it (it was not
-        // entered) and it is the name of a candidate: `index.<ext>`, or a path the
-        // lookup also tried without that extension.
+        // The same answer anywhere else the lookup tried a name with an
+        // extension: an index file of a directory it entered
+        // (`x/index.ts/`), a file next to the target of a mapping or of
+        // a package's entry (`src/x.ts/` for `@/x`). A directory is one
+        // of those when the lookup asked nothing inside it (it was not
+        // entered) and it is the name of a candidate: `index.<ext>`, or a path
+        // the lookup also tried without that extension.
         let tried_as_a_file = tried_as_a_file
             || (there.kind == turborepo_trace_core::fs::FileKind::Dir
                 && asked.as_ref() != Some(m)
@@ -1659,13 +1683,13 @@ fn oxc_resolve(
         };
         record_node_modules_walk(fs, base, package_name(spec), walked);
     }
-    // A request that names a directory: its own `package.json` was read or looked
-    // for (oxc reports this only on a cold cache). Resolved through its index
-    // or `main`, and also when the directory did not answer (a manifest that
-    // names no entry, no index file): what the manifest says decides that, and
-    // one that comes to name an entry makes the request resolve. So the
-    // manifest (its resolution view) is an input of whoever asked
-    // for the directory, whatever the answer was.
+    // A request that names a directory: its own `package.json` was read or
+    // looked for (oxc reports this only on a cold cache). Resolved through
+    // its index or `main`, and also when the directory did not answer (a
+    // manifest that names no entry, no index file): what the manifest says
+    // decides that, and one that comes to name an entry makes the request
+    // resolve. So the manifest (its resolution view) is an input of whoever
+    // asked for the directory, whatever the answer was.
     if matches!(spec_kind(spec), SpecKind::Relative | SpecKind::Absolute) {
         let target = normalize(&base.join(spec));
         let through_directory = match &result {
@@ -1780,8 +1804,9 @@ fn record_node_modules_walk(fs: &DirCache, start: &Path, name: &str, walked: Wal
             }
             Walked::Failed => {}
         }
-        // A package directory above the repository is the machine's: a graph does not
-        // depend on what it holds (like a probe there, which the store drops).
+        // A package directory above the repository is the machine's: a graph
+        // does not depend on what it holds (like a probe there, which
+        // the store drops).
         if fs.is_above_base(d) {
             continue;
         }
@@ -1838,9 +1863,9 @@ fn level_observations(
             record::extend_from(o);
         }
     };
-    // Of a reference that was checked and does not govern the file: the places its
-    // load looked at and found nothing (and the directories it found there
-    // without reading anything in them), no contents (P13).
+    // Of a reference that was checked and does not govern the file: the places
+    // its load looked at and found nothing (and the directories it found
+    // there without reading anything in them), no contents (P13).
     let probes = |k: usize| {
         let Some(o) = dc.and_then(|dc| dc.ref_observed.get(k)) else {
             return;
@@ -2023,7 +2048,8 @@ fn refine_glob_memberships(res: &Resolution, obs: &mut record::Observations) {
         obs.listings
             .retain(|(d, p)| !(d.starts_with(dir) && p == "**"));
         for p in membership_patterns(rest) {
-            // Extension variants append a literal `.ext`, which never contains `/`.
+            // Extension variants append a literal `.ext`, which never contains
+            // `/`.
             if ext {
                 obs.listings.push((dir.to_path_buf(), format!("{p}.*")));
             }

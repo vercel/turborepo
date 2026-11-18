@@ -207,13 +207,15 @@ impl TaskSource for Nx {
     fn discover(&self, cx: &SourceCx<'_>) -> Vec<DiscoveredTask> {
         let root = &cx.workspace.root;
         let nx_json = read_nx_json(root);
-        // Not an nx workspace and no project file here: nothing to find. Checked before
-        // the walk below, which otherwise lists the whole package tree (the
-        // repository for the root package) on every non-nx repository.
+        // Not an nx workspace and no project file here: nothing to find.
+        // Checked before the walk below, which otherwise lists the
+        // whole package tree (the repository for the root package) on
+        // every non-nx repository.
         if nx_json.is_none() && !fsx::is_file(&cx.package.dir.join("project.json")) {
             return Vec::new();
         }
-        // Project files of this package (its own root and non-package subdirectories).
+        // Project files of this package (its own root and non-package
+        // subdirectories).
         let mut dirs: Vec<PathBuf> = cx
             .find_files(4, &|n| n == "project.json")
             .into_iter()
@@ -231,8 +233,8 @@ impl TaskSource for Nx {
         let mut out = Vec::new();
         for d in dirs {
             let Some(p) = load_project(&d) else { continue };
-            // Projects inferred from package.json alone (no `nx` key) have no explicit
-            // targets here: their scripts are npm tasks.
+            // Projects inferred from package.json alone (no `nx` key) have no
+            // explicit targets here: their scripts are npm tasks.
             if p.targets.is_empty() {
                 continue;
             }
@@ -264,8 +266,9 @@ fn dep_projects(
                 if let Some(x) = all.iter().find(|x| x.dir == d.dir) {
                     out.push(x.clone());
                 } else {
-                    // A package without nx configuration: its package.json scripts are its
-                    // targets; its files count for `^` inputs.
+                    // A package without nx configuration: its package.json
+                    // scripts are its targets; its files
+                    // count for `^` inputs.
                     out.push(Project {
                         name: d.name.clone().unwrap_or_else(|| d.rel.clone()),
                         dir: d.dir.clone(),
@@ -477,8 +480,8 @@ fn add_named(
             }
         }
         _ => {
-            // nx: an unknown named input (and a missing `default`) means every file of the
-            // project.
+            // nx: an unknown named input (and a missing `default`) means every
+            // file of the project.
             spec.membership(p.dir.clone(), "**", format!("nx input `{name}`"));
         }
     }
@@ -633,9 +636,9 @@ fn target(
         .strip_prefix("@nrwl/")
         .map(|r| format!("@nx/{r}"))
         .unwrap_or_else(|| executor.clone());
-    // Outputs: declared, else nx's default output directories for executors that
-    // build (not for scripts, tests and linters); plus `outputPath`-like
-    // options.
+    // Outputs: declared, else nx's default output directories for executors
+    // that build (not for scripts, tests and linters); plus
+    // `outputPath`-like options.
     let builds = !matches!(
         exec_short.as_str(),
         "nx:run-script"
@@ -1104,7 +1107,8 @@ impl Recognizer for NxCli {
             | "view-logs" | "print-affected" | "exec" | "import" | "login" | "logout"
             | "--version" | "help" => return Recognition::Ignored,
             t => {
-                // `nx build web` / `nx web:build` / `nx build` (project of the cwd).
+                // `nx build web` / `nx web:build` / `nx build` (project of the
+                // cwd).
                 if let Some((p, tg)) = t.split_once(':') {
                     add(out, p, tg);
                 } else {

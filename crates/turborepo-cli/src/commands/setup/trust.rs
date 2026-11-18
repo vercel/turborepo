@@ -298,8 +298,9 @@ impl TrustStore {
                     #[cfg(unix)]
                     {
                         use std::os::unix::fs::MetadataExt;
-                        // Foreign-owned and world-writable ancestors are unsafe,
-                        // except root-owned sticky temp directories.
+                        // Foreign-owned and world-writable ancestors are
+                        // unsafe, except root-owned
+                        // sticky temp directories.
                         let sticky_root = metadata.uid() == 0 && metadata.mode() & 0o1000 != 0;
                         if (metadata.uid() != 0 && metadata.uid() != unsafe { libc::geteuid() })
                             || (metadata.mode() & 0o002 != 0 && !sticky_root)
@@ -332,8 +333,9 @@ impl TrustStore {
         let Some(bytes) = read(&self.path(), true)? else {
             return Ok(None);
         };
-        // Corrupt/old records are not authority; a fresh setup can replace them.
-        // A lockless record must name the clone-local selection it trusts.
+        // Corrupt/old records are not authority; a fresh setup can replace
+        // them. A lockless record must name the clone-local selection
+        // it trusts.
         Ok(serde_json::from_slice::<Record>(&bytes).ok().filter(|r| {
             r.schema == SCHEMA
                 && r.root == self.root
@@ -481,8 +483,9 @@ impl TrustStore {
         if read(&self.path(), true)?.as_deref() == Some(bytes.as_slice()) {
             return Ok(());
         }
-        // Recheck location on each write; never follow a state symlink introduced
-        // since new(). Create missing components with private permissions.
+        // Recheck location on each write; never follow a state symlink
+        // introduced since new(). Create missing components with
+        // private permissions.
         let mut missing = Vec::new();
         let mut parent = self.directory.as_path();
         while !parent.exists() {

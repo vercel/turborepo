@@ -142,8 +142,9 @@ impl RepoState {
                         return Err(error);
                     };
                     // An invalid default config cannot enable native adapters.
-                    // Determine JS ownership without borrowing any native flags:
-                    // discarded ancestors must not poison a nearer package, but
+                    // Determine JS ownership without borrowing any native
+                    // flags: discarded ancestors must not
+                    // poison a nearer package, but
                     // an owning workspace must retain its config diagnostic.
                     let javascript = InferInfo::at(path, &Registry::default(), None)?;
                     if let Some(candidate) = javascript
@@ -160,7 +161,8 @@ impl RepoState {
                     _ => candidate,
                 };
                 // Preserve nearest independent-workspace behavior. An ancestor
-                // may replace a standalone package only when it actually owns it.
+                // may replace a standalone package only when it actually owns
+                // it.
                 if selected.repo_mode() == RepoMode::MultiPackage {
                     return Ok(selected.into());
                 }
@@ -407,7 +409,8 @@ mod test {
         }
 
         // Merely encountering a workspace isn't enough to stop: a standalone
-        // package excluded from the inner workspace may belong to the outer one.
+        // package excluded from the inner workspace may belong to the outer
+        // one.
         let standalone = inner.join_component("standalone");
         standalone.create_dir_all().unwrap();
         standalone
@@ -1099,7 +1102,8 @@ mod test {
                 assert_eq!(inferred.mode, RepoMode::SinglePackage);
             }
         }
-        // Even an unrelated parent's config is a hard error when it is selected.
+        // Even an unrelated parent's config is a hard error when it is
+        // selected.
         assert!(matches!(
             RepoState::infer(&outer),
             Err(Error::Config { .. })
@@ -1131,7 +1135,8 @@ mod test {
         write(&root, "package.json", r#"{"name":"irrelevant"}"#);
         let member = root.join_components(&["members", "owned"]);
         write(&member, "package.json", r#"{"name":"member"}"#);
-        // If the disabled adapter probes this directory it will fail to read it.
+        // If the disabled adapter probes this directory it will fail to read
+        // it.
         let manifest = match id.as_str() {
             "rust" => "Cargo.toml",
             "python" => "pyproject.toml",
@@ -1165,7 +1170,8 @@ mod test {
                 Err(Error::NotFound(_))
             ));
         }
-        // JavaScript can still identify a single package, not a native workspace.
+        // JavaScript can still identify a single package, not a native
+        // workspace.
         write(&root, "package.json", r#"{"name":"irrelevant"}"#);
         let inferred = RepoState::infer(&src).unwrap();
         assert_eq!(inferred.root, root);
@@ -1239,7 +1245,8 @@ mod test {
         const TRAP: &str = "TURBO_INFERENCE_TOOLCHAIN_TRAP";
         if std::env::var_os(TRAP).is_some() {
             // Run in an isolated test process: never mutate the parallel test
-            // harness's PATH. Root inference and ownership must both stay cheap.
+            // harness's PATH. Root inference and ownership must both stay
+            // cheap.
             let (_tmp, root) = tmp_dir();
             native_fixture(&root, &id);
             assert_native_root(&root, &root, false);
@@ -1410,7 +1417,8 @@ mod test {
         assert_eq!(visited.borrow().last(), Some(&root));
         assert!(visited.borrow().contains(&javascript));
 
-        // An aggregate at the root must not claim arbitrary descendant packages.
+        // An aggregate at the root must not claim arbitrary descendant
+        // packages.
         let unrelated = root.join_component("unrelated");
         write(&unrelated, "package.json", r#"{"name":"unrelated"}"#);
         let inferred = RepoState::infer_with_registry(&unrelated, None, registry_for).unwrap();
@@ -1473,7 +1481,8 @@ mod test {
         assert_eq!(inferred.root, inner);
         assert_eq!(inferred.mode, RepoMode::MultiPackage);
 
-        // Without the flag, the inner root is a JS package of the outer workspace.
+        // Without the flag, the inner root is a JS package of the outer
+        // workspace.
         turbo_json
             .create_with_contents(r#"{"futureFlags":{}}"#)
             .unwrap();

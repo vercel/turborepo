@@ -555,7 +555,8 @@ pub fn pattern_of(value: &str, path_arg: bool) -> Option<(String, Option<String>
     if segs.len() >= 2 && segs[0].starts_with('@') && segs[0].len() > 1 {
         segs.drain(..2);
     }
-    // The run of literal segments after the last `.`/`..` and after leading holes.
+    // The run of literal segments after the last `.`/`..` and after leading
+    // holes.
     let is_hole =
         |s: &str| s.contains(HOLE) || s.contains('*') || s.contains('{') || s.contains('}');
     let mut run: Vec<&str> = Vec::new();
@@ -765,7 +766,8 @@ pub fn scan_json(src: &[u8]) -> Names {
                 while i < src.len() && src[i] != b'"' {
                     match src[i] {
                         b'\\' => {
-                            // `\/` and `\\` are themselves; any other escape separates words.
+                            // `\/` and `\\` are themselves; any other escape
+                            // separates words.
                             match src.get(i + 1) {
                                 Some(&(b'/' | b'\\')) => text.push(src[i + 1]),
                                 _ => text.push(b' '),
@@ -849,8 +851,8 @@ mod tests {
             ]
         );
         assert_eq!(d.names().map(|n| n.0).collect::<Vec<_>>(), [1, 2]);
-        // A name whose string climbs out of where it starts is marked, with or without
-        // offsets, and the mark is not part of the line.
+        // A name whose string climbs out of where it starts is marked, with or
+        // without offsets, and the mark is not part of the line.
         let mut c = Collector::new();
         c.string("../shared/a.json", false, 4);
         c.at = Some(70);
@@ -971,7 +973,8 @@ mod tests {
         // A hole at the end, or only holes, is no rest.
         assert_eq!(rest("fixtures/\u{1}"), none("fixtures"));
         assert_eq!(rest("fixtures/\u{1}/\u{1}"), none("fixtures"));
-        // `..` after a hole: the path leaves what was spelled; a new shape starts.
+        // `..` after a hole: the path leaves what was spelled; a new shape
+        // starts.
         assert_eq!(rest("a/\u{1}/../b/c"), none("b/c"));
         // No hole, no rest.
         assert_eq!(rest("fixtures/a.json"), none("fixtures/a.json"));

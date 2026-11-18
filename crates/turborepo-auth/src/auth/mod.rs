@@ -85,8 +85,8 @@ fn ensure_non_vercel_login_url_is_safe(login_url: &Url) -> Result<(), Error> {
 }
 
 fn is_localhost(host: &str) -> bool {
-    // `Url::host_str` returns IPv6 addresses wrapped in brackets (e.g. `[::1]`),
-    // so match both the bracketed and bare forms to be safe.
+    // `Url::host_str` returns IPv6 addresses wrapped in brackets (e.g.
+    // `[::1]`), so match both the bracketed and bare forms to be safe.
     matches!(host, "localhost" | "127.0.0.1" | "::1" | "[::1]")
 }
 

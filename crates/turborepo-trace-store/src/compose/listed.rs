@@ -65,8 +65,8 @@ pub(super) fn unplaced(path: &str) -> bool {
 /// `rel` below it (`out_pattern`: the output's own glob below `rel`, if it has
 /// one). See the module docs.
 pub(super) fn names_output(pattern: &str, rel: &str, out_pattern: Option<&str>) -> bool {
-    // Where the output is: `rel`, extended by the literal leading directories of
-    // its own pattern (`<pkg>` with `dist/**` is at `<pkg>/dist`).
+    // Where the output is: `rel`, extended by the literal leading directories
+    // of its own pattern (`<pkg>` with `dist/**` is at `<pkg>/dist`).
     let mut at = rel.trim_end_matches('/').to_owned();
     if let Some(op) = out_pattern {
         let (prefix, _) = split_static_prefix(op);
@@ -169,7 +169,8 @@ mod tests {
             "src/generated/client.ts",
             None
         ));
-        // Wildcards alone: the listing would see the output, it does not name it.
+        // Wildcards alone: the listing would see the output, it does not name
+        // it.
         assert!(!names_output("**", "$BUILD_DIR/pnpm-workspace.yaml", None));
         assert!(!names_output("*/*", "packages/ui", Some("dist/**")));
         assert!(!names_output(

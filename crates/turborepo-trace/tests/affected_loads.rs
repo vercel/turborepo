@@ -109,8 +109,8 @@ fn a_package_name_known_in_part_keeps_an_open_record() {
     const USERS: [&str; 2] = ["pkgs/p1/test/a.test.js", "pkgs/p1/test/b.test.js"];
     assert_eq!(affected(r, "pkgs/p2/index.js"), USERS);
     assert_eq!(affected(r, "pkgs/p2/lib/x.js"), USERS);
-    // The record is open: an unrelated edit selects the tests that reach the helper
-    // too, and nothing else.
+    // The record is open: an unrelated edit selects the tests that reach the
+    // helper too, and nothing else.
     assert_eq!(affected(r, "README.md"), USERS);
 }
 
@@ -199,13 +199,13 @@ fn a_module_mapper_applies_to_every_value_of_a_reference() {
     ];
     assert_eq!(affected_unbound(r, "shared/routes/a.js"), USERS);
     assert_eq!(affected_unbound(r, "shared/routes/b.js"), USERS);
-    // With cross-file binding (the default) the test that passes the key `a` loads
-    // that value alone; the mapper still applies to it and to every value of
-    // the others.
+    // With cross-file binding (the default) the test that passes the key `a`
+    // loads that value alone; the mapper still applies to it and to every
+    // value of the others.
     assert_eq!(affected(r, "shared/routes/a.js"), USERS);
     assert_eq!(affected(r, "shared/routes/b.js"), USERS[1..]);
-    // Every value is mapped, so nothing is open: a file the table does not name and
-    // an unrelated edit select nothing.
+    // Every value is mapped, so nothing is open: a file the table does not name
+    // and an unrelated edit select nothing.
     assert_eq!(affected(r, "shared/routes/c.js"), [""; 0]);
     assert_eq!(affected(r, "README.md"), [""; 0]);
 }

@@ -147,7 +147,8 @@ impl Discovery {
             || invocation.to_owned(),
             |cwd| AbsoluteSystemPathBuf::from_unknown(invocation, cwd),
         );
-        // Global --root-turbo-json remains relative to the invocation, NOT --cwd.
+        // Global --root-turbo-json remains relative to the invocation, NOT
+        // --cwd.
         let config = args
             .root_turbo_json
             .as_deref()

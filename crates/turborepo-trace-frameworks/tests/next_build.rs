@@ -69,8 +69,8 @@ fn reads_what_an_entry_loads() {
     assert_eq!(about.key, "/about/page");
     assert_eq!(about.entry, "server/app/about/page.js");
     assert!(about.trace.present);
-    // Server chunks inside the dist dir; library files outside it carry the trace's
-    // hash.
+    // Server chunks inside the dist dir; library files outside it carry the
+    // trace's hash.
     assert!(
         about
             .trace

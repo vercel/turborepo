@@ -445,15 +445,17 @@ impl Parser<'_> {
                         let names = e.expand(body);
                         let export = mods.iter().any(|m| m == "export");
                         for n in words(&names) {
-                            // An exported variable that is not defined comes from the
-                            // environment: nothing to record.
+                            // An exported variable that is not defined comes
+                            // from the environment:
+                            // nothing to record.
                             if let Some(v) = self.db.vars.get_mut(n) {
                                 v.exported = export;
                             }
                         }
                         continue;
                     }
-                    // A bare function call (`$(eval …)`, `$(info …)`) or garbage.
+                    // A bare function call (`$(eval …)`, `$(info …)`) or
+                    // garbage.
                     let mut e = Exp::new(&self.db.vars, &self.db.dir);
                     let out = e.expand(body);
                     let (issues, globs) =
@@ -629,9 +631,9 @@ impl Parser<'_> {
             push_issue(&mut self.db.issues, i);
         }
         for c in ctx {
-            // An include inside an unknown conditional: its rules carry the issue through
-            // the variables and rules it defines; record it globally (it may define
-            // anything).
+            // An include inside an unknown conditional: its rules carry the
+            // issue through the variables and rules it defines;
+            // record it globally (it may define anything).
             push_issue(&mut self.db.issues, c.clone());
         }
         for w in words(&names).map(str::to_string).collect::<Vec<_>>() {
@@ -772,8 +774,8 @@ impl Parser<'_> {
         let mut targets: Vec<String> = Vec::new();
         for w in words(&texp) {
             if has_unknown(w) {
-                // An unknown target may be what a known prerequisite names: every target is
-                // affected.
+                // An unknown target may be what a known prerequisite names:
+                // every target is affected.
                 self.db.issue(
                     UncertaintyKind::ComputedSpecifier,
                     format!("computed target `{}`", short(targets_raw.trim())),
@@ -782,7 +784,8 @@ impl Parser<'_> {
                 targets.push(w.to_string());
             }
         }
-        // Target-specific variable: `targets: [override|export|private] VAR op value`.
+        // Target-specific variable: `targets: [override|export|private] VAR op
+        // value`.
         let rest_mods_stripped = strip_modifier_words(rest.trim_start());
         if let LineKind::Assign {
             name_end,
@@ -803,7 +806,8 @@ impl Parser<'_> {
                         issues: issues.clone(),
                     });
                 }
-                // A target-specific variable line does not start a recipe context.
+                // A target-specific variable line does not start a recipe
+                // context.
                 self.cur_rules.clear();
                 return;
             }
@@ -848,7 +852,8 @@ impl Parser<'_> {
                 );
                 continue;
             }
-            // Make expands wildcards in prerequisites (not in pattern prerequisites).
+            // Make expands wildcards in prerequisites (not in pattern
+            // prerequisites).
             let expanded: Vec<String> = if crate::glob::is_glob(w) && !w.contains('%') {
                 let (found, g) = super::eval::wildcard_word(&self.db.dir, w);
                 globs.push(g);
@@ -931,7 +936,8 @@ impl Parser<'_> {
             }
             _ => {
                 if self.db.first_target.is_none() && !pattern {
-                    // The first target not starting with `.` (unless it has a `/`).
+                    // The first target not starting with `.` (unless it has a
+                    // `/`).
                     if let Some(t) = targets
                         .iter()
                         .find(|t| !t.starts_with('.') || t.contains('/'))

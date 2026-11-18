@@ -335,7 +335,8 @@ fn managed_run_pins_the_locked_go_toolchain_and_follows_the_workspace_flag() {
         std::path::Path::new(&env["GOROOT"]).join("bin/go").exists(),
         "{env:?}"
     );
-    // Setup ignores go.work without the flag, so run reads the selection as drift.
+    // Setup ignores go.work without the flag, so run reads the selection as
+    // drift.
     fs::write(f.owned.root().join("turbo.json"), ENABLED).unwrap();
     let error = run_overrides(&f.owned).unwrap_err();
     assert!(error.contains("no longer match turbo.lock"), "{error}");

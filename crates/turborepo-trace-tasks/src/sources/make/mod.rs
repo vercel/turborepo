@@ -567,17 +567,19 @@ impl Analysis {
                 continue;
             }
             if self.db.phony.contains(p) || order_only {
-                // An order-only file (`| $(BUILD_DIR)`): only its existence matters.
+                // An order-only file (`| $(BUILD_DIR)`): only its existence
+                // matters.
                 continue;
             }
             // A file or directory (no filesystem check: see outputs below).
             d.spec.input(fsx::join(dir, p));
         }
-        // A file target is an output. Bare names (`test`, `build`, `app`) are usually
-        // phony or directories (`test/` would cover sources); their recipes'
-        // recognizers report what they write (`cc -o app`). No filesystem check
-        // here: a probe in task discovery would be shared by every task of the
-        // package and link them all to this producer.
+        // A file target is an output. Bare names (`test`, `build`, `app`) are
+        // usually phony or directories (`test/` would cover sources);
+        // their recipes' recognizers report what they write (`cc -o
+        // app`). No filesystem check here: a probe in task discovery
+        // would be shared by every task of the package and link them
+        // all to this producer.
         if !t.phony && !t.recipes.is_empty() && name.contains(['/', '.']) {
             d.spec
                 .output_of_kind(fsx::join(dir, name), OutputKind::Declared);
@@ -724,9 +726,10 @@ impl TaskSource for MakeSource {
         }
         let mut out = Vec::new();
         for mk in by_dir.values() {
-            // Directory listings made while evaluating the makefile (`$(wildcard)`) become
-            // memberships of the tasks that use them instead of observations shared by
-            // every task of the package.
+            // Directory listings made while evaluating the makefile
+            // (`$(wildcard)`) become memberships of the tasks that
+            // use them instead of observations shared by every task
+            // of the package.
             turborepo_trace_core::record::pause_listings(|| {
                 let a = analyze(mk);
                 for name in a.targets.keys() {
@@ -755,13 +758,13 @@ pub(crate) fn find_quietly(
     use std::sync::{Arc, OnceLock};
 
     use turborepo_trace_core::record;
-    // Every source of the package walks the same tree (the root package's is the
-    // whole repository): walk once per shared dir cache, package and depth,
-    // keeping every file, then filter by name. `pred` only selects files, never
-    // which directories are entered. Which directories the walk enters depends
-    // on the packages nested below this one (`SourceCx::owns`): their roots are
-    // part of the key. Packages are sorted by `rel`, so they form one
-    // contiguous block.
+    // Every source of the package walks the same tree (the root package's is
+    // the whole repository): walk once per shared dir cache, package and
+    // depth, keeping every file, then filter by name. `pred` only selects
+    // files, never which directories are entered. Which directories the
+    // walk enters depends on the packages nested below this one
+    // (`SourceCx::owns`): their roots are part of the key. Packages are
+    // sorted by `rel`, so they form one contiguous block.
     let nested = {
         use std::hash::{Hash, Hasher};
         let pkgs = &cx.workspace.packages;
@@ -906,8 +909,8 @@ impl Recognizer for MakeRun {
             return Recognition::Partial;
         }
         if !discoverable(cx.repo_root, &mk) {
-            // No `make:` tasks exist for it (outside the repo, too deep, or in a skipped
-            // directory such as `build/`).
+            // No `make:` tasks exist for it (outside the repo, too deep, or in
+            // a skipped directory such as `build/`).
             out.config(mk.clone());
             out.uncertain(
                 UncertaintyKind::UnknownCommand,

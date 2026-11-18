@@ -55,7 +55,8 @@ impl GitAttrs {
         let mut buf = Vec::new();
         let mut collection = MetadataCollection::default();
 
-        // Initialize with built-in macros (e.g. `binary` → `-diff -merge -text`)
+        // Initialize with built-in macros (e.g. `binary` → `-diff -merge
+        // -text`)
         let mut search = match Search::new_globals(
             std::iter::empty::<std::path::PathBuf>(),
             &mut buf,
@@ -506,8 +507,9 @@ fn hash_file_for_cache(
     file_len: u64,
     attr: TextAttr,
 ) -> Result<OidHash, std::io::Error> {
-    // Bound allocation for unusually large files. Unsupported files retain their
-    // ordinary hash, preferring a cache miss over ambiguous normalization.
+    // Bound allocation for unusually large files. Unsupported files retain
+    // their ordinary hash, preferring a cache miss over ambiguous
+    // normalization.
     if path.as_std_path().file_name() == Some(std::ffi::OsStr::new(".env.local"))
         && file_len <= 1024 * 1024
     {

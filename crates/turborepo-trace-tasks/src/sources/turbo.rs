@@ -324,8 +324,8 @@ fn apply_def(
             m.reason = "turbo inputs".into();
             m.data = true;
         }
-        // The files turbo hashes for the task: read, whatever the commands run or
-        // compile (their recognizers add that).
+        // The files turbo hashes for the task: read, whatever the commands run
+        // or compile (their recognizers add that).
         declared.data_inputs = std::mem::take(&mut declared.inputs);
         spec.merge(declared);
     }
@@ -407,7 +407,8 @@ pub fn scope_outputs(outputs: Vec<Output>, pkg_dir: &Path, nested: &[PathBuf]) -
                 .map(|c| c.as_os_str().to_string_lossy().into_owned())
                 .collect();
             let segs: Vec<&str> = segs.iter().map(String::as_str).collect();
-            // Excludes relative to the outer directory are dropped (a superset).
+            // Excludes relative to the outer directory are dropped (a
+            // superset).
             narrow_pattern(o.pattern.as_deref(), &segs).map(|p| (pkg_dir.to_path_buf(), p, vec![]))
         } else {
             None
@@ -810,7 +811,8 @@ mod tests {
                 "declared /r/t/s **/dist/**/* true"
             ]
         );
-        // A root task `//#cache-tsbuildinfo-files`: outputs in other packages only.
+        // A root task `//#cache-tsbuildinfo-files`: outputs in other packages
+        // only.
         let nested = [PathBuf::from("/r/apps/a"), PathBuf::from("/r/apps/b")];
         let v = scope_outputs(
             vec![

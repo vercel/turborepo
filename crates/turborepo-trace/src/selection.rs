@@ -378,11 +378,12 @@ pub(crate) fn unknown_tests(
         return Vec::new();
     }
     // The tests of a framework that was not asked for are known tests, of that
-    // framework: not unknown ones of this evaluation (`--tests jest` in a vitest
-    // repository lists nothing).
+    // framework: not unknown ones of this evaluation (`--tests jest` in a
+    // vitest repository lists nothing).
     let mut others = NodeSet::new(g.node_count());
-    // Packages where jest or vitest found tests: a config of theirs decides what
-    // a test is there. Elsewhere jest and vitest run with their defaults.
+    // Packages where jest or vitest found tests: a config of theirs decides
+    // what a test is there. Elsewhere jest and vitest run with their
+    // defaults.
     let mut configured = std::collections::HashSet::new();
     for (fw, _) in turborepo_trace_store::fw::GRAPH_FRAMEWORKS {
         let tests = g.tests(Some(*fw));
@@ -713,8 +714,8 @@ pub(crate) fn build(i: &Input<'_>) -> Document {
         ));
     }
     for (dir, t) in tasks {
-        // A task of a directory that is no package of the graph goes to the enclosing
-        // one.
+        // A task of a directory that is no package of the graph goes to the
+        // enclosing one.
         let key = if by_dir.contains_key(&dir) || acc.contains_key(&dir) {
             dir
         } else {

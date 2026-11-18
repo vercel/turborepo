@@ -373,7 +373,8 @@ fn a_package_next_transpiles_is_consumed_by_its_importers() {
         err.contains("every changed dependency has known consumers in the package"),
         "{err}"
     );
-    // Without the rule the consumers are not known and the manifest counts whole.
+    // Without the rule the consumers are not known and the manifest counts
+    // whole.
     assert_eq!(since_with(r, &[], &OFF), SITE_TESTS);
     let o = run_env(r, &[&ARGS[..], &["--stats"]].concat(), &OFF);
     let err = String::from_utf8_lossy(&o.stderr);
@@ -388,8 +389,8 @@ fn a_package_next_transpiles_is_consumed_by_its_importers() {
     // config.
     assert_eq!(bump(r, "prod-lib"), [PROD]);
     assert!(stats(r).contains("names prod-lib in transpilePackages[]"));
-    // Named there and imported by nothing: the lockfile diff says what the install
-    // changes, nothing in the package can observe the version.
+    // Named there and imported by nothing: the lockfile diff says what the
+    // install changes, nothing in the package can observe the version.
     assert!(bump(r, "unimported-lib").is_empty());
     assert_eq!(since_with(r, &[], &OFF), SITE_TESTS);
 }
@@ -412,8 +413,8 @@ fn the_other_next_fields_that_only_importers_consume() {
 fn a_package_the_tool_loads_is_consumed_by_the_readers_of_the_config() {
     let d = repo();
     let r = d.path();
-    // A compiler plugin runs on every file: the jest tests of the next/jest project
-    // read the config, the other projects do not.
+    // A compiler plugin runs on every file: the jest tests of the next/jest
+    // project read the config, the other projects do not.
     assert_eq!(bump(r, "swc-plugin-x"), SITE_TESTS);
     let err = stats(r);
     assert!(
@@ -457,9 +458,9 @@ fn a_package_the_config_imports() {
         ),
         "{explained}"
     );
-    // The A/B switch assumes that the package leaves those values alone: then only
-    // what loads the config is seeded (nothing here), and the notes say what
-    // was assumed.
+    // The A/B switch assumes that the package leaves those values alone: then
+    // only what loads the config is seeded (nothing here), and the notes
+    // say what was assumed.
     let assume = [("TURBO_TRACE_DEBUG_CONFIG_IMPORTS", "0")];
     assert!(since_with(r, &[], &assume).is_empty());
     let o = run_env(r, &[&ARGS[..], &["--stats"]].concat(), &assume);

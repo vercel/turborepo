@@ -915,7 +915,8 @@ impl RunBuilder {
 
         if matches!(filter_mode, FilterMode::AllPackages) {
             // When all tasks use package#task syntax, we can narrow the package
-            // set to only the referenced packages rather than the entire monorepo.
+            // set to only the referenced packages rather than the entire
+            // monorepo.
             let task_names: Vec<TaskName> = opts
                 .run_opts
                 .tasks
@@ -1134,12 +1135,14 @@ impl RunBuilder {
         };
         // A pure native workspace (experimentalCargoWorkspaces,
         // experimentalPythonWorkspaces, or experimentalGoWorkspaces, no root
-        // package.json) has no JavaScript root manifest. A *missing* file is only
-        // tolerated in those modes; a malformed one always fails, and a missing
-        // one without native support keeps the original hard error.
+        // package.json) has no JavaScript root manifest. A *missing* file is
+        // only tolerated in those modes; a malformed one always fails,
+        // and a missing one without native support keeps the original
+        // hard error.
         let graph_features = RepositoryGraphFeatures::new(&self.opts.future_flags);
         // Revalidate at the CLI/config boundary; shim inference is a separate
-        // process-scoped observation. Reuse this decision for graph construction.
+        // process-scoped observation. Reuse this decision for graph
+        // construction.
         let (root_package_json, contributor_plan) = graph_features
             .observe_root(&self.repo_root)?
             .into_graph_parts()
@@ -1155,17 +1158,18 @@ impl RunBuilder {
             "dangerously_allow_missing_package_manager",
             self.opts.repo_opts.allow_no_package_manager,
         );
-        // we only track the remote cache if we're linked because this defaults to
-        // Vercel
+        // we only track the remote cache if we're linked because this defaults
+        // to Vercel
         if is_linked {
             run_telemetry.track_remote_cache(&self.opts.api_client_opts.api_url);
         }
         run_telemetry.track_ci(turborepo_ci::Vendor::get_name());
         run_telemetry.track_ai_agent(turborepo_ai_agents::get_agent());
 
-        // The daemon is no longer used for `turbo run`. It provided no measurable
-        // performance benefit and added IPC overhead. The daemon is still used by
-        // `turbo watch` which connects independently.
+        // The daemon is no longer used for `turbo run`. It provided no
+        // measurable performance benefit and added IPC overhead. The
+        // daemon is still used by `turbo watch` which connects
+        // independently.
         run_telemetry.track_daemon_init(DaemonInitStatus::Disabled);
 
         if self.should_initialize_http_client() {
@@ -1931,7 +1935,8 @@ impl RunBuilder {
 
         let managed_setup = scope::has_committed_setup_lock(&self.repo_root, scm, root_turbo_json);
 
-        // Task-level filter: resolve --filter and/or --affected against the task graph.
+        // Task-level filter: resolve --filter and/or --affected against the
+        // task graph.
         if use_task_level_filter {
             let task_entrypoints = self
                 .opts
@@ -2001,7 +2006,8 @@ impl RunBuilder {
                             managed_setup,
                         )?)
                     } else {
-                        // Adding a tag must not opt --affected into task-input semantics.
+                        // Adding a tag must not opt --affected into task-input
+                        // semantics.
                         let mut opts = self.opts.clone();
                         opts.scope_opts.filter_patterns.clear();
                         let (packages, _, _) = Self::calculate_filtered_packages(
@@ -2230,7 +2236,8 @@ impl RunBuilder {
             self.opts.run_opts.dry_run.is_some(),
         ));
 
-        // futureFlags are hard gates: reject observability config when disabled.
+        // futureFlags are hard gates: reject observability config when
+        // disabled.
         if let Some(obs_opts) = &self.opts.experimental_observability
             && obs_opts.otel.is_some()
             && !self.opts.future_flags.experimental_observability
@@ -2329,7 +2336,8 @@ impl RunBuilder {
             TurboState::platform_name(),
         );
         let start_at = Local::now();
-        // Reject stale managed state before graph/probe work or HTTP activation.
+        // Reject stale managed state before graph/probe work or HTTP
+        // activation.
         if let Some(tools) = &self.managed_environment {
             tools.revalidate().map_err(Error::ManagedTools)?;
         }
@@ -2350,7 +2358,8 @@ impl RunBuilder {
         // Graph construction may override stale inference or --single-package
         // when contributors supply additional execution scopes. Keep loader,
         // scope/engine construction, and the final run/summary options aligned
-        // with that authoritative shape. Lazy loading preserves scope identities.
+        // with that authoritative shape. Lazy loading preserves scope
+        // identities.
         self.opts.run_opts.single_package = is_single_package;
 
         // SCM-independent work runs while the background scm_task continues.
@@ -2760,10 +2769,11 @@ impl RunBuilder {
         if exclusions.is_empty() {
             return engine;
         }
-        // Native-task preferences select entrypoints, not the dependency closure.
-        // Keep excluded entrypoints when a retained task depends on them or schedules
-        // them with `with`. Dependencies may themselves have `with` siblings, so
-        // alternate both closures until no new tasks are added.
+        // Native-task preferences select entrypoints, not the dependency
+        // closure. Keep excluded entrypoints when a retained task
+        // depends on them or schedules them with `with`. Dependencies
+        // may themselves have `with` siblings, so alternate both
+        // closures until no new tasks are added.
         let mut retained_tasks: HashSet<TaskId<'static>> = engine
             .task_ids()
             .filter(|task_id| !exclusions.contains(*task_id))
@@ -2802,7 +2812,8 @@ impl RunBuilder {
             Spanned::new(TaskName::from(task.as_str()).into_owned())
         });
         // Inverse of global_deps_for_hash: when globalConfiguration is on,
-        // global deps are embedded in per-task inputs via prepend_global_inputs.
+        // global deps are embedded in per-task inputs via
+        // prepend_global_inputs.
         let global_deps_for_task_inputs = if self.opts.future_flags.global_configuration {
             root_turbo_json.global_deps.clone()
         } else {

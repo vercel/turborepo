@@ -228,12 +228,13 @@ pub fn analyze_package(ws: &Workspace, pkg: &Package, opts: &Options) -> Vec<Tas
         BTreeMap::new();
     let mut augments: Vec<(&'static str, sources::DiscoveredTask)> = Vec::new();
     for src in sources::sources() {
-        // Discovery runs in the package's shared frame: everything it records becomes
-        // an observation of every task of the package, and the store links a
-        // task to the producer of any output inside a directory it listed.
-        // Directory walks that look for config files would therefore make every
-        // task depend on every generator in the package. A source that names
-        // its config files gets its listings replaced by one narrow listing (`*
+        // Discovery runs in the package's shared frame: everything it records
+        // becomes an observation of every task of the package, and the
+        // store links a task to the producer of any output inside a
+        // directory it listed. Directory walks that look for config
+        // files would therefore make every task depend on every
+        // generator in the package. A source that names its config
+        // files gets its listings replaced by one narrow listing (`*
         // */{names}`), so adding such a file still changes the package's tasks.
         // Reads and probes stay shared (config files are inputs of every task);
         // listings a task's own spec needs are expressed as memberships.
@@ -277,207 +278,226 @@ pub fn analyze_package(ws: &Workspace, pkg: &Package, opts: &Options) -> Vec<Tas
         })
         .collect();
     let reg = registry();
-    let analyze_task =
-        |id: TaskId, mut srcs: Vec<&'static str>, parts: Vec<sources::DiscoveredTask>| -> Task {
-            srcs.dedup();
-            let ci = srcs.iter().any(|s| {
-                sources::sources()
-                    .iter()
-                    .any(|src| src.id() == *s && src.ci_side_effects())
-            });
-            let mut spec = TaskSpec::default();
-            let mut files = Vec::new();
-            let mut lines = Vec::new();
-            let mut commands = Vec::new();
-            let mut line_recognition = Vec::new();
-            let mut name = String::new();
-            // Whether a command may write files the spec doesn't name (see below).
-            let mut opaque = false;
-            let mut decided_by = turborepo_trace_core::Observations::default();
-            let frame = turborepo_trace_core::record::start();
-            for d in parts {
-                if name.is_empty() {
-                    name = d.name.clone();
-                }
-                decided_by.extend_from(&d.decided_by);
-                files.extend(d.files.iter().cloned());
-                spec.merge(d.spec);
-                let mut env = opts.env.clone();
-                env.extend(d.env);
-                for line in &d.lines {
-                    lines.push(line.clone());
-                    let parsed = shell::parse(line, &d.cwd, &env);
-                    if !parsed.uncertainties.is_empty() {
-                        // Skipped constructs (`case`, `eval`, functions) may run anything.
-                        spec.membership(pkg.dir.clone(), "**", "unsupported shell syntax");
-                        runs::scan_unsupported_shell(line, &ws.root, &mut spec);
-                    }
-                    let shell_issue = !parsed.uncertainties.is_empty();
-                    opaque |= shell_issue;
-                    let mut recs = Vec::new();
-                    spec.uncertainties.extend(parsed.uncertainties);
-                    for cmd in &parsed.commands {
-                        let rcx = RecognizeCx {
-                            repo_root: &ws.root,
-                            package_root: &pkg.dir,
-                            env: &env,
-                            task_name: Some(&name),
-                            scripts: &scripts,
-                        };
-                        let before = (spec.parts.len(), footprint(&spec));
-                        let rep = reg.recognize(cmd, &rcx, &mut spec);
-                        // A command is transparent when it has no file effect, when it only
-                        // runs other tasks (`pnpm typegen`: their writes are theirs), or when
-                        // it is made of parts. Anything else (`node patch-dist.js`) may write
-                        // files the spec doesn't name.
-                        opaque |= spec.parts.len() == before.0
-                            && rep.recognition != Recognition::Ignored
-                            && (rep.recognition != Recognition::Full
-                                || footprint(&spec) != before.1);
-                        recs.push(rep.recognition);
-                        commands.push(rep);
-                    }
-                    line_recognition.push(line_recognition_of(&recs, shell_issue));
-                }
-            }
-            let observations = frame.finish();
-            // Whether a task this one depends on or runs can write into this package: a
-            // task of the same package. Tasks of other packages (turbo `^build`) write
-            // their own packages, as declared outputs link only inside their package.
-            let local_writer = spec
-                .task_deps
+    let analyze_task = |id: TaskId,
+                        mut srcs: Vec<&'static str>,
+                        parts: Vec<sources::DiscoveredTask>|
+     -> Task {
+        srcs.dedup();
+        let ci = srcs.iter().any(|s| {
+            sources::sources()
                 .iter()
-                .any(|d| may_write_into(&d.target, pkg, ws, &scripts));
-            if !spec.parts.is_empty() {
-                if opaque && pkg.rel == "." {
-                    // A root script may write anywhere in the repository: another command of
-                    // the task may rewrite what a part wrote (`tsc -b && node patch-dists.js`)
-                    // or generate what it reads. Importers of the outputs depend on the whole
-                    // task, as without parts.
-                    spec.drop_parts();
-                } else if opaque || local_writer {
-                    // Another command of the task (`bunchee && tsc -b`,
-                    // `tsc -b && node patch-dist.js`) or a task of the same package that it
-                    // depends on or runs (`dependsOn: ["typegen"]`, a `pre` hook,
-                    // `pnpm typegen && tsc -b`) may rewrite what the package's own projects
-                    // emit, or generate their sources without declaring them: the outputs of
-                    // those projects also stay outputs of the task. A project of another
-                    // workspace package is fed and written by that package's tasks (as for
-                    // declared outputs, which link only inside their package), not by this
-                    // task's other commands or dependencies. For the same reason a
-                    // dependency on other packages' tasks alone (turbo `^build`) does not
-                    // make the task a producer of its own projects' outputs: what a project
-                    // emits depends on those packages only through what its sources import,
-                    // and the sources' own edges carry that. (Linked to the task, an importer
-                    // of `dist/index.js` inherited the whole dependency chain of the task:
-                    // every upstream build script and its uncertainty.)
-                    let nested: Vec<&std::path::Path> = ws
-                        .packages
-                        .iter()
-                        .filter(|p| p.dir != pkg.dir && p.dir.starts_with(&pkg.dir))
-                        .map(|p| p.dir.as_path())
-                        .collect();
-                    let own = |part: &std::path::Path| {
-                        part.starts_with(&pkg.dir) && !nested.iter().any(|n| part.starts_with(n))
+                .any(|src| src.id() == *s && src.ci_side_effects())
+        });
+        let mut spec = TaskSpec::default();
+        let mut files = Vec::new();
+        let mut lines = Vec::new();
+        let mut commands = Vec::new();
+        let mut line_recognition = Vec::new();
+        let mut name = String::new();
+        // Whether a command may write files the spec doesn't name (see below).
+        let mut opaque = false;
+        let mut decided_by = turborepo_trace_core::Observations::default();
+        let frame = turborepo_trace_core::record::start();
+        for d in parts {
+            if name.is_empty() {
+                name = d.name.clone();
+            }
+            decided_by.extend_from(&d.decided_by);
+            files.extend(d.files.iter().cloned());
+            spec.merge(d.spec);
+            let mut env = opts.env.clone();
+            env.extend(d.env);
+            for line in &d.lines {
+                lines.push(line.clone());
+                let parsed = shell::parse(line, &d.cwd, &env);
+                if !parsed.uncertainties.is_empty() {
+                    // Skipped constructs (`case`, `eval`, functions) may run
+                    // anything.
+                    spec.membership(pkg.dir.clone(), "**", "unsupported shell syntax");
+                    runs::scan_unsupported_shell(line, &ws.root, &mut spec);
+                }
+                let shell_issue = !parsed.uncertainties.is_empty();
+                opaque |= shell_issue;
+                let mut recs = Vec::new();
+                spec.uncertainties.extend(parsed.uncertainties);
+                for cmd in &parsed.commands {
+                    let rcx = RecognizeCx {
+                        repo_root: &ws.root,
+                        package_root: &pkg.dir,
+                        env: &env,
+                        task_name: Some(&name),
+                        scripts: &scripts,
                     };
-                    let copies: Vec<spec::Output> = spec
-                        .outputs
-                        .iter()
-                        .filter(|o| o.part.as_deref().is_some_and(own))
-                        .map(|o| spec::Output {
-                            part: None,
-                            ..o.clone()
-                        })
-                        .collect();
-                    spec.outputs.extend(copies);
+                    let before = (spec.parts.len(), footprint(&spec));
+                    let rep = reg.recognize(cmd, &rcx, &mut spec);
+                    // A command is transparent when it has no file effect, when
+                    // it only runs other tasks (`pnpm
+                    // typegen`: their writes are theirs), or when
+                    // it is made of parts. Anything else (`node patch-dist.js`)
+                    // may write files the spec doesn't
+                    // name.
+                    opaque |= spec.parts.len() == before.0
+                        && rep.recognition != Recognition::Ignored
+                        && (rep.recognition != Recognition::Full || footprint(&spec) != before.1);
+                    recs.push(rep.recognition);
+                    commands.push(rep);
                 }
+                line_recognition.push(line_recognition_of(&recs, shell_issue));
             }
-            if !spec.uncertainties.is_empty() {
-                // Every uncertain task falls back to its whole package (also for uncertainties
-                // declared by task sources).
-                spec.membership(pkg.dir.clone(), "**", "uncertain task");
+        }
+        let observations = frame.finish();
+        // Whether a task this one depends on or runs can write into this
+        // package: a task of the same package. Tasks of other packages
+        // (turbo `^build`) write their own packages, as declared
+        // outputs link only inside their package.
+        let local_writer = spec
+            .task_deps
+            .iter()
+            .any(|d| may_write_into(&d.target, pkg, ws, &scripts));
+        if !spec.parts.is_empty() {
+            if opaque && pkg.rel == "." {
+                // A root script may write anywhere in the repository: another
+                // command of the task may rewrite what a part
+                // wrote (`tsc -b && node patch-dists.js`)
+                // or generate what it reads. Importers of the outputs depend on
+                // the whole task, as without parts.
+                spec.drop_parts();
+            } else if opaque || local_writer {
+                // Another command of the task (`bunchee && tsc -b`,
+                // `tsc -b && node patch-dist.js`) or a task of the same package
+                // that it depends on or runs (`dependsOn:
+                // ["typegen"]`, a `pre` hook, `pnpm typegen &&
+                // tsc -b`) may rewrite what the package's own projects
+                // emit, or generate their sources without declaring them: the
+                // outputs of those projects also stay outputs
+                // of the task. A project of another
+                // workspace package is fed and written by that package's tasks
+                // (as for declared outputs, which link only
+                // inside their package), not by this
+                // task's other commands or dependencies. For the same reason a
+                // dependency on other packages' tasks alone (turbo `^build`)
+                // does not make the task a producer of its own
+                // projects' outputs: what a project
+                // emits depends on those packages only through what its sources
+                // import, and the sources' own edges carry
+                // that. (Linked to the task, an importer
+                // of `dist/index.js` inherited the whole dependency chain of
+                // the task: every upstream build script and its
+                // uncertainty.)
+                let nested: Vec<&std::path::Path> = ws
+                    .packages
+                    .iter()
+                    .filter(|p| p.dir != pkg.dir && p.dir.starts_with(&pkg.dir))
+                    .map(|p| p.dir.as_path())
+                    .collect();
+                let own = |part: &std::path::Path| {
+                    part.starts_with(&pkg.dir) && !nested.iter().any(|n| part.starts_with(n))
+                };
+                let copies: Vec<spec::Output> = spec
+                    .outputs
+                    .iter()
+                    .filter(|o| o.part.as_deref().is_some_and(own))
+                    .map(|o| spec::Output {
+                        part: None,
+                        ..o.clone()
+                    })
+                    .collect();
+                spec.outputs.extend(copies);
             }
-            if !line_recognition.is_empty()
-                && line_recognition.iter().all(|r| *r == Recognition::Ignored)
-                && spec.uncertainties.is_empty()
-            {
-                // Every command has no file effect (`echo "dummy target for caching"`): the
-                // task writes nothing, so its declared outputs are only what
-                // turbo restores from the cache. A root task such as
-                // `//#cache-tsbuildinfo-files` declares every package's
-                // `dist/tsbuildinfo.json` that way.
-                for o in &mut spec.outputs {
-                    if o.kind == spec::OutputKind::Declared {
-                        o.kind = spec::OutputKind::CacheOnly;
-                    }
-                }
-            }
-            if !spec.parts.is_empty() && !opaque && !local_writer && spec.uncertainties.is_empty() {
-                // Every command of the task is made of parts, has no file effect or only
-                // runs tasks of other packages: the task writes exactly what its parts
-                // write, and nothing it depends on writes into this package. What its
-                // declared outputs name beyond that (turbo `outputs: ["dist"]` on a
-                // `tsc -b` type-check, there to restore the `.d.ts` files from the cache)
-                // is produced by the tasks that write it, which link on their own.
-                for o in &mut spec.outputs {
-                    if o.kind == spec::OutputKind::Declared && o.part.is_none() {
-                        o.kind = spec::OutputKind::CacheOnly;
-                    }
-                }
-            }
-            if spec.persistent {
-                // A persistent task (`tsc -b -w`, a dev server): no task can depend on it and
-                // builds don't run it, so nothing built or tested reads what it writes.
-                for o in &mut spec.outputs {
-                    if o.links_producer() {
-                        o.kind = spec::OutputKind::Persistent;
-                    }
-                }
-            }
-            if ci {
-                // CI and container tasks are never producers: whatever their steps write
-                // (`mv tmp package.json` in a bump job) is recorded but does not link.
-                spec.classify_all_outputs(spec::OutputKind::CiSideEffect);
-            }
-            // A write to a path that is not a known place in the repository produces no
-            // file anyone can name: recorded, not linked ([`spec::unplaced`]).
+        }
+        if !spec.uncertainties.is_empty() {
+            // Every uncertain task falls back to its whole package (also for
+            // uncertainties declared by task sources).
+            spec.membership(pkg.dir.clone(), "**", "uncertain task");
+        }
+        if !line_recognition.is_empty()
+            && line_recognition.iter().all(|r| *r == Recognition::Ignored)
+            && spec.uncertainties.is_empty()
+        {
+            // Every command has no file effect (`echo "dummy target for
+            // caching"`): the task writes nothing, so its declared
+            // outputs are only what turbo restores from the cache.
+            // A root task such as `//#cache-tsbuildinfo-files`
+            // declares every package's `dist/tsbuildinfo.json` that
+            // way.
             for o in &mut spec.outputs {
-                if o.links_producer() && spec::unplaced(&o.path, &ws.root) {
-                    o.kind = spec::OutputKind::Unplaced;
+                if o.kind == spec::OutputKind::Declared {
+                    o.kind = spec::OutputKind::CacheOnly;
                 }
             }
-            // A task that produces outputs does not depend on a formatting script it calls.
-            format::drop_in_place_deps(&mut spec);
-            // The whole-package fallback of a root task: the root package's own files,
-            // unless the task works on the workspace.
-            fallback::settle(ws, pkg, &lines, &mut spec);
-            spec.configs.extend(files.iter().cloned());
-            files.sort();
-            files.dedup();
-            spec.normalize();
-            Task {
-                id,
-                name,
-                package: pkg.rel.clone(),
-                package_name: pkg.name.clone(),
-                sources: srcs,
-                files,
-                lines,
-                commands,
-                line_recognition,
-                spec,
-                deps: Vec::new(),
-                observations,
-                decided_by,
+        }
+        if !spec.parts.is_empty() && !opaque && !local_writer && spec.uncertainties.is_empty() {
+            // Every command of the task is made of parts, has no file effect or
+            // only runs tasks of other packages: the task writes
+            // exactly what its parts write, and nothing it depends
+            // on writes into this package. What its
+            // declared outputs name beyond that (turbo `outputs: ["dist"]` on a
+            // `tsc -b` type-check, there to restore the `.d.ts` files from the
+            // cache) is produced by the tasks that write it, which
+            // link on their own.
+            for o in &mut spec.outputs {
+                if o.kind == spec::OutputKind::Declared && o.part.is_none() {
+                    o.kind = spec::OutputKind::CacheOnly;
+                }
             }
-        };
+        }
+        if spec.persistent {
+            // A persistent task (`tsc -b -w`, a dev server): no task can depend
+            // on it and builds don't run it, so nothing built or
+            // tested reads what it writes.
+            for o in &mut spec.outputs {
+                if o.links_producer() {
+                    o.kind = spec::OutputKind::Persistent;
+                }
+            }
+        }
+        if ci {
+            // CI and container tasks are never producers: whatever their steps
+            // write (`mv tmp package.json` in a bump job) is
+            // recorded but does not link.
+            spec.classify_all_outputs(spec::OutputKind::CiSideEffect);
+        }
+        // A write to a path that is not a known place in the repository
+        // produces no file anyone can name: recorded, not linked
+        // ([`spec::unplaced`]).
+        for o in &mut spec.outputs {
+            if o.links_producer() && spec::unplaced(&o.path, &ws.root) {
+                o.kind = spec::OutputKind::Unplaced;
+            }
+        }
+        // A task that produces outputs does not depend on a formatting script
+        // it calls.
+        format::drop_in_place_deps(&mut spec);
+        // The whole-package fallback of a root task: the root package's own
+        // files, unless the task works on the workspace.
+        fallback::settle(ws, pkg, &lines, &mut spec);
+        spec.configs.extend(files.iter().cloned());
+        files.sort();
+        files.dedup();
+        spec.normalize();
+        Task {
+            id,
+            name,
+            package: pkg.rel.clone(),
+            package_name: pkg.name.clone(),
+            sources: srcs,
+            files,
+            lines,
+            commands,
+            line_recognition,
+            spec,
+            deps: Vec::new(),
+            observations,
+            decided_by,
+        }
+    };
     /// One task to analyze: its id, the sources that define it and their parts.
     type TaskDef = (TaskId, (Vec<&'static str>, Vec<sources::DiscoveredTask>));
     let defs: Vec<TaskDef> = defs.into_iter().collect();
-    // Tasks are independent (each records in its own frame): a package with many
-    // (the root of a big monorepo: hundreds of workflow jobs and scripts) is
-    // analyzed on several threads, each with this thread's shared dir cache and
-    // pause state, in task order.
+    // Tasks are independent (each records in its own frame): a package with
+    // many (the root of a big monorepo: hundreds of workflow jobs and
+    // scripts) is analyzed on several threads, each with this thread's
+    // shared dir cache and pause state, in task order.
     const PARALLEL_MIN: usize = 16;
     let threads = std::thread::available_parallelism()
         .map_or(1, |n| n.get())

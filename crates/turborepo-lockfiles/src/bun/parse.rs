@@ -157,9 +157,10 @@ impl FromStr for BunLockfile {
             if data.lockfile_version < LockfileVersion::LATEST.as_i32() {
                 return Err(crate::Error::UnsupportedBunVersion(data.lockfile_version));
             }
-            // Bun lockfile revisions have only ever added to the schema, and the
-            // deserialization above already succeeded, so treat a newer version
-            // like the latest one we know instead of discarding the lockfile.
+            // Bun lockfile revisions have only ever added to the schema, and
+            // the deserialization above already succeeded, so treat
+            // a newer version like the latest one we know instead
+            // of discarding the lockfile.
             tracing::warn!(
                 "bun.lock has lockfileVersion {}, newer than the latest supported version {}; \
                  treating it as version {}",
@@ -190,8 +191,8 @@ fn build_key_to_entry(
     // Build key_to_entry map
     // When there are multiple lockfile keys with the same ident (e.g., nested
     // versions), we pick the FIRST one in sorted order for determinism.
-    // Sort keys to ensure deterministic selection: workspace-specific entries (with
-    // /) come before hoisted entries (without /) in the sort order.
+    // Sort keys to ensure deterministic selection: workspace-specific entries
+    // (with /) come before hoisted entries (without /) in the sort order.
     let mut sorted_keys: Vec<_> = packages.keys().collect();
     sorted_keys.sort();
 

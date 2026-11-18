@@ -191,8 +191,8 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
     }
 
     // Returns the set of allowed tasks that can be run if --only is used
-    // The set is exactly the product of the packages in filter and tasks specified
-    // by CLI
+    // The set is exactly the product of the packages in filter and tasks
+    // specified by CLI
     fn allowed_tasks(&self) -> Option<HashSet<TaskId<'static>>> {
         if self.tasks_only {
             let workspaces = self.allowed_workspaces.as_ref().unwrap_or(&self.workspaces);
@@ -333,10 +333,11 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
 
         let entrypoints_span = tracing::info_span!("engine_entrypoints").entered();
         for (workspace, task) in self.workspaces.iter().cartesian_product(tasks.iter()) {
-            // When a task uses package#task syntax (e.g. "web#build"), the task_id
-            // always resolves to that specific package regardless of which workspace
-            // we're iterating over. Skip workspaces that don't match to avoid
-            // unnecessary turbo.json lookups across every package in the monorepo.
+            // When a task uses package#task syntax (e.g. "web#build"), the
+            // task_id always resolves to that specific package
+            // regardless of which workspace we're iterating over.
+            // Skip workspaces that don't match to avoid unnecessary
+            // turbo.json lookups across every package in the monorepo.
             if let Some(task_pkg) = task.package()
                 && workspace != &PackageName::from(task_pkg)
             {
@@ -372,12 +373,13 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
             )? {
                 missing_tasks.remove(task.as_inner());
 
-                // Even if a task definition was found, we _only_ want to add it as an entry
-                // point to the task graph (i.e. the traversalQueue), if
-                // it's:
-                // - A task from the non-root workspace (i.e. tasks from every other workspace)
-                // - A task that we *know* is rootEnabled task (in which case, the root
-                //   workspace is acceptable)
+                // Even if a task definition was found, we _only_ want to add it
+                // as an entry point to the task graph (i.e. the
+                // traversalQueue), if it's:
+                // - A task from the non-root workspace (i.e. tasks from every
+                //   other workspace)
+                // - A task that we *know* is rootEnabled task (in which case,
+                //   the root workspace is acceptable)
                 if !matches!(workspace, PackageName::Root)
                     || self
                         .root_enabled_tasks
@@ -393,9 +395,10 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
 
         {
             let _span = tracing::info_span!("engine_missing_tasks").entered();
-            // We can encounter IO errors trying to load turbo.jsons which prevents using
-            // `retain` in the standard way. Instead we store the possible error
-            // outside of the loop and short circuit checks if we've encountered an error.
+            // We can encounter IO errors trying to load turbo.jsons which
+            // prevents using `retain` in the standard way. Instead
+            // we store the possible error outside of the loop and
+            // short circuit checks if we've encountered an error.
             let mut error = None;
             missing_tasks.retain(|task_name, span| {
                 // If we've already encountered an error skip checking the rest.
@@ -503,22 +506,26 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
                 engine.add_task_location(task_id.into_owned(), span);
             }
 
-            // Skip before doing expensive work if we've already processed this task.
+            // Skip before doing expensive work if we've already processed this
+            // task.
             if visited.contains(task_id.as_inner()) {
                 continue;
             }
 
-            // For root tasks, verify they are either explicitly enabled OR (when using
-            // add_all_tasks mode like devtools) have a definition in root turbo.json.
-            // Tasks defined without the //#  prefix (like "transit") in root turbo.json
-            // are valid root tasks when referenced as dependencies in add_all_tasks mode.
+            // For root tasks, verify they are either explicitly enabled OR
+            // (when using add_all_tasks mode like devtools) have a
+            // definition in root turbo.json. Tasks defined without
+            // the //#  prefix (like "transit") in root turbo.json
+            // are valid root tasks when referenced as dependencies in
+            // add_all_tasks mode.
             if task_id.package() == ROOT_PKG_NAME
                 && !self
                     .root_enabled_tasks
                     .contains(&task_id.as_non_workspace_task_name())
             {
-                // In add_all_tasks mode (devtools), allow root tasks that have a definition
-                // in turbo.json even if not explicitly in root_enabled_tasks
+                // In add_all_tasks mode (devtools), allow root tasks that have
+                // a definition in turbo.json even if not
+                // explicitly in root_enabled_tasks
                 let should_allow = if self.add_all_tasks {
                     let task_name: TaskName<'static> =
                         TaskName::from(task_id.task().to_string()).into_owned();
@@ -555,9 +562,10 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
                     .is_none()
             {
                 // If we have a pkg it should be in PackageGraph.
-                // If we're hitting this error something has gone wrong earlier when building
-                // PackageGraph or the package really doesn't exist and
-                // turbo.json is misconfigured.
+                // If we're hitting this error something has gone wrong earlier
+                // when building PackageGraph or the package
+                // really doesn't exist and turbo.json is
+                // misconfigured.
                 let (span, text) = task_id.span_and_text("turbo.json");
                 return Err(BuilderError::MissingPackageFromTask(Box::new(
                     MissingPackageFromTaskError {
@@ -579,9 +587,9 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
 
             visited.insert(task_id.as_inner().clone());
 
-            // Note that the Go code has a whole if/else statement for putting stuff into
-            // deps or calling e.AddDep the bool is cannot be true so we skip to
-            // just doing deps
+            // Note that the Go code has a whole if/else statement for putting
+            // stuff into deps or calling e.AddDep the bool is
+            // cannot be true so we skip to just doing deps
             let deps = task_definition
                 .task_dependencies
                 .iter()
@@ -700,8 +708,8 @@ impl<'a, L: TurboJsonLoader> EngineBuilder<'a, L> {
 
         let _span = tracing::info_span!("engine_validate").entered();
         // This is the sole cycle/self-dependency check in the pipeline. Package
-        // graph cycles are intentionally allowed; only task graph cycles prevent
-        // execution. See #2559.
+        // graph cycles are intentionally allowed; only task graph cycles
+        // prevent execution. See #2559.
         graph::validate_graph(engine.task_graph_mut())?;
 
         let engine = engine.seal();

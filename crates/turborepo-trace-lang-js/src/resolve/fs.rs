@@ -78,8 +78,9 @@ impl CachedFs {
         if let Some(o) = &self.overlay
             && let Some(r) = o.read(&self.fs, path)
         {
-            // A file of the revision is read like one of the working tree: an observation
-            // of whoever asks (recorded where its links lead, as a diff names it).
+            // A file of the revision is read like one of the working tree: an
+            // observation of whoever asks (recorded where its links
+            // lead, as a diff names it).
             if r.is_ok() && self.fs.records() {
                 turborepo_trace_core::record::read(&o.on_disk(&self.fs, path));
             }
@@ -498,8 +499,8 @@ mod tests {
         let t = tempfile::tempdir().unwrap();
         let r = turborepo_trace_core::fs::normalize(t.path());
         fs::create_dir_all(r.join("app/node_modules/@installed/base")).unwrap();
-        // The root package is `@me/root` and lists the missing bases as dependencies,
-        // as a checkout without `node_modules` does.
+        // The root package is `@me/root` and lists the missing bases as
+        // dependencies, as a checkout without `node_modules` does.
         fs::write(
             r.join("package.json"),
             "{\"name\":\"@me/root\",\"devDependencies\":{\"@tsconfig/node24\":\"24.0.3\",\"\
@@ -527,7 +528,8 @@ mod tests {
                  \"@installed/base/x.json\"]}}"
             )
         );
-        // Installed, relative, absolute, subpath imports and self references stay.
+        // Installed, relative, absolute, subpath imports and self references
+        // stay.
         for keep in [
             "@installed/base/tsconfig.json",
             "./base.json",
@@ -542,7 +544,8 @@ mod tests {
                 "{keep}"
             );
         }
-        // Only the top-level key counts, and strings that merely contain it don't.
+        // Only the top-level key counts, and strings that merely contain it
+        // don't.
         assert_eq!(
             redirect("{\"compilerOptions\": {\"extends\": \"missing-pkg\"}, \"a\": \"extends\"}"),
             None
@@ -550,8 +553,8 @@ mod tests {
         assert_eq!(redirect("{}"), None);
         assert_eq!(redirect("not json \"extends"), None);
 
-        // Through the filesystem adapter, oxc sees the redirected text and the empty
-        // base.
+        // Through the filesystem adapter, oxc sees the redirected text and the
+        // empty base.
         fs::write(&at, "{\"extends\": \"missing-pkg/tsconfig.json\"}").unwrap();
         let cfs = CachedFs::new_shared(Arc::new(DirCache::new()));
         assert!(cfs.read_to_string(&at).unwrap().contains(MISSING_BASE));

@@ -169,7 +169,8 @@ impl TailwindInfo {
             }
         }
         if !t.config_files.is_empty() {
-            // v3: `content` globs from the config; read them statically where possible.
+            // v3: `content` globs from the config; read them statically where
+            // possible.
             for c in &t.config_files {
                 let l = crate::jsconfig::load(c, crate::jsconfig::LoadOptions::default());
                 let mut got = false;

@@ -580,7 +580,8 @@ fn unsupported_modes_and_policy_fail_before_traffic_or_storage() {
             assert_eq!(f.run(&u, &flags).unwrap(), 0);
             assert_eq!(u.hits(), 3);
         } else if flags == ["--check"] {
-            // Like --check --tools-only: nothing installed is an error, read-only.
+            // Like --check --tools-only: nothing installed is an error,
+            // read-only.
             let result = f.run(&u, &flags);
             assert!(result.is_err() && !matches!(result, Err(Error::NotImplemented)));
             assert_eq!(u.hits(), 0);
@@ -850,7 +851,8 @@ fn telemetry_report_counts_artifact_bytes_and_reuse() {
         tools_installed,
         tools_reused,
     };
-    // First ready state downloads both verified artifacts; a repeat reuses them.
+    // First ready state downloads both verified artifacts; a repeat reuses
+    // them.
     let artifacts = (f.node.len() + f.pnpm.len()) as u64;
     assert_eq!(run(FROZEN), (Ok(0), ready(artifacts, 2, 0)));
     assert_eq!(run(FROZEN), (Ok(0), ready(0, 0, 2)));

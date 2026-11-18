@@ -474,9 +474,9 @@ fn test_multi_level_task_extends_false() {
     // pkg-b excludes "lint" task via extends: false
     // pkg-a extends pkg-b
     //
-    // Correct behavior: pkg-a should NOT see "lint" because exclusions propagate
-    // through the extends chain. When pkg-b excludes "lint", all packages that
-    // extend pkg-b (like pkg-a) will also not see "lint".
+    // Correct behavior: pkg-a should NOT see "lint" because exclusions
+    // propagate through the extends chain. When pkg-b excludes "lint", all
+    // packages that extend pkg-b (like pkg-a) will also not see "lint".
     let turbo_jsons = vec![
         (
             PackageName::Root,
@@ -517,7 +517,8 @@ fn test_multi_level_task_extends_false() {
 
     let loader = TestTurboJsonLoader::new(turbo_jsons);
 
-    // pkg-a should NOT see lint because exclusions propagate through extends chain
+    // pkg-a should NOT see lint because exclusions propagate through extends
+    // chain
     let mut tasks = HashSet::new();
     let mut visited = HashSet::new();
     collect_tasks_from_extends_chain(
@@ -1023,7 +1024,8 @@ fn test_add_all_tasks_with_transit_node() {
     let loader = TestTurboJsonLoader::new(turbo_jsons);
 
     // Simulate what devtools does:
-    // - Collect task keys from turbo.json (type-check, transit - both without //#)
+    // - Collect task keys from turbo.json (type-check, transit - both without
+    //   //#)
     // - Also add //#type-check because it's in root package.json scripts
     // The key is that //#type-check is enabled but //#transit is NOT explicitly
     // enabled - it only has a definition in turbo.json.
@@ -1612,8 +1614,8 @@ fn test_cyclic_extends_with_task_exclusion() {
 fn test_task_definition_chain_with_extends_false_in_intermediate() {
     // Scenario:
     // - Root turbo.json: defines build: { cache: true, outputs: ["dist/**"] }
-    // - shared-config/turbo.json: extends root, defines build: { extends: false,
-    //   cache: false }
+    // - shared-config/turbo.json: extends root, defines build: { extends:
+    //   false, cache: false }
     // - app/turbo.json: extends shared-config, empty tasks
     //
     // Expected: app#build should use shared-config's cache: false, NOT root's
@@ -1665,7 +1667,8 @@ fn test_task_definition_chain_with_extends_false_in_intermediate() {
     let engine_builder = EngineBuilder::new(&repo_root, &package_graph, &loader, false)
         .with_future_flags(FutureFlags::default());
 
-    // Verify task_definition_chain gets definitions from shared-config, not root
+    // Verify task_definition_chain gets definitions from shared-config, not
+    // root
     let task_name = TaskName::from("build");
     let task_id = TaskId::try_from("app#build").unwrap();
     let task_id_spanned = Spanned::new(task_id);

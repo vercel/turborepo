@@ -690,8 +690,8 @@ impl<'s> Lexer<'s> {
             self.try_depth -= 1;
         }
         self.ternary = c.saved_ternary;
-        // Code contexts (brackets, braces, `${`) are only pushed in code mode, so
-        // popping one returns to code mode.
+        // Code contexts (brackets, braces, `${`) are only pushed in code mode,
+        // so popping one returns to code mode.
         self.jsx_top = matches!(
             c.kind,
             CtxKind::JsxAttr | CtxKind::JsxChild | CtxKind::JsxTag | CtxKind::JsxChildren
@@ -872,7 +872,8 @@ impl<'s> Lexer<'s> {
                         let start = self.pos;
                         self.pos = memchr::memchr2(b'\n', b'\r', &src[start..])
                             .map_or(src.len(), |i| start + i);
-                        // Only before any code: `last` is still the start-of-input marker.
+                        // Only before any code: `last` is still the
+                        // start-of-input marker.
                         if self.last == TokKind::Eof && src.get(start + 2) == Some(&b'/') {
                             return Some(Token {
                                 start: start as u32,
@@ -984,7 +985,8 @@ impl<'s> Lexer<'s> {
                 (Some(b'='), Some(b'=')) => self.punct(start, 3, TokKind::Op),
                 (Some(b'='), _) => self.punct(start, 2, TokKind::Op),
                 _ => {
-                    // Glued to the previous token: no whitespace or comment in between.
+                    // Glued to the previous token: no whitespace or comment in
+                    // between.
                     let glued = start > 0
                         && !matches!(
                             src[start - 1],
@@ -1084,7 +1086,8 @@ impl<'s> Lexer<'s> {
             {
                 i += 1;
             }
-            // A non-ASCII byte continues the identifier unless it starts whitespace.
+            // A non-ASCII byte continues the identifier unless it starts
+            // whitespace.
             match src.get(i) {
                 Some(&c) if c >= 0x80 && unicode_ws_len(&src[i..]) == 0 => i += 1,
                 _ => break,
@@ -1130,8 +1133,8 @@ impl<'s> Lexer<'s> {
     /// the same tokens as filtering the full token stream.
     #[inline(never)]
     pub fn next_matching_top(&mut self, mask: u64, top_mask: u64) -> Token {
-        // Bit 0 (`Kw::None`) means "may be a dynamic trigger word"; it is never a
-        // keyword.
+        // Bit 0 (`Kw::None`) means "may be a dynamic trigger word"; it is never
+        // a keyword.
         let mask = if self.dyn_filter.is_some() {
             mask | 1
         } else {
@@ -1149,10 +1152,11 @@ impl<'s> Lexer<'s> {
     /// normalized).
     fn next_matching_reference(&mut self, mask: u64, top_mask: u64) -> Token {
         let src = self.src;
-        // `done` implies JSX mode or the end of input (see `jsx_fail`), so it needs no
-        // separate check. JSX mode can only be entered or re-entered by the full lexer
-        // (`<` in expression position, a `}` closing a JSX expression container), so
-        // `jsx_top` is checked on entry and after delegating.
+        // `done` implies JSX mode or the end of input (see `jsx_fail`), so it
+        // needs no separate check. JSX mode can only be entered or
+        // re-entered by the full lexer (`<` in expression position, a
+        // `}` closing a JSX expression container), so `jsx_top` is
+        // checked on entry and after delegating.
         'outer: loop {
             while self.jsx_top {
                 let t = self.next_token_inline();
@@ -1382,7 +1386,8 @@ impl<'s> Lexer<'s> {
         let mut i = start + 1;
         let mut flags = 0;
         loop {
-            // Most strings are short: `find_any3` has no setup cost, unlike `memchr3`.
+            // Most strings are short: `find_any3` has no setup cost, unlike
+            // `memchr3`.
             match find_any3(&src[i..], q, b'\\', b'\n') {
                 None => {
                     self.err(start, src.len(), "unterminated string literal");
@@ -1605,7 +1610,8 @@ impl<'s> Lexer<'s> {
             return false;
         }
         if self.dialect.ts {
-            // `<T,>`, `<T extends U>`, `<const T>`: type parameters of a generic arrow.
+            // `<T,>`, `<T extends U>`, `<const T>`: type parameters of a
+            // generic arrow.
             let name_start = i;
             while src.get(i).is_some_and(|&c| IDENT[c as usize]) {
                 i += 1;
@@ -1633,7 +1639,8 @@ impl<'s> Lexer<'s> {
                     while src.get(j).is_some_and(|c| c.is_ascii_whitespace()) {
                         j += 1;
                     }
-                    // `<T extends>` / `<T extends={..}>` / `<T extends/>`: an attribute.
+                    // `<T extends>` / `<T extends={..}>` / `<T extends/>`: an
+                    // attribute.
                     return matches!(src.get(j), Some(b'=' | b'>' | b'/') | None);
                 }
                 _ => {}
@@ -1685,7 +1692,8 @@ impl<'s> Lexer<'s> {
         if self.dialect.jsx == Jsx::Heuristic {
             self.jsx_failed = true;
             self.done = true;
-            // The pass is discarded; ending here keeps `done` cheap to check in the skim.
+            // The pass is discarded; ending here keeps `done` cheap to check in
+            // the skim.
             self.pos = self.src.len();
         } else {
             self.err(at, at, what);

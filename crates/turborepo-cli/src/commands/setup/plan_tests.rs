@@ -469,7 +469,8 @@ fn proposed_creation_drift_and_refresh_match_what_setup_then_writes() {
 #[test]
 fn proposed_first_lock_resolves_rust_alongside_node_and_pnpm() {
     use super::rustup::{FLAGS, TOOLCHAIN, rust_routes, triple};
-    // Node, pnpm, and Rust declarations without turbo.lock, as in this repository.
+    // Node, pnpm, and Rust declarations without turbo.lock, as in this
+    // repository.
     let f = super::first_lock::fresh();
     let root = f.owned.root();
     fs::write(root.join("turbo.json"), FLAGS).unwrap();

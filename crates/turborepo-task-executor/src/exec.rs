@@ -520,8 +520,9 @@ where
             })?;
 
             let mut exit_observer = process.clone();
-            // Report through the run logger, not the task's grouped/cached output:
-            // otherwise a held-open task could hide its own waiting diagnostic.
+            // Report through the run logger, not the task's grouped/cached
+            // output: otherwise a held-open task could hide its own
+            // waiting diagnostic.
             let log =
                 turborepo_log::log(turborepo_log::Source::turbo(turborepo_log::Subsystem::Run));
             let result = wait_for_output(

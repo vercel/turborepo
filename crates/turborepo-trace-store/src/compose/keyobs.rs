@@ -55,7 +55,8 @@ impl Graph {
                 above.entry(dir).or_default().push(i as u32);
             }
         }
-        // Every record of every shard is in the string table, key sets included.
+        // Every record of every shard is in the string table, key sets
+        // included.
         let strings = &self.tables().strings;
         if !exact
             .keys()
@@ -76,7 +77,8 @@ impl Graph {
                     .iter()
                     .map(|g| {
                         let mut hit: Vec<u32> = Vec::new();
-                        // A set of the framework pass is no part of the question.
+                        // A set of the framework pass is no part of the
+                        // question.
                         if g.framework {
                             return hit;
                         }
@@ -204,8 +206,9 @@ impl Graph {
         if self.tables().strings.find(path).is_none() {
             return Vec::new();
         }
-        // Per shard: the config entries that are the loader's view of the manifest, and
-        // the ones that are the manifest read any other way.
+        // Per shard: the config entries that are the loader's view of the
+        // manifest, and the ones that are the manifest read any other
+        // way.
         let entries: Vec<(Vec<u32>, Vec<u32>)> = self
             .shards
             .par_iter()

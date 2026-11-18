@@ -71,8 +71,9 @@ fn installed_wrapper_resolves_native_binary_and_repository_local_handoff() {
     ] {
         let mut command = launcher.command(entry, cwd.path());
         command.args(["bin", "-vv"]);
-        // These must be removed, not allowed to bypass optional-package resolution.
-        // The real test process need not mutate its environment to check that.
+        // These must be removed, not allowed to bypass optional-package
+        // resolution. The real test process need not mutate its
+        // environment to check that.
         assert!(
             command
                 .get_envs()
@@ -161,7 +162,8 @@ fn wrapper_leaves_the_console_to_exec_commands() {
     use std::{io::Write, process::Stdio};
 
     // On Windows, a wrapper that owns Ctrl+C also reads stdin in raw mode, so
-    // the exec'd command would lose its console. Evaluate the shipped predicate.
+    // the exec'd command would lose its console. Evaluate the shipped
+    // predicate.
     let source = fs::read_to_string(common::manifest_dir().join("../../packages/turbo/bin/turbo"))
         .unwrap()
         .replace("\r\n", "\n");

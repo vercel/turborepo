@@ -249,7 +249,8 @@ impl TurboJson {
         };
 
         let mut turbo_json = TurboJson::try_from(raw_turbo_json)?;
-        // Override with root's future flags (only root turbo.json can define them)
+        // Override with root's future flags (only root turbo.json can define
+        // them)
         turbo_json.future_flags = future_flags;
         Ok(Some(turbo_json))
     }
@@ -338,8 +339,9 @@ fn gather_env_vars(
         let value: Spanned<String> = value.map(|v| v.into());
         if value.starts_with(ENV_PIPELINE_DELIMITER) {
             let (span, text) = value.span_and_text("turbo.json");
-            // Hard error to help people specify this correctly during migration.
-            // TODO: Remove this error after we have run summary.
+            // Hard error to help people specify this correctly during
+            // migration. TODO: Remove this error after we have run
+            // summary.
             return Err(Error::InvalidEnvPrefix(Box::new(InvalidEnvPrefixError {
                 key: key.to_string(),
                 value: value.into_inner(),
@@ -382,7 +384,8 @@ impl TaskInputsFromProcessed for turborepo_types::TaskInputs {
         }
 
         // Resolve all globs with the turbo_root path
-        // Absolute path validation was already done during ProcessedGlob creation
+        // Absolute path validation was already done during ProcessedGlob
+        // creation
         let globs = inputs.resolve(turbo_root_path);
         let default = inputs.default;
         let jit_globs = inputs.resolve_jit(turbo_root_path);
@@ -498,8 +501,8 @@ mod tests {
             }
         }))
         .unwrap();
-        // We do this comparison manually so we don't compare the `task_name_range`
-        // fields, which are expected to be different
+        // We do this comparison manually so we don't compare the
+        // `task_name_range` fields, which are expected to be different
         let pruned_pipeline = pruned_json.tasks.unwrap();
         let expected_pipeline = expected.tasks.unwrap();
         for (
@@ -711,8 +714,8 @@ mod tests {
         let future_flags = raw_turbo_json.future_flags.as_ref().unwrap();
         assert_eq!(future_flags.as_inner(), &FutureFlags::default());
 
-        // Verify that the futureFlags field doesn't cause errors during conversion to
-        // TurboJson
+        // Verify that the futureFlags field doesn't cause errors during
+        // conversion to TurboJson
         let turbo_json = TurboJson::try_from(raw_turbo_json);
         assert!(turbo_json.is_ok());
     }
@@ -759,8 +762,8 @@ mod tests {
         let future_flags = raw_turbo_json.future_flags.as_ref().unwrap();
         assert!(future_flags.as_inner().errors_only_show_hash);
 
-        // Verify that the futureFlags field doesn't cause errors during conversion to
-        // TurboJson
+        // Verify that the futureFlags field doesn't cause errors during
+        // conversion to TurboJson
         let turbo_json = TurboJson::try_from(raw_turbo_json);
         assert!(turbo_json.is_ok());
         assert!(turbo_json.unwrap().future_flags.errors_only_show_hash);
@@ -1238,7 +1241,8 @@ mod tests {
             .try_into()
             .unwrap();
 
-        // Before resolve: top-level fields should be None, global should be Some
+        // Before resolve: top-level fields should be None, global should be
+        // Some
         assert!(raw.global.is_some());
         assert!(raw.global_dependencies.is_none());
         assert!(raw.ui.is_none());

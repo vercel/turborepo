@@ -179,7 +179,8 @@ impl ActivationPlan {
         let version =
             |tool: &Tool| semver::Version::parse(&tool.version).map_err(|_| Error::InvalidLock);
         let mut tools = Vec::new();
-        // Python- and Go-only repositories lock no Node; pnpm still requires it.
+        // Python- and Go-only repositories lock no Node; pnpm still requires
+        // it.
         let node = if lock.tools().contains_key("node") {
             let node = NodePlan::from_lock(lock, platform).map_err(|_| Error::InvalidLock)?;
             if !sources

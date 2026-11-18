@@ -575,8 +575,8 @@ impl LanguageSet {
     pub fn by_extension(&self, path: &Path) -> Option<usize> {
         use crate::os::OsStrExt;
         let name = path.file_name()?.as_bytes();
-        // Candidate suffixes after each '.', longest first. A leading dot (dotfile) is
-        // not an extension separator.
+        // Candidate suffixes after each '.', longest first. A leading dot
+        // (dotfile) is not an extension separator.
         for (i, _) in name.iter().enumerate().skip(1).filter(|(_, b)| **b == b'.') {
             let ext = &name[i + 1..];
             if ext.is_empty() {

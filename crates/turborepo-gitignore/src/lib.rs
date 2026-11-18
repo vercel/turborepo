@@ -36,8 +36,8 @@ pub fn ensure_turbo_is_gitignored(repo_root: &AbsoluteSystemPath) -> Result<(), 
             opts.read(true).write(true).append(true);
             let mut gitignore = &gitignore_path.open_with_options(opts)?;
 
-            // write with a preceding newline just in case the .gitignore file doesn't end
-            // with a newline
+            // write with a preceding newline just in case the .gitignore file
+            // doesn't end with a newline
             writeln!(gitignore, "\n{}", get_ignore_string())?;
         }
     }
@@ -77,7 +77,8 @@ mod tests {
 
         ensure_turbo_is_gitignored(repo_root).expect("Failed to ensure turbo is gitignored");
 
-        // Verify that the .gitignore file exists and contains the expected entry
+        // Verify that the .gitignore file exists and contains the expected
+        // entry
         let gitignore_path = repo_root.join_component(GITIGNORE_FILE);
         assert!(gitignore_path.exists());
 
@@ -106,7 +107,8 @@ mod tests {
 
         ensure_turbo_is_gitignored(repo_root).expect("Failed to ensure turbo is gitignored");
 
-        // Verify that the .gitignore file exists and contains the expected entry
+        // Verify that the .gitignore file exists and contains the expected
+        // entry
         let gitignore_path = repo_root.join_component(GITIGNORE_FILE);
         assert!(gitignore_path.exists());
 
@@ -134,7 +136,8 @@ mod tests {
 
         ensure_turbo_is_gitignored(repo_root).expect("Failed to ensure turbo is gitignored");
 
-        // Verify that the .gitignore file exists and contains the expected entry
+        // Verify that the .gitignore file exists and contains the expected
+        // entry
         let gitignore_path = repo_root.join_component(GITIGNORE_FILE);
         assert!(gitignore_path.exists());
 
@@ -160,7 +163,8 @@ mod tests {
 
         ensure_turbo_is_gitignored(repo_root).expect("Failed to ensure turbo is gitignored");
 
-        // Verify that the .gitignore file exists and contains the expected entry
+        // Verify that the .gitignore file exists and contains the expected
+        // entry
         let gitignore_path = repo_root.join_component(GITIGNORE_FILE);
         assert!(gitignore_path.exists());
 
@@ -187,7 +191,8 @@ mod tests {
 
         ensure_turbo_is_gitignored(repo_root).expect("Failed to ensure turbo is gitignored");
 
-        // Verify that the .gitignore file exists and contains the expected entry
+        // Verify that the .gitignore file exists and contains the expected
+        // entry
         let gitignore_path = repo_root.join_component(GITIGNORE_FILE);
         assert!(gitignore_path.exists());
 

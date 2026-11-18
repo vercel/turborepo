@@ -209,8 +209,8 @@ impl ProcessManager {
 
     /// Construct a process manager and infer if pty should be used
     pub fn infer() -> Self {
-        // Only use PTY if we're not on windows and we're currently hooked up to a
-        // in a TTY
+        // Only use PTY if we're not on windows and we're currently hooked up to
+        // a in a TTY
         let use_pty = !cfg!(windows) && std::io::stdout().is_terminal();
         Self::new(use_pty)
     }
@@ -235,8 +235,9 @@ impl ProcessManager {
     /// Returns whether or not closing a child's stdin will result in it
     /// immediately exiting.
     pub fn closing_stdin_ends_process(&self) -> bool {
-        // Processes spawned hooked up to ConPTY on Windows will immediately exit
-        // if their stdin is closed. We avoid closing stdin in this case.
+        // Processes spawned hooked up to ConPTY on Windows will immediately
+        // exit if their stdin is closed. We avoid closing stdin in this
+        // case.
         cfg!(windows) && self.use_pty
     }
 }
@@ -325,10 +326,12 @@ impl ProcessManager {
         let children_to_stop: Vec<_> = {
             let mut lock = self.lock_state();
 
-            // If we're closing, return early - close() will stop all children and they
-            // should report Shutdown. By checking is_closing under the lock, we ensure
-            // mutual exclusion: either close() runs first (we return early here), or we
-            // run first and remove children before close() can see them.
+            // If we're closing, return early - close() will stop all children
+            // and they should report Shutdown. By checking
+            // is_closing under the lock, we ensure
+            // mutual exclusion: either close() runs first (we return early
+            // here), or we run first and remove children before
+            // close() can see them.
             if lock.is_closing {
                 return;
             }
@@ -381,8 +384,9 @@ impl ProcessManager {
             lock.is_closing = true;
 
             for child in lock.children.values().flatten() {
-                // Mark each child as closing so it knows this is a shutdown, not a restart.
-                // This is done under the lock to ensure mutual exclusion with stop_tasks().
+                // Mark each child as closing so it knows this is a shutdown,
+                // not a restart. This is done under the lock to
+                // ensure mutual exclusion with stop_tasks().
                 child.set_closing();
                 let child = child.clone();
                 set.spawn(async move {

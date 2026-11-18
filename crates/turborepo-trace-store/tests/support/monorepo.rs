@@ -75,8 +75,8 @@ pub fn backdate(root: &Path, secs: u64) -> io::Result<()> {
                 walk(&e?.path(), t)?;
             }
         }
-        // Directories last: listing them does not change their mtime, setting children
-        // does not either, but keep the order obvious.
+        // Directories last: listing them does not change their mtime, setting
+        // children does not either, but keep the order obvious.
         fs::File::open(p)?.set_modified(t)
     }
     walk(root, t)
@@ -155,7 +155,8 @@ impl Monorepo {
                 let mut ws_deps: Vec<usize> = if i == 0 {
                     Vec::new()
                 } else {
-                    // Mostly nearby lower packages, sometimes a popular low-index one.
+                    // Mostly nearby lower packages, sometimes a popular
+                    // low-index one.
                     (0..1 + rng.below(4))
                         .map(|_| {
                             if rng.below(3) == 0 {
@@ -314,8 +315,9 @@ impl Monorepo {
                 scripts.push_str(",\n    \"generate\": \"prisma generate\"");
             }
             if self.hubs && i % 15 == 6 {
-                // A repo-wide membership hub repeated across packages (knip lists the whole
-                // repository from every package that runs it).
+                // A repo-wide membership hub repeated across packages (knip
+                // lists the whole repository from every package
+                // that runs it).
                 scripts.push_str(&format!(
                     ",\n    \"lint:unused\": \"knip --directory {up} --workspace {}\"",
                     p.dir
@@ -347,7 +349,8 @@ impl Monorepo {
                 ),
                 &mut st,
             )?;
-            // Build output (gitignored, outside the walk): what a deep listing enters.
+            // Build output (gitignored, outside the walk): what a deep listing
+            // enters.
             for c in 0..self.dist_dirs {
                 put(
                     &format!("{}/dist/chunks/c{c}/index.js", p.dir),

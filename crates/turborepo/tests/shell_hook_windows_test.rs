@@ -117,7 +117,8 @@ fn journey(shell: &str) {
     assert_eq!(a, b);
     let remove = b.parent().unwrap().to_owned();
     let (a, b) = (a.display().to_string(), b.display().to_string());
-    // Nested, flagged, never set up: untrusted. Flag off: ignored even if set up.
+    // Nested, flagged, never set up: untrusted. Flag off: ignored even if set
+    // up.
     repo(&temp.join(r"a\vendor\c"), true, None);
     repo(&temp.join("off"), false, Some(&store));
     fs::create_dir(temp.join("plain")).unwrap();

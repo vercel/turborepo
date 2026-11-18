@@ -159,7 +159,8 @@ const NONE: [&str; 0] = [];
 fn type_only_change_selects_no_transpiled_test() {
     let d = repo(&[]);
     let r = d.path();
-    // A new field, a new interface, a new alias and a comment: no runtime change.
+    // A new field, a new interface, a new alias and a comment: no runtime
+    // change.
     write(
         r,
         "src/types.ts",
@@ -184,8 +185,8 @@ fn type_only_change_selects_no_transpiled_test() {
     assert_eq!(v["pruning"]["erased"], serde_json::json!(["src/types.ts"]));
     assert_eq!(v["pruning"]["erased_skipped"][0]["path"], "src/types.ts");
     assert_eq!(v["pruning"]["erased_skipped"][0]["entries_skipped"], 1);
-    // The off switches. Without the erased-equal rule the change is still found to
-    // be one of type exports only, which `model.ts` reads as types
+    // The off switches. Without the erased-equal rule the change is still found
+    // to be one of type exports only, which `model.ts` reads as types
     // (`turborepo_trace_lang_js::symbols`); without that as well, it is a
     // change of everything `types.ts` exports.
     assert_eq!(affected_env(r, &[("TURBO_TRACE_DEBUG_ERASE", "0")]), NONE);

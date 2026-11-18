@@ -383,8 +383,9 @@ impl<'s> Recognizer<'s, '_> {
         let tree = Tree::new(&toks);
         let before = self.ex.refs.len();
         if want.anchors {
-            // Bindings declared inside functions ended with their scope in the main pass;
-            // the evaluator modules (`path`, `url`, ...) are rebound for the whole file.
+            // Bindings declared inside functions ended with their scope in the
+            // main pass; the evaluator modules (`path`, `url`, ...)
+            // are rebound for the whole file.
             let saved = self.apis.len();
             self.local_path_bindings(&toks);
             self.deep_assets(&toks, &tree, before);
@@ -406,7 +407,8 @@ impl<'s> Recognizer<'s, '_> {
             self.deep_path_args(&toks, &tree);
         }
         if self.ex.refs.len() > before {
-            // Keep source order (stable: same-start references keep their order).
+            // Keep source order (stable: same-start references keep their
+            // order).
             self.ex.refs.sort_by_key(|r| r.span.start);
         }
     }
@@ -558,9 +560,9 @@ impl<'s> Recognizer<'s, '_> {
         let mut seen: HashSet<String> = HashSet::new();
         let mut last = Span::default();
         let mut emitted = 0;
-        // Function-local `const|let|var NAME = <anchored>` bindings, live until their
-        // block closes: (token index where the scope ends, name, the shadowed
-        // `vars` entry).
+        // Function-local `const|let|var NAME = <anchored>` bindings, live until
+        // their block closes: (token index where the scope ends, name,
+        // the shadowed `vars` entry).
         let mut locals: Vec<Local<'s>> = Vec::new();
         for k in 0..toks.len() {
             while locals.last().is_some_and(|l| l.0 <= k) {
@@ -601,9 +603,10 @@ impl<'s> Recognizer<'s, '_> {
             let Some((a, b, out)) = self.grow(toks, tree, k) else {
                 continue;
             };
-            // `const NAME = <this expression>` inside a function: NAME is an anchor too,
-            // within its block (shadowing beyond that is not tracked; values read through
-            // it carry a record).
+            // `const NAME = <this expression>` inside a function: NAME is an
+            // anchor too, within its block (shadowing beyond that
+            // is not tracked; values read through it carry a
+            // record).
             if a >= 3
                 && toks[a - 1].kind == TokKind::Assign
                 && toks[a - 2].kind == TokKind::Ident
@@ -636,8 +639,8 @@ impl<'s> Recognizer<'s, '_> {
                 last = span;
                 continue;
             }
-            // The argument of `createRequire(...)` says where a `require` function searches
-            // from: Node does not read that path.
+            // The argument of `createRequire(...)` says where a `require`
+            // function searches from: Node does not read that path.
             if a >= 2
                 && toks[a - 1].kind == TokKind::LParen
                 && toks[a - 2].text(src) == b"createRequire"
@@ -724,7 +727,8 @@ impl<'s> Recognizer<'s, '_> {
             }
             out
         };
-        // `name = <head> {`: the binding name before the head starting at `start`.
+        // `name = <head> {`: the binding name before the head starting at
+        // `start`.
         let assigned = |mut start: usize| -> Option<&'s str> {
             if start > 0 && toks[start - 1].text(src) == b"async" {
                 start -= 1;
@@ -788,7 +792,8 @@ impl<'s> Recognizer<'s, '_> {
             let Ok(param) = std::str::from_utf8(toks[k + 2].text(src)) else {
                 continue;
             };
-            // A concise arrow body (`name => require(name)`), else the enclosing `{` body.
+            // A concise arrow body (`name => require(name)`), else the
+            // enclosing `{` body.
             let concise = self
                 .element(toks, tree, k)
                 .map(|(a, _)| a)

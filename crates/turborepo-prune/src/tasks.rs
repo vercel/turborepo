@@ -54,8 +54,9 @@ pub(super) fn retain_task_dependencies(
         // Positional scopes are packages, not task selectors: conservatively
         // discover every task in each retained package, including inherited and
         // toolchain-registered tasks. Do not load unrelated package configs.
-        // Root stays an implicit install seed, not a task entrypoint; root tasks
-        // are traversed only when a retained package's tasks depend on them.
+        // Root stays an implicit install seed, not a task entrypoint; root
+        // tasks are traversed only when a retained package's tasks
+        // depend on them.
         let workspaces = retained
             .iter()
             .filter(|package| !matches!(package, PackageName::Root))

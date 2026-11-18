@@ -293,8 +293,8 @@ impl GlobSet {
         })
     }
 
-    // delegates to from_raw, but filters the globs into inclusions and exclusions
-    // first
+    // delegates to from_raw, but filters the globs into inclusions and
+    // exclusions first
     pub fn from_raw_unfiltered(raw: Vec<String>) -> Result<Self, GlobError> {
         let (includes, excludes): (Vec<_>, Vec<_>) = {
             let mut includes = vec![];
@@ -459,8 +459,8 @@ impl GlobWatcher {
                 return;
             };
 
-            // if the receiver is closed, it means the glob watcher is closed and we
-            // probably don't want to start the glob tracker
+            // if the receiver is closed, it means the glob watcher is closed
+            // and we probably don't want to start the glob tracker
             let (query_ch, query_recv) = mpsc::channel(128);
             if query_ch_tx.send(Some(query_ch)).is_err() {
                 tracing::debug!("no queryers for glob watcher, exiting");
@@ -767,8 +767,8 @@ fn dynamic_watch_scope(
             return false;
         };
 
-        // Queries are ordered by cookie events, so cookies must remain in scope even
-        // when no output globs have been registered yet.
+        // Queries are ordered by cookie events, so cookies must remain in scope
+        // even when no output globs have been registered yet.
         if cookie_root.relation_to_path(&path) == PathRelation::Parent {
             return true;
         }
@@ -835,8 +835,8 @@ impl GlobTracker {
                 let hash = registration.hash.clone();
                 let glob_set = registration.glob_set.clone();
                 debug!("watching globs {:?} for hash {}", glob_set, hash);
-                // Assume cookie handling has happened external to this component.
-                // Other tasks _could_ write to the
+                // Assume cookie handling has happened external to this
+                // component. Other tasks _could_ write to the
                 // same output directories, however we are relying on task
                 // execution dependencies to prevent that.
                 let Some((previous, removed_path)) = ({
@@ -880,9 +880,10 @@ impl GlobTracker {
                 mut candidates,
                 resp,
             } => {
-                // Assume cookie handling has happened external to this component.
-                // Build a set of candidate globs that *may* have changed.
-                // An empty set translates to all globs have not changed.
+                // Assume cookie handling has happened external to this
+                // component. Build a set of candidate globs
+                // that *may* have changed. An empty set
+                // translates to all globs have not changed.
                 let state = self
                     .state
                     .read()
@@ -1089,8 +1090,9 @@ fn invalidate_path_candidates(
 
             hashes_for_glob.retain(|hash| {
                 let Some(active) = state.active.get(hash) else {
-                    // This shouldn't ever happen, but if we aren't tracking this hash at
-                    // all, we don't need to keep it in the set of hashes that are relevant
+                    // This shouldn't ever happen, but if we aren't tracking
+                    // this hash at all, we don't need to
+                    // keep it in the set of hashes that are relevant
                     // for this glob.
                     debug_assert!(
                         false,
@@ -1317,7 +1319,8 @@ mod test {
         state.pending.insert(registration.id, registration.clone());
 
         // Deterministically model the boundary that used to race: state was
-        // committed, but the response had not yet been observed at the deadline.
+        // committed, but the response had not yet been observed at the
+        // deadline.
         assert!(commit_registration_state(&mut state, &registration).is_some());
         registration.cancelled.store(true, Ordering::Release);
         assert!(remove_registration_state(&mut state, registration.id).is_some());
@@ -2127,7 +2130,8 @@ mod test {
             .unwrap();
         assert!(results.is_empty());
 
-        // Make a change that is excluded in one of the hashes but not in the other
+        // Make a change that is excluded in one of the hashes but not in the
+        // other
         repo_root
             .join_components(&["my-pkg", ".next", "cache", "foo"])
             .create_with_contents("hello")
@@ -2140,8 +2144,8 @@ mod test {
         let expected = HashSet::from_iter(["my-pkg/.next/**".to_string()]);
         assert_eq!(results, expected);
 
-        // The second hash which excludes the change should still not have any changed
-        // globs
+        // The second hash which excludes the change should still not have any
+        // changed globs
         let results = glob_watcher
             .get_changed_globs(second_hash.clone(), second_candidates.clone(), timeout)
             .await
@@ -2334,7 +2338,8 @@ mod test {
             .await
             .unwrap();
 
-        // Write a file that matches the EXCLUSION glob — should not trigger change
+        // Write a file that matches the EXCLUSION glob — should not trigger
+        // change
         repo_root
             .join_components(&["my-pkg", ".next", "cache", "cached-file"])
             .create_with_contents("cached data")

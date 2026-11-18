@@ -452,7 +452,8 @@ esac
                     } else {
                         kill(target, signal).unwrap();
                     }
-                    // finish() also waits until the managed command itself is gone.
+                    // finish() also waits until the managed command itself is
+                    // gone.
                     let output = process.finish(TIMEOUT);
                     let stderr = String::from_utf8_lossy(&output.stderr);
                     assert_eq!(
@@ -494,7 +495,8 @@ esac
                 let pid = wait_for(&home.join("ready"));
                 process.track_task(pid);
                 let entrypoint = process.child.id() as i32;
-                // The wrapper is a Node parent; its native turbo became the command.
+                // The wrapper is a Node parent; its native turbo became the
+                // command.
                 let exec = match entry {
                     Entrypoint::NpmWrapper => parent(pid),
                     _ => pid,

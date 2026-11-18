@@ -237,8 +237,8 @@ fn jest_tests_and_inputs() {
     );
     assert_eq!(o.status.code(), Some(1));
 
-    // A deleted file: the graph is refreshed after the change, where a.js probes
-    // it.
+    // A deleted file: the graph is refreshed after the change, where a.js
+    // probes it.
     std::fs::remove_file(r.join("src/b.js")).unwrap();
     write(r, "changes.txt", "D\tsrc/b.js\n");
     let o = ok(
@@ -296,7 +296,8 @@ fn config_edits_invalidate_framework_inputs() {
          '^@app/(.*)$': '<rootDir>/src/other/$1' },\n};\n",
     );
     assert_eq!(affected(r, &["src/other/mapped.js"]), ["test/m.test.js"]);
-    // Drop the setup file from the config: it stops being an input of every test.
+    // Drop the setup file from the config: it stops being an input of every
+    // test.
     write(
         r,
         "jest.config.js",
@@ -375,7 +376,8 @@ fn lockfile_diffs_mark_packages() {
         ],
     );
     assert_eq!(lines(&o), ["test/a.test.js", "test/c.test.js"]);
-    // The same with --changed-from and --since (the harness's selector template).
+    // The same with --changed-from and --since (the harness's selector
+    // template).
     write(r, "changes.txt", "M\tpackage-lock.json\n");
     let o = ok(
         r,
@@ -761,8 +763,9 @@ fn only_the_governing_tsconfig_is_an_input() {
         write(r, c, edited);
         assert!(since(r).is_empty(), "{c}: {:?}", since(r));
         git(r, &["checkout", "-q", "--", c]);
-        // Named as changed without a base revision, nothing says what the project
-        // included before: the files that consulted it count as changed.
+        // Named as changed without a base revision, nothing says what the
+        // project included before: the files that consulted it count as
+        // changed.
         assert_eq!(affected(r, &[c]), test, "{c} without a base");
     }
     // A config added between the file and its governing config is probed.
@@ -846,7 +849,8 @@ fn covered_uncertainty_selects_only_inside_its_scope() {
         ]
     );
 
-    // Reported: --explain names the scope or the ignored eval, JSON counts them.
+    // Reported: --explain names the scope or the ignored eval, JSON counts
+    // them.
     let ex = ok(
         r,
         &[
@@ -933,8 +937,8 @@ fn unresolved_imports_and_env_reads_are_not_open() {
     write(r, "docs/readme.txt", "x");
     ok(r, &["graph", "build"]);
 
-    // An unrelated change selects only the test that loads a module named by the
-    // environment: that one executes code nothing bounds.
+    // An unrelated change selects only the test that loads a module named by
+    // the environment: that one executes code nothing bounds.
     assert_eq!(affected(r, &["docs/readme.txt"]), ["test/env-load.test.js"]);
     assert_eq!(
         affected(r, &["src/plain.js"]),

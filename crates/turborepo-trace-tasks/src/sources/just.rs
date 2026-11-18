@@ -211,7 +211,8 @@ pub fn parse(src: &str) -> Vec<Item> {
         if t.starts_with("unexport ") {
             continue;
         }
-        // Assignment: `[export] name := expr` (possibly continued with an open paren).
+        // Assignment: `[export] name := expr` (possibly continued with an open
+        // paren).
         let (export, body) = match t.strip_prefix("export ") {
             Some(r) => (true, r.trim_start()),
             None => (false, t),
@@ -220,7 +221,8 @@ pub fn parse(src: &str) -> Vec<Item> {
             let n = n.trim();
             if is_ident(n) {
                 let mut expr = e.trim().to_string();
-                // Multi-line expressions: keep reading while parens/brackets are open.
+                // Multi-line expressions: keep reading while parens/brackets
+                // are open.
                 while depth_of(&expr) > 0 && i < lines.len() {
                     expr.push(' ');
                     expr.push_str(lines[i].trim());
@@ -804,8 +806,9 @@ impl Loader {
             shell_ok: true,
             ..Default::default()
         };
-        // Pass 1: settings and variables, in order (just allows forward references, but
-        // static values are almost always defined before use).
+        // Pass 1: settings and variables, in order (just allows forward
+        // references, but static values are almost always defined
+        // before use).
         for (src_file, it) in &items {
             let ecx = EvalCx {
                 vars: &vars,
@@ -1231,8 +1234,9 @@ impl Recognizer for JustCli {
             }
             return Recognition::Full;
         }
-        // Arguments may be recipe names or parameters: every word that names a recipe
-        // resolves (a sound over-approximation); `mod recipe` is also `mod::recipe`.
+        // Arguments may be recipe names or parameters: every word that names a
+        // recipe resolves (a sound over-approximation); `mod recipe` is
+        // also `mod::recipe`.
         for (i, p) in pos.iter().enumerate() {
             let p = p.split_once('=').map_or(*p, |_| "");
             if p.is_empty() {

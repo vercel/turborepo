@@ -235,8 +235,8 @@ impl<'a> Parser<'a> {
         if is_marker_at(0) {
             markers.insert(0, 0);
         }
-        // Segments between markers; a segment counts when it has a non-comment content
-        // line.
+        // Segments between markers; a segment counts when it has a non-comment
+        // content line.
         let has_content = |seg: &[u8]| {
             seg.split(|&c| c == b'\n').any(|line| {
                 let t = line.trim_ascii();
@@ -315,7 +315,8 @@ impl<'a> Parser<'a> {
             return Ok(());
         }
         if !self.at_eol() && self.peek() != Some(b'#') {
-            // A scalar where a mapping was expected: consume it and yield nothing.
+            // A scalar where a mapping was expected: consume it and yield
+            // nothing.
             let _ = self.value(parent_indent)?;
             return Ok(());
         }
@@ -419,8 +420,8 @@ impl<'a> Parser<'a> {
             return Some(ExplicitValue::Missing);
         }
         self.skip_spaces();
-        // `: key: value` starts a block mapping whose keys sit at the column after `:
-        // `.
+        // `: key: value` starts a block mapping whose keys sit at the column
+        // after `: `.
         if !self.at_eol() && self.peek() != Some(b'#') && self.looks_like_key() {
             return Some(ExplicitValue::CompactMap(
                 self.pos - self.line_start(self.pos),
@@ -711,7 +712,8 @@ impl<'a> Parser<'a> {
             if ind <= parent_indent {
                 break;
             }
-            // Continuation line of a multi-line plain scalar (a key there is an error).
+            // Continuation line of a multi-line plain scalar (a key there is an
+            // error).
             self.pos += ind;
             if self.looks_like_key() {
                 return self.err("unexpected mapping key (bad indentation?)");
@@ -772,8 +774,8 @@ impl<'a> Parser<'a> {
             lines.push(&line[bi..]);
             self.pos = (end + 1).min(self.b.len());
         }
-        // Trailing blank lines belong to chomping, and the cursor must not skip past
-        // content.
+        // Trailing blank lines belong to chomping, and the cursor must not skip
+        // past content.
         let mut trailing = 0;
         while lines.last() == Some(&"") {
             lines.pop();

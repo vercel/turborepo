@@ -726,9 +726,9 @@ impl<'a> Matcher<'a> {
     /// Finds the best routes for `pat`; returns whether something matched.
     fn best(&self, pat: &UrlPat, static_only: bool, soft: bool, m: &mut UrlMatch) -> bool {
         let routes = &self.table.routes;
-        // A route whose first segment is a fixed name other than the pattern's first
-        // (fully known) segment cannot match: most routes are ruled out by one
-        // comparison.
+        // A route whose first segment is a fixed name other than the pattern's
+        // first (fully known) segment cannot match: most routes are
+        // ruled out by one comparison.
         let first = pat.lit(0);
         let eligible = |r: &&super::routes::Route| {
             (soft || r.intercept.is_none())
@@ -738,7 +738,8 @@ impl<'a> Matcher<'a> {
                     (Some(super::routes::Seg::Static(v)), Some(l)) if v != l
                 )
         };
-        // The pattern's segments as known text or unknown, once for every route.
+        // The pattern's segments as known text or unknown, once for every
+        // route.
         let parts: Vec<Option<String>> = (0..pat.segs.len()).map(|i| pat.lit(i)).collect();
         let refs: Vec<Option<&str>> = parts.iter().map(|p| p.as_deref()).collect();
         // Heuristic.
@@ -833,8 +834,8 @@ impl<'a> Matcher<'a> {
             m.outcome = Outcome::Routes;
             true
         } else {
-            // Only sound candidates (the heuristic says 404 here; keep looking in later
-            // layers, but remember the candidates).
+            // Only sound candidates (the heuristic says 404 here; keep looking
+            // in later layers, but remember the candidates).
             false
         }
     }

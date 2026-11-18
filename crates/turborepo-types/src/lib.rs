@@ -643,328 +643,6 @@ impl TaskInputs {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn env_mode_display() {
-        assert_eq!(format!("{}", EnvMode::Loose), "loose");
-        assert_eq!(format!("{}", EnvMode::Strict), "strict");
-    }
-
-    #[test]
-    fn output_logs_mode_display() {
-        assert_eq!(format!("{}", OutputLogsMode::Full), "full");
-        assert_eq!(format!("{}", OutputLogsMode::None), "none");
-        assert_eq!(format!("{}", OutputLogsMode::HashOnly), "hash-only");
-        assert_eq!(format!("{}", OutputLogsMode::NewOnly), "new-only");
-        assert_eq!(format!("{}", OutputLogsMode::ErrorsOnly), "errors-only");
-    }
-
-    #[test]
-    fn output_logs_mode_default() {
-        assert_eq!(OutputLogsMode::default(), OutputLogsMode::Full);
-    }
-
-    #[test]
-    fn env_mode_default() {
-        assert_eq!(EnvMode::default(), EnvMode::Strict);
-    }
-
-    #[test]
-    fn task_outputs_default() {
-        let outputs = TaskOutputs::default();
-        assert!(outputs.inclusions.is_empty());
-        assert!(outputs.exclusions.is_empty());
-    }
-
-    #[test]
-    fn explicit_override_requires_authored_inclusions_and_derived_exclusions() {
-        let mut inputs = TaskInputs::default();
-        assert!(inputs.explicit_override_globs().is_none());
-        inputs.derived_globs = vec!["../lib/**".into(), "!../lib/node_modules/**".into()];
-        assert!(inputs.explicit_override_globs().is_none());
-        inputs.globs.push("!excluded/**".into());
-        assert!(inputs.explicit_override_globs().is_none());
-        inputs.globs.push("../lib/node_modules/data.json".into());
-        assert_eq!(
-            inputs.explicit_override_globs(),
-            Some(inputs.globs.as_slice())
-        );
-        inputs.derived_globs.pop();
-        assert!(inputs.explicit_override_globs().is_none());
-    }
-
-    #[test]
-    fn task_inputs_default() {
-        let inputs = TaskInputs::default();
-        assert!(inputs.globs.is_empty());
-        assert!(!inputs.default);
-    }
-
-    #[test]
-    fn task_inputs_new() {
-        let inputs = TaskInputs::new(vec!["src/**".to_string()]);
-        assert_eq!(inputs.globs, vec!["src/**".to_string()]);
-        assert!(!inputs.default);
-    }
-
-    #[test]
-    fn task_inputs_with_default() {
-        let inputs = TaskInputs::new(vec!["src/**".to_string()]).with_default(true);
-        assert_eq!(inputs.globs, vec!["src/**".to_string()]);
-        assert!(inputs.default);
-    }
-
-    #[test]
-    fn test_task_log_filename() {
-        assert_eq!(task_log_filename("build"), "turbo-build.log");
-        assert_eq!(
-            task_log_filename("build:prod"),
-            "turbo-build$colon$prod.log"
-        );
-        assert_eq!(
-            task_log_filename("build:prod:extra"),
-            "turbo-build$colon$prod$colon$extra.log"
-        );
-    }
-
-    #[test]
-    fn test_sharable_workspace_relative_log_file() {
-        let path = sharable_workspace_relative_log_file("build", None);
-        assert_eq!(path.as_str(), ".turbo/turbo-build.log");
-
-        let path = sharable_workspace_relative_log_file("build:prod", None);
-        assert_eq!(path.as_str(), ".turbo/turbo-build$colon$prod.log");
-    }
-
-    #[test]
-    fn scoped_task_logs_are_bounded_portable_and_identity_specific() {
-        let long_name = "long/".repeat(1000);
-        let names = [
-            "@scope/pkg",
-            "example.com/module",
-            "//",
-            "CON",
-            "con",
-            "..",
-            "a/b",
-            "a\\b",
-            "a-b",
-            "root",
-            "unnamed",
-            "a:*?<>|[]{}",
-            "trailing. ",
-            "unicodé/包",
-            long_name.as_str(),
-        ];
-        let mut paths = std::collections::HashSet::new();
-        for name in names {
-            for task in [
-                "build",
-                "build:prod",
-                "build$colon$prod",
-                "../CON",
-                long_name.as_str(),
-            ] {
-                let unix = sharable_workspace_relative_log_file(task, Some(name));
-                assert_eq!(unix, sharable_workspace_relative_log_file(task, Some(name)));
-                let (directory, file) = unix.as_str().rsplit_once('/').unwrap();
-                assert_eq!(directory, ".turbo");
-                assert!(is_scoped_task_log_filename(file));
-                assert!(
-                    file.len()
-                        <= SCOPED_LOG_PREFIX.len()
-                            + SCOPED_LOG_LABEL_MAX_LEN * 2
-                            + 2
-                            + SCOPED_LOG_DIGEST_LEN
-                            + 4
-                );
-                let digest = file
-                    .strip_suffix(".log")
-                    .unwrap()
-                    .rsplit_once('-')
-                    .unwrap()
-                    .1;
-                assert_eq!(digest.len(), SCOPED_LOG_DIGEST_LEN);
-                assert!(digest.bytes().all(|byte| byte.is_ascii_hexdigit()));
-                assert!(paths.insert(unix.as_str().to_lowercase()), "{name}#{task}");
-                assert_eq!(
-                    TaskDefinition::workspace_relative_log_file(task, Some(name)).to_unix(),
-                    unix,
-                );
-            }
-        }
-        // Delimiter-like names must not alias a different identity tuple.
-        assert_ne!(
-            sharable_workspace_relative_log_file("bc", Some("a")),
-            sharable_workspace_relative_log_file("c", Some("ab")),
-        );
-        let task = TaskDefinition::default();
-        assert_ne!(
-            task.hashable_outputs("build", None),
-            task.hashable_outputs("build", Some("app"))
-        );
-        assert_ne!(
-            task.hashable_outputs("build", Some("app")),
-            task.hashable_outputs("build", Some("other"))
-        );
-    }
-
-    #[test]
-    fn scoped_task_log_names_are_readable_and_disambiguated() {
-        assert_eq!(
-            sharable_workspace_relative_log_file("build", Some("@repo/js")).as_str(),
-            ".turbo/turbo-build-repo-js-444eee26cd60b933.log",
-        );
-        assert!(
-            sharable_workspace_relative_log_file("build:prod", Some("example.com/module"))
-                .as_str()
-                .starts_with(".turbo/turbo-build-prod-example-com-module-")
-        );
-        assert!(
-            sharable_workspace_relative_log_file("build", Some("//"))
-                .as_str()
-                .starts_with(".turbo/turbo-build-root-")
-        );
-        let long_prefix = "a".repeat(80);
-        for (left, right) in [
-            ("a/b".to_string(), "a-b".to_string()),
-            (format!("{long_prefix}/one"), format!("{long_prefix}/two")),
-        ] {
-            assert_eq!(scoped_log_label(&left), scoped_log_label(&right));
-            assert_ne!(
-                sharable_workspace_relative_log_file("build", Some(&left)),
-                sharable_workspace_relative_log_file("build", Some(&right)),
-            );
-        }
-        for ordinary in [
-            "notes.log",
-            "turbo-build.log",
-            "turbo-build-app-not-a-digest.log",
-            "turbo-build/app-444eee26cd60b933.log",
-            "turbo--444eee26cd60b933.log",
-        ] {
-            assert!(!is_scoped_task_log_filename(ordinary), "{ordinary}");
-        }
-    }
-
-    #[test]
-    fn test_hashable_outputs_includes_log_file() {
-        let task_def = TaskDefinition {
-            outputs: TaskOutputs {
-                inclusions: vec!["dist/**".to_string()],
-                exclusions: vec!["dist/temp".to_string()],
-            },
-            ..Default::default()
-        };
-
-        let result = task_def.hashable_outputs("build", None);
-
-        // Log file should be included and outputs should be sorted
-        assert!(
-            result
-                .inclusions
-                .contains(&".turbo/turbo-build.log".to_string())
-        );
-        assert!(result.inclusions.contains(&"dist/**".to_string()));
-        assert_eq!(result.exclusions, vec!["dist/temp".to_string()]);
-    }
-
-    #[test]
-    fn test_hashable_outputs_sorts_outputs() {
-        let task_def = TaskDefinition {
-            outputs: TaskOutputs {
-                inclusions: vec!["z-output".to_string(), "a-output".to_string()],
-                exclusions: vec!["z-exclude".to_string(), "a-exclude".to_string()],
-            },
-            ..Default::default()
-        };
-
-        let result = task_def.hashable_outputs("build", None);
-
-        // Should be sorted
-        assert_eq!(
-            result.inclusions,
-            vec![
-                ".turbo/turbo-build.log".to_string(),
-                "a-output".to_string(),
-                "z-output".to_string(),
-            ]
-        );
-        assert_eq!(
-            result.exclusions,
-            vec!["a-exclude".to_string(), "z-exclude".to_string(),]
-        );
-    }
-
-    #[test]
-    fn test_hashable_outputs_escapes_colons() {
-        let task_def = TaskDefinition::default();
-        let result = task_def.hashable_outputs("build:prod", None);
-
-        assert!(
-            result
-                .inclusions
-                .contains(&".turbo/turbo-build$colon$prod.log".to_string())
-        );
-    }
-
-    #[test]
-    fn test_task_definition_ext_workspace_relative_log_file() {
-        let path = TaskDefinition::workspace_relative_log_file("build", None);
-        #[cfg(not(windows))]
-        assert_eq!(path.as_str(), ".turbo/turbo-build.log");
-        #[cfg(windows)]
-        assert_eq!(path.as_str(), ".turbo\\turbo-build.log");
-
-        let path = TaskDefinition::workspace_relative_log_file("build:prod", None);
-        #[cfg(not(windows))]
-        assert_eq!(path.as_str(), ".turbo/turbo-build$colon$prod.log");
-        #[cfg(windows)]
-        assert_eq!(path.as_str(), ".turbo\\turbo-build$colon$prod.log");
-    }
-
-    #[test]
-    fn test_task_outputs_ext_is_empty() {
-        // Empty outputs (only log file)
-        let outputs = TaskOutputs {
-            inclusions: vec![".turbo/turbo-build.log".to_string()],
-            exclusions: vec![],
-        };
-        assert!(outputs.is_empty());
-
-        // Non-empty outputs
-        let outputs = TaskOutputs {
-            inclusions: vec![".turbo/turbo-build.log".to_string(), "dist/**".to_string()],
-            exclusions: vec![],
-        };
-        assert!(!outputs.is_empty());
-
-        // Has exclusions
-        let outputs = TaskOutputs {
-            inclusions: vec![".turbo/turbo-build.log".to_string()],
-            exclusions: vec!["node_modules".to_string()],
-        };
-        assert!(!outputs.is_empty());
-    }
-
-    #[test]
-    fn test_task_outputs_ext_validated_globs() {
-        let outputs = TaskOutputs {
-            inclusions: vec!["dist/**".to_string(), "build/**/*.js".to_string()],
-            exclusions: vec!["dist/temp".to_string()],
-        };
-
-        let inclusions = outputs.validated_inclusions().unwrap();
-        assert_eq!(inclusions.len(), 2);
-
-        let exclusions = outputs.validated_exclusions().unwrap();
-        assert_eq!(exclusions.len(), 1);
-    }
-}
-
 /// Configuration for the experimental `experimentalCI` task key.
 ///
 /// The key accepts either a boolean toggle or an object with arbitrary
@@ -1631,4 +1309,326 @@ pub trait GlobalHashInputs {
     fn framework_inference(&self) -> bool;
     /// Returns the list of dot-env files
     fn dot_env(&self) -> Option<&[RelativeUnixPathBuf]>;
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn env_mode_display() {
+        assert_eq!(format!("{}", EnvMode::Loose), "loose");
+        assert_eq!(format!("{}", EnvMode::Strict), "strict");
+    }
+
+    #[test]
+    fn output_logs_mode_display() {
+        assert_eq!(format!("{}", OutputLogsMode::Full), "full");
+        assert_eq!(format!("{}", OutputLogsMode::None), "none");
+        assert_eq!(format!("{}", OutputLogsMode::HashOnly), "hash-only");
+        assert_eq!(format!("{}", OutputLogsMode::NewOnly), "new-only");
+        assert_eq!(format!("{}", OutputLogsMode::ErrorsOnly), "errors-only");
+    }
+
+    #[test]
+    fn output_logs_mode_default() {
+        assert_eq!(OutputLogsMode::default(), OutputLogsMode::Full);
+    }
+
+    #[test]
+    fn env_mode_default() {
+        assert_eq!(EnvMode::default(), EnvMode::Strict);
+    }
+
+    #[test]
+    fn task_outputs_default() {
+        let outputs = TaskOutputs::default();
+        assert!(outputs.inclusions.is_empty());
+        assert!(outputs.exclusions.is_empty());
+    }
+
+    #[test]
+    fn explicit_override_requires_authored_inclusions_and_derived_exclusions() {
+        let mut inputs = TaskInputs::default();
+        assert!(inputs.explicit_override_globs().is_none());
+        inputs.derived_globs = vec!["../lib/**".into(), "!../lib/node_modules/**".into()];
+        assert!(inputs.explicit_override_globs().is_none());
+        inputs.globs.push("!excluded/**".into());
+        assert!(inputs.explicit_override_globs().is_none());
+        inputs.globs.push("../lib/node_modules/data.json".into());
+        assert_eq!(
+            inputs.explicit_override_globs(),
+            Some(inputs.globs.as_slice())
+        );
+        inputs.derived_globs.pop();
+        assert!(inputs.explicit_override_globs().is_none());
+    }
+
+    #[test]
+    fn task_inputs_default() {
+        let inputs = TaskInputs::default();
+        assert!(inputs.globs.is_empty());
+        assert!(!inputs.default);
+    }
+
+    #[test]
+    fn task_inputs_new() {
+        let inputs = TaskInputs::new(vec!["src/**".to_string()]);
+        assert_eq!(inputs.globs, vec!["src/**".to_string()]);
+        assert!(!inputs.default);
+    }
+
+    #[test]
+    fn task_inputs_with_default() {
+        let inputs = TaskInputs::new(vec!["src/**".to_string()]).with_default(true);
+        assert_eq!(inputs.globs, vec!["src/**".to_string()]);
+        assert!(inputs.default);
+    }
+
+    #[test]
+    fn test_task_log_filename() {
+        assert_eq!(task_log_filename("build"), "turbo-build.log");
+        assert_eq!(
+            task_log_filename("build:prod"),
+            "turbo-build$colon$prod.log"
+        );
+        assert_eq!(
+            task_log_filename("build:prod:extra"),
+            "turbo-build$colon$prod$colon$extra.log"
+        );
+    }
+
+    #[test]
+    fn test_sharable_workspace_relative_log_file() {
+        let path = sharable_workspace_relative_log_file("build", None);
+        assert_eq!(path.as_str(), ".turbo/turbo-build.log");
+
+        let path = sharable_workspace_relative_log_file("build:prod", None);
+        assert_eq!(path.as_str(), ".turbo/turbo-build$colon$prod.log");
+    }
+
+    #[test]
+    fn scoped_task_logs_are_bounded_portable_and_identity_specific() {
+        let long_name = "long/".repeat(1000);
+        let names = [
+            "@scope/pkg",
+            "example.com/module",
+            "//",
+            "CON",
+            "con",
+            "..",
+            "a/b",
+            "a\\b",
+            "a-b",
+            "root",
+            "unnamed",
+            "a:*?<>|[]{}",
+            "trailing. ",
+            "unicodé/包",
+            long_name.as_str(),
+        ];
+        let mut paths = std::collections::HashSet::new();
+        for name in names {
+            for task in [
+                "build",
+                "build:prod",
+                "build$colon$prod",
+                "../CON",
+                long_name.as_str(),
+            ] {
+                let unix = sharable_workspace_relative_log_file(task, Some(name));
+                assert_eq!(unix, sharable_workspace_relative_log_file(task, Some(name)));
+                let (directory, file) = unix.as_str().rsplit_once('/').unwrap();
+                assert_eq!(directory, ".turbo");
+                assert!(is_scoped_task_log_filename(file));
+                assert!(
+                    file.len()
+                        <= SCOPED_LOG_PREFIX.len()
+                            + SCOPED_LOG_LABEL_MAX_LEN * 2
+                            + 2
+                            + SCOPED_LOG_DIGEST_LEN
+                            + 4
+                );
+                let digest = file
+                    .strip_suffix(".log")
+                    .unwrap()
+                    .rsplit_once('-')
+                    .unwrap()
+                    .1;
+                assert_eq!(digest.len(), SCOPED_LOG_DIGEST_LEN);
+                assert!(digest.bytes().all(|byte| byte.is_ascii_hexdigit()));
+                assert!(paths.insert(unix.as_str().to_lowercase()), "{name}#{task}");
+                assert_eq!(
+                    TaskDefinition::workspace_relative_log_file(task, Some(name)).to_unix(),
+                    unix,
+                );
+            }
+        }
+        // Delimiter-like names must not alias a different identity tuple.
+        assert_ne!(
+            sharable_workspace_relative_log_file("bc", Some("a")),
+            sharable_workspace_relative_log_file("c", Some("ab")),
+        );
+        let task = TaskDefinition::default();
+        assert_ne!(
+            task.hashable_outputs("build", None),
+            task.hashable_outputs("build", Some("app"))
+        );
+        assert_ne!(
+            task.hashable_outputs("build", Some("app")),
+            task.hashable_outputs("build", Some("other"))
+        );
+    }
+
+    #[test]
+    fn scoped_task_log_names_are_readable_and_disambiguated() {
+        assert_eq!(
+            sharable_workspace_relative_log_file("build", Some("@repo/js")).as_str(),
+            ".turbo/turbo-build-repo-js-444eee26cd60b933.log",
+        );
+        assert!(
+            sharable_workspace_relative_log_file("build:prod", Some("example.com/module"))
+                .as_str()
+                .starts_with(".turbo/turbo-build-prod-example-com-module-")
+        );
+        assert!(
+            sharable_workspace_relative_log_file("build", Some("//"))
+                .as_str()
+                .starts_with(".turbo/turbo-build-root-")
+        );
+        let long_prefix = "a".repeat(80);
+        for (left, right) in [
+            ("a/b".to_string(), "a-b".to_string()),
+            (format!("{long_prefix}/one"), format!("{long_prefix}/two")),
+        ] {
+            assert_eq!(scoped_log_label(&left), scoped_log_label(&right));
+            assert_ne!(
+                sharable_workspace_relative_log_file("build", Some(&left)),
+                sharable_workspace_relative_log_file("build", Some(&right)),
+            );
+        }
+        for ordinary in [
+            "notes.log",
+            "turbo-build.log",
+            "turbo-build-app-not-a-digest.log",
+            "turbo-build/app-444eee26cd60b933.log",
+            "turbo--444eee26cd60b933.log",
+        ] {
+            assert!(!is_scoped_task_log_filename(ordinary), "{ordinary}");
+        }
+    }
+
+    #[test]
+    fn test_hashable_outputs_includes_log_file() {
+        let task_def = TaskDefinition {
+            outputs: TaskOutputs {
+                inclusions: vec!["dist/**".to_string()],
+                exclusions: vec!["dist/temp".to_string()],
+            },
+            ..Default::default()
+        };
+
+        let result = task_def.hashable_outputs("build", None);
+
+        // Log file should be included and outputs should be sorted
+        assert!(
+            result
+                .inclusions
+                .contains(&".turbo/turbo-build.log".to_string())
+        );
+        assert!(result.inclusions.contains(&"dist/**".to_string()));
+        assert_eq!(result.exclusions, vec!["dist/temp".to_string()]);
+    }
+
+    #[test]
+    fn test_hashable_outputs_sorts_outputs() {
+        let task_def = TaskDefinition {
+            outputs: TaskOutputs {
+                inclusions: vec!["z-output".to_string(), "a-output".to_string()],
+                exclusions: vec!["z-exclude".to_string(), "a-exclude".to_string()],
+            },
+            ..Default::default()
+        };
+
+        let result = task_def.hashable_outputs("build", None);
+
+        // Should be sorted
+        assert_eq!(
+            result.inclusions,
+            vec![
+                ".turbo/turbo-build.log".to_string(),
+                "a-output".to_string(),
+                "z-output".to_string(),
+            ]
+        );
+        assert_eq!(
+            result.exclusions,
+            vec!["a-exclude".to_string(), "z-exclude".to_string(),]
+        );
+    }
+
+    #[test]
+    fn test_hashable_outputs_escapes_colons() {
+        let task_def = TaskDefinition::default();
+        let result = task_def.hashable_outputs("build:prod", None);
+
+        assert!(
+            result
+                .inclusions
+                .contains(&".turbo/turbo-build$colon$prod.log".to_string())
+        );
+    }
+
+    #[test]
+    fn test_task_definition_ext_workspace_relative_log_file() {
+        let path = TaskDefinition::workspace_relative_log_file("build", None);
+        #[cfg(not(windows))]
+        assert_eq!(path.as_str(), ".turbo/turbo-build.log");
+        #[cfg(windows)]
+        assert_eq!(path.as_str(), ".turbo\\turbo-build.log");
+
+        let path = TaskDefinition::workspace_relative_log_file("build:prod", None);
+        #[cfg(not(windows))]
+        assert_eq!(path.as_str(), ".turbo/turbo-build$colon$prod.log");
+        #[cfg(windows)]
+        assert_eq!(path.as_str(), ".turbo\\turbo-build$colon$prod.log");
+    }
+
+    #[test]
+    fn test_task_outputs_ext_is_empty() {
+        // Empty outputs (only log file)
+        let outputs = TaskOutputs {
+            inclusions: vec![".turbo/turbo-build.log".to_string()],
+            exclusions: vec![],
+        };
+        assert!(outputs.is_empty());
+
+        // Non-empty outputs
+        let outputs = TaskOutputs {
+            inclusions: vec![".turbo/turbo-build.log".to_string(), "dist/**".to_string()],
+            exclusions: vec![],
+        };
+        assert!(!outputs.is_empty());
+
+        // Has exclusions
+        let outputs = TaskOutputs {
+            inclusions: vec![".turbo/turbo-build.log".to_string()],
+            exclusions: vec!["node_modules".to_string()],
+        };
+        assert!(!outputs.is_empty());
+    }
+
+    #[test]
+    fn test_task_outputs_ext_validated_globs() {
+        let outputs = TaskOutputs {
+            inclusions: vec!["dist/**".to_string(), "build/**/*.js".to_string()],
+            exclusions: vec!["dist/temp".to_string()],
+        };
+
+        let inclusions = outputs.validated_inclusions().unwrap();
+        assert_eq!(inclusions.len(), 2);
+
+        let exclusions = outputs.validated_exclusions().unwrap();
+        assert_eq!(exclusions.len(), 1);
+    }
 }

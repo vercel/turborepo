@@ -154,9 +154,9 @@ fn named(f: &Fixture, path: &str, by_runner: bool) -> Vec<String> {
 #[test]
 fn a_file_of_the_consumer_is_not_named_by_a_script_its_task_runs_elsewhere() {
     let f = fixture();
-    // The consumer's own directory names the file only for the tests that run the
-    // script themselves, and for the one whose task runs somewhere that is not
-    // known.
+    // The consumer's own directory names the file only for the tests that run
+    // the script themselves, and for the one whose task runs somewhere that
+    // is not known.
     assert_eq!(
         named(&f, "pkg/app/src/page.ts", true),
         ["both", "direct", "odd", "shell"]
@@ -172,15 +172,15 @@ fn a_file_of_the_consumer_is_not_named_by_a_script_its_task_runs_elsewhere() {
 #[test]
 fn a_file_the_task_can_read_selects_the_consumers_of_its_output() {
     let f = fixture();
-    // Below the directory the task runs in, in the task's package: the tests above
-    // the task, through one task or two. The test that only loads the script
-    // runs it in its own directory.
+    // Below the directory the task runs in, in the task's package: the tests
+    // above the task, through one task or two. The test that only loads the
+    // script runs it in its own directory.
     assert_eq!(
         named(&f, "pkg/built/data/x.json", true),
         ["both", "chain", "output"]
     );
-    // Before runners nobody: the path is neither below the tests' directory nor in
-    // their package.
+    // Before runners nobody: the path is neither below the tests' directory nor
+    // in their package.
     assert_eq!(named(&f, "pkg/built/data/x.json", false), [] as [&str; 0]);
     let r = results(&f, "pkg/built/data/x.json", true);
     let Cause::Named { by, site, .. } = &r.iter().find(|r| r.0 == "output").unwrap().1 else {
@@ -228,15 +228,16 @@ fn a_string_counts_in_the_package_of_the_task() {
 #[test]
 fn the_nearest_task_runs_the_script() {
     let f = fixture();
-    // A file of the package of the second task: that task consumes the output, it
-    // does not run the script.
+    // A file of the package of the second task: that task consumes the output,
+    // it does not run the script.
     assert_eq!(named(&f, "pkg/mid/data/x.json", true), [] as [&str; 0]);
 }
 
 #[test]
 fn a_root_task_runs_at_the_root_for_the_root_package() {
     let f = fixture();
-    // The root package's own files; not the files of the packages below the root.
+    // The root package's own files; not the files of the packages below the
+    // root.
     assert_eq!(named(&f, "config/x.json", true), ["root"]);
     assert_eq!(named(&f, "pkg/mid/data/x.json", true), [] as [&str; 0]);
 }
@@ -244,8 +245,9 @@ fn a_root_task_runs_at_the_root_for_the_root_package() {
 #[test]
 fn a_task_whose_directory_is_not_known_keeps_the_entry_s_names() {
     let f = fixture();
-    // What the task of pkg/odd could read where it is defined is not claimed: the
-    // answer is the one from before runners, the consumer's own directory.
+    // What the task of pkg/odd could read where it is defined is not claimed:
+    // the answer is the one from before runners, the consumer's own
+    // directory.
     assert_eq!(named(&f, "pkg/odd/data/x.json", true), [] as [&str; 0]);
     assert_eq!(named(&f, "pkg/odd/data/x.json", false), [] as [&str; 0]);
     assert!(named(&f, "pkg/app/src/page.ts", true).contains(&"odd".to_owned()));

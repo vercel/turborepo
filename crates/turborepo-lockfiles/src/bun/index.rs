@@ -143,7 +143,8 @@ impl PackageIndex {
             }
         }
 
-        // Sort by_ident vectors for deterministic selection (prefer workspace-scoped)
+        // Sort by_ident vectors for deterministic selection (prefer
+        // workspace-scoped)
         for keys in by_ident.values_mut() {
             keys.sort();
         }

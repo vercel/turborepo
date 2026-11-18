@@ -92,7 +92,8 @@ fn jest_basic() {
         r.test_names(),
         ["src/__tests__/db.test.ts", "src/components/button.spec.tsx"]
     );
-    // Mapper with regex groups and <rootDir>, then the helper's mappers, in order.
+    // Mapper with regex groups and <rootDir>, then the helper's mappers, in
+    // order.
     let hit = p.resolution.apply("@app/lib/x").unwrap();
     assert_eq!(
         hit.requests,
@@ -152,8 +153,8 @@ fn jest_basic() {
     assert!(t.entries.iter().any(|e| e.role == InputRole::Automocked
         && matches!(&e.target, Target::Module { request, .. } if request == "../lib/cache")));
     assert!(t.entries.iter().any(|e| e.role == InputRole::RequireActual));
-    // Mapped mock: `@app/lib/x` resolves through the mapper; its adjacent mock is
-    // probed.
+    // Mapped mock: `@app/lib/x` resolves through the mapper; its adjacent mock
+    // is probed.
     assert!(
         t.probes
             .iter()
@@ -262,7 +263,8 @@ fn jest_rootdir_preset_resolver() {
             .iter()
             .any(|f| f.ends_with("config/preset.json"))
     );
-    // Custom snapshot resolver: an entry, a broad membership and an uncertainty.
+    // Custom snapshot resolver: an entry, a broad membership and an
+    // uncertainty.
     let t = r.test("src/feature/f.unit.ts");
     assert!(t.memberships.iter().any(|m| m.pattern == "**/*.snap"));
     assert!(!t.uncertainties.is_empty());
@@ -280,8 +282,8 @@ fn vitest_alias_merge_mocks() {
     insta::assert_snapshot!("vitest_alias", r.json());
     let p = &r.inputs.projects[0];
     assert_eq!(r.test_names(), ["src/app.test.ts"]);
-    // test.alias first, then resolve.alias from the merged vite config (regex and
-    // prefix).
+    // test.alias first, then resolve.alias from the merged vite config (regex
+    // and prefix).
     let sources: Vec<&str> = p.resolution.aliases.iter().map(|a| a.source).collect();
     assert_eq!(sources, ["test.alias", "resolve.alias", "resolve.alias"]);
     assert_eq!(
@@ -410,11 +412,11 @@ fn jest_next_async_wrapper() {
         p.uncertainties
     );
     // The config rewrites next's `transform` entry
-    // (`Object.fromEntries(Object.entries(config.transform ?? {}).map(...))`) to
-    // swap the SWC transformer for a file of its own. The field used to be
-    // unknown, which made every test of the project uncertain. It is known now,
-    // and the project's transformer is an input of every test (as is next's:
-    // both branches of the callback count).
+    // (`Object.fromEntries(Object.entries(config.transform ?? {}).map(...))`)
+    // to swap the SWC transformer for a file of its own. The field used to
+    // be unknown, which made every test of the project uncertain. It is
+    // known now, and the project's transformer is an input of every test
+    // (as is next's: both branches of the callback count).
     let all: Vec<_> = p
         .uncertainties
         .iter()

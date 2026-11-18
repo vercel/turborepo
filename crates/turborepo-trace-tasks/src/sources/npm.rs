@@ -50,8 +50,8 @@ impl TaskSource for NpmScripts {
             return Vec::new();
         };
         let mut env = BTreeMap::new();
-        // Package managers point `$npm_execpath` at themselves (`$npm_execpath run
-        // build`).
+        // Package managers point `$npm_execpath` at themselves (`$npm_execpath
+        // run build`).
         env.insert(
             "npm_execpath".to_string(),
             package_manager_of(&cx.workspace.root).to_string(),
@@ -230,9 +230,9 @@ impl Recognizer for PackageManager {
             return bun(&cmd, "run", &rest, cx, out);
         }
         let reason = format!("{pm} run");
-        // A script that only formats in place, called with arguments that keep it that
-        // way (paths, no `--check`): a dependency a producing task drops
-        // ([`crate::format`]).
+        // A script that only formats in place, called with arguments that keep
+        // it that way (paths, no `--check`): a dependency a producing
+        // task drops ([`crate::format`]).
         let formats = |dir: &std::path::Path| {
             let plain = extra.iter().all(|a| {
                 let dynamic = cmd.argv.iter().any(|w| w.text == *a && w.dynamic);
@@ -494,10 +494,11 @@ impl Recognizer for Concurrently {
             "--teardown",
             "--pad-prefix",
         ];
-        // Real invocations run a handful of commands. Beyond this many, recognizing
-        // each one (shell parse, registry dispatch, binary lookups on the
-        // filesystem) costs more than it buys: fall back to the whole package
-        // (the registry adds it for the uncertainty).
+        // Real invocations run a handful of commands. Beyond this many,
+        // recognizing each one (shell parse, registry dispatch, binary
+        // lookups on the filesystem) costs more than it buys: fall back
+        // to the whole package (the registry adds it for the
+        // uncertainty).
         const MAX_COMMANDS: usize = 64;
         let words: Vec<&crate::spec::Word> = cmd.arg_words().iter().collect();
         let mut i = 0;

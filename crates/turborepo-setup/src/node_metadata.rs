@@ -103,7 +103,8 @@ impl ReleaseIndex {
                     return Err(Error::Index);
                 }
             }
-            // Unknown upstream fields (e.g. V8/security) do not influence tool identity.
+            // Unknown upstream fields (e.g. V8/security) do not influence tool
+            // identity.
             if releases
                 .insert(
                     version,

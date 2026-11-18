@@ -297,8 +297,8 @@ fn a_job_that_starts_a_compose_project_runs_its_tests_against_it() {
     // The build and the project themselves.
     assert_eq!(selected(r, "services/ingest/Dockerfile"), INGEST);
     assert_eq!(selected(r, "services/ingest/docker-compose.yml"), INGEST);
-    // Files mounted into third-party containers, in both volume syntaxes, and an
-    // env file.
+    // Files mounted into third-party containers, in both volume syntaxes, and
+    // an env file.
     assert_eq!(
         selected(r, "services/ingest/integration/config/store-init.sql"),
         INGEST
@@ -317,7 +317,8 @@ fn a_job_that_starts_a_compose_project_runs_its_tests_against_it() {
 fn a_script_that_starts_a_project_through_another_script() {
     let d = repo();
     let r = d.path();
-    // `test:integration` runs `services:up` (which runs no tests) and then jest.
+    // `test:integration` runs `services:up` (which runs no tests) and then
+    // jest.
     assert_eq!(selected(r, "packages/registry/seed/tables.json"), REGISTRY);
     assert_eq!(
         selected(r, "packages/registry/docker-compose.yml"),
@@ -344,7 +345,8 @@ fn files_outside_the_services_select_nothing_through_them() {
     let r = d.path();
     // Not copied into the image, not mounted.
     assert!(selected(r, "services/ingest/README.md").is_empty());
-    // Another package: its own test through the import, nothing of the services.
+    // Another package: its own test through the import, nothing of the
+    // services.
     assert_eq!(
         selected(r, "packages/other/src/o.js"),
         ["packages/other/src/o.test.js"]

@@ -216,7 +216,8 @@ impl Verification {
                 if actual != expected.0 {
                     return Err(Error::Sha512DigestMismatch);
                 }
-                // Never derive/compare SHA-256 before mandatory SHA-512 matches.
+                // Never derive/compare SHA-256 before mandatory SHA-512
+                // matches.
                 if let Some(expected) = sha256 {
                     let actual: [u8; 32] = Sha256::digest(bytes).into();
                     if actual != expected.0 {
@@ -582,7 +583,8 @@ fn http_error(error: reqwest::Error) -> Error {
         return Error::TimedOut;
     }
     // Classify typed errors only: no formatting/string matching of sources
-    // containing URLs, proxy credentials, certificate names, or filesystem paths.
+    // containing URLs, proxy credentials, certificate names, or filesystem
+    // paths.
     let mut source: Option<&(dyn StdError + 'static)> = Some(&error);
     while let Some(cause) = source {
         if matches!(
@@ -600,7 +602,8 @@ fn http_error(error: reqwest::Error) -> Error {
     }
     if error.is_connect() {
         // reqwest cannot reliably distinguish a proxy CONNECT failure from an
-        // origin connection failure. Give a neutral hint, not false attribution.
+        // origin connection failure. Give a neutral hint, not false
+        // attribution.
         Error::ConnectionFailed
     } else {
         Error::RequestFailed

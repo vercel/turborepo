@@ -159,7 +159,8 @@ fn noop_refresh_reuses_tree_parts() {
     assert!(b.walk_cached);
     assert_eq!(b.traced, 0);
     assert_eq!(b.tree_reused, [a.first_party, 0], "{:?}", b.tree_reused);
-    // And again: tree parts and listings reused without being recomputed are kept.
+    // And again: tree parts and listings reused without being recomputed are
+    // kept.
     let c = rebuild(&root);
     assert_eq!(c.tree_reused, [a.first_party, 0]);
 }
@@ -194,7 +195,8 @@ fn manifest_bump_does_not_retrace_transitive_dependents() {
             "{r} depends on {target} only transitively but was re-traced: {traced:?}"
         );
     }
-    // The fixture has transitive dependents (so the check above means something).
+    // The fixture has transitive dependents (so the check above means
+    // something).
     assert!(deps.iter().filter(|(_, d)| !d.is_empty()).count() > direct.len() + 1);
 }
 

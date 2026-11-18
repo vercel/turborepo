@@ -128,7 +128,8 @@ impl Repo {
             ));
         }
         if inc_json != fresh_json {
-            // Lines only one side has (the export is one record per line group).
+            // Lines only one side has (the export is one record per line
+            // group).
             let inc: std::collections::BTreeSet<&str> = inc_json.lines().collect();
             let fr: std::collections::BTreeSet<&str> = fresh_json.lines().collect();
             let only = |a: &std::collections::BTreeSet<&str>,
@@ -287,8 +288,8 @@ fn the_first_local_action_and_reusable_workflow() {
 
 #[test]
 fn the_first_task_file_of_each_kind() {
-    // A package without any task gets its first Makefile, script, turbo config and
-    // Dockerfile, one after the other.
+    // A package without any task gets its first Makefile, script, turbo config
+    // and Dockerfile, one after the other.
     let mut files = SOURCES.to_vec();
     files.push(("packages/a/package.json", r#"{"name":"a"}"#));
     files.push(("packages/a/src/a.js", "module.exports = 2;\n"));

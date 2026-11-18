@@ -184,8 +184,8 @@ pub fn parse(src: &str) -> Result<Lockfile> {
         if raw.resolution.contains("@patch:") {
             pkg.patch = patch_hash(&raw.resolution).map(str::to_string);
         }
-        // Registry packages are fully identified by name and version; keep other
-        // sources.
+        // Registry packages are fully identified by name and version; keep
+        // other sources.
         if !raw.resolution.contains("@npm:") || raw.resolution.contains("@patch:") {
             pkg.resolution = Some(raw.resolution.clone());
         }

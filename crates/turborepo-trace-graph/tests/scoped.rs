@@ -93,8 +93,8 @@ fn covered_uncertainty_selects_on_changes_inside_its_scope() {
         run(&g, &one(ChangeKind::Modified, "other/b.json"), &opts),
         [("test/open.test.ts".to_owned(), A)]
     );
-    // Edit, addition and deletion inside the scope select the covered test (and the
-    // open one, as on any change).
+    // Edit, addition and deletion inside the scope select the covered test (and
+    // the open one, as on any change).
     for kind in [ChangeKind::Modified, ChangeKind::Added, ChangeKind::Deleted] {
         let path = if kind == ChangeKind::Added {
             "data/new/c.json"

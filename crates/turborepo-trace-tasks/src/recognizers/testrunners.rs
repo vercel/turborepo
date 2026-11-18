@@ -53,8 +53,9 @@ pub fn add_framework_inputs(fi: &FrameworkInputs, out: &mut TaskSpec) -> bool {
     let mut complete = true;
     if let Some(c) = &fi.config_file {
         add_code_config(c, out);
-        // The runner's config defines how the task runs its tests ([`crate::runs`]): a
-        // config named with `-c` is not the one the tests' own discovery finds.
+        // The runner's config defines how the task runs its tests
+        // ([`crate::runs`]): a config named with `-c` is not the one
+        // the tests' own discovery finds.
         out.defines(c.clone());
     }
     for u in &fi.uncertainties {
@@ -68,8 +69,9 @@ pub fn add_framework_inputs(fi: &FrameworkInputs, out: &mut TaskSpec) -> bool {
         out.test_run(fi.framework, dir);
     }
     for p in &fi.projects {
-        // The tests this run executes ([`crate::runs`]): everything below the discovery
-        // roots (filters such as `--shard` or positional patterns only narrow it).
+        // The tests this run executes ([`crate::runs`]): everything below the
+        // discovery roots (filters such as `--shard` or positional
+        // patterns only narrow it).
         if p.discovery.roots.is_empty() {
             out.test_run(fi.framework, p.root_dir.clone());
         }
@@ -105,8 +107,8 @@ pub fn add_framework_inputs(fi: &FrameworkInputs, out: &mut TaskSpec) -> bool {
             out.membership(m.dir.clone(), m.pattern.clone(), m.reason.clone());
         }
         let exts = &p.discovery.extensions;
-        // Globs relative to a base (vitest): one membership per include, when our glob
-        // syntax covers them (no extglobs).
+        // Globs relative to a base (vitest): one membership per include, when
+        // our glob syntax covers them (no extglobs).
         if let Some(base) = &p.discovery.glob_base
             && !p.discovery.include.is_empty()
             && p.discovery.include.iter().all(
@@ -419,7 +421,8 @@ impl Recognizer for Pytest {
                 &cmd.cwd.join("__turbotrace_probe__.py"),
             ),
         };
-        // Without the pytest adapter (feature `python`), what the run reads is unknown.
+        // Without the pytest adapter (feature `python`), what the run reads is
+        // unknown.
         let mut complete = turborepo_trace_frameworks::PYTHON;
         if let Some(c) = &config
             && let Some(fi) = turborepo_trace_frameworks::pytest_inputs(c)
@@ -638,8 +641,9 @@ impl Recognizer for GoTest {
         let base = opt(&args, &["-C"])
             .map(|d| cmd.path(d))
             .unwrap_or_else(|| cmd.cwd.clone());
-        // A computed package argument (`go test "$1" "$@"`) names packages the command
-        // line does not say: the one of the working directory or any below it.
+        // A computed package argument (`go test "$1" "$@"`) names packages the
+        // command line does not say: the one of the working directory
+        // or any below it.
         let computed = |p: &str| cmd.argv.iter().any(|w| w.text == p && w.dynamic);
         if pos.iter().any(|p| computed(p)) {
             pos.retain(|p| !computed(p));
@@ -655,8 +659,9 @@ impl Recognizer for GoTest {
         let mut partial = false;
         for p in pos {
             partial |= go_package_arg(&base, p, out);
-            // The tests this run executes ([`crate::runs`]): the package directories; an
-            // import path could be any package of the repository.
+            // The tests this run executes ([`crate::runs`]): the package
+            // directories; an import path could be any package of
+            // the repository.
             let run_dir = p.strip_suffix("...").unwrap_or(p).trim_end_matches('/');
             let relative = run_dir.is_empty()
                 || run_dir == "."
@@ -769,8 +774,8 @@ impl Recognizer for Cargo {
             cx.whole_package(out, "cargo without a Cargo.toml");
             return Recognition::Partial;
         };
-        // The workspace root: the topmost Cargo.toml with [workspace] up to the repo
-        // root.
+        // The workspace root: the topmost Cargo.toml with [workspace] up to the
+        // repo root.
         let crate_dir = manifest.parent().unwrap_or(&cmd.cwd).to_path_buf();
         let mut root = crate_dir.clone();
         for x in crate_dir.ancestors().skip(1) {
@@ -807,7 +812,8 @@ impl Recognizer for Cargo {
         out.membership(root.clone(), "**/*.rs", "cargo workspace sources");
         out.membership(root.clone(), "**/Cargo.toml", "cargo workspace manifests");
         if sub != "fmt" {
-            // Build scripts and tests read arbitrary files (include_str!, fixtures).
+            // Build scripts and tests read arbitrary files (include_str!,
+            // fixtures).
             out.membership(
                 root.clone(),
                 "**/{build.rs,*.proto,*.c,*.h}",

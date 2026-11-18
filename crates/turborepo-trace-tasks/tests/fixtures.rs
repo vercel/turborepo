@@ -128,8 +128,8 @@ fn turbo_monorepo() {
         .unwrap();
     }
     insta::assert_snapshot!("turbo_monorepo", out);
-    // Task deps resolve through turbo `^build`, `dependsOn`, pre hooks and `turbo
-    // run`.
+    // Task deps resolve through turbo `^build`, `dependsOn`, pre hooks and
+    // `turbo run`.
     let get = |id: &str| {
         set.get(&id.parse().unwrap())
             .unwrap_or_else(|| panic!("{id}"))

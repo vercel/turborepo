@@ -209,9 +209,9 @@ fn empty_string(i: &str) -> IResult<&str, String> {
 }
 
 fn syml_chars(i: &str) -> IResult<&str, String> {
-    // The SYML grammar provided by Yarn2+ includes escape sequences that weren't
-    // supported by the yarn1 parser. We diverge from the Yarn2+ provided
-    // grammar to match the actual parser used by yarn1.
+    // The SYML grammar provided by Yarn2+ includes escape sequences that
+    // weren't supported by the yarn1 parser. We diverge from the Yarn2+
+    // provided grammar to match the actual parser used by yarn1.
     escaped_transform(
         is_not("\"\\"),
         '\\',

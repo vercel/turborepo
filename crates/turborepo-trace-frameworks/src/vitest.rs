@@ -242,8 +242,9 @@ pub fn env_request(e: &str) -> Option<String> {
 
 /// Loads a vitest/vite config or workspace file.
 pub fn load_config(path: &Path) -> FrameworkInputs {
-    // A config that its own list of projects names (`projects: ['.']`, a glob that
-    // matches its directory) is, as that project, its options without the list.
+    // A config that its own list of projects names (`projects: ['.']`, a glob
+    // that matches its directory) is, as that project, its options without
+    // the list.
     match jsconfig::listing_projects(path, || load_with(path, true)) {
         Some(inputs) => inputs,
         None => load_with(path, false),
@@ -359,8 +360,9 @@ fn workspace_projects(
                 }
                 let abs = fsx::join(dir, s);
                 let mut paths = if is_glob(s) {
-                    // tinyglobby (fast-glob before it) follows links. (A link to a
-                    // directory that the pattern itself names is a project for vitest 2
+                    // tinyglobby (fast-glob before it) follows links. (A link
+                    // to a directory that the pattern
+                    // itself names is a project for vitest 2
                     // and none for 3.2: taken as one.)
                     let links = fsx::Links::Follow;
                     let mut ps = fsx::expand_glob(&abs.to_string_lossy(), true, links);
@@ -507,7 +509,8 @@ fn read_aliases(
                                     format!("regex not supported by the matcher: {source}"),
                                 );
                             }
-                            // Vite applies `importee.replace(find, replacement)`.
+                            // Vite applies `importee.replace(find,
+                            // replacement)`.
                             AliasMatcher::Replace(re)
                         }
                         other => {
@@ -518,9 +521,11 @@ fn read_aliases(
                             continue;
                         }
                     };
-                    // `customResolver`: the function vite calls with the rewritten request
-                    // instead of resolving it itself. `(id) => require.resolve(id)` is Node's
-                    // resolution of that request, which is what the alias edge does; any
+                    // `customResolver`: the function vite calls with the
+                    // rewritten request instead of
+                    // resolving it itself. `(id) => require.resolve(id)` is
+                    // Node's resolution of that request,
+                    // which is what the alias edge does; any
                     // other resolver may send the request anywhere.
                     match x.field("customResolver") {
                         None | Some(ConfigVal::Null) => {}
@@ -624,9 +629,10 @@ fn build_project(
             target: t,
         });
     }
-    // The runner itself. vitest loads a built-in environment (the request above,
-    // when the project also installs it) as its own dependency: the instance
-    // the project's `vitest` resolves to decides which `jsdom` the tests get.
+    // The runner itself. vitest loads a built-in environment (the request
+    // above, when the project also installs it) as its own dependency: the
+    // instance the project's `vitest` resolves to decides which `jsdom` the
+    // tests get.
     global.entries.push(InputRef {
         role: InputRole::Runner,
         target: crate::inputs::Target::Module {
@@ -672,7 +678,8 @@ fn build_project(
             })
             .collect();
     }
-    // Plugins that may redirect imports or serve modules ([`crate::viteplugins`]).
+    // Plugins that may redirect imports or serve modules
+    // ([`crate::viteplugins`]).
     if let Some(p) = r.get("plugins") {
         let unmodelled = crate::viteplugins::unmodelled(&p);
         if !unmodelled.is_empty() {
@@ -685,7 +692,8 @@ fn build_project(
                 ),
             );
         }
-        // Loader plugins make only the importers of the modules they compile uncertain.
+        // Loader plugins make only the importers of the modules they compile
+        // uncertain.
         resolution.loaders = crate::viteplugins::loaders(&p);
     }
     // Discovery.

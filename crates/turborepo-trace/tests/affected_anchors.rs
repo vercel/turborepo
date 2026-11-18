@@ -215,8 +215,8 @@ const D: &str = "services/d/test/d.test.js";
 fn an_escaping_file_path_names_the_file() {
     let d = repo();
     let r = d.path();
-    // Without following, the file names everything below the repository root (two
-    // parent steps from its directory).
+    // Without following, the file names everything below the repository root
+    // (two parent steps from its directory).
     assert!(
         affected(
             r,
@@ -239,8 +239,8 @@ fn an_escaping_file_path_names_the_file() {
 fn a_followed_location_names_where_it_goes() {
     let d = repo();
     let r = d.path();
-    // Fidelity: without following, each of the four files names everything below
-    // the repository root, and an unrelated file selects every test.
+    // Fidelity: without following, each of the four files names everything
+    // below the repository root, and an unrelated file selects every test.
     assert_eq!(
         affected(
             r,
@@ -250,10 +250,10 @@ fn a_followed_location_names_where_it_goes() {
         ),
         [A, B, C, D]
     );
-    // Followed: the directories handed to dotenv-flow name their `.env*` files, and
-    // the path with the environment tail is the environment registry's. An
-    // exported root still names everything below it, and so does a path whose
-    // tail is the result of a function that is no environment helper.
+    // Followed: the directories handed to dotenv-flow name their `.env*` files,
+    // and the path with the environment tail is the environment registry's.
+    // An exported root still names everything below it, and so does a path
+    // whose tail is the result of a function that is no environment helper.
     assert_eq!(
         affected(r, ".tt", "docs/guide.md", &[]),
         [B, C],
@@ -324,8 +324,8 @@ fn a_root_that_is_no_read_names_nothing() {
     const UP: &str = "services/a/test/b.test.js";
     write(r, TOOLS, "require('../tools');\ntest('a', () => {});\n");
     write(r, UP, "require('../up');\ntest('b', () => {});\n");
-    // The root of `tools.js` names nothing; the path `up.js` builds on the working
-    // directory leads to the repository root and is read.
+    // The root of `tools.js` names nothing; the path `up.js` builds on the
+    // working directory leads to the repository root and is read.
     assert_eq!(
         affected(r, ".tt", "docs/guide.md", &[]),
         [UP],
@@ -410,7 +410,8 @@ fn a_child_process_is_outside_the_model_for_every_caller() {
     let r = d.path();
     write(r, "package.json", r#"{"name":"r","version":"1.0.0"}"#);
     write(r, "docs/guide.md", "x\n");
-    // What the children run and read: a script of the repository that reads a file.
+    // What the children run and read: a script of the repository that reads a
+    // file.
     write(
         r,
         "scripts/check.js",
@@ -447,8 +448,8 @@ fn a_child_process_is_outside_the_model_for_every_caller() {
          root = path.resolve(__dirname, '..', '..', '..');\nexports.run = (cmd, args) => \
          spawnSync(cmd, args, { cwd: root });\n",
     );
-    // The rooted child in a file that hands a path below its package to a reader: a
-    // read with a computed path (a parameter), bounded by names.
+    // The rooted child in a file that hands a path below its package to a
+    // reader: a read with a computed path (a parameter), bounded by names.
     write(
         r,
         "services/a/tools/reads.js",
@@ -475,16 +476,18 @@ fn a_child_process_is_outside_the_model_for_every_caller() {
     for changed in ["docs/guide.md", "scripts/check.js"] {
         // The rule on and off, each with a graph of its own.
         for (graph, env) in [(".tt", &[][..]), (".tt-off", &off[..])] {
-            // By default no test is selected. With the rule off the root of `reads.js`
-            // escapes and names every path for its read: that test, and no other.
+            // By default no test is selected. With the rule off the root of
+            // `reads.js` escapes and names every path for its read:
+            // that test, and no other.
             let default = affected_with(r, graph, changed, &[], env);
             if env.is_empty() {
                 assert_eq!(default, none, "{changed} {graph}");
             } else {
                 assert_eq!(default, [READS], "{changed} {graph}");
             }
-            // `--strict` counts the read with a computed path as open, with the rule on and
-            // off alike; the tests that only start children have nothing to count.
+            // `--strict` counts the read with a computed path as open, with the
+            // rule on and off alike; the tests that only start
+            // children have nothing to count.
             assert_eq!(
                 affected_with(r, graph, changed, &["--strict"], env),
                 [READS],

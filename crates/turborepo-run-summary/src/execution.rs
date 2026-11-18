@@ -177,7 +177,8 @@ impl<'a> ExecutionSummary<'a> {
         self.success + self.cached
     }
 
-    // Used in observability/otel.rs to populate RunMetricsPayload.attempted_tasks
+    // Used in observability/otel.rs to populate
+    // RunMetricsPayload.attempted_tasks
     pub(crate) fn attempted(&self) -> usize {
         self.attempted
     }
@@ -265,8 +266,9 @@ impl Default for ExecutionTracker {
 
 impl ExecutionTracker {
     pub fn new() -> Self {
-        // This buffer size is probably overkill, but since messages are only a byte
-        // it's worth the extra memory to avoid the channel filling up.
+        // This buffer size is probably overkill, but since messages are only a
+        // byte it's worth the extra memory to avoid the channel filling
+        // up.
         let (sender, mut receiver) = mpsc::channel::<Message>(128);
         let state_thread = tokio::spawn(async move {
             let mut state = SummaryState::default();
@@ -304,9 +306,10 @@ impl ExecutionTracker {
             sender,
             ..
         } = self;
-        // We drop the sender so the channel closes once all trackers have finished.
-        // We don't explicitly close as that would cause running trackers to be unable
-        // to send their execution summary.
+        // We drop the sender so the channel closes once all trackers have
+        // finished. We don't explicitly close as that would cause
+        // running trackers to be unable to send their execution
+        // summary.
         drop(sender);
 
         let summary_state = state_thread.await?;
@@ -369,8 +372,8 @@ impl TaskTracker<()> {
 }
 
 impl TaskTracker<chrono::DateTime<Local>> {
-    // In the case of a task getting canceled we send no information as there was an
-    // internal turbo error
+    // In the case of a task getting canceled we send no information as there
+    // was an internal turbo error
     pub fn cancel(self) {}
 
     pub async fn cached(self) -> TaskExecutionSummary {
@@ -669,7 +672,8 @@ mod test {
         Ok(())
     }
 
-    // Verifies ExecutionSummary computes successful() correctly from SummaryState
+    // Verifies ExecutionSummary computes successful() correctly from
+    // SummaryState
     #[test]
     fn test_execution_summary_stats_from_state() {
         use turbopath::AnchoredSystemPath;

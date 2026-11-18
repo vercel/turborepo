@@ -55,7 +55,8 @@ where
             Poll::Ready(Some(item)) => {
                 // same as `curr_gen_index` but we can't borrow `self` twice
                 let (curr_gen, index) = {
-                    // usize fits 570 million years of milliseconds since start on 64 bit
+                    // usize fits 570 million years of milliseconds since start
+                    // on 64 bit
                     let r#gen = (this.start.elapsed().as_millis() as usize) / INTERVAL;
                     (r#gen, r#gen % BUCKETS)
                 };
@@ -158,7 +159,8 @@ impl<const BUCKETS: usize, const INTERVAL: usize> UploadProgressQuery<BUCKETS, I
                     .map(|(_, bytes)| *bytes)
                     .sum::<usize>();
 
-            // buckets * interval = milliseconds, so we multiply by 1000 to get seconds
+            // buckets * interval = milliseconds, so we multiply by 1000 to get
+            // seconds
             (total_bytes as f64 / (BUCKETS * INTERVAL) as f64) * 1000.0
         })
     }

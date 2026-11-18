@@ -377,8 +377,8 @@ impl<'a, M: MfeConfigProvider, E: From<CommandProviderError>> CommandProvider<E>
 
         apply_environment(&mut cmd, environment);
 
-        // If the task has an associated proxy, then we indicate this to the underlying
-        // task via an env var
+        // If the task has an associated proxy, then we indicate this to the
+        // underlying task via an env var
         if self
             .mfe_configs
             .is_some_and(|mfe_configs| mfe_configs.task_has_mfe_proxy(task_id))
@@ -393,8 +393,9 @@ impl<'a, M: MfeConfigProvider, E: From<CommandProviderError>> CommandProvider<E>
             cmd.env("TURBO_PORT", port.to_string());
         }
 
-        // If this task is using the Turborepo proxy (not @vercel/microfrontends),
-        // set the local port value in an env var
+        // If this task is using the Turborepo proxy (not
+        // @vercel/microfrontends), set the local port value in an env
+        // var
         if let Some(mfe_configs) = self.mfe_configs
             && mfe_configs.task_uses_turborepo_proxy(task_id)
             && let Some(port) = mfe_configs.dev_task_port(task_id)
@@ -634,8 +635,8 @@ impl<'a, M: MfeConfigProvider, E: From<CommandProviderError>> CommandProvider<E>
             let mut args: Vec<&str> = vec!["proxy", mfe_path.as_str(), "--names"];
             args.extend(local_apps);
 
-            // On Windows, a package manager will rework the binary to be a .cmd extension
-            // since that's what Windows needs
+            // On Windows, a package manager will rework the binary to be a .cmd
+            // extension since that's what Windows needs
             let bin_name = if cfg!(windows) {
                 "microfrontends.cmd"
             } else {
@@ -976,7 +977,8 @@ mod tests {
 
     fn path_only(path: &str) -> EnvironmentVariableMap {
         let mut environment = HashMap::from([("PATH".to_owned(), path.to_owned())]);
-        // cmd.exe runs `.cmd` exports; it needs these, and strict mode keeps them.
+        // cmd.exe runs `.cmd` exports; it needs these, and strict mode keeps
+        // them.
         for name in ["SYSTEMROOT", "COMSPEC", "PATHEXT"] {
             if let Ok(value) = std::env::var(name) {
                 environment.insert(name.to_owned(), value);

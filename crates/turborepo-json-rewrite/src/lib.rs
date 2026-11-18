@@ -78,8 +78,8 @@ pub fn set_path(
         _ => GenerateType::Object,
     };
 
-    // Identify the token replacement metadata: start, end, and possible trailing
-    // join character
+    // Identify the token replacement metadata: start, end, and possible
+    // trailing join character
     let (start, end, separator) = match generate_type {
         GenerateType::Object => {
             let start = range.start;
@@ -150,8 +150,8 @@ fn get_closest_node<'a>(
     match current_node {
         // Only objects can have key paths.
         jsonc_parser::ast::Value::Object(obj) => {
-            // Grab the last property (member) which matches the current target_path
-            // element.
+            // Grab the last property (member) which matches the current
+            // target_path element.
             let object_property = obj.properties.iter().rev().find(|property| {
                 let current_property_name = property.name.as_str();
                 target_path[0] == current_property_name
@@ -220,8 +220,8 @@ pub fn unset_path(
 ) -> Result<Option<String>, RewriteError> {
     let root = get_root(json_document_string)?;
 
-    // The key path can appear multiple times. This a vec that contains each time it
-    // occurs.
+    // The key path can appear multiple times. This a vec that contains each
+    // time it occurs.
     let path_ranges = find_all_paths(&root, path, match_case_sensitive);
 
     if path_ranges.is_empty() {
@@ -280,8 +280,9 @@ fn find_all_paths<'a>(
 
     // We can only find paths on objects.
     if let jsonc_parser::ast::Value::Object(obj) = current_node {
-        // We need a reference to the previous and next property to identify if we're
-        // looking at the first or last node which need special handling.
+        // We need a reference to the previous and next property to identify if
+        // we're looking at the first or last node which need special
+        // handling.
         let mut properties_iterator = obj.properties.iter().peekable();
 
         let mut previous_property: Option<&jsonc_parser::ast::ObjectProp<'_>> = None;
@@ -300,9 +301,11 @@ fn find_all_paths<'a>(
                     let next_property = properties_iterator.peek();
 
                     // We calculate the range based off the adjacent nodes.
-                    // This is required to ensure that we capture things like commas.
+                    // This is required to ensure that we capture things like
+                    // commas.
 
-                    // If this property follows another property, remove starting from the end of
+                    // If this property follows another property, remove
+                    // starting from the end of
                     // that property.
                     let start = if let Some(previous_property) = previous_property {
                         previous_property.range.end
@@ -310,7 +313,8 @@ fn find_all_paths<'a>(
                         property.range.start
                     };
 
-                    // If this property precedes another property, remove all the way to the start
+                    // If this property precedes another property, remove all
+                    // the way to the start
                     // of that property.
                     let end = if let Some(next_property) = next_property {
                         next_property.range.start
@@ -318,8 +322,9 @@ fn find_all_paths<'a>(
                         property.range.end
                     };
 
-                    // The comma will _always_ be in the range. If we're the first or last, we want
-                    // to remove it. If we are somewhere in the middle, we need
+                    // The comma will _always_ be in the range. If we're the
+                    // first or last, we want to remove it.
+                    // If we are somewhere in the middle, we need
                     // to insert a comma to replace the comma we ate.
                     let replacement_char = if previous_property.is_none() || next_property.is_none()
                     {

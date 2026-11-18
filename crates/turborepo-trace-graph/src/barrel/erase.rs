@@ -97,8 +97,8 @@ pub(crate) fn hop(from: &str, e: &Edge<'_>) -> Hop {
             if !is_js(from) {
                 return Hop::Other;
             }
-            // Framework edges are labelled `<framework>:<role> <target>`; a plain module
-            // specifier has no space.
+            // Framework edges are labelled `<framework>:<role> <target>`; a
+            // plain module specifier has no space.
             match spec.split_once(' ') {
                 None => Hop::Load,
                 Some((label, _)) => match label.split_once(':') {
@@ -130,9 +130,9 @@ pub(crate) fn readers<G: GraphView>(
     // Everything that reaches a candidate over any edge.
     let (_, order) = super::bfs(engine, filter, cands.iter().copied());
     let reach = NodeSet::from_iter_in(g.node_count(), order.iter().copied());
-    // Of those, what the pending entries depend on: only these can stand between an
-    // entry and a candidate, and only their edges are read below (the expensive
-    // part).
+    // Of those, what the pending entries depend on: only these can stand
+    // between an entry and a candidate, and only their edges are read below
+    // (the expensive part).
     let fwd = engine.forward();
     let mut order: Vec<NodeId> = Vec::new();
     let mut seen = NodeSet::new(g.node_count());
@@ -153,8 +153,8 @@ pub(crate) fn readers<G: GraphView>(
             }
         }
     }
-    // Per target in `reach`: the sources that load it as a module, and the edges
-    // that read it another way.
+    // Per target in `reach`: the sources that load it as a module, and the
+    // edges that read it another way.
     let mut loaders: HashMap<NodeId, Vec<NodeId>> = HashMap::new();
     let mut others: Vec<(NodeId, NodeId)> = Vec::new();
     let mut per: Vec<(NodeId, bool, bool)> = Vec::new();

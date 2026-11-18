@@ -767,8 +767,8 @@ mod tests {
             write_member(&root, directory, module_path);
         }
 
-        // Inventory membership retains Go's identity even though public scope names
-        // shorten.
+        // Inventory membership retains Go's identity even though public scope
+        // names shorten.
         let uses = directories
             .iter()
             .map(|directory| directory.to_string())
@@ -936,7 +936,8 @@ mod tests {
             Err(Error::VendoredModule { .. })
         ));
 
-        // Both a bare and a derived package name can collide with the aggregate.
+        // Both a bare and a derived package name can collide with the
+        // aggregate.
         for module_path in [GO_WORKSPACE_NAME, "example.com/go-workspace"] {
             let (_tempdir, root) = temp_root();
             write_work(&root, &["./module"]);

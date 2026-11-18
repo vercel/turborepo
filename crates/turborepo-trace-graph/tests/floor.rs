@@ -282,8 +282,8 @@ fn strict_options_open_more_records() {
         classes(&r)
     );
 
-    // --strict: probed and ignored records count too; scoped ones and memberships
-    // don't.
+    // --strict: probed and ignored records count too; scoped ones and
+    // memberships don't.
     let opts = AffectedOptions::default().strict(true);
     let r = e.floor(&tests(&g), &opts, 25);
     assert_eq!(r.floor, 5);
@@ -390,8 +390,8 @@ fn runtime_entries_skip_type_only_edges() {
     let r = run(&[]);
     assert_eq!((r.floor, r.runtime_entries), (3, 0));
     assert_eq!(r, e.floor(&entries, &opts, 25));
-    // The transpile-only tests don't follow the type-only import; the other entry
-    // does.
+    // The transpile-only tests don't follow the type-only import; the other
+    // entry does.
     let r = run(&[isolated, direct]);
     assert_eq!((r.entries, r.floor, r.runtime_entries), (3, 2, 2));
     assert_eq!(sites(&g, &r), [s("src/site.ts", 2, 2)]);
@@ -641,7 +641,8 @@ fn weighted_order_ranks_sites_that_free_entries_together() {
     let opts = AffectedOptions::default();
     let entries = tests(&g);
 
-    // Freed: at first only the small site frees an entry. p frees nothing alone.
+    // Freed: at first only the small site frees an entry. p frees nothing
+    // alone.
     let freed = e.floor(&entries, &opts, 25);
     assert_eq!(
         greedy(&g, &freed),
@@ -652,8 +653,8 @@ fn weighted_order_ranks_sites_that_free_entries_together() {
         ]
     );
     assert_eq!(e.floor_with(&entries, &opts, FloorOrder::Freed, 25), freed);
-    // Weighted: p and q each hold half of three entries, more than the small site's
-    // one entry. p and q tie: the smaller path goes first.
+    // Weighted: p and q each hold half of three entries, more than the small
+    // site's one entry. p and q tie: the smaller path goes first.
     let weighted = e.floor_with(&entries, &opts, FloorOrder::Weighted, 25);
     assert_eq!(
         greedy(&g, &weighted),
@@ -671,8 +672,8 @@ fn weighted_order_ranks_sites_that_free_entries_together() {
     let two = e.floor_with(&entries, &opts, FloorOrder::Weighted, 2);
     assert_eq!(two.greedy, weighted.greedy[..2]);
 
-    // An entry that one site holds counts fully in both orders: on the hub graph
-    // they agree.
+    // An entry that one site holds counts fully in both orders: on the hub
+    // graph they agree.
     let g = hubs();
     let e = Engine::new(&g);
     let weighted = e.floor_with(&tests(&g), &opts, FloorOrder::Weighted, 25);
@@ -710,7 +711,8 @@ fn what_if_records_were_resolved() {
     let base = Engine::new(&g).floor(&tests(&g), &AffectedOptions::default(), 25);
     assert_eq!((base.floor, base.assumed.as_ref()), (4, None));
 
-    // The whole hub file: t1 and t2 leave the floor, t3 still reaches the plugin.
+    // The whole hub file: t1 and t2 leave the floor, t3 still reaches the
+    // plugin.
     let r = assuming(&g, &["src/hub.ts"], &[]);
     let a = r.assumed.clone().unwrap();
     assert_eq!((r.floor, r.records.open), (2, 3));
@@ -773,9 +775,9 @@ fn what_if_records_were_resolved() {
     assert_eq!((r.floor, a.records, a.files, a.freed), (0, 5, 4, 4));
     assert!(r.sites.is_empty() && r.classes.is_empty() && r.greedy.is_empty());
 
-    // Assumptions that match no open record are reported: a missing file, a file
-    // whose records aren't open, a line without a record, and a class nothing
-    // has.
+    // Assumptions that match no open record are reported: a missing file, a
+    // file whose records aren't open, a line without a record, and a class
+    // nothing has.
     let r = assuming(
         &g,
         &[

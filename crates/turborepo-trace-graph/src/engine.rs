@@ -558,7 +558,8 @@ impl<'g, G: GraphView> Engine<'g, G> {
                 }
             });
         } else {
-            // (The index matches the path against every pattern of its directories.)
+            // (The index matches the path against every pattern of its
+            // directories.)
             self.membership_index().matches(path, |n, d, pattern| {
                 if d == parent && pattern == pattern_of_name {
                     f(n, d, pattern);
@@ -574,8 +575,9 @@ impl<'g, G: GraphView> Engine<'g, G> {
         if self.g.has_lookups() {
             let mut globs: HashMap<String, Option<Glob>> = HashMap::new();
             for (dir, rest) in crate::index::dir_splits(path) {
-                // Views usually list a directory's memberships grouped by pattern; remember
-                // the verdict for the previous pattern so each run is matched once.
+                // Views usually list a directory's memberships grouped by
+                // pattern; remember the verdict for the
+                // previous pattern so each run is matched once.
                 let mut last: Option<(String, bool)> = None;
                 self.g.membership_lookup(dir, &mut |n, d, pat| {
                     let hit = match &last {
@@ -633,8 +635,9 @@ impl<'g, G: GraphView> Engine<'g, G> {
             let node = g.node_by_path(&c.path);
             match c.kind {
                 ChangeKind::Modified | ChangeKind::Added => {
-                    // An "added" path that is already a node means the graph is stale; treat
-                    // it as modified (conservative).
+                    // An "added" path that is already a node means the graph is
+                    // stale; treat it as modified
+                    // (conservative).
                     if let Some(n) = node {
                         matched = true;
                         add(
@@ -686,15 +689,17 @@ impl<'g, G: GraphView> Engine<'g, G> {
                 }),
                 ChangeKind::Deleted | ChangeKind::Modified => {}
             }
-            // What was looked for below the path ([`Engine::match_probes_below`]).
+            // What was looked for below the path
+            // ([`Engine::match_probes_below`]).
             if c.kind != ChangeKind::Deleted || after_change {
                 self.match_probes_below(&c.path, &mut |n, probe| {
                     matched = true;
                     add(n, &|| below_cause(c, probe), &mut seeds);
                 });
             }
-            // Config inputs: any change to a file that a resolution read (but for the
-            // readers the caller found untouched by this change, `ChangeSet::spared`).
+            // Config inputs: any change to a file that a resolution read (but
+            // for the readers the caller found untouched by this
+            // change, `ChangeSet::spared`).
             let spared: Option<&Vec<NodeId>> = changes
                 .spared
                 .iter()
@@ -718,8 +723,9 @@ impl<'g, G: GraphView> Engine<'g, G> {
                     &mut seeds,
                 );
             });
-            // Covered uncertainty: any change inside a scope (its contents, added or
-            // deleted files) can change what the reference reads.
+            // Covered uncertainty: any change inside a scope (its contents,
+            // added or deleted files) can change what the reference
+            // reads.
             self.match_scopes(&c.path, &mut |n, dir, pattern| {
                 matched = true;
                 add(
@@ -752,8 +758,8 @@ impl<'g, G: GraphView> Engine<'g, G> {
                 unmatched.push(c.clone());
             }
         }
-        // Directories the change made or removed: the lookups that asked for one by
-        // name.
+        // Directories the change made or removed: the lookups that asked for
+        // one by name.
         for c in &changes.dirs {
             self.match_dir(&c.path, &mut |n, dir, pattern| {
                 add(
@@ -768,8 +774,8 @@ impl<'g, G: GraphView> Engine<'g, G> {
                 );
             });
         }
-        // Nodes the caller seeds directly; those only type resolution observes, when
-        // the pass follows type-only edges.
+        // Nodes the caller seeds directly; those only type resolution observes,
+        // when the pass follows type-only edges.
         let types = !filter.exclude_flags.contains(RefFlags::TYPE_ONLY);
         let typed = changes.type_seeds.iter().filter(|_| types);
         for (n, cause) in changes.seeds.iter().chain(typed) {
@@ -793,9 +799,10 @@ impl<'g, G: GraphView> Engine<'g, G> {
             }
         }
         if !changes.scoped.is_empty() {
-            // Per changed package: the importers it changed for. A package's own nodes are
-            // seeded only when it is traced (more than its opaque node); otherwise the
-            // linking files of the listed importers are.
+            // Per changed package: the importers it changed for. A package's
+            // own nodes are seeded only when it is traced (more
+            // than its opaque node); otherwise the linking files of
+            // the listed importers are.
             let np = g.package_count() as usize;
             let mut scope: Vec<Option<Vec<bool>>> = vec![None; np];
             for s in &changes.scoped {
@@ -881,8 +888,9 @@ impl<'g, G: GraphView> Engine<'g, G> {
         let g = self.g;
         let rev = self.reverse();
         let (mut seeds, unmatched) = self.seeds(changes, opts.after_change, filter);
-        // Task mode (`crate::taskmode`): a byte read carries the read file's own change
-        // one hop, and the walk skips byte reads and listing-only links.
+        // Task mode (`crate::taskmode`): a byte read carries the read file's
+        // own change one hop, and the walk skips byte reads and
+        // listing-only links.
         let base = filter;
         let filter = if task_mode {
             let mut seeded = NodeSet::from_iter_in(g.node_count(), seeds.iter().map(|s| s.0));
@@ -948,7 +956,8 @@ impl<'g, G: GraphView> Engine<'g, G> {
             _ => crate::barrel::PruneReport::default(),
         };
 
-        // Entries the change reaches only through modules they replace with a mock.
+        // Entries the change reaches only through modules they replace with a
+        // mock.
         if let Some(b) = barrels.filter(|b| b.mocks) {
             let nodes: Vec<NodeId> = seeds
                 .iter()
@@ -1021,7 +1030,8 @@ impl<'g, G: GraphView> Engine<'g, G> {
                         && !is_affected.contains(n)
                         && !exempt.is_some_and(|x| x.contains(n))
                     {
-                        // An entry both passes reach keeps the first pass's site.
+                        // An entry both passes reach keeps the first pass's
+                        // site.
                         is_affected.insert(n);
                         let mut witness = Self::chain(&parent, n);
                         witness.reverse();
@@ -1048,8 +1058,8 @@ impl<'g, G: GraphView> Engine<'g, G> {
             }
         }
         self.put_queue(q);
-        // A pass without type-only edges: which entries the change reaches only through
-        // them.
+        // A pass without type-only edges: which entries the change reaches only
+        // through them.
         if barrels.is_some() && base != self.opts.traversal {
             let nodes: Vec<NodeId> = seeds
                 .iter()

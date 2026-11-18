@@ -325,7 +325,8 @@ fn facts_survive_the_cache_format() {
 
 #[test]
 fn shared_values_do_not_unfold_exponentially() {
-    // Each step uses the previous value twice: 40 steps are 2^40 leaves as a tree.
+    // Each step uses the previous value twice: 40 steps are 2^40 leaves as a
+    // tree.
     let mut src = String::from("import { f } from './m';\nexport function g(v0: string) {\n");
     for i in 1..=40 {
         src.push_str(&format!("  const v{i} = v{} + '/' + v{};\n", i - 1, i - 1));
@@ -561,7 +562,8 @@ fn an_unknown_key_selects_every_value_at_that_caller() {
         !b.contains("dep pkg/a.test.ts:2 require spec services/svc-b"),
         "{b}"
     );
-    // A key from the command line selects every value, at the file that passes it.
+    // A key from the command line selects every value, at the file that passes
+    // it.
     assert!(
         b.contains("dep tools/lifecycle.ts:2 require spec services/svc-a/src/routes <-"),
         "{b}"
@@ -608,8 +610,8 @@ fn a_load_the_facts_do_not_describe_is_bound_at_the_loader() {
     r.dynamic.push(("pkg/d.test.ts", "helpers/index.ts"));
     let b = r.bound(&["helpers/setup-endpoint.ts"], LOADS);
     println!("{b}");
-    // The barrel is loaded with `require`: whoever does it may call anything with
-    // anything.
+    // The barrel is loaded with `require`: whoever does it may call anything
+    // with anything.
     assert!(
         b.contains("dep pkg/d.test.ts:0 require spec services/svc-a/src/routes <-"),
         "{b}"
@@ -797,8 +799,8 @@ fn return_summaries_and_constants_of_other_files() {
         b.contains("dep app/load.ts:4 require path lib/configs/default.js <- app/load.ts:4"),
         "{b}"
     );
-    // The call of a function of a module without facts stays the file's own record;
-    // a function that returns nothing loads nothing.
+    // The call of a function of a module without facts stays the file's own
+    // record; a function that returns nothing loads nothing.
     let load = r.id("app/load.ts").unwrap();
     let bound = bind(&r, &[load], LOADS);
     assert_eq!(bound.closed.len(), 3, "{b}");
@@ -817,8 +819,8 @@ fn return_summaries_and_constants_of_other_files() {
 
 #[test]
 fn thousands_of_callers_with_distinct_options() {
-    // Every caller passes a different options object; the option the table is read
-    // with has two values.
+    // Every caller passes a different options object; the option the table is
+    // read with has two values.
     let mut files: Vec<(String, String)> = vec![
         ("helpers/setup-endpoint.ts".to_owned(), ROUTES.to_owned()),
         (
@@ -866,9 +868,9 @@ fn thousands_of_callers_with_distinct_options() {
 
 #[test]
 fn too_many_combinations_keep_the_site_open() {
-    // Three parameters with 40 values each: the callers pass 40 triples, a join of
-    // the parameters is 64,000 combinations. Nothing is dropped silently: the
-    // site's own record stays.
+    // Three parameters with 40 values each: the callers pass 40 triples, a join
+    // of the parameters is 64,000 combinations. Nothing is dropped
+    // silently: the site's own record stays.
     let mut files: Vec<(String, String)> = vec![(
         "lib/load.ts".to_owned(),
         "import { join } from 'path';\nexport function load(a: string, b: string, c: string) {\n  \
@@ -996,8 +998,8 @@ fn a_bound_require_is_followed_into_the_module() {
     let mut r = harness_repo();
     let b = r.bound(&["framework/index.ts"], LOADS);
     println!("{b}");
-    // The framework's site is closed: the handler a key selects is a literal of the
-    // route module, which supplies it.
+    // The framework's site is closed: the handler a key selects is a literal of
+    // the route module, which supplies it.
     assert!(b.contains("closed framework/index.ts record"), "{b}");
     assert!(
         b.contains(
@@ -1007,8 +1009,9 @@ fn a_bound_require_is_followed_into_the_module() {
         "{b}"
     );
     assert!(!b.contains("svc-b/src/endpoints"), "{b}");
-    // The route module of the working directory: evaluated for the tests' working
-    // directories; the record on the harness does not count for tests.
+    // The route module of the working directory: evaluated for the tests'
+    // working directories; the record on the harness does not count for
+    // tests.
     assert!(
         b.contains("dep helpers/setup-endpoint.ts:20 dynamic_import cwd-per-test"),
         "{b}"
@@ -1150,8 +1153,9 @@ fn a_module_outside_the_repository_exports_something_unknown() {
 
 #[test]
 fn the_file_that_loads_a_module_is_a_caller_of_its_exports() {
-    // `plugin.ts` is only loaded through the bound site of `helper.ts`: the graph
-    // has no edge for it, but `helper.ts` calls its export with an argument.
+    // `plugin.ts` is only loaded through the bound site of `helper.ts`: the
+    // graph has no edge for it, but `helper.ts` calls its export with an
+    // argument.
     let t = caller("run", "run('./plugin')");
     let r = Repo::new(&[
         (
@@ -1189,8 +1193,8 @@ fn a_table_value_that_leaves_another_way_keeps_the_table() {
     let out = r.bound(&["lib/helper.ts"], LOADS);
     println!("{out}");
     assert!(out.contains("table lib/helper.ts"), "{out}");
-    // The same table, also read by a function that returns the value: whoever gets
-    // it may load it, so the references of the literal have to stay.
+    // The same table, also read by a function that returns the value: whoever
+    // gets it may load it, so the references of the literal have to stay.
     let r = Repo::new(&[("lib/helper.ts", &leaky), ("lib/t.test.ts", &t)]);
     let out = r.bound(&["lib/helper.ts"], LOADS);
     println!("{out}");
@@ -1346,8 +1350,9 @@ fn a_partly_unknown_alternative_keeps_the_record() {
     ]);
     let out = r.bound(&["lib/helper.ts"], LOADS);
     println!("{out}");
-    // The record stays, so every test that reaches the helper is selected on every
-    // change: what the callers pass adds nothing and is not evaluated.
+    // The record stays, so every test that reaches the helper is selected on
+    // every change: what the callers pass adds nothing and is not
+    // evaluated.
     assert_eq!(out, "");
 }
 
@@ -1473,8 +1478,8 @@ fn a_function_that_walks_its_argument_by_calling_itself() {
     };
     let out = repo(UTIL, &[]).bound(&["framework/normalize.ts"], LOADS);
     println!("{out}");
-    // The handlers at every depth, and nothing else of the table: no method, path
-    // or tag, no object, array or function.
+    // The handlers at every depth, and nothing else of the table: no method,
+    // path or tag, no object, array or function.
     assert_eq!(
         out,
         "closed framework/normalize.ts record\ndep app/a.test.ts:3 dynamic_import spec \
@@ -1602,8 +1607,9 @@ fn a_method_of_a_call_result_is_no_escape() {
     let out = bound("many", "many.call(null, ['./mods/a'])");
     println!("{out}");
     assert!(out.contains("dep lib/t.test.ts:0 require open"), "{out}");
-    // A function of the module reached through a result: `load` is used as a value
-    // in its own file, so its site stays open there whatever the caller does.
+    // A function of the module reached through a result: `load` is used as a
+    // value in its own file, so its site stays open there whatever the
+    // caller does.
     let out = bound("api", "api().go('./mods/b')");
     println!("{out}");
     assert!(!out.contains("./mods/b"), "{out}");
@@ -1744,7 +1750,8 @@ fn an_array_method_hands_its_elements_to_a_callback() {
         ])
         .bound(&["lib/helper.ts"], LOADS)
     };
-    // The callback writes the property: the caller's literal is not all there is.
+    // The callback writes the property: the caller's literal is not all there
+    // is.
     let out = bound(
         each,
         "each([{ name: './mods/a' }], (it) => {\n  it.name = process.env.NAME;\n})",

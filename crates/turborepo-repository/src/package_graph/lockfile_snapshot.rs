@@ -96,7 +96,8 @@ impl PackageGraph {
         }
 
         // The existing splitter reads package-manager configuration from disk.
-        // Reuse it only if that configuration is identical at the requested ref.
+        // Reuse it only if that configuration is identical at the requested
+        // ref.
         if !self.dependency_configuration_matches(&read) {
             return Err(unavailable());
         }

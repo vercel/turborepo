@@ -367,7 +367,8 @@ const NPM_NESTED: &str = r#"{
 
 #[test]
 fn npm_hoisting_move_is_not_an_identity_change() {
-    // The root drops `b@2`, so npm hoists `b@1` from under `a` to the top level.
+    // The root drops `b@2`, so npm hoists `b@1` from under `a` to the top
+    // level.
     let new = r#"{
   "lockfileVersion": 3,
   "packages": {
@@ -653,8 +654,9 @@ snapshots:
       leaf: 2.0.0
 ";
     assert!(diff(&pnpm(old), &pnpm(old)).is_empty());
-    // Deep in the cycle, `b` moves to the other variant of `x`: `a` and `b` keep
-    // their ids and identities, and the root's `a` now unfolds to another tree.
+    // Deep in the cycle, `b` moves to the other variant of `x`: `a` and `b`
+    // keep their ids and identities, and the root's `a` now unfolds to
+    // another tree.
     let new = edit(
         old,
         &[(

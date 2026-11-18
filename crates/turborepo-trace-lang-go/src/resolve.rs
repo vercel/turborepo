@@ -573,7 +573,8 @@ impl Resolver for GoResolver {
     fn resolve(&self, r: &RawRef<'_>, _from: FileId, cx: &ResolveCx<'_>) -> Resolution {
         let res = self.resolve_spec(r, &r.spec, cx);
         if r.kind == RefKind::SharedLib {
-            // `plugin.Open`: keep the extractor's cwd-relative record for a missing plugin.
+            // `plugin.Open`: keep the extractor's cwd-relative record for a
+            // missing plugin.
             return explain_missing(r, res);
         }
         res
@@ -602,7 +603,8 @@ impl Resolver for GoResolver {
             }
         }
         out.extend(res.extra);
-        // Manifests: the module's go.mod and the context's go.sum/go.work/modules.txt.
+        // Manifests: the module's go.mod and the context's
+        // go.sum/go.work/modules.txt.
         let mut manifests: Vec<PathBuf> = Vec::new();
         manifests.extend(self.own_go_mod(cx.fs, dir));
         if let Some(c) = self.ctx_for(cx.fs, dir) {
@@ -669,8 +671,8 @@ impl Resolver for GoResolver {
     }
 
     fn external_identity(&self, name: &str, fs: &DirCache) -> Option<PackageIdentity> {
-        // `module@version` of a module that is not in the module cache: the identity
-        // its files would have there.
+        // `module@version` of a module that is not in the module cache: the
+        // identity its files would have there.
         let (module, version) = name.rsplit_once('@')?;
         if module.is_empty() || !version.starts_with('v') {
             return None;

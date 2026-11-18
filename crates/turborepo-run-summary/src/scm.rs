@@ -42,7 +42,8 @@ impl SCMState {
             }
         }
 
-        // Fall back to using git, resolving the branch and SHA in one subprocess.
+        // Fall back to using git, resolving the branch and SHA in one
+        // subprocess.
         if state.branch.is_none() && state.sha.is_none() {
             let (branch, sha) = scm.get_current_branch_and_sha(dir);
             if state.branch.is_none() {

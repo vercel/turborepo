@@ -142,8 +142,8 @@ impl Language for JsLanguage {
 
     fn extract<'s>(&self, src: &'s [u8], cx: &ExtractCx<'_>, out: &mut RefSink<'s>) {
         let file_name = cx.path.file_name().and_then(|n| n.to_str());
-        // Environment assignments and helpers are first-party facts: installed packages
-        // are not scanned for them.
+        // Environment assignments and helpers are first-party facts: installed
+        // packages are not scanned for them.
         let first_party = !cx
             .options
             .local(cx.path)
@@ -179,17 +179,18 @@ impl Language for JsLanguage {
         } else {
             None
         };
-        // What the file does with the mock APIs of the test runners (first-party files
-        // only: an installed package does not mock the repository's modules).
+        // What the file does with the mock APIs of the test runners
+        // (first-party files only: an installed package does not mock
+        // the repository's modules).
         if first_party && mocks::may_mock(src) {
             let m = mocks::scan(src, Dialect::from_path(cx.path));
             if !m.is_empty() {
                 out.fact(m.encode());
             }
         }
-        // A `@jsxImportSource <module>` pragma makes the transpiler import the JSX
-        // factory from `<module>/jsx-runtime`: an import no statement of the
-        // file writes.
+        // A `@jsxImportSource <module>` pragma makes the transpiler import the
+        // JSX factory from `<module>/jsx-runtime`: an import no
+        // statement of the file writes.
         if let Some(r) = jsx_import_source(src) {
             out.push(r);
         }

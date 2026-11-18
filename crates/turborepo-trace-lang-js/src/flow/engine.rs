@@ -898,7 +898,8 @@ impl<'a, 's> Engine<'a, 's> {
     }
 
     fn arr_at(&mut self, a: &ArrV<'a>, i: usize) -> V<'a> {
-        // Reordered somewhere in the file (`xs.sort()` on an alias): any element.
+        // Reordered somewhere in the file (`xs.sort()` on an alias): any
+        // element.
         let at = if a.trust == Trust::Shared && self.facts().array_reorder() {
             a.elems.to_vec()
         } else {
@@ -1002,8 +1003,9 @@ impl<'a, 's> Engine<'a, 's> {
                         // An accessor computes its value.
                         PropertyKind::Get | PropertyKind::Set => self.unk(Tag::Unknown, "", p.span),
                     };
-                    // A setter that uses `this` can write any property on an assignment
-                    // to its own; `__proto__: base` inherits every property of `base`.
+                    // A setter that uses `this` can write any property on an
+                    // assignment to its own; `__proto__:
+                    // base` inherits every property of `base`.
                     let setter = p.kind == PropertyKind::Set
                         && matches!(&p.value, Expression::FunctionExpression(f)
                             if self.facts().uses_this(f.span.start));
@@ -1017,8 +1019,10 @@ impl<'a, 's> Engine<'a, 's> {
                     match key {
                         Some(k) => {
                             obj.set(&k, val, false);
-                            // Written by name after every spread so far: the spreads'
-                            // unknown properties do not reach it (cross-file facts
+                            // Written by name after every spread so far: the
+                            // spreads'
+                            // unknown properties do not reach it (cross-file
+                            // facts
                             // only: the per-file pass does not track it).
                             if self.sym.is_some()
                                 && p.kind == PropertyKind::Init
@@ -1157,9 +1161,9 @@ impl<'a, 's> Engine<'a, 's> {
         let outer_low = std::mem::replace(&mut self.lowest_hit, usize::MAX);
         let outer_used = std::mem::replace(&mut self.frame_used, false);
         let mut v = self.definitions(sym);
-        // A definition that refers to the binding itself (`dir = resolve(dir)`):
-        // evaluate again with the previous result until it is stable; otherwise
-        // widen.
+        // A definition that refers to the binding itself (`dir =
+        // resolve(dir)`): evaluate again with the previous result until
+        // it is stable; otherwise widen.
         let mut pass = 1;
         while self.lowest_hit <= k && pass < MAX_PASSES {
             self.busy[k].partial = v.clone();
@@ -1170,9 +1174,10 @@ impl<'a, 's> Engine<'a, 's> {
             }
             v = next;
             if pass == MAX_PASSES {
-                // In symbolic mode, a binding that keeps reading deeper into the same
-                // values (a function that walks a structure by calling itself) is
-                // everything those reads can reach.
+                // In symbolic mode, a binding that keeps reading deeper into
+                // the same values (a function that walks a
+                // structure by calling itself) is everything
+                // those reads can reach.
                 v = match self.sym_widen(sym, k, &v) {
                     Some(w) => w,
                     None => {
@@ -1193,8 +1198,8 @@ impl<'a, 's> Engine<'a, 's> {
         }
         let low = self.lowest_hit;
         let used = self.frame_used;
-        // Memoize unless the value depends on an outer binding still being evaluated or
-        // on the parameters of an inlined call.
+        // Memoize unless the value depends on an outer binding still being
+        // evaluated or on the parameters of an inlined call.
         if low >= k && !used && self.site_steps > 0 {
             self.memo.insert(sym, v.clone());
         }
@@ -1348,10 +1353,11 @@ impl<'a, 's> Engine<'a, 's> {
             AstKind::FormalParameter(p) => self.param(p, decl, sym),
             AstKind::Function(f) => {
                 if f.body.is_some() {
-                    // In sloppy code a function declared in a block is also a `var` of the
-                    // enclosing function, shared with the declarations of that name in
-                    // other blocks: which one a call outside the block reaches is not
-                    // known here.
+                    // In sloppy code a function declared in a block is also a
+                    // `var` of the enclosing function,
+                    // shared with the declarations of that name in
+                    // other blocks: which one a call outside the block reaches
+                    // is not known here.
                     let nested = !matches!(
                         self.nodes.parent_kind(decl),
                         AstKind::Program(_)
@@ -1376,7 +1382,8 @@ impl<'a, 's> Engine<'a, 's> {
                     // `declare function`: defined somewhere else.
                     V::unknown(Tag::Unknown, "", &name)
                 } else {
-                    // An overload signature: the implementation is another declaration.
+                    // An overload signature: the implementation is another
+                    // declaration.
                     V::Void
                 }
             }
@@ -1429,7 +1436,8 @@ impl<'a, 's> Engine<'a, 's> {
             },
             AstKind::TSEnumDeclaration(e) => {
                 let mut props = Vec::new();
-                // Numeric members also map their number back to their name (`E[1]`).
+                // Numeric members also map their number back to their name
+                // (`E[1]`).
                 let mut reverse: Vec<(Rc<str>, V<'a>)> = Vec::new();
                 let mut next: Option<u64> = Some(0);
                 let mut open = None;
@@ -1627,8 +1635,8 @@ impl<'a, 's> Engine<'a, 's> {
             return V::unknown(Tag::Unknown, "", &name);
         };
         let reach = self.reach(f, fn_id);
-        // The call sites are other activations: the frames of inlined calls do not
-        // apply.
+        // The call sites are other activations: the frames of inlined calls do
+        // not apply.
         let frames = std::mem::take(&mut self.frames);
         let mut vals = Vec::new();
         match &*reach {
@@ -1738,8 +1746,9 @@ impl<'a, 's> Engine<'a, 's> {
                 AstKind::CallExpression(c) => {
                     let fspan = f.span();
                     if c.callee.get_inner_expression().span() == fspan {
-                        // An immediately invoked function. Its own name can call it again
-                        // with other arguments.
+                        // An immediately invoked function. Its own name can
+                        // call it again with other
+                        // arguments.
                         let recursive = symbols
                             .iter()
                             .any(|s| scoping.get_resolved_references(*s).next().is_some());
@@ -1804,9 +1813,9 @@ impl<'a, 's> Engine<'a, 's> {
                 }
             }
         }
-        // A function nothing in the file refers to is still reachable where top-level
-        // declarations are globals (classic scripts): no call site bounds its
-        // parameters.
+        // A function nothing in the file refers to is still reachable where
+        // top-level declarations are globals (classic scripts): no call
+        // site bounds its parameters.
         if calls.is_empty() {
             escapes = true;
         }
@@ -1850,8 +1859,9 @@ impl<'a, 's> Engine<'a, 's> {
                 match (method, arg, param) {
                     (_, 0, 0) if iterates => {
                         let recv = self.eval(&m.object);
-                        // Only an array has these methods: a string or a plain object
-                        // in the receiver's place has no elements to hand out.
+                        // Only an array has these methods: a string or a plain
+                        // object in the receiver's
+                        // place has no elements to hand out.
                         let recv = self.sym_as_array(recv, m.object.span());
                         self.elements(recv, m.object.span())
                     }
@@ -2077,9 +2087,10 @@ impl<'a, 's> Engine<'a, 's> {
             FnRef::Function(func) => &func.params,
             FnRef::Arrow(a) => &a.params,
         };
-        // Bind the parameters. Defaults are evaluated in the callee, where earlier
-        // parameters are already bound. Whether the callee reads its own frame says
-        // nothing about the caller's (the arguments were evaluated there).
+        // Bind the parameters. Defaults are evaluated in the callee, where
+        // earlier parameters are already bound. Whether the callee
+        // reads its own frame says nothing about the caller's (the
+        // arguments were evaluated there).
         let outer_used = self.frame_used;
         // `arguments[i] = x` in the body writes the parameter (sloppy code).
         let aliased = self.facts().uses_arguments(key);
@@ -2122,7 +2133,8 @@ impl<'a, 's> Engine<'a, 's> {
     pub(super) fn apply(&mut self, f: Func, args: &Args<'a>, span: Span) -> V<'a> {
         let mut vals = args.vals.clone();
         if let Some(r) = &args.rest {
-            // `path.join(dir, ...parts)`: some unknown number of further segments.
+            // `path.join(dir, ...parts)`: some unknown number of further
+            // segments.
             let mut tails = Vec::new();
             for l in r.leaves() {
                 tails.push(match l {
@@ -2328,8 +2340,8 @@ impl<'a, 's> Engine<'a, 's> {
         let budget = self.site_steps;
         let v = match c.callee.get_inner_expression() {
             Expression::StaticMemberExpression(m) if m.property.name == "resolve" => {
-                // An absolute path or a builtin module is its own answer, whatever
-                // function resolves it.
+                // An absolute path or a builtin module is its own answer,
+                // whatever function resolves it.
                 let fixed = match c.arguments.as_slice() {
                     [_] => {
                         let a = self.args(&c.arguments);
@@ -2347,8 +2359,8 @@ impl<'a, 's> Engine<'a, 's> {
             callee => {
                 let f = self.eval(callee);
                 let a = self.args(&c.arguments);
-                // A builtin module or an absolute path is the same for every `require`
-                // function.
+                // A builtin module or an absolute path is the same for every
+                // `require` function.
                 let (fixed, other): (Vec<V<'a>>, Vec<V<'a>>) = a
                     .get(0)
                     .into_leaves()
@@ -2356,7 +2368,8 @@ impl<'a, 's> Engine<'a, 's> {
                     .partition(same_everywhere);
                 let mut out = fixed;
                 let request = join(other.iter().cloned());
-                // The alternatives that are exactly an environment variable, and the rest.
+                // The alternatives that are exactly an environment variable,
+                // and the rest.
                 let (named, rest): (Vec<V<'a>>, Vec<V<'a>>) = other.iter().cloned().partition(
                     |l| matches!(l, V::Js(JsVal::Unknown(r)) if super::env::exact_env(r).is_some()),
                 );
@@ -2399,7 +2412,8 @@ impl<'a, 's> Engine<'a, 's> {
                         }
                     };
                     if !named.is_empty() {
-                        // Functions for different places: no one place can be said.
+                        // Functions for different places: no one place can be
+                        // said.
                         from = Some(match from {
                             Some(f) if f != place => EnvFrom::Unknown,
                             _ => place,
@@ -2445,8 +2459,9 @@ impl<'a, 's> Engine<'a, 's> {
                         };
                         let known =
                             matches!(&i, JsVal::Str(Value::Str(s)) if !s.starts_with("file:"));
-                        // An unknown input against a file URL: taken as a relative
-                        // reference (like an unknown segment of `path.resolve`), so the
+                        // An unknown input against a file URL: taken as a
+                        // relative reference (like an
+                        // unknown segment of `path.resolve`), so the
                         // result is something below the base's directory.
                         if let (
                             JsVal::Unknown(r),
@@ -2556,8 +2571,9 @@ impl<'a, 's> Engine<'a, 's> {
     // ---- methods ----
 
     fn method(&mut self, recv: V<'a>, name: &str, args: &'a [Argument<'a>], span: Span) -> V<'a> {
-        // Promises are their settled values: `p.then(f)` is `f(p)`, `p.catch(f)` is `p`
-        // or what the handler returns, `p.finally(f)` is `p`.
+        // Promises are their settled values: `p.then(f)` is `f(p)`,
+        // `p.catch(f)` is `p` or what the handler returns,
+        // `p.finally(f)` is `p`.
         match name {
             "then" | "catch" => {
                 let Some(cb) = args.first().and_then(|a| a.as_expression()) else {
@@ -2574,7 +2590,8 @@ impl<'a, 's> Engine<'a, 's> {
                     rest: None,
                 };
                 let mut r = self.call_with(f, &a, span);
-                // `p.then(onFulfilled, onRejected)`: also what the second one returns.
+                // `p.then(onFulfilled, onRejected)`: also what the second one
+                // returns.
                 if name == "then"
                     && let Some(cb) = args.get(1).and_then(|a| a.as_expression())
                 {
@@ -2788,7 +2805,8 @@ impl<'a, 's> Engine<'a, 's> {
                     Some(sep) if a.rest.is_none() && a.trust != Trust::Shared => {
                         let mut acc: Option<V<'a>> = None;
                         for e in &a.elems {
-                            // `join` writes `undefined` and `null` as the empty string.
+                            // `join` writes `undefined` and `null` as the empty
+                            // string.
                             let e = &join(e.leaves().iter().map(|l| match l {
                                 V::Void => V::str(""),
                                 l => l.clone(),

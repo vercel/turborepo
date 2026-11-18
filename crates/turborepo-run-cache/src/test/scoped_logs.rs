@@ -196,8 +196,9 @@ async fn concurrent_scoped_logs_save_restore_and_replay_independently() {
         cache.cache.wait().await.unwrap();
         assert!(cache.warnings.lock().unwrap().is_empty());
 
-        // Restore each archive into an empty log directory. Restoring all entries
-        // together could hide an archive accidentally containing a peer's log.
+        // Restore each archive into an empty log directory. Restoring all
+        // entries together could hide an archive accidentally
+        // containing a peer's log.
         for (index, task) in tasks.iter_mut().enumerate() {
             std::fs::remove_dir_all(log_dir.as_std_path()).unwrap();
             let (sink, mut handle) = recording_task_handle();
@@ -384,9 +385,10 @@ async fn symlinked_output_directory_does_not_archive_or_overwrite_peer_logs() {
             .map(|task| task.log_file_path.clone())
             .collect();
         if literal_outputs {
-            // Literal paths bypass manual expansion of symlinked output globs. Use
-            // an actual peer's digest so filtering must recognize its canonical
-            // managed-log path, not just the lexical logs/ alias.
+            // Literal paths bypass manual expansion of symlinked output globs.
+            // Use an actual peer's digest so filtering must
+            // recognize its canonical managed-log path, not just
+            // the lexical logs/ alias.
             let peer_filename = paths[1]
                 .as_std_path()
                 .file_name()
@@ -430,8 +432,9 @@ async fn symlinked_output_directory_does_not_archive_or_overwrite_peer_logs() {
             .unwrap();
         cache.cache.wait().await.unwrap();
 
-        // Restore without any logs present: peer bytes must not be in the archive,
-        // either under their managed paths or under the logs/ alias.
+        // Restore without any logs present: peer bytes must not be in the
+        // archive, either under their managed paths or under the logs/
+        // alias.
         for path in &paths {
             std::fs::remove_file(path).unwrap();
         }
@@ -457,8 +460,8 @@ async fn symlinked_output_directory_does_not_archive_or_overwrite_peer_logs() {
             );
         }
 
-        // Restore again with newer peer logs already in place. An archived alias
-        // must not overwrite the underlying peer file.
+        // Restore again with newer peer logs already in place. An archived
+        // alias must not overwrite the underlying peer file.
         for (index, path) in paths.iter().enumerate().skip(1) {
             path.create_with_contents(format!("newer peer {index}\n"))
                 .unwrap();

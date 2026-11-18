@@ -209,7 +209,8 @@ mod tests {
                 std::thread::spawn(move || {
                     barrier.wait();
                     let permit = breaker.enter();
-                    // Keep the winning probe in flight until every thread has tried.
+                    // Keep the winning probe in flight until every thread has
+                    // tried.
                     barrier.wait();
                     permit.is_some()
                 })

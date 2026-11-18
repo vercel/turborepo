@@ -272,7 +272,8 @@ impl Snapshot {
 
     fn matches(&self, guard: &WriterStorage) -> Result<bool, StorageError> {
         // Compare the pinned guard before reading its lock: equal bytes alone
-        // cannot authorize a different repository, even when both locks are absent.
+        // cannot authorize a different repository, even when both locks are
+        // absent.
         Ok(guard.matches_root(&self.root_identity)?
             && same_file::Handle::from_path(&self.root)? == *self.root_identity
             && guard.read_lock()? == self.bytes

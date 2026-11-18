@@ -880,8 +880,9 @@ impl<G: GraphView> Engine<'_, G> {
         let mut cut = NodeSet::new(g.node_count());
         let mut cut_missing = Vec::new();
         for path in &assume.cut {
-            // An exact path first: paths may contain glob characters (`[slug]`). Not for
-            // `PREFIX**`, which is always the prefix form: the hub of a whole repository is
+            // An exact path first: paths may contain glob characters
+            // (`[slug]`). Not for `PREFIX**`, which is always the
+            // prefix form: the hub of a whole repository is
             // a node named `members:**`, and `members:**` means every hub.
             let before = cut.len();
             let prefix_form = path
@@ -919,10 +920,10 @@ impl<G: GraphView> Engine<'_, G> {
         }
         let (mut assumed_records, mut assumed_files) = (0, 0);
 
-        // Records resolved per entry (`GraphView::is_entry_resolved`) are not open when
-        // every entry of the report is one they are resolved for (the usual
-        // case: jest and vitest tests); otherwise they are reported as open,
-        // for every entry.
+        // Records resolved per entry (`GraphView::is_entry_resolved`) are not
+        // open when every entry of the report is one they are resolved
+        // for (the usual case: jest and vitest tests); otherwise they
+        // are reported as open, for every entry.
         let per_entry = g
             .resolved_entries()
             .is_some_and(|r| entries.iter().all(|e| r.contains(e)));
@@ -1031,10 +1032,10 @@ impl<G: GraphView> Engine<'_, G> {
             }
         }
 
-        // 2-4. The sites each entry reaches. Only sites in the entries' closure get a
-        // column. Entries are grouped by the edges they follow, as in
-        // `affected_with`: the runtime entries without type-only edges, the
-        // others with the engine's filter.
+        // 2-4. The sites each entry reaches. Only sites in the entries' closure
+        // get a column. Entries are grouped by the edges they follow,
+        // as in `affected_with`: the runtime entries without type-only
+        // edges, the others with the engine's filter.
         let all = self.options().traversal.for_uncertainty();
         let runtime = all.without_flags(RefFlags::TYPE_ONLY);
         let mut groups: Vec<(EdgeFilter, NodeSet)> = Vec::new();
@@ -1085,8 +1086,8 @@ impl<G: GraphView> Engine<'_, G> {
         drop(col_of);
         drop(closures);
 
-        // Per entry: its number of sites and its classes. Per site: its entries (the
-        // transposed matrix).
+        // Per entry: its number of sites and its classes. Per site: its entries
+        // (the transposed matrix).
         let ew = ne.div_ceil(64);
         let mut cols = vec![0u64; ncols * ew];
         let mut reached = vec![0usize; ncols];
@@ -1126,7 +1127,8 @@ impl<G: GraphView> Engine<'_, G> {
             }
         }
 
-        // 5. Greedy hitting set. `sole[c]`: entries whose only unresolved site is `c`.
+        // 5. Greedy hitting set. `sole[c]`: entries whose only unresolved site
+        //    is `c`.
         let mut unresolved = vec![u64::MAX; tw];
         if !ncols.is_multiple_of(64)
             && let Some(last) = unresolved.last_mut()
@@ -1142,11 +1144,11 @@ impl<G: GraphView> Engine<'_, G> {
             sites[si].reached = reached[c];
             sites[si].exclusive = sole[c];
         }
-        // `score[c]`: what a pick maximizes. Freed: the entries that `c` alone keeps on
-        // the floor (`sole`). Weighted: every floored entry splits one point,
-        // `ONE`, evenly between the unresolved sites it reaches; the shares are
-        // exact fixed-point numbers, so the scores don't depend on the order of
-        // the updates.
+        // `score[c]`: what a pick maximizes. Freed: the entries that `c` alone
+        // keeps on the floor (`sole`). Weighted: every floored entry
+        // splits one point, `ONE`, evenly between the unresolved sites
+        // it reaches; the shares are exact fixed-point numbers, so the
+        // scores don't depend on the order of the updates.
         const ONE: u64 = 1 << 32;
         let mut score: Vec<u64> = match by {
             FloorOrder::Freed => sole.iter().map(|&n| n as u64).collect(),
@@ -1163,9 +1165,10 @@ impl<G: GraphView> Engine<'_, G> {
         // (column, freed, remaining floor)
         let mut order: Vec<(usize, usize, usize)> = Vec::new();
         while order.len() < picks && left > 0 {
-            // Every entry that reaches an unresolved site is still on the floor, so the
-            // site that the most floored entries reach is the one with the largest
-            // `reached`. Columns are in path order: the first of equal keys wins.
+            // Every entry that reaches an unresolved site is still on the
+            // floor, so the site that the most floored entries
+            // reach is the one with the largest `reached`. Columns
+            // are in path order: the first of equal keys wins.
             let mut best: Option<((u64, usize), usize)> = None;
             for_each_bit(&unresolved, |c| {
                 let key = (score[c], reached[c]);
@@ -1208,7 +1211,8 @@ impl<G: GraphView> Engine<'_, G> {
             order.push((c, freed, left));
         }
 
-        // Final order of the sites: most entries first, then path (the sort is stable).
+        // Final order of the sites: most entries first, then path (the sort is
+        // stable).
         let mut perm: Vec<usize> = (0..sites.len()).collect();
         perm.sort_by_key(|&i| std::cmp::Reverse(sites[i].reached));
         let mut pos = vec![0usize; sites.len()];

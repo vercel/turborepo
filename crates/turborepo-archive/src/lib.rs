@@ -304,7 +304,8 @@ fn portable_path(raw: &[u8], directory: bool, limits: Limits) -> Result<String, 
     if raw.len() > limits.path_bytes {
         return Err(Error::LimitExceeded);
     }
-    // ASCII avoids Unicode case/normalization aliases; '~' avoids DOS short names.
+    // ASCII avoids Unicode case/normalization aliases; '~' avoids DOS short
+    // names.
     if raw
         .iter()
         .any(|b| !(32..127).contains(b) || b"\\:<>\"|?*~".contains(b))
@@ -511,9 +512,10 @@ impl Tree {
         if self.nodes.values().all(|node| node.link.is_none()) {
             return Ok(());
         }
-        // Directory containment plus link-target edges form the filesystem graph.
-        // Kahn's algorithm rejects file chains and directory traversal cycles
-        // without recursion or creating even one symlink on a validation failure.
+        // Directory containment plus link-target edges form the filesystem
+        // graph. Kahn's algorithm rejects file chains and directory
+        // traversal cycles without recursion or creating even one
+        // symlink on a validation failure.
         let indices: BTreeMap<_, _> = self
             .nodes
             .values()

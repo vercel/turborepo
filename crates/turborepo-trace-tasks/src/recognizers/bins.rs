@@ -230,8 +230,8 @@ pub fn resolve_unknown(
     cx: &RecognizeCx<'_>,
     out: &mut TaskSpec,
 ) -> Option<Resolved> {
-    // Forwarding re-enters the registry; bins wrapping each other must not recurse
-    // forever.
+    // Forwarding re-enters the registry; bins wrapping each other must not
+    // recurse forever.
     thread_local! {
         static DEPTH: std::cell::Cell<u32> = const { std::cell::Cell::new(0) };
     }
@@ -395,8 +395,8 @@ fn first_party(
             }
         }
         lang => {
-            // A shell script or native binary: its contents are an input, its effects
-            // unknown.
+            // A shell script or native binary: its contents are an input, its
+            // effects unknown.
             out.entry(file.to_path_buf(), lang);
             out.uncertain(
                 UncertaintyKind::UnknownCommand,

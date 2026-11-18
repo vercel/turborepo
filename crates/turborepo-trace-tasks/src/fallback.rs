@@ -170,7 +170,8 @@ pub fn workspace_path<'a>(text: &'a str, root: &str, members: &[&str]) -> Option
         if word.contains("://") {
             return false;
         }
-        // The directory the command runs in, as an argument (`.` first is `source`).
+        // The directory the command runs in, as an argument (`.` first is
+        // `source`).
         if !first && matches!(word, "." | "./") {
             return true;
         }
@@ -195,8 +196,9 @@ pub fn workspace_path<'a>(text: &'a str, root: &str, members: &[&str]) -> Option
                 if names(w) {
                     return true;
                 }
-                // After a variable or another root (`$GITHUB_WORKSPACE/apps/web`,
-                // `}}/apps/web`, `/abs/apps/web`): a tail with a literal member path.
+                // After a variable or another root
+                // (`$GITHUB_WORKSPACE/apps/web`, `}}/apps/web`,
+                // `/abs/apps/web`): a tail with a literal member path.
                 w.starts_with(['$', '}', '/'])
                     && w.match_indices('/').any(|(i, _)| {
                         let tail = &w[i + 1..];
@@ -209,7 +211,8 @@ pub fn workspace_path<'a>(text: &'a str, root: &str, members: &[&str]) -> Option
             })
         })
     };
-    // Commands, so that a leading `.` (the `source` builtin) is not an argument.
+    // Commands, so that a leading `.` (the `source` builtin) is not an
+    // argument.
     for cmd in text.split(['\n', ';', '|', '&', '(', ')']) {
         let mut first = true;
         for word in
@@ -260,8 +263,8 @@ mod tests {
         // The directory the command runs in, as an argument.
         assert_eq!(named("sometool check ."), Some("."));
         assert_eq!(named("tar czf out.tgz /repo"), Some("/repo"));
-        // A variable before a literal member path, a volume mapping, braces, a short
-        // flag.
+        // A variable before a literal member path, a volume mapping, braces, a
+        // short flag.
         assert_eq!(
             named("ls \"$GITHUB_WORKSPACE/apps/web\""),
             Some("$GITHUB_WORKSPACE/apps/web")

@@ -157,7 +157,8 @@ fn use_templates() {
             vec![var("DATA_DIR"), EnvPart::Lit("/seed/a.json".into())]
         )]
     );
-    // The fallback is an ordinary reference of the site; the fact has the variable.
+    // The fallback is an ordinary reference of the site; the fact has the
+    // variable.
     assert_eq!(us[1].2.alts, [term(EnvBase::Str, vec![var("CONFIG_FILE")])]);
     // A value derived from a variable is not the variable.
     assert!(matches!(us[2].2.alts.as_slice(), [EnvAlt::Unknown(_)]));
@@ -319,8 +320,8 @@ fn files_without_references() {
             .collect::<Vec<_>>(),
         [("DATA_FILE".to_owned(), vec![lit("/srv/data.json")])]
     );
-    // Constants, typed declarations, case labels, import lists, string values and
-    // comments are not assignments of a variable.
+    // Constants, typed declarations, case labels, import lists, string values
+    // and comments are not assignments of a variable.
     assert!(!super::env::may_have_facts(
         b"import { AAA, BBB } from './c';\nconst MAX_SIZE = 3;\nconst X_Y: number = 1;\n\
           export const a = MAX_SIZE + 1;\nfoo(a == B_C, MAX_SIZE);\n\

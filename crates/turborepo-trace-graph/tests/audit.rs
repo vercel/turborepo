@@ -158,8 +158,8 @@ fn a_task_hub_is_the_source_of_what_only_it_selects() {
     // Only the hub path reaches the tests of app/dist.ts; a.test.ts is not
     // selected.
     assert_eq!((r.selected, r.implausible), (2, 2));
-    // Hub and task both dominate the two tests: the one closest to the entries is
-    // picked.
+    // Hub and task both dominate the two tests: the one closest to the entries
+    // is picked.
     let s = &r.sources[0];
     assert_eq!(
         (s.id.as_str(), s.kind),
@@ -286,7 +286,8 @@ fn floor_only_change_only_and_both() {
     assert_eq!(fx.signals(&r, "t/floor.test.ts"), ["non_import", "floor"]);
     assert!(fx.signals(&r, "t/both.test.ts").is_empty());
     assert_eq!(r.implausible, 1);
-    // The floor and its only site dominate the same entry: the site is the source.
+    // The floor and its only site dominate the same entry: the site is the
+    // source.
     let s = &r.sources[0];
     assert_eq!(
         (s.id.as_str(), s.kind),
@@ -604,7 +605,8 @@ fn steering_files_select_only_through_explicit_references() {
         (s.kind, s.exclusive, s.inclusive),
         (SourceKind::Steering, 1, 1)
     );
-    // With a source change in the same hub, steering is no longer the only reason.
+    // With a source change in the same hub, steering is no longer the only
+    // reason.
     let r = fx.run(&modified(&["svc/.vercel.approvers", "svc/src.ts"]));
     assert_eq!(fx.signals(&r, "svc/s.test.ts"), ["non_import"]);
     assert_eq!((r.steering.inclusive, r.steering.exclusive), (1, 0));
@@ -728,8 +730,8 @@ fn passes_with_their_own_edge_filter_merge() {
             },
         )
     };
-    // A type change: only the type-checking test is selected, through the type-only
-    // edge.
+    // A type change: only the type-checking test is selected, through the
+    // type-only edge.
     let cs = modified(&["src/types.ts"]);
     let a = pass(&cs, iso, Some(no_types), &[check]);
     assert_eq!((a.entries, a.selected, a.implausible), (1, 0, 0));
@@ -746,8 +748,8 @@ fn passes_with_their_own_edge_filter_merge() {
         (1, 1, 0)
     );
     assert_eq!(m.changes, 2);
-    // A source change: both tests through the task; the counts of the passes add
-    // up.
+    // A source change: both tests through the task; the counts of the passes
+    // add up.
     let cs = modified(&["lib/src.ts"]);
     let m =
         pass(&cs, iso, Some(no_types), &[iso, check]).merge(pass(&cs, check, None, &[iso, check]));

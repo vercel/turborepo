@@ -292,10 +292,10 @@ fn alias_edit(
     let Some(fw) = turborepo_trace_frameworks::framework("vitest") else {
         return Err("no vitest adapter".to_owned());
     };
-    // An import of a Node built-in that only the head revision has loads nothing of
-    // the repository and binds a name nothing else can use (a second
-    // declaration of a name is an early error, which the comparison below
-    // rejects): the new alias value uses it.
+    // An import of a Node built-in that only the head revision has loads
+    // nothing of the repository and binds a name nothing else can use (a
+    // second declaration of a name is an early error, which the comparison
+    // below rejects): the new alias value uses it.
     crate::erase::canonical(path, new).map_err(|e| format!("head: {e}"))?;
     let head = crate::jsblank::without_imports(path, new, &|module, text| {
         PURE_BUILTINS.contains(&module) && !old.contains(text)
@@ -427,8 +427,8 @@ pub fn effects(
         ) else {
             continue;
         };
-        // The same runtime JavaScript at both revisions: the rule for such files
-        // applies (crate::erase).
+        // The same runtime JavaScript at both revisions: the rule for such
+        // files applies (crate::erase).
         if crate::erase::erased_equal(&c.path, &old, &new).is_ok() {
             continue;
         }
@@ -454,16 +454,17 @@ pub fn effects(
             }
         };
         let changed = Changed::new(tables);
-        // The tests this file governs. A test of another config that merges this one
-        // (the file is a helper there) gets what that config makes of it, which
-        // was not looked at: it stays selected.
+        // The tests this file governs. A test of another config that merges
+        // this one (the file is a helper there) gets what that config
+        // makes of it, which was not looked at: it stays selected.
         let abs = root.join(&c.path);
         let (governed, merged): (Vec<NodeId>, Vec<NodeId>) = tests.iter().partition(|t| {
             fw.config_for(&root.join(g.path(**t)))
                 .is_some_and(|cf| cf == abs)
         });
         let (selected, files) = reaching(engine, &governed, &changed);
-        // Everything the file change does, except the config edge of those tests.
+        // Everything the file change does, except the config edge of those
+        // tests.
         let modified = || Cause::Modified {
             path: c.path.clone(),
         };

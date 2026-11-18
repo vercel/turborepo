@@ -255,8 +255,8 @@ fn a_required_module_that_was_never_downloaded() {
         }
         _ => unreachable!(),
     }
-    // Below two nested modules: the inner one is not downloaded and may hold the
-    // package; the outer one is on disk and does not.
+    // Below two nested modules: the inner one is not downloaded and may hold
+    // the package; the outer one is on disk and does not.
     let loc = res.locate(&fs, r, "example.com/nest/deep/x");
     assert_eq!(candidates(&loc), ["example.com/nest/deep@v0.2.0"]);
     // A module replaced by another module version is that version.
@@ -267,7 +267,8 @@ fn a_required_module_that_was_never_downloaded() {
         &*res.locate(&fs, r, "example.com/a/missing"),
         PkgLoc::Missing(_)
     ));
-    // Neither does a local replacement (first-party code that is simply not there).
+    // Neither does a local replacement (first-party code that is simply not
+    // there).
     assert!(matches!(
         &*res.locate(&fs, r, "example.com/loc/missing"),
         PkgLoc::Missing(_)

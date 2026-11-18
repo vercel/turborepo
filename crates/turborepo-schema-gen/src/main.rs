@@ -135,12 +135,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 /// Generate the JSON Schema for turbo.json (both root and workspace schemas)
 fn generate_schema() -> RootSchema {
-    // Generate schema for RawTurboJson which is the complete turbo.json structure
-    // This includes both root-level and workspace-level configurations
+    // Generate schema for RawTurboJson which is the complete turbo.json
+    // structure This includes both root-level and workspace-level
+    // configurations
     let mut schema = schema_for!(RawTurboJson);
 
     // Add allowComments and allowTrailingCommas to the root schema
-    // These tell editors like VSCode that JSONC (JSON with comments) is supported
+    // These tell editors like VSCode that JSONC (JSON with comments) is
+    // supported
     schema
         .schema
         .extensions

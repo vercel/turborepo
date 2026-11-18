@@ -360,7 +360,8 @@ fn redeclarations_recursion_and_block_functions() {
         ),
         "fs_read dir:fx/first.json | fx/* !partial_specifier/unknown"
     );
-    // Sloppy code (a script without `import`): functions of one name in two blocks.
+    // Sloppy code (a script without `import`): functions of one name in two
+    // blocks.
     let src = "var fs = require('fs');\nvar path = require('path');\nif (process.env.X) { \
                function pick() { return 'a.json'; } }\nelse { function pick() { return 'b.json'; \
                } }\nfs.readFileSync(path.join(__dirname, 'fx', pick()));\n";
@@ -503,8 +504,8 @@ fn a_key_of_an_open_map_may_be_missing() {
 
 #[test]
 fn a_module_loaded_from_the_temporary_directory_keeps_a_record() {
-    // The bundle is generated at runtime from files this site cannot name; the data
-    // file next to it is the program's own.
+    // The bundle is generated at runtime from files this site cannot name; the
+    // data file next to it is the program's own.
     assert_eq!(
         show(
             "export async function analyze(build: (out: string) => void) {\n  const dir = await \
@@ -543,7 +544,8 @@ fn dotdot_after_an_unknown_segment() {
 
 #[test]
 fn rows_of_an_imported_table_are_not_undefined() {
-    // The second parameter of an `each` callback over a table from another module.
+    // The second parameter of an `each` callback over a table from another
+    // module.
     assert_eq!(
         show(
             "import { cases } from './cases';\nit.each(cases)('%s', (name, file) => {\n  \
@@ -695,9 +697,9 @@ fn a_complete_token_result_is_checked_too() {
 
 #[test]
 fn chains_nested_in_brackets_are_not_parsed() {
-    // 40 bracket levels of 100 curried arrows each: every level is short, the tree
-    // is 4,000 functions deep. The engine declines (and the stack survives);
-    // the site keeps the token result with a record.
+    // 40 bracket levels of 100 curried arrows each: every level is short, the
+    // tree is 4,000 functions deep. The engine declines (and the stack
+    // survives); the site keeps the token result with a record.
     let mut deep = String::from("1");
     for _ in 0..40 {
         deep = format!("{}({deep})", "a => ".repeat(100));
@@ -720,8 +722,8 @@ fn chains_nested_in_brackets_are_not_parsed() {
 
 #[test]
 fn a_container_whose_uses_are_not_checked_is_open() {
-    // Five containers, each filled from the next: the innermost is past the nesting
-    // bound.
+    // Five containers, each filled from the next: the innermost is past the
+    // nesting bound.
     assert_eq!(
         show(
             "const a: string[] = [];\nconst b: string[] = [];\nconst c: string[] = [];\nconst d: \

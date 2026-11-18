@@ -173,8 +173,8 @@ fn a_named_read_is_not_open() {
         assert_eq!(d(site, &opts()), Disposition::Named, "{site}");
         assert_eq!(d(site, &opts().strict(true)), Disposition::Open, "{site}");
     }
-    // A module load with a computed specifier stays open: what it loads brings its
-    // own dependencies.
+    // A module load with a computed specifier stays open: what it loads brings
+    // its own dependencies.
     assert_eq!(d("src/loader.ts", &opts()), Disposition::Open);
 }
 
@@ -197,9 +197,10 @@ fn an_unrelated_change_selects_only_open_uncertainty() {
 fn a_change_to_a_named_path_selects_the_tests_that_load_name_and_read() {
     let f = fixture();
     for kind in [ChangeKind::Modified, ChangeKind::Added, ChangeKind::Deleted] {
-        // a: loads the helper with the string and the reader. f: test/local.ts names
-        // everything below test/. Not b (no name), c (no computed read), d (the string
-        // 'logos' does not match), g (a type-only import loads no code).
+        // a: loads the helper with the string and the reader. f: test/local.ts
+        // names everything below test/. Not b (no name), c (no computed
+        // read), d (the string 'logos' does not match), g (a type-only
+        // import loads no code).
         assert_eq!(
             named(&f, kind, "test/fixtures/a.json"),
             ["test/a.test.ts", "test/f.test.ts"],
@@ -234,8 +235,8 @@ fn a_change_to_a_named_path_selects_the_tests_that_load_name_and_read() {
 #[test]
 fn names_do_not_travel_through_tasks() {
     let f = fixture();
-    // scripts/build.ts names `logos`; test d reaches it only through a task, so the
-    // string cannot flow into the read that test d loads.
+    // scripts/build.ts names `logos`; test d reaches it only through a task, so
+    // the string cannot flow into the read that test d loads.
     assert!(named(&f, ChangeKind::Modified, "static/logos/x.svg").is_empty());
 }
 
@@ -283,9 +284,9 @@ fn a_script_passes_its_names_on_through_the_task_that_runs_it() {
 #[test]
 fn data_files_name_paths_for_their_readers() {
     let f = fixture();
-    // data/routes.json has the string 'handlers/get'. h loads the file that reads
-    // it through an edge. i only names the data file: which file it reads is
-    // not known, so the data file's strings are not its names.
+    // data/routes.json has the string 'handlers/get'. h loads the file that
+    // reads it through an edge. i only names the data file: which file it
+    // reads is not known, so the data file's strings are not its names.
     assert_eq!(
         named(&f, ChangeKind::Modified, "svc/handlers/get.ts"),
         ["test/h.test.ts"]
@@ -308,9 +309,9 @@ fn data_files_name_paths_for_their_readers() {
 #[test]
 fn the_working_directory_and_the_test_directory_are_names_of_the_entry() {
     let f = fixture();
-    // j: src/cwd.ts uses the working directory, and j runs in pkg/. k: src/self.ts
-    // uses the test path, and k is in pkg/test/. l: its read is relative to the
-    // working directory.
+    // j: src/cwd.ts uses the working directory, and j runs in pkg/. k:
+    // src/self.ts uses the test path, and k is in pkg/test/. l: its read is
+    // relative to the working directory.
     assert_eq!(
         named(&f, ChangeKind::Added, "pkg/test/data/new.bin"),
         [
@@ -324,7 +325,8 @@ fn the_working_directory_and_the_test_directory_are_names_of_the_entry() {
         ["pkg/test/j.test.ts", "pkg/test/l.test.ts"]
     );
     assert!(named(&f, ChangeKind::Modified, "elsewhere/x.ts").is_empty());
-    // A file that steps up from the working directory reaches that much further.
+    // A file that steps up from the working directory reaches that much
+    // further.
     let mut up = fixture();
     let cwd = up.g.node_by_path("src/cwd.ts").unwrap();
     up.ix.set_ups(cwd, 1);
@@ -440,8 +442,8 @@ fn an_entry_is_asked_about_every_working_directory_user_it_loads() {
     let n = ["pkg/sub/test/n.test.ts".to_owned()];
     // Below the working directory: the nearest user names it.
     assert_eq!(named(&f, ChangeKind::Modified, "pkg/sub/data/x.txt"), n);
-    // Two directories above it: only the user further away, with its parent steps,
-    // does.
+    // Two directories above it: only the user further away, with its parent
+    // steps, does.
     assert_eq!(named(&f, ChangeKind::Modified, "other/x.txt"), n);
 }
 
@@ -570,13 +572,13 @@ fn a_string_names_a_path_only_in_the_package_of_the_entry_or_of_the_read() {
         v
     };
     let all = [n, a, b, r];
-    // In the entry's package: only the tests of that package, whichever file has
-    // the string. A package inside another one is part of it: both tests below
-    // pkg/a.
+    // In the entry's package: only the tests of that package, whichever file
+    // has the string. A package inside another one is part of it: both
+    // tests below pkg/a.
     assert_eq!(strings("pkg/a/fixtures/x.json", true), [n, a]);
     assert_eq!(strings("pkg/b/fixtures/x.json", true), [b]);
-    // In the package of the file with the read: every test that loads the read and
-    // a name.
+    // In the package of the file with the read: every test that loads the read
+    // and a name.
     assert_eq!(strings("pkg/lib/fixtures/x.json", true), all);
     // In a package that neither a test nor the read belongs to: nobody.
     assert!(strings("pkg/c/fixtures/x.json", true).is_empty());
@@ -602,11 +604,12 @@ fn names_that_say_where_they_go_are_not_bounded_by_the_package() {
     let w = ["pkg/w/test/w.test.ts"];
     // A location that goes into another package names what is there.
     assert_eq!(named_in(&f, "pkg/a/data/x.bin", true), w);
-    // A followed working-directory path: `cwd/../b` of a test of pkg/w is pkg/b.
+    // A followed working-directory path: `cwd/../b` of a test of pkg/w is
+    // pkg/b.
     assert_eq!(named_in(&f, "pkg/b/zz/x.bin", true), w);
-    // The working directory as such, raised by the file's parent steps, stays in
-    // the package: two steps above pkg/w is the root, but the root is not a
-    // file of pkg/w.
+    // The working directory as such, raised by the file's parent steps, stays
+    // in the package: two steps above pkg/w is the root, but the root is
+    // not a file of pkg/w.
     assert_eq!(named_in(&f, "pkg/w/zz/x.bin", true), w);
     assert!(named_in(&f, "zz/x.bin", true).is_empty());
     assert!(named_in(&f, "pkg/c/zz/x.bin", true).is_empty());
@@ -638,8 +641,9 @@ fn climb_fixture() -> (Fixture, NodeId) {
     b.edge(test, reader, RefKind::Import);
     let g = b.build().unwrap();
     let mut ix = NameIndex::new();
-    // What the caller adds for a name marked as climbing three directories from the
-    // working directory: the shape, bounded by the package, and the places.
+    // What the caller adds for a name marked as climbing three directories from
+    // the working directory: the shape, bounded by the package, and the
+    // places.
     ix.add_shape(test, "package.json", 5);
     for rel in [
         "../package.json",
@@ -683,8 +687,8 @@ fn a_string_that_climbs_from_the_working_directory_names_where_it_climbs_to() {
              (svc/a/pkg/x/)"
         )]
     };
-    // The directories above the working directory, whatever package they are in:
-    // svc (the root package) is the third.
+    // The directories above the working directory, whatever package they are
+    // in: svc (the root package) is the third.
     assert_eq!(named("svc/package.json", true), at(3));
     // Below the working directory, and anywhere in the package (the first two
     // directories above it too): the shape.
@@ -706,12 +710,13 @@ fn a_string_that_climbs_from_the_working_directory_names_where_it_climbs_to() {
         named("web/package.json", false),
         ["the string 'package.json'"]
     );
-    // The file's other parent steps do not raise the places: no other file of the
-    // module, nor of the root package.
+    // The file's other parent steps do not raise the places: no other file of
+    // the module, nor of the root package.
     for path in ["svc/a/zz.txt", "svc/zz.txt"] {
         assert!(named(path, true).is_empty(), "{path}");
     }
-    // The place completed with an extension, as a shape names a file by its stem.
+    // The place completed with an extension, as a shape names a file by its
+    // stem.
     assert_eq!(named("svc/package.json.bak", true), at(3));
 }
 
@@ -734,8 +739,8 @@ fn the_place_of_a_climbing_string_takes_an_extension_and_its_shape_counts_below(
     ] {
         assert!(!at_place(path, "shared/golden"), "{path}");
     }
-    // The shape anywhere, as the index names a path: a suffix of the path or of an
-    // ancestor directory, or of the path up to an extension.
+    // The shape anywhere, as the index names a path: a suffix of the path or of
+    // an ancestor directory, or of the path up to an extension.
     for rel in [
         "apps/web/settings.json",
         "settings.json",

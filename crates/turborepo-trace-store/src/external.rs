@@ -95,8 +95,9 @@ pub(crate) fn link(tcx: &TargetCx<'_>, edge: &Edge) -> Option<(LinkRec, CrossRec
         integrity: li.id.integrity.clone(),
         root: rel_to(&cx.repo, &cx.repo, &li.root),
     };
-    // The package directory inside the module, for display: the import path below
-    // the module path (`github.com/a/b/sub` in `github.com/a/b@v1` is `sub`).
+    // The package directory inside the module, for display: the import path
+    // below the module path (`github.com/a/b/sub` in `github.com/a/b@v1` is
+    // `sub`).
     let module = name.rsplit_once('@').map_or(&**name, |(m, _)| m);
     let subpath = edge
         .spec

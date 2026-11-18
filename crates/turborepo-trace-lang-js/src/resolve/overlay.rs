@@ -236,8 +236,8 @@ impl Overlay {
         let Some(dir) = at.parent() else {
             return (at, within);
         };
-        // The target is relative to the link's directory, and can go through links
-        // itself.
+        // The target is relative to the link's directory, and can go through
+        // links itself.
         let next = turborepo_trace_core::fs::normalize(&dir.join(target));
         self.locate(fs, &next, depth + 1)
     }
@@ -254,8 +254,8 @@ impl Overlay {
         if within == Within::Nothing {
             return Some(Entry::Absent);
         }
-        // A path with a file of the revision below it is a directory there, whatever
-        // the working tree has at it.
+        // A path with a file of the revision below it is a directory there,
+        // whatever the working tree has at it.
         let dir = || self.dirs.contains(real);
         match self.files.get(real) {
             Some(true) => Some(Entry::File),
@@ -410,8 +410,8 @@ mod tests {
         let entry = |p: &str| o.entry(&fs, &r.join(p));
         let read = |p: &str| o.read(&fs, &r.join(p)).map(|b| b.unwrap().to_vec());
         let on_disk = |p: &str| o.on_disk(&fs, &r.join(p)).into_owned();
-        // The link led to `shared/y`: the diff's file there, and the others on disk
-        // there.
+        // The link led to `shared/y`: the diff's file there, and the others on
+        // disk there.
         assert_eq!(entry("app/moved/lib.json"), Some(Entry::File));
         assert_eq!(read("app/moved/lib.json").unwrap(), b"then lib.json");
         assert_eq!(entry("app/moved/only-y.json"), None);
@@ -427,8 +427,8 @@ mod tests {
         // A link to a file leads where it led.
         assert_eq!(entry("app/to-file"), None);
         assert_eq!(on_disk("app/to-file"), r.join("shared/y/only-y.json"));
-        // Not there at the revision: nothing below it, whatever the working tree's link
-        // leads to.
+        // Not there at the revision: nothing below it, whatever the working
+        // tree's link leads to.
         assert_eq!(entry("app/added"), Some(Entry::Absent));
         assert_eq!(entry("app/added/lib.json"), Some(Entry::Absent));
         assert_eq!(entry("app/added/deep/x.json"), Some(Entry::Absent));
@@ -436,7 +436,8 @@ mod tests {
         assert_eq!(entry("app/was-file"), Some(Entry::File));
         assert_eq!(read("app/was-file").unwrap(), b"then was-file");
         assert_eq!(entry("app/was-file/lib.json"), Some(Entry::Absent));
-        // A directory of the revision: what the diff says it held, and nothing else.
+        // A directory of the revision: what the diff says it held, and nothing
+        // else.
         assert_eq!(entry("app/was-dir"), Some(Entry::Dir));
         assert_eq!(read("app/was-dir/lib.json").unwrap(), b"then lib.json");
         assert_eq!(entry("app/was-dir/other.json"), Some(Entry::Absent));

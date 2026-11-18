@@ -479,8 +479,9 @@ impl PnpmLockfile {
         &mut self,
         workspace_lockfiles: &[(&str, &[u8])],
     ) -> Result<(), crate::Error> {
-        // Workspace discovery order is nondeterministic. Since duplicate keys keep
-        // the first value, sort before merging so identical inputs hash identically.
+        // Workspace discovery order is nondeterministic. Since duplicate keys
+        // keep the first value, sort before merging so identical inputs
+        // hash identically.
         let mut workspace_lockfiles = workspace_lockfiles.to_vec();
         workspace_lockfiles.sort_unstable_by(|a, b| a.0.cmp(b.0).then_with(|| a.1.cmp(b.1)));
         for (workspace_path, bytes) in workspace_lockfiles {
@@ -946,7 +947,8 @@ impl PnpmLockfile {
             let dp = DepPath::parse(self.version(), dependency.as_str())?;
 
             let hash_matches = |patch: &PatchFile| {
-                // In V7 patch hash isn't included in packages key, so no need to check
+                // In V7 patch hash isn't included in packages key, so no need
+                // to check
                 matches!(self.version(), SupportedLockfileVersion::V7AndV9)
                     || dp.patch_hash() == Some(patch.hash())
             };
@@ -1052,8 +1054,9 @@ impl PnpmLockfile {
             .and_then(|s| s.inject_workspace_packages)
             .unwrap_or(false);
 
-        // Importers are preserved verbatim, so their full dependency closures must be
-        // retained to keep the pruned lockfile valid for frozen installs.
+        // Importers are preserved verbatim, so their full dependency closures
+        // must be retained to keep the pruned lockfile valid for frozen
+        // installs.
         for importer in importers.values() {
             for dependency in importer.dependencies.all_dependency_names() {
                 let Some((_, version)) = importer.dependencies.find_resolution(dependency) else {
@@ -1472,9 +1475,10 @@ impl crate::Lockfile for PnpmLockfile {
             // Look through all of the workspace packages for a turbo dependency
             // grab the first one we find.
             .find_map(|project| project.dependencies.turbo_version())?;
-        // pnpm versions can include peer dependency suffixes like "1.4.6_peer_suffix"
-        // or peer deps in parens like "1.4.6(react@18.2.0)".
-        // Extract the base semver part for validation.
+        // pnpm versions can include peer dependency suffixes like
+        // "1.4.6_peer_suffix" or peer deps in parens like
+        // "1.4.6(react@18.2.0)". Extract the base semver part for
+        // validation.
         let base_version = turbo_version
             .split(['_', '('])
             .next()
@@ -1490,10 +1494,11 @@ impl crate::Lockfile for PnpmLockfile {
     fn human_name(&self, package: &crate::Package) -> Option<String> {
         match self.version() {
             SupportedLockfileVersion::V7AndV9 => {
-                // For v7/v9 the key is already the human-readable identity, so a
-                // `human_name` here would just duplicate it. `display_name()`
-                // falls back to the key when `human_name` is absent, while the
-                // resolution fingerprint hashes only `(key, version)`.
+                // For v7/v9 the key is already the human-readable identity, so
+                // a `human_name` here would just duplicate it.
+                // `display_name()` falls back to the key when
+                // `human_name` is absent, while the resolution
+                // fingerprint hashes only `(key, version)`.
                 None
             }
             SupportedLockfileVersion::V5 => {
@@ -2082,15 +2087,16 @@ c:
         let contents = serde_yaml_ng::to_string(&original_parsed).unwrap();
 
         // serde_yml quotes strings like "0.0.0" that could be ambiguous,
-        // so we verify the round-trip by re-parsing instead of comparing raw strings
+        // so we verify the round-trip by re-parsing instead of comparing raw
+        // strings
         let reparsed: Map<String, PackageSnapshot> = serde_yaml_ng::from_str(&contents).unwrap();
         assert_eq!(original_parsed, reparsed);
     }
 
     #[test]
     fn test_turbo_version_rejects_non_semver() {
-        // Malicious version strings that could be used for RCE via npx should be
-        // rejected
+        // Malicious version strings that could be used for RCE via npx should
+        // be rejected
         let malicious_versions = [
             "file:./malicious.tgz",
             "https://evil.com/malicious.tgz",
@@ -2653,8 +2659,8 @@ snapshots:
     fn test_subgraph_with_injected_workspace_packages_setting() {
         // Reproduces https://github.com/vercel/turborepo/issues/11059
         // When injectWorkspacePackages: true is set in pnpm 10, workspace deps
-        // use file: resolution instead of link: and appear in packages/snapshots.
-        // turbo prune must retain these entries.
+        // use file: resolution instead of link: and appear in
+        // packages/snapshots. turbo prune must retain these entries.
         let yaml = r#"lockfileVersion: '9.0'
 
 settings:
@@ -2785,7 +2791,8 @@ snapshots:
             "pruned lockfile should contain @repo/shared in snapshots"
         );
 
-        // Transitive deps of the injected package and direct deps should be present
+        // Transitive deps of the injected package and direct deps should be
+        // present
         assert!(packages.contains_key("is-odd@3.0.1"));
         assert!(packages.contains_key("is-number@6.0.0"));
         assert!(packages.contains_key("lodash@4.17.21"));
@@ -2793,7 +2800,8 @@ snapshots:
         assert!(snapshots.contains_key("is-number@6.0.0"));
         assert!(snapshots.contains_key("lodash@4.17.21"));
 
-        // Root importer dependencies must remain installable with a frozen lockfile.
+        // Root importer dependencies must remain installable with a frozen
+        // lockfile.
         assert!(packages.contains_key("prettier@3.5.3"));
         assert!(snapshots.contains_key("prettier@3.5.3"));
     }
@@ -2894,7 +2902,8 @@ snapshots:
             "pruned should have @repo/ui in snapshots"
         );
 
-        // These must come from the transitive dep traversal of the injected package
+        // These must come from the transitive dep traversal of the injected
+        // package
         assert!(
             snapshots.contains_key("is-odd@3.0.1"),
             "pruned should have is-odd in snapshots via transitive deps"
@@ -3514,7 +3523,8 @@ snapshots:
 
             // express@4.18.2 merges 8 dependencies + 3 optionalDependencies
             // into a single map via PackageSnapshotV7::dependencies().
-            // If this map is a HashMap, its iteration order varies per instance.
+            // If this map is a HashMap, its iteration order varies per
+            // instance.
             let deps = lockfile
                 .all_dependencies("express@4.18.2")
                 .unwrap()
@@ -4041,7 +4051,8 @@ snapshots:
         );
 
         let workspace_packages = vec!["packages/config".to_string()];
-        // Root devDependencies are not part of the selected workspace's closure.
+        // Root devDependencies are not part of the selected workspace's
+        // closure.
         let resolved_packages = vec![];
         let pruned = lockfile
             .subgraph(&workspace_packages, &resolved_packages)

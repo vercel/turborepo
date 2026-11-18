@@ -161,7 +161,8 @@ impl Session {
             .context("PTY has no file descriptor")?;
         // The cloned reader and writer share these flags. Nonblocking IO lets
         // Drop join the reader even if a descendant still holds the slave open.
-        // SAFETY: fd is owned by pair.master and remains valid during both calls.
+        // SAFETY: fd is owned by pair.master and remains valid during both
+        // calls.
         let flags = unsafe { libc::fcntl(fd, libc::F_GETFL) };
         if flags < 0 || unsafe { libc::fcntl(fd, libc::F_SETFL, flags | libc::O_NONBLOCK) } < 0 {
             return Err(io::Error::last_os_error().into());
@@ -320,14 +321,16 @@ impl Session {
         let running = matches!(self.child.try_wait(), Ok(None));
         if let Some(pid) = self.child.process_id() {
             let root = Pid::from_raw(pid as i32);
-            // portable-pty makes the owned child a session leader. Fixture tasks
-            // retain that session across groups/reparenting; detached sessions
-            // are deliberately out of scope. Query/signal PID races remain.
+            // portable-pty makes the owned child a session leader. Fixture
+            // tasks retain that session across groups/reparenting;
+            // detached sessions are deliberately out of scope.
+            // Query/signal PID races remain.
             let owned = |candidate: u32| {
                 // SAFETY: getsid only queries a process ID; it owns no memory.
                 unsafe { libc::getsid(candidate as i32) == pid as i32 }
             };
-            // Do not scan under a root PID known to have been reused after reap.
+            // Do not scan under a root PID known to have been reused after
+            // reap.
             if (running || kill(root, None) == Err(nix::errno::Errno::ESRCH))
                 && let Ok(output) = std::process::Command::new("/bin/ps")
                     .args(["-axo", "pid="])

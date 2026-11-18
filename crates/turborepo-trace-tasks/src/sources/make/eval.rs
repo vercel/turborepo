@@ -771,8 +771,9 @@ impl<'a> Exp<'a> {
                 }
             }
             "shell" => {
-                // The marker makes every use unknown where it matters (prerequisites,
-                // conditionals, recipe words); no blanket issue.
+                // The marker makes every use unknown where it matters
+                // (prerequisites, conditionals, recipe words);
+                // no blanket issue.
                 let _ = arg(self, 0);
                 unknown("shell")
             }

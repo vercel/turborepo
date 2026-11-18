@@ -86,8 +86,9 @@ fn format_only_at(line: &str, dir: &Path, cx: &RecognizeCx<'_>, depth: usize) ->
         if !c.redirects.is_empty() {
             return false;
         }
-        // The script of the same package that a package-manager command runs, before
-        // wrappers are stripped (`pnpm fmt:all` is not a wrapper around a program).
+        // The script of the same package that a package-manager command runs,
+        // before wrappers are stripped (`pnpm fmt:all` is not a wrapper
+        // around a program).
         if let Some(name) = local_script(c)
             && let Some(text) = script_text(dir, name)
         {

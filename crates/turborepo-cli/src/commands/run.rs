@@ -249,8 +249,9 @@ fn create_structured_sink(
 
     if let Some(path) = file_path {
         builder = builder.file_path(path.as_std_path());
-        // Warn that structured logs capture ALL output including potential secrets.
-        // This fires before the logger is initialized so we use eprintln.
+        // Warn that structured logs capture ALL output including potential
+        // secrets. This fires before the logger is initialized so we
+        // use eprintln.
         eprintln!(
             "turbo: structured logs will capture all output (including potential secrets) to {}",
             path

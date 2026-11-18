@@ -71,7 +71,8 @@ impl PythonRequirement {
                 }
                 (None, request.to_owned())
             } else {
-                // Do not echo parser diagnostics; they can quote unrelated values.
+                // Do not echo parser diagnostics; they can quote unrelated
+                // values.
                 let table: toml::Table =
                     text.parse().map_err(|_| invalid("expected valid TOML"))?;
                 let project = match table.get("project") {

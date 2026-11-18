@@ -38,7 +38,7 @@ pub fn transitive_closure<N: Hash + Eq + PartialEq, E, I: IntoIterator<Item = No
     };
 
     match direction {
-        petgraph::Direction::Outgoing => depth_first_search(&graph, indices, visitor),
+        petgraph::Direction::Outgoing => depth_first_search(graph, indices, visitor),
         petgraph::Direction::Incoming => depth_first_search(Reversed(&graph), indices, visitor),
     };
 

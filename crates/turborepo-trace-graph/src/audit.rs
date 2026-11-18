@@ -843,8 +843,9 @@ fn dominators(ag: &Ag, removed: &[bool]) -> Dom {
                 continue;
             }
             let l = if v as usize > w {
-                // Compress the path from `v` up to the first ancestor that is not linked
-                // yet (index <= w), keeping the minimum label.
+                // Compress the path from `v` up to the first ancestor that is
+                // not linked yet (index <= w), keeping the
+                // minimum label.
                 path.clear();
                 path.push(v);
                 loop {
@@ -1091,8 +1092,8 @@ impl<G: GraphView> Engine<'_, G> {
         let mut parent = vec![NONE; total];
         let all = ag.bfs(&[ag.root], &none_blocked, Some(&mut parent));
         let change_nodes: Vec<u32> = ag.changes.iter().map(|c| c.node).collect();
-        // Chains prefer a change over the floor: what a change reaches is explained by
-        // it.
+        // Chains prefer a change over the floor: what a change reaches is
+        // explained by it.
         let mut parent_change = vec![NONE; total];
         let by_change = ag.bfs(&change_nodes, &none_blocked, Some(&mut parent_change));
         let by_floor = ag.floor_reach();
@@ -1117,9 +1118,9 @@ impl<G: GraphView> Engine<'_, G> {
             .collect();
         let by_steer = (!steer_nodes.is_empty()).then(|| ag.bfs(&steer_nodes, &none_blocked, None));
 
-        // Ecosystems: per ecosystem among the entries, what changes of that ecosystem
-        // (or neutral ones) reach, plus what other changes reach over known
-        // bridges.
+        // Ecosystems: per ecosystem among the entries, what changes of that
+        // ecosystem (or neutral ones) reach, plus what other changes
+        // reach over known bridges.
         let eco_of = |n: NodeId| g.lang(n).and_then(Ecosystem::of_lang);
         let mut ecos: Vec<Ecosystem> = entry_list.iter().filter_map(|&e| eco_of(e)).collect();
         ecos.sort_unstable();
@@ -1137,9 +1138,10 @@ impl<G: GraphView> Engine<'_, G> {
                 .map(|c| c.node)
                 .collect();
             let mut reach = ag.bfs(&same, &none_blocked, None);
-            // Known bridges for the other changes: explicit reads and cross-language
-            // references anywhere on the path, and a task that has the changed file as a
-            // direct input and generates a file (one hop through the task).
+            // Known bridges for the other changes: explicit reads and
+            // cross-language references anywhere on the path, and a
+            // task that has the changed file as a direct input and
+            // generates a file (one hop through the task).
             let mut starts: Vec<u32> = Vec::new();
             for c in ag
                 .changes
@@ -1169,8 +1171,8 @@ impl<G: GraphView> Engine<'_, G> {
             eco_reach.push((eco, reach));
         }
 
-        // Packages: per changed package, what its changes reach; an entry is related
-        // when one of them is in its dependency closure.
+        // Packages: per changed package, what its changes reach; an entry is
+        // related when one of them is in its dependency closure.
         let mut pkg_related = vec![rel.is_none(); total];
         if let Some(rel) = &rel {
             // (global, packages) → the change nodes.
@@ -1183,8 +1185,9 @@ impl<G: GraphView> Engine<'_, G> {
                     .push(c.node);
             }
             let mut groups: Vec<(Key, Vec<u32>)> = groups.into_iter().collect();
-            // Global changes first, then the packages with the most changed files; beyond
-            // the cap the rest counts as related to what it reaches (conservative).
+            // Global changes first, then the packages with the most changed
+            // files; beyond the cap the rest counts as related to
+            // what it reaches (conservative).
             groups.sort_by(|a, b| b.0.0.cmp(&a.0.0).then(b.1.len().cmp(&a.1.len())));
             const CAP: usize = 64;
             if groups.len() > CAP {
@@ -1202,7 +1205,8 @@ impl<G: GraphView> Engine<'_, G> {
                     }
                 }
             }
-            // Entries whose language their package's manifests don't cover: unknown.
+            // Entries whose language their package's manifests don't cover:
+            // unknown.
             for &e in &entry_list {
                 if !rel.covers(g.package(e).0, eco_of(e)) {
                     pkg_related[e.index()] = true;
@@ -1234,7 +1238,8 @@ impl<G: GraphView> Engine<'_, G> {
             steering.changes += 1;
             steering.ignored += 1;
         }
-        // Targets: selected entries with no plain path, by index into `verdicts`.
+        // Targets: selected entries with no plain path, by index into
+        // `verdicts`.
         let mut targets: Vec<u32> = Vec::new();
         for &e in &entry_list {
             let i = e.index();
@@ -1360,7 +1365,8 @@ impl<G: GraphView> Engine<'_, G> {
         let mut depth = vec![0u64; ag.groups.len()];
         let mut stamp = vec![NONE; ag.groups.len()];
         let mut picked = vec![false; ag.groups.len()];
-        // Per group: targets with a member among their dominators in the full graph.
+        // Per group: targets with a member among their dominators in the full
+        // graph.
         let mut dominated0: Vec<u32> = Vec::new();
         let mut dom = dominators(&ag, &removed);
         loop {
@@ -1390,8 +1396,8 @@ impl<G: GraphView> Engine<'_, G> {
             if picks.len() >= audit.top || left == 0 {
                 break;
             }
-            // Most dominated entries; on ties the source closest to the entries, then by
-            // id.
+            // Most dominated entries; on ties the source closest to the
+            // entries, then by id.
             let mut best: Option<u32> = None;
             for gi in 0..ag.groups.len() as u32 {
                 let i = gi as usize;
@@ -1433,8 +1439,8 @@ impl<G: GraphView> Engine<'_, G> {
         let greedy_ms = t2.elapsed().as_secs_f64() * 1e3;
         let t3 = Instant::now();
 
-        // Without the floor (`--on-uncertain ignore`): the sources that dominate the
-        // entries a change reaches.
+        // Without the floor (`--on-uncertain ignore`): the sources that
+        // dominate the entries a change reaches.
         let mut no_floor = vec![false; total];
         no_floor[ag.floor as usize] = true;
         let dom_nf = dominators(&ag, &no_floor);
@@ -1460,8 +1466,9 @@ impl<G: GraphView> Engine<'_, G> {
         }
         drop(dom_nf);
 
-        // Reported sources: the picks, then the sources that dominate the most entries
-        // alone (with or without the floor), and every steering source.
+        // Reported sources: the picks, then the sources that dominate the most
+        // entries alone (with or without the floor), and every steering
+        // source.
         let mut reported: Vec<u32> = picks.iter().map(|p| p.0).collect();
         let mut others: Vec<u32> = (0..ag.groups.len() as u32)
             .filter(|&gi| !picked[gi as usize] && dominated0[gi as usize] > 0)
@@ -1491,7 +1498,8 @@ impl<G: GraphView> Engine<'_, G> {
                 blocked[m as usize] = true;
             }
             let without = ag.bfs(&[ag.root], &blocked, None);
-            // The same without the floor: what the changes no longer reach without them.
+            // The same without the floor: what the changes no longer reach
+            // without them.
             let without_nf = ag.bfs(&change_nodes, &blocked, None);
             for &m in &gr.members {
                 blocked[m as usize] = false;
@@ -1535,7 +1543,8 @@ impl<G: GraphView> Engine<'_, G> {
                     *signals.entry(s.as_str()).or_default() += 1;
                 }
             }
-            // An example: a change (else the floor) → member → an attributed entry.
+            // An example: a change (else the floor) → member → an attributed
+            // entry.
             let mut example = Vec::new();
             if let Some(&ti) = attributed.first() {
                 let t = target_nodes[ti as usize];
@@ -1556,7 +1565,8 @@ impl<G: GraphView> Engine<'_, G> {
                 example = head;
                 example.extend(tail.iter().filter_map(|&n| ag.label(g, n)));
             }
-            // Changes that enter through the source: backwards from the members.
+            // Changes that enter through the source: backwards from the
+            // members.
             let mut seen = vec![false; total];
             let mut q: Vec<u32> = gr.members.clone();
             for &m in &q {
@@ -1599,7 +1609,8 @@ impl<G: GraphView> Engine<'_, G> {
                 changes_total: entering.len(),
             });
         }
-        // Sources beyond the picks: by exclusive count (exact now), then inclusive.
+        // Sources beyond the picks: by exclusive count (exact now), then
+        // inclusive.
         let n_picks = picks.len();
         sources[n_picks..].sort_by(|a, b| {
             (b.exclusive.max(b.exclusive_no_floor), b.inclusive)
@@ -1891,7 +1902,8 @@ impl<G: GraphView> Engine<'_, G> {
                         let ci = b.cause_labels.len() as u32;
                         b.cause_labels.push(label);
                         let cn = b.fresh(Virt::Cause(ci), Some((kind, id.clone())));
-                        // A steering file's indirect causes hang below its steering node.
+                        // A steering file's indirect causes hang below its
+                        // steering node.
                         b.edges.push((steer.unwrap_or(node), cn));
                         causes.insert(id, cn);
                         cn
@@ -1981,7 +1993,8 @@ impl<G: GraphView> Engine<'_, G> {
             }
         }
 
-        // The reached part of the reverse graph, with bridges on non-plain edges.
+        // The reached part of the reverse graph, with bridges on non-plain
+        // edges.
         let mut data_edges: HashSet<(u32, u32)> = HashSet::new();
         let mut head = 0;
         while head < queue.len() {
@@ -2003,7 +2016,8 @@ impl<G: GraphView> Engine<'_, G> {
                 reach(d, &mut queue);
                 let pseudo = (nf | df) & (F_TASK | F_HUB) != 0;
                 if pseudo {
-                    // A steering file reaching a task or hub goes through its steering node.
+                    // A steering file reaching a task or hub goes through its
+                    // steering node.
                     if df & (F_TASK | F_HUB) != 0
                         && let Some(&s) = steer_of.get(&n)
                     {
@@ -2019,8 +2033,9 @@ impl<G: GraphView> Engine<'_, G> {
                     kind,
                     RefKind::FsRead | RefKind::FsReadDir | RefKind::Asset | RefKind::Embed
                 );
-                // The bridge of a non-plain edge: its node, kind, and whether it groups the
-                // edges by their target `n` or by their reader `d`.
+                // The bridge of a non-plain edge: its node, kind, and whether
+                // it groups the edges by their target `n` or by
+                // their reader `d`.
                 let bridge = if nf & F_ENTRY != 0 {
                     Some((Virt::Via(n), SourceKind::ViaTest, true))
                 } else if a.flags().contains(RefFlags::TYPE_ONLY) {
@@ -2316,7 +2331,8 @@ impl AuditReport {
                 None => self.sources.push(s),
             }
         }
-        // Picks first, by the entries they freed; then the rest by exclusive count.
+        // Picks first, by the entries they freed; then the rest by exclusive
+        // count.
         self.sources.sort_by(|a, b| {
             let key = |s: &AuditSource| {
                 (

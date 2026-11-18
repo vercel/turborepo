@@ -406,8 +406,8 @@ fn restyle_yarn_classic(src: &str, rng: &mut Rng, quote_flip: bool, crlf: bool) 
             );
         }
         out.push(head);
-        // Fields (indent 2) with their nested blocks, shuffled; nested dependency lines
-        // too.
+        // Fields (indent 2) with their nested blocks, shuffled; nested
+        // dependency lines too.
         let mut fields: Vec<Vec<String>> = Vec::new();
         for l in &e[1..] {
             if indent_of(l) == 2 {

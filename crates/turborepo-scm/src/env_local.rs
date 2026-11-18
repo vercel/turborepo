@@ -162,7 +162,8 @@ fn unquoted_value(bytes: &[u8], cursor: &mut usize) -> Option<Range<usize>> {
             b'\r' | b'\n' => break,
             b'#' => {
                 // An adjacent '#' may be either a literal or a comment,
-                // depending on the dotenv reader. Only accept separated comments.
+                // depending on the dotenv reader. Only accept separated
+                // comments.
                 if *cursor != start && !matches!(bytes[*cursor - 1], b' ' | b'\t') {
                     return None;
                 }

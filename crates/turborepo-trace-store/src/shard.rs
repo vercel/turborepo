@@ -733,10 +733,11 @@ impl LoadedShard {
     /// The archived shard.
     #[inline]
     pub fn get(&self) -> &ArchivedShard {
-        // SAFETY: every `LoadedShard` is made by `validate`, which ran the checked
-        // `rkyv::access` on exactly this range (in every build profile: store files
-        // are checkout-controlled and travel through caches, so a matching checksum
-        // proves nothing); the range starts at a 16-byte aligned offset of an aligned
+        // SAFETY: every `LoadedShard` is made by `validate`, which ran the
+        // checked `rkyv::access` on exactly this range (in every build
+        // profile: store files are checkout-controlled and travel
+        // through caches, so a matching checksum proves nothing); the
+        // range starts at a 16-byte aligned offset of an aligned
         // buffer, and the buffer is never mutated afterwards.
         unsafe { rkyv::access_unchecked::<ArchivedShard>(&self.buf[self.start..self.end]) }
     }
@@ -906,9 +907,9 @@ fn map_file(path: &Path) -> Option<Buf> {
     let f = std::fs::File::open(path).ok()?;
     let len = f.metadata().ok()?.len() as usize;
     if len > 0 {
-        // SAFETY: store files are written by rename (pack) or appended to (log); the
-        // only truncation cuts a log's torn tail, beyond every record a reader
-        // indexed.
+        // SAFETY: store files are written by rename (pack) or appended to
+        // (log); the only truncation cuts a log's torn tail, beyond
+        // every record a reader indexed.
         if let Ok(m) = unsafe { memmap2::Mmap::map(&f) } {
             return Some(Buf::Map(m));
         }
@@ -1459,7 +1460,8 @@ mod tests {
 
     #[test]
     fn a_forged_archive_with_a_valid_checksum_is_rejected_in_every_profile() {
-        // Release builds used to trust the checksum and read the archive unchecked.
+        // Release builds used to trust the checksum and read the archive
+        // unchecked.
         let good = encode(&sample());
         let bytes = forged(&vec![0xff; good.len() - HEADER]);
         assert!(check(&bytes, "t").is_ok(), "the checksum matches");
@@ -1503,8 +1505,8 @@ mod tests {
         assert_eq!(keys.len(), 2);
         assert_eq!(sizes[0], 0);
         assert!(sizes[1] > 0);
-        // A torn record (an interrupted append) is ignored, then cut off by the next
-        // append.
+        // A torn record (an interrupted append) is ignored, then cut off by the
+        // next append.
         let log = store.join(LOG_FILE);
         let end = p.log_end();
         let mut bytes = std::fs::read(&log).unwrap();
@@ -1530,10 +1532,10 @@ mod tests {
 
     #[test]
     fn the_order_of_a_log_is_not_seen_through_the_pack() {
-        // A build stages its shards in the order its threads finish them, so two builds
-        // of one tree may write their logs in another order. The files differ;
-        // a reader gets the same bytes under the same keys, and the same pack
-        // once the log is compacted.
+        // A build stages its shards in the order its threads finish them, so
+        // two builds of one tree may write their logs in another order.
+        // The files differ; a reader gets the same bytes under the same
+        // keys, and the same pack once the log is compacted.
         let mk = |name: &str| {
             let mut s = sample();
             s.package.name = name.into();

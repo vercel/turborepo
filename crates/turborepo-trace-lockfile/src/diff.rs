@@ -277,9 +277,9 @@ fn classes<'l>(old: &'l Lockfile, new: &'l Lockfile, ids: &Identities) -> Classe
     let total = cur[0].len() + cur[1].len();
     let mut table: FxHashMap<Vec<u32>, u32> = FxHashMap::default();
     let mut key: Vec<u32> = Vec::new();
-    // Each round splits classes by the classes of the edge targets; it stops when a
-    // round splits nothing. At most one round per package (each round but the
-    // last adds a class).
+    // Each round splits classes by the classes of the edge targets; it stops
+    // when a round splits nothing. At most one round per package (each
+    // round but the last adds a class).
     for _ in 0..=total {
         table.clear();
         let mut next = [
@@ -487,10 +487,11 @@ fn affected(
             seeds.push(j);
             continue;
         }
-        // The same id with the same identity must unfold to the same closure as before
-        // (its edges may be re-pointed to another variant of the same package);
-        // a new id, or an id that held another package, is unchanged when some
-        // old copy of this package had this closure.
+        // The same id with the same identity must unfold to the same closure as
+        // before (its edges may be re-pointed to another variant of the
+        // same package); a new id, or an id that held another package,
+        // is unchanged when some old copy of this package had this
+        // closure.
         let unchanged = match same_id[j].filter(|&i| ids.old[i] == ident) {
             Some(i) => classes.old[i] == classes.new[j],
             None => old_classes.contains(classes.new[j] as usize),
@@ -563,12 +564,12 @@ fn importer_diffs(
         let (b_edges, b_targets) = b.map_or((&[][..], &[][..]), |x| {
             (&ni[x].dependencies[..], new.importer_edge_targets(x))
         });
-        // Edges are sorted by (name, kind): merge-join on that key. A dependency moving
-        // between kinds is reported as removed under one kind and added under
-        // the other.
+        // Edges are sorted by (name, kind): merge-join on that key. A
+        // dependency moving between kinds is reported as removed under
+        // one kind and added under the other.
         let mut changed = Vec::new();
-        // New-side edges that lead to the same package as before through another
-        // closure.
+        // New-side edges that lead to the same package as before through
+        // another closure.
         let mut repointed = FixedBitSet::with_capacity(b_edges.len());
         let (mut x, mut y) = (0, 0);
         while x < a_edges.len() || y < b_edges.len() {
@@ -584,9 +585,9 @@ fn importer_diffs(
             };
             x += usize::from(pa.is_some());
             y += usize::from(pb.is_some());
-            // Same content identity counts as the same resolution even if the id moved (npm
-            // hoisting, pnpm peer suffix); those show up in `affected` if the closure
-            // changed.
+            // Same content identity counts as the same resolution even if the
+            // id moved (npm hoisting, pnpm peer suffix); those show
+            // up in `affected` if the closure changed.
             let same = match (pa, pb) {
                 (Some(pa), Some(pb)) => {
                     let (ta, tb) = (a_targets[pa], b_targets[pb]);

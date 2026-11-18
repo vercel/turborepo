@@ -108,8 +108,8 @@ fn path_values_are_assets() {
             "views/page.html",
         ])
     );
-    // Guesses carry records: the bundler namespace taken as `path` (and the cwd),
-    // the directory expanded as a whole.
+    // Guesses carry records: the bundler namespace taken as `path` (and the
+    // cwd), the directory expanded as a whole.
     let (k, d) = run
         .uncertainty("assets/dict.json")
         .expect("dict.json record");
@@ -159,8 +159,8 @@ fn loaders_beyond_require() {
         ])
     );
     let kind = |spec: &str| run.uncertainty(spec).map(|(k, _)| k);
-    // The wrapper is only called in the file and `target` is never reassigned: the
-    // value-flow pass resolves both loads exactly.
+    // The wrapper is only called in the file and `target` is never reassigned:
+    // the value-flow pass resolves both loads exactly.
     assert_eq!(kind("./plugins/a"), None);
     assert_eq!(kind("my-transport"), Some(UncertaintyKind::AliasedLoader));
     assert_eq!(kind("ext-dep"), Some(UncertaintyKind::AliasedLoader));
@@ -189,8 +189,8 @@ fn module_sync_and_imports() {
     ] {
         assert!(files.contains(f), "{f} missing: {files:?}");
     }
-    // Not the `default` branch shadowed by `require`, not the browser file without
-    // the `browser` condition, not the musl prebuild on glibc.
+    // Not the `default` branch shadowed by `require`, not the browser file
+    // without the `browser` condition, not the musl prebuild on glibc.
     for f in [
         "node_modules/sync-pkg/default.js",
         "node_modules/browser-pkg/browser.js",

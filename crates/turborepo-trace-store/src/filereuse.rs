@@ -240,18 +240,22 @@ pub(crate) fn states(cx: &Cx, s: &ArchivedShard) -> States {
                             }
                         }
                     }
-                    // The directory the paths lie in: when it is gone (or no directory),
-                    // every answer the record holds is another one (`DIR_ABSENT`).
-                    // (A path that is there has its directory: only a probe that found
-                    // nothing can be one whose directory is gone.)
+                    // The directory the paths lie in: when it is gone (or no
+                    // directory), every answer the record
+                    // holds is another one (`DIR_ABSENT`).
+                    // (A path that is there has its directory: only a probe
+                    // that found nothing can be one whose
+                    // directory is gone.)
                     if h.is_none()
                         && let Some(dir) = probe_dir(p)
                     {
                         if !matches!(&last_dir, Some((d, _)) if *d == dir) {
-                            // (Memoized per directory by the cache: one lookup.)
+                            // (Memoized per directory by the cache: one
+                            // lookup.)
                             let there = fs.dir_exact(&abs(&root, dir));
                             let nearest = (!there).then(|| nearest_dir_on(fs, &root, dir));
-                            // The state of every probe of the run: computed once.
+                            // The state of every probe of the run: computed
+                            // once.
                             let absent = nearest.map(|n| digest(&[DIR_ABSENT, n.as_str()]).max(1));
                             last_dir = Some((dir, absent));
                         }
@@ -350,8 +354,9 @@ pub(crate) fn states(cx: &Cx, s: &ArchivedShard) -> States {
         found,
         links,
         fw: {
-            // The framework config paths, and the place of the checkout for a shard whose
-            // files it decides ([`crate::fw::place_state`]).
+            // The framework config paths, and the place of the checkout for a
+            // shard whose files it decides
+            // ([`crate::fw::place_state`]).
             let d = cx.fw_configs.digest_for(s.package.root.as_str());
             match crate::fw::place_state(cx, s) {
                 Some(below) => {
@@ -427,9 +432,10 @@ fn gone(
             let (importer, name) = rest.split_once(':').unwrap_or((rest, ""));
             cx.ids.lock_resolve(importer, name).is_none()
         } else if let Some(rest) = location.strip_prefix(SEEN_LINK) {
-            // A place that led into an installed package and still leads into one is a
-            // package link by another name (a dependency of another version). Any other
-            // place has no state but where it leads: another one is another place, or none.
+            // A place that led into an installed package and still leads into
+            // one is a package link by another name (a dependency
+            // of another version). Any other place has no state but
+            // where it leads: another one is another place, or none.
             l.name.is_empty()
                 || crate::build::seen_state(cx, &abs(&root, rest))
                     .package
@@ -496,9 +502,9 @@ pub(crate) fn plan(
         );
         return None;
     }
-    // The place of the checkout decides other tests than it did (or decides now, or
-    // no longer): which files are tests is an answer for every file of a
-    // project.
+    // The place of the checkout decides other tests than it did (or decides
+    // now, or no longer): which files are tests is an answer for every file
+    // of a project.
     if old
         .located
         .iter()
@@ -528,7 +534,8 @@ pub(crate) fn plan(
         ix.iter().any(|i| changed[i.to_native() as usize])
     };
     let path_only = |i: u32| old.path_configs.binary_search(&i.into()).is_ok();
-    // Per set of key observations: whether one of its entries changed its state.
+    // Per set of key observations: whether one of its entries changed its
+    // state.
     let key_changed: Vec<bool> = old
         .key_groups
         .iter()
@@ -545,18 +552,18 @@ pub(crate) fn plan(
         .map(|(i, r)| (r.as_str(), i))
         .collect();
 
-    // Something the shard knew to be there is gone (see the module docs): nothing
-    // is kept.
+    // Something the shard knew to be there is gone (see the module docs):
+    // nothing is kept.
     if let Some(what) = gone(cx, old, &entry, &found, &links, &configs) {
         why(&format!("{what}: what was there is gone"));
         return None;
     }
 
-    // Shared framework state: something a framework group read has changed and it
-    // is not only the reading file's own source, or a key-only config has. It
-    // can decide the framework inputs of any file of the package, also of one
-    // that has none so far (a project root that now contains it): nothing is
-    // kept.
+    // Shared framework state: something a framework group read has changed and
+    // it is not only the reading file's own source, or a key-only config
+    // has. It can decide the framework inputs of any file of the package,
+    // also of one that has none so far (a project root that now contains
+    // it): nothing is kept.
     let shared = old.files.as_slice().par_iter().find_map_any(|f| {
         if pseudo(f) {
             return None;
@@ -577,8 +584,9 @@ pub(crate) fn plan(
             if r.index.to_native() != FRAMEWORK_LEVEL {
                 continue;
             }
-            // (A path that a framework group looked for is the file's own: the walk for a
-            // config, which decides for other files too, is a key observation of each.)
+            // (A path that a framework group looked for is the file's own: the
+            // walk for a config, which decides for other files too,
+            // is a key observation of each.)
             if let Some(m) = r
                 .memberships
                 .iter()
@@ -646,7 +654,8 @@ pub(crate) fn plan(
             if any(&r.configs, &configs) {
                 return Err("a config it read");
             }
-            // A source file reads configs by content; anything else is traced again.
+            // A source file reads configs by content; anything else is traced
+            // again.
             if r.configs.iter().any(|c| path_only(c.to_native())) {
                 return Err("a path-only config");
             }
@@ -787,8 +796,8 @@ pub(crate) fn pending(old: &ArchivedShard, fi: u32, file_ix: &HashMap<&str, u32>
                 .expect("validated shard")
         })
         .collect();
-    // Its sets of key observations, by their index in `old`: the new shard takes
-    // each from there once ([`key_set`]).
+    // Its sets of key observations, by their index in `old`: the new shard
+    // takes each from there once ([`key_set`]).
     let keys = std::mem::take(&mut rec.key_groups)
         .into_iter()
         .map(PendingKey::Kept)
@@ -899,7 +908,7 @@ pub(crate) fn kept_framework(
         .iter()
         .map(|i| abs(root_abs, old.configs[i.to_native() as usize].as_str()))
         .collect();
-    // What the framework pass found for the file is in its kept reached files and
-    // links.
+    // What the framework pass found for the file is in its kept reached files
+    // and links.
     (marks, keys, Vec::new())
 }

@@ -232,8 +232,9 @@ impl Patch {
             e.u32(n);
             e.u32(t);
         }
-        // Cut edges, as a trailing section that is only there when the patch cuts
-        // something: a patch without cuts has the bytes it always had.
+        // Cut edges, as a trailing section that is only there when the patch
+        // cuts something: a patch without cuts has the bytes it always
+        // had.
         if !self.cuts.is_empty() {
             let mut cuts = self.cuts.clone();
             cuts.sort_unstable();
@@ -699,8 +700,8 @@ impl<'g, G: GraphView> Patched<'g, G> {
         let ns = patch.strings.len();
         let probe_ix = ByString::build(ns, patch.probes.iter().map(|&(x, p)| (p, x)).collect());
         let input_ix = ByString::build(ns, patch.inputs.iter().map(|&(x, p)| (p, x)).collect());
-        // Per directory grouped by pattern, like the store's lookup (the engine matches
-        // each run of one pattern once).
+        // Per directory grouped by pattern, like the store's lookup (the engine
+        // matches each run of one pattern once).
         let member_ix = ByString::build(
             ns,
             patch
@@ -719,8 +720,8 @@ impl<'g, G: GraphView> Patched<'g, G> {
                 .collect(),
         );
         let cut: HashSet<(u32, u32)> = patch.cuts.iter().copied().collect();
-        // A cut concerns the edges of a few nodes: only their rows are looked at edge
-        // by edge.
+        // A cut concerns the edges of a few nodes: only their rows are looked
+        // at edge by edge.
         let mut cut_from = NodeSet::new(n);
         for &(from, _) in &cut {
             if from < n {
@@ -1195,10 +1196,12 @@ mod tests {
         assert!(r.iter().all(|x| x.2));
 
         let pg = Patched::new(&g, patch(&g));
-        // An unrelated change: only the entry outside the resolved set stays uncertain.
+        // An unrelated change: only the entry outside the resolved set stays
+        // uncertain.
         let r = run(&pg, ChangeKind::Modified, "unrelated.ts", ALL);
         assert_eq!(r, [("tools/run.ts".to_owned(), Verdict::Affected, true)]);
-        // A service's routes select that service's test through the patch's edge.
+        // A service's routes select that service's test through the patch's
+        // edge.
         let r = run(&pg, ChangeKind::Modified, "svc/a/src/routes.ts", ALL);
         assert_eq!(
             r,

@@ -144,7 +144,8 @@ fn a_branch_that_merged_main_into_itself() {
     edit(r, "m", "main");
     edit(r, "b", "main");
     let merged_in = commit(r, "main: m, b");
-    // The branch merges main: a conflict in `b`, resolved with content of its own.
+    // The branch merges main: a conflict in `b`, resolved with content of its
+    // own.
     git(r, &["checkout", "-q", "feature"]);
     assert!(!git_out(r, &["merge", "main"]).status.success());
     edit(r, "b", "resolved");
@@ -155,8 +156,8 @@ fn a_branch_that_merged_main_into_itself() {
     commit(r, "main: c");
     git(r, &["checkout", "-q", "feature"]);
 
-    // The branch's own commit and its conflict resolution: not `m`, which the merge
-    // commit brought in, and not `c`, which main gained afterwards.
+    // The branch's own commit and its conflict resolution: not `m`, which the
+    // merge commit brought in, and not `c`, which main gained afterwards.
     let (tests, err) = selected(r, "main", &[]);
     assert_eq!(tests, ["a", "b"]);
     assert!(
@@ -166,7 +167,8 @@ fn a_branch_that_merged_main_into_itself() {
         )),
         "{err}"
     );
-    // The base is in the JSON output, and it is what every consumer compared with.
+    // The base is in the JSON output, and it is what every consumer compared
+    // with.
     let o = harness(
         r,
         &[
@@ -236,7 +238,8 @@ fn a_rebased_branch_a_branch_behind_main_and_an_ancestor() {
     let main_tip = commit(r, "main: m");
     git(r, &["checkout", "-q", "feature"]);
 
-    // Behind main: what main gained since the fork is not a change of the branch.
+    // Behind main: what main gained since the fork is not a change of the
+    // branch.
     let (tests, err) = selected(r, "main", &[]);
     assert_eq!(tests, ["a"]);
     assert!(err.contains(&format!("base {}", &fork[..12])), "{err}");
@@ -293,7 +296,8 @@ fn the_merge_ref_of_a_pull_request() {
         assert_eq!(tests, ["a"], "{rev}");
         assert!(err.contains(&format!("base {}", &main_tip[..12])), "{err}");
     }
-    // The pull request's own head would compare the wrong way round: main's change.
+    // The pull request's own head would compare the wrong way round: main's
+    // change.
     assert_eq!(selected(r, "HEAD^2", &[]).0, ["m"]);
 
     // As a CI system fetches it, with depth 2: the merge commit and its two
@@ -313,7 +317,8 @@ fn the_merge_ref_of_a_pull_request() {
     let (tests, err) = selected(s, "HEAD^1", &[]);
     assert_eq!(tests, ["a"]);
     assert!(err.contains(&format!("base {}", &main_tip[..12])), "{err}");
-    // With depth 1 the parents are not there, and the message says what to fetch.
+    // With depth 1 the parents are not there, and the message says what to
+    // fetch.
     let one = tempfile::tempdir().unwrap();
     git(
         one.path(),
@@ -336,8 +341,8 @@ fn the_merge_ref_of_a_pull_request() {
 fn several_merge_bases_count_together() {
     let d = repo();
     let r = d.path();
-    // Two lines that each merge the other: `main` and `feature` then have two merge
-    // bases.
+    // Two lines that each merge the other: `main` and `feature` then have two
+    // merge bases.
     git(r, &["checkout", "-q", "-b", "feature"]);
     edit(r, "a", "feature");
     let f1 = commit(r, "feature: a");
@@ -362,9 +367,9 @@ fn several_merge_bases_count_together() {
     bases.sort();
     assert_eq!(bases.len(), 2);
 
-    // The union of the changes against each base: against `f1` the branch gained
-    // `m` and `c`, against `m1` it gained `a` and `c`. Never less than against
-    // any one of them.
+    // The union of the changes against each base: against `f1` the branch
+    // gained `m` and `c`, against `m1` it gained `a` and `c`. Never less
+    // than against any one of them.
     let (tests, err) = selected(r, "main", &[]);
     assert_eq!(tests, ["a", "c", "m"]);
     assert!(err.contains("2 merge bases of main and HEAD"), "{err}");
@@ -524,7 +529,8 @@ fn a_shallow_checkout_never_guesses_a_base() {
         err.contains("history is cut off at") && err.contains("--exact-base"),
         "{err}"
     );
-    // The caller knows the base: no history is needed for the comparison itself.
+    // The caller knows the base: no history is needed for the comparison
+    // itself.
     assert_eq!(selected(r, &m1, &["--exact-base"]).0, ["a", "b"]);
 
     // With the history: the branch's own changes.

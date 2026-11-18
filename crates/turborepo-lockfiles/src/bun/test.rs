@@ -171,7 +171,8 @@ fn test_override_functionality_no_override() {
 
     let lockfile = BunLockfile::from_str(&contents).unwrap();
 
-    // Resolve bar - should get original version since no override exists for bar
+    // Resolve bar - should get original version since no override exists for
+    // bar
     let result = lockfile
         .resolve_package("", "bar", "^1.0.0")
         .unwrap()
@@ -437,7 +438,8 @@ fn test_optional_dependencies_not_in_lockfile() {
 
     let lockfile = BunLockfile::from_str(lockfile_content).unwrap();
 
-    // This should not error even though @emnapi/wasi-threads is not in the packages
+    // This should not error even though @emnapi/wasi-threads is not in the
+    // packages
     let deps = lockfile
         .all_dependencies("@emnapi/runtime@1.5.0")
         .unwrap()
@@ -510,7 +512,8 @@ fn test_integration_v1_catalog_override_patch_combined() {
         .resolve_package("", "lodash", "catalog:")
         .unwrap()
         .unwrap();
-    // Should resolve catalog to 4.17.20, then override to 4.17.21, then apply patch
+    // Should resolve catalog to 4.17.20, then override to 4.17.21, then apply
+    // patch
     assert_eq!(lodash_result.key, "lodash@4.17.21");
     assert_eq!(
         lodash_result.version,
@@ -781,8 +784,9 @@ fn test_prune_github_package_format() {
 
     let encoded = String::from_utf8(subgraph.encode().unwrap()).unwrap();
 
-    // Verify the GitHub package has exactly 3 elements (no empty string registry)
-    // The output should contain the ident followed directly by the info object
+    // Verify the GitHub package has exactly 3 elements (no empty string
+    // registry) The output should contain the ident followed directly by
+    // the info object
     assert!(
         !encoded.contains(r#"["some-lib@github:user/repo#abc123", "", {"#),
         "GitHub package should NOT have empty string registry field"
@@ -889,9 +893,9 @@ fn test_optional_peers_compact_format() {
     let lockfile = BunLockfile::from_str(&lockfile_json.to_string()).unwrap();
     let encoded = String::from_utf8(lockfile.encode().unwrap()).unwrap();
 
-    // Verify optionalPeers uses compact format without leading/trailing spaces or
-    // commas The array should be formatted as ["react", "vue"] or ["vue",
-    // "react"] NOT as [ "react", "vue", ] or similar
+    // Verify optionalPeers uses compact format without leading/trailing spaces
+    // or commas The array should be formatted as ["react", "vue"] or
+    // ["vue", "react"] NOT as [ "react", "vue", ] or similar
     assert!(
         !encoded.contains(r#"[ ""#),
         "optionalPeers array should NOT have leading space after opening bracket"
@@ -1542,8 +1546,8 @@ fn test_nested_promotion_deep_chain() {
 
     // After promotion, deeply nested entries should be flattened.
     // "chalk/ansi-styles" → "ansi-styles" (promoted, children renamed)
-    // "ansi-styles/color-convert" → "color-convert" (promoted, children renamed)
-    // "color-convert/color-name" → "color-name" (promoted)
+    // "ansi-styles/color-convert" → "color-convert" (promoted, children
+    // renamed) "color-convert/color-name" → "color-name" (promoted)
     assert!(
         pruned.data.packages.contains_key("ansi-styles"),
         "ansi-styles should be promoted to top-level"
@@ -1659,10 +1663,10 @@ fn test_file_protocol_roundtrip() {
         "file: packages should not gain a checksum after roundtrip"
     );
 
-    // Verify the encoded string does NOT contain empty strings for the file: entry
-    // A correct entry looks like: ["@api/sdk@file:apps/api/.api/apis/sdk", { ... }]
-    // A corrupted entry looks like: ["@api/sdk@file:apps/api/.api/apis/sdk", "", {
-    // ... }, ""]
+    // Verify the encoded string does NOT contain empty strings for the file:
+    // entry A correct entry looks like:
+    // ["@api/sdk@file:apps/api/.api/apis/sdk", { ... }] A corrupted entry
+    // looks like: ["@api/sdk@file:apps/api/.api/apis/sdk", "", { ... }, ""]
     assert!(
         !encoded_str.contains(r#""@api/sdk@file:apps/api/.api/apis/sdk", """#),
         "file: entry should not have empty registry string inserted"
@@ -2151,7 +2155,8 @@ fn test_subgraph_preserves_patched_dependency_when_two_versions_exist() {
 
     let lockfile = BunLockfile::from_str(&contents).unwrap();
 
-    // Simulate lockfile_keys from `turbo prune` (external transitive deps only).
+    // Simulate lockfile_keys from `turbo prune` (external transitive deps
+    // only).
     let lockfile_keys: Vec<String> = [
         "is-number@4.0.0",
         "is-number@6.0.0",

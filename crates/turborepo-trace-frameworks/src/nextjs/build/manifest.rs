@@ -536,7 +536,8 @@ impl NextBuild {
                     {
                         for c in strs(module.1.get("chunks")) {
                             if c.ends_with(".js") || c.ends_with(".css") {
-                                // webpack lists chunk ids and bare names under static/chunks.
+                                // webpack lists chunk ids and bare names under
+                                // static/chunks.
                                 client.push(if c.contains("static/") {
                                     static_path(&c)
                                 } else {
@@ -569,7 +570,8 @@ impl NextBuild {
                     self.warnings
                         .push(format!("{side}_client-reference-manifest.js: not parsed"));
                 }
-                // Turbopack writes a build manifest per entry; webpack one for the app.
+                // Turbopack writes a build manifest per entry; webpack one for
+                // the app.
                 match self.json_opt(&format!("{side}/build-manifest.json")) {
                     Some(bm) => {
                         for k in ["rootMainFiles", "polyfillFiles"] {

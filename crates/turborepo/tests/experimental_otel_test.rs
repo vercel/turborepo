@@ -9,8 +9,8 @@ use common::{run_turbo_with_env, setup};
 fn setup_otel_fixture(dir: &std::path::Path) {
     setup::setup_integration_test(dir, "basic_monorepo", "npm@10.5.0", false).unwrap();
 
-    // Enable experimentalObservability by inserting futureFlags after the opening
-    // brace
+    // Enable experimentalObservability by inserting futureFlags after the
+    // opening brace
     let turbo_json = dir.join("turbo.json");
     let contents = fs::read_to_string(&turbo_json).unwrap();
     let new_contents = contents.replacen(
@@ -48,7 +48,8 @@ fn test_otel_cli_flags_do_not_break_run() {
     let tempdir = tempfile::tempdir().unwrap();
     setup_otel_fixture(tempdir.path());
 
-    // Prime the cache without attempting to export metrics to a missing collector.
+    // Prime the cache without attempting to export metrics to a missing
+    // collector.
     let primed = run_turbo_with_env(
         tempdir.path(),
         &["run", "build", "--filter=my-app"],

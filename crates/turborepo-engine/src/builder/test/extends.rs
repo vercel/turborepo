@@ -111,7 +111,8 @@ fn test_extends_inherits_tasks_from_non_root_package() {
 
     let loader = TestTurboJsonLoader::new(turbo_jsons);
 
-    // Verify that "app" can find the "build" task inherited from "shared-config"
+    // Verify that "app" can find the "build" task inherited from
+    // "shared-config"
     let task_name = TaskName::from("build");
     let task_id = TaskId::try_from("app#build").unwrap();
     let has_def = EngineBuilder::has_task_definition_in_run(
@@ -196,7 +197,8 @@ fn test_add_all_tasks_discovers_extended_tasks() {
     collect_tasks_from_extends_chain(&loader, &PackageName::from("app"), &mut tasks, &mut visited)
         .unwrap();
 
-    // app should have discovered "build" from shared-config and "test" from root
+    // app should have discovered "build" from shared-config and "test" from
+    // root
     assert!(
         tasks.contains(&TaskName::from("build")),
         "Should discover 'build' task from shared-config"
@@ -270,7 +272,8 @@ fn test_cyclic_extends_between_packages_graceful() {
     )
     .unwrap();
 
-    // Should have collected tasks from pkg-a, pkg-b, and root (despite the cycle)
+    // Should have collected tasks from pkg-a, pkg-b, and root (despite the
+    // cycle)
     assert!(
         tasks.contains(&TaskName::from("task-a")),
         "Should have task-a"

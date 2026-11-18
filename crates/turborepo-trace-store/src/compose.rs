@@ -242,18 +242,18 @@ impl Graph {
             .par_iter()
             .map(|e| shard::load_from(&store, pack.as_ref(), &e.key).map_err(Error::Shard))
             .collect::<Result<_, _>>()?;
-        // Compact when the log has grown (it keeps replaced versions of shards) or many
-        // shards are loose files (older stores): one pack of exactly this snapshot's
-        // shards.
+        // Compact when the log has grown (it keeps replaced versions of shards)
+        // or many shards are loose files (older stores): one pack of
+        // exactly this snapshot's shards.
         let loose = manifest
             .shards
             .iter()
             .filter(|e| !pack.as_ref().is_some_and(|p| p.contains(&e.key)))
             .count();
         let [main_bytes, log_bytes] = pack.as_ref().map_or([0, 0], |p| p.sizes());
-        // The previous snapshot's composed parts, when this one differs from it only in
-        // what composition does not read. Decided here: the compaction below
-        // drops the shards that were replaced.
+        // The previous snapshot's composed parts, when this one differs from it
+        // only in what composition does not read. Decided here: the
+        // compaction below drops the shards that were replaced.
         let mut reused = reuse::across_edit(out, &manifest, &shards, pack.as_ref());
         drop(pack);
         if loose > PACK_SLACK.max(manifest.shards.len() / 20)
@@ -277,8 +277,8 @@ impl Graph {
 
         // Packages.
         let t1 = Instant::now();
-        // Roots come from the manifest: an opaque shard does not store its installed
-        // location.
+        // Roots come from the manifest: an opaque shard does not store its
+        // installed location.
         let packages: Vec<Pkg> = shards
             .iter()
             .zip(&manifest.shards)
@@ -386,7 +386,8 @@ impl Graph {
             }
         }
 
-        // Membership hubs: one member list per distinct hub, expanded from the walk.
+        // Membership hubs: one member list per distinct hub, expanded from the
+        // walk.
         turborepo_trace_core::timing::mark("load: packages");
         let hubs = expand_hubs(out, &manifest, &shards)?;
         turborepo_trace_core::timing::mark("load: hubs");
@@ -449,9 +450,9 @@ impl Graph {
                 ArchivedTargetRec::Outside(p) => Link::Path(p.to_string(), root_pkg),
             }
         };
-        // Per shard, in parallel: its file and package nodes, and its leaf candidates.
-        // `rank` 0 = file or package node, 1 = leaf; a leaf that is also a file is
-        // dropped.
+        // Per shard, in parallel: its file and package nodes, and its leaf
+        // candidates. `rank` 0 = file or package node, 1 = leaf; a leaf
+        // that is also a file is dropped.
         let per_shard: Vec<Vec<(String, u8, Node)>> = (0..shards.len())
             .into_par_iter()
             .map(|si| {
@@ -464,8 +465,9 @@ impl Graph {
                         .as_ref()
                         .map(|v| v.as_str())
                         .unwrap_or("unknown");
-                    // npm packages: `node_modules/<name>@<version>`; language packages
-                    // (namespaced `eco:name`): `<eco>:<name>@<version>`.
+                    // npm packages: `node_modules/<name>@<version>`; language
+                    // packages (namespaced `eco:name`):
+                    // `<eco>:<name>@<version>`.
                     let name = a.package.name.as_str();
                     let path = if name.contains(':') {
                         format!("{name}@{v}")
@@ -521,8 +523,9 @@ impl Graph {
             .collect();
         turborepo_trace_core::timing::mark("load: node candidates");
         let mut cand: Vec<(String, u8, Node)> = per_shard.into_iter().flatten().collect();
-        // Hub members that are not files: leaves owned by the deepest first-party
-        // package containing them (as the stored edges' targets were).
+        // Hub members that are not files: leaves owned by the deepest
+        // first-party package containing them (as the stored edges'
+        // targets were).
         if !hubs.lists.is_empty() {
             let fp_roots: HashMap<&str, u32> = shards
                 .iter()
@@ -540,8 +543,9 @@ impl Graph {
                 }
                 fp_roots.get("").copied().unwrap_or(root_pkg)
             };
-            // One candidate per member path, whichever hubs list it (indexes into the
-            // sorted walk: sorted indexes are sorted paths).
+            // One candidate per member path, whichever hubs list it (indexes
+            // into the sorted walk: sorted indexes are sorted
+            // paths).
             let mut members: Vec<u32> = hubs.lists.iter().flatten().copied().collect();
             if hubs.lists.len() > 1 {
                 members.par_sort_unstable();
@@ -562,7 +566,8 @@ impl Graph {
                 )
             }));
         }
-        // The same leaf named by several shards keeps the owner of the first shard.
+        // The same leaf named by several shards keeps the owner of the first
+        // shard.
         cand.par_sort_unstable_by(|a, b| {
             (a.0.as_str(), a.1, a.2.pkg).cmp(&(b.0.as_str(), b.1, b.2.pkg))
         });
@@ -648,7 +653,8 @@ impl Graph {
             let mut hub_nodes: Vec<(u32, u32)> = Vec::new();
             for (si, s) in shards.iter().enumerate() {
                 for (h, &hi) in s.get().hubs.iter().zip(&hubs.of_shard[si]) {
-                    // A hub several shards define has one node (the first shard's).
+                    // A hub several shards define has one node (the first
+                    // shard's).
                     if let Some(&n) = file_node[si].get(h.file.to_native() as usize)
                         && n != NONE
                     {
@@ -783,7 +789,8 @@ impl Graph {
     /// docs). `out`: the graph directory.
     fn link_tasks(&mut self, out: &Path) -> Vec<u32> {
         let mut extra: Vec<(u32, u32)> = Vec::new();
-        // Nodes an output covers: files a task (re)generates (`listed`), sorted.
+        // Nodes an output covers: files a task (re)generates (`listed`),
+        // sorted.
         let mut produced: Vec<u32> = Vec::new();
         // Generated-file links that exist only through type-level references.
         let mut weak: Vec<(u32, u32)> = Vec::new();
@@ -821,22 +828,26 @@ impl Graph {
         let any_output = deps.iter().any(|d| d.1);
         extra.extend(deps.into_iter().flat_map(|d| d.0));
         if any_output {
-            // Committed files of tasks that nothing runs are not linked (`tracked`).
+            // Committed files of tasks that nothing runs are not linked
+            // (`tracked`).
             let tracked = tracked::Tracked::new(self, out, &extra);
             let tracked = &tracked;
             let t0 = Instant::now();
-            // With the tables built here (the usual case: they have the composed graph's
-            // key), the probe paths of every shard record are at hand as string ids.
+            // With the tables built here (the usual case: they have the
+            // composed graph's key), the probe paths of every shard
+            // record are at hand as string ids.
             let mut probe_ids: Option<ProbeIds> = None;
             let t = self.tables_with(Some(&mut probe_ids));
             let probe_ids = probe_ids.as_ref();
             let inv = self.inverted();
             turborepo_trace_core::timing::mark("load: tables + inverted indexes (for task links)");
             tables_us = t0.elapsed().as_micros() as u64;
-            // Outputs in order (their indexes are stable), then linked in parallel.
+            // Outputs in order (their indexes are stable), then linked in
+            // parallel.
             let mut work: Vec<(u32, u32)> = Vec::new();
-            // A task part defined by several shards (every `tsc -b` that builds the
-            // project) is one node: each of its outputs is linked once.
+            // A task part defined by several shards (every `tsc -b` that builds
+            // the project) is one node: each of its outputs is
+            // linked once.
             let mut part_outputs: HashSet<(u32, GenOutput)> = HashSet::new();
             for (si, s) in self.shards.iter().enumerate() {
                 let a = s.get();
@@ -888,12 +899,14 @@ impl Graph {
                         xxhash_rust::xxh3::Xxh3Builder,
                     > = HashMap::with_hasher(xxhash_rust::xxh3::Xxh3Builder::new());
                     let (p, pattern, exclude, package) = gen_ref[oi as usize].clone();
-                    // A write to a path with an unexpanded variable (`$BUILD_DIR/x`): no
-                    // file anyone names; its listing links are listing-only.
+                    // A write to a path with an unexpanded variable
+                    // (`$BUILD_DIR/x`): no file anyone
+                    // names; its listing links are listing-only.
                     let unplaced = listed::unplaced(&p);
                     {
                         {
-                            // An output package: its opaque nodes (any version).
+                            // An output package: its opaque nodes (any
+                            // version).
                             if let Some(name) = &package {
                                 let prefix = format!("node_modules/{name}@");
                                 for i in self.lower_bound(&prefix)..self.nodes.len() {
@@ -907,7 +920,8 @@ impl Graph {
                                     }
                                 }
                             }
-                            // `output_covers` with the globs compiled once per output.
+                            // `output_covers` with the globs compiled once per
+                            // output.
                             let inc = pattern.as_deref().map(crate::glob::FastGlob::new);
                             let exc: Vec<crate::glob::FastGlob> = exclude
                                 .iter()
@@ -937,8 +951,10 @@ impl Graph {
                                         .is_some_and(|r| r.starts_with('/'))
                             };
                             // Nodes covered by the output.
-                            // Paths under `p` are a subrange of those starting with `p`, which may
-                            // interleave with siblings such as `p.config.js` (`.` sorts before
+                            // Paths under `p` are a subrange of those starting
+                            // with `p`, which may
+                            // interleave with siblings such as `p.config.js`
+                            // (`.` sorts before
                             // `/`).
                             let start = self.lower_bound(&p);
                             for i in start..self.nodes.len() {
@@ -973,8 +989,10 @@ impl Graph {
                                     (inv.probe_off[id] as usize, inv.probe_off[id + 1] as usize);
                                 for &n in &inv.probe_nodes[lo..hi] {
                                     if n != tn && !tracked.passing_probe(self, tn, n, s) {
-                                        // A path that only type-level references look for
-                                        // (`import type { Api } from './generated/api'`)
+                                        // A path that only type-level
+                                        // references look for
+                                        // (`import type { Api } from
+                                        // './generated/api'`)
                                         // links by a type-only edge.
                                         if self.probed_by_types_only(n, s, id as u32, probe_ids) {
                                             weak.push((n, tn));
@@ -993,13 +1011,17 @@ impl Graph {
                                     }
                                 }
                             }
-                            // Listings of a directory inside the output (anything listed there is
-                            // produced), or containing it when the listing's pattern can match a
+                            // Listings of a directory inside the output
+                            // (anything listed there is
+                            // produced), or containing it when the listing's
+                            // pattern can match a
                             // file the output produces.
                             let mut dirs: Vec<(u32, Option<String>)> = Vec::new();
-                            // A directory inside the output: its listing links only when an
-                            // entry it lists can be one the output produces (the output's
-                            // pattern and excludes; `None` below: everything there is).
+                            // A directory inside the output: its listing links
+                            // only when an entry it
+                            // lists can be one the output produces (the
+                            // output's pattern and
+                            // excludes; `None` below: everything there is).
                             let scoped = pattern.is_some() || !exclude.is_empty();
                             let mut inside: Vec<(u32, String)> = Vec::new();
                             for id in sstart..t.strings.len() {
@@ -1050,9 +1072,12 @@ impl Graph {
                                     }
                                 }
                             }
-                            // Members of a directory are grouped by pattern: decide once per
-                            // pattern (memoized across outputs: a root `**/__mocks__/**` listing is
-                            // recorded on thousands of tests and every output has the root as an
+                            // Members of a directory are grouped by pattern:
+                            // decide once per
+                            // pattern (memoized across outputs: a root
+                            // `**/__mocks__/**` listing is
+                            // recorded on thousands of tests and every output
+                            // has the root as an
                             // ancestor), then link the whole run.
                             for (id, rel) in dirs {
                                 let (lo, hi) = (
@@ -1077,8 +1102,10 @@ impl Graph {
                                             }),
                                     };
                                     if lists {
-                                        // A listing that reaches the output through
-                                        // wildcards alone links as listing-only.
+                                        // A listing that reaches the output
+                                        // through
+                                        // wildcards alone links as
+                                        // listing-only.
                                         let names = !unplaced
                                             && rel.as_ref().is_none_or(|rel| {
                                                 listed::names_output(
@@ -1125,8 +1152,9 @@ impl Graph {
         listed.par_sort_unstable();
         listed.dedup();
         listed.retain(|e| extra.binary_search(e).is_err());
-        // A listing link was a full link before it was marked: a pair that a type-level
-        // probe makes as well stays one for every entry but tasks (listing-only wins).
+        // A listing link was a full link before it was marked: a pair that a
+        // type-level probe makes as well stays one for every entry but
+        // tasks (listing-only wins).
         weak.retain(|e| extra.binary_search(e).is_err() && listed.binary_search(e).is_err());
         const MARKS: u32 = TYPE_ONLY_LINK | listed::LISTED_LINK;
         let mut extra: Vec<(u32, u32)> = extra
@@ -1209,8 +1237,8 @@ impl Graph {
     /// outputs.
     fn replaced_by_link(&self, n: NodeId, outs: &[u32], kind: u8, detail: &str) -> bool {
         if kind == generated_file_index() {
-            // Not the record of a read below a temporary directory, which says nothing
-            // about how the file itself is made.
+            // Not the record of a read below a temporary directory, which says
+            // nothing about how the file itself is made.
             return !detail.ends_with(turborepo_trace_core::output::TEMP_READ_NOTE)
                 && !detail.ends_with(turborepo_trace_core::output::MOUNT_READ_NOTE);
         }
@@ -1609,7 +1637,8 @@ impl Graph {
             if let Some(p) = &self.tables_cache
                 && let Some((t, inv)) = tables::open(p, key, self.nodes.len())
             {
-                // Published before the tables: whoever sees the tables finds the indexes.
+                // Published before the tables: whoever sees the tables finds
+                // the indexes.
                 let _ = self.inverted.set(inv);
                 return t;
             }
@@ -1677,9 +1706,9 @@ impl Graph {
     // Invariant: every looked-up string was interned into `all` above.
     #[allow(clippy::expect_used)]
     fn build_tables(&self) -> (Tables, ProbeIds) {
-        // 1. Per shard, in parallel: each probe and membership record expanded once
-        //    into repo-relative strings (records outside the repository expand to
-        //    nothing).
+        // 1. Per shard, in parallel: each probe and membership record expanded
+        //    once into repo-relative strings (records outside the repository
+        //    expand to nothing).
         struct Expanded {
             probes: Vec<Vec<String>>,
             members: Vec<Option<(String, String)>>,
@@ -1691,8 +1720,9 @@ impl Graph {
             .map(|s| {
                 let a = s.get();
                 let root = a.package.root.as_str();
-                // Also in parallel inside a shard: a repository with a few very large
-                // packages has most of its records in a handful of shards.
+                // Also in parallel inside a shard: a repository with a few very
+                // large packages has most of its records in a
+                // handful of shards.
                 let probes = a
                     .probes
                     .as_slice()
@@ -1726,8 +1756,8 @@ impl Graph {
             })
             .collect();
         turborepo_trace_core::timing::mark("tables: records expanded");
-        // 2. One sorted string table: ids follow string order, so every list sorted by
-        //    id is sorted by path.
+        // 2. One sorted string table: ids follow string order, so every list
+        //    sorted by id is sorted by path.
         let mut all: Vec<&str> = expanded
             .par_iter()
             .flat_map_iter(|e| {
@@ -1911,22 +1941,23 @@ fn may_list_output(pattern: &str, rel: &str, out_pattern: Option<&str>) -> bool 
     let names = || NAMES.iter().copied().chain(derived.as_deref());
     let rel_last = rel.rsplit('/').next().unwrap_or(rel);
     let mut buf = String::new();
-    // `matches(pattern, c)` is `matches(alt, c)` for some brace alternative `alt`
-    // (each is a fixed point of the expansion), so each alternative is tested
-    // on its own, after exact prefilters (necessary conditions; the glob runs
-    // only on what passes). The candidates are `rel`, `rel/<name>` and
-    // `rel/x/<name>`. Without escapes, a segment with no wildcard matches
-    // exactly one whole path component (when every `**` is a whole segment: `a*
-    // */b` matches `ab`), so it must be a component of `rel`, `x` or a name; and
-    // the last segment's literal tail (after its last wildcard) must end the
-    // candidate.
+    // `matches(pattern, c)` is `matches(alt, c)` for some brace alternative
+    // `alt` (each is a fixed point of the expansion), so each alternative
+    // is tested on its own, after exact prefilters (necessary conditions;
+    // the glob runs only on what passes). The candidates are `rel`,
+    // `rel/<name>` and `rel/x/<name>`. Without escapes, a segment with no
+    // wildcard matches exactly one whole path component (when every `**` is
+    // a whole segment: `a* */b` matches `ab`), so it must be a component of
+    // `rel`, `x` or a name; and the last segment's literal tail (after its
+    // last wildcard) must end the candidate.
     turborepo_trace_tasks::glob::expand_braces(pattern)
         .iter()
         .any(|alt| {
             let pat = alt.strip_prefix("./").unwrap_or(alt);
             let mut tail = "";
-            // Without `**`, every segment matches exactly one component: only candidates
-            // with as many components as the pattern has segments can match.
+            // Without `**`, every segment matches exactly one component: only
+            // candidates with as many components as the pattern has
+            // segments can match.
             let mut comps: Option<usize> = None;
             if !pat.contains(['{', '}', '\\']) {
                 if !pat.contains("**") && !pat.contains(['[', ']']) {
@@ -2005,8 +2036,8 @@ fn output_may_reach(drel: &str, out_pattern: Option<&str>, exclude: &[String]) -
         let segs: Vec<&str> = alt.split('/').collect();
         for (i, comp) in comps.iter().enumerate() {
             let Some(seg) = segs.get(i) else {
-                // The pattern ends above the directory: it names the directory or an
-                // ancestor, never an entry inside it.
+                // The pattern ends above the directory: it names the directory
+                // or an ancestor, never an entry inside it.
                 return false;
             };
             if seg.contains("**") {
@@ -2023,8 +2054,8 @@ fn output_may_reach(drel: &str, out_pattern: Option<&str>, exclude: &[String]) -
     {
         return false;
     }
-    // Whether exclude alternative `alt` (`<prefix>/**`) excludes every path below
-    // `drel`.
+    // Whether exclude alternative `alt` (`<prefix>/**`) excludes every path
+    // below `drel`.
     let covers_dir = |alt: &str| -> bool {
         let alt = alt.strip_prefix("./").unwrap_or(alt);
         let Some(prefix) = alt.strip_suffix("**") else {
@@ -2156,7 +2187,8 @@ fn expand_hubs(out: &Path, manifest: &Manifest, shards: &[LoadedShard]) -> Resul
                 .iter()
                 .map(|e| crate::glob::FastGlob::new(e))
                 .collect();
-            // A repo-wide hub scans every walked file: in parallel chunks, in order.
+            // A repo-wide hub scans every walked file: in parallel chunks, in
+            // order.
             (start..start + len)
                 .into_par_iter()
                 .with_min_len(4096)
@@ -2350,7 +2382,8 @@ impl GraphView for Graph {
         if ids.is_empty() {
             return;
         }
-        // (Of the strings below the path, the ones no node probes have no nodes here.)
+        // (Of the strings below the path, the ones no node probes have no nodes
+        // here.)
         let inv = self.inverted();
         for id in ids {
             let (lo, hi) = (
@@ -2423,8 +2456,8 @@ mod tests {
         assert!(output_may_reach("a/b/gen", Some("**/gen/*.ts"), &[]));
         assert!(output_may_reach("pkg-a/dist", Some("*/dist/*.js"), &[]));
         assert!(!output_may_reach("pkg-a/src", Some("*/dist/*.js"), &[]));
-        // A pattern naming the directory itself or an ancestor produces no entry inside
-        // it.
+        // A pattern naming the directory itself or an ancestor produces no
+        // entry inside it.
         assert!(!output_may_reach("dist/x", Some("dist"), &[]));
         assert!(output_may_reach("x", Some("[ab]/**"), &[]), "classes: link");
         // Excludes of whole subtrees (nested packages excluded from `apps/**`).

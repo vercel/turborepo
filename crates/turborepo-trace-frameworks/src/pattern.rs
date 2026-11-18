@@ -226,7 +226,8 @@ fn expand_replacement(replacement: &str, s: &str, m: &RegexMatch, out: &mut Stri
                 i += 2;
             }
             d if d.is_ascii_digit() => {
-                // Two digits when that group exists, else one digit, else literal text.
+                // Two digits when that group exists, else one digit, else
+                // literal text.
                 let one = usize::from(d - b'0');
                 let two = b
                     .get(i + 2)
@@ -292,7 +293,8 @@ fn translate(src: &str, flags: &str) -> String {
             '[' if !in_class => {
                 in_class = true;
                 out.push('[');
-                // `[^]` / `[]` edge cases are rare; `[` inside a class must be escaped.
+                // `[^]` / `[]` edge cases are rare; `[` inside a class must be
+                // escaped.
                 if chars.peek() == Some(&'^') {
                     out.push('^');
                     chars.next();
@@ -673,7 +675,8 @@ mod tests {
         assert!(la.is_supported());
         assert!(la.is_match("a/node_modules/x"));
         assert!(!la.is_match("a/node_modules/jose/x"));
-        // A negative lookahead built from a list of files (a vite alias `find`).
+        // A negative lookahead built from a list of files (a vite alias
+        // `find`).
         let alias = JsRegex::new(r"^#/(?!(?:app/routes\.mjs|lib/valid\.mjs)$)(.*)$", "");
         assert!(alias.is_supported());
         assert_eq!(
@@ -713,14 +716,15 @@ mod tests {
             .as_deref(),
             Some("/r/site/a/b")
         );
-        // An unmatched group is empty; `$$`, `$&`, the text before and after the match.
+        // An unmatched group is empty; `$$`, `$&`, the text before and after
+        // the match.
         assert_eq!(
             r(r"^@/app/\(site\)(/.*)?$", "", "@/app/(site)", "/r/site$1").as_deref(),
             Some("/r/site")
         );
         assert_eq!(r("b", "", "abc", "[$$$&$`$']").as_deref(), Some("a[$bac]c"));
-        // `$10` is group 1 followed by `0` when there is no group 10; `$2` without a
-        // second group is literal.
+        // `$10` is group 1 followed by `0` when there is no group 10; `$2`
+        // without a second group is literal.
         assert_eq!(r("(b)", "", "abc", "$10$2").as_deref(), Some("ab0$2c"));
         // The first match only, unless `g`.
         assert_eq!(r("a", "", "aaa", "b").as_deref(), Some("baa"));

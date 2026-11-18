@@ -225,7 +225,8 @@ pub fn rootdir_for(test: &Path) -> (PathBuf, Option<PathBuf>) {
             }
         }
     }
-    // pytest >= 8.1: a pyproject.toml without the table still defines the rootdir.
+    // pytest >= 8.1: a pyproject.toml without the table still defines the
+    // rootdir.
     for dir in start.ancestors() {
         let p = dir.join("pyproject.toml");
         if p.fx_is_file() {
@@ -431,7 +432,8 @@ pub fn inputs_of(cfg: &PytestConfig) -> FrameworkInputs {
     let mut global = GlobalInputs::default();
     if let Some(c) = &cfg.config_file {
         global.config_files.push(c.clone());
-        // A config file of higher precedence created next to this one would replace it.
+        // A config file of higher precedence created next to this one would
+        // replace it.
         let name = c.file_name().and_then(|n| n.to_str()).unwrap_or("");
         let dir = c.parent().unwrap_or(root);
         for n in CONFIG_NAMES.iter().take_while(|n| **n != name) {
@@ -612,7 +614,8 @@ pub fn test_inputs_of(cfg: &PytestConfig, test: &Path, src: &[u8]) -> TestInputs
             out.probes.push(c);
         }
     }
-    // Package __init__.py files above the test; the first missing one is a probe.
+    // Package __init__.py files above the test; the first missing one is a
+    // probe.
     let mut d = test_dir;
     loop {
         let init = d.join("__init__.py");

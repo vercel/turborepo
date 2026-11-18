@@ -260,7 +260,8 @@ fn disabled_python_flag_ignores_uv_declarations() {
     ));
     assert_eq!(publication_guards::state(owned.root()), before);
     assert_eq!(upstream.hits(), 0);
-    // A uv-only repository with Python enabled but no request has nothing to lock.
+    // A uv-only repository with Python enabled but no request has nothing to
+    // lock.
     let owned = fixture(PYTHON, ">=0.12");
     fs::write(
         owned.root().join("pyproject.toml"),

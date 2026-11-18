@@ -269,7 +269,8 @@ async fn bounds_declared_chunked_and_close_delimited_bodies() -> TestResult {
 async fn chunked_writes_require_completion_and_keep_total_deadline() -> TestResult {
     let header = "HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\nConnection: close\r\n\r\n";
     // The unterminated case contains all of `abc`, matching the pinned digest.
-    // The slow case advances every 200ms, but must still exhaust its 300ms budget.
+    // The slow case advances every 200ms, but must still exhaust its 300ms
+    // budget.
     for (end, gap_ms, budget_ms, failure) in [
         ("0\r\n\r\n", 10, 2000, None),
         ("", 0, 2000, Some(Error::RequestFailed)),

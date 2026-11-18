@@ -64,8 +64,8 @@ fn what_a_config_computes_from_its_own_location_is_kept_exactly() {
              modulePathIgnorePatterns: [`${{__dirname}}/lib/gen/`],\n}};\n"
         ),
     );
-    // A shared base, and a package config that adds what it computes from its own
-    // place.
+    // A shared base, and a package config that adds what it computes from its
+    // own place.
     write(
         &root,
         "jest.base.js",
@@ -117,8 +117,8 @@ fn what_a_config_computes_from_its_own_location_is_kept_exactly() {
             !text.contains(root.to_str().unwrap()) && !text.contains("checkout"),
             "{text}"
         );
-        // Taken at the place it was loaded at, it is the discovery as loaded; at
-        // another place it finds the same files.
+        // Taken at the place it was loaded at, it is the discovery as loaded;
+        // at another place it finds the same files.
         let m = d.matcher().rooted(&root);
         let found: Vec<&str> = files
             .iter()
@@ -191,9 +191,9 @@ fn a_pattern_through_the_checkouts_name_is_not_kept_exactly() {
         let files = vec![format!("{dir}/checks/one.js")];
         let exact = spec.exact();
         let dependent = verdict(&spec, fell_back, &root, &Tree::new(&files)).dependent;
-        // Either the spec says that the place decides (the path is the config's own
-        // text, matched as written everywhere), or it is not kept exactly: in
-        // both cases the root is recorded.
+        // Either the spec says that the place decides (the path is the config's
+        // own text, matched as written everywhere), or it is not kept
+        // exactly: in both cases the root is recorded.
         assert!(
             !exact || dependent,
             "{dir}: exact {exact}, dependent {dependent}"

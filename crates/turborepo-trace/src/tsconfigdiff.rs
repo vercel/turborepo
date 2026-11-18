@@ -300,11 +300,11 @@ fn reference_is_inert(
         };
         apart(&at)?;
     }
-    // As TypeScript reads it: the configs the load read, each with the `files` and
-    // `include` it writes, relative to itself (`${configDir}`: to the project). The
-    // project's own replace inherited ones; without its own, the ones of an
-    // extended config apply (which one, when several write them, is not worked
-    // out: all are checked).
+    // As TypeScript reads it: the configs the load read, each with the `files`
+    // and `include` it writes, relative to itself (`${configDir}`: to the
+    // project). The project's own replace inherited ones; without its own,
+    // the ones of an extended config apply (which one, when several write
+    // them, is not worked out: all are checked).
     let config = rel(&p.config);
     let mut definers: Vec<(String, Vec<String>)> = Vec::new();
     let mut own_defines = false;
@@ -312,15 +312,16 @@ fn reference_is_inert(
         if file_name(at) == "package.json" {
             continue;
         }
-        // A file of the repository as it was at the revision; what git does not have
-        // there (an installed package, a generated file) from the working tree.
+        // A file of the repository as it was at the revision; what git does not
+        // have there (an installed package, a generated file) from the
+        // working tree.
         let text = at_base
             .then(|| base.show_config(at))
             .flatten()
             .or_else(|| std::fs::read_to_string(root.join(at)).ok())
             .ok_or_else(|| format!("{at} cannot be read"))?;
-        // The loader goes on without a base whose package is not installed; what that
-        // base would add is not known.
+        // The loader goes on without a base whose package is not installed;
+        // what that base would add is not known.
         if turborepo_trace_lang_js::resolve::governance::extends_uninstalled(&root.join(at), &text)
         {
             return Err(format!(
@@ -404,8 +405,8 @@ fn reads_references(view: &View<'_>, config: NodeId) -> Option<String> {
             ) {
                 continue;
             }
-            // Labelled edges (`vitest:config <path>`, a generated file) are not imports of
-            // the config's code.
+            // Labelled edges (`vitest:config <path>`, a generated file) are not
+            // imports of the config's code.
             let Some(spec) = e.specifier.filter(|s| !s.contains(' ')) else {
                 continue;
             };
@@ -492,8 +493,8 @@ pub fn effects(
         .collect();
     base.preload(&modified);
     let changed = |p: &str| changes.iter().any(|c| c.path == p);
-    // The loader of referenced projects, made for the first reference that came or
-    // went.
+    // The loader of referenced projects, made for the first reference that came
+    // or went.
     let loader: std::cell::OnceCell<Projects> = std::cell::OnceCell::new();
     for c in changes {
         if c.kind != ChangeKind::Modified || !is_tsconfig(file_name(&c.path)) || skip(&c.path) {
@@ -538,8 +539,8 @@ pub fn effects(
             let (Some(before), Some(after)) = (reference_paths(&old), reference_paths(&new)) else {
                 return Err("`references` is not a list of projects at one revision".to_owned());
             };
-            // The first referenced project that includes a file wins: the projects both
-            // revisions list must keep their order.
+            // The first referenced project that includes a file wins: the
+            // projects both revisions list must keep their order.
             let common = |a: &[String], b: &[String]| -> Vec<String> {
                 a.iter().filter(|r| b.contains(r)).cloned().collect()
             };
@@ -547,8 +548,8 @@ pub fn effects(
                 return Err("the order of the referenced projects changed".to_owned());
             }
             let mut touched = Vec::new();
-            // A project that came is asked about in the working tree, one that went at
-            // the base.
+            // A project that came is asked about in the working tree, one that
+            // went at the base.
             for (list, other, at_base) in [(&after, &before, false), (&before, &after, true)] {
                 for r in list.iter().filter(|r| !other.contains(r)) {
                     let target = join(dir, r)

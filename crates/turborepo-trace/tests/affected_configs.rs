@@ -203,16 +203,17 @@ const OFF: [(&str, &str); 1] = [("TURBO_TRACE_DEBUG_CONFIG_FIELDS", "0")];
 fn inert_fields_select_only_readers_of_the_file() {
     let d = repo(A_MANIFEST);
     let r = d.path();
-    // As a whole-file change, the manifest selects every test of the package and of
-    // its importer (and, through the importer, what the importer's build
-    // produces).
+    // As a whole-file change, the manifest selects every test of the package
+    // and of its importer (and, through the importer, what the importer's
+    // build produces).
     edit_a(r, r#""version": "1.0.0""#, r#""version": "1.0.1""#);
     assert_eq!(since_env(r, &OFF), ALL);
     // Field by field: `version` selects the tests that load or read the file
     // itself.
     assert_eq!(since(r), [NAME_TEST, VER_TEST]);
-    // The package's tasks read its whole directory, the two readers of the manifest
-    // included, so they are affected; the importer's tasks are not.
+    // The package's tasks read its whole directory, the two readers of the
+    // manifest included, so they are affected; the importer's tasks are
+    // not.
     let t = tasks(r);
     assert!(
         !t.is_empty() && t.iter().all(|t| t.starts_with("task:packages/a#")),
@@ -299,8 +300,8 @@ fn inert_fields_select_only_readers_of_the_file() {
     assert_eq!(all, ALL);
     git(r, &["checkout", "-q", "--", "."]);
 
-    // A package without readers of its manifest: a `version` bump selects no test,
-    // and only the task whose script names `$npm_package_version`.
+    // A package without readers of its manifest: a `version` bump selects no
+    // test, and only the task whose script names `$npm_package_version`.
     write(
         r,
         "packages/b/package.json",
@@ -340,8 +341,9 @@ fn other_fields_select_the_package_and_its_importers() {
         edit_a(r, from, to);
         assert_eq!(since(r), ALL, "{to}");
     }
-    // Resolution fields are applied entry by entry (tests/affected_exports.rs): an
-    // added subpath that nobody requests selects only the readers of the file.
+    // Resolution fields are applied entry by entry (tests/affected_exports.rs):
+    // an added subpath that nobody requests selects only the readers of the
+    // file.
     edit_a(
         r,
         r#""./util": "./src/util.js""#,
@@ -410,7 +412,8 @@ fn dependency_edits_select_the_nodes_that_link_the_dependency() {
         write(r, "packages/c/package.json", &C_MANIFEST.replace(from, to));
     };
 
-    // A third-party range edit: the file that links the package, not the others.
+    // A third-party range edit: the file that links the package, not the
+    // others.
     edit_c(r#""dep-x": "^1.0.0""#, r#""dep-x": "^1.1.0""#);
     assert_eq!(since_of(r, &C_TESTS, &OFF), [OTHER, USES_A, USES_X]);
     assert_eq!(since_of(r, &C_TESTS, &[]), [USES_X]);
@@ -523,10 +526,10 @@ fn script_edits_select_their_tasks() {
     assert_eq!(since(r), [NAME_TEST, VER_TEST]);
     git(r, &["checkout", "-q", "--", "."]);
 
-    // The script of a task whose output a test loads: the task and that test, not
-    // the tests that import the package's sources. (The package's other tasks
-    // read its whole directory, the build output included, so they follow the
-    // build task.)
+    // The script of a task whose output a test loads: the task and that test,
+    // not the tests that import the package's sources. (The package's other
+    // tasks read its whole directory, the build output included, so they
+    // follow the build task.)
     write(
         r,
         "packages/b/package.json",
@@ -546,8 +549,8 @@ fn script_edits_select_their_tasks() {
     );
     assert_eq!(tasks(r), ["task:packages/b#fmt"]);
     assert!(since(r).is_empty());
-    // A removed script: every task that read the manifest (what ran it no longer
-    // finds it).
+    // A removed script: every task that read the manifest (what ran it no
+    // longer finds it).
     write(
         r,
         "packages/b/package.json",
@@ -660,15 +663,15 @@ fn imports_a_module_mapper_rewrites_do_not_read_the_manifest() {
         write(r, "apps/site/package.json", &MANIFEST.replace(from, to));
     };
 
-    // One dependency changes. Every test reaches the manifest through its mapped
-    // imports (their resolution asks it for the package's module type); only
-    // the file that uses the dependency consumes it. The file that loads the
-    // manifest through the mapper reads it.
+    // One dependency changes. Every test reaches the manifest through its
+    // mapped imports (their resolution asks it for the package's module
+    // type); only the file that uses the dependency consumes it. The file
+    // that loads the manifest through the mapper reads it.
     edit(r#""dep-x": "^1.0.0""#, r#""dep-x": "^1.1.0""#);
     assert_eq!(since_of(r, &TESTS, &OFF), [A, NAME, STYLED, X]);
     assert_eq!(since_of(r, &TESTS, &[]), [NAME, X]);
-    // The package the jest config rewrites CSS modules to: the config names it, so
-    // every test of the config may use it.
+    // The package the jest config rewrites CSS modules to: the config names it,
+    // so every test of the config may use it.
     edit(
         r#""identity-obj-proxy": "^3.0.0""#,
         r#""identity-obj-proxy": "^3.0.1""#,

@@ -66,7 +66,8 @@ pub fn main(
     if let Some(code) = capabilities::run_query(std::env::args_os()) {
         return Ok(code);
     }
-    // Generated shell scripts ask for candidates before normal CLI/shim parsing.
+    // Generated shell scripts ask for candidates before normal CLI/shim
+    // parsing.
     let words: Vec<_> = std::env::args_os().skip(1).collect();
     // The global shim prefixes requests handed to a repository-local binary.
     let completion_words = match words.as_slice() {

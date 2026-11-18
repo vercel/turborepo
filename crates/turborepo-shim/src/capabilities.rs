@@ -344,7 +344,8 @@ mod tests {
 
     #[test]
     fn compatibility_is_explicit_schema_membership_not_a_cli_version_floor() {
-        // Synthetic peer responses, not capabilities of this partially shipped CLI.
+        // Synthetic peer responses, not capabilities of this partially shipped
+        // CLI.
         let peer = Capabilities::parse(
             br#"{"abiVersion":1,"cliVersion":"old-build","managedRunSchemas":[0,2]}"#,
         )

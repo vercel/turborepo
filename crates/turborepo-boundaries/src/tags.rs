@@ -71,8 +71,8 @@ where
     G: PackageGraphProvider,
     T: TurboJsonProvider,
 {
-    // We allow "punning" the package name as a tag, so if the allow list contains
-    // the package name, then we have a tag in the allow list
+    // We allow "punning" the package name as a tag, so if the allow list
+    // contains the package name, then we have a tag in the allow list
     // Likewise, if the allow list is empty, then we vacuously have a tag in the
     // allow list
     let mut has_tag_in_allowlist =
@@ -810,8 +810,9 @@ mod tests {
     fn cached_deps_used_across_multiple_tag_rules() {
         // Graph: pkg-a -> pkg-b, pkg-a -> pkg-c
         // pkg-b has tag "lib", pkg-c has tag "util"
-        // pkg-a has two tags: "tag1" (allow deps with "lib") and "tag2" (allow deps
-        // with "util") Both rules should see the same cached dependency set.
+        // pkg-a has two tags: "tag1" (allow deps with "lib") and "tag2" (allow
+        // deps with "util") Both rules should see the same cached
+        // dependency set.
         let mut graph = MockGraph::new();
         graph.add_package("pkg-a");
         graph.add_package("pkg-b");
@@ -867,8 +868,8 @@ mod tests {
         let diagnostics = check_package_tags(&ctx, pkg, None, tags, Some(&tag_rules)).unwrap();
 
         // tag1 allows "lib": pkg-b has "lib" (ok), pkg-c has "util" (violation)
-        // tag2 allows "util": pkg-c has "util" (ok), pkg-b has "lib" (violation)
-        // So we expect 2 NoTagInAllowlist diagnostics
+        // tag2 allows "util": pkg-c has "util" (ok), pkg-b has "lib"
+        // (violation) So we expect 2 NoTagInAllowlist diagnostics
         let allowlist_violations: Vec<_> = diagnostics
             .iter()
             .filter(|d| matches!(d, BoundariesDiagnostic::NoTagInAllowlist { .. }))
@@ -883,9 +884,9 @@ mod tests {
 
     #[test]
     fn no_dfs_when_no_rules_need_it() {
-        // If no rules require dependency/ancestor checks, the DFS should be skipped.
-        // We verify by giving pkg-a dependencies but no rules that would trigger
-        // checking.
+        // If no rules require dependency/ancestor checks, the DFS should be
+        // skipped. We verify by giving pkg-a dependencies but no rules
+        // that would trigger checking.
         let mut graph = MockGraph::new();
         graph.add_package("pkg-a");
         graph.add_package("pkg-b");
@@ -920,7 +921,8 @@ mod tests {
 
         let diagnostics = check_package_tags(&ctx, pkg, None, tags, Some(&tag_rules)).unwrap();
 
-        // No dependency/dependent rules → no violations possible from tag checking
+        // No dependency/dependent rules → no violations possible from tag
+        // checking
         let tag_violations: Vec<_> = diagnostics
             .iter()
             .filter(|d| {

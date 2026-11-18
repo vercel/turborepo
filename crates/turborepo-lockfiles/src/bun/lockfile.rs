@@ -43,14 +43,16 @@ impl Lockfile for BunLockfile {
         // Apply overrides to the resolved version if any exist for this package
         let override_version = self.apply_overrides(name, resolved_version);
 
-        // V1 optimization: Check if this is a workspace dependency that can be resolved
-        // directly from the workspaces section without requiring a packages entry
+        // V1 optimization: Check if this is a workspace dependency that can be
+        // resolved directly from the workspaces section without
+        // requiring a packages entry
         if self.data.lockfile_version >= 1 {
             let override_spec = VersionSpec::parse(override_version);
             if let Some(workspace_target_path) = override_spec.workspace_path()
                 && let Some(target_workspace) = self.data.workspaces.get(workspace_target_path)
             {
-                // This is a workspace dependency, create a synthetic package entry
+                // This is a workspace dependency, create a synthetic package
+                // entry
                 let workspace_version = target_workspace.version.as_deref().unwrap_or("0.0.0");
                 return Ok(Some(crate::Package {
                     key: format!("{name}@{workspace_version}"),
@@ -144,8 +146,8 @@ impl Lockfile for BunLockfile {
         workspace_packages: &[String],
         packages: &[String],
     ) -> Result<Box<dyn Lockfile>, crate::Error> {
-        // Workspace mappings must be included in the packages list to ensure they're
-        // found during pruning
+        // Workspace mappings must be included in the packages list to ensure
+        // they're found during pruning
         let mut packages_with_workspaces: std::collections::HashSet<String> =
             packages.iter().cloned().collect();
 
@@ -218,15 +220,17 @@ impl Lockfile for BunLockfile {
         }
 
         // Add workspace peer dependencies that are actually installed
-        // Peer dependencies declared at workspace level are requirements, not automatic
-        // dependencies, but if they're installed (exist in packages section), they
-        // should be included in the pruned lockfile
+        // Peer dependencies declared at workspace level are requirements, not
+        // automatic dependencies, but if they're installed (exist in
+        // packages section), they should be included in the pruned
+        // lockfile
         for ws_path in workspace_packages {
             if let Some(workspace_entry) = self.data.workspaces.get(ws_path.as_str())
                 && let Some(peer_deps) = &workspace_entry.peer_dependencies
             {
                 for peer_name in peer_deps.keys() {
-                    // Check if this peer dependency exists as an installed package
+                    // Check if this peer dependency exists as an installed
+                    // package
                     if self.data.packages.contains_key(peer_name) {
                         packages_with_workspaces.insert(peer_name.clone());
                     }

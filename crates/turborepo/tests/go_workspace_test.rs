@@ -421,7 +421,8 @@ mod go_watch_harness_tests {
             "printf 'watch stdout'; printf 'watch stderr' >&2; exit 7",
         ]);
         let mut watch = GoWatchGuard::spawn_command(command);
-        // Synchronize on exit rather than racing the child's final instructions.
+        // Synchronize on exit rather than racing the child's final
+        // instructions.
         watch.child.wait().unwrap();
         let error = watch
             .wait_for_path(&path, Duration::from_secs(30))
@@ -1300,7 +1301,8 @@ fn test_go_watch_rediscovers_workspace_members_with_repository_local_caches() {
     .unwrap();
     // This test exercises rediscovery of a valid workspace, not recovery from
     // a partially written manifest. fs::write truncates go.work before writing;
-    // the watcher can observe an empty workspace and exit before the write ends.
+    // the watcher can observe an empty workspace and exit before the write
+    // ends.
     publish_go_work(
         &tempdir.path().join("go.work"),
         b"go 1.22\n\nuse (\n\t./apps/api\n\t./apps/worker\n\t./packages/lib\n)\n",
@@ -1523,11 +1525,12 @@ fn test_go_versioned_default_binaries_match_go_and_do_not_hash_into_dependents()
     ] {
         if stage == "restored" {
             // Changing either output must not invalidate its own task or the
-            // downstream executable. The build below must remain a cache hit and
-            // restore the original bytes.
+            // downstream executable. The build below must remain a cache hit
+            // and restore the original bytes.
             for binary in &binaries {
-                // Replace the inode instead of truncating an executable in place:
-                // Linux can return ETXTBSY while the old inode is still in use.
+                // Replace the inode instead of truncating an executable in
+                // place: Linux can return ETXTBSY while the old
+                // inode is still in use.
                 fs::remove_file(binary).unwrap();
                 fs::write(binary, "changed generated binary").unwrap();
                 fs::remove_file(binary).unwrap();

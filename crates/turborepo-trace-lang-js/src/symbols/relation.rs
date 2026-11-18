@@ -341,8 +341,8 @@ impl Module {
             exports: self.exports.keys().cloned().collect(),
             ..Rows::default()
         };
-        // Per statement with a conditional chain: its roots, and the questions on which
-        // it only builds a value (`None`: it never does).
+        // Per statement with a conditional chain: its roots, and the questions
+        // on which it only builds a value (`None`: it never does).
         let mut roots: Vec<Vec<u32>> = vec![Vec::new(); self.stmts.len()];
         let mut reduced: Vec<Option<Vec<Atom>>> = vec![None; self.stmts.len()];
         for (i, s) in self.stmts.iter().enumerate() {
@@ -385,7 +385,8 @@ impl Module {
                 &mut cond_index,
                 &mut out,
             );
-            // Member names that some statement reads without using the binding otherwise.
+            // Member names that some statement reads without using the binding
+            // otherwise.
             let mut members: Vec<&str> = Vec::new();
             for (i, s) in self.stmts.iter().enumerate() {
                 for r in s
@@ -456,8 +457,9 @@ impl Module {
         for &b in seed {
             tainted[b as usize] = true;
         }
-        // Whether statement `i` reads the seed through reference `r`. A statement whose
-        // conditional chain is rooted in the binding uses it as a whole.
+        // Whether statement `i` reads the seed through reference `r`. A
+        // statement whose conditional chain is rooted in the binding
+        // uses it as a whole.
         let direct = |i: usize, r: &super::Ref| {
             let whole = r.members.is_none() || roots[i].contains(&r.binding);
             match mode {
@@ -508,8 +510,9 @@ impl Module {
             if !stmt_tainted[i] {
                 continue;
             }
-            // A class that extends a tainted value, other than a class or a plain function
-            // of this module (those stay constructors whatever they read).
+            // A class that extends a tainted value, other than a class or a
+            // plain function of this module (those stay
+            // constructors whatever they read).
             if s.extends.iter().any(|&b| {
                 tainted[b as usize]
                     && !matches!(self.bindings[b as usize].kind, Kind::Class | Kind::Function)
@@ -875,9 +878,9 @@ fn encode(shape: &ex::Shape<'_>, rows: Result<&Rows, &str>, flags: Flags) -> Str
         }
         _ => &[],
     };
-    // The names of the named and default bindings of the declaration at `start`,
-    // sorted; `None` when it has a namespace binding (what that uses is the
-    // shape's to say).
+    // The names of the named and default bindings of the declaration at
+    // `start`, sorted; `None` when it has a namespace binding (what that
+    // uses is the shape's to say).
     let bound = |start: u32| -> Option<Vec<&str>> {
         let mut names = Vec::new();
         for s in seeds.iter().filter(|s| s.start == start) {
@@ -1004,9 +1007,9 @@ fn encode(shape: &ex::Shape<'_>, rows: Result<&Rows, &str>, flags: Flags) -> Str
         }
     }
     if !ok {
-        // A question with a control character: the shape's lines for the declarations
-        // were left out on the word of seeds that are not written after all, so the
-        // file has no shape either.
+        // A question with a control character: the shape's lines for the
+        // declarations were left out on the word of seeds that are not
+        // written after all, so the file has no shape either.
         let mut out = String::from(TAG);
         out.push_str(VERSION);
         out.push('\t');
@@ -1049,7 +1052,8 @@ pub fn fact(path: &Path, src: &[u8]) -> Option<String> {
             flags.reads_this = has_this();
             Err("a file too large to parse at every trace")
         } else if !shape.mocked.is_empty() {
-            // A mock call names `jest` or `vi`: the parse would end with this answer.
+            // A mock call names `jest` or `vi`: the parse would end with this
+            // answer.
             flags.reads_this = has_this();
             Err("test-runner mocks")
         } else {
@@ -1066,7 +1070,8 @@ pub fn fact(path: &Path, src: &[u8]) -> Option<String> {
             }
         }
     } else {
-        // A script or a CommonJS module: `require('./x').f()` calls `f` on its exports.
+        // A script or a CommonJS module: `require('./x').f()` calls `f` on its
+        // exports.
         flags.reads_this = has_this();
         Ok(Rows::default())
     };
@@ -1252,8 +1257,8 @@ impl<'a> Fact<'a> {
         let mut bound = None;
         for l in self.body.split('\n') {
             let Some(rest) = l.get(2..).and_then(|r| r.strip_prefix(needle.as_str())) else {
-                // A line that ends with the start: `U<TAB>start` never does (a kind follows),
-                // a `B` line always has a seed.
+                // A line that ends with the start: `U<TAB>start` never does (a
+                // kind follows), a `B` line always has a seed.
                 continue;
             };
             match l.as_bytes()[0] {
@@ -1415,7 +1420,8 @@ impl<'a> Fact<'a> {
                 found += 1;
                 for s in seeds.split('\t') {
                     let s = SeedText::parse(s)?;
-                    // A namespace import reads every name; a default import reads `default`.
+                    // A namespace import reads every name; a default import
+                    // reads `default`.
                     let named = s.kind != b's';
                     let hit = match (named, a.names) {
                         (_, None) | (false, _) => true,
@@ -1425,8 +1431,9 @@ impl<'a> Fact<'a> {
                     if !hit {
                         continue;
                     }
-                    // Only some members of the name changed, and the file reads some of
-                    // it member by member: the statements that use it as a whole, and the
+                    // Only some members of the name changed, and the file reads
+                    // some of it member by member: the
+                    // statements that use it as a whole, and the
                     // ones that read a changed member.
                     let only = (s.kind == b'n' && a.names.is_some())
                         .then(|| members.get(s.name))
@@ -1446,8 +1453,8 @@ impl<'a> Fact<'a> {
             }
         }
         if found != asked.len() {
-            // `import 'x'` binds nothing and reads nothing; anything else is not an import
-            // declaration this file has.
+            // `import 'x'` binds nothing and reads nothing; anything else is
+            // not an import declaration this file has.
             return None;
         }
         let mut out = Taint {
@@ -1585,8 +1592,8 @@ mod tests {
             }
         }
         let member_names: Vec<String> = member_names.into_iter().take(4).collect();
-        // The questions: each declaration with each subset of its names (at most 6
-        // names).
+        // The questions: each declaration with each subset of its names (at
+        // most 6 names).
         let mut questions: Vec<(u32, Option<Vec<String>>)> = Vec::new();
         for (start, names) in &decls {
             questions.push((*start, None));
@@ -1748,8 +1755,9 @@ mod tests {
     fn rows_answer_as_the_joint_computation() {
         let mut compared = 0;
         for (name, src) in SAMPLES {
-            // A chain rooted in a binding reads the binding as a whole in the rows; the
-            // joint computation reads it member by member until the root is tainted.
+            // A chain rooted in a binding reads the binding as a whole in the
+            // rows; the joint computation reads it member by member
+            // until the root is tainted.
             let exact = *name != "chain.ts";
             compared += same_as_joint(name, src, &Alone, exact);
             compared += same_as_joint(name, src, &Named, exact);
@@ -1785,7 +1793,8 @@ mod tests {
             assert_eq!(f.at(start), Some(Used::Forward(forward)));
         }
         assert_eq!(f.at(3), None);
-        // The names of a declaration with bindings are written once, with the bindings.
+        // The names of a declaration with bindings are written once, with the
+        // bindings.
         assert!(!text.contains("\nU\t0\t"), "{text:?}");
         assert!(text.contains("\nB\t0\t"), "{text:?}");
         let forwards: Vec<Forward<'_>> = f.reexports().map(|r| r.1).collect();
@@ -1866,8 +1875,8 @@ mod tests {
                 "{src}"
             );
         }
-        // A namespace import that is called through hands the namespace over; one that
-        // is only read member by member does not.
+        // A namespace import that is called through hands the namespace over;
+        // one that is only read member by member does not.
         let text = fact_of(
             "a.ts",
             "import * as called from './f';\nimport * as read from './g';\nimport { x } from \

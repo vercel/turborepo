@@ -21,8 +21,8 @@ fn reverse_seen_keys<'a>(
 
 impl Yarn1Lockfile {
     // Map from keys to seen keys
-    // A "seen key" just entry.resolved with the key's package name appended to it
-    // See https://github.com/yarnpkg/yarn/pull/9023/
+    // A "seen key" just entry.resolved with the key's package name appended to
+    // it See https://github.com/yarnpkg/yarn/pull/9023/
     fn seen_keys(&self) -> HashMap<&str, String> {
         let mut seen_keys = HashMap::new();
         for (key, entry) in &self.inner {
@@ -63,8 +63,9 @@ impl fmt::Display for Yarn1Lockfile {
                     all_keys.iter().copied().collect::<Vec<_>>()
                 }
                 None => {
-                    // If there isn't a seen key, then there won't be any merged entries so we can
-                    // just add the key as is
+                    // If there isn't a seen key, then there won't be any merged
+                    // entries so we can just add the key as
+                    // is
                     vec![key.as_str()]
                 }
             };
@@ -150,8 +151,8 @@ struct Pattern {
 }
 
 impl Pattern {
-    // This is an exact port of JS code. It is intentionally keeps JS-isms to make
-    // patching easier in the future https://github.com/yarnpkg/yarn/blob/3c3ef8278121c0598c61caf8023d9bb2af888152/src/util/normalize-pattern.js
+    // This is an exact port of JS code. It is intentionally keeps JS-isms to
+    // make patching easier in the future https://github.com/yarnpkg/yarn/blob/3c3ef8278121c0598c61caf8023d9bb2af888152/src/util/normalize-pattern.js
     fn new(pattern: &str) -> Self {
         let mut name = pattern;
         let mut range = "latest".to_owned();

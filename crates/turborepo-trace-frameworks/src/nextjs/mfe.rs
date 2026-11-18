@@ -138,7 +138,8 @@ impl Microfrontends {
         let Some(apps) = v.get("applications").and_then(|a| a.as_object()) else {
             return m;
         };
-        // This app: by package name, else the default app (the one without routing).
+        // This app: by package name, else the default app (the one without
+        // routing).
         let this = apps
             .iter()
             .find(|(k, d)| {

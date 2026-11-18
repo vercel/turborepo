@@ -309,7 +309,8 @@ impl UrlPat {
     }
 
     fn build(pieces: &[Piece], lenient: bool) -> Result<UrlPat, Unresolved> {
-        // Merge adjacent literals and split `{param}` placeholders out of literals.
+        // Merge adjacent literals and split `{param}` placeholders out of
+        // literals.
         let mut ps: Vec<Piece> = Vec::new();
         for p in pieces {
             match p {
@@ -367,8 +368,8 @@ impl UrlPat {
                                 open_tail: false,
                             });
                         }
-                        // An unknown part follows. After a complete host, a path-like value
-                        // is the path (`https://host${path}`): an unknown path. Otherwise the
+                        // An unknown part follows. After a complete host, a
+                        // path-like value is the path (`https://host${path}`): an unknown path. Otherwise the
                         // host continues (`http://${host}/x`, `http://localhost:${port}/x`,
                         // `https://${sub}.example.com/x`) up to the next `/`.
                         let host_done = after < s.len()
@@ -472,7 +473,8 @@ impl UrlPat {
                             }
                             started = true;
                         } else if !started && idx == i && !chunk.is_empty() {
-                            // A path without a leading slash: relative to the base URL.
+                            // A path without a leading slash: relative to the
+                            // base URL.
                             started = true;
                         }
                         if !chunk.is_empty() {

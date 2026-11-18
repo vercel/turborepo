@@ -107,7 +107,8 @@ impl PackageTaskEventBuilder {
             TelemetryConfig::one_way_hash(package)
         };
 
-        // don't obfuscate the task in development mode or if it's in the allowlist
+        // don't obfuscate the task in development mode or if it's in the
+        // allowlist
         let task = if cfg!(debug_assertions) || ALLOWLIST.contains(&task) {
             task.to_string()
         } else {

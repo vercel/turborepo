@@ -563,8 +563,8 @@ impl<'s> Walk<'s> {
                 }
                 j = self.mate[j] + 1;
             }
-            // The body: the first brace that is not the one of `interface{}` / `struct{}`
-            // in the result type.
+            // The body: the first brace that is not the one of `interface{}` /
+            // `struct{}` in the result type.
             let mut body = None;
             while j < n {
                 if self.p(j, b'{') {
@@ -1046,8 +1046,8 @@ impl<'s> Walk<'s> {
                     return Err(Coarse);
                 };
                 if own != 0 {
-                    // Text before the located path (`"--dir=" + root`): the path is
-                    // handed on as it is.
+                    // Text before the located path (`"--dir=" + root`): the
+                    // path is handed on as it is.
                     return self.escape(a, &vals);
                 }
                 let mut sep = false;
@@ -1150,7 +1150,8 @@ impl<'s> Walk<'s> {
                 if matches!(name, b"panic" | b"print" | b"println") {
                     return Ok(());
                 }
-                // A function of this file, unless a variable of that name hides it.
+                // A function of this file, unless a variable of that name hides
+                // it.
                 if !self.funcs[f].declared.contains(name)
                     && let Some(&g) = self.by_name.get(name)
                     && let Some(&(Some(param), false)) = self.funcs[g].params.get(index)
@@ -1178,8 +1179,8 @@ impl<'s> Walk<'s> {
                         };
                     }
                     b"fmt" if matches!(name, b"Sprintf" | b"Sprint" | b"Sprintln") => {
-                        // Text can follow the path without a separator, unless the
-                        // format says `%s/…`.
+                        // Text can follow the path without a separator, unless
+                        // the format says `%s/…`.
                         let first = self.elements(open).first().copied();
                         let joined = name == b"Sprintf"
                             && index == 1
@@ -1474,7 +1475,8 @@ mod tests {
 
     #[test]
     fn a_root_joined_with_literal_segments_names_that_subtree() {
-        // A known path and a path with an unknown tail, read in the same function.
+        // A known path and a path with an unknown tail, read in the same
+        // function.
         assert_eq!(
             of(
                 "\tos.ReadFile(filepath.Join(root, \"configs\", \
@@ -1568,7 +1570,8 @@ mod tests {
             ),
             some(&[(6, "../..")])
         );
-        // The command is handed on, its directory is read back, or it is no command.
+        // The command is handed on, its directory is read back, or it is no
+        // command.
         for body in [
             "\tcmd := exec.Command(\"make\")\n\tcmd.Dir = root\n\tstart(cmd)",
             "\tcmd := exec.Command(\"make\")\n\tcmd.Dir = root\n\tos.ReadFile(cmd.Dir)",
@@ -1592,13 +1595,14 @@ mod tests {
             of("\tload(t, filepath.Join(root, \"pkg\"), \"a.json\")", rest),
             some(&[(13, "../../pkg/testdata")])
         );
-        // The helper runs a command it is given: its parts are not literals there.
+        // The helper runs a command it is given: its parts are not literals
+        // there.
         assert_eq!(
             of("\trun(root, \"git\", \"status\")", rest),
             some(&[(18, "../..")])
         );
-        // A variadic or a missing parameter, a method, a function of another file, and
-        // a variable that hides the function.
+        // A variadic or a missing parameter, a method, a function of another
+        // file, and a variable that hides the function.
         for body in [
             "\trun(\"x\", \"cat\", root)",
             "\th.sweep(ctx, root)",
@@ -1612,8 +1616,8 @@ mod tests {
 
     #[test]
     fn what_reaches_package_scope_escapes() {
-        // The shapes of a harness: a function that returns the root, with and without
-        // resolving links.
+        // The shapes of a harness: a function that returns the root, with and
+        // without resolving links.
         let plain = "package e2e\nfunc repoRoot() string {\n\t_, file, _, _ := \
                      runtime.Caller(0)\n\treturn filepath.Clean(filepath.Join(filepath.Dir(file), \
                      \"..\", \"..\", \"..\"))\n}\n";
@@ -1653,8 +1657,8 @@ mod tests {
         let named = "package p\nfunc root() (dir string, err error) {\n\t_, file, _, _ := \
                      runtime.Caller(0)\n\tdir = filepath.Dir(file)\n\treturn\n}\n";
         assert_eq!(entries(named), some(&[(4, "")]));
-        // Text of a format: a separator after the path keeps it, anything else may be a
-        // sibling.
+        // Text of a format: a separator after the path keeps it, anything else
+        // may be a sibling.
         assert_eq!(
             of(
                 "\tp := fmt.Sprintf(\"%s/out/%d\", root, n)\n\tother.Load(p)",
@@ -1727,13 +1731,14 @@ mod tests {
                    runtime.Caller(0)\n\tif !ok {\n\t\tt.Fatalf(\"no caller\")\n\t}\n\treturn \
                    filepath.Join(filepath.Dir(thisFile), \"..\", \"..\", \"..\", \"..\", \
                    \"services\")\n}\n";
-        // Without following: everything below the location, raised by five parent
-        // steps.
+        // Without following: everything below the location, raised by five
+        // parent steps.
         let coarse = names_with(src.as_bytes(), false, false);
         assert_eq!((coarse.anchor, coarse.ups), (Some(7), 5));
         assert!(coarse.anchored.is_empty());
-        // The string climbs; as joined onto the working directory it is marked with
-        // its steps and the `Dir`; the location covers where it goes from there.
+        // The string climbs; as joined onto the working directory it is marked
+        // with its steps and the `Dir`; the location covers where it
+        // goes from there.
         assert_eq!(
             (coarse.names[0].climbs, coarse.names[0].climbs_from_cwd),
             (false, 5)
@@ -1789,8 +1794,8 @@ mod tests {
         ] {
             let _ = follow(src.as_bytes());
         }
-        // Every prefix of a file with most of the constructs, and the same with one
-        // bracket removed.
+        // Every prefix of a file with most of the constructs, and the same with
+        // one bracket removed.
         let src = "package p\nfunc TestX(t *testing.T) {\n\t_, file, _, _ := \
                    runtime.Caller(0)\n\troot := filepath.Clean(filepath.Join(filepath.Dir(file), \
                    \"..\", \"..\"))\n\tif real, err := filepath.EvalSymlinks(root); err == nil \

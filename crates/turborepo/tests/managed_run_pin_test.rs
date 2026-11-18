@@ -364,7 +364,8 @@ fn a_repository_local_turbo_never_runs_without_managed_authorization() {
         ] {
             refused(args, &[], setup);
         }
-        // Gate on: `turbo trace` is a discovery command, routed like `turbo query`.
+        // Gate on: `turbo trace` is a discovery command, routed like `turbo
+        // query`.
         let routed = |args: &[&str]| {
             let (code, text) = repo.turbo_with_env(args, &[("TURBO_EXPERIMENTAL_TRACE", "1")]);
             assert!(!text.contains("panicked"), "{setup} {args:?}: {text}");

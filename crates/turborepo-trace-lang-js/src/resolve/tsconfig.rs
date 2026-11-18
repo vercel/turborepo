@@ -397,7 +397,8 @@ impl Tsconfigs {
 
     fn load_dir(&self, fs: &DirCache, d: &Path) -> Option<DirConfig> {
         let overlaid = |p: &Path| self.overlay.as_ref().and_then(|o| o.entry(fs, p));
-        // Where the working tree has what the revision has at a path without an entry.
+        // Where the working tree has what the revision has at a path without an
+        // entry.
         let on_disk = |p: &Path| match &self.overlay {
             Some(o) => o.on_disk(fs, p).into_owned(),
             None => p.to_path_buf(),
@@ -410,8 +411,9 @@ impl Tsconfigs {
                 Some(e) => e == Entry::File,
                 None => fs.is_file(&on_disk(p)),
             })?;
-        // oxc clears `references` when loading with references disabled: read them from
-        // the file. A file that oxc could not parse has none here either.
+        // oxc clears `references` when loading with references disabled: read
+        // them from the file. A file that oxc could not parse has none
+        // here either.
         let text = match self.overlay.as_ref().and_then(|o| o.read(fs, &path)) {
             Some(r) => r,
             None => fs.read_cached(&on_disk(&path)),
@@ -622,11 +624,12 @@ pub(super) fn recorded(fs: &DirCache, observed: Observations) -> Observations {
             out.loader_reads.push(p);
         }
     }
-    // The directories a load found where it asked (`kept_directories`): each as a
-    // membership of its parent under its name, like a path that was not found.
+    // The directories a load found where it asked (`kept_directories`): each as
+    // a membership of its parent under its name, like a path that was not
+    // found.
     for (parent, pattern) in observed.listings {
-        // (The pattern of one name, `record::literal_pattern`; anything else is kept as
-        // it is.)
+        // (The pattern of one name, `record::literal_pattern`; anything else is
+        // kept as it is.)
         let Some(name) = record::pattern_name(&pattern) else {
             out.listings.push((parent, pattern));
             continue;
@@ -695,8 +698,8 @@ impl DirConfig {
             (None, None) => {}
             _ => return LevelDiff::Whole,
         }
-        // The first reference that covers a file governs it: the ones both list must be
-        // in the same order.
+        // The first reference that covers a file governs it: the ones both list
+        // must be in the same order.
         let common = |a: &[PathBuf], b: &[PathBuf]| -> Vec<PathBuf> {
             a.iter().filter(|r| b.contains(r)).cloned().collect()
         };

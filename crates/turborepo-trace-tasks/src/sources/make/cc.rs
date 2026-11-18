@@ -236,8 +236,8 @@ pub fn include_closure(
                     }
                 }
                 None if quoted => {
-                    // Not in the repository (or not yet generated): creating it would change
-                    // the build.
+                    // Not in the repository (or not yet generated): creating it
+                    // would change the build.
                     let p = fsx::join(&dir, &name);
                     if p.starts_with(repo) {
                         out.input(p);

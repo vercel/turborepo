@@ -183,7 +183,8 @@ fn invoke_raw_options(
         .env("NO_PROXY", "")
         .envs(env.iter().cloned());
     if ci {
-        // Even this normal shim override must not trigger JS inference or handoff.
+        // Even this normal shim override must not trigger JS inference or
+        // handoff.
         command
             .env("CI", "1")
             .env("TURBO_BINARY_PATH", root.join("unbuilt-local-turbo"));
@@ -428,7 +429,8 @@ fn accepted_setup_modes_are_typed_failures_not_prepared_success() {
     let temp = tempfile::tempdir().unwrap();
     let root = temp.path();
     // Inference parses enabled native manifests in-process, but a missing local
-    // pin/manager and Cargo executable must not trigger provisioning or handoff.
+    // pin/manager and Cargo executable must not trigger provisioning or
+    // handoff.
     let package = r#"{"devDependencies":{"turbo":"2.0.3"},"scripts":{"setup":"exit 99"}}"#;
     write(root, "package.json", package);
     write(root, "Cargo.toml", "[workspace]\nmembers = []\n");
@@ -530,7 +532,8 @@ fn malformed_cargo_manifest_is_rejected_only_when_enabled() {
                 assert!(!text.contains(PENDING), "{text}");
             } else {
                 // Setup, plans and checks reach JS setup without parsing Cargo.
-                // (#14653's Node-required message names experimentalCargoWorkspaces.)
+                // (#14653's Node-required message names
+                // experimentalCargoWorkspaces.)
                 let (code, text) = invoke(root, words, false);
                 assert_eq!(code, 1, "{text}");
                 assert!(
@@ -727,7 +730,8 @@ fn nested_native_workspace_markers_follow_root_flags() {
                 );
             } else {
                 inferred(root, &["setup", "--cwd=inner/src"], root);
-                // Disabled ecosystems aren't even parsed, including tool declarations.
+                // Disabled ecosystems aren't even parsed, including tool
+                // declarations.
                 write(root, &format!("inner/{marker}"), "not a valid declaration");
                 write(root, "inner/rust-toolchain.toml", "also invalid");
                 inferred(root, &["setup", "--cwd=inner/src"], root);
@@ -981,8 +985,9 @@ fn standalone_root_policy_selects_tools_only_and_skips_ecosystems() {
         )
     };
     write(root, "turbo.json", &config("skip"));
-    // The tool-download preflight accepts the policy, which makes this a tools-only
-    // check without --tools-only and lifts the unsupported Rust ecosystem.
+    // The tool-download preflight accepts the policy, which makes this a
+    // tools-only check without --tools-only and lifts the unsupported Rust
+    // ecosystem.
     let (code, text) = invoke(root, &["setup", "--check"], false);
     assert_eq!(code, 1, "{text}");
     if cfg!(all(
@@ -1239,7 +1244,8 @@ fn pruned_outputs_pass_real_setup_check_against_their_own_lock() {
         };
         for pruned in layouts {
             // package.json is rewritten for the pruned workspaces; the check
-            // below proves its packageManager provenance still matches the lock.
+            // below proves its packageManager provenance still matches the
+            // lock.
             for file in ["turbo.lock", ".nvmrc"] {
                 assert_eq!(
                     fs::read(pruned.join(file)).unwrap(),
@@ -1300,7 +1306,8 @@ fn repository_npmrc_does_not_affect_tool_download_policy() {
     let layout = "auto-install-peers = true\nhoist-pattern[]=react\nresolution-mode=highest\n";
     write(root, ".npmrc", layout);
     let words = ["setup", "--check", "--tools-only"];
-    // Ambient npm settings are irrelevant, so check reaches its lock requirement.
+    // Ambient npm settings are irrelevant, so check reaches its lock
+    // requirement.
     check_failure(
         root,
         &words,
@@ -1581,8 +1588,9 @@ fn standalone_check_and_locked_plan_report_only_node_pnpm_and_reject_damage() {
                 );
                 assert_eq!(code, 0, "{text}");
                 assert!(text.contains("Dependencies skipped"), "{text}");
-                // Owned policy is a test-only typed seam, never a production opt-out.
-                // Inspect the actual prune output and all fixture state without locks.
+                // Owned policy is a test-only typed seam, never a production
+                // opt-out. Inspect the actual prune output and
+                // all fixture state without locks.
                 let before = snapshot(pruned.root().parent().unwrap());
                 let sources = Snapshot::capture(&output_root).unwrap();
                 pruned.policy_at(&output_root).unwrap();
@@ -1751,7 +1759,8 @@ fn plain_setup_provisions_tools_and_reports_dependencies_skipped() {
     monitor.set_nonblocking(true).unwrap();
     let proxy = format!("http://{}", monitor.local_addr().unwrap());
     // pnpm installs need a pnpm-lock.yaml, so this repository skips them.
-    // Plain --check checks the same tools and never claims dependency readiness.
+    // Plain --check checks the same tools and never claims dependency
+    // readiness.
     let policy = r#"{"futureFlags":{"experimentalSetup":true},"setup":{"javascript":{"dependencies":"skip"}}}"#;
     write(root, "turbo.json", policy);
     // Whitespace runs collapse to one space below.
@@ -1850,7 +1859,8 @@ fn native_local_tools_only_rejects_unsupported_inputs_before_writers() {
         if let Some(node) = node {
             write(temp.path(), ".nvmrc", node);
         }
-        // Real binary, empty PATH, observed proxy, exact recursive file snapshot.
+        // Real binary, empty PATH, observed proxy, exact recursive file
+        // snapshot.
         for ci in [false, true] {
             failure(
                 temp.path(),

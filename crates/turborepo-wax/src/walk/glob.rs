@@ -203,10 +203,12 @@ impl<'t> Glob<'t> {
             if prefix.is_empty() {
                 None
             } else {
-                // here, we don't know if the glob will be walked with or without symlinks,
-                // so we need to ensure that the invariant prefix optimisation doesn't cross a
-                // symlink todo: `anchor` knows nothing about the walk behaviour. if it did, we
-                // could probably skip this conditionally for a small perf bonus
+                // here, we don't know if the glob will be walked with or
+                // without symlinks, so we need to ensure that
+                // the invariant prefix optimisation doesn't cross a
+                // symlink todo: `anchor` knows nothing about the walk
+                // behaviour. if it did, we could probably skip
+                // this conditionally for a small perf bonus
                 let prefix: PathBuf = prefix.into();
                 let mut curr_prefix = prefix.as_path();
                 let mut last_symlink = None;
@@ -233,17 +235,19 @@ impl<'t> Glob<'t> {
         }
 
         let directory = directory.into();
-        // Establish the root directory and any prefix in that root path that is not a
-        // part of the glob expression. The directory tree is traversed from
-        // `root`, which may include an invariant prefix from the glob. The
-        // `prefix` is an integer that specifies how many components from the
-        // end of the root path must be popped to get the portion of the root
-        // path that is not present in the glob. The prefix may be empty or may be the
-        // entirety of `root` depending on `directory` and the glob.
+        // Establish the root directory and any prefix in that root path that is
+        // not a part of the glob expression. The directory tree is
+        // traversed from `root`, which may include an invariant prefix
+        // from the glob. The `prefix` is an integer that specifies how
+        // many components from the end of the root path must be popped
+        // to get the portion of the root path that is not present in
+        // the glob. The prefix may be empty or may be the entirety of
+        // `root` depending on `directory` and the glob.
         //
-        // Note that a rooted glob, like in `Path::join`, replaces `directory` when
-        // establishing the root path. In this case, there is no prefix, as the
-        // entire root path is present in the glob expression.
+        // Note that a rooted glob, like in `Path::join`, replaces `directory`
+        // when establishing the root path. In this case, there is no
+        // prefix, as the entire root path is present in the glob
+        // expression.
         let (root, prefix) = match invariant_path_prefix(self.tree.as_ref().tokens(), &directory) {
             Some(prefix) => directory.join_and_get_depth(prefix),
             _ => (directory, 0),
@@ -294,8 +298,8 @@ impl WalkProgram {
                 .iter()
                 .any(|token| token.has_component_boundary())
             {
-                // Stop at component boundaries, such as tree wildcards or any boundary within a
-                // group token.
+                // Stop at component boundaries, such as tree wildcards or any
+                // boundary within a group token.
                 break;
             }
             regexes.push(Glob::compile(component.tokens().iter().copied())?);
@@ -412,7 +416,8 @@ impl GlobWalker {
                     match (position, candidate) {
                         (First | Middle, Both(candidate, program)) => {
                             if !program.is_match(candidate.as_ref()) {
-                                // Do not walk directories that do not match the corresponding
+                                // Do not walk directories that do not match the
+                                // corresponding
                                 // component program.
                                 return filtrate.filter_tree(cancellation).into();
                             }
@@ -434,7 +439,8 @@ impl GlobWalker {
                                     filtrate.filter_node().into()
                                 }
                             } else {
-                                // Do not walk directories that do not match the corresponding
+                                // Do not walk directories that do not match the
+                                // corresponding
                                 // component program.
                                 filtrate.filter_tree(cancellation).into()
                             };
@@ -460,9 +466,9 @@ impl GlobWalker {
                         }
                     }
                 }
-                // If the component loop is not entered, then check for a match. This may
-                // indicate that the `Glob` is empty and a single invariant path
-                // may be matched.
+                // If the component loop is not entered, then check for a match.
+                // This may indicate that the `Glob` is empty
+                // and a single invariant path may be matched.
                 let candidate = CandidatePath::from(path);
                 if let Some(matched) = self
                     .program

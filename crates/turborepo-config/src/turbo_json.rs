@@ -266,7 +266,8 @@ mod test {
         let config = reader.get_configuration_options(&existing_config).unwrap();
         // The raw field is populated from turbo.json
         assert_eq!(config.daemon, Some(false));
-        // But the getter always returns None since daemon is deprecated for turbo run
+        // But the getter always returns None since daemon is deprecated for
+        // turbo run
         assert_eq!(config.daemon(), None);
     }
 
@@ -298,7 +299,8 @@ mod test {
         let config = reader.get_configuration_options(&existing_config).unwrap();
         // The raw field is populated from the custom turbo.json path
         assert_eq!(config.daemon, Some(false));
-        // But the getter always returns None since daemon is deprecated for turbo run
+        // But the getter always returns None since daemon is deprecated for
+        // turbo run
         assert_eq!(config.daemon(), None);
     }
 

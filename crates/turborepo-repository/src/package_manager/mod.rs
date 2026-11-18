@@ -459,9 +459,9 @@ impl PackageManager {
             }
         };
 
-        // Normalize globs by stripping leading "./" since paths are relative to the
-        // root anyway and other parts of the codebase don't include the "./"
-        // prefix. See https://github.com/vercel/turborepo/issues/8599
+        // Normalize globs by stripping leading "./" since paths are relative to
+        // the root anyway and other parts of the codebase don't include
+        // the "./" prefix. See https://github.com/vercel/turborepo/issues/8599
         let (inclusions, exclusions) = globs.into_iter().partition_map(|glob| {
             if let Some(exclusion) = glob.strip_prefix('!') {
                 let exclusion = exclusion.strip_prefix("./").unwrap_or(exclusion);
@@ -565,7 +565,8 @@ impl PackageManager {
                 let message = match err {
                     EntryError::ExpectedObject => "`devEngines.packageManager` must be an object",
                     EntryError::MissingName => {
-                        // An empty object has a distinct legacy diagnostic on the property key.
+                        // An empty object has a distinct legacy diagnostic on
+                        // the property key.
                         let message = if package_manager
                             .as_object()
                             .is_some_and(|obj| obj.is_empty())
@@ -609,7 +610,8 @@ impl PackageManager {
                     ),
                 }
             })?;
-        // Graph discovery still requires a version and deliberately ignores onFail.
+        // Graph discovery still requires a version and deliberately ignores
+        // onFail.
         let Some(version) = version else {
             return Err(Self::invalid_dev_engines_package_manager_key_at(
                 dev_engines,
@@ -634,9 +636,10 @@ impl PackageManager {
         }
         // Per the devEngines spec, `packageManager.version` is a semver RANGE
         // (https://nodejs.org/api/packages.html#packagemanager), not a single
-        // pinned version. We accept ranges only when they target a single major:
-        // the declaration is still explicit enough to validate against the
-        // repository lockfile instead of silently inferring intent.
+        // pinned version. We accept ranges only when they target a single
+        // major: the declaration is still explicit enough to validate
+        // against the repository lockfile instead of silently inferring
+        // intent.
         let range = node_semver::Range::parse(version).map_err(|err: SemverError| {
             Self::invalid_dev_engines_package_manager_at(
                 dev_engines,
@@ -1357,9 +1360,10 @@ impl PackageManager {
     pub fn arg_separator(&self, user_args: &[impl AsRef<str>]) -> Option<&str> {
         match self {
             PackageManager::Yarn | PackageManager::Bun => {
-                // Yarn and bun warn and swallows a "--" token. If the user is passing "--", we
-                // need to prepend our own so that the user's doesn't get
-                // swallowed. If they are not passing their own, we don't need
+                // Yarn and bun warn and swallows a "--" token. If the user is
+                // passing "--", we need to prepend our own so
+                // that the user's doesn't get swallowed. If
+                // they are not passing their own, we don't need
                 // the "--" token and can avoid the warning.
                 if user_args.iter().any(|arg| arg.as_ref() == "--") {
                     Some("--")
@@ -1923,8 +1927,8 @@ mod tests {
         let package_manager = PackageManager::get_package_manager(repo_root, &package_json)?;
         assert_eq!(package_manager, PackageManager::Bun);
 
-        // nub has no lockfile of its own, so with none present it resolves to the
-        // npm-compatible default lockfile.
+        // nub has no lockfile of its own, so with none present it resolves to
+        // the npm-compatible default lockfile.
         package_json.package_manager = Some(Spanned::new("nub@0.1.0".to_string()));
         let package_manager = PackageManager::get_package_manager(repo_root, &package_json)?;
         assert_eq!(
@@ -2348,8 +2352,8 @@ mod tests {
     fn test_native_nub_lockfile_is_ignored_by_detection() -> Result<(), Error> {
         let (_dir, repo_root) = temp_repo_root()?;
         // A native `nub.lock` does not participate in detection (nub is
-        // field-only), so a co-present `pnpm-lock.yaml` resolves cleanly to pnpm
-        // rather than producing an ambiguous multi-manager result.
+        // field-only), so a co-present `pnpm-lock.yaml` resolves cleanly to
+        // pnpm rather than producing an ambiguous multi-manager result.
         std::fs::write(
             repo_root.join_component(nub::LOCKFILE).as_std_path(),
             "lockfileVersion: '9.0'\nimporters:\n  .: {}\n",
@@ -2369,10 +2373,11 @@ mod tests {
     #[test]
     fn test_nub_links_workspace_packages_unlike_underlying_pnpm() -> Result<(), Error> {
         let (_dir, repo_root) = temp_repo_root()?;
-        // A pnpm9 manager with no workspace config defaults link-workspace-packages
-        // to false; nub links bare specifiers (`"*"`) to local workspace packages,
-        // so the Nub variant must report true regardless of its pnpm9 lockfile.
-        // Without this, every internal workspace edge declared without the
+        // A pnpm9 manager with no workspace config defaults
+        // link-workspace-packages to false; nub links bare specifiers
+        // (`"*"`) to local workspace packages, so the Nub variant must
+        // report true regardless of its pnpm9 lockfile. Without this,
+        // every internal workspace edge declared without the
         // `workspace:` protocol is dropped from the graph.
         assert!(!PackageManager::Pnpm9.link_workspace_packages(&repo_root));
         assert!(
@@ -2750,8 +2755,8 @@ mod tests {
 
         // Verify the leading "./" is stripped from inclusions
         assert_eq!(globs.raw_inclusions, vec!["packages/*"]);
-        // Exclusions include both the configured exclusion (normalized) and default
-        // exclusions
+        // Exclusions include both the configured exclusion (normalized) and
+        // default exclusions
         assert!(
             globs
                 .raw_exclusions

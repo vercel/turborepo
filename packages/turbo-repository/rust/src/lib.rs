@@ -601,7 +601,8 @@ impl Workspace {
             )),
             turborepo_repository::change_mapper::PackageMapping::Packages(packages) => {
                 // Preserve this singular API's historical name-based tie-break.
-                // The mapper sorts co-located owners; affected_packages keeps all of them.
+                // The mapper sorts co-located owners; affected_packages keeps
+                // all of them.
                 let (package, _reason) = packages.first().ok_or_else(|| {
                     Error::from_reason("iterated to the root of the workspace and found no package")
                 })?;
@@ -665,7 +666,8 @@ fn classify_resolution_code(code: &str) -> LockfileErrorKind {
 fn split_identity(display_name: &str) -> Option<(String, String)> {
     // pnpm v5/v6 dependency-path keys are prefixed with a leading slash.
     let trimmed = display_name.strip_prefix('/').unwrap_or(display_name);
-    // Drop any peer-dependency closure: `pkg@1.2.3(react@18.0.0)` -> `pkg@1.2.3`.
+    // Drop any peer-dependency closure: `pkg@1.2.3(react@18.0.0)` ->
+    // `pkg@1.2.3`.
     let base = trimmed.split('(').next().unwrap_or(trimmed);
     // Scoped names start with '@', so search for the version delimiter after
     // the leading scope '@'. The version is the final `@`-delimited segment

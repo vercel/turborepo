@@ -234,7 +234,8 @@ impl TaskAccess {
         let trace_by_task = Arc::new(Mutex::new(HashMap::<String, TaskAccessTraceFile>::new()));
         let mut config_cache = Option::<ConfigCache>::None;
 
-        // we only want to setup the config cacher if task access tracing is enabled
+        // we only want to setup the config cacher if task access tracing is
+        // enabled
         if enabled {
             // make sure .turbo is ignored
             match ensure_turbo_is_gitignored(&repo_root) {

@@ -81,8 +81,8 @@ impl<'a> DependencyLocations<'a> {
     /// it's a valid import. We don't use `unrs_resolver` because there are some
     /// cases where you can resolve a package that isn't declared properly.
     fn is_dependency(&self, package_name: &PackageNode) -> bool {
-        // The containing package's name. We allow a package to import itself per
-        // JavaScript convention
+        // The containing package's name. We allow a package to import itself
+        // per JavaScript convention
         self.package == package_name.as_package_name()
             || self.internal_dependencies.contains(package_name)
             || self.external_declarations.iter().any(|declaration| {
@@ -229,8 +229,8 @@ pub(crate) fn check_import(
     dependency_locations: DependencyLocations<'_>,
     resolver: &PackageResolver,
 ) -> Result<(), Error> {
-    // If the import is prefixed with `@boundaries-ignore`, we ignore it, but print
-    // a warning
+    // If the import is prefixed with `@boundaries-ignore`, we ignore it, but
+    // print a warning
     match BoundariesChecker::get_ignored_comment(comments, source_text, *statement_span) {
         Some(reason) if reason.is_empty() => {
             warnings.push(
@@ -323,9 +323,9 @@ pub(crate) fn check_file_import(
     source_span: SourceSpan,
     file_content: &Arc<str>,
 ) -> Result<Option<BoundariesDiagnostic>, Error> {
-    // We have to check for this case because `relation_to_path` returns `Parent` if
-    // the paths are equal and there's nothing wrong with importing the
-    // package you're in.
+    // We have to check for this case because `relation_to_path` returns
+    // `Parent` if the paths are equal and there's nothing wrong with
+    // importing the package you're in.
     if resolved_import_path.as_str() == package_path.as_str() {
         return Ok(None);
     }
@@ -390,7 +390,8 @@ fn is_vscode_module(import: &str) -> bool {
 /// For bare imports without subpaths, returns the import as-is.
 pub(crate) fn get_package_name(import: &str) -> &str {
     if import.starts_with("@") {
-        // Find the second '/' for scoped packages: @scope/name/path -> @scope/name
+        // Find the second '/' for scoped packages: @scope/name/path ->
+        // @scope/name
         match import.find('/') {
             Some(first_slash) => match import[first_slash + 1..].find('/') {
                 Some(second_slash) => &import[..first_slash + 1 + second_slash],

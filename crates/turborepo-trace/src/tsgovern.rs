@@ -279,7 +279,8 @@ pub fn effects(
         }
         Compare::new(overlay)
     });
-    // Per file that observed one of them: how its discovery differs, if it does.
+    // Per file that observed one of them: how its discovery differs, if it
+    // does.
     let mut files: Vec<NodeId> = moved
         .iter()
         .flat_map(|i| observers[i].iter().copied())

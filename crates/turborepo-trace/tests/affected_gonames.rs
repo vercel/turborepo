@@ -100,8 +100,8 @@ fn computed_reads_in_go_leave_no_floor() {
         floor.starts_with("uncertainty floor: 0 of 4 entries"),
         "{floor}"
     );
-    // Without the names the reads are open and every test that reaches one is on
-    // the floor.
+    // Without the names the reads are open and every test that reaches one is
+    // on the floor.
     let open = r.run(
         &["floor", "--tests", "gotest"],
         &[("TURBO_TRACE_DEBUG_NAMES", "0")],
@@ -119,8 +119,8 @@ fn computed_reads_in_go_leave_no_floor() {
 #[test]
 fn a_file_the_strings_of_a_test_name_selects_it() {
     let r = repo();
-    // A directory given as a relative path and a file name given to a method: the
-    // read is a struct field joined with a parameter, in another file.
+    // A directory given as a relative path and a file name given to a method:
+    // the read is a struct field joined with a parameter, in another file.
     let golden = "data/fixtures/golden.json";
     assert_eq!(r.affected(golden), [LOADER]);
     let why = r.run(
@@ -150,10 +150,10 @@ fn a_literal_path_from_the_location_of_a_file_is_a_reference() {
     assert_eq!(r.affected(schema), [SCHEMA]);
     let deps = r.run(&["deps", SCHEMA], &[]);
     assert!(deps.lines().any(|l| l == schema), "{deps}");
-    // The file does not use its location for anything else: a sibling of the schema
-    // that no string names is not a dependency through the location. (It still
-    // is one through the working directory, see below, so look outside the
-    // package directory.)
+    // The file does not use its location for anything else: a sibling of the
+    // schema that no string names is not a dependency through the location.
+    // (It still is one through the working directory, see below, so look
+    // outside the package directory.)
     r.write("tools/other/notes.txt", "x\n");
     assert_eq!(r.affected("tools/other/notes.txt"), [""; 0]);
 }
@@ -161,11 +161,12 @@ fn a_literal_path_from_the_location_of_a_file_is_a_reference() {
 #[test]
 fn a_file_written_below_a_temp_dir_names_no_repository_file() {
     let r = repo();
-    // `config_test.go` writes `settings.yaml` below `t.TempDir()` and loads it: the
-    // repository's own `defaults/settings.yaml` is not what it reads. The failure
-    // message that mentions the name is no path either.
+    // `config_test.go` writes `settings.yaml` below `t.TempDir()` and loads it:
+    // the repository's own `defaults/settings.yaml` is not what it reads.
+    // The failure message that mentions the name is no path either.
     assert_eq!(r.affected("defaults/settings.yaml"), [""; 0]);
-    // The same for a file that a test only looks for below a temporary directory.
+    // The same for a file that a test only looks for below a temporary
+    // directory.
     r.write("docs/doomed.txt", "x\n");
     assert_eq!(r.affected("docs/doomed.txt"), [""; 0]);
 }
@@ -173,9 +174,9 @@ fn a_file_written_below_a_temp_dir_names_no_repository_file() {
 #[test]
 fn a_test_with_a_computed_read_reads_below_its_package_directory() {
     let r = repo();
-    // `go test` runs in the package directory, and a relative path needs no string
-    // to name what is there. A file below the directory of a test with a read
-    // that can't be evaluated selects that test, and no other.
+    // `go test` runs in the package directory, and a relative path needs no
+    // string to name what is there. A file below the directory of a test
+    // with a read that can't be evaluated selects that test, and no other.
     r.write("config/nested/extra.txt", "x\n");
     assert_eq!(r.affected("config/nested/extra.txt"), [CONFIG]);
     r.write("extract/nested/extra.txt", "x\n");

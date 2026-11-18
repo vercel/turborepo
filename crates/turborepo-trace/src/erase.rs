@@ -579,7 +579,8 @@ mod tests {
 
     #[test]
     fn class_fields_count() {
-        // `useDefineForClassFields`: a field without initializer defines a property.
+        // `useDefineForClassFields`: a field without initializer defines a
+        // property.
         assert!(!eq(
             "a.ts",
             "export class K { }\n",
@@ -658,8 +659,8 @@ mod tests {
 
     #[test]
     fn imports_that_may_load_a_module_count() {
-        // `import {type A}` loads './t' under verbatimModuleSyntax; `import type` never
-        // does.
+        // `import {type A}` loads './t' under verbatimModuleSyntax; `import
+        // type` never does.
         assert!(!eq(
             "a.ts",
             "import type { A } from './t';\nexport const a = 1;\n",
@@ -680,8 +681,8 @@ mod tests {
             "import { type A } from './t';\nexport const a = 1;\n",
             "import { type A, type B } from './t';\nexport const a = 1;\n"
         ));
-        // An import whose only use is a type is kept or elided by its value references,
-        // which are the same at both revisions.
+        // An import whose only use is a type is kept or elided by its value
+        // references, which are the same at both revisions.
         assert!(eq(
             "a.ts",
             "import { A } from './t';\nexport const a = 1;\n",
@@ -717,7 +718,8 @@ mod tests {
 
     #[test]
     fn exported_type_names_count_when_they_disappear() {
-        // `export { A }` of a local type is erased; of nothing, it is a syntax error.
+        // `export { A }` of a local type is erased; of nothing, it is a syntax
+        // error.
         assert!(eq(
             "a.ts",
             "interface A { x: 1 }\nexport { A };\nexport const a = 1;\n",

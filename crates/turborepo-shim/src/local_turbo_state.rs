@@ -42,7 +42,8 @@ impl LocalTurboState {
 
     // Nested strategy:
     // - `npm install --install-strategy=shallow` (`npm install --global-style`)
-    // - `npm install --install-strategy=nested` (`npm install --legacy-bundling`)
+    // - `npm install --install-strategy=nested` (`npm install
+    //   --legacy-bundling`)
     // - berry (nodeLinker: "pnpm")
     //
     // Returns `node_modules/turbo/node_modules` — the caller appends
@@ -57,13 +58,13 @@ impl LocalTurboState {
     // - `pnpm install`
     // - `npm install --install-strategy=linked`
     fn generate_linked_path(root_path: &AbsoluteSystemPath) -> Option<AbsoluteSystemPathBuf> {
-        // root_path/node_modules/turbo is a symlink. Canonicalize the symlink to what
-        // it points to. We do this _before_ traversing up to the parent,
-        // because on Windows, if you canonicalize a path that ends with `/..`
-        // it traverses to the parent directory before it follows the symlink,
-        // leading to the wrong place. We could separate the Windows
-        // implementation, but this workaround works for other platforms as
-        // well.
+        // root_path/node_modules/turbo is a symlink. Canonicalize the symlink
+        // to what it points to. We do this _before_ traversing up to
+        // the parent, because on Windows, if you canonicalize a path
+        // that ends with `/..` it traverses to the parent directory
+        // before it follows the symlink, leading to the wrong place. We
+        // could separate the Windows implementation, but this
+        // workaround works for other platforms as well.
         let turbo_path = root_path.as_path().join("node_modules").join("turbo");
 
         match fs_canonicalize(&turbo_path) {
@@ -72,20 +73,24 @@ impl LocalTurboState {
                 None => None,
             },
             Err(_) => {
-                // On Windows, canonicalize can fail with permission errors even when
-                // the symlink is valid. Try using read_link instead.
+                // On Windows, canonicalize can fail with permission errors even
+                // when the symlink is valid. Try using
+                // read_link instead.
                 #[cfg(target_os = "windows")]
                 {
                     match fs::read_link(turbo_path.as_std_path()) {
                         Ok(link_target) => {
-                            // The link target is relative to the symlink location
+                            // The link target is relative to the symlink
+                            // location
                             // e.g., ".pnpm/turbo@1.0.0/node_modules/turbo"
-                            // We need to resolve it relative to node_modules directory
+                            // We need to resolve it relative to node_modules
+                            // directory
                             let node_modules =
                                 PathBuf::from(root_path.as_path().as_str()).join("node_modules");
                             let resolved = node_modules.join(&link_target);
 
-                            // Get the parent directory (should be .pnpm/turbo@1.0.0/node_modules)
+                            // Get the parent directory (should be
+                            // .pnpm/turbo@1.0.0/node_modules)
                             resolved
                                 .parent()
                                 .and_then(|parent| AbsoluteSystemPathBuf::try_from(parent).ok())
@@ -245,7 +250,8 @@ impl LocalTurboState {
         let unplugged_base_path = Self::get_unplugged_base_path(root_path);
         for package_path in package_paths {
             // Berry unplugged dirs use `{name}-npm-{version}-{hash}`.
-            // For scoped `@turbo/linux-64` this becomes `@turbo-linux-64-npm-...`.
+            // For scoped `@turbo/linux-64` this becomes
+            // `@turbo-linux-64-npm-...`.
             let unplugged_prefix = package_path.join("-");
             if let Some(root) = Self::find_in_unplugged(&unplugged_base_path, &unplugged_prefix)
                 && let Some(state) = Self::try_probe_binary(&root, package_path, binary_name)
@@ -338,9 +344,9 @@ pub fn turbo_version_has_shim(version: &str) -> bool {
         }
         version.major > 1
     } else {
-        // In the case that we don't get passed a valid semver we should avoid a panic.
-        // We shouldn't hit this we introduce back inferring package version from schema
-        // or package.json.
+        // In the case that we don't get passed a valid semver we should avoid a
+        // panic. We shouldn't hit this we introduce back inferring
+        // package version from schema or package.json.
         true
     }
 }

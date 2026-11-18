@@ -24,8 +24,9 @@ pub struct TaskExecutionSummary {
 
 impl TaskExecutionSummary {
     pub fn is_failure(&self) -> bool {
-        // We consider None as a failure as it indicates the task failed to start
-        // or was killed in a manner where we didn't collect an exit code.
+        // We consider None as a failure as it indicates the task failed to
+        // start or was killed in a manner where we didn't collect an
+        // exit code.
         !matches!(self.exit_code, Some(0))
     }
 }
@@ -187,12 +188,14 @@ impl From<Option<CacheHitMetadata>> for TaskCacheSummary {
         match response {
             Some(cache_hit) => {
                 let source = CacheSource::from(cache_hit.source);
-                // Assign these deprecated fields Local and Remote based on the information
-                // available in the itemStatus. Note that these fields are
-                // problematic, because an ItemStatus isn't always the composite
-                // of both local and remote caches. That means that an ItemStatus might say it
-                // was a local cache hit, and we return remote: false here. That's misleading
-                // because it does not mean that there is no remote cache hit,
+                // Assign these deprecated fields Local and Remote based on the
+                // information available in the itemStatus. Note
+                // that these fields are problematic, because an
+                // ItemStatus isn't always the composite of both
+                // local and remote caches. That means that an ItemStatus might
+                // say it was a local cache hit, and we return
+                // remote: false here. That's misleading because
+                // it does not mean that there is no remote cache hit,
                 // it _could_ mean that we never checked the remote cache. These
                 // fields are being deprecated for this reason.
                 let (local, remote) = match source {

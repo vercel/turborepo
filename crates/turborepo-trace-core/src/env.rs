@@ -387,7 +387,8 @@ mod tests {
         };
         let s = f.encode();
         assert!(s.starts_with("env:{\"use\""), "{s}");
-        // The file's own request and a record of its own are the defaults: not written.
+        // The file's own request and a record of its own are the defaults: not
+        // written.
         assert!(!s.contains("from") && !s.contains("shared"), "{s}");
         assert_eq!(EnvFact::decode(&s), Some(f.clone()));
         for from in [EnvFrom::Dir("../other".into()), EnvFrom::Unknown] {

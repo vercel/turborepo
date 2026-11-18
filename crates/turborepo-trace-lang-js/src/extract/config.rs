@@ -810,7 +810,8 @@ fn eval_module(
         };
         if let Some(ConfigVal::Function(f)) = v {
             exported.get_or_insert(f.id);
-            // What `import d from` gives: the default export, else `module.exports`.
+            // What `import d from` gives: the default export, else
+            // `module.exports`.
             if slot == 0 || ev.out.esm_default.is_none() {
                 ev.out.default_function = Some(f.clone());
             }
@@ -834,8 +835,8 @@ fn eval_module(
             "evaluation step limit reached".into(),
         );
     }
-    // A function nobody called is as opaque as an unknown value: what its body does
-    // with the bindings it sees is not known.
+    // A function nobody called is as opaque as an unknown value: what its body
+    // does with the bindings it sees is not known.
     let mut opaque = ev.opaque.take();
     let mut escaped = ev.escaped.take();
     for m in std::mem::take(&mut ev.fn_meta) {
@@ -1011,8 +1012,9 @@ fn object_from_entries(x: ConfigVal, why: &str) -> Option<ConfigVal> {
         ConfigVal::Arr(xs) => {
             let mut o = ConfigObj::default();
             for x in xs {
-                // One entry, or the alternatives of one (a callback with several `return`s):
-                // `[key, value]` arrays that agree on a known key.
+                // One entry, or the alternatives of one (a callback with
+                // several `return`s): `[key, value]` arrays
+                // that agree on a known key.
                 let pairs: Vec<(String, ConfigVal)> = x
                     .alternatives()
                     .into_iter()
@@ -2239,8 +2241,8 @@ impl<'s> Ev<'s, '_> {
                 _ => return,
             }
         }
-        // Conditional pushes still add the elements: consumers union array elements, so
-        // keeping them over-approximates.
+        // Conditional pushes still add the elements: consumers union array
+        // elements, so keeping them over-approximates.
         match cur {
             ConfigVal::Arr(a) => {
                 if front {
@@ -2342,7 +2344,8 @@ impl<'s> Ev<'s, '_> {
                 j = self.skip_type(j + 1, e, true);
             }
             let v = if self.kind(j, e) == TokKind::Assign {
-                // `const X = require('y')`: the CommonJS form of an import declaration.
+                // `const X = require('y')`: the CommonJS form of an import
+                // declaration.
                 if self.tok(j + 1).kw == Kw::Require
                     && self.kind(j + 2, e) == TokKind::LParen
                     && self.kind(j + 3, e) == TokKind::Str
@@ -2728,7 +2731,8 @@ impl<'s> Ev<'s, '_> {
         match t.kw {
             Kw::Default => {
                 let k = j + 1;
-                // `export default function name() {}` / `export default async function`.
+                // `export default function name() {}` / `export default async
+                // function`.
                 let fn_at = if self.tok(k).kw == Kw::Function {
                     Some(k)
                 } else if self.is_word(k, end, "async") && self.tok(k + 1).kw == Kw::Function {
@@ -2843,8 +2847,9 @@ impl<'s> Ev<'s, '_> {
                 }
             }
             _ => {
-                // `export type`, `export interface`, `export * from`, `export class`,
-                // `export async function`, `export enum`, `export declare`.
+                // `export type`, `export interface`, `export * from`, `export
+                // class`, `export async function`, `export
+                // enum`, `export declare`.
                 if self.is_word(j, end, "async") && self.tok(j + 1).kw == Kw::Function {
                     return match self.function_at(j + 1, end) {
                         Some((def, e)) => {
@@ -2933,7 +2938,8 @@ impl<'s> Ev<'s, '_> {
                 }
                 b += 1;
             }
-            // `: { a: string } {`: take the last brace pair before the next statement.
+            // `: { a: string } {`: take the last brace pair before the next
+            // statement.
             while let Some(c) = self.closer_of(b)
                 && self.kind(c + 1, end) == TokKind::LBrace
             {
@@ -3277,7 +3283,8 @@ impl<'s> Ev<'s, '_> {
         if !(i..e).any(|k| self.is_word(k, e, "realpathSync")) {
             return None;
         }
-        // The callee: `require('fs')` or a binding, then `.member` names, then `(`.
+        // The callee: `require('fs')` or a binding, then `.member` names, then
+        // `(`.
         let mut k = i;
         let (module, mut path): (String, Vec<String>) =
             if self.tok(k).kw == Kw::Require && self.kind(k + 1, e) == TokKind::LParen {
@@ -3458,8 +3465,8 @@ impl<'s> Ev<'s, '_> {
                 }
             };
         }
-        // `new RegExp(source, flags)` with a known source: the same value as a regex
-        // literal.
+        // `new RegExp(source, flags)` with a known source: the same value as a
+        // regex literal.
         if t.kw == Kw::New
             && self.is_word(i + 1, end, "RegExp")
             && self.kind(i + 2, end) == TokKind::LParen
@@ -3646,7 +3653,8 @@ impl<'s> Ev<'s, '_> {
                 _ => break,
             }
         }
-        // Operators the structural evaluator does not model (`+`, comparisons...).
+        // Operators the structural evaluator does not model (`+`,
+        // comparisons...).
         if j >= end
             || self.asi_break(j)
             || self.is_word(j, end, "as")
@@ -4082,9 +4090,9 @@ impl<'s> Ev<'s, '_> {
             self.note_opaque(i, e);
         }
         // The URL of a directory ends with `/`, and so does its path:
-        // `fileURLToPath(new URL('.', import.meta.url))` is `<dir>/`, which configs
-        // concatenate (`${root}$1`). The path model drops trailing slashes, so it is
-        // put back for exactly this form.
+        // `fileURLToPath(new URL('.', import.meta.url))` is `<dir>/`, which
+        // configs concatenate (`${root}$1`). The path model drops
+        // trailing slashes, so it is put back for exactly this form.
         let v = match v {
             ConfigVal::Str(Value::Str(s)) if !s.ends_with('/') && self.is_dir_url(i, e) => {
                 ConfigVal::str(format!("{s}/"))
@@ -4300,8 +4308,8 @@ fn spread_into(o: &mut ConfigObj, v: ConfigVal, conditional: bool) {
         }
         ConfigVal::Null | ConfigVal::Bool(_) | ConfigVal::Num(_) => {}
         ConfigVal::Alts(vs) => {
-            // Per key: the alternatives of each branch (a branch without the key keeps
-            // the current value).
+            // Per key: the alternatives of each branch (a branch without the
+            // key keeps the current value).
             let mut keys: Vec<String> = Vec::new();
             for v in &vs {
                 if let ConfigVal::Obj(x) = v {
@@ -4626,7 +4634,8 @@ mod tests {
             matches!(&none, ConfigVal::Obj(o) if o.entries.is_empty() && o.open.is_none()),
             "{none:?}"
         );
-        // Unknown entries leave the object open (a superset), known ones are kept.
+        // Unknown entries leave the object open (a superset), known ones are
+        // kept.
         for f in ["open", "computed"] {
             let x = v.field(f).unwrap();
             assert!(
@@ -4772,8 +4781,8 @@ mod tests {
             format!(r#""{store}/x/a.js""#)
         );
         assert_eq!(show(&v.field("direct").unwrap()), format!(r#""{store}/x""#));
-        // A path that does not exist stays as written (`realpathSync` would throw
-        // there).
+        // A path that does not exist stays as written (`realpathSync` would
+        // throw there).
         assert_eq!(show(&v.field("missing").unwrap()), r#""/r/pkg/nowhere""#);
         assert!(matches!(v.field("unknown"), Some(ConfigVal::Unknown(_))));
     }
@@ -4833,9 +4842,9 @@ mod tests {
             ),
             Some(FunctionShape::DefaultResolverConditions(None))
         );
-        // Anything else is not this shape: the request is used in another way, the
-        // request is rewritten, more options change, or the resolver does its
-        // own lookup.
+        // Anything else is not this shape: the request is used in another way,
+        // the request is rewritten, more options change, or the
+        // resolver does its own lookup.
         for other in [
             "module.exports = (request, options) => options.defaultResolver(request, { \
              ...options, conditions: request.startsWith('@x/') ? ['import'] : options.conditions \
@@ -4882,8 +4891,9 @@ mod tests {
             };
         "#;
         let m = ev(src);
-        // Passed to an untracked helper, named in a function nobody called, passed to a
-        // plugin: the evaluator cannot say what happens to these.
+        // Passed to an untracked helper, named in a function nobody called,
+        // passed to a plugin: the evaluator cannot say what happens to
+        // these.
         assert_eq!(m.escaped, ["/r/pkg/gen", "/r/pkg/lib", "/r/pkg/out"]);
         let text = |&(a, b): &(u32, u32)| &src[a as usize..b as usize];
         let opaque: Vec<&str> = m.opaque.iter().map(text).collect();
@@ -4958,15 +4968,16 @@ mod tests {
             "{:?}",
             m.notes
         );
-        // `filter` with a callback the evaluator can decide is exact; otherwise a
-        // superset.
+        // `filter` with a callback the evaluator can decide is exact; otherwise
+        // a superset.
         let m = ev(r#"
             const keep = (p) => true;
             module.exports = { a: ['a', 'b', null].filter(keep), b: ['x', 'y'].filter((p) => p !== 'x') };
         "#);
         let v = m.config().unwrap();
         assert_eq!(show(&v.field("a").unwrap()), r#"["a", "b", null]"#);
-        // The undecided filter: the superset plus an unknown, on the value only.
+        // The undecided filter: the superset plus an unknown, on the value
+        // only.
         let b = v.field("b").unwrap();
         assert!(
             b.alternatives().iter().any(|x| show(x) == r#"["x", "y"]"#),
@@ -5178,8 +5189,8 @@ mod tests {
             cfg(&m),
             r#"{globalSetup: "/r/tooling/e2e/setup.ts", testDir: "./spec", outputDir: "/r/app/out", testMatch: "*.spec.ts", projects: null}"#
         );
-        // The same for a local helper, whose `__dirname` is its own; and a default
-        // export.
+        // The same for a local helper, whose `__dirname` is its own; and a
+        // default export.
         let (m, _) = ev_factories(
             "import wrap, { defineConfig } from './local';\nexport default wrap({ dir: \
              defineConfig('/x').globalSetup });",
@@ -5216,21 +5227,22 @@ mod tests {
 
     #[test]
     fn packages_and_helper_functions_are_not_followed_by_default() {
-        // A package's `defineConfig(x)` is `x`, whatever the package: no host is asked.
+        // A package's `defineConfig(x)` is `x`, whatever the package: no host
+        // is asked.
         let m =
             ev("import { defineConfig } from '@acme/e2e';\nexport default \
                 defineConfig(__dirname);");
         assert_eq!(cfg(&m), r#""/r/pkg""#);
-        // A followed package is not `External`, but an installed one still is: the
-        // identity.
+        // A followed package is not `External`, but an installed one still is:
+        // the identity.
         let (m, calls) = ev_factories(
             "import { defineConfig } from '@playwright/test';\nexport default defineConfig({ \
              testDir: './e2e' });",
         );
         assert_eq!(cfg(&m), r#"{testDir: "./e2e"}"#);
         assert_eq!(calls, 0);
-        // A helper's function is not called, and a lookup with an unknown key is
-        // unknown.
+        // A helper's function is not called, and a lookup with an unknown key
+        // is unknown.
         let m = ev_with(
             "import { f } from './h';\nconst table = { a: 'x', b: 'y' };\nexport default { v: \
              f('a'), t: table[process.env.K ?? 'a'] };",

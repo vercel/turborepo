@@ -84,7 +84,8 @@ pub fn select(
     let fail = |reason: String| Error::new(requirement, Some(local), reason);
     let binary = fs::canonicalize(local)
         .map_err(|err| fail(format!("its native binary cannot be resolved: {err}")))?;
-    // Self and copied peers must meet the same contract, not merely parse locks.
+    // Self and copied peers must meet the same contract, not merely parse
+    // locks.
     let is_self = std::env::current_exe()
         .ok()
         .and_then(|p| fs::canonicalize(p).ok())
@@ -277,7 +278,8 @@ fn query_command(binary: &Path) -> Result<Command, &'static str> {
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
     // Old CLIs may not implement the preflight. Suppress normal startup's
-    // download/update/telemetry/agent paths without altering the real dispatch env.
+    // download/update/telemetry/agent paths without altering the real dispatch
+    // env.
     for (key, _) in std::env::vars_os() {
         // Windows variable names are case-insensitive.
         let name = if cfg!(windows) {

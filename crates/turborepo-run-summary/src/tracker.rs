@@ -196,8 +196,8 @@ impl RunTracker {
 
         let summary_state = self.execution_tracker.finish().await?;
 
-        // Build task summaries in parallel — each task_summary call is read-only
-        // on the engine, hash tracker, and package graph.
+        // Build task summaries in parallel — each task_summary call is
+        // read-only on the engine, hash tracker, and package graph.
         let tasks = turborepo_rayon_compat::block_in_place(|| {
             use rayon::prelude::*;
             let results: Vec<Result<TaskSummary, crate::task_factory::Error>> = summary_state
@@ -415,7 +415,8 @@ impl<'a> RunSummary<'a> {
         self.execution.as_ref()
     }
 
-    // Used in observability/otel.rs to iterate over tasks for TaskMetricsPayload
+    // Used in observability/otel.rs to iterate over tasks for
+    // TaskMetricsPayload
     pub(crate) fn tasks(&self) -> &[TaskSummary] {
         &self.tasks
     }
@@ -434,10 +435,10 @@ impl<'a> RunSummary<'a> {
         ui: ColorConfig,
         is_watch: bool,
     ) -> Result<(), Error> {
-        // Handle observability shutdown before the dry run check to ensure graceful
-        // cleanup even when metrics are not being emitted.
-        // Note: shutdown respects the configured timeout_ms (default 10s) to prevent
-        // hanging indefinitely on network issues.
+        // Handle observability shutdown before the dry run check to ensure
+        // graceful cleanup even when metrics are not being emitted.
+        // Note: shutdown respects the configured timeout_ms (default 10s) to
+        // prevent hanging indefinitely on network issues.
         if let Some(handle) = self.observability_handle.take() {
             // Only record metrics for actual runs, not dry runs
             if !matches!(self.run_type, RunType::DryJson | RunType::DryText) {
@@ -781,8 +782,8 @@ impl<'a> RunSummary<'a> {
                     .map_or_else(String::new, |vars| vars.join(", "))
             )?;
 
-            // If there's an error, we can silently ignore it, we don't need to block the
-            // entire print.
+            // If there's an error, we can silently ignore it, we don't need to
+            // block the entire print.
             if let Ok(task_definition_json) =
                 serde_json::to_string(&task.shared.resolved_task_definition)
             {
@@ -816,7 +817,8 @@ impl<'a> RunSummary<'a> {
         let mut rendered_json = if self.monorepo {
             serde_json::to_string_pretty(&self)
         } else {
-            // Deref coercion used to get an immutable reference from the mutable reference.
+            // Deref coercion used to get an immutable reference from the
+            // mutable reference.
             let monorepo_rsm = SinglePackageRunSummary::from(&*self);
             serde_json::to_string_pretty(&monorepo_rsm)
         }?;
@@ -873,7 +875,8 @@ impl<'a> RunSummary<'a> {
         let json = self.format_json()?;
         let summary_path = self.get_path();
 
-        // Perform file I/O in a blocking task to avoid blocking the async runtime
+        // Perform file I/O in a blocking task to avoid blocking the async
+        // runtime
         tokio::task::spawn_blocking(move || -> Result<(), Error> {
             summary_path.ensure_dir()?;
             summary_path.create_with_contents(json)?;

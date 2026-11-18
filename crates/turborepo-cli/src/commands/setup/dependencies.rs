@@ -642,7 +642,8 @@ fn python(root: &Path, snapshot: &Snapshot) -> Result<Step, Error> {
 }
 
 fn rust(root: &Path, snapshot: &Snapshot) -> Result<Step, Error> {
-    // Cargo fetches with the managed toolchain only, so it needs a toolchain file.
+    // Cargo fetches with the managed toolchain only, so it needs a toolchain
+    // file.
     if !snapshot.declarations().contains_key("rust") {
         let reason = "no managed Rust toolchain; declare one in rust-toolchain.toml";
         return Ok(Step::Skip(reason.into()));

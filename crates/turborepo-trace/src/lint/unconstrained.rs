@@ -106,8 +106,9 @@ fn at_configs(findings: Vec<Finding>) -> Vec<Finding> {
             .find(|o| o.rule == f.rule && o.file == file && o.line == line && o.key == key)
         {
             Some(o) => {
-                // The tests only this record holds add up (each is its own); the tests
-                // that reach any of them are at least the most one of them has.
+                // The tests only this record holds add up (each is its own);
+                // the tests that reach any of them are at least
+                // the most one of them has.
                 if let (Some(a), Some(b)) = (&mut o.cost, f.cost) {
                     a.exclusive += b.exclusive;
                     a.reached = a.reached.max(b.reached).max(a.exclusive);
@@ -739,8 +740,8 @@ mod tests {
             first(Effect::Load, Some("shell")).starts_with("give the loaded path a literal prefix")
         );
         assert!(first(Effect::Read, None).starts_with("give the path a literal prefix"));
-        // What the runner is configured with has no specifier to change; a pattern in
-        // the code that a mapper may apply to has.
+        // What the runner is configured with has no specifier to change; a
+        // pattern in the code that a mapper may apply to has.
         let conditional = UncertaintyKind::ConditionalResolution;
         let of = |detail: &str| {
             let f = fix_of(

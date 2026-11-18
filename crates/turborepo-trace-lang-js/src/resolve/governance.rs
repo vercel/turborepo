@@ -334,8 +334,8 @@ impl Compare {
         if self.clean(dir) {
             return None;
         }
-        // A level whose references differ changes nothing for a file that none of them
-        // covers at either revision.
+        // A level whose references differ changes nothing for a file that none
+        // of them covers at either revision.
         let file_str = file.to_string_lossy();
         let mut cur = Some(dir);
         let mut look = false;
@@ -471,7 +471,8 @@ mod tests {
     fn a_project_that_did_not_load_at_the_base() {
         let d = tree();
         let r = &root(&d);
-        // It did not parse; it was not there; the config it extends was not there.
+        // It did not parse; it was not there; the config it extends was not
+        // there.
         for base in [
             vec![("app/tsconfig.lib.json", Some("{ \"include\": ["))],
             vec![("app/tsconfig.lib.json", None)],

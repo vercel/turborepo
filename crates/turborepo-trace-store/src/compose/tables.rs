@@ -63,9 +63,10 @@ impl<T: Word> Deref for Slab<T> {
         match self {
             Slab::Owned(v) => v,
             Slab::Mapped { map, off, len } => {
-                // SAFETY: `decode` checked that `off` is aligned for `T` and that
-                // `off + len * size_of::<T>()` lies inside the mapping; `T: Word` accepts
-                // any bytes; the mapping is read-only and lives as long as `self`.
+                // SAFETY: `decode` checked that `off` is aligned for `T` and
+                // that `off + len * size_of::<T>()` lies inside
+                // the mapping; `T: Word` accepts any bytes; the
+                // mapping is read-only and lives as long as `self`.
                 unsafe { std::slice::from_raw_parts(map.as_ptr().add(*off).cast::<T>(), *len) }
             }
         }
@@ -109,8 +110,8 @@ impl Interned {
     }
 
     fn text(&self) -> &str {
-        // SAFETY: built from `&str`s, or validated by `decode` when the file was
-        // mapped.
+        // SAFETY: built from `&str`s, or validated by `decode` when the file
+        // was mapped.
         unsafe { std::str::from_utf8_unchecked(&self.text) }
     }
 
@@ -219,9 +220,9 @@ impl Inverted {
             |Pair(d, _)| d,
             |n, Pair(_, p)| Pair(n, p),
         );
-        // Per directory, group by pattern: `affected` matches each distinct pattern
-        // once per directory (a root `**/__mocks__/**` is recorded on every
-        // jest test).
+        // Per directory, group by pattern: `affected` matches each distinct
+        // pattern once per directory (a root `**/__mocks__/**` is
+        // recorded on every jest test).
         for w in member_off.windows(2) {
             member_nodes[w[0] as usize..w[1] as usize]
                 .sort_unstable_by_key(|&Pair(node, pat)| (pat, node));
@@ -380,9 +381,9 @@ fn decode(map: Arc<Mmap>, key: u128, nodes: usize) -> Option<(Tables, Inverted)>
         input_off: words(12)?,
         input_nodes: words(13)?,
     };
-    // Shapes: one offset per node (and per string) plus one, offsets inside their
-    // arrays, spans inside the text. The values are the checksummed output of
-    // `encode`.
+    // Shapes: one offset per node (and per string) plus one, offsets inside
+    // their arrays, spans inside the text. The values are the checksummed
+    // output of `encode`.
     let strings = t.strings.len();
     let csr = |off: &[u32], items: usize, rows: usize| {
         off.len() == rows + 1 && off.last().is_some_and(|&e| e as usize == items)
@@ -471,7 +472,8 @@ mod tests {
         let mapped = open(&path, 7, 3).expect("valid cache file");
         assert!(matches!(mapped.0.probes, Slab::Mapped { .. }));
         same(&built, &mapped);
-        // Another key, another node count, a flipped byte or a cut file: not used.
+        // Another key, another node count, a flipped byte or a cut file: not
+        // used.
         assert!(open(&path, 8, 3).is_none());
         assert!(open(&path, 7, 4).is_none());
         let mut bad = bytes.clone();

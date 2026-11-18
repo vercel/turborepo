@@ -124,11 +124,12 @@ impl Lab {
 
     /// [`Lab::new`], with a place on a RAM disk when `ram_disk`.
     fn with(name: &str, ram_disk: bool) -> Lab {
-        // Below the temporary directory (`/tmp`, `/var/folders/…`), as short as it
-        // gets.
+        // Below the temporary directory (`/tmp`, `/var/folders/…`), as short as
+        // it gets.
         let temp = tempfile::tempdir().unwrap();
         let t = temp.path().canonicalize().unwrap();
-        // Not below it, unless this checkout is: cargo's directory for test files.
+        // Not below it, unless this checkout is: cargo's directory for test
+        // files.
         let plain = support::outside_tmp().join(format!("location-{}-{name}", std::process::id()));
         let _ = std::fs::remove_dir_all(&plain);
         std::fs::create_dir_all(&plain).unwrap();
@@ -152,10 +153,10 @@ impl Lab {
                 n.join("deep/dist/build/vendor/src/__tests__/.git/site-packages/x/repo"),
             ),
         ];
-        // On a RAM disk, where a CI system may keep its checkouts: below `/dev`, which
-        // holds no files to trace otherwise. Only where there is one to write
-        // to, and only for the small repositories of this file (such a disk is
-        // small).
+        // On a RAM disk, where a CI system may keep its checkouts: below
+        // `/dev`, which holds no files to trace otherwise. Only where
+        // there is one to write to, and only for the small repositories
+        // of this file (such a disk is small).
         let shm = Path::new("/dev/shm").join(format!("location-{}-{name}", std::process::id()));
         if ram_disk && std::fs::create_dir_all(&shm).is_ok() {
             places.push(place("on a RAM disk below /dev", shm.join("repo")));
@@ -284,9 +285,9 @@ fn files_of(export: &Value) -> Vec<String> {
 /// `changes` are the files whose change is asked about (those of the first
 /// place, for every place).
 fn see(place: &Place, changes: &mut Option<Vec<String>>) -> Seen {
-    // One thread: which file is the first to fill a memo is no part of this test
-    // (the development repository's `host_paths.rs` has that one; the targets of a
-    // crate are recorded on whichever file asked first).
+    // One thread: which file is the first to fill a memo is no part of this
+    // test (the development repository's `host_paths.rs` has that one; the
+    // targets of a crate are recorded on whichever file asked first).
     harness(place, &["graph", "build", "--threads", "1"]);
     let json = harness(
         place,
@@ -368,8 +369,8 @@ fn table_diff(a: &Value, b: &Value, table: &str) -> String {
             .map(|r| r.chars().take(400).collect())
             .collect()
     };
-    // The same rows in another order (or another number of times): the first row
-    // that differs, at both places.
+    // The same rows in another order (or another number of times): the first
+    // row that differs, at both places.
     let order = match ra.iter().zip(&rb).position(|(x, y)| x != y) {
         Some(i) if only(&ra, &rb).is_empty() && only(&rb, &ra).is_empty() => format!(
             "; the same rows, row {i} at the first place: {}; here: {}",
@@ -463,12 +464,14 @@ fn compare_kinds(fixture: &str, places: &[&Place], seen: &[&Seen]) -> Vec<(Strin
                 format!("{at}: the shard keys differ"),
             ));
         } else {
-            // A shard that names its checkout holds the absolute root, by design: a task
-            // line in which the runner's own location is expanded
-            // (`{{justfile_directory()}}`, `${{ github.workspace }}`). `graph
-            // pack` lists such shards and `unpack` at another root traces them
-            // again (`crates/turborepo-trace-store/tests/artifact.rs`). They are compared
-            // by key and through the export; every other shard byte for byte.
+            // A shard that names its checkout holds the absolute root, by
+            // design: a task line in which the runner's own
+            // location is expanded (`{{justfile_directory()}}`,
+            // `${{ github.workspace }}`). `graph pack` lists such
+            // shards and `unpack` at another root traces them again
+            // (`crates/turborepo-trace-store/tests/artifact.rs`). They are
+            // compared by key and through the export; every other
+            // shard byte for byte.
             let names = |bytes: &[u8], p: &Place| {
                 let root = p.dir.as_os_str().as_encoded_bytes();
                 bytes.windows(root.len()).any(|w| w == root)
@@ -568,7 +571,8 @@ const KNOWN_KINDS_NEXT_APP: &[&str] =
 fn check(lab_name: &str, repos: &[(String, PathBuf)]) {
     let lab = Lab::new(lab_name);
     let mut diffs = Vec::new();
-    // (repository, place) pairs that are not compared: the place decides the tests.
+    // (repository, place) pairs that are not compared: the place decides the
+    // tests.
     let mut differing = 0;
     for (name, source) in repos {
         let mut changes = None;
@@ -586,11 +590,13 @@ fn check(lab_name: &str, repos: &[(String, PathBuf)]) {
             seen[0].located
         );
         for (i, place) in lab.places.iter().enumerate().skip(1) {
-            // jest matches absolute paths: below a directory called `node_modules` it
-            // finds no test, and below one called `__tests__` every file is one. There the
-            // graph of a repository with jest projects is another one, as the runner's
-            // answer is (`lint` says so, and `patterns_that_name_a_place` asserts the
-            // answers); every repository without them is the same there too.
+            // jest matches absolute paths: below a directory called
+            // `node_modules` it finds no test, and below one called
+            // `__tests__` every file is one. There the graph of a
+            // repository with jest projects is another one, as the runner's
+            // answer is (`lint` says so, and `patterns_that_name_a_place`
+            // asserts the answers); every repository without them
+            // is the same there too.
             if !seen[i].located.is_empty() {
                 if !NAMED.contains(&place.name) {
                     diffs.push(format!(
@@ -633,7 +639,8 @@ fn check(lab_name: &str, repos: &[(String, PathBuf)]) {
         diffs.len(),
         diffs.join("\n")
     );
-    // Most pairs are compared: a repository differs at two of the places at most.
+    // Most pairs are compared: a repository differs at two of the places at
+    // most.
     assert!(
         differing <= 2 * repos.len(),
         "{differing} pairs of repository and place were not compared"
@@ -725,8 +732,8 @@ fn go_and_rust_fixtures_are_the_same_at_every_place() {
 
 #[test]
 fn js_fixtures_are_the_same_at_every_place() {
-    // `js/nft` is one repository: Node File Trace's cases, with every shape of a
-    // path.
+    // `js/nft` is one repository: Node File Trace's cases, with every shape of
+    // a path.
     check("js", &group("js", None));
 }
 
@@ -754,18 +761,18 @@ fn leaving(root: &Path) {
             "scripts":{"gen":"node ../outside/gen.js > /tmp/out.txt && cat /etc/hosts",
                        "reenter":"sh scripts/reenter.sh"}}"#,
     );
-    // A script that a task runs: back in through a directory name, and the path of
-    // a container.
+    // A script that a task runs: back in through a directory name, and the path
+    // of a container.
     write(
         root,
         "scripts/reenter.sh",
         "#!/bin/sh\ncat ../repo/data/in.json\ncat /app/docs/notes.txt\n",
     );
-    // A vitest project of its own (no test of the root's jest project): its runner
-    // is started in the package or in the root. A path relative to the working
-    // directory that comes back in through a directory name is read from the
-    // root too; one that the package's directory explains (`packages/a` exists)
-    // is not.
+    // A vitest project of its own (no test of the root's jest project): its
+    // runner is started in the package or in the root. A path relative to
+    // the working directory that comes back in through a directory name is
+    // read from the root too; one that the package's directory explains
+    // (`packages/a` exists) is not.
     write(
         root,
         "packages/e/package.json",
@@ -824,8 +831,8 @@ fn leaving(root: &Path) {
         "packages/a/src/climb.test.js",
         "require('./climb');\ntest('climb', () => {});\n",
     );
-    // Above the root and back in through a directory name (`repo` is what some of
-    // the places are called).
+    // Above the root and back in through a directory name (`repo` is what some
+    // of the places are called).
     write(
         root,
         "packages/a/src/reenter.js",
@@ -968,8 +975,8 @@ fn a_repository_whose_paths_leave_it_is_the_same_at_every_place() {
         diffs.len(),
         diffs.join("\n")
     );
-    // And the answers are the right ones, not only the same ones: what stays inside
-    // is a dependency, what leaves selects nothing.
+    // And the answers are the right ones, not only the same ones: what stays
+    // inside is a dependency, what leaves selects nothing.
     let first = seen[0];
     let of = |change: &str| -> Vec<String> {
         first
@@ -1003,9 +1010,9 @@ fn a_repository_whose_paths_leave_it_is_the_same_at_every_place() {
             "svc/main_test.go"
         ]
     );
-    // A path relative to the working directory of a test in a package, through a
-    // directory name: the root is a working directory of the test too. Not
-    // where the package's own directory explains the path.
+    // A path relative to the working directory of a test in a package, through
+    // a directory name: the root is a working directory of the test too.
+    // Not where the package's own directory explains the path.
     assert_eq!(with("data/root.json"), ["packages/e/checks/cwd.check.js"]);
     assert_eq!(with("dist/gen.json"), [""; 0]);
     assert_eq!(
@@ -1051,9 +1058,9 @@ fn a_repository_whose_paths_leave_it_is_the_same_at_every_place() {
         );
     }
     assert!(floor.contains(&"packages/a/src/abs.test.js".to_owned()));
-    // The task whose script reads through the checkout's name and by the path of a
-    // container depends on both files, at every place (the outputs are compared
-    // above).
+    // The task whose script reads through the checkout's name and by the path
+    // of a container depends on both files, at every place (the outputs are
+    // compared above).
     let task = |change: &str| {
         let args = ["affected", "--tasks", "task:.#reenter", "--changed", change];
         harness(&lab.places[0], &args)
@@ -1061,8 +1068,8 @@ fn a_repository_whose_paths_leave_it_is_the_same_at_every_place() {
     assert_eq!(task("data/in.json").trim(), "task:.#reenter");
     assert_eq!(task("docs/notes.txt").trim(), "task:.#reenter");
     assert_eq!(task("data/abs.json").trim(), "");
-    // A module below a temporary directory was generated at run time: the load is
-    // open, wherever the checkout is.
+    // A module below a temporary directory was generated at run time: the load
+    // is open, wherever the checkout is.
     let texts: Vec<&str> = first.export["uncertainties"]
         .as_array()
         .unwrap()
@@ -1391,9 +1398,9 @@ fn at_an_ordinary_place_code_that_names_its_checkout_selects_what_it_did() {
             "require('../lib');\ntest('one', () => {});\n",
         );
     }
-    // The same with a wildcard after the directory, and with a directory further
-    // up: a `**` or `.*` that lies across the root, and a rest that is a part
-    // of the file name.
+    // The same with a wildcard after the directory, and with a directory
+    // further up: a `**` or `.*` that lies across the root, and a rest that
+    // is a part of the file name.
     let above = root
         .parent()
         .unwrap()
@@ -1578,7 +1585,8 @@ fn the_root_is_a_working_directory_of_a_test_in_a_package() {
             "{FS}test('rootname', () => {{ fs.readFileSync('../{name}/data/rootname.json'); }});\n"
         ),
     );
-    // A helper of another package, a listing and a computed name below the path.
+    // A helper of another package, a listing and a computed name below the
+    // path.
     write(
         root,
         "packages/a/src/helper.test.js",
@@ -1918,9 +1926,9 @@ fn a_computed_name_at_the_mount_point_and_a_read_below_a_temporary_directory() {
             turborepo_trace_core::output::TEMP_READ_NOTE
         )]
     );
-    // A directory computed directly below the mount point: read as mounted at `/`
-    // (`app/*/x.json`), and not as `*/x.json` from the root. An assumption with a
-    // record.
+    // A directory computed directly below the mount point: read as mounted at
+    // `/` (`app/*/x.json`), and not as `*/x.json` from the root. An
+    // assumption with a record.
     assert_eq!(
         details("src/mid.test.js"),
         [format!(
@@ -1928,8 +1936,8 @@ fn a_computed_name_at_the_mount_point_and_a_read_below_a_temporary_directory() {
             turborepo_trace_core::output::MOUNT_READ_NOTE
         )]
     );
-    // By default: the directory the deeper path names, and nothing for the others
-    // (their records are bounded by names, or ignored).
+    // By default: the directory the deeper path names, and nothing for the
+    // others (their records are bounded by names, or ignored).
     assert_eq!(run(&[], None, "data/x.json"), ["src/deep.test.js"]);
     assert_eq!(run(&[], None, "fixtures/x.json"), [""; 0]);
     assert_eq!(run(&[], None, "no/such/file.txt"), [""; 0]);
@@ -2074,8 +2082,8 @@ fn a_test_like_file_that_no_pattern_matches_here_stays_unknown() {
     let lab = Lab::new("unknown");
     let place = &lab.places[1];
     let root = &place.dir;
-    // Not below a directory called `src`: there the pattern matches the file, for
-    // jest too.
+    // Not below a directory called `src`: there the pattern matches the file,
+    // for jest too.
     if root.iter().any(|c| c == "src") {
         eprintln!(
             "skipped: {} is below a directory called src",
@@ -2644,9 +2652,9 @@ fn vitest_alias_repo(root: &Path, tsconfig: &str) {
 #[test]
 fn aliases_below_node_modules() {
     let mut wrong = Vec::new();
-    // An installed package answers the import below node_modules (the alias wins in
-    // the runner): the import resolves, so only the file's own record can say
-    // it.
+    // An installed package answers the import below node_modules (the alias
+    // wins in the runner): the import resolves, so only the file's own
+    // record can say it.
     wrong.extend(alias_case(
         "installed",
         &|r| {
@@ -4437,8 +4445,8 @@ fn every_fixture_moved_across_node_modules() {
     repos.extend(one("next-e2e"));
     repos.extend(one("next-build/lab"));
     repos.extend(one("host-paths"));
-    // Cold builds of a multi-crate cargo workspace are not deterministic: remove
-    // this exclusion when F3 is fixed.
+    // Cold builds of a multi-crate cargo workspace are not deterministic:
+    // remove this exclusion when F3 is fixed.
     repos.retain(|(name, _)| name != "tasks/cargo");
     let lab = Lab::new("fixtures");
     let mut wrong = Vec::new();
@@ -4869,8 +4877,8 @@ fn a_moved_graph_with_aliases_from_an_extended_or_referenced_config() {
             ],
         )
     };
-    // The link resolved inside `b` where no config of `b` covers the `.js` file:
-    // the root's config does.
+    // The link resolved inside `b` where no config of `b` covers the `.js`
+    // file: the root's config does.
     let link_above = |r: &Path| {
         link(
             r,

@@ -225,7 +225,8 @@ fn normalize_records(cx: &NormCx<'_>, obs: &Observations, memo: &mut Located) ->
         memberships: memberships(cx, obs, memo),
         configs: {
             let mut v = configs(cx, &obs.reads, memo);
-            // A manifest read through its resolution view is another input than the file.
+            // A manifest read through its resolution view is another input than
+            // the file.
             if !obs.view_reads.is_empty() {
                 v.extend(
                     configs(cx, &obs.view_reads, memo)
@@ -233,7 +234,8 @@ fn normalize_records(cx: &NormCx<'_>, obs: &Observations, memo: &mut Located) ->
                         .map(|c| c + VIEW_SUFFIX),
                 );
             }
-            // And one read by a config loader, through its narrower view, a third.
+            // And one read by a config loader, through its narrower view, a
+            // third.
             if !obs.loader_reads.is_empty() {
                 v.extend(
                     configs(cx, &obs.loader_reads, memo)
@@ -272,9 +274,10 @@ pub fn add_key_only(
     shard: &mut crate::shard::Shard,
 ) -> Vec<PathBuf> {
     let n = normalize(cx, obs, &mut Located::default());
-    // The records the shard has, indexed once: a project with thousands of package
-    // directories has as many key-only records, each looked up here (in push order,
-    // so the tables and the key are what a lookup in the vectors gives).
+    // The records the shard has, indexed once: a project with thousands of
+    // package directories has as many key-only records, each looked up here
+    // (in push order, so the tables and the key are what a lookup in the
+    // vectors gives).
     let mut probes: std::collections::HashSet<ProbeRec> = shard.probes.iter().cloned().collect();
     for p in n.probes {
         if probes.insert(p.clone()) {
@@ -519,9 +522,9 @@ fn probes(cx: &NormCx<'_>, obs: &Observations, memo: &mut Located) -> Vec<ProbeR
     let mut names: Vec<&str> = obs.packages.iter().map(String::as_str).collect();
     names.sort_unstable();
     names.dedup();
-    // A missing marker directory is shared by every name looked up through it, so
-    // every name sees the full set; claimed paths are removed once all names
-    // are done.
+    // A missing marker directory is shared by every name looked up through it,
+    // so every name sees the full set; claimed paths are removed once all
+    // names are done.
     let mut claimed = BTreeSet::new();
     // Only paths at most two levels below a `node_modules` directory (or one
     // itself) can be walk-up paths of any name; test the names against those
@@ -626,9 +629,9 @@ fn memberships(cx: &NormCx<'_>, obs: &Observations, memo: &mut Located) -> Vec<M
                 .then(|| (dir.to_path_buf(), pat.clone()))
         })
         .collect();
-    // A listing is subsumed by a `**` listing of itself (unless it is that listing)
-    // or of any ancestor: one set lookup per ancestor instead of a scan over
-    // every `**` listing.
+    // A listing is subsumed by a `**` listing of itself (unless it is that
+    // listing) or of any ancestor: one set lookup per ancestor instead of a
+    // scan over every `**` listing.
     let whole: std::collections::HashSet<PathBuf> = list
         .iter()
         .filter(|(_, p)| p == "**")
@@ -649,9 +652,9 @@ fn memberships(cx: &NormCx<'_>, obs: &Observations, memo: &mut Located) -> Vec<M
 }
 
 fn configs(cx: &NormCx<'_>, reads: &[PathBuf], memo: &mut Located) -> Vec<String> {
-    // A read inside a real third-party package (its manifest, a config it ships) is
-    // covered by the package identity; through a workspace link it is a
-    // first-party file.
+    // A read inside a real third-party package (its manifest, a config it
+    // ships) is covered by the package identity; through a workspace link
+    // it is a first-party file.
     let set: BTreeSet<PathBuf> = reads
         .iter()
         .filter_map(|p| locate_in(cx, memo, p))
@@ -711,7 +714,8 @@ pub fn expand_guards(p: &crate::shard::ArchivedProbeRec, out: &mut Vec<String>) 
         return;
     };
     let marker = w.marker.as_str();
-    // As `walkup_level` reads a name: everything before the first `/` is its scope.
+    // As `walkup_level` reads a name: everything before the first `/` is its
+    // scope.
     let scope = w.name.split_once('/').map(|(s, _)| s);
     let mut d = w.dir.to_string();
     for _ in 0..w.levels.to_native() {
@@ -955,8 +959,8 @@ mod tests {
             .iter()
             .filter(|p| matches!(p, ProbeRec::WalkUp(_)))
             .collect();
-        // `/r/p/src`, `/r/p` and `/r` are consecutive ancestors: one record. `/` is
-        // outside the repository and dropped.
+        // `/r/p/src`, `/r/p` and `/r` are consecutive ancestors: one record.
+        // `/` is outside the repository and dropped.
         assert_eq!(
             walk,
             [&ProbeRec::WalkUp(WalkUpRec {
@@ -992,8 +996,8 @@ mod tests {
         ] {
             assert!(all.iter().any(|a| a == want), "{want} in {all:?}");
         }
-        // What the walk-up was conditional on: the marker directory of each level.
-        // Other records have no guards.
+        // What the walk-up was conditional on: the marker directory of each
+        // level. Other records have no guards.
         let mut guards = Vec::new();
         for p in arch.iter() {
             expand_guards(p, &mut guards);

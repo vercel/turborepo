@@ -775,9 +775,9 @@ fn external_npm_dependency_matching_go_name_stays_external() {
     );
     write_file(root, "tools/go-chalk/chalk.go", "package chalk\n");
 
-    // Hand-authored npm v3 lockfile: no installation or registry access is needed.
-    // The spy also blocks npm/node, proving discovery and hashing are
-    // subprocess-free.
+    // Hand-authored npm v3 lockfile: no installation or registry access is
+    // needed. The spy also blocks npm/node, proving discovery and hashing
+    // are subprocess-free.
     let mut lockfile = serde_json::json!({
         "name": "external-npm-with-go",
         "lockfileVersion": 3,
@@ -851,7 +851,8 @@ fn external_npm_dependency_matching_go_name_stays_external() {
     };
     assert_eq!(external_hash(&baseline), external_hash(&overlapping));
 
-    // Only the external lockfile row changes; neither package.json nor Go changes.
+    // Only the external lockfile row changes; neither package.json nor Go
+    // changes.
     lockfile["packages"]["node_modules/chalk"]["version"] = serde_json::json!("5.4.1");
     lockfile["packages"]["node_modules/chalk"]["resolved"] =
         serde_json::json!("https://registry.npmjs.org/chalk/-/chalk-5.4.1.tgz");

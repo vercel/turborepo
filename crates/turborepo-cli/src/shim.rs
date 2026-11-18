@@ -80,7 +80,8 @@ impl TurboRunner for TurboCliRunner<'_> {
             Ok(None) => return Ok(None),
             Err(_) => {
                 // Never hand unparseable arguments to an unvalidated local CLI.
-                // Args::new reports them exactly like the normal CLI, then exits.
+                // Args::new reports them exactly like the normal CLI, then
+                // exits.
                 cli::Args::new(words);
                 unreachable!("Args::new exits for arguments that fail to parse");
             }
@@ -261,7 +262,8 @@ impl ChildSpawner for TurboChildSpawner {
 /// VERCEL_CONFIG_DIR_PATH are resolved to absolute paths.
 fn normalize_config_dir_env_vars() {
     use camino::Utf8PathBuf;
-    // Normalize relative config dir env vars to absolute paths early in CLI startup
+    // Normalize relative config dir env vars to absolute paths early in CLI
+    // startup
     for var in ["TURBO_CONFIG_DIR_PATH", "VERCEL_CONFIG_DIR_PATH"] {
         if let Ok(val) = std::env::var(var) {
             match turbopath::AbsoluteSystemPathBuf::new(val.as_str()) {

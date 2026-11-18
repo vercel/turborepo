@@ -375,8 +375,8 @@ mod tests {
         (temp_dir, path)
     }
 
-    // Each scenario gets its own process so environment variables and the global
-    // OnceLock cannot race with other tests.
+    // Each scenario gets its own process so environment variables and the
+    // global OnceLock cannot race with other tests.
     #[test]
     fn test_telemetry_state() {
         use std::{fmt, process::Command};

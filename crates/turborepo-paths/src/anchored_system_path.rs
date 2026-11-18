@@ -156,8 +156,8 @@ impl AnchoredSystemPath {
         }
     }
 
-    // Note that this defers to Path::strip_prefix, which operates on components,
-    // and therefore enforces boundaries at path dividers.
+    // Note that this defers to Path::strip_prefix, which operates on
+    // components, and therefore enforces boundaries at path dividers.
     pub fn strip_prefix(&self, other: &Self) -> Option<AnchoredSystemPathBuf> {
         self.0
             .strip_prefix(&other.0)
@@ -168,6 +168,8 @@ impl AnchoredSystemPath {
 
 #[cfg(test)]
 mod tests {
+    use std::str::FromStr;
+
     use test_case::test_case;
 
     use crate::{AnchoredSystemPathBuf, PathRelation};
@@ -181,10 +183,10 @@ mod tests {
         other_components: &[&str],
         expected: PathRelation,
     ) {
-        let abs_path = AnchoredSystemPathBuf::try_from("")
+        let abs_path = AnchoredSystemPathBuf::from_str("")
             .unwrap()
             .join_components(abs_path_components);
-        let other_path = AnchoredSystemPathBuf::try_from("")
+        let other_path = AnchoredSystemPathBuf::from_str("")
             .unwrap()
             .join_components(other_components);
 

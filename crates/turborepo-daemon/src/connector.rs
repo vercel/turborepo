@@ -228,7 +228,8 @@ impl DaemonConnector {
 
         #[cfg(not(target_os = "windows"))]
         let make_service = move |_| {
-            // we clone the reference counter here and move it into the async closure
+            // we clone the reference counter here and move it into the async
+            // closure
             let path = path.clone();
             async move {
                 let stream = tokio::net::UnixStream::connect(path.as_path()).await?;
@@ -246,8 +247,8 @@ impl DaemonConnector {
             }
         };
 
-        // note, this endpoint is just a placeholder. the actual path is passed in via
-        // make_service
+        // note, this endpoint is just a placeholder. the actual path is passed
+        // in via make_service
         Endpoint::from_static("http://[::]:50051")
             .timeout(Self::CONNECT_TIMEOUT)
             .connect_with_connector(tower::service_fn(make_service))
@@ -762,12 +763,13 @@ mod test {
         let mut client = Endpoint::try_from("http://[::]:50051")
             .expect("this is a valid uri")
             .connect_with_connector(tower::service_fn(move |_| {
-                // when a connection is made, create a duplex stream and send it to the server
+                // when a connection is made, create a duplex stream and send it
+                // to the server
                 let tx = tx.clone();
                 async move {
                     let (client, server) = tokio::io::duplex(1024);
-                    // Server expects tokio::io::DuplexStream (implements Connected + AsyncRead +
-                    // AsyncWrite)
+                    // Server expects tokio::io::DuplexStream (implements
+                    // Connected + AsyncRead + AsyncWrite)
                     let server: Result<_, anyhow::Error> = Ok(server);
                     let client = hyper_util::rt::TokioIo::new(client);
                     tx.send(server).await.unwrap();

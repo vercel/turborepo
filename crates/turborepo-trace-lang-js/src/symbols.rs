@@ -1021,8 +1021,8 @@ impl Eval<'_> {
             // A global that only makes a value.
             Some(None) => {
                 let name = root.name.as_str();
-                // A symbol's description is converted to a string: only literal text is
-                // sure to run no code.
+                // A symbol's description is converted to a string: only literal
+                // text is sure to run no code.
                 let text = c
                     .arguments
                     .iter()
@@ -1041,8 +1041,9 @@ impl Eval<'_> {
                 if pure { None } else { runs }
             }
             Some(Some(b)) => {
-                // The callee has to exist when the statement runs: a binding of the module
-                // that is declared further down is not initialized yet, and a function
+                // The callee has to exist when the statement runs: a binding of
+                // the module that is declared further down is
+                // not initialized yet, and a function
                 // declared further down may read bindings that are not.
                 if let Some(s) = self.symbol(root) {
                     if self.scoping.symbol_flags(s).is_import() {
@@ -1252,10 +1253,10 @@ impl Eval<'_> {
             return 0;
         }
         let d = self.body_depth(&body.statements, true);
-        // The result of a generator is not the returned value: nothing runs until it is
-        // iterated. An async function resolves its promise with what it returns, which
-        // reads and calls `then` of a thenable: calling it does more than build a
-        // value.
+        // The result of a generator is not the returned value: nothing runs
+        // until it is iterated. An async function resolves its promise
+        // with what it returns, which reads and calls `then` of a
+        // thenable: calling it does more than build a value.
         if f.r#async && !f.generator {
             0
         } else if f.generator {
@@ -1307,8 +1308,8 @@ impl Eval<'_> {
             .collect();
         let spreads = self.spreads.replace(spread);
         self.params.replace(outer);
-        // A class the function defines extends a binding of the module: calling the
-        // function throws when that is not a constructor.
+        // A class the function defines extends a binding of the module: calling
+        // the function throws when that is not a constructor.
         if !self.extends.borrow().is_empty() {
             self.extends.borrow_mut().clear();
             return None;
@@ -1387,7 +1388,8 @@ impl Eval<'_> {
                 if self.prims.contains(&s) {
                     return true;
                 }
-                // An import: a primitive on the condition that its module says so.
+                // An import: a primitive on the condition that its module says
+                // so.
                 match self.index.get(&s) {
                     Some(&binding) if self.scoping.symbol_flags(s).is_import() => {
                         self.immediate.borrow_mut().push(binding);
@@ -1567,8 +1569,8 @@ impl Eval<'_> {
             match el {
                 ClassElement::StaticBlock(_) => return Some(Why::Is("a static block")),
                 ClassElement::MethodDefinition(m) => {
-                    // A decorator of the method or of one of its parameters runs when the
-                    // class is defined.
+                    // A decorator of the method or of one of its parameters
+                    // runs when the class is defined.
                     if !m.decorators.is_empty()
                         || m.value
                             .params
@@ -1636,7 +1638,8 @@ impl Eval<'_> {
             match self.expr(init) {
                 Some(w) => why = why.or(Some(w)),
                 None => {
-                    // A primitive without conditions (the probe's own are dropped).
+                    // A primitive without conditions (the probe's own are
+                    // dropped).
                     let before = self.conds.borrow().len();
                     let prim = self.prim(init) && self.conds.borrow().len() == before;
                     self.conds.borrow_mut().truncate(before);
@@ -1784,8 +1787,8 @@ impl<'a> Visit<'a> for Scan {
     }
 
     fn visit_object_property(&mut self, it: &oxc_ast::ast::ObjectProperty<'a>) {
-        // `{ f() {} }` and `{ f: function () {} }`: called as `o.f()`, `this` is the
-        // object.
+        // `{ f() {} }` and `{ f: function () {} }`: called as `o.f()`, `this`
+        // is the object.
         self.method = matches!(strip(&it.value), Expression::FunctionExpression(_));
         oxc_ast_visit::walk::walk_object_property(self, it);
         self.method = false;
@@ -1855,7 +1858,8 @@ fn table_of(s: &Statement<'_>) -> Option<(Span, Vec<(String, Span)>)> {
                     oxc_ast::ast::TSEnumMemberName::String(s) => lit(s),
                     _ => return None,
                 };
-                // Without a literal initializer the value depends on the members before.
+                // Without a literal initializer the value depends on the
+                // members before.
                 let literal = match m.initializer.as_ref().map(strip) {
                     Some(Expression::StringLiteral(_) | Expression::NumericLiteral(_)) => true,
                     Some(Expression::UnaryExpression(u)) => {
@@ -1888,8 +1892,9 @@ fn table_of(s: &Statement<'_>) -> Option<(Span, Vec<(String, Span)>)> {
                     PropertyKey::StringLiteral(s) => lit(s),
                     _ => return None,
                 };
-                // `__proto__: x` is not a member: it sets the prototype, whose properties
-                // every member read can fall through to.
+                // `__proto__: x` is not a member: it sets the prototype, whose
+                // properties every member read can fall through
+                // to.
                 if name == "__proto__" {
                     return None;
                 }
@@ -1982,7 +1987,8 @@ impl Module {
         }
         let mut scan = Scan::default();
         scan.visit_program(&program);
-        // Code handed to `eval` reads and writes the bindings of the module by name.
+        // Code handed to `eval` reads and writes the bindings of the module by
+        // name.
         if scan.eval {
             return Err("a call of `eval`");
         }
@@ -2007,8 +2013,8 @@ impl Module {
         let mut symbols: Vec<SymbolId> = scoping.iter_bindings_in(root).collect();
         symbols.sort_unstable();
         let mut by_name: HashMap<&str, u32> = HashMap::new();
-        // Per symbol: the statement that declares it, and whether it is uninitialized
-        // before.
+        // Per symbol: the statement that declares it, and whether it is
+        // uninitialized before.
         let mut declared: HashMap<SymbolId, (u32, bool)> = HashMap::new();
         for s in &symbols {
             let b = m.bindings.len() as u32;
@@ -2032,7 +2038,8 @@ impl Module {
                 Kind::Other
             };
             if let Some(at) = stmt_at(&spans, scoping.symbol_span(*s).start) {
-                // A merged declaration counts as uninitialized when any part of it is.
+                // A merged declaration counts as uninitialized when any part of
+                // it is.
                 let lexical = flags.is_class()
                     || flags.intersects(oxc_semantic::SymbolFlags::BlockScopedVariable);
                 declared.insert(*s, (at, lexical));
@@ -2064,8 +2071,9 @@ impl Module {
                     continue;
                 };
                 let value = types_are_values || !r.flags().is_type_only();
-                // `X.name`, read: a use of one member. `X.name(...)` is not: the call hands
-                // the whole of `X` to the function as `this` (a method of the object, or
+                // `X.name`, read: a use of one member. `X.name(...)` is not:
+                // the call hands the whole of `X` to the
+                // function as `this` (a method of the object, or
                 // one it inherits such as `hasOwnProperty`).
                 let nodes = semantic.nodes();
                 let member = match nodes.parent_kind(r.node_id()) {
@@ -2128,12 +2136,12 @@ impl Module {
                 }
             }
         }
-        // The JSX factory is named by a pragma or by the transpiler's configuration,
-        // never by the code: every statement with JSX reads the bindings the
-        // pragmas name, `React`, and every import nothing else in the file uses
-        // (`import { h } from './h'`). Bindings that some statement of the
-        // source reads as a value, before the reads that JSX stands for are
-        // added.
+        // The JSX factory is named by a pragma or by the transpiler's
+        // configuration, never by the code: every statement with JSX
+        // reads the bindings the pragmas name, `React`, and every
+        // import nothing else in the file uses (`import { h } from
+        // './h'`). Bindings that some statement of the source reads as
+        // a value, before the reads that JSX stands for are added.
         let mut written_use = vec![false; m.bindings.len()];
         for st in &m.stmts {
             for r in st.refs.iter().filter(|r| r.value) {
@@ -2153,8 +2161,9 @@ impl Module {
                     )
                 })
                 .collect();
-            // A pragma says what the factory is. Without one the configuration does, and
-            // the file does not: the usual names, and every import nothing else uses.
+            // A pragma says what the factory is. Without one the configuration
+            // does, and the file does not: the usual names, and
+            // every import nothing else uses.
             guessed_factory = pragmas.is_empty();
             let mut factories: Vec<u32> = index
                 .iter()
@@ -2281,8 +2290,9 @@ impl Module {
                     if kept(&value_used) && !all_types {
                         m.loads.push(lit(&d.source));
                     }
-                    // Where the factory is a guess, an import that only the guess uses may
-                    // be dropped after all: both readings are kept.
+                    // Where the factory is a guess, an import that only the
+                    // guess uses may be dropped after all:
+                    // both readings are kept.
                     let written = if guessed_factory {
                         &written_use
                     } else {
@@ -2432,9 +2442,9 @@ impl Module {
         for (s, &b) in &index {
             m.bindings[b as usize].prim = eval.prims.contains(s);
         }
-        // A function that reads `this` and that an export hands out (the export is the
-        // function, a constant that holds it, or what a builder made of it) reads the
-        // namespace it is called on: `ns.f()`.
+        // A function that reads `this` and that an export hands out (the export
+        // is the function, a constant that holds it, or what a builder
+        // made of it) reads the namespace it is called on: `ns.f()`.
         let mut through_this: Vec<u32> = scan
             .this
             .iter()
@@ -2491,10 +2501,11 @@ impl Module {
         }
         if texts {
             let toks = tokens(path, src).ok_or("not tokenizable")?;
-            // The lexer skims JSX: an attribute name, an attribute string and JSX text are
-            // in no token, so a change of markup alone would compare equal. The
-            // source of the outermost JSX elements of a span is part of its
-            // text, byte for byte: white space inside an attribute string or
+            // The lexer skims JSX: an attribute name, an attribute string and
+            // JSX text are in no token, so a change of markup alone
+            // would compare equal. The source of the outermost JSX
+            // elements of a span is part of its text, byte for
+            // byte: white space inside an attribute string or
             // between two words of JSX text is output.
             let mut outer: Vec<Span> = Vec::new();
             let mut all = scan.jsx.clone();
@@ -2520,8 +2531,8 @@ impl Module {
             for (i, span) in spans.iter().enumerate() {
                 m.stmts[i].text = span_text(src, &toks, *span);
                 m.stmts[i].text.push_str(&markup(*span));
-                // An enum or an object table: the statement around its members, and each
-                // member.
+                // An enum or an object table: the statement around its members,
+                // and each member.
                 if let Some((body, members)) = table_of(&program.body[i])
                     && m.stmts[i].evaluated.is_none()
                 {
@@ -2666,8 +2677,8 @@ impl Module {
             return None;
         };
         let table = self.stmts[*at as usize].table.as_ref()?;
-        // A member that reads the table itself (`g: () => T.a`, or a helper that does)
-        // changes with the other members.
+        // A member that reads the table itself (`g: () => T.a`, or a helper
+        // that does) changes with the other members.
         let (in_closure, _) = self.closure(&[], &[*b], declared_in);
         if self
             .stmts
@@ -2873,7 +2884,8 @@ impl Module {
             }
             Some(Pure::Alias { root, steps: first }) => {
                 let all: Vec<Step> = first.iter().chain(steps).cloned().collect();
-                // The literal-ness of the first calls' arguments is not known here.
+                // The literal-ness of the first calls' arguments is not known
+                // here.
                 self.holds(
                     &Cond::Builds {
                         root: *root,
@@ -3060,8 +3072,9 @@ impl Module {
                 }
             }
             if !found {
-                // `import 'x'` binds nothing and reads nothing; anything else is not an
-                // import declaration this module knows.
+                // `import 'x'` binds nothing and reads nothing; anything else
+                // is not an import declaration this module
+                // knows.
                 return None;
             }
         }
@@ -3093,14 +3106,15 @@ impl Module {
                 }
             }
         }
-        // A chain that only builds a value is not load-time code, unless its root is
-        // what changed.
+        // A chain that only builds a value is not load-time code, unless its
+        // root is what changed.
         let mut pure_calls = 0;
         let mut evaluation = relinked
             .then(|| "an import of a name that was added, removed or redeclared".to_owned());
         for (s, _) in self.stmts.iter().zip(&stmt_tainted).filter(|(_, t)| **t) {
-            // A class that extends a tainted value, other than a class or a plain function
-            // of this module (those stay constructors whatever they read).
+            // A class that extends a tainted value, other than a class or a
+            // plain function of this module (those stay
+            // constructors whatever they read).
             if evaluation.is_none()
                 && s.extends.iter().any(|&b| {
                     tainted[b as usize]
@@ -3231,7 +3245,8 @@ pub fn diff(
             members.insert(n.clone(), changed);
         }
     }
-    // Names whose binding changed: at one version only, or declared in another way.
+    // Names whose binding changed: at one version only, or declared in another
+    // way.
     let kind = |m: &Module, n: &str| {
         m.exports.get(n).map(|e| match e {
             Export::Binding(b) => Some(m.bindings[*b as usize].kind),
@@ -3357,7 +3372,8 @@ mod tests {
     fn an_import_is_compared_by_where_it_comes_from() {
         let base =
             "import { x, y } from './m';\nexport const a = () => x;\nexport const b = () => y;\n";
-        // Another name is added to the declaration: nothing that exists changed.
+        // Another name is added to the declaration: nothing that exists
+        // changed.
         let head = "import { x, y, z } from './m';\nexport const a = () => x;\nexport const b = \
                     () => y;\nexport const c = () => z;\n";
         assert_eq!(ch(base, head).exports, names(&["c"]));
@@ -3415,7 +3431,8 @@ mod tests {
             ch(&head, base).load_time.as_deref(),
             Some("a call of console.log was removed")
         );
-        // A directive, and a directive comment (an ordinary comment is not a change).
+        // A directive, and a directive comment (an ordinary comment is not a
+        // change).
         let head = format!("'use client';\n{base}");
         assert!(ch(base, &head).evaluation);
         let head = format!("/** @jest-environment jsdom */\n{base}");
@@ -3631,8 +3648,8 @@ mod tests {
         let t = taint(src, "import {", &["Dep"]).expect("taint");
         assert_eq!(t.evaluation.as_deref(), Some("a decorator"));
         assert_eq!(t.exports, names(&["Svc"]));
-        // A namespace import is tainted by any name; an import the module does not have
-        // is unknown.
+        // A namespace import is tainted by any name; an import the module does
+        // not have is unknown.
         let src =
             "import * as ns from './f';\nexport const f = () => ns.a();\nexport const g = 1;\n";
         assert_eq!(
@@ -3645,8 +3662,8 @@ mod tests {
 
     #[test]
     fn functions_that_only_build_a_value() {
-        // The longest row of calls of an export that only builds a value (arguments are
-        // literals, nothing is known about imports).
+        // The longest row of calls of an export that only builds a value
+        // (arguments are literals, nothing is known about imports).
         let depth = |src: &str, name: &str| {
             let m = Module::read("a.tsx", src, false).expect("facts");
             (1..=4u8)
@@ -3658,7 +3675,8 @@ mod tests {
         let wrap = "export function withTrace(handler, options) {\n  return (req, ctx) => \
                     trace(() => handler(req, ctx), options);\n}\n";
         assert_eq!(depth(wrap, "withTrace"), 1);
-        // A wrapper factory: two calls build values, the third runs the component.
+        // A wrapper factory: two calls build values, the third runs the
+        // component.
         let hoc = "export function withInterceptors<P>() {\n  return (interceptors, create, \
                    options) => {\n    return function Intercepted(props) {\n      return trace(() \
                    => create(props), options);\n    };\n  };\n}\n";
@@ -3750,8 +3768,8 @@ mod tests {
 
     #[test]
     fn a_call_that_only_builds_a_value_is_not_load_time_code() {
-        // A local wrapper, a known builder of a package, and a member of its default
-        // import.
+        // A local wrapper, a known builder of a package, and a member of its
+        // default import.
         let src = "import React, { cache } from 'react';\nimport { changed, other } from \
                    './f';\nconst wrap = (fn) => (...a) => fn(...a);\nexport const GET = \
                    wrap((req) => changed(req));\nexport const load = cache(async () => \
@@ -3772,8 +3790,8 @@ mod tests {
         assert_eq!((t.evaluation, t.pure_calls), (None, 1));
         let t = taint_with(src, "import {", &["wrap"], &pure).expect("taint");
         assert_eq!(t.evaluation.as_deref(), Some("a call of wrap"));
-        // More calls in a row than the callee is known for, an evaluated argument, a
-        // callee that is not a plain name.
+        // More calls in a row than the callee is known for, an evaluated
+        // argument, a callee that is not a plain name.
         let src = "import { wrap, handler } from './f';\nexport const GET = wrap()(handler);\n";
         let t = taint_with(src, "import {", &["handler"], &pure).expect("taint");
         assert_eq!(t.evaluation.as_deref(), Some("a call of wrap()"));
@@ -3791,8 +3809,8 @@ mod tests {
 
     #[test]
     fn a_builder_may_call_other_builders_and_spread_its_parameter() {
-        // The shape of a flag declarator: it hands its argument, plus an adapter made
-        // by another builder, to a builder of a package.
+        // The shape of a flag declarator: it hands its argument, plus an
+        // adapter made by another builder, to a builder of a package.
         let declare = "import { flag } from 'flags';\nimport { adapter } from \
                        './adapter';\nimport { identify } from './identify';\nexport function \
                        declare(declaration) {\n  return flag({ ...declaration, adapter: \
@@ -3821,7 +3839,8 @@ mod tests {
             !m.builds("declare", &[Step::Call, Step::Call], true, &Both),
             "a flag is called"
         );
-        // A constant holding what a builder made: calling it continues the chain.
+        // A constant holding what a builder made: calling it continues the
+        // chain.
         let adapter = "import { createAdapter } from 'pkg';\nimport { client } from \
                        './client';\nexport const adapter = createAdapter(client);\nexport { \
                        createAdapter as make };\n";
@@ -3840,8 +3859,8 @@ mod tests {
 
     #[test]
     fn chains_and_constants_of_other_modules_hold_on_the_oracles_word() {
-        // A schema built by a chain on `z`, and a table with a label made from an
-        // imported constant.
+        // A schema built by a chain on `z`, and a table with a label made from
+        // an imported constant.
         let src = "import { z } from 'zod';\nimport { NAME } from './constants';\nimport { inner, \
                    other } from './f';\nexport const schema = z.object({ a: z.string().min(1), \
                    inner }).optional();\nexport const table = { '/a': { label: `${NAME} credits`, \
@@ -3859,8 +3878,8 @@ mod tests {
         // A chain that parses runs the schema.
         let t = taint_with(src, "import { inner", &["other"], &Known).expect("taint");
         assert_eq!(t.evaluation.as_deref(), Some("a call of z.string().parse"));
-        // The constant is what changed: the template is evaluated with a new value,
-        // which only its own statement uses.
+        // The constant is what changed: the template is evaluated with a new
+        // value, which only its own statement uses.
         let t = taint_with(src, "import { NAME", &["NAME"], &Known).expect("taint");
         assert_eq!(
             t.evaluation.as_deref(),
@@ -3882,8 +3901,8 @@ mod tests {
                     defaultValue: false });\nexport const b = declare({ key: 'b', defaultValue: \
                     true });\nexport const c = declare({ key: 'c', defaultValue: false, decide() \
                     { return a(); } });\n";
-        // `b` goes away, `d` is new, `a` changes its default (and with it `c`, which
-        // calls it).
+        // `b` goes away, `d` is new, `a` changes its default (and with it `c`,
+        // which calls it).
         let head = "import { declare } from './declare';\nexport const a = declare({ key: 'a', \
                     defaultValue: true });\nexport const c = declare({ key: 'c', defaultValue: \
                     false, decide() { return a(); } });\nexport const d = declare({ key: 'd', \
@@ -3913,7 +3932,8 @@ mod tests {
                 .expect("facts")
                 .evaluation
         );
-        // A declaration that runs something in its argument stays load-time code.
+        // A declaration that runs something in its argument stays load-time
+        // code.
         let head2 = format!("{head}export const e = declare({{ key: lookup() }});\n");
         let c = changed("flags.ts", head, &head2, &Calls(1), &Calls(1), false).expect("facts");
         assert_eq!(
@@ -3940,7 +3960,8 @@ mod tests {
         )
         .expect("facts");
         assert_eq!((c.evaluation, c.exports), (false, names(&["b"])));
-        // ... called with something that is not a literal: the spread may run a getter.
+        // ... called with something that is not a literal: the spread may run a
+        // getter.
         let c = changed(
             "flags.ts",
             &local("export const a = declare({ key: 'a' });\n"),
@@ -4028,8 +4049,9 @@ mod tests {
             Some(&names(&["Project", "Team"]))
         );
         assert_eq!(c.members.get("LIMITS"), Some(&names(&["max", "pro"])));
-        // Not member by member: a member without a literal value (its value depends on
-        // its position), a change outside the members, an object with a spread.
+        // Not member by member: a member without a literal value (its value
+        // depends on its position), a change outside the members, an
+        // object with a spread.
         for (b, h) in [
             ("export enum E { A, B }\n", "export enum E { A, X, B }\n"),
             (
@@ -4073,7 +4095,8 @@ mod tests {
             m.taint_members(&ask(start, &tracked), &members, &Alone)
                 .expect("taint")
         };
-        // A new member: the reader of that member, and the uses of the enum as a whole.
+        // A new member: the reader of that member, and the uses of the enum as
+        // a whole.
         assert_eq!(
             with(&["Rules"]).exports,
             names(&["all", "canSeeRules", "check"])
@@ -4086,7 +4109,8 @@ mod tests {
         let t = with(&["Billing"]);
         assert_eq!(t.exports, names(&["all", "check"]));
         assert!(t.any);
-        // Without member information every value use counts; a type use never does.
+        // Without member information every value use counts; a type use never
+        // does.
         let t = m
             .taint_members(&ask(start, &tracked), &BTreeMap::new(), &Alone)
             .expect("taint");
@@ -4110,8 +4134,8 @@ mod tests {
             .taint_members(&ask(0, &tracked), &members, &Alone)
             .expect("taint");
         assert!(t.any && t.evaluation.is_some());
-        // A write to a member, and a member read through a wrapper, take the whole
-        // export.
+        // A write to a member, and a member read through a wrapper, take the
+        // whole export.
         for src in [
             "import { T } from './t';\nexport const f = () => { T.a = 1; };\n",
             "import { T } from './t';\nexport const f = () => (T as any).a;\n",
@@ -4129,14 +4153,15 @@ mod tests {
 
     #[test]
     fn a_class_definition_reads_what_it_extends() {
-        // In the modified file: the base is compared, the body of the class is not.
+        // In the modified file: the base is compared, the body of the class is
+        // not.
         let base = "import { Base } from './base';\nconst local = Base;\nexport class A extends \
                     Base { m() { return 1; } }\nexport const other = 1;\n";
         let c = ch(base, &base.replace("return 1", "return 2"));
         assert!(!c.evaluation);
         assert_eq!(c.exports, names(&["A"]));
-        // A new class on a base that no class extended before, and a constant as base
-        // whose value changes.
+        // A new class on a base that no class extended before, and a constant
+        // as base whose value changes.
         let head = format!("{base}const k: any = 1;\nexport class Z extends k {{}}\n");
         assert!(ch(base, &head).evaluation);
         let base2 = "const k: any = Object;\nexport class Z extends k {}\nexport const o = 1;\n";
@@ -4147,8 +4172,8 @@ mod tests {
         let c = ch(base3, &base3.replace("return 1", "return 2"));
         assert!(!c.evaluation);
         assert_eq!(c.exports, names(&["Z"]));
-        // In an importer: a class that extends a changed import ends the walk, a class
-        // that extends a class of the importer does not.
+        // In an importer: a class that extends a changed import ends the walk,
+        // a class that extends a class of the importer does not.
         let src = "import { Base, helper } from './base';\nexport class A extends Base {}\nexport \
                    const other = 1;\n";
         let t = taint(src, "import {", &["Base"]).expect("taint");
@@ -4170,8 +4195,8 @@ mod tests {
 
     #[test]
     fn a_rebound_export_is_read_by_every_import_of_its_name() {
-        // A function that becomes a constant, a removed and an added name are rebound;
-        // a changed body is not.
+        // A function that becomes a constant, a removed and an added name are
+        // rebound; a changed body is not.
         let base = "export function f() { return 1; }\nexport function g() { return 1; }\nexport \
                     const gone = 1;\nexport class K {}\n";
         let head = "export const f = () => 1;\nexport function g() { return 2; }\nexport const \
@@ -4179,8 +4204,8 @@ mod tests {
         let c = ch(base, head);
         assert_eq!(c.exports, names(&["K", "f", "fresh", "g", "gone"]));
         assert_eq!(c.rebound, names(&["K", "f", "fresh", "gone"]));
-        // The importer: naming a rebound export is a load-time read, a type import is
-        // not.
+        // The importer: naming a rebound export is a load-time read, a type
+        // import is not.
         let src = "import { f, g } from './m';\nimport type { K } from './m';\nexport const a = \
                    () => g();\nexport const b = (k: K) => f();\n";
         let m = Module::read("a.ts", src, false).expect("facts");
@@ -4213,7 +4238,8 @@ mod tests {
         let c = ch(base, head);
         assert!(c.reordered && !c.evaluation);
         assert_eq!(c.exports, names(&[]));
-        // A new name between the others is not a reordering of what both versions have.
+        // A new name between the others is not a reordering of what both
+        // versions have.
         let head = "export const a = 1;\nexport const n = 0;\nexport const b = 2;\nexport \
                     function c() {}\n";
         assert!(!ch(base, head).reordered);
@@ -4247,8 +4273,8 @@ mod tests {
                     }\n";
         let c = ch(base, &base.replace("return 1", "return 2"));
         assert_eq!(c.exports, names(&["hidden"]));
-        // With a default expression or a re-export there is no binding to name: no
-        // facts.
+        // With a default expression or a re-export there is no binding to name:
+        // no facts.
         assert_eq!(
             Module::read(
                 "a.ts",
@@ -4262,7 +4288,8 @@ mod tests {
 
     #[test]
     fn an_import_whose_last_value_use_goes_away_is_no_longer_loaded() {
-        // A transpiler drops an import no value reads: the module is then not loaded.
+        // A transpiler drops an import no value reads: the module is then not
+        // loaded.
         let base = "import { a } from './a';\nimport { b } from './b';\nexport const x = () => \
                     a;\nexport const y = () => b;\n";
         let head =
@@ -4276,7 +4303,8 @@ mod tests {
                  import)"
             )
         );
-        // Another use of the same import goes away: nothing about loading changes.
+        // Another use of the same import goes away: nothing about loading
+        // changes.
         let head = "import { a } from './a';\nimport { b } from './b';\nexport const x = () => \
                     a;\nexport const y = () => [b, b];\n";
         assert!(!ch(base, head).evaluation);
@@ -4333,8 +4361,8 @@ mod tests {
                 "{b} -> {h}: {c:?}"
             );
         }
-        // A call through a member hands the table to the function as `this`: it reads
-        // every member. A member that is only read does not.
+        // A call through a member hands the table to the function as `this`: it
+        // reads every member. A member that is only read does not.
         let src = "import { T } from './t';\nexport const viaThis = () => T.f();\nexport const \
                    inherited = () => T.hasOwnProperty('b');\nexport const tagged = () => \
                    T.tag`x`;\nexport const one = () => T.a;\nexport const wrapped = () => \
@@ -4353,7 +4381,8 @@ mod tests {
 
     #[test]
     fn a_module_on_an_import_cycle_is_compared_more_strictly() {
-        // A statement that only names an import, and a chain that only builds a value.
+        // A statement that only names an import, and a chain that only builds a
+        // value.
         let base =
             "import { x, wrap } from './m';\nexport const a = () => x;\nexport const k = 1;\n";
         let named = format!("{base}export const list = [x];\n");
@@ -4373,8 +4402,9 @@ mod tests {
         for head in [&named, &built] {
             let free = changed("a.ts", base, head, &Builds, &Builds, false).expect("facts");
             assert!(!free.evaluation, "{head}");
-            // An import of a package or of a CommonJS module may be a getter: reading it
-            // when the module loads is something the module does.
+            // An import of a package or of a CommonJS module may be a getter:
+            // reading it when the module loads is something the
+            // module does.
             struct Getters;
             impl Oracle for Getters {
                 fn builds(&self, _: Callee<'_>, _: &[Step], _: bool) -> bool {

@@ -372,7 +372,8 @@ impl Special {
                 globs.extend(["build/Release/*.node".into(), "build/Debug/*.node".into()]);
             }
             _ => {
-                // node-pre-gyp family: the `binary` config in the package's package.json.
+                // node-pre-gyp family: the `binary` config in the package's
+                // package.json.
                 match read_json(cx, &root.join("package.json"))
                     .and_then(|pj| pregyp::module_pattern(&pj, p))
                 {
@@ -387,7 +388,8 @@ impl Special {
                         globs.push(m.pattern);
                     }
                     None => {
-                        // No usable `binary` config: search the conventional location.
+                        // No usable `binary` config: search the conventional
+                        // location.
                         globs.push("lib/binding/*.node".into());
                         partial = Some(format!(
                             "{loader}: no binary.module_name/module_path in {}; searched \
@@ -407,7 +409,8 @@ impl Special {
             let Some(found) = JS_ASSET_RULES.glob(&parts, Path::new("/"), cx, keep_all) else {
                 continue;
             };
-            // `*` in eval globs spans directories; the loaders look in exact directories.
+            // `*` in eval globs spans directories; the loaders look in exact
+            // directories.
             let depth = g.split('/').count();
             let found = self.only_platform(found, |f| {
                 is_node_file(f)

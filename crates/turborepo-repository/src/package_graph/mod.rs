@@ -1617,8 +1617,8 @@ impl PackageGraph {
             self.node_lookup.get(node).cloned(),
             petgraph::Direction::Outgoing,
         );
-        // Add in all root dependencies as they're implied dependencies for every
-        // package in the graph.
+        // Add in all root dependencies as they're implied dependencies for
+        // every package in the graph.
         dependencies.extend(self.root_internal_dependencies());
         dependencies.remove(node);
         dependencies
@@ -1636,7 +1636,8 @@ impl PackageGraph {
     /// If the package graph contains cycles, the returned set will include
     /// all members of any cycle reachable from `node`.
     pub fn ancestors(&self, node: &PackageNode) -> HashSet<&PackageNode> {
-        // If node is a root dep, then *every* package is an ancestor of this one
+        // If node is a root dep, then *every* package is an ancestor of this
+        // one
         let mut dependents = if self.root_internal_dependencies().contains(node) {
             return self.graph.node_weights().collect();
         } else {
@@ -1710,7 +1711,8 @@ impl PackageGraph {
 
     fn root_internal_dependencies(&self) -> &HashSet<PackageNode> {
         self.root_internal_dependencies.get_or_init(|| {
-            // We cannot call self.dependencies(&PackageNode::Workspace(PackageName::Root))
+            // We cannot call
+            // self.dependencies(&PackageNode::Workspace(PackageName::Root))
             // as it will infinitely recurse.
             let mut dependencies: HashSet<PackageNode> = turborepo_graph_utils::transitive_closure(
                 &self.graph,
@@ -3489,7 +3491,8 @@ snapshots:
         let bar_node = PackageNode::Workspace("bar".into());
         let baz_node = PackageNode::Workspace("baz".into());
 
-        // transitive_closure starting from any cycle member includes all members
+        // transitive_closure starting from any cycle member includes all
+        // members
         let closure = pkg_graph.transitive_closure(Some(&foo_node));
         assert!(
             closure.contains(&foo_node)

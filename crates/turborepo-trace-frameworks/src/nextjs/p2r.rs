@@ -346,7 +346,8 @@ pub fn compile_destination(dest: &str, params: &[(String, Option<String>)]) -> O
                     }
                 }
                 None => {
-                    // Not a source parameter (for example a port `:3000`): keep the text.
+                    // Not a source parameter (for example a port `:3000`): keep
+                    // the text.
                     if name.chars().all(|c| c.is_ascii_digit()) {
                         out.push(':');
                         out.push_str(&name);

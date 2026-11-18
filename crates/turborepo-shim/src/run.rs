@@ -265,8 +265,9 @@ where
             run_correct_turbo(runtime, repo_state, args, color_config)
         }
         Err(err @ turborepo_repository::inference::Error::NotFound(_)) => {
-            // A missing repository can still run global turbo. Malformed repository
-            // configuration must retain its inference error instead of falling back.
+            // A missing repository can still run global turbo. Malformed
+            // repository configuration must retain its inference
+            // error instead of falling back.
             debug!("Repository inference failed: {}", err);
             debug!("Running command as global turbo");
             run_cli(runtime, None, color_config)
@@ -391,8 +392,8 @@ where
             .get_config(&repo_state.root, shim_args.root_turbo_json.as_ref());
         try_check_for_updates(&shim_args, version, &config, package_manager);
 
-        // cli::run checks for this env var, rather than an arg, so that we can support
-        // calling old versions without passing unknown flags.
+        // cli::run checks for this env var, rather than an arg, so that we can
+        // support calling old versions without passing unknown flags.
         unsafe {
             env::set_var(INVOCATION_DIR_ENV_VAR, shim_args.invocation_dir.as_path());
         }
@@ -604,7 +605,8 @@ fn modify_args_for_local(
     raw_args.extend(shim_args.remaining_turbo_args.drain(..).map(OsString::from));
 
     // The shim consumes this flag and changes cwd to the repository root.
-    // Preserve its already-resolved absolute path before the task-args boundary.
+    // Preserve its already-resolved absolute path before the task-args
+    // boundary.
     if let Some(config) = &shim_args.root_turbo_json {
         raw_args.push(format!("--root-turbo-json={config}").into());
     }
@@ -667,7 +669,8 @@ fn is_turbo_binary_path_set() -> bool {
 }
 
 fn normalize_config_dir_env_vars() {
-    // Normalize relative config dir env vars to absolute paths early in CLI startup
+    // Normalize relative config dir env vars to absolute paths early in CLI
+    // startup
     for var in ["TURBO_CONFIG_DIR_PATH", "VERCEL_CONFIG_DIR_PATH"] {
         if let Ok(val) = env::var(var) {
             match turbopath::AbsoluteSystemPathBuf::new(val.as_str()) {

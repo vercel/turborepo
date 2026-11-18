@@ -914,7 +914,8 @@ pub fn write_summary(trace: &Trace, w: &mut dyn Write) -> io::Result<()> {
             Some((l, c, t)) => (l, c, Some(t)),
             None => (0, 0, None),
         };
-        // Flags such as `optional` (inside `try`) tell whether a failure matters.
+        // Flags such as `optional` (inside `try`) tell whether a failure
+        // matters.
         let spec = edge
             .map(|e| {
                 let flags: Vec<&str> = e
@@ -952,7 +953,8 @@ pub fn write_summary(trace: &Trace, w: &mut dyn Write) -> io::Result<()> {
             for (file, recs) in files {
                 writeln!(w, "    {file}")?;
                 for (line, col, spec, detail, snippet) in recs {
-                    // Skip the prefix when the detail already starts with the specifier.
+                    // Skip the prefix when the detail already starts with the
+                    // specifier.
                     let spec = if spec.is_empty() || detail.starts_with(&format!("{spec}: ")) {
                         String::new()
                     } else {

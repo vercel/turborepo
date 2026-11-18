@@ -294,7 +294,8 @@ pub fn load_config(path: &Path) -> FrameworkInputs {
         Some(v) => v.clone(),
         None => {
             if loaded.uncertainties.is_empty() {
-                // A package.json without a "jest" key, or an empty module: defaults.
+                // A package.json without a "jest" key, or an empty module:
+                // defaults.
                 ConfigVal::Obj(ConfigObj::default())
             } else {
                 out.uncertainties = loaded.uncertainties.clone();
@@ -356,9 +357,11 @@ fn list_projects(
                         let s = replace_root_dir(v.as_str().unwrap_or(""), root_dir);
                         let abs = fsx::join(root_dir, &s);
                         let paths = if is_glob(&s) {
-                            // jest expands the pattern with node-glob, then drops what
-                            // `lstat` says is no directory and has no config file's
-                            // extension: a link to a directory is no project directory.
+                            // jest expands the pattern with node-glob, then
+                            // drops what
+                            // `lstat` says is no directory and has no config
+                            // file's extension: a
+                            // link to a directory is no project directory.
                             let links = fsx::Links::NodeGlob;
                             let mut ps = fsx::expand_glob(&abs.to_string_lossy(), true, links);
                             ps.retain(|p| !fsx::is_link(p));
@@ -726,13 +729,13 @@ fn build_project(
     );
     add(r, "resolver", InputRole::Resolver, &mut global);
     add(r, "testRunner", InputRole::TestRunner, &mut global);
-    // A custom resolver decides resolution. One that is the default resolver with
-    // other export conditions for named requests
+    // A custom resolver decides resolution. One that is the default resolver
+    // with other export conditions for named requests
     // (`options.defaultResolver(request, { ...options, conditions: request ===
     // 'x' ? [...] : options.conditions })`) changes nothing but which file of
     // those requests' packages is picked: recorded per request
-    // ([`ResolutionOverrides::condition_requests`]). Any other resolver makes the
-    // project's resolution uncertain.
+    // ([`ResolutionOverrides::condition_requests`]). Any other resolver makes
+    // the project's resolution uncertain.
     let mut condition_requests: Vec<String> = Vec::new();
     // Whether a resolver other than the default one with more conditions is
     // configured.
@@ -788,14 +791,14 @@ fn build_project(
             from_dir: root.clone(),
         },
     });
-    // `next/jest` reads the Next.js project the config belongs to before it returns
-    // the jest config: `next.config.*` (its `transpilePackages`,
+    // `next/jest` reads the Next.js project the config belongs to before it
+    // returns the jest config: `next.config.*` (its `transpilePackages`,
     // `modularizeImports`, `compiler` and `experimental.swcPlugins` become
     // options of the SWC transform every test file goes through) and the env
     // files of test mode (they become `process.env` of the tests). The
-    // files themselves are inputs of every test; what `next.config` imports is not
-    // followed (an app's config reaches half the app through its rewrites and
-    // flags, and only those four fields matter here).
+    // files themselves are inputs of every test; what `next.config` imports is
+    // not followed (an app's config reaches half the app through its
+    // rewrites and flags, and only those four fields matter here).
     if uses_next_jest(loaded) {
         for name in NEXT_JEST_READS {
             let p = config_dir.join(name);
@@ -819,8 +822,10 @@ fn build_project(
                         );
                     }
                     for (_, v) in &o.entries {
-                        // Each alternative of an entry (a config that replaces a transformer
-                        // under a condition) names one module: all of them are inputs.
+                        // Each alternative of an entry (a config that replaces
+                        // a transformer
+                        // under a condition) names one module: all of them are
+                        // inputs.
                         let modules: Vec<ConfigVal> = v
                             .alternatives()
                             .into_iter()
@@ -1028,8 +1033,9 @@ fn build_project(
                 Some(rest) => (true, rest.to_string()),
                 None => (false, g),
             };
-            // jest escapes the glob characters of `rootDir` before it substitutes it into a
-            // `testMatch` pattern (`escapeGlobCharacters`), so a root like `app/(site)` is
+            // jest escapes the glob characters of `rootDir` before it
+            // substitutes it into a `testMatch` pattern
+            // (`escapeGlobCharacters`), so a root like `app/(site)` is
             // matched literally.
             let written = PatternSpec::jest_glob(&g);
             let g = crate::location::jest_glob(&g, &root);
@@ -1054,8 +1060,8 @@ fn build_project(
         let spec = PatternSpec::plain(&TestPattern::Regex(re.clone()));
         vec![(re, spec)]
     });
-    // The haste map ignores modulePathIgnorePatterns: such files are never tests
-    // (and no mocks or modules: `unmapped`).
+    // The haste map ignores modulePathIgnorePatterns: such files are never
+    // tests (and no mocks or modules: `unmapped`).
     let first_unmapped = discovery.exclude.len() + ignore.len();
     let unmapped: Vec<usize> =
         (first_unmapped..first_unmapped + module_path_ignore.len()).collect();
@@ -1063,11 +1069,12 @@ fn build_project(
         discovery.exclude.push(TestPattern::Regex(re));
         exclude_written.push(spec);
     }
-    // jest matches all of these against the absolute path of a file: the discovery
-    // as the config writes it, for whoever keeps the project to check whether
-    // the place of the checkout decides something ([`crate::location`]).
-    // (`<rootDir>` in the root directory of a project that a config lists inline is
-    // the listing config's directory, which is `config_dir` here.)
+    // jest matches all of these against the absolute path of a file: the
+    // discovery as the config writes it, for whoever keeps the project to
+    // check whether the place of the checkout decides something
+    // ([`crate::location`]). (`<rootDir>` in the root directory of a
+    // project that a config lists inline is the listing config's directory,
+    // which is `config_dir` here.)
     let root_dir_plain = match r.string("rootDir") {
         Some(s) => crate::location::stays_inside(&repo, config_dir, &s.replace("<cwd>/", "")),
         None => config_dir.starts_with(&repo),
@@ -1078,8 +1085,9 @@ fn build_project(
                    exclude: Vec<PatternSpec>,
                    unmapped: Vec<usize>| {
         let repo_s = repo.to_string_lossy().into_owned();
-        // A pattern with the checkout's path in it: the config's own text when one of
-        // its sources spells that path, else computed from where the config is.
+        // A pattern with the checkout's path in it: the config's own text when
+        // one of its sources spells that path, else computed from where
+        // the config is.
         let named = repo_s.len() > 1
             && include
                 .iter()
@@ -1109,13 +1117,14 @@ fn build_project(
         }))
     };
     discovery.spec = spec_of(&discovery, include_written, exclude_written, unmapped);
-    // A discovery that is not kept exactly: something of it has the checkout's path
-    // in its text, or steps out of the config's directory. Whether the config
-    // computed that from its own location (`__dirname`) is what a load at the
-    // real place cannot say, and what a load as if the repository were at the
-    // neutral root says: there the config's location is text that no config
-    // spells ([`DiscoverySpec::proved`]). For the config of the file itself (a
-    // project that a config lists inline is a part of its value).
+    // A discovery that is not kept exactly: something of it has the checkout's
+    // path in its text, or steps out of the config's directory. Whether the
+    // config computed that from its own location (`__dirname`) is what a
+    // load at the real place cannot say, and what a load as if the
+    // repository were at the neutral root says: there the config's location
+    // is text that no config spells ([`DiscoverySpec::proved`]). For the
+    // config of the file itself (a project that a config lists inline is a
+    // part of its value).
     if let (Some(spec), Some(file), true) = (discovery.spec.as_deref(), config_file, whole)
         && !spec.exact
         && repo.parent().is_some()
@@ -1161,8 +1170,8 @@ fn build_project(
     let esm = r.get("extensionsToTreatAsEsm").is_some_and(|v| {
         !matches!(&v, ConfigVal::Null) && !matches!(&v, ConfigVal::Arr(xs) if xs.is_empty())
     });
-    // Anything but an absent or false value counts (a value the evaluator could not
-    // read).
+    // Anything but an absent or false value counts (a value the evaluator could
+    // not read).
     let set = |field: &str| {
         r.get(field)
             .is_some_and(|v| !matches!(&v, ConfigVal::Null | ConfigVal::Bool(false)))
@@ -1193,12 +1202,12 @@ fn build_project(
         haste_mocks: Vec::new(),
         unreliable,
     };
-    // The haste map's manual mocks: of the files below the roots, the ones below a
-    // `__mocks__` directory, and the walk asks for no other (a file that appears
-    // anywhere else is no change for it).
+    // The haste map's manual mocks: of the files below the roots, the ones
+    // below a `__mocks__` directory, and the walk asks for no other (a file
+    // that appears anywhere else is no change for it).
     for root_d in &resolution.roots {
-        // (The haste map goes by the whole path: below a root that is itself inside a
-        // `__mocks__` directory every file is one.)
+        // (The haste map goes by the whole path: below a root that is itself
+        // inside a `__mocks__` directory every file is one.)
         let inside = root_d.components().any(|c| c.as_os_str() == "__mocks__");
         let wanted = if inside { "**" } else { "**/__mocks__/**" };
         fsx::walk_files_matching(root_d, wanted, &mut |p| {
@@ -1233,13 +1242,13 @@ fn build_project(
         });
     }
     mocks.haste_mocks.sort();
-    // Never silently zero tests: a config whose discovery can't be read, or matches
-    // nothing although it may not have been read exactly, falls back to jest's
-    // default `testMatch` under `rootDir`, with an uncertainty. A discovery
-    // that was read exactly and matches no file is believed: jest finds no test
-    // either (a config for tests that do not exist yet), and inventing tests
-    // from the default patterns would turn another runner's files
-    // under the same directory into jest tests.
+    // Never silently zero tests: a config whose discovery can't be read, or
+    // matches nothing although it may not have been read exactly, falls
+    // back to jest's default `testMatch` under `rootDir`, with an
+    // uncertainty. A discovery that was read exactly and matches no file is
+    // believed: jest finds no test either (a config for tests that do not
+    // exist yet), and inventing tests from the default patterns would turn
+    // another runner's files under the same directory into jest tests.
     let exact = !discovery.include.is_empty()
         && matches!(&r.cfg, ConfigVal::Obj(o) if o.open.is_none())
         && loaded.uncertainties.is_empty()
@@ -1258,14 +1267,15 @@ fn build_project(
                 TestPattern::Regex(re) => re.is_supported(),
             });
     if !exact {
-        // Which of the two discoveries it is depends on the files that are there:
-        // whether the configured one matches any, and whether the default one
-        // does. That is a question about every file below the roots, and its
-        // answer matters for few of them: a file the configured discovery
-        // matches is a test whatever else is there (it is itself a file that is
-        // matched), and one that neither matches is none. So the walks are a
-        // part of the load of their own ([`fsx::part`]), which the
-        // discovery names for whoever keeps the load ([`DiscoveryChoice`]).
+        // Which of the two discoveries it is depends on the files that are
+        // there: whether the configured one matches any, and whether
+        // the default one does. That is a question about every file
+        // below the roots, and its answer matters for few of them: a
+        // file the configured discovery matches is a test whatever else
+        // is there (it is itself a file that is matched), and one that
+        // neither matches is none. So the walks are a part of the load
+        // of their own ([`fsx::part`]), which the discovery names for
+        // whoever keeps the load ([`DiscoveryChoice`]).
         let mut fallback = fallback_discovery(&discovery, &root);
         fallback.spec = spec_of(
             &fallback,
@@ -1276,9 +1286,10 @@ fn build_project(
             vec![PatternSpec::jest_regex("/node_modules/")],
             Vec::new(),
         );
-        // The default discovery searches the directories of the configured one below
-        // the same root directory: where those are proved to be the same
-        // directories of the tree at every place, so are the default one's.
+        // The default discovery searches the directories of the configured one
+        // below the same root directory: where those are proved to be
+        // the same directories of the tree at every place, so are the
+        // default one's.
         if discovery.spec.as_deref().is_some_and(|s| s.exact)
             && let Some(mut spec) = fallback.spec.as_deref().cloned()
             && !spec.exact

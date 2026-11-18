@@ -751,8 +751,8 @@ mod test {
 
     #[test]
     fn test_missing_required_applications() {
-        // Even though applications has defaults, if JSON structure is invalid it should
-        // fail
+        // Even though applications has defaults, if JSON structure is invalid
+        // it should fail
         let input = r#"{"applications": {, "web": {}}}"#;
         let config = ConfigV1::from_str(input, "microfrontends.json");
         assert!(

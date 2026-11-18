@@ -101,7 +101,8 @@ impl Directory {
             .create_new(exclusive)
             .custom_flags(0x00200000 | if directory { 0x02000000 } else { 0 });
         if directory || create && !exclusive {
-            // Pin every directory and the persistent writer inode against deletion.
+            // Pin every directory and the persistent writer inode against
+            // deletion.
             options.share_mode(0x1 | 0x2);
         }
         let file = options.open(path)?;

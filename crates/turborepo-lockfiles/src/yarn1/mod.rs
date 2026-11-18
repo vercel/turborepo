@@ -152,10 +152,10 @@ impl Lockfile for Yarn1Lockfile {
     }
 
     fn turbo_version(&self) -> Option<String> {
-        // Yarn lockfiles can have multiple descriptors as a key e.g. turbo@latest,
-        // turbo@1.2.3 We just check if the first descriptor is for turbo and
-        // return that. Using multiple versions of turbo in a single project is
-        // not supported.
+        // Yarn lockfiles can have multiple descriptors as a key e.g.
+        // turbo@latest, turbo@1.2.3 We just check if the first
+        // descriptor is for turbo and return that. Using multiple
+        // versions of turbo in a single project is not supported.
         let key = self.inner.keys().find(|key| key.starts_with("turbo@"))?;
         let entry = self.inner.get(key)?;
         let version = &entry.version;
@@ -387,8 +387,8 @@ is-odd@^3.0.1:
 
     #[test]
     fn test_turbo_version_rejects_non_semver() {
-        // Malicious version strings that could be used for RCE via npx should be
-        // rejected
+        // Malicious version strings that could be used for RCE via npx should
+        // be rejected
         let malicious_versions = [
             "file:./malicious.tgz",
             "https://evil.com/malicious.tgz",

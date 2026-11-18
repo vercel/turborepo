@@ -393,8 +393,8 @@ fn matrix(kind: Kind) -> (String, Vec<String>) {
             .collect();
         hs.into_iter().map(|h| h.join().unwrap()).collect()
     });
-    // `u`: the change of the file nothing names selects the test; `n`: the named
-    // one.
+    // `u`: the change of the file nothing names selects the test; `n`: the
+    // named one.
     let mark = |b: [bool; 2]| {
         format!(
             "{}{}",
@@ -434,8 +434,9 @@ fn matrix(kind: Kind) -> (String, Vec<String>) {
             if !lost.is_empty() {
                 holes.push(format!("{what}: {}", lost.join(", ")));
             }
-            // Every cell is about what it says: the alternative was resolved (the file the
-            // variable names is a dependency), or, for the kept record, was not.
+            // Every cell is about what it says: the alternative was resolved
+            // (the file the variable names is a dependency), or,
+            // for the kept record, was not.
             if cell.resolved != [*env != Env::HelperKept; 2] {
                 vacuous.push(what);
             }

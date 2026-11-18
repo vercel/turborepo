@@ -59,12 +59,13 @@ where
         //       variance should be the same.
         // There are three distinct possibilities for disjunctive variance.
         //
-        //   - The iterator is empty and there are no unit variances to consider. The
-        //     disjunctive variance is the empty invariant.
+        //   - The iterator is empty and there are no unit variances to
+        //     consider. The disjunctive variance is the empty invariant.
         //   - The iterator is non-empty and all unit variances are equal. The
-        //     disjunctive variance is the same as any of the like unit variances.
-        //   - The iterator is non-empty and the unit variances are **not** all equal.
-        //     The disjunctive variance is variant and bounded (closed).
+        //     disjunctive variance is the same as any of the like unit
+        //     variances.
+        //   - The iterator is non-empty and the unit variances are **not** all
+        //     equal. The disjunctive variance is variant and bounded (closed).
         let mut variances = self.map(UnitVariance::unit_variance).fuse();
         let first = variances
             .next()
@@ -501,9 +502,9 @@ where
         .peek()
         .map_or(false, |token| !token.has_sub_tokens() && token.has_root())
     {
-        // Push a preceding separator if the first token has a root and is not a group.
-        // This ensures that initiating separators and tree wildcards express a
-        // root in invariant prefixes.
+        // Push a preceding separator if the first token has a root and is not a
+        // group. This ensures that initiating separators and tree
+        // wildcards express a root in invariant prefixes.
         prefix.push_str(separator);
     }
     prefix.push_str(

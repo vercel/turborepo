@@ -279,8 +279,8 @@ pub(crate) struct Normalizer {
 }
 
 impl Normalizer {
-    // Invariant: literal patterns; building fails only past size limits far above
-    // these.
+    // Invariant: literal patterns; building fails only past size limits far
+    // above these.
     #[allow(clippy::expect_used)]
     pub(crate) fn new(build: &NextBuild, volatile: &[(String, String)]) -> Normalizer {
         let mut pats: Vec<(Vec<u8>, Vec<u8>)> = Vec::new();
@@ -290,7 +290,8 @@ impl Normalizer {
                 pats.push((p, r.as_bytes().to_vec()));
             }
         };
-        // Declared volatile values first: on equal matches the earlier pattern wins.
+        // Declared volatile values first: on equal matches the earlier pattern
+        // wins.
         for (name, value) in volatile {
             if value.len() >= 6 {
                 add(
@@ -311,9 +312,9 @@ impl Normalizer {
         if root.len() > 1 {
             add(root.as_bytes().to_vec(), "<ROOT>", &mut pats);
         }
-        // The paths the build itself recorded: the app directory where it ran (the
-        // output may have been moved since) and the tracing root above it,
-        // which traced paths of a monorepo start with.
+        // The paths the build itself recorded: the app directory where it ran
+        // (the output may have been moved since) and the tracing root
+        // above it, which traced paths of a monorepo start with.
         if let Some(v) = build
             .read("required-server-files.json")
             .and_then(|b| serde_json::from_slice::<Value>(&b).ok())
@@ -336,7 +337,8 @@ impl Normalizer {
                 }
             }
         }
-        // Debug ids: one per file that has one, and the same id inside the file.
+        // Debug ids: one per file that has one, and the same id inside the
+        // file.
         for f in &build.files {
             if f.ends_with(".js")
                 && let Some(id) = debug_id(build, f)
@@ -371,8 +373,8 @@ impl Normalizer {
     // Invariant: a literal pattern, compiled by the unit tests.
     #[allow(clippy::expect_used)]
     pub(crate) fn apply(&self, bytes: &[u8]) -> Vec<u8> {
-        // A source map reference names a file that is not output of a route (maps are
-        // not read), with a hash of its own.
+        // A source map reference names a file that is not output of a route
+        // (maps are not read), with a hash of its own.
         static MAPS: OnceLock<regex::bytes::Regex> = OnceLock::new();
         let maps = MAPS.get_or_init(|| {
             regex::bytes::Regex::new(r"(?m)^(?://[#@]|/\*#) ?sourceMappingURL=[^\n]*$")
@@ -404,8 +406,9 @@ impl Normalizer {
             std::borrow::Cow::Borrowed(_) => bytes,
             std::borrow::Cow::Owned(v) => v,
         };
-        // Action ids the server reference manifest does not list (a function that is
-        // registered but not exported): 42 hex digits, salted like the others.
+        // Action ids the server reference manifest does not list (a function
+        // that is registered but not exported): 42 hex digits, salted
+        // like the others.
         static ACTIONS: OnceLock<regex::bytes::Regex> = OnceLock::new();
         let actions = ACTIONS
             .get_or_init(|| regex::bytes::Regex::new(r"(?-u)\b[0-9a-f]{42}\b").expect("regex"));
@@ -454,9 +457,9 @@ impl Ctx<'_> {
         let build = self.build;
         let norm = &self.norm;
         let files: Vec<&String> = build.files.iter().filter(|f| is_chunk_path(f)).collect();
-        // Minified bundles nest deeply (a chain of a thousand `+` is one expression):
-        // the parser and the visitors recurse, so they run on threads with a
-        // large stack.
+        // Minified bundles nest deeply (a chain of a thousand `+` is one
+        // expression): the parser and the visitors recurse, so they run
+        // on threads with a large stack.
         let next = std::sync::atomic::AtomicUsize::new(0);
         let workers = std::thread::available_parallelism()
             .map_or(4, std::num::NonZero::get)
@@ -506,10 +509,11 @@ impl Ctx<'_> {
                 }
             }
         }
-        // A module id is not content: it is derived from what identifies the module (a
-        // path, or for a generated module text that holds values of this build), and it
-        // differs between builds of one source (see `super::modules`). Where an id is
-        // referenced, a name made from the target's text stands instead: the hash of
+        // A module id is not content: it is derived from what identifies the
+        // module (a path, or for a generated module text that holds
+        // values of this build), and it differs between builds of one
+        // source (see `super::modules`). Where an id is referenced, a
+        // name made from the target's text stands instead: the hash of
         // its text with every id as one placeholder, refined [`ROUNDS`] times
         // with the names of the modules it references. (An id defined in
         // several chunks, as a module shared by two bundles is, stands for all
@@ -539,8 +543,9 @@ impl Ctx<'_> {
             let next = describe(&|id| names.get(id).cloned());
             names = next;
         }
-        // Diagnostic: TURBO_TRACE_DEBUG_FP_DUMP=<dir> writes every chunk's entries with
-        // the text each one hashes, to compare two builds module by module.
+        // Diagnostic: TURBO_TRACE_DEBUG_FP_DUMP=<dir> writes every chunk's
+        // entries with the text each one hashes, to compare two builds
+        // module by module.
         let dump = turborepo_trace_core::debug::var_os("FP_DUMP").map(std::path::PathBuf::from);
         for (rel, c) in &chunks {
             let mut entries: Vec<String> = Vec::new();
@@ -1007,8 +1012,9 @@ mod tests {
 
     #[test]
     fn a_chunk_name_without_a_file_is_not_content() {
-        // A loadable manifest can name a chunk that is not among the output files: no
-        // pattern comes from a file then, and the name is a hash all the same.
+        // A loadable manifest can name a chunk that is not among the output
+        // files: no pattern comes from a file then, and the name is a
+        // hash all the same.
         let n = Normalizer {
             ac: None,
             replacements: Vec::new(),
@@ -1016,7 +1022,8 @@ mod tests {
         let a = n.apply(br#"{"500001":{"id":500001,"files":["static/chunks/0ab1cdefgh2ij.js"]}}"#);
         let b = n.apply(br#"{"500001":{"id":500001,"files":["static/chunks/9zy8xwvuts7rq.js"]}}"#);
         assert_eq!(a, b);
-        // Another kind of file, another module and a name that is a word are content.
+        // Another kind of file, another module and a name that is a word are
+        // content.
         for other in [
             r#"{"500001":{"id":500001,"files":["static/chunks/0ab1cdefgh2ij.css"]}}"#,
             r#"{"500002":{"id":500002,"files":["static/chunks/0ab1cdefgh2ij.js"]}}"#,

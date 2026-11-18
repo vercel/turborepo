@@ -320,7 +320,8 @@ impl Recognizer for CargoAlias {
         if BUILTIN_NOOP.contains(&sub.as_str()) {
             return Recognition::Ignored;
         }
-        // The nearest `.cargo/config.toml` defining the alias, up to the repo root.
+        // The nearest `.cargo/config.toml` defining the alias, up to the repo
+        // root.
         let mut found = None;
         for d in cmd.cwd.ancestors() {
             if let Some((file, list)) = aliases(d)

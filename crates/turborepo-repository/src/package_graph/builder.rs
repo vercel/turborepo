@@ -633,8 +633,9 @@ where
             observations,
         };
         let graph = Arc::new(plan.reassemble().await?);
-        // Retain the initial graph's parsed lockfile so loading an inventory-only
-        // contributor does not read and parse the same lockfile again.
+        // Retain the initial graph's parsed lockfile so loading an
+        // inventory-only contributor does not read and parse the same
+        // lockfile again.
         plan.lockfile = graph.shared_lockfile().cloned();
         Ok(LazyPackageGraph { graph, plan })
     }
@@ -1329,7 +1330,8 @@ impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedPackageManage
             None => {
                 // A pre-supplied set of parsed package.json files (used by the
                 // package-change watcher and tests) stands in for JavaScript
-                // discovery only; other toolchains always discover for themselves.
+                // discovery only; other toolchains always discover for
+                // themselves.
                 let mut contributor_outputs = Vec::with_capacity(self.extra_contributors.len() + 1);
                 if let Some(javascript) = self.javascript.as_ref() {
                     let output = match self.package_jsons.take() {
@@ -1386,10 +1388,12 @@ impl<'a, T: PackageDiscovery + Send + Sync> BuildState<'a, ResolvedPackageManage
                     );
                     for scope in scopes {
                         let identity = scope.name().map(str::to_string);
-                        // A default descriptor makes the node addressable without
-                        // carrying native facts. JavaScript dependency lookup uses
-                        // manifest provenance, so native names cannot capture npm
-                        // dependencies before or after their owner is loaded.
+                        // A default descriptor makes the node addressable
+                        // without carrying native
+                        // facts. JavaScript dependency lookup uses
+                        // manifest provenance, so native names cannot capture
+                        // npm dependencies before or
+                        // after their owner is loaded.
                         if let Some(name) = identity.clone() {
                             inventory_descriptors.push((name.clone(), PackageJson::default()));
                             self.unloaded_scopes
@@ -2713,7 +2717,8 @@ mod test {
     async fn lazy_prefetch_waits_for_a_successful_non_empty_inventory() {
         let root =
             AbsoluteSystemPathBuf::new(if cfg!(windows) { r"C:\repo" } else { "/repo" }).unwrap();
-        // (scope names, inventory fails, prefetch requested, expected prefetches)
+        // (scope names, inventory fails, prefetch requested, expected
+        // prefetches)
         let cases: [(&[&str], bool, bool, usize); 4] = [
             (&["native-pkg"], false, true, 1),
             (&["native-pkg"], false, false, 0),

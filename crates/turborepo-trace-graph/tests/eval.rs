@@ -459,8 +459,8 @@ fn affected_probes_below_a_changed_path() {
             .map(|r| g.path(r.entry).to_owned())
             .collect()
     };
-    // Deleted: only a graph of the tree after the change can hold a path that was
-    // looked for below it.
+    // Deleted: only a graph of the tree after the change can hold a path that
+    // was looked for below it.
     let mut cs = ChangeSet::new();
     cs.push(ChangeKind::Deleted, "node_modules");
     assert!(selected(&cs, &ignore).is_empty());

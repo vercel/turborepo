@@ -8,7 +8,7 @@
 
 #![cfg_attr(test, allow(clippy::expect_used, clippy::unwrap_used))]
 
-use std::{collections::HashMap, sync::Arc};
+use std::{collections::HashMap, str::FromStr, sync::Arc};
 
 use tempfile::TempDir;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPathBuf};
@@ -266,7 +266,7 @@ fn filter_by_directory_selects_colocated_scopes() {
 fn colocated_cwd_inference_selects_javascript_and_go_scopes() {
     let (_tempdir, root) = fixture();
     let graph = colocated_graph(&root);
-    let directory = AnchoredSystemPathBuf::try_from("packages/lib").unwrap();
+    let directory = AnchoredSystemPathBuf::from_str("packages/lib").unwrap();
     let inference = Some(PackageInference::calculate(&root, &directory, &graph));
     let resolver =
         FilterResolver::new_with_change_detector(&graph, &root, inference, HeadChanges(Vec::new()));

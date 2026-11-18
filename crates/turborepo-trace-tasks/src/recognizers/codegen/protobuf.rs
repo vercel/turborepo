@@ -576,7 +576,8 @@ impl Recognizer for Protoc {
             "grpc_tools_ruby_protoc" => out.tool("gem", "grpc-tools"),
             "protoc" => out.tool("system", "protoc"),
             p => {
-                // A plugin run directly reads a CodeGeneratorRequest from stdin.
+                // A plugin run directly reads a CodeGeneratorRequest from
+                // stdin.
                 plugin_binary(cmd, p, out);
                 unknown(
                     out,
@@ -639,7 +640,8 @@ impl Recognizer for Protoc {
                     None => (body.to_string(), next(&mut i).unwrap_or_default()),
                 };
                 let plugin = k.trim_end_matches("_out").to_string();
-                // `--go_out=plugins=grpc:dir`: the directory is after the last `:`.
+                // `--go_out=plugins=grpc:dir`: the directory is after the last
+                // `:`.
                 let dir = v.rsplit(':').next().unwrap_or(&v).to_string();
                 outs.push((plugin, dir));
             } else if w.starts_with('-') {

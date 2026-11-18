@@ -492,7 +492,8 @@ fn settings(cmd: &LintCmd, root: &Path) -> Result<Settings> {
     let baseline = if cmd.no_baseline {
         None
     } else if let Some(p) = &cmd.baseline {
-        // Like every path on the command line: relative to the current directory.
+        // Like every path on the command line: relative to the current
+        // directory.
         let cwd = std::env::current_dir().context("cannot read current directory")?;
         Some((cwd.join(p), p.display().to_string()))
     } else {
@@ -631,8 +632,8 @@ pub fn cmd_lint(cmd: LintCmd, out: &mut dyn Write) -> Result<ExitCode> {
     let mut stale = Vec::new();
     if let Some((path, _)) = &set.baseline {
         let b = baseline::Baseline::load(path)?;
-        // Entries of rules that did not run and of excluded files are not judged: the
-        // check did not look there.
+        // Entries of rules that did not run and of excluded files are not
+        // judged: the check did not look there.
         let in_scope = |e: &baseline::Entry| {
             rule(&e.rule).is_none_or(|r| set.severity[r.name] != Severity::Off)
                 && !set.exclude.iter().any(|g| g.matches(&e.file))

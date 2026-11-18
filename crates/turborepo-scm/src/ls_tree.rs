@@ -271,8 +271,9 @@ fn read_diff_index_with_unsupported<R: Read>(
     reader: R,
     state: &mut GitStatusState,
 ) -> Result<(), Error> {
-    // git diff-index -z output: ":old_mode new_mode old_sha new_sha status\0path\0"
-    // Each record is two null-terminated fields: the diff header and the path.
+    // git diff-index -z output: ":old_mode new_mode old_sha new_sha
+    // status\0path\0" Each record is two null-terminated fields: the diff
+    // header and the path.
     let mut reader = BufReader::with_capacity(64 * 1024, reader);
     let mut header_buf = Vec::new();
     let mut path_buf = Vec::new();

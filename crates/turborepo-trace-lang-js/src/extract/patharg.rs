@@ -216,7 +216,8 @@ impl<'s> Recognizer<'s, '_> {
             if !shape(content) || covered.iter().any(|c| c.start <= t.start && t.end <= c.end) {
                 continue;
             }
-            // The callee: `root`, `root.a.b`, with `root` an import of an untracked module.
+            // The callee: `root`, `root.a.b`, with `root` an import of an
+            // untracked module.
             let p = p as usize;
             if p == 0 || toks[p - 1].kind != TokKind::Ident || toks[p - 1].kw != Kw::None {
                 continue;
@@ -230,7 +231,8 @@ impl<'s> Recognizer<'s, '_> {
                 r -= 2;
             }
             if r >= 1 && matches!(toks[r - 1].kind, TokKind::Dot | TokKind::OptChain) {
-                // A member of something that is not a plain name (a call result, `this`).
+                // A member of something that is not a plain name (a call
+                // result, `this`).
                 continue;
             }
             let Some(module) = imports.get(toks[r].text(src)) else {
@@ -249,9 +251,10 @@ impl<'s> Recognizer<'s, '_> {
         }
         for (span, spec) in sites {
             let detail = format!("path argument {spec}");
-            // A source file is named the way an import names it: against the caller
-            // (`mock.module('../lib/x.ts')`, a worker or loader registration). Only a data
-            // file is also read the way file APIs read: against the working directory.
+            // A source file is named the way an import names it: against the
+            // caller (`mock.module('../lib/x.ts')`, a worker or
+            // loader registration). Only a data file is also read
+            // the way file APIs read: against the working directory.
             let mut alternatives = vec![JsVal::Path(Anchor::FileDir, Value::Str(spec.to_owned()))];
             if !module_file(spec) {
                 alternatives.insert(0, JsVal::Path(Anchor::Cwd, Value::Str(spec.to_owned())));
@@ -366,8 +369,8 @@ mod tests {
 
     #[test]
     fn callee_forms() {
-        // A namespace member, a default import, `new`, `require`, a later argument, a
-        // helper of the repository.
+        // A namespace member, a default import, `new`, `require`, a later
+        // argument, a helper of the repository.
         for call in [
             "import * as ns from 'pkg';\nns.load('./a.json');\n",
             "import pkg from 'pkg';\npkg.sub.load('./a.json');\n",

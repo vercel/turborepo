@@ -353,9 +353,9 @@ impl Framework for CargoTest {
         if ci.lib.is_none() {
             global.probes.push(dir.join("src/lib.rs"));
         }
-        // Cargo's own discovery, unless the manifest turns it off: then a file in
-        // `tests/` is a test only as a `[[test]]` target (the roots below), and
-        // anything else there is a module of one.
+        // Cargo's own discovery, unless the manifest turns it off: then a file
+        // in `tests/` is a test only as a `[[test]]` target (the roots
+        // below), and anything else there is a module of one.
         let mut include = if ci.explicit_tests {
             Vec::new()
         } else {
@@ -407,8 +407,8 @@ impl Framework for CargoTest {
             package: project.global.package.clone(),
             ..Default::default()
         };
-        // The package, its targets and (for a unit test) its dev-dependencies, from the
-        // project model.
+        // The package, its targets and (for a unit test) its dev-dependencies,
+        // from the project model.
         let Some((pkg, dev)) = fsx::direct(|fs| {
             let model = project_model(fs);
             let pkg = model.package_at(&project.root_dir)?;
@@ -452,7 +452,8 @@ impl Framework for CargoTest {
                 }
             }
             None => {
-                // `tests/foo.rs` not (yet) a target, e.g. with `autotests = false`.
+                // `tests/foo.rs` not (yet) a target, e.g. with `autotests =
+                // false`.
                 out.uncertainties.push(FrameworkUncertainty {
                     kind: UncertaintyKind::UnsupportedSyntax,
                     file: test.to_path_buf(),

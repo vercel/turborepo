@@ -191,8 +191,9 @@ impl Write for ArchiveSink<'_> {
 
 impl Drop for CacheWriter<'_> {
     fn drop(&mut self) {
-        // Clean up temp file if finish() was not called (e.g., due to error or panic).
-        // We take() the path to avoid double-cleanup if Drop is called multiple times.
+        // Clean up temp file if finish() was not called (e.g., due to error or
+        // panic). We take() the path to avoid double-cleanup if Drop is
+        // called multiple times.
         if let Some(temp_path) = self.temp_path.take() {
             // Best-effort cleanup - ignore errors since we may be in a panic
             // or the file may have already been cleaned up/moved.
@@ -244,12 +245,13 @@ impl<'a> CacheWriter<'a> {
         }
 
         // Take the paths before the rename. If rename succeeds, Drop won't try
-        // to clean up. If rename fails, we return the error and Drop will clean up.
+        // to clean up. If rename fails, we return the error and Drop will clean
+        // up.
         if let (Some(temp_path), Some(final_path)) = (self.temp_path.take(), self.final_path.take())
         {
             // Atomically rename temp file to final destination.
-            // The builder (and its file handle) will be dropped when `self` goes
-            // out of scope at the end of this function.
+            // The builder (and its file handle) will be dropped when `self`
+            // goes out of scope at the end of this function.
             temp_path.rename(&final_path)?;
         }
 
@@ -509,8 +511,8 @@ impl<'a> CacheWriter<'a> {
             header.set_entry_type(EntryType::Regular);
             header.set_size(file_info.len());
         } else {
-            // Throw an error if trying to create a cache that contains a type we don't
-            // support.
+            // Throw an error if trying to create a cache that contains a type
+            // we don't support.
             return Err(CacheError::CreateUnsupportedFileType(Backtrace::capture()));
         }
 

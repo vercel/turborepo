@@ -293,8 +293,8 @@ impl MockScan {
 /// word. `mockReturnValue`, `mockFn` or `Actually` in a comment are
 /// not, and most test files have nothing else.
 pub fn may_mock(src: &[u8]) -> bool {
-    // A byte of an identifier (any non-ASCII byte counts: the word is then no API
-    // name).
+    // A byte of an identifier (any non-ASCII byte counts: the word is then no
+    // API name).
     let ident = |b: u8| b.is_ascii_alphanumeric() || b == b'_' || b == b'$' || b >= 0x80;
     [&b"mock"[..], b"Mock", b"Actual"].iter().any(|needle| {
         memchr::memmem::find_iter(src, needle).any(|at| {
@@ -349,8 +349,8 @@ fn call_paren(toks: &[Token], j: usize) -> Option<usize> {
     }
     let mut angle = 1usize;
     let mut k = j + 1;
-    // Type arguments are short; a comparison chain that happens to follow the name
-    // is not followed far.
+    // Type arguments are short; a comparison chain that happens to follow the
+    // name is not followed far.
     while k < toks.len() && k < j + 200 {
         match toks[k].kind {
             TokKind::Lt => angle += 1,
@@ -409,8 +409,8 @@ fn second_arg(src: &[u8], toks: &[Token], j: usize) -> MockArg {
         }
     };
     if t.kind == TokKind::LParen {
-        // `() =>` or `(a) =>`: an arrow function when the matching `)` is followed by
-        // `=>`.
+        // `() =>` or `(a) =>`: an arrow function when the matching `)` is
+        // followed by `=>`.
         let depth = t.depth;
         let mut c = k + 1;
         while c < toks.len() && !(toks[c].kind == TokKind::RParen && toks[c].depth == depth) {
@@ -528,13 +528,14 @@ pub fn scan(src: &[u8], dialect: Dialect) -> MockScan {
                             (None, MockArg::Bare)
                         }
                         None => {
-                            // A computed request: the argument after it, if the request is
-                            // one token.
+                            // A computed request: the argument after it, if the
+                            // request is one token.
                             (None, second_arg(src, &toks, lp + 2))
                         }
                     };
-                    // The innermost replacing call this one stands in (they are read in
-                    // source order: an inner one comes later).
+                    // The innermost replacing call this one stands in (they are
+                    // read in source order: an inner one
+                    // comes later).
                     let within = replacing
                         .iter()
                         .rev()
@@ -576,8 +577,8 @@ pub fn scan(src: &[u8], dialect: Dialect) -> MockScan {
             && let Some(lp) = call_paren(&toks, i + 1)
             && let Some((request, _)) = literal_request(src, &toks, lp + 1)
         {
-            // A replacing call on a receiver this scan does not know (an alias of the
-            // runner's object, a chained call).
+            // A replacing call on a receiver this scan does not know (an alias
+            // of the runner's object, a chained call).
             out.loose.push(LooseUse {
                 name: String::from_utf8_lossy(name).into_owned(),
                 request: Some(request),
@@ -713,7 +714,8 @@ mod tests {
             assert!(may_mock(a.method.as_bytes()), "{}", a.method);
         }
         assert!(!may_mock(b"const lock = block(socket);\n"));
-        // An API name as a whole word, however it is used; not a longer word around it.
+        // An API name as a whole word, however it is used; not a longer word
+        // around it.
         for src in [
             "jest\n  .mock('./a')",
             "x.mock ('./a')",

@@ -340,7 +340,8 @@ fn urls() {
          !partial_specifier/unknown\nfs_read dir:../migrations/one.sql\nfs_read \
          dir:../migrations/one.sql\nfs_read dir:../migrations/two.sql"
     );
-    // A base URL without a trailing slash names a file: its directory is the base.
+    // A base URL without a trailing slash names a file: its directory is the
+    // base.
     assert_eq!(
         show(
             "const here = new URL('./data/index.json', import.meta.url);\nreadFileSync(new \
@@ -455,7 +456,8 @@ fn parameters_of_escaping_functions_keep_a_param_record() {
         ),
         "fs_read dir:fx/* !partial_specifier/unknown"
     );
-    // Closures returned from a function, methods, callbacks of unknown functions.
+    // Closures returned from a function, methods, callbacks of unknown
+    // functions.
     assert_eq!(
         show(
             "export function reader(dir: string) { return (name: string) => \
@@ -752,7 +754,8 @@ fn derived_values_are_not_void() {
         ),
         "fs_read dir:a.txt\nfs_read dir:d/* !partial_specifier/unknown"
     );
-    // A URL against a base that is not a file URL is unknown, not "another scheme".
+    // A URL against a base that is not a file URL is unknown, not "another
+    // scheme".
     assert_eq!(
         show(
             "const root = new URL('.', somewhere.href);\nawait import(new URL('lib/x.js', \
@@ -849,9 +852,9 @@ fn route_registry_built_into_a_set() {
     let lines: Vec<&str> = out.lines().collect();
     assert_eq!(lines.len(), 3, "{out}");
     assert_eq!(lines[0], "fs_read cwd:src/routes.ts !cwd_dependent/cwd");
-    // The cwd-relative path keeps its base and a literal specifier (the per-test
-    // working directory layer resolves it); the 18 table values stay exact
-    // alternatives.
+    // The cwd-relative path keeps its base and a literal specifier (the
+    // per-test working directory layer resolves it); the 18 table values
+    // stay exact alternatives.
     assert_eq!(lines[1], "require cwd:./src/routes !cwd_dependent/cwd");
     assert!(
         lines[2]
@@ -866,7 +869,8 @@ fn route_registry_built_into_a_set() {
 
 #[test]
 fn unparseable_files_keep_the_token_results() {
-    // The token result stays, with an open record: nothing checked the name `d`.
+    // The token result stays, with an open record: nothing checked the name
+    // `d`.
     assert_eq!(
         show("const d = join(__dirname, 'x');\nreadFileSync(join(d, 'a'));\nfunction {\n"),
         "fs_read dir:x/a !computed_specifier/unknown"
@@ -951,8 +955,8 @@ fn next_to_a_resolved_module() {
          mod:require.resolve('eve/package.json')/../README.md\nrequire dir:eve\ndynamic_import \
          mod:require.resolve('eve')/../y.js"
     );
-    // A parameter of an exported function: a pattern below the directory, and the
-    // record of a partial specifier.
+    // A parameter of an exported function: a pattern below the directory, and
+    // the record of a partial specifier.
     assert_eq!(
         show(
             "const root = new URL('dist/', \
@@ -1058,12 +1062,12 @@ fn resolve_options() {
          require.resolve('dep', from require.resolve('eve')/'..')\nrequire dir:<unknown> \
          !computed_specifier/call"
     );
-    // (The record of the `resolve` call itself has no origin that another file's
-    // value could answer: the load is asked of its callee. The `require` of its
-    // result is a value like any other.)
-    // (An object held in a binding and handed to a call is not trusted to stay as
-    // it was written: the entries are found, and a record stays. Written in
-    // place it is exact.)
+    // (The record of the `resolve` call itself has no origin that another
+    // file's value could answer: the load is asked of its callee. The
+    // `require` of its result is a value like any other.)
+    // (An object held in a binding and handed to a call is not trusted to stay
+    // as it was written: the entries are found, and a record stays. Written
+    // in place it is exact.)
     assert_eq!(
         show("require(require.resolve('dep', { paths: [join(__dirname, '../other')] }));\n"),
         "require mod:require.resolve('dep', from '../other')\nrequire mod:require.resolve('dep', \
@@ -1078,8 +1082,8 @@ fn resolve_options() {
         out.contains("require dir:<unknown> !computed_specifier/"),
         "{out}"
     );
-    // An entry that is a file searches from its directory (the resolver decides);
-    // an array with unknown elements is unknown.
+    // An entry that is a file searches from its directory (the resolver
+    // decides); an array with unknown elements is unknown.
     assert_eq!(
         show(
             "require.resolve('dep', { paths: [require.resolve('eve/package.json')] });\nexport \
@@ -1181,7 +1185,8 @@ fn loads(body: &str) -> String {
 #[test]
 fn a_load_from_the_environment_says_where_it_searches() {
     let open = "require dir:<unknown> !env_dependent/env";
-    // A name that can be bound again: asked of its callee, which is the file's own.
+    // A name that can be bound again: asked of its callee, which is the file's
+    // own.
     assert_eq!(
         loads("let req = createRequire(import.meta.url);\nreq(process.env.PLUGIN);\n"),
         format!("{open}\nuse env/File")
@@ -1207,8 +1212,8 @@ fn a_load_from_the_environment_says_where_it_searches() {
         ),
         format!("{open}\nuse env/Unknown")
     );
-    // Next to another request, which the unknown place leaves unknown: two records,
-    // and the template stands for the one of the variable.
+    // Next to another request, which the unknown place leaves unknown: two
+    // records, and the template stands for the one of the variable.
     assert_eq!(
         loads(
             "const req = createRequire(join(process.cwd(), 'noop.js'));\nreq(process.env.PLUGIN \
@@ -1216,8 +1221,9 @@ fn a_load_from_the_environment_says_where_it_searches() {
         ),
         format!("require dir:<unknown> !computed_specifier/unknown\n{open}\nuse env/Unknown")
     );
-    // A path resolved where it is asked is the same for every `require` function:
-    // its template is anchored at the working directory, whatever the place.
+    // A path resolved where it is asked is the same for every `require`
+    // function: its template is anchored at the working directory, whatever
+    // the place.
     assert_eq!(
         loads(
             "const req = createRequire(join(process.cwd(), \

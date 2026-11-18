@@ -276,8 +276,9 @@ impl PathResolver {
                 }
                 Some(r) => return Some(r),
                 None => {
-                    // In case-insensitive mode an exactly spelled index file inside a
-                    // mismatched directory is still a mismatch.
+                    // In case-insensitive mode an exactly spelled index file
+                    // inside a mismatched directory is
+                    // still a mismatch.
                     if mode == Mode::CaseInsensitive && dir_mismatch && fs.is_file(&p) {
                         return Some(Resolved::CaseMismatch {
                             path: p,

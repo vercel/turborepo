@@ -109,7 +109,8 @@ pub fn spec_refs(text: &str) -> Vec<String> {
         }
     }
     for line in text.lines() {
-        // graphql-import style: `# import * from "x.graphql"` / `#import "./f.graphql"`
+        // graphql-import style: `# import * from "x.graphql"` / `#import
+        // "./f.graphql"`
         let t = line.trim_start();
         if let Some(rest) = t.strip_prefix('#')
             && rest.trim_start().starts_with("import")

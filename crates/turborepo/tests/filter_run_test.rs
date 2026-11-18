@@ -176,7 +176,8 @@ fn test_exclude_only_filter_includes_root_tasks() {
 
 #[test]
 fn test_exclude_root_filter_excludes_root_tasks() {
-    // Explicitly excluding root (--filter=!//) should prevent root task injection.
+    // Explicitly excluding root (--filter=!//) should prevent root task
+    // injection.
     let tempdir = tempfile::tempdir().unwrap();
     setup_root_task_fixture(tempdir.path());
 

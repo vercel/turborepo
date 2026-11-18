@@ -245,7 +245,8 @@ impl SCM {
         }
         let tracked = if repo_index.is_none() {
             // The output walk already validated selected paths. Unsupported
-            // tracked paths elsewhere in the repository must not fail this query.
+            // tracked paths elsewhere in the repository must not fail this
+            // query.
             match git.git_ls_files_cached_with_unsupported() {
                 Ok(list) => list.paths.into_iter().collect(),
                 Err(err) if git.has_no_index_file() => {
@@ -325,9 +326,9 @@ impl SCM {
         self.file_hash_mode().apply(turbo_root, hashes, false)
     }
 
-    // hash_existing_of takes a list of files to hash and returns the hashes for the
-    // files in that list that exist. Files in the list that do not exist are
-    // skipped.
+    // hash_existing_of takes a list of files to hash and returns the hashes for
+    // the files in that list that exist. Files in the list that do not
+    // exist are skipped.
     pub fn hash_existing_of(
         &self,
         turbo_root: &AbsoluteSystemPath,
@@ -753,9 +754,10 @@ impl GitRepo {
             &excludes,
         )?;
 
-        // Include globs can find files not in the git index (e.g. gitignored files
-        // that a user explicitly wants to track). Walk the filesystem for these
-        // files but skip re-hashing any already known from the index.
+        // Include globs can find files not in the git index (e.g. gitignored
+        // files that a user explicitly wants to track). Walk the
+        // filesystem for these files but skip re-hashing any already
+        // known from the index.
         //
         // Optimization: separate literal file paths from actual glob patterns.
         // Literal paths (e.g. "$TURBO_ROOT$/tsconfig.json") are resolved with a
@@ -797,7 +799,8 @@ impl GitRepo {
                             let git_relative = match self.root.anchor(&resolved) {
                                 Ok(git_relative) => git_relative.to_unix(),
                                 Err(PathError::NotParent(..)) => {
-                                    // The in-memory exclusion filter below can't
+                                    // The in-memory exclusion filter below
+                                    // can't
                                     // see files outside the repository, so let
                                     // the walker apply exclusions, as manual
                                     // hashing does.
@@ -842,7 +845,8 @@ impl GitRepo {
                 )?;
             }
 
-            // Only do the expensive glob walk for patterns that are actual globs.
+            // Only do the expensive glob walk for patterns that are actual
+            // globs.
             if !glob_inclusions.is_empty() {
                 let files = globwalk::globwalk_with_settings(
                     turbo_root,
@@ -889,14 +893,15 @@ impl GitRepo {
             self.hash_files_outside_root(turbo_root, &full_pkg_path, &outside_root, &mut hashes)?;
         }
 
-        // Apply excludes via in-memory matching — no filesystem walk needed since
-        // we already know all the paths from the combined index + includes.
-        // Hash keys are package-relative, so resolve them into the same
-        // repo-root-relative space as the exclusion globs before matching.
-        // `<literal>/**` exclusions (one per path dependency for Cargo crates)
-        // are matched by prefix comparison instead of compiling a wax regex
-        // per exclusion and matching every key against each of them, and
-        // `**/<literal>/**`-style exclusions are matched by path segment.
+        // Apply excludes via in-memory matching — no filesystem walk needed
+        // since we already know all the paths from the combined index +
+        // includes. Hash keys are package-relative, so resolve them
+        // into the same repo-root-relative space as the exclusion globs
+        // before matching. `<literal>/**` exclusions (one per path
+        // dependency for Cargo crates) are matched by prefix comparison
+        // instead of compiling a wax regex per exclusion and matching
+        // every key against each of them, and `**/<literal>/**`-style
+        // exclusions are matched by path segment.
         let mut exclude_trees: Vec<&str> = Vec::new();
         let mut exclude_segments: Vec<globwalk::LiteralSegmentGlob<'_>> = Vec::new();
         let mut exclude_globs: Vec<wax::Glob<'static>> = Vec::new();
@@ -986,7 +991,8 @@ mod tests {
         license.create_with_contents("license v1").unwrap();
         let inclusions = vec!["dist/**".to_owned()];
         let scm = SCM::new(&turbo_root);
-        // An unborn repository may have no index yet; generated outputs are not inputs.
+        // An unborn repository may have no index yet; generated outputs are not
+        // inputs.
         assert!(
             scm.get_tracked_output_hashes(&turbo_root, package_path, &inclusions, &[], None)
                 .unwrap()
@@ -1481,7 +1487,8 @@ mod tests {
         ignored_file_path.ensure_dir()?;
         ignored_file_path.create_with_contents("ignored")?;
 
-        // create a file that matches the $TURBO_DEFAULT$ token to test the edge case
+        // create a file that matches the $TURBO_DEFAULT$ token to test the edge
+        // case
         let token_file_path = my_pkg_dir.join_components(&["$TURBO_DEFAULT$"]);
         token_file_path.ensure_dir()?;
         token_file_path.create_with_contents("maybe-rename?")?;
@@ -1692,8 +1699,8 @@ mod tests {
         assert!(info.is_linked_worktree());
         assert_eq!(info.git_root, worktree_path);
 
-        // Construct SCM the same way the run builder does: using the pre-resolved
-        // git_root from worktree detection
+        // Construct SCM the same way the run builder does: using the
+        // pre-resolved git_root from worktree detection
         let scm = crate::SCM::new_with_git_root(&worktree_path, info.git_root);
         let crate::SCM::Git(git) = scm else {
             panic!("expected git SCM");
@@ -2053,7 +2060,8 @@ mod tests {
         )
         .unwrap();
 
-        // Filter to the same set of keys (manual path may pick up .gitignore etc.)
+        // Filter to the same set of keys (manual path may pick up .gitignore
+        // etc.)
         for (path, git_hash) in &git_hashes {
             let manual_hash = manual_hashes.get(path);
             assert_eq!(
@@ -2545,7 +2553,8 @@ mod tests {
             .output()
             .unwrap();
 
-        // git hash-object --path applies .gitattributes filters (normalizes CRLF)
+        // git hash-object --path applies .gitattributes filters (normalizes
+        // CRLF)
         for name in &["global-dep.env", "lockfile.lock"] {
             let git_output = Command::new("git")
                 .args(["hash-object", "--path", name, "--stdin"])

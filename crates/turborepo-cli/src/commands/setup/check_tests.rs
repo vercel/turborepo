@@ -232,7 +232,8 @@ fn check_rejects_a_locked_node_version_that_does_not_satisfy_native_declarations
     fs::write(f.owned.root().join(".nvmrc"), "26.0.0").unwrap();
     f.lock["tools"]["node"]["declarations"][0]["request"] = json!("26.0.0");
     f.save();
-    // Matching provenance cannot authorize a version outside the native request.
+    // Matching provenance cannot authorize a version outside the native
+    // request.
     assert!(matches!(
         f.check(CHECK),
         Err(Error::Activation(

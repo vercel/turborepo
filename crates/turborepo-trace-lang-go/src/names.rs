@@ -416,7 +416,8 @@ fn scan(src: &[u8], followed: Option<&Followed>) -> Strings {
     } else {
         Vec::new()
     };
-    // The closing parenthesis of the literal location path the scan is inside of.
+    // The closing parenthesis of the literal location path the scan is inside
+    // of.
     let mut literal_until: Option<usize> = None;
     let mut groups: Vec<Group> = Vec::new();
     // A `for` keyword whose body has not been opened yet.
@@ -461,7 +462,8 @@ fn scan(src: &[u8], followed: Option<&Followed>) -> Strings {
                         .map(|p| p.text(src));
                     let name = callee.map(|c| c.text(src)).unwrap_or(b"");
                     let path = callee.is_some() && path_fn(name);
-                    // The first argument is a temp root name or a `TempDir()` call.
+                    // The first argument is a temp root name or a `TempDir()`
+                    // call.
                     let temp = path
                         && roots
                             .as_ref()
@@ -482,8 +484,9 @@ fn scan(src: &[u8], followed: Option<&Followed>) -> Strings {
                 }
                 b'{' => {
                     let looped = for_pending;
-                    // The body of a loop ends its line (gofmt); a composite literal of the
-                    // header does not, and the body is still to come.
+                    // The body of a loop ends its line (gofmt); a composite
+                    // literal of the header does not, and
+                    // the body is still to come.
                     if for_pending
                         && next(1).is_none_or(|n| {
                             n.is_punct(src, b'}')
@@ -500,8 +503,9 @@ fn scan(src: &[u8], followed: Option<&Followed>) -> Strings {
                 b'[' => groups.push(Group::default()),
                 b')' | b']' | b'}' => {
                     let g = groups.pop();
-                    // The literal location path is complete: it names what is below its
-                    // parent steps, which are not parent steps of anything else.
+                    // The literal location path is complete: it names what is
+                    // below its parent steps, which are not
+                    // parent steps of anything else.
                     if literal_until == Some(here)
                         && let Some((_, slot)) = g.and_then(|g| g.last)
                     {
@@ -578,9 +582,11 @@ fn scan(src: &[u8], followed: Option<&Followed>) -> Strings {
                     } else {
                         v.into_owned()
                     };
-                    // Consecutive literal arguments of a path function are consecutive
-                    // segments of one path: `Join(dir, "src", "routes.ts")` names
-                    // `src/routes.ts`, not everything below a directory called `src`.
+                    // Consecutive literal arguments of a path function are
+                    // consecutive segments of one path:
+                    // `Join(dir, "src", "routes.ts")` names
+                    // `src/routes.ts`, not everything below a directory called
+                    // `src`.
                     let joined = g.path
                         && here >= 2
                         && prev(1).is_some_and(|p| p.is_punct(src, b','))
@@ -789,8 +795,8 @@ func load(dir string) {
                 ("raw/text.txt".to_owned(), false),
             ]
         );
-        // Consecutive literal arguments of a path function are one path; an argument
-        // that is not a literal ends the run.
+        // Consecutive literal arguments of a path function are one path; an
+        // argument that is not a literal ends the run.
         assert_eq!(
             lits(
                 "package p\nvar a = filepath.Join(root, \"src\", \"routes.ts\")\nvar b = \
@@ -843,9 +849,10 @@ func load(dir string) {
             climbing("package p\nvar a, _ = os.ReadFile(\"../../../../package.json\")\n"),
             [own("package.json", 4)]
         );
-        // Consecutive literal arguments of `Join` are one string; a base below the
-        // working directory spelled in the same call takes steps back. Each string
-        // can also climb by the file's other parent steps.
+        // Consecutive literal arguments of `Join` are one string; a base below
+        // the working directory spelled in the same call takes steps
+        // back. Each string can also climb by the file's other parent
+        // steps.
         assert_eq!(
             climbing(
                 "package p\nvar a = filepath.Join(\"..\", \"..\", \"shared\", name)\nvar b = \
@@ -869,8 +876,8 @@ func load(dir string) {
             ),
             [own("x/y.json", 2)]
         );
-        // The same shape without parent steps is one name; the largest climb is kept
-        // (each string's own steps plus the file's others).
+        // The same shape without parent steps is one name; the largest climb is
+        // kept (each string's own steps plus the file's others).
         assert_eq!(
             climbing(
                 "package p\nvar a = []string{\"./services\", \"../services\"}\nvar b = \
@@ -878,8 +885,8 @@ func load(dir string) {
             ),
             [own("services", 4)]
         );
-        // A rest that is not the shape keeps the plain mark: a step back after a named
-        // segment, a hole before the name.
+        // A rest that is not the shape keeps the plain mark: a step back after
+        // a named segment, a hole before the name.
         assert_eq!(
             climbing(
                 "package p\nvar a = \"../a/b/../c.json\"\nvar b = \
@@ -916,7 +923,8 @@ func load(dir string) {
             ),
             [free("x/y.json")]
         );
-        // A loop whose header has a composite literal: its body is still the loop.
+        // A loop whose header has a composite literal: its body is still the
+        // loop.
         let s = strings(
             b"package p\nfunc f(d string) {\n\tfor _, x := range []string{\"a\"} {\n\t\td = \
               filepath.Dir(d)\n\t}\n}\nfunc g(d string) string {\n\treturn filepath.Dir(d)\n}\n",
@@ -924,7 +932,8 @@ func load(dir string) {
         assert!(s.dir_in_loop);
         let s = strings(b"package p\nfunc g(d string) string {\n\treturn filepath.Dir(d)\n}\n");
         assert!(!s.dir_in_loop);
-        // A string that only climbs, or a `Chdir`, marks the file for its package.
+        // A string that only climbs, or a `Chdir`, marks the file for its
+        // package.
         for src in [
             "package p\nconst Root = \"../..\"\n",
             "package p\nvar r = filepath.Join(\"..\", \"..\")\n",
@@ -936,7 +945,8 @@ func load(dir string) {
             assert!(!n.is_empty(), "{src}");
         }
         assert!(!names(b"package p\nvar a = \"../x/y.json\"\n", false).moves_base);
-        // No parent steps, no mark; a literal path from the location is no climb.
+        // No parent steps, no mark; a literal path from the location is no
+        // climb.
         assert_eq!(
             climbing(
                 r#"package p
@@ -975,7 +985,8 @@ func root() string {
 	return filepath.Join(filepath.Dir(filepath.Dir(file)), wd)
 }
 "#;
-        // The location is used where the file variable is, not where it is declared.
+        // The location is used where the file variable is, not where it is
+        // declared.
         let s = strings(src.as_bytes());
         assert_eq!((s.location, s.getwd, s.parents), (Some(5), Some(4), 2));
         let s = strings(b"package p\nvar x = y.Caller(0)\n");
@@ -1001,8 +1012,8 @@ func schemaPath(t *testing.T) string {
         assert_eq!((s.location, s.parents), (None, 0));
         // The parent steps are gone from the literal: they move nothing else.
         assert_eq!(values(src), ["schemas/job.schema.json"]);
-        // A path that only goes up, names a directory, or continues with something
-        // unknown, uses the location.
+        // A path that only goes up, names a directory, or continues with
+        // something unknown, uses the location.
         let dir = r#"package p
 func services() string {
 	_, file, _, _ := runtime.Caller(0)

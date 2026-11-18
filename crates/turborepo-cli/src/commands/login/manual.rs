@@ -59,8 +59,8 @@ impl<'a> From<&'a APIClientOpts> for ManualLoginOptions<'a> {
         let team_id = value.team_id.as_deref().map(TeamIdentifier::Id);
         let team_slug = value.team_slug.as_deref().map(TeamIdentifier::Slug);
         let team_identifier = team_id.or(team_slug);
-        // We always ask for a token even if one is present as the user probably wants a
-        // new token when they run `turbo login`.
+        // We always ask for a token even if one is present as the user probably
+        // wants a new token when they run `turbo login`.
         let token = None;
         ManualLoginOptions {
             api_url,

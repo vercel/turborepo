@@ -151,8 +151,9 @@ pub(crate) fn layout_of(npmrc: Option<&str>, pnpm: Option<&str>, yarnrc: Option<
         {
             return Layout::Hoisted("shamefully-hoist is on");
         }
-        // The patterns pnpm hoisted publicly by default before version 10 stay in: a
-        // workspace package with such a name was linked into the root.
+        // The patterns pnpm hoisted publicly by default before version 10 stay
+        // in: a workspace package with such a name was linked into the
+        // root.
         let mut public = vec!["*eslint*".to_owned(), "*prettier*".to_owned()];
         public.extend(
             setting("public-hoist-pattern", "publicHoistPattern")
@@ -212,9 +213,9 @@ const KINDS: [&str; 4] = [
 /// The names a manifest declares: the keys of its dependency maps, and for a
 /// `workspace:` alias (`"a": "workspace:@scope/b@*"`) the package it points to.
 fn declared_names(manifest: &Path) -> Vec<String> {
-    // The file itself, with its dependency lists: not the view of it that module
-    // resolution gets (`turborepo_trace_core::manifest`), which leaves them
-    // out.
+    // The file itself, with its dependency lists: not the view of it that
+    // module resolution gets (`turborepo_trace_core::manifest`), which
+    // leaves them out.
     match std::fs::read(manifest) {
         Ok(bytes) => declared_in(&bytes),
         Err(_) => Vec::new(),
@@ -295,7 +296,8 @@ pub(crate) fn reach<G: GraphView>(g: &G, root: &Path) -> (LoadReach, usize) {
             decl.insert(*p, ids);
         }
     }
-    // The packages around each one, nearest first; the root package (`""`) last.
+    // The packages around each one, nearest first; the root package (`""`)
+    // last.
     let around = |r: &str| -> Vec<u32> {
         let mut out = Vec::new();
         let mut d = r;
@@ -308,8 +310,9 @@ pub(crate) fn reach<G: GraphView>(g: &G, root: &Path) -> (LoadReach, usize) {
         out
     };
     let root_id = by_root.get("").copied();
-    // Packages linked into the root `node_modules` whatever declares them: every
-    // package resolves them. In a hoisted layout that is every package.
+    // Packages linked into the root `node_modules` whatever declares them:
+    // every package resolves them. In a hoisted layout that is every
+    // package.
     let public = match layout(root) {
         Layout::Strict { public } => public,
         Layout::Hoisted(_) => vec!["*".to_owned()],
@@ -322,8 +325,8 @@ pub(crate) fn reach<G: GraphView>(g: &G, root: &Path) -> (LoadReach, usize) {
             Some(p) != root_id && public.iter().any(|pat| name_matches(pat, name))
         })
         .collect();
-    // Nested packages: for every package, the ones at or below its directory. The
-    // root package holds only its own files (the root minus the other
+    // Nested packages: for every package, the ones at or below its directory.
+    // The root package holds only its own files (the root minus the other
     // packages).
     let mut below: HashMap<u32, Vec<u32>> = HashMap::new();
     for (p, r) in &first {
@@ -337,9 +340,10 @@ pub(crate) fn reach<G: GraphView>(g: &G, root: &Path) -> (LoadReach, usize) {
     let mut out = LoadReach::new(np);
     for (p, r) in &first {
         if Some(*p) == root_id {
-            // The directory of the root package is the repository: a load from one of its
-            // files reaches every package below it (a relative specifier, a runner that
-            // looks packages up below its root directory).
+            // The directory of the root package is the repository: a load from
+            // one of its files reaches every package below it (a
+            // relative specifier, a runner that looks packages up
+            // below its root directory).
             for (q, _) in &first {
                 out.add(PackageId(*p), PackageId(*q));
             }
@@ -347,9 +351,10 @@ pub(crate) fn reach<G: GraphView>(g: &G, root: &Path) -> (LoadReach, usize) {
         }
         let mut set: BTreeSet<u32> = BTreeSet::new();
         set.extend(below.get(p).into_iter().flatten().copied());
-        // The packages around it lend what they declare (resolution walks up), not
-        // themselves: a Go module in `scripts/` is around every package below
-        // `scripts/`, and counting it as part of each would make them all one.
+        // The packages around it lend what they declare (resolution walks up),
+        // not themselves: a Go module in `scripts/` is around every
+        // package below `scripts/`, and counting it as part of each
+        // would make them all one.
         let up = around(r);
         for q in std::iter::once(*p).chain(up.iter().copied()) {
             for d in decl.get(&q).into_iter().flatten() {
@@ -412,8 +417,8 @@ pub(crate) fn lent<G: GraphView>(
         first.push((p, if r == "." { "" } else { r }.to_owned()));
         names.insert(info.name);
     }
-    // The text of a path before the change: `Ok(None)` if it did not exist, `Err`
-    // if that is not known.
+    // The text of a path before the change: `Ok(None)` if it did not exist,
+    // `Err` if that is not known.
     let before = |c: &Change| -> Result<Option<String>, ()> {
         match (c.kind, base(&c.path)) {
             (ChangeKind::Added, _) => Ok(None),
@@ -472,7 +477,8 @@ pub(crate) fn lent<G: GraphView>(
         }
         let dir = c.path.strip_suffix("package.json").unwrap_or("");
         let dir = dir.trim_end_matches('/');
-        // The packages below this manifest's directory (every package for the root's).
+        // The packages below this manifest's directory (every package for the
+        // root's).
         let below: Vec<u32> = first
             .iter()
             .filter(|(_, r)| {
@@ -510,11 +516,11 @@ pub(crate) fn lent<G: GraphView>(
             out.extend(below.into_iter().map(|p| (i as u32, PackageId(p))));
         }
     }
-    // A removed package could be resolved by every package when the layout links
-    // its name for all, and by the packages whose manifest still declares it (a
-    // declaration that went with the package is a changed manifest: its package
-    // is affected, and what it lent is compared above) with the packages below
-    // them.
+    // A removed package could be resolved by every package when the layout
+    // links its name for all, and by the packages whose manifest still
+    // declares it (a declaration that went with the package is a changed
+    // manifest: its package is affected, and what it lent is compared
+    // above) with the packages below them.
     if everything.is_none()
         && !removed.is_empty()
         && let Layout::Strict { public } = layout(root)
@@ -706,8 +712,8 @@ mod tests {
         )
         .unwrap();
         assert!(hoisted(r));
-        // Yarn: Plug'n'Play (the default with a .yarnrc.yml) and the pnpm linker are
-        // strict.
+        // Yarn: Plug'n'Play (the default with a .yarnrc.yml) and the pnpm
+        // linker are strict.
         std::fs::remove_file(r.join("pnpm-workspace.yaml")).unwrap();
         std::fs::write(r.join(".yarnrc.yml"), "yarnPath: .yarn/releases/yarn.cjs\n").unwrap();
         assert!(!hoisted(r));

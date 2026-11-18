@@ -101,8 +101,9 @@ impl Locks {
                     && (p.name == name || (ecosystem == "pypi" && canon(&p.name) == canon(name)))
             })
             .filter_map(|p| {
-                // Cargo git dependencies have no checksum: their pinned source is the
-                // identity, as `CargoProject::identity` reports it.
+                // Cargo git dependencies have no checksum: their pinned source
+                // is the identity, as `CargoProject::identity`
+                // reports it.
                 let i = p.integrity.as_deref().or(if ecosystem == "crates" {
                     p.resolution.as_deref()
                 } else {
@@ -410,7 +411,8 @@ fn load_lockfiles_inner(
         hashes.push((f.clone(), hash(&bytes)));
         let text = String::from_utf8_lossy(&bytes);
         let parsed = if kind == LockfileKind::GoSum {
-            // `go.sum` hashes are keyed through the module's `go.mod` requirements.
+            // `go.sum` hashes are keyed through the module's `go.mod`
+            // requirements.
             let go_mod = f.strip_suffix("go.sum").map(|d| format!("{d}go.mod"));
             match go_mod.and_then(|m| std::fs::read_to_string(root.join(m)).ok()) {
                 Some(m) => gosum::parse(&m, Some(&text)),

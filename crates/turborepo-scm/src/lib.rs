@@ -185,27 +185,29 @@ pub(crate) fn wait_for_success<R: Read, T>(
 ) -> Result<T, Error> {
     if let Err(parse_err) = parse_result {
         // In this case, we don't care about waiting for the child to exit,
-        // we need to kill it. It's possible that we didn't read all of the output,
-        // or that the child process doesn't know to exit.
+        // we need to kill it. It's possible that we didn't read all of the
+        // output, or that the child process doesn't know to exit.
         // For good measure close off `stdin`
         child.stdin.take();
         match child.kill() {
             Ok(()) => {
-                // If we successfully sent the signal, then we wait for process to exit
-                // Do not error if wait fails as that can indicate the pid has already been
-                // reaped.
+                // If we successfully sent the signal, then we wait for process
+                // to exit Do not error if wait fails as that
+                // can indicate the pid has already been reaped.
                 child.wait().ok();
             }
             Err(e) => {
                 debug!("failed to kill git process: {e}");
                 // There are exactly 3 reasons why killing a child could fail:
-                // - Invalid signal number (Unix only, would indicate Rust stdlib is faulty)
-                // - Insufficient permission (Windows + Unix) (Not sure how this could happen
-                //   given we're talking about a child process)
+                // - Invalid signal number (Unix only, would indicate Rust
+                //   stdlib is faulty)
+                // - Insufficient permission (Windows + Unix) (Not sure how this
+                //   could happen given we're talking about a child process)
                 // - Process has already exited (Windows + Unix)
-                // The final option is by far the most likely in which case `try_call` is a
-                // nonblocking option that will reap the child pid if it has
-                // already exited. We use this over `wait` to avoid blocking on a process
+                // The final option is by far the most likely in which case
+                // `try_call` is a nonblocking option that will
+                // reap the child pid if it has already exited.
+                // We use this over `wait` to avoid blocking on a process
                 // exiting which possibly did not receive our kill signal.
                 child.try_wait().ok();
             }
@@ -228,8 +230,8 @@ pub(crate) fn wait_for_success<R: Read, T>(
         );
         return Err(Error::Git(err_text, Backtrace::capture()));
     }
-    // TODO: if we've successfully parsed the output, but the command is hanging for
-    // some reason, we will currently block forever.
+    // TODO: if we've successfully parsed the output, but the command is hanging
+    // for some reason, we will currently block forever.
     let exit_status = child.wait()?;
     if exit_status.success() {
         return parse_result;
@@ -314,9 +316,10 @@ impl GitRepo {
         reason = "preserve the structured git-root error without boxing on this error path"
     )]
     fn find(path_in_repo: &AbsoluteSystemPath) -> Result<Self, GitError> {
-        // If which produces an invalid absolute path, it's not an execution error, it's
-        // a programming error. We expect it to always give us an absolute path
-        // if it gives us any path. If that's not the case, we should crash.
+        // If which produces an invalid absolute path, it's not an execution
+        // error, it's a programming error. We expect it to always give
+        // us an absolute path if it gives us any path. If that's not
+        // the case, we should crash.
         let bin = Self::find_bin()?;
         let root =
             find_git_root(path_in_repo).map_err(|e| GitError::Root(path_in_repo.to_owned(), e))?;
@@ -734,9 +737,9 @@ mod tests {
         // Previously, this would hang forever trying to read from stderr
         let err =
             wait_for_success(cmd, &mut stderr, "hanging.sh", &root, parse_result).unwrap_err();
-        // Note that we aren't guaranteed to have captured stderr, notably on windows.
-        // We should, however, have our injected error of "any error" in the error
-        // message.
+        // Note that we aren't guaranteed to have captured stderr, notably on
+        // windows. We should, however, have our injected error of "any
+        // error" in the error message.
         assert!(err.to_string().contains("any error"));
     }
 

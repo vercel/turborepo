@@ -424,8 +424,8 @@ impl<'a> RouteMapper<'a> {
         let mut statics = Vec::new();
         let mut dynamics = Vec::new();
         let mut broken: Option<String> = None;
-        // Rules match case-insensitively unless `caseSensitiveRoutes` is set; routes
-        // always match exactly.
+        // Rules match case-insensitively unless `caseSensitiveRoutes` is set;
+        // routes always match exactly.
         let rule_flags = if fp.case_sensitive { "" } else { "i" };
         for r in &fp.route_regexes {
             let re = JsRegex::new(r.regex.clone(), "");
@@ -566,8 +566,8 @@ impl<'a> RouteMapper<'a> {
         if let Some(m) = rule.regex.find_at(path, 0) {
             return Some(m);
         }
-        // With i18n the rules carry a locale group; a path without a locale has the
-        // default.
+        // With i18n the rules carry a locale group; a path without a locale has
+        // the default.
         let d = self.default_locale.as_deref()?;
         let first = path.trim_start_matches('/').split('/').next().unwrap_or("");
         if self.locales.contains(&first.to_ascii_lowercase()) {
@@ -815,9 +815,9 @@ impl<'a> RouteMapper<'a> {
                 path = path.split(['?', '#']).next().unwrap_or(&path).to_string();
             }
         }
-        // Redirect rules run first. Without a status (a redirect the request API
-        // followed, a request without a response) a matching rule may or may
-        // not have answered.
+        // Redirect rules run first. Without a status (a redirect the request
+        // API followed, a request without a response) a matching rule
+        // may or may not have answered.
         if (redirected || r.status.is_none()) && r.kind != RequestKind::Nav {
             for rule in self.rules.iter().filter(|x| x.phase == Phase::Redirect) {
                 if self.rule_matches(rule, &path).is_none() {
@@ -932,10 +932,10 @@ impl Visits {
         self.recordings += 1;
         let host = rec.base_host();
         let test = rec.title.join(" › ");
-        // What the server answered for each path. A URL change carries no headers of
-        // its own: it is resolved with the answers for its path (the document,
-        // the RSC payload or the prefetch the router used), which say where a
-        // middleware sent it.
+        // What the server answered for each path. A URL change carries no
+        // headers of its own: it is resolved with the answers for its
+        // path (the document, the RSC payload or the prefetch the
+        // router used), which say where a middleware sent it.
         let mut answers: BTreeMap<String, Vec<&Request>> = BTreeMap::new();
         for r in &rec.requests {
             if matches!(
@@ -946,7 +946,8 @@ impl Visits {
                     | RequestKind::Data
             ) && r.status.is_some_and(|s| !(300..400).contains(&s))
             {
-                // A Pages Router navigation asks for the data of the page it goes to.
+                // A Pages Router navigation asks for the data of the page it
+                // goes to.
                 let path = if r.kind == RequestKind::Data {
                     mapper.data_path(&r.path)
                 } else {
@@ -954,8 +955,9 @@ impl Visits {
                 };
                 answers.entry(path).or_default().push(r);
             }
-            // A server action that redirects answers with the page it redirects to: the
-            // rewrite headers of that response are the target's.
+            // A server action that redirects answers with the page it redirects
+            // to: the rewrite headers of that response are the
+            // target's.
             if let Some(target) = action_redirect(r) {
                 answers.entry(target).or_default().push(r);
             }
@@ -1288,8 +1290,8 @@ mod tests {
             .insert("x-middleware-rewrite".into(), "/blog/about".into());
         let mut v = Visits::default();
         v.add(&m, &rec(vec![doc, req(RequestKind::Nav, "/about")]));
-        // Not /about: the middleware sent the path elsewhere, and the URL change says
-        // nothing else.
+        // Not /about: the middleware sent the path elsewhere, and the URL
+        // change says nothing else.
         assert_eq!(
             v.routes.keys().cloned().collect::<Vec<_>>(),
             ["/blog/[slug]"]
@@ -1305,8 +1307,8 @@ mod tests {
         v.add(&m, &rec(vec![req(RequestKind::Nav, "/api/hello")]));
         assert_eq!(v.routes.keys().cloned().collect::<Vec<_>>(), ["/api/hello"]);
         assert!(v.unmapped.is_empty());
-        // A server action that redirects: its response answers for the target, and the
-        // action itself ran on the route of its own path.
+        // A server action that redirects: its response answers for the target,
+        // and the action itself ran on the route of its own path.
         let mut page = req(RequestKind::Document, "/about");
         page.res
             .insert("x-middleware-rewrite".into(), "/blog/about".into());
@@ -1329,7 +1331,8 @@ mod tests {
         );
         assert_eq!(v.routes["/blog/[slug]"].kind, RequestKind::Document);
         assert!(v.unmapped.is_empty());
-        // A Pages Router navigation: the answer is the data request of the page.
+        // A Pages Router navigation: the answer is the data request of the
+        // page.
         let mut v = Visits::default();
         v.add(
             &m,
@@ -1365,7 +1368,8 @@ mod tests {
         let l = load_dir(d.path()).unwrap();
         assert_eq!(l.recordings.len(), 1);
         let kinds: Vec<RequestKind> = l.recordings[0].requests.iter().map(|r| r.kind).collect();
-        // A kind a newer recorder wrote is kept as `Other` (and maps to nothing).
+        // A kind a newer recorder wrote is kept as `Other` (and maps to
+        // nothing).
         assert_eq!(kinds, [RequestKind::Document, RequestKind::Other]);
         assert!(l.recordings[0].as_expected());
         assert_eq!(l.fingerprints.len(), 1);

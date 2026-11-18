@@ -66,7 +66,8 @@ impl SharedHttpClient {
             }
         });
 
-        // Phase 2: build full client in background (native-roots, ~200ms on macOS).
+        // Phase 2: build full client in background (native-roots, ~200ms on
+        // macOS).
         let native = self.native_client.clone();
         let fast_fallback = self.fast_client.clone();
         let warming = self.warming.clone();
@@ -78,7 +79,8 @@ impl SharedHttpClient {
                 }
                 Err(e) => {
                     tracing::warn!("Native HTTP client init failed ({e}), using fast client");
-                    // Ensure the fast (webpki-only) client is available as fallback.
+                    // Ensure the fast (webpki-only) client is available as
+                    // fallback.
                     if fast_fallback.get().is_none()
                         && let Ok(client) = APIClient::build_http_client_webpki_only(None)
                     {

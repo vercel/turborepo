@@ -156,7 +156,8 @@ impl Child {
                 match stdout_lines.read(&mut buffer) {
                     Ok(0) => {
                         if !matches!(last_byte, Some(b'\n')) {
-                            // Ignore if this fails as we already are shutting down
+                            // Ignore if this fails as we already are shutting
+                            // down
                             byte_tx.blocking_send(vec![b'\n']).ok();
                         }
                         break;
@@ -166,7 +167,8 @@ impl Child {
                         bytes.extend_from_slice(&buffer[..n]);
                         last_byte = bytes.last().copied();
                         if byte_tx.blocking_send(bytes).is_err() {
-                            // A dropped receiver indicates that there was an issue writing to the
+                            // A dropped receiver indicates that there was an
+                            // issue writing to the
                             // pipe. We can stop reading output.
                             break;
                         }
@@ -296,7 +298,8 @@ mod tests {
     use super::*;
     use crate::child::{ChildCommandChannel, ShutdownStyle};
 
-    // Make exit ready independently of output, without process-scheduling races.
+    // Make exit ready independently of output, without process-scheduling
+    // races.
     fn exited_child(status: ChildExit, closing: bool) -> Child {
         let (_, exit_channel) = watch::channel(Some(status));
         let (command_channel, _) = ChildCommandChannel::new();

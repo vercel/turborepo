@@ -22,9 +22,10 @@ fn copy_dir(from: &Path, to: &Path) {
 }
 
 fn harness(root: &Path, args: &[&str]) -> String {
-    // These tests are about how open uncertainty travels; their fixtures use a read
-    // with a computed path as the uncertain site. Such reads are bounded by
-    // names by default (tests/affected_names.rs), so that layer is off here.
+    // These tests are about how open uncertainty travels; their fixtures use a
+    // read with a computed path as the uncertain site. Such reads are
+    // bounded by names by default (tests/affected_names.rs), so that layer
+    // is off here.
     let o = Command::new(support::harness())
         .args(args)
         .env("TURBO_TRACE_DEBUG_NAMES", "0")
@@ -135,20 +136,21 @@ fn tsc_build_outputs_link_to_their_project() {
     assert_eq!(affected(r, &["apps/docs/lib/slug.ts"]), [SLUG]);
     assert_eq!(affected(r, &["apps/web/lib/math.ts"]), [MATH]);
 
-    // Soundness: the consumers of a built package still depend on what produces it.
-    // `icons` is loaded by `icon-button` directly, by `card` through the built
-    // `ui`, and by every test of `docs` through its jest config; the `patched`
-    // project references it.
+    // Soundness: the consumers of a built package still depend on what produces
+    // it. `icons` is loaded by `icon-button` directly, by `card` through
+    // the built `ui`, and by every test of `docs` through its jest config;
+    // the `patched` project references it.
     assert_eq!(
         affected(r, &["packages/icons/src/paths.ts"]),
         [CARD, SLUG, ICON_BUTTON, VERSION]
     );
     assert_eq!(affected(r, &["packages/ui/src/index.ts"]), [CARD, SLUG]);
-    // The project's configuration, and the shared base it extends: an edit of an
-    // option selects the consumers of what the project builds. That is decided
-    // against the base revision; named as changed without one, nothing says
-    // which files the project included before, and every file that consulted it
-    // as a referenced project counts (`crates/turborepo-trace/src/tsgovern.rs`).
+    // The project's configuration, and the shared base it extends: an edit of
+    // an option selects the consumers of what the project builds. That is
+    // decided against the base revision; named as changed without one,
+    // nothing says which files the project included before, and every file
+    // that consulted it as a referenced project counts
+    // (`crates/turborepo-trace/src/tsgovern.rs`).
     git(r, &["init", "-q"]);
     git(r, &["add", "-A"]);
     git(r, &["commit", "-q", "-m", "base"]);
@@ -310,9 +312,9 @@ fn only_what_a_task_may_run_or_compile_floors_its_consumers() {
         affected(r, &["README.md"]),
         ["app/gen.test.js", "app/lib.test.js"]
     );
-    // A command that only reads the script: the consumer of the generated file is
-    // not floored by it; the consumer of the emitted JavaScript still is by its
-    // source.
+    // A command that only reads the script: the consumer of the generated file
+    // is not floored by it; the consumer of the emitted JavaScript still is
+    // by its source.
     write(
         r,
         "pkg/package.json",
@@ -383,22 +385,22 @@ fn files_a_task_only_reads_do_not_lend_their_uncertainty() {
     // A change that touches nothing selects the tests on the floor:
     // - `gen`: its `build` task runs a script with a computed read (the output
     //   depends on files the graph does not know);
-    // - `lib`: `tsc` emits JavaScript, so the test runs a copy of `src/index.ts`,
-    //   which loads a module it computes;
-    // - `tool`: the same source behind an unknown compiler (`frobnicate src --out
-    //   dist`). Its package is all the graph knows about the command, and the test
-    //   runs whatever it makes of `src/index.ts`;
+    // - `lib`: `tsc` emits JavaScript, so the test runs a copy of
+    //   `src/index.ts`, which loads a module it computes;
+    // - `tool`: the same source behind an unknown compiler (`frobnicate src
+    //   --out dist`). Its package is all the graph knows about the command, and
+    //   the test runs whatever it makes of `src/index.ts`;
     // - `typed`: `pnpm typegen && tsc -b`. The package's own `typegen` runs a
     //   script with computed reads and may generate the sources `tsc` compiles.
-    // Not `icon`: the three uncertain files of `packages/assets` (a script and a
-    // test file inside the turbo inputs and the type-checked project, and the
-    // file the project's `include` names) are only hashed and type-checked, and
-    // the `build` task compiles none of them.
-    // Not `analytics` either: its `tsc --build` depends on the upstream build of
-    // `packages/gen` (turbo `^build`), which runs the uncertain script, but a task
-    // of another package doesn't write into this one, and the sources import
-    // nothing of it. The importer is linked to the project, not to the task and
-    // its dependency chain.
+    // Not `icon`: the three uncertain files of `packages/assets` (a script and
+    // a test file inside the turbo inputs and the type-checked project, and
+    // the file the project's `include` names) are only hashed and
+    // type-checked, and the `build` task compiles none of them.
+    // Not `analytics` either: its `tsc --build` depends on the upstream build
+    // of `packages/gen` (turbo `^build`), which runs the uncertain script,
+    // but a task of another package doesn't write into this one, and the
+    // sources import nothing of it. The importer is linked to the project,
+    // not to the task and its dependency chain.
     assert_eq!(selected("README.md"), [GEN, LIB, TOOL, TYPED]);
 
     // Changes still propagate along data edges. The importer looks for the
@@ -530,8 +532,8 @@ fn committed_outputs_of_a_task_nothing_runs_are_just_files() {
     );
     assert_eq!(tasks.trim(), GENERATOR);
 
-    // Something runs it (the test script regenerates before it starts jest): the
-    // test depends on the generator again, uncertainty included.
+    // Something runs it (the test script regenerates before it starts jest):
+    // the test depends on the generator again, uncertainty included.
     write(
         r,
         "apps/web/package.json",
@@ -543,8 +545,8 @@ fn committed_outputs_of_a_task_nothing_runs_are_just_files() {
     write(r, "apps/web/package.json", &web_manifest("jest"));
     assert_eq!(affected(r, &["README.md"]), none);
 
-    // A script that could run it but that nothing runs itself (a launcher run by
-    // hand) changes nothing.
+    // A script that could run it but that nothing runs itself (a launcher run
+    // by hand) changes nothing.
     write(
         r,
         "package.json",
@@ -561,14 +563,15 @@ fn committed_outputs_of_a_task_nothing_runs_are_just_files() {
     workflow(&["pnpm --filter web test"]);
     assert_eq!(affected(r, &["README.md"]), none);
 
-    // Not in the checkout (a gitignored output): somebody has to run the generator
-    // for the file to exist, whatever the repository's automation says.
+    // Not in the checkout (a gitignored output): somebody has to run the
+    // generator for the file to exist, whatever the repository's automation
+    // says.
     std::fs::remove_file(r.join(output)).unwrap();
     assert_eq!(affected(r, &["README.md"]), [TEST]);
 
-    // No CI that the trace reads (a fresh graph of the same repository without the
-    // workflow): where the tests run and what runs before them is not known, so the
-    // committed file stays linked to its generator.
+    // No CI that the trace reads (a fresh graph of the same repository without
+    // the workflow): where the tests run and what runs before them is not
+    // known, so the committed file stays linked to its generator.
     write(r, output, "export const entryTypes = ['post'];\n");
     std::fs::remove_dir_all(r.join(".github")).unwrap();
     std::fs::remove_dir_all(r.join(".turbo/trace")).unwrap();

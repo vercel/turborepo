@@ -255,8 +255,8 @@ fn resolver_exports_conditions_follow_the_module_system() {
 
 #[test]
 fn resolver_custom_conditions() {
-    // `--conditions` replaces the default set; with only `require` the ESM import
-    // has no matching condition.
+    // `--conditions` replaces the default set; with only `require` the ESM
+    // import has no matching condition.
     let opts = TraceOptions {
         conditions: vec!["require".into()],
         ..Default::default()
@@ -322,8 +322,8 @@ fn resolver_builtins() {
 #[test]
 fn resolver_manifests() {
     let e = Env::new("basic");
-    // The referencing file's scope first, then the package root, then the target's
-    // scope.
+    // The referencing file's scope first, then the package root, then the
+    // target's scope.
     let out = e.resolve("esm.mjs", Import, "pkg-exports");
     assert_eq!(
         out.manifests,
@@ -443,7 +443,8 @@ fn resolver_tsconfig_paths_for_js_files() {
             "{from}"
         );
     }
-    // `.jsx` is not in `include`: the package's config applies anyway (Next.js).
+    // `.jsx` is not in `include`: the package's config applies anyway
+    // (Next.js).
     assert_eq!(
         e.targets("src/widget.jsx", Import, "#/lib/util"),
         ["lib/util.ts"]
@@ -508,9 +509,9 @@ fn resolver_tsconfig_broken_references_degrade() {
             "{skipped}: {d}"
         );
     }
-    // `pkgs/bad` extends a package that isn't installed: it loads without that base
-    // (a third-party base can't define first-party path mappings), so it is not
-    // skipped.
+    // `pkgs/bad` extends a package that isn't installed: it loads without that
+    // base (a third-party base can't define first-party path mappings), so
+    // it is not skipped.
     assert!(!d.contains("@not-installed/tsconfig/base.json"), "{d}");
     assert!(!d.contains("pkgs/bad:"), "{d}");
     assert!(!d.contains("pkgs/good"), "{d}");
@@ -544,8 +545,8 @@ fn resolver_records_config_discovery_for_js_files() {
     let frame = turborepo_trace_core::record::start();
     let u = e.file_uncertainties("src/main.ts");
     let obs = frame.finish();
-    // In graph mode the load failures are reported on every file that consults the
-    // config.
+    // In graph mode the load failures are reported on every file that consults
+    // the config.
     assert_eq!(u.len(), 1);
     assert_eq!(e.file_uncertainties("src/util.ts").len(), 1);
     let rel = |p: &PathBuf| p.strip_prefix(&e.root).map(|r| r.display().to_string());
@@ -558,11 +559,11 @@ fn resolver_records_config_discovery_for_js_files() {
     ] {
         assert!(reads.iter().any(|r| r == want), "{want} in {reads:?}");
     }
-    // P13: a reference that loads but doesn't govern the file is no content input.
-    // That includes `pkgs/bad`, which loads without its uninstalled base.
-    // It is a key observation: whether it loads and what it includes decide the
-    // file's records, so a change of it makes them stale, and no query selects
-    // through it.
+    // P13: a reference that loads but doesn't govern the file is no content
+    // input. That includes `pkgs/bad`, which loads without its uninstalled
+    // base. It is a key observation: whether it loads and what it includes
+    // decide the file's records, so a change of it makes them stale, and no
+    // query selects through it.
     let key_reads: Vec<_> = obs
         .key
         .iter()
@@ -601,8 +602,8 @@ fn resolver_records_config_discovery_for_js_files() {
         reads.iter().any(|r| r == "jsapp/jsconfig.json"),
         "{reads:?}"
     );
-    // P13: `jsapp/jsconfig.json` covers the file, so discovery never looks above
-    // it.
+    // P13: `jsapp/jsconfig.json` covers the file, so discovery never looks
+    // above it.
     assert!(!reads.iter().any(|r| r == "tsconfig.json"), "{reads:?}");
 }
 
@@ -633,7 +634,8 @@ fn config_record(root: &Path, file: &str) -> (Vec<String>, Vec<String>) {
     };
     let (mut read, mut missing) = (Vec::new(), Vec::new());
     for o in std::iter::once(&obs).chain(obs.key.iter().map(|k| &**k)) {
-        // (A manifest: through the resolution view, or the view of a config loader.)
+        // (A manifest: through the resolution view, or the view of a config
+        // loader.)
         let paths = (o.reads.iter().chain(&o.view_reads))
             .chain(&o.loader_reads)
             .chain(o.path_reads.iter().chain(&o.links));
@@ -971,8 +973,8 @@ fn resolver_records_everything_a_config_load_depends_on() {
         walk(&root, &mut files, &mut tree_links, &mut dirs);
         let rel = |p: &Path| rel2(&root, p).unwrap();
 
-        // A file that changes, or goes (the configs and manifests: what the alias names
-        // and the file itself are no part of a load).
+        // A file that changes, or goes (the configs and manifests: what the
+        // alias names and the file itself are no part of a load).
         for f in &files {
             if ["app/src", "app/v1", "app/v2"]
                 .iter()
@@ -1016,9 +1018,10 @@ fn resolver_records_everything_a_config_load_depends_on() {
                 rel(l)
             );
         }
-        // A file that appears: a config or a manifest in a directory of the tree, the
-        // name of a file without its extension, a directory of that name, and a
-        // nearer place of what was found in a `node_modules` directory.
+        // A file that appears: a config or a manifest in a directory of the
+        // tree, the name of a file without its extension, a directory
+        // of that name, and a nearer place of what was found in a
+        // `node_modules` directory.
         let mut places: Vec<PathBuf> = Vec::new();
         for d in &dirs {
             places.extend(["tsconfig.json", "jsconfig.json", "package.json"].map(|n| d.join(n)));
@@ -1042,7 +1045,8 @@ fn resolver_records_everything_a_config_load_depends_on() {
             }
         }
         for p in places {
-            // (Not where the alias leads: that is the resolution's, not the load's.)
+            // (Not where the alias leads: that is the resolution's, not the
+            // load's.)
             if p.exists()
                 || std::fs::symlink_metadata(&p).is_ok()
                 || ["app/v1", "app/v2"]
@@ -1108,10 +1112,11 @@ fn resolver_records_everything_a_config_load_depends_on() {
                 rel(&p)
             );
         }
-        // A directory that goes, with everything in it: what the load read in it, and
-        // what it looked for in it and did not find (it looked there because the
-        // directory was one). Not the directories the file and its alias targets lie
-        // in; a package directory is recorded by the store, as a place seen.
+        // A directory that goes, with everything in it: what the load read in
+        // it, and what it looked for in it and did not find (it looked
+        // there because the directory was one). Not the directories the
+        // file and its alias targets lie in; a package directory is
+        // recorded by the store, as a place seen.
         let hold = root.join(".held");
         for d in dirs.iter().skip(1) {
             let at = rel(d);
@@ -1206,8 +1211,8 @@ fn resolver_records_the_manifest_of_a_package_directory_that_does_not_answer() {
     assert_eq!(out.targets, ["node_modules/dep/index.js"]);
     assert!(missing.contains(&manifest), "{missing:?}");
 
-    // The nearer directory answers: its manifest is the resolution's own, and the
-    // level above is not asked.
+    // The nearer directory answers: its manifest is the resolution's own, and
+    // the level above is not asked.
     write(
         "app/node_modules/dep/package.json",
         r#"{"name":"dep","main":"lib/x.js"}"#,
@@ -1232,8 +1237,8 @@ fn resolver_externals_stop_workspace_packages() {
         },
         JsResolveOptions::default(),
     );
-    // Workspace packages linked into `node_modules` are first party (link paths;
-    // core canonicalizes them).
+    // Workspace packages linked into `node_modules` are first party (link
+    // paths; core canonicalizes them).
     assert_eq!(
         e.targets("index.js", Require, "@ws/lib"),
         ["node_modules/@ws/lib/index.js"]
@@ -1244,8 +1249,8 @@ fn resolver_externals_stop_workspace_packages() {
         hoisted[0].ends_with("/workspace/node_modules/@ws/hoisted/index.js"),
         "{hoisted:?}"
     );
-    // Real third-party packages: in `node_modules/.pnpm`, or linked from outside
-    // the workspace.
+    // Real third-party packages: in `node_modules/.pnpm`, or linked from
+    // outside the workspace.
     assert_eq!(e.targets("index.js", Require, "dep"), ["external:dep"]);
     assert_eq!(
         e.targets("index.js", Require, "linked"),
@@ -1262,7 +1267,8 @@ fn resolver_pnpm_returns_link_paths_for_core_to_canonicalize() {
         out.manifests,
         ["package.json", "node_modules/foo/package.json"]
     );
-    // From foo's real location, `bar` is found in the `.pnpm` sibling directory.
+    // From foo's real location, `bar` is found in the `.pnpm` sibling
+    // directory.
     assert_eq!(
         e.targets(
             "node_modules/.pnpm/foo@1.0.0/node_modules/foo/index.js",

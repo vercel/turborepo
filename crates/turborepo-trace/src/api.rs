@@ -342,9 +342,9 @@ pub fn affected(repo: &Repo<'_>, req: &AffectedRequest) -> Result<AffectedTests,
     let doc = selection(cmd)?;
     if doc.run == Run::All {
         if doc.packages.is_empty() {
-            // The selection failed open. When it was the diff, every test is listed; any
-            // other failure (a bad request, a graph that cannot be built) is an
-            // error.
+            // The selection failed open. When it was the diff, every test is
+            // listed; any other failure (a bad request, a graph
+            // that cannot be built) is an error.
             if doc.reason.code == "diff-unreadable" {
                 return everything(repo, req, &doc.reason.detail);
             }
@@ -429,8 +429,9 @@ fn report(
                 for s in &pkg.selected {
                     push(&s.path, &s.frameworks, reason(&s.reason, s.via.as_deref()));
                 }
-                // Files that look like tests and that the selection does not know: they
-                // always run (the selection document's `unknown`).
+                // Files that look like tests and that the selection does not
+                // know: they always run (the selection
+                // document's `unknown`).
                 for p in &pkg.unknown {
                     push(p, &[], Reason::UnknownTest);
                 }

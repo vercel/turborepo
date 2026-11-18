@@ -140,7 +140,8 @@ fn an_unconstrained_load_is_a_new_finding() {
         ],
         "{out}"
     );
-    // The literal prefix, the anchored path and the literal table are not findings.
+    // The literal prefix, the anchored path and the literal table are not
+    // findings.
     assert!(!out.contains("src/prefix.js"), "{out}");
 
     // Without --tests: every test framework.
@@ -538,8 +539,8 @@ fn rules_are_switched_by_flag_and_by_config() {
     );
     assert!(r.join("ci/lint-baseline.json").is_file() && !r.join(BASELINE).exists());
     assert_eq!(lint(r, &error).0, 0);
-    // A stale entry of a rule that only warns does not fail; of a rule that is off,
-    // it is not judged.
+    // A stale entry of a rule that only warns does not fail; of a rule that is
+    // off, it is not judged.
     write(
         r,
         "src/load.js",
@@ -561,7 +562,8 @@ fn rules_are_switched_by_flag_and_by_config() {
     );
     write(r, "src/load.js", LOAD);
 
-    // Excluded files have no findings: from the configuration and from the flag.
+    // Excluded files have no findings: from the configuration and from the
+    // flag.
     write(r, "src/legacy/old.js", "exports.old = (m) => require(m);\n");
     write(
         r,
@@ -674,8 +676,8 @@ fn reads_are_a_separate_rule_that_is_off_by_default() {
             .unwrap()
             .starts_with("give the path a literal directory")
     );
-    // With the default layers the read is bounded: no finding even with the rule
-    // on.
+    // With the default layers the read is bounded: no finding even with the
+    // rule on.
     assert_eq!(rules(&json(&on, &[])), [load]);
 }
 
@@ -714,8 +716,8 @@ fn unresolved_references_are_a_rule_of_their_own() {
     let (code, v) = lint_json(r, &["--rule", "unresolved-reference=error"]);
     assert_eq!(code, 1);
     assert_eq!(of(&v, "unconstrained-load"), ["src/load.js"], "{v}");
-    // The rule reports whatever unresolved references are open; none of them is a
-    // load of `src/load.js`, and every one says what it is.
+    // The rule reports whatever unresolved references are open; none of them is
+    // a load of `src/load.js`, and every one says what it is.
     for f in v["findings"].as_array().unwrap() {
         if f["rule"] == "unresolved-reference" {
             assert!(
@@ -846,9 +848,9 @@ fn a_check_before_the_load_is_no_finding_unless_its_prefix_names_too_much() {
     assert_eq!(code, 0, "{out}");
     assert!(!out.contains("src/load.js"), "{out}");
 
-    // A table of module names indexed by a key, and a value checked against a list:
-    // the load is one of modules that all exist, so nothing about it is
-    // unknown.
+    // A table of module names indexed by a key, and a value checked against a
+    // list: the load is one of modules that all exist, so nothing about it
+    // is unknown.
     write(
         r,
         "src/load.js",
@@ -1051,9 +1053,9 @@ fn lint_uncertainty_and_affected_agree_under_every_switch() {
         "pnpm-lock.yaml",
         "lockfileVersion: '9.0'\nimporters:\n  .: {}\n  services/g:\n    dependencies:\n      left-pad:\n        specifier: ^1\n        version: 1.3.0\npackages:\n  left-pad@1.3.0:\n    resolution: {integrity: sha512-pad}\nsnapshots:\n  left-pad@1.3.0: {}\n",
     );
-    // A located root that is only the working directory of a child process, in a
-    // file that hands a path below its own directory to a reader (a read with a
-    // computed path, bounded by names).
+    // A located root that is only the working directory of a child process, in
+    // a file that hands a path below its own directory to a reader (a read
+    // with a computed path, bounded by names).
     service(
         "k",
         &plain("k"),
@@ -1104,9 +1106,9 @@ fn lint_uncertainty_and_affected_agree_under_every_switch() {
         (words.next().unwrap().parse().unwrap(), total)
     };
     let python = usize::from(false);
-    // Each switch with the value that turns its rule off, the floor that leaves,
-    // and the tests a change of nothing selects beyond the floor (through a
-    // name of every path).
+    // Each switch with the value that turns its rule off, the floor that
+    // leaves, and the tests a change of nothing selects beyond the floor
+    // (through a name of every path).
     let switches: [(&str, &str, usize, usize); 11] = [
         ("", "", 0, 0),
         // The computed reads of `read.js` and of the reader of `tools.js` are open.
@@ -1160,18 +1162,18 @@ fn lint_uncertainty_and_affected_agree_under_every_switch() {
         assert!(out.lines().count() >= lint.0, "{switch}: {out}");
         seen.push((lint.0, out.lines().count() - lint.0));
     }
-    // The switches do move the floor here: each rule's record is open without the
-    // rule.
+    // The switches do move the floor here: each rule's record is open without
+    // the rule.
     let expected: Vec<(usize, usize)> = switches.iter().map(|s| (s.2, s.3)).collect();
     assert_eq!(
         seen, expected,
         "(floor, selected by a change of nothing beyond it) per switch"
     );
-    // The load next to the package that is not installed: one more record that the
-    // declared packages bound.
+    // The load next to the package that is not installed: one more record that
+    // the declared packages bound.
     assert_eq!(declared[8], declared[0] + 1, "{declared:?}");
-    // Who runs a process decides what a changed path selects, not what is open: the
-    // findings are the same with the switch off.
+    // Who runs a process decides what a changed path selects, not what is open:
+    // the findings are the same with the switch off.
     let json = |env: &[(&str, &str)]| {
         let args = ["lint", "--tests", "jest", "--format", "json", "--rule"];
         let mut args = args.to_vec();
@@ -1232,9 +1234,9 @@ fn a_load_bounded_by_the_declared_packages_is_still_an_unconstrained_load() {
         ),
         "{out}"
     );
-    // With the declared closure (TURBO_TRACE_DEBUG_LOADS_STEP=0) the bound is what
-    // the packages of the tests depend on; the loader that the tests of one
-    // package reach names that package.
+    // With the declared closure (TURBO_TRACE_DEBUG_LOADS_STEP=0) the bound is
+    // what the packages of the tests depend on; the loader that the tests
+    // of one package reach names that package.
     let (code, closure, err) = run_env(
         r,
         &["lint", "--tests", "jest"],
@@ -1266,8 +1268,8 @@ fn a_load_bounded_by_the_declared_packages_is_still_an_unconstrained_load() {
     assert_eq!(v["findings"][0]["key"], KEY);
     assert_eq!(v["summary"]["floor"], 0);
 
-    // Without the bound the same two findings are open records with the same keys:
-    // a baseline written either way accepts both.
+    // Without the bound the same two findings are open records with the same
+    // keys: a baseline written either way accepts both.
     const OPEN: &[(&str, &str)] = &[("TURBO_TRACE_DEBUG_LOADS_PACKAGE", "0")];
     let (code, open, err) = run_env(r, &["lint", "--tests", "jest"], OPEN);
     assert_eq!(code, 1, "{open}{err}");
@@ -1325,7 +1327,8 @@ fn undeclared_dependencies_are_a_rule_that_is_off_by_default() {
     }
     write(r, "packages/far/data.json", "{}\n");
     write(r, "packages/far/types.ts", "export type T = number;\n");
-    // services/c: two loads and a read of a package nothing it depends on declares.
+    // services/c: two loads and a read of a package nothing it depends on
+    // declares.
     write(
         r,
         "services/c/src/reach.js",
@@ -1339,9 +1342,9 @@ fn undeclared_dependencies_are_a_rule_that_is_off_by_default() {
         "services/c/src/types.ts",
         "import type { T } from '../../../packages/far/types';\nexport type U = T;\n",
     );
-    // packages/h declares nothing; services/d declares h and dep: fine. services/c
-    // reaches dep, which only services/d declares: nothing services/c depends
-    // on does.
+    // packages/h declares nothing; services/d declares h and dep: fine.
+    // services/c reaches dep, which only services/d declares: nothing
+    // services/c depends on does.
     write(
         r,
         "services/d/src/ok.js",
@@ -1456,7 +1459,8 @@ fn undeclared_dependencies_are_a_rule_that_is_off_by_default() {
         out.contains("\n0 new, 0 baselined, 0 suppressed, 3 stale; 0 of 2 tests on the floor\n"),
         "{out}"
     );
-    // As a warning it never fails the check, and a rule that is off is not judged.
+    // As a warning it never fails the check, and a rule that is off is not
+    // judged.
     let (code, _) = lint(r, &["--rule", "undeclared-dependency=warn"]);
     assert_eq!(code, 0);
     assert_eq!(lint(r, &[]).0, 0);
@@ -1547,8 +1551,8 @@ fn a_test_pattern_that_matches_through_a_directory_above_the_root_is_reported() 
             .unwrap()
             .to_owned()
     };
-    // The pattern finds `inside/src/a.js` wherever the checkout is: reported all
-    // the same.
+    // The pattern finds `inside/src/a.js` wherever the checkout is: reported
+    // all the same.
     assert_eq!(
         message("inside/jest.config.js"),
         "the test pattern `**/src/**/*.js` matches through `src` above the checkout: which files \
@@ -1580,8 +1584,8 @@ fn a_test_pattern_that_matches_through_a_directory_above_the_root_is_reported() 
             .any(|f| f["rule"] == "test-pattern-above-root"),
         "{v}"
     );
-    // The files are tests here, as for jest, and `--explain` says what the place
-    // decides.
+    // The files are tests here, as for jest, and `--explain` says what the
+    // place decides.
     let (code, out, err) = run(
         r,
         &[

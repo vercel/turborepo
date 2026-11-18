@@ -127,7 +127,8 @@ const RECORD_LIMIT: u64 = 1024 * 1024;
 
 fn component(value: &str) -> Result<(), Error> {
     // Conservative cross-filesystem spelling: no traversal, ADS, DOS devices or
-    // case aliases. Version labels are opaque; only IDs/names become components.
+    // case aliases. Version labels are opaque; only IDs/names become
+    // components.
     let stem = value.split('.').next().unwrap_or("");
     if value.is_empty()
         || value.len() > 128
@@ -394,7 +395,8 @@ fn check_executables(tool: &Tool, tree: impl Fn(&str) -> Option<PathBuf>) -> Res
             {
                 use std::os::unix::fs::PermissionsExt;
                 // Installer-owned files need owner execute; group/other execute
-                // alone does not make the exported binary runnable by its owner.
+                // alone does not make the exported binary runnable by its
+                // owner.
                 if executed && fs::metadata(resolved)?.permissions().mode() & 0o100 == 0 {
                     return Err(Error::InvalidInventory);
                 }
@@ -582,7 +584,8 @@ fn sync_tree(root: &Path) -> Result<(), Error> {
     for dir in dirs.into_iter().rev() {
         sync_entry(&dir, true)?;
     }
-    // Each F_FULLFSYNC flushes the whole drive cache, so one here covers the tree.
+    // Each F_FULLFSYNC flushes the whole drive cache, so one here covers the
+    // tree.
     #[cfg(target_vendor = "apple")]
     rustix::fs::fcntl_fullfsync(File::open(root)?).map_err(io::Error::from)?;
     Ok(())

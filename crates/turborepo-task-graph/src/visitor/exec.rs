@@ -187,8 +187,9 @@ impl<'a, R: TaskGraphRunOpts> ExecContextFactory<'a, R> {
         }
 
         // enable task access tracing
-        // set the trace file env var - frameworks that support this can use it to
-        // write out a trace file that we will use to automatically cache the task
+        // set the trace file env var - frameworks that support this can use it
+        // to write out a trace file that we will use to automatically
+        // cache the task
         if task_access.is_enabled() {
             let (task_access_trace_key, trace_file) = task_access.get_env_var(task_hash);
             execution_env.insert(task_access_trace_key, trace_file.to_string());

@@ -44,11 +44,11 @@ impl TaskSource for GoGenerateSource {
         if !fsx::is_file(&root.join("go.mod")) {
             return Vec::new();
         }
-        // The scan is not recorded: discovery observations are shared by every task of
-        // the package, and a directive task depends only on its own file (a
-        // config input) and on what its command reads. Adding or editing a
-        // `.go` file re-discovers the package anyway, since the file belongs to
-        // it.
+        // The scan is not recorded: discovery observations are shared by every
+        // task of the package, and a directive task depends only on its
+        // own file (a config input) and on what its command reads.
+        // Adding or editing a `.go` file re-discovers the package
+        // anyway, since the file belongs to it.
         let scanned: Vec<(PathBuf, Vec<u8>)> = turborepo_trace_core::record::pause(|| {
             let mut files = Vec::new();
             walk(cx, root, 0, &mut files);

@@ -178,14 +178,15 @@ fn the_choice_of_a_discovery_is_a_part_of_the_log() {
         part.listed.contains(&(r.clone(), "**".to_owned())),
         "{part:?}"
     );
-    // The file is a test by the default patterns only: the choice decides for it.
+    // The file is a test by the default patterns only: the choice decides for
+    // it.
     let m = inputs.projects[0].discovery.matcher();
     let other = choice.other.matcher();
     let t = r.join("src/a.test.js");
     assert!(m.is_test(&t) && !other.is_test(&t));
     assert!(choice.decides(m.is_test(&t), other.is_test(&t)));
-    // A file the configured patterns match is there: they apply, and for that file
-    // the choice decides nothing (it is itself a file they match).
+    // A file the configured patterns match is there: they apply, and for that
+    // file the choice decides nothing (it is itself a file they match).
     write(&r, "src/b.spec.js", "");
     let (inputs, _) = load();
     let choice = inputs.projects[0]
@@ -310,8 +311,8 @@ fn a_glob_goes_through_a_link_as_the_runner_s_library_does() {
         glob(files, false, Links::Skip),
         ["packages/y/jest.config.js"]
     );
-    // A `**`: node-glob matches the link and what the next segment names below it,
-    // and does not go on below it; the others do.
+    // A `**`: node-glob matches the link and what the next segment names below
+    // it, and does not go on below it; the others do.
     let deep = "pack*/**/jest.config.js";
     assert_eq!(glob(deep, false, Links::NodeGlob), both);
     assert_eq!(

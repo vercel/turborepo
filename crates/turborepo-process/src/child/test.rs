@@ -745,7 +745,8 @@ async fn test_orphan_process() {
     tokio::time::sleep(STARTUP_DELAY).await;
 
     let child_pid = child.pid().unwrap() as i32;
-    // We don't kill the process group to simulate what an external program might do
+    // We don't kill the process group to simulate what an external program
+    // might do
     unsafe {
         libc::kill(child_pid, libc::SIGKILL);
     }

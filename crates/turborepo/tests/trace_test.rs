@@ -949,11 +949,12 @@ fn go_climbing_string_keeps_its_package_name_deeper_bases_and_locations() {
             "services/billing/config/testdata/shared/defaults.json",
         ],
     );
-    // (`store_test.go` too: a test file with parent steps names everything in its
-    // package from its working directory.)
+    // (`store_test.go` too: a test file with parent steps names everything in
+    // its package from its working directory.)
     assert_selects(&selected, &[CLIMB_CONFIG, CLIMB_HARNESS, CLIMB_STORE], &[]);
-    // `filepath.Join("testdata/golden", "../../../../../apps/admin/settings.json")`
-    // from `services/billing/store` is `apps/admin/settings.json`.
+    // `filepath.Join("testdata/golden",
+    // "../../../../../apps/admin/settings.json")` from `services/billing/
+    // store` is `apps/admin/settings.json`.
     let selected = affected(dir.path(), &["--changed", "apps/admin/settings.json"]);
     assert_selects(&selected, &[CLIMB_STORE, CLIMB_HARNESS], &[CLIMB_CONFIG]);
     let selected = affected(dir.path(), &["--changed", "apps/web/settings.json"]);

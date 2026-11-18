@@ -45,9 +45,10 @@ impl CacheMultiplexer {
         let use_fs_cache = opts.cache.local.should_use();
         let use_http_cache = opts.cache.remote.should_use();
 
-        // Since the above two flags are not mutually exclusive it is possible to
-        // configure yourself out of having a cache. We should tell you about it
-        // but we shouldn't fail your build for that reason.
+        // Since the above two flags are not mutually exclusive it is possible
+        // to configure yourself out of having a cache. We should tell
+        // you about it but we shouldn't fail your build for that
+        // reason.
         if !use_fs_cache && !use_http_cache {
             turborepo_log::warn(
                 turborepo_log::Source::turbo(turborepo_log::Subsystem::Cache),
@@ -185,7 +186,7 @@ impl CacheMultiplexer {
 
             return match http_result {
                 Err(CacheError::ApiClientError(
-                    box turborepo_api_client::Error::CacheDisabled { .. },
+                    deref!(turborepo_api_client::Error::CacheDisabled { .. }),
                     ..,
                 )) => {
                     warn!("failed to put to http cache: cache disabled");
@@ -232,7 +233,7 @@ impl CacheMultiplexer {
 
         match http_result {
             Some(Err(CacheError::ApiClientError(
-                box turborepo_api_client::Error::CacheDisabled { .. },
+                deref!(turborepo_api_client::Error::CacheDisabled { .. }),
                 ..,
             ))) => {
                 warn!("failed to put to http cache: cache disabled");

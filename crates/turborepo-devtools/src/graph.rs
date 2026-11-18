@@ -25,8 +25,8 @@ pub fn package_graph_to_data(pkg_graph: &PackageGraph) -> PackageGraphData {
             PackageName::Other(n) => (n.clone(), n.clone(), false),
         };
 
-        // Available native tasks from the catalog (not a live PackageJson scripts
-        // read).
+        // Available native tasks from the catalog (not a live PackageJson
+        // scripts read).
         let scripts: Vec<String> = pkg_graph
             .package_task_context(&name)
             .map(|context| context.native_tasks().script_names())
@@ -41,14 +41,15 @@ pub fn package_graph_to_data(pkg_graph: &PackageGraph) -> PackageGraphData {
         });
 
         // Get dependencies for this package and create edges
-        // Note: All packages (including root) are stored as Workspace nodes in the
-        // graph. PackageNode::Root is a separate synthetic node that all
-        // workspace packages depend on.
+        // Note: All packages (including root) are stored as Workspace nodes in
+        // the graph. PackageNode::Root is a separate synthetic node
+        // that all workspace packages depend on.
         let pkg_node = RepoPackageNode::Workspace(name);
 
         if let Some(deps) = pkg_graph.immediate_dependencies(&pkg_node) {
             for dep in deps {
-                // Skip the synthetic Root node - it's not a real package, just a graph anchor
+                // Skip the synthetic Root node - it's not a real package, just
+                // a graph anchor
                 if matches!(dep, RepoPackageNode::Root) {
                     continue;
                 }

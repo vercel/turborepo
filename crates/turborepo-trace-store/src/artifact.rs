@@ -334,8 +334,8 @@ pub fn pack(out: &Path, dest: &Path, opts: &PackOptions) -> Result<PackReport, A
     let mut manifest = Manifest::read(out).ok_or_else(|| ArtifactError::NotBuilt(out.into()))?;
     let store = out.join("store");
     if opts.caches {
-        // Composes (or reads back) the graph of this manifest and its tables, which
-        // writes both cache files for exactly this manifest.
+        // Composes (or reads back) the graph of this manifest and its tables,
+        // which writes both cache files for exactly this manifest.
         let g = crate::Graph::from_manifest(out, manifest.clone())
             .map_err(|e| ArtifactError::Store(e.to_string()))?;
         g.warm();
@@ -401,7 +401,8 @@ pub fn pack(out: &Path, dest: &Path, opts: &PackOptions) -> Result<PackReport, A
             contents.push((name, std::fs::read(&p).map_err(io(&p))?));
         }
     }
-    // What is checked against the graph it is used with: when the directory has it.
+    // What is checked against the graph it is used with: when the directory has
+    // it.
     for name in CHECKED {
         if let Ok(bytes) = std::fs::read(file_of(out, name))
             && !bytes.is_empty()
@@ -646,7 +647,8 @@ pub fn unpack(
     if len == 0 {
         return Err(ArtifactError::NotAnArtifact(src.to_path_buf()));
     }
-    // SAFETY: read-only; an artifact is written under a temporary name and renamed.
+    // SAFETY: read-only; an artifact is written under a temporary name and
+    // renamed.
     let map = unsafe { memmap2::Mmap::map(&file) }.map_err(io(src))?;
     let (header, data) = parse_header(&map, src)?;
     check_binary(&header)?;
@@ -718,8 +720,8 @@ pub fn unpack(
         Ok(Some(parts.concat()))
     };
 
-    // Every chunk is checked before a file of the graph directory is replaced: the
-    // small sections in memory, the pack under a temporary name.
+    // Every chunk is checked before a file of the graph directory is replaced:
+    // the small sections in memory, the pack under a temporary name.
     let manifest_bytes =
         small(MANIFEST)?.ok_or_else(|| ArtifactError::Corrupt("no manifest".into()))?;
     let mut manifest: Manifest = serde_json::from_slice(&manifest_bytes)
@@ -758,8 +760,9 @@ pub fn unpack(
         .located
         .as_ref()
         .filter(|l| l.root != root_digest(&root.to_string_lossy()));
-    // Each cache is checked against the manifest's key when it is opened. Composed
-    // from shards that are traced again here, the caches stay behind.
+    // Each cache is checked against the manifest's key when it is opened.
+    // Composed from shards that are traced again here, the caches stay
+    // behind.
     let caches: Vec<(&str, Option<Vec<u8>>)> = [COMPOSED, TABLES]
         .into_iter()
         .map(|name| match moved {
@@ -780,7 +783,8 @@ pub fn unpack(
     let suffix = format!("tmp.{}", std::process::id());
     let mut written = 0u64;
 
-    // The pack: every chunk decompressed and written at its offset, in parallel.
+    // The pack: every chunk decompressed and written at its offset, in
+    // parallel.
     let pack_path = store.join(shard::PACK_FILE);
     let pack_tmp = pack_path.with_extension(&suffix);
     let install_pack = || -> Result<(), ArtifactError> {
@@ -796,9 +800,10 @@ pub fn unpack(
         f.set_len(raw_len).map_err(io(&pack_tmp))?;
         let pack_jobs: Vec<&Job<'_>> = jobs.iter().filter(|j| j.section == pack_si).collect();
         if raw_len > 0 && turborepo_trace_core::debug::var_os("UNPACK_MMAP").is_some() {
-            // Measurement switch: decompress into a shared mapping of the file instead of
-            // into a buffer that is then written.
-            // SAFETY: the file was just created under a temporary name by this process.
+            // Measurement switch: decompress into a shared mapping of the file
+            // instead of into a buffer that is then written.
+            // SAFETY: the file was just created under a temporary name by this
+            // process.
             let mut map = unsafe { memmap2::MmapMut::map_mut(&f) }.map_err(io(&pack_tmp))?;
             let mut rest: &mut [u8] = &mut map;
             let mut slices = Vec::with_capacity(pack_jobs.len());
@@ -982,8 +987,8 @@ mod tests {
             parse_header(&file(&other), src),
             Err(ArtifactError::NotAnArtifact(_))
         ));
-        // A header of this schema written by another binary parses; the binary check
-        // rejects it.
+        // A header of this schema written by another binary parses; the binary
+        // check rejects it.
         assert!(matches!(
             check_binary(&back),
             Err(ArtifactError::Incompatible(_))

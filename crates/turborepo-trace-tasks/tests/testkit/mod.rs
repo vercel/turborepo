@@ -347,9 +347,9 @@ impl SyntheticRepo {
             N.fetch_add(1, Ordering::Relaxed)
         ));
         let _ = std::fs::remove_dir_all(&tmp);
-        // Decoys above the repo root: a recognizer that searches upwards without
-        // stopping at the root picks them up, and the inside-repo check reports
-        // it.
+        // Decoys above the repo root: a recognizer that searches upwards
+        // without stopping at the root picks them up, and the
+        // inside-repo check reports it.
         for (rel, contents) in DECOYS {
             let p = tmp.join(rel);
             std::fs::create_dir_all(p.parent().unwrap()).unwrap();
@@ -361,8 +361,8 @@ impl SyntheticRepo {
             std::fs::create_dir_all(p.parent().unwrap()).unwrap();
             std::fs::write(&p, contents).unwrap();
         }
-        // Canonical, so paths compare equal to what recognizers build (macOS /var →
-        // /private/var).
+        // Canonical, so paths compare equal to what recognizers build (macOS
+        // /var → /private/var).
         let root = repo.canonicalize().unwrap();
         SyntheticRepo {
             root,
@@ -1268,8 +1268,9 @@ pub fn run_registry(mode: Mode, per_program: usize) -> (Vec<Failure>, usize) {
         );
         for program in r.programs() {
             for i in 0..per_program {
-                // Every fourth command uses a near-miss of the program name (`python3.11`,
-                // `TSC`, `tsc-x`): no recognizer may claim a program it does not declare.
+                // Every fourth command uses a near-miss of the program name
+                // (`python3.11`, `TSC`, `tsc-x`): no recognizer
+                // may claim a program it does not declare.
                 let program = if i % 4 == 3 {
                     near_miss(program, &mut g.rng)
                 } else {
@@ -1386,8 +1387,8 @@ pub fn fixture_text<S: AsRef<str>>(dir: &str, commands: &[S]) -> String {
             panic!("`{line}`: [{p:?}] {m}");
         }
         for r in &reps {
-            // Per command: a Full command must not be the one that added an unknown
-            // command.
+            // Per command: a Full command must not be the one that added an
+            // unknown command.
             if r.recognition == Recognition::Full
                 && let Some(p) = &r.program
                 && spec.uncertainties.iter().any(|u| {

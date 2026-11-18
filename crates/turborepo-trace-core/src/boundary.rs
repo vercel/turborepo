@@ -316,7 +316,8 @@ mod tests {
             Some("/a/node_modules/.pnpm/x@1/node_modules/foo")
         );
         assert_eq!(root(&nm, "/a/node_modules/foo"), None);
-        // nft quirk kept: a scoped path without a file below still yields a root.
+        // nft quirk kept: a scoped path without a file below still yields a
+        // root.
         assert_eq!(
             root(&nm, "/a/node_modules/@s/foo").as_deref(),
             Some("/a/node_modules/@s/foo")

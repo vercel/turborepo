@@ -46,14 +46,6 @@ pub fn request_open_port() -> Option<u16> {
         .map(|addr| addr.port())
 }
 
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn requests_ephemeral_port() {
-        assert_ne!(super::request_open_port().unwrap(), 0);
-    }
-}
-
 #[derive(Deserialize)]
 struct VercelAppTokenIntrospectRequest {
     token: String,
@@ -491,4 +483,12 @@ pub async fn start_test_server(
     axum::serve(listener, app).await?;
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn requests_ephemeral_port() {
+        assert_ne!(super::request_open_port().unwrap(), 0);
+    }
 }

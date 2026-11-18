@@ -71,8 +71,9 @@ pub fn edge_attr(kind: RefKind, phase: Phase, flags: RefFlags) -> u16 {
         Phase::Runtime => q::Phase::Runtime,
         Phase::Build => q::Phase::Build,
     };
-    // Bits 0..5 are shared; core `NAMES` is not carried over, core `LOCATED` has
-    // its own query bit (bits 6 and 7 of the query set are the store's marks).
+    // Bits 0..5 are shared; core `NAMES` is not carried over, core `LOCATED`
+    // has its own query bit (bits 6 and 7 of the query set are the store's
+    // marks).
     let mut f = q::RefFlags::from_bits_truncate(flags.bits() as u8 & 0x1f);
     if flags.contains(RefFlags::LOCATED) {
         f |= q::RefFlags::LOCATED;

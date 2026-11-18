@@ -51,8 +51,9 @@ pub(crate) fn run_query<T: AsRef<OsStr>>(args: impl IntoIterator<Item = T>) -> O
                     return Some(1);
                 }
             };
-            // Do not use println!: a broken stdout pipe must not panic and enter
-            // the crash-reporting path for this otherwise side-effect-free query.
+            // Do not use println!: a broken stdout pipe must not panic and
+            // enter the crash-reporting path for this otherwise
+            // side-effect-free query.
             if std::io::stdout().lock().write_all(&bytes).is_err() {
                 let _ = writeln!(
                     std::io::stderr().lock(),

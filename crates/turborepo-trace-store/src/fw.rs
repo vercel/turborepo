@@ -347,8 +347,8 @@ impl Loaded {
     /// a key observation of the file's framework group (`obs`), and the
     /// links it crossed.
     fn consulted(&self, out: &mut FileFw, obs: &mut Observations) {
-        // (Once per file: a file that may be a test and the imports of the same file
-        // ask the same loads.)
+        // (Once per file: a file that may be a test and the imports of the same
+        // file ask the same loads.)
         let id = self as *const Loaded as usize;
         if out.consulted.contains(&id) {
             return;
@@ -666,7 +666,8 @@ impl<'a> Fw<'a> {
     /// tenth of the time of a cold build's assembly); as one
     /// set per directory, a file names the directories its walk passed.
     fn walk_levels(&self, ai: usize, key: Observations) -> Vec<Arc<Observations>> {
-        // Names that were looked up have no directory: such a walk stays one set.
+        // Names that were looked up have no directory: such a walk stays one
+        // set.
         if !key.packages.is_empty() {
             return vec![self.own(key)];
         }
@@ -775,8 +776,9 @@ impl<'a> Fw<'a> {
             }
             config_files.sort();
             config_files.dedup();
-            // The parts of the load that decide for some files only: the choice of a
-            // project's discovery. A part that no project names decides for every file.
+            // The parts of the load that decide for some files only: the choice
+            // of a project's discovery. A part that no project
+            // names decides for every file.
             let mut parts: Vec<(String, fsx::Log)> = Vec::new();
             for (name, part) in std::mem::take(&mut log.parts) {
                 let named = inputs
@@ -789,9 +791,10 @@ impl<'a> Fw<'a> {
                     log.extend(part);
                 }
             }
-            // (Where a link leads that a part crossed is a record of the files the part
-            // decides for, like its set: a file that does not name the set keeps its
-            // records when the part's walk comes to cross a link.)
+            // (Where a link leads that a part crossed is a record of the files
+            // the part decides for, like its set: a file that does
+            // not name the set keeps its records when the part's
+            // walk comes to cross a link.)
             let parts: Vec<(String, Arc<Observations>, Vec<PathBuf>)> = parts
                 .into_iter()
                 .map(|(name, part)| {
@@ -821,8 +824,8 @@ impl<'a> Fw<'a> {
                     ))
                 })
                 .collect();
-            // Whether the place of the checkout decides which files are tests, per project
-            // whose runner matches absolute paths.
+            // Whether the place of the checkout decides which files are tests,
+            // per project whose runner matches absolute paths.
             let mut located: Vec<Arc<LocatedRec>> = Vec::new();
             for p in &inputs.projects {
                 let Some((spec, _)) = location::ProjectSpec::of(&p.discovery) else {
@@ -952,8 +955,9 @@ impl<'a> Fw<'a> {
         match target {
             FwTarget::Path(p) => {
                 let p = fsx::normalize(p);
-                // A path outside the repository (a config's `<rootDir>/../../x` that leaves
-                // it, an absolute path of the machine) is not looked up: neither an edge to
+                // A path outside the repository (a config's `<rootDir>/../../x`
+                // that leaves it, an absolute path of the
+                // machine) is not looked up: neither an edge to
                 // a host file nor a probe.
                 if self.tracer.fs().is_host_path(&p) {
                     return None;
@@ -1083,9 +1087,10 @@ impl<'a> Fw<'a> {
         for h in &ti.mock_hazards {
             edges.push(marker(format!("mock:hazard {} @ {at}:{}", h.what, h.line)));
         }
-        // A manual mock that a file other than a test registers without a factory loads
-        // when its module is requested: `crate::compose::mocks` adds the edge from the
-        // module to the mock.
+        // A manual mock that a file other than a test registers without a
+        // factory loads when its module is requested:
+        // `crate::compose::mocks` adds the edge from the module to the
+        // mock.
         for l in &ti.lazy_mocks {
             edges.push(marker(format!(
                 "mock:manual {fw_id} {} for {}",
@@ -1140,7 +1145,8 @@ impl<'a> Fw<'a> {
                 else {
                     continue;
                 };
-                // Mocks registered in setup files apply to every test of the project.
+                // Mocks registered in setup files apply to every test of the
+                // project.
                 if matches!(
                     e.role,
                     InputRole::SetupFile | InputRole::SetupFileAfterEnv | InputRole::Conftest
@@ -1193,7 +1199,8 @@ impl<'a> Fw<'a> {
                     at.as_deref().unwrap_or(id)
                 )));
             }
-            // Read by the runner, not loaded by the test: an input by content, no edge.
+            // Read by the runner, not loaded by the test: an input by content,
+            // no edge.
             obs.reads
                 .extend(p.global.reads.iter().map(|p| fsx::normalize(p)));
             obs.missing
@@ -1296,7 +1303,8 @@ impl<'a> Fw<'a> {
                             walks.push(Arc::clone(level));
                         }
                     }
-                    // A config above `cur` is the answer of that directory's walk.
+                    // A config above `cur` is the answer of that directory's
+                    // walk.
                     if let Some(c) = gov.as_ref().filter(|c| c.parent() == Some(cur)) {
                         out.push(self.load(ai, c));
                     }
@@ -1452,8 +1460,8 @@ impl<'a> Fw<'a> {
                 continue;
             }
             let l = self.load(*ai, c);
-            // The helpers the config loads decide its values: key inputs of the config
-            // file.
+            // The helpers the config loads decide its values: key inputs of the
+            // config file.
             out.key_reads.extend(l.config_files.iter().cloned());
             values.extend(
                 l.inputs
@@ -1483,7 +1491,8 @@ impl<'a> Fw<'a> {
             else {
                 continue;
             };
-            // A reporter: the runner loads it to report results, no test executes it.
+            // A reporter: the runner loads it to report results, no test
+            // executes it.
             if values.iter().any(|v| {
                 v.runner
                     .iter()
@@ -1549,8 +1558,8 @@ impl<'a> Fw<'a> {
         // The walks that said which configs are consulted for the file.
         let mut walks: Vec<Arc<Observations>> = Vec::new();
 
-        // 0. A runner config: its path values that the adapter models are not its
-        //    reads.
+        // 0. A runner config: its path values that the adapter models are not
+        //    its reads.
         if lang == "js" {
             self.drop_config_values(path, dir, a, &mut out);
         }
@@ -1567,10 +1576,11 @@ impl<'a> Fw<'a> {
             walks.extend(levels.iter().cloned());
             let Some(config) = config else { continue };
             let l = self.load(ai, config);
-            // Whether the file is a test is the load's answer, also when it is no.
+            // Whether the file is a test is the load's answer, also when it is
+            // no.
             l.consulted(&mut out, &mut obs);
-            // A discovery that was chosen by the files that are there: the choice is a
-            // record of the files it decides for.
+            // A discovery that was chosen by the files that are there: the
+            // choice is a record of the files it decides for.
             for (pi, choice) in l.choices.iter().enumerate() {
                 if let Some((other, set, crossed)) = choice
                     && let Some(c) = l.inputs.projects[pi].discovery.choice.as_deref()
@@ -1582,8 +1592,9 @@ impl<'a> Fw<'a> {
                     }
                 }
             }
-            // The runner runs the file once in every project whose patterns match it, each
-            // time with that project's setup files, transforms, environment and mocks: the
+            // The runner runs the file once in every project whose patterns
+            // match it, each time with that project's setup files,
+            // transforms, environment and mocks: the
             // inputs of every one of them are inputs of the test.
             let mut matched: Vec<usize> = (0..l.matchers.len())
                 .filter(|&pi| l.matchers[pi].is_test(path))
@@ -1611,8 +1622,9 @@ impl<'a> Fw<'a> {
             cwds.dedup();
             out.tests.push((fw.id(), cwds));
             obs.extend_from(cobs);
-            // What the file does with the mock APIs is a fact of its extraction (none: it
-            // uses none of them): the adapter does not scan the source for it again.
+            // What the file does with the mock APIs is a fact of its extraction
+            // (none: it uses none of them): the adapter does not
+            // scan the source for it again.
             let mocks = a.extraction.as_ref().map(|e| {
                 e.facts
                     .iter()
@@ -1645,8 +1657,9 @@ impl<'a> Fw<'a> {
                 );
                 edges.append(&mut own);
             }
-            // A module that one project's run replaces and another's loads for real is
-            // loaded: the replacements of a test hold only when every run makes them.
+            // A module that one project's run replaces and another's loads for
+            // real is loaded: the replacements of a test hold only
+            // when every run makes them.
             if replaced.windows(2).any(|w| w[0] != w[1]) {
                 edges.push(marker(format!(
                     "mock:hazard the projects that run the test replace other modules @ {}:0",
@@ -1655,12 +1668,12 @@ impl<'a> Fw<'a> {
             }
         }
 
-        // 2. Module mappers and haste mocks of the js projects whose root contains the
-        //    file.
+        // 2. Module mappers and haste mocks of the js projects whose root
+        //    contains the file.
         if lang == "js" {
-            // Every config that was asked whether one of its projects contains the file:
-            // the answer is a function of its load, also when it is no (a `rootDir`
-            // elsewhere).
+            // Every config that was asked whether one of its projects contains
+            // the file: the answer is a function of its load, also
+            // when it is no (a `rootDir` elsewhere).
             let loads = self.js_loads_for(dir);
             walks.extend(loads.1.iter().cloned());
             for l in &loads.0 {
@@ -1681,8 +1694,9 @@ impl<'a> Fw<'a> {
                     {
                         continue;
                     }
-                    // A reference with several values (`a | b`: a table of module names, a
-                    // conditional) is mapped value by value: each one is a request the
+                    // A reference with several values (`a | b`: a table of
+                    // module names, a conditional) is
+                    // mapped value by value: each one is a request the
                     // runner's resolver sees on its own.
                     let whole = e.spec.to_string();
                     let unresolved = a.edges[i].succ.is_empty();
@@ -1694,10 +1708,13 @@ impl<'a> Fw<'a> {
                         }
                         if spec.contains('*') {
                             all_by_alias = false;
-                            // A pattern (`'@shared/routes/' + name`, not a literal with a
-                            // `*` in it) that nothing resolved, in a project with module
-                            // mappers: a mapper may apply to what the pattern stands for,
-                            // and mappers are not applied to patterns, so the load is open.
+                            // A pattern (`'@shared/routes/' + name`, not a
+                            // literal with a `*` in
+                            // it) that nothing resolved, in a project with
+                            // module mappers: a
+                            // mapper may apply to what the pattern stands for,
+                            // and mappers are not applied to patterns, so the
+                            // load is open.
                             if unresolved
                                 && !spec.starts_with(['.', '/'])
                                 && !spec.contains(':')
@@ -1726,15 +1743,22 @@ impl<'a> Fw<'a> {
                             resolved_by_alias |= es.iter().any(|x| x.spec.contains(" -> "));
                             edges.extend(es);
                             obs.extend(o);
-                            // A module a loader plugin of the runner compiles: what the plugin
-                            // reads for it (a shader's own imports) is traced when a language
-                            // plugin reads the module (its import lines are its references,
-                            // and one it cannot read or resolve is its own record). When none
-                            // does, this importer is uncertain. Nothing else is, because of
+                            // A module a loader plugin of the runner compiles:
+                            // what the plugin reads
+                            // for it (a shader's own imports) is traced when a
+                            // language plugin reads
+                            // the module (its import lines are its references,
+                            // and one it cannot read or resolve is its own
+                            // record). When none
+                            // does, this importer is uncertain. Nothing else
+                            // is, because of
                             // the plugin.
-                            // A request whose export conditions a custom resolver changes: it
-                            // matters only when the request resolves into the repository (an
-                            // installed package is one unit whatever file of it is picked).
+                            // A request whose export conditions a custom
+                            // resolver changes: it
+                            // matters only when the request resolves into the
+                            // repository (an
+                            // installed package is one unit whatever file of it
+                            // is picked).
                             let proj = &l.inputs.projects[*pi];
                             if proj.resolution.condition_requests.contains(&spec)
                                 && a.edges[i].succ.iter().any(|&f| {
@@ -1784,11 +1808,11 @@ impl<'a> Fw<'a> {
                 }
             }
         }
-        // 3. What a file that is not a test does with the mock APIs of the runners
-        //    (from its
-        // extraction's fact): the real loads and hazards that undo the replacements of
-        // the tests that load it, and the mocks and real modules it loads or
-        // registers.
+        // 3. What a file that is not a test does with the mock APIs of the
+        //    runners (from its
+        // extraction's fact): the real loads and hazards that undo the
+        // replacements of the tests that load it, and the mocks and
+        // real modules it loads or registers.
         if lang == "js"
             && out.tests.is_empty()
             && let Some(scan) = a
@@ -1814,18 +1838,20 @@ impl<'a> Fw<'a> {
             });
             obs.extend(tobs);
             out.reached.extend(res.reached.take());
-            // A manual mock the file registers is found by looking next to its module, and
-            // only named in a marker: reached, like what a resolution found.
+            // A manual mock the file registers is found by looking next to its
+            // module, and only named in a marker: reached, like
+            // what a resolution found.
             out.reached
                 .extend(ti.lazy_mocks.iter().map(|l| (l.mock.clone(), Vec::new())));
             obs.extend(res.obs.into_inner());
             let id = projects.first().map_or("jest", |(l, _)| l.fw.id());
-            // The markers (among them the manual mocks the file registers without a
-            // factory, which the derived layer turns into edges from their modules), and
-            // the mocks the file loads itself (`requireMock`, a mock found by name).
+            // The markers (among them the manual mocks the file registers
+            // without a factory, which the derived layer turns into
+            // edges from their modules), and the mocks the file
+            // loads itself (`requireMock`, a mock found by name).
             self.test_input_edges("js", id, &ti, &mut edges, &mut obs, &mut uncs);
-            // A real load when the file's code runs is a dependency of the file (a test's
-            // own are edges of its framework inputs).
+            // A real load when the file's code runs is a dependency of the file
+            // (a test's own are edges of its framework inputs).
             for p in &ti.loaded_eager {
                 if self.tracer.fs().is_file(p) {
                     edges.push(FwEdge {
@@ -1839,20 +1865,22 @@ impl<'a> Fw<'a> {
                 }
             }
         }
-        // What each walk accessed decides the file's framework inputs, also when it
-        // found no config and when the file is no test: a key observation of
-        // the file.
+        // What each walk accessed decides the file's framework inputs, also
+        // when it found no config and when the file is no test: a key
+        // observation of the file.
         for walk in &walks {
             key_observation(&mut obs, walk);
         }
-        // A set that this pass did not make reached the file through a resolution it
-        // asked of the tracer (the tsconfig chain of the directory a config's
-        // request is resolved from): the tracer's set, which the file names
-        // like the sets of its own resolutions, in its file-level group. The
-        // store labels a set by the group that
-        // names it ([`crate::shard::KeyGroupRec::framework`]), and a tsconfig set that
-        // was labelled as this pass's would be none for a query that asks which
-        // files observed a config ([`crate::Graph::key_observers`]).
+        // A set that this pass did not make reached the file through a
+        // resolution it asked of the tracer (the tsconfig chain of the
+        // directory a config's request is resolved from): the tracer's
+        // set, which the file names like the sets of its own
+        // resolutions, in its file-level group. The store labels a set
+        // by the group that
+        // names it ([`crate::shard::KeyGroupRec::framework`]), and a tsconfig
+        // set that was labelled as this pass's would be none for a
+        // query that asks which files observed a config
+        // ([`crate::Graph::key_observers`]).
         let mut theirs: Vec<Arc<Observations>> = Vec::new();
         obs.key.retain(|k| {
             let own = self.own_sets.contains_key(&(Arc::as_ptr(k) as usize));
@@ -1923,9 +1951,10 @@ impl<'a> Fw<'a> {
                 links: e.links,
             });
         }
-        // Uncertainties travel on unresolved marker edges (the store records edge
-        // uncertainties on the file, with the effect of the edge's kind: a record about
-        // which module the runner loads is a load, every other one a read).
+        // Uncertainties travel on unresolved marker edges (the store records
+        // edge uncertainties on the file, with the effect of the edge's
+        // kind: a record about which module the runner loads is a load,
+        // every other one a read).
         let mut useen = std::collections::HashSet::new();
         for FwUnc { unc: u, load } in uncs {
             if !useen.insert((u.kind, u.detail.clone())) {
@@ -1999,7 +2028,8 @@ impl<'f, 'a> Resolver<'f, 'a> {
             .any(|(q, d)| q == request && d == from_dir);
         if !known {
             self.obs.borrow_mut().extend_from(&r.obs);
-            // Whatever the caller does with the result, the file depends on what was found.
+            // Whatever the caller does with the result, the file depends on
+            // what was found.
             let path = |f: &FileId| self.fw.tracer.path_of(*f).to_path_buf();
             let links: Vec<PathBuf> = r.links.iter().map(path).collect();
             self.reached
@@ -2206,9 +2236,9 @@ struct FwUnc {
 
 impl FwUnc {
     fn load(unc: Uncertainty) -> Self {
-        // `TURBO_TRACE_DEBUG_FW_LOADS=0`: every record of the framework pass is a read,
-        // as before (for A/B measurements; graphs built either way are not
-        // interchangeable).
+        // `TURBO_TRACE_DEBUG_FW_LOADS=0`: every record of the framework pass is
+        // a read, as before (for A/B measurements; graphs built either
+        // way are not interchangeable).
         static ON: std::sync::LazyLock<bool> = std::sync::LazyLock::new(|| {
             turborepo_trace_core::debug::var_os("FW_LOADS").is_none_or(|v| v != "0")
         });
@@ -2281,7 +2311,8 @@ mod tests {
             std::fs::create_dir_all(p.parent().unwrap()).unwrap();
             std::fs::write(p, body).unwrap();
         };
-        // A root multi config, a nested multi config, plain configs at several depths.
+        // A root multi config, a nested multi config, plain configs at several
+        // depths.
         w(
             "jest.config.js",
             "module.exports = { projects: ['apps/*'] };",

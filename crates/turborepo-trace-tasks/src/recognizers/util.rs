@@ -106,7 +106,8 @@ pub fn positionals<'a>(args: &[Arg<'a>]) -> Vec<&'a str> {
 /// directory a `**` membership, anything else (existing or not) an input file.
 pub fn add_path_input(cmd: &Command, arg: &str, reason: &str, out: &mut TaskSpec) {
     if arg.contains('$') || arg.contains('`') {
-        // A computed path: the registry adds the package directory for dynamic words.
+        // A computed path: the registry adds the package directory for dynamic
+        // words.
         return;
     }
     if crate::glob::is_glob(arg) {
@@ -115,9 +116,10 @@ pub fn add_path_input(cmd: &Command, arg: &str, reason: &str, out: &mut TaskSpec
     }
     let p = cmd.path(arg);
     if out.written.contains(&p) {
-        // An absolute path the command writes out: not looked up where it lands on this
-        // machine. A directory that it may name inside the repository is a membership,
-        // like a directory inside; the files it may name are the input's readings.
+        // An absolute path the command writes out: not looked up where it lands
+        // on this machine. A directory that it may name inside the
+        // repository is a membership, like a directory inside; the
+        // files it may name are the input's readings.
         for (dir, _) in fsx::readings(&p) {
             if fsx::is_dir(&dir) {
                 out.membership(dir, "**", reason);

@@ -1337,9 +1337,9 @@ mod tests {
         assert!(Glob::new("a/[a-z-]/c").is_err());
         assert!(Glob::new("a/[-a-z]/c").is_err());
         assert!(Glob::new("a/[-]/c").is_err());
-        // NOTE: Without special attention to escaping and character parsing, this could
-        // be       mistakenly interpreted as an empty range over the character
-        // `-`. This should be       rejected.
+        // NOTE: Without special attention to escaping and character parsing,
+        // this could be       mistakenly interpreted as an empty range
+        // over the character `-`. This should be       rejected.
         assert!(Glob::new("a/[---]/c").is_err());
         assert!(Glob::new("a/[[]/c").is_err());
         assert!(Glob::new("a/[]]/c").is_err());
@@ -1410,8 +1410,8 @@ mod tests {
         assert!(Glob::new("<a/:0,>/").is_err());
     }
 
-    // Rooted repetitions are rejected if their lower bound is zero; any other lower
-    // bound is accepted.
+    // Rooted repetitions are rejected if their lower bound is zero; any other
+    // lower bound is accepted.
     #[test]
     fn reject_glob_with_rooted_repetition_tokens() {
         assert!(Glob::new("</root:0,>maybe").is_err());
@@ -1502,8 +1502,8 @@ mod tests {
         assert!(!glob.is_match(Path::new("a/bb")));
         assert!(!glob.is_match(Path::new("a/b/c")));
 
-        // There are no variant tokens with which to capture, but the matched text
-        // should always be available.
+        // There are no variant tokens with which to capture, but the matched
+        // text should always be available.
         assert_eq!(
             "a/b",
             glob.matched(&CandidatePath::from(Path::new("a/b")))
@@ -1607,8 +1607,9 @@ mod tests {
     #[cfg(any(unix, windows))]
     #[test]
     fn match_glob_with_empty_class_tokens() {
-        // A character class is "empty" if it only matches separators on the target
-        // platform. Such a character class never matches anything.
+        // A character class is "empty" if it only matches separators on the
+        // target platform. Such a character class never matches
+        // anything.
         let glob = Glob::new("a[/]b").unwrap();
 
         assert!(!glob.is_match(Path::new("a/b")));
@@ -1936,13 +1937,15 @@ mod tests {
         assert!(Glob::new("</root:1,>").unwrap().has_root());
 
         assert!(!Glob::new("").unwrap().has_root());
-        // This is not rooted, because character classes may not match separators. This
-        // example compiles an "empty" character class, which attempts to match
-        // `NUL` and so effectively matches nothing.
+        // This is not rooted, because character classes may not match
+        // separators. This example compiles an "empty" character class,
+        // which attempts to match `NUL` and so effectively matches
+        // nothing.
         #[cfg(any(unix, windows))]
         assert!(!Glob::new("[/]root").unwrap().has_root());
-        // The leading forward slash in tree tokens is meaningful. When omitted, at the
-        // beginning of an expression, the resulting glob is not rooted.
+        // The leading forward slash in tree tokens is meaningful. When omitted,
+        // at the beginning of an expression, the resulting glob is not
+        // rooted.
         assert!(!Glob::new("**/").unwrap().has_root());
     }
 

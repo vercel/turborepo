@@ -57,7 +57,8 @@ struct RelationshipIndex {
 
 impl RelationshipIndex {
     fn build(repository: &RepositoryKnowledge, relationships: &RelationshipKnowledge) -> Self {
-        // Root is the always-present Turbo task namespace, not PackageNode::Root.
+        // Root is the always-present Turbo task namespace, not
+        // PackageNode::Root.
         let mut names = vec![PackageName::Root];
         names.extend(
             repository
@@ -93,12 +94,14 @@ impl RelationshipIndex {
             let mut required_peers = Vec::new();
 
             for relationship in group.relationships() {
-                // Existing prune semantics intentionally use the required peer's
-                // declaration name, independently of classification and ordinary
-                // declaration precedence. This retains an authoritative same-name
-                // workspace even when the peer specifier was classified external
-                // or a duplicate dev declaration won the graph projection.
-                // Optional peers are never retained here.
+                // Existing prune semantics intentionally use the required
+                // peer's declaration name, independently of
+                // classification and ordinary declaration
+                // precedence. This retains an authoritative same-name
+                // workspace even when the peer specifier was classified
+                // external or a duplicate dev declaration won
+                // the graph projection. Optional peers are
+                // never retained here.
                 if relationship.kind() == (DependencyKind::Peer { optional: false })
                     && let Some(target) =
                         lookup_identity(&non_root_lookup, root, relationship.declaration_name())

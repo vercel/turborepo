@@ -309,7 +309,8 @@ mod tests {
 
     #[test]
     fn steering_edits_change_no_job() {
-        // Comments, formatting, names, triggers, path filters, concurrency, job `if`.
+        // Comments, formatting, names, triggers, path filters, concurrency, job
+        // `if`.
         let edited = BASE
             .replace("name: CI", "# a comment\nname:   Continuous\nrun-name: x")
             .replace(

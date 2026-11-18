@@ -29,7 +29,8 @@ pub(super) fn check(file: &File, private: bool) -> io::Result<()> {
     if pointer.is_null() {
         let error = io::Error::last_os_error();
         // Darwin reports an absent extended ACL as ENOENT on a live descriptor.
-        // Confirm the descriptor remains valid; every other query error fails closed.
+        // Confirm the descriptor remains valid; every other query error fails
+        // closed.
         return if error.raw_os_error() == Some(libc::ENOENT) {
             file.metadata().map(|_| ())
         } else {
@@ -59,14 +60,16 @@ pub(super) fn check(file: &File, private: bool) -> io::Result<()> {
             };
         }
         let (mut tag, mut mask) = (0, 0);
-        // SAFETY: entry belongs to the live ACL; output storage is correctly typed.
+        // SAFETY: entry belongs to the live ACL; output storage is correctly
+        // typed.
         if unsafe { acl_get_tag_type(entry, &mut tag) } != 0
             || unsafe { acl_get_permset_mask_np(entry, &mut mask) } != 0
         {
             return Err(io::Error::last_os_error());
         }
-        // Reject grants even when another ACE denies them, or they are currently
-        // inherit-only. Do not attempt to resolve principals or effective order.
+        // Reject grants even when another ACE denies them, or they are
+        // currently inherit-only. Do not attempt to resolve principals
+        // or effective order.
         if private || !matches!(tag, 1 | 2) || (tag == 1 && mask & MUTATION != 0) {
             return Err(io::Error::other(
                 "unsupported or unsafe setup user-state ACL",

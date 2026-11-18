@@ -69,8 +69,9 @@ fn linked() {
     let set = discover(&ws, &Options::default());
     insta::assert_snapshot!("linked", dump(&root, &set));
 
-    // An internal bin through a pnpm shim: its source is an entry, the schema an
-    // input, the redirect an output; the bin's package is not a membership.
+    // An internal bin through a pnpm shim: its source is an entry, the schema
+    // an input, the redirect an output; the bin's package is not a
+    // membership.
     let t = get(&set, "task:packages/app#codegen");
     assert_eq!(t.commands[0].recognizer, Some("bin"));
     assert_eq!(t.commands[0].recognition, Recognition::Full);
@@ -94,8 +95,8 @@ fn linked() {
         assert_eq!(t.commands[0].recognizer, Some("bin"), "{s}");
         assert!(has_entry(t, &root, "tools/gen/bin/gen-client.js"), "{s}");
     }
-    // A wrapper (symlinked `.bin`, weak evidence): jest with the config from the
-    // argv.
+    // A wrapper (symlinked `.bin`, weak evidence): jest with the config from
+    // the argv.
     let t = get(&set, "task:packages/app#test");
     assert_eq!(t.commands[0].recognizer, Some("bin-wrapper"));
     assert_eq!(t.commands[0].recognition, Recognition::Partial);
@@ -136,7 +137,8 @@ fn linked() {
     let t = get(&set, "task:packages/app#cwd");
     assert_eq!(t.commands[0].recognition, Recognition::Partial);
     assert!(has_membership_in(t, &root, "packages/app"));
-    // A stale `.bin` shim (target gone) falls back to the workspace `bin` field.
+    // A stale `.bin` shim (target gone) falls back to the workspace `bin`
+    // field.
     let t = get(&set, "task:packages/app#test:vitest");
     assert_eq!(t.commands[0].recognizer, Some("bin-wrapper"));
     assert!(has_entry(t, &root, "tools/test-dd/bin/vitest-dd.js"));

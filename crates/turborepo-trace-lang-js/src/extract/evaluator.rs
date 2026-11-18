@@ -828,8 +828,8 @@ impl<'s> Ev<'_, 's> {
                     return Some(out);
                 }
                 TokKind::Ellipsis => {
-                    // `f(...xs)`: an unknown number of unknown arguments, kept as one
-                    // wildcard (nft does the same).
+                    // `f(...xs)`: an unknown number of unknown arguments, kept
+                    // as one wildcard (nft does the same).
                     let a = self.pos;
                     self.pos += 1;
                     self.expr()?;
@@ -1009,8 +1009,9 @@ impl<'s> Ev<'_, 's> {
                 let start = self.pos;
                 self.pos += 1;
                 let head = part(&t, 2)?;
-                // `${__dirname}/x`: with an empty head the first substitution starts the
-                // value, like the left operand of `+`.
+                // `${__dirname}/x`: with an empty head the first substitution
+                // starts the value, like the left operand of
+                // `+`.
                 let mut acc = (!head.is_empty()).then_some(JsVal::Str(Value::Str(head)));
                 loop {
                     let a = self.pos;
@@ -1825,16 +1826,16 @@ fn url_ctor_raw(args: &[JsVal], _sc: &Scope<'_, '_>) -> Option<JsVal> {
             _ => None,
         };
     }
-    // A scheme ends the first segment (`https:`, `data:`); a `:` later is part of a
-    // name (`./logs/10:30.txt`).
+    // A scheme ends the first segment (`https:`, `data:`); a `:` later is part
+    // of a name (`./logs/10:30.txt`).
     if first_lit.starts_with("//") || first_lit.split('/').next().is_some_and(|s| s.contains(':')) {
         return None; // another scheme or host
     }
     if first_lit.starts_with('/') {
         return Some(JsVal::Str(rel));
     }
-    // Keep a trailing `/` (a directory URL): it decides how the result works as a
-    // base.
+    // Keep a trailing `/` (a directory URL): it decides how the result works as
+    // a base.
     let directory = ends_with_slash(&rel)
         || matches!(rel.as_str(), Some("." | ".."))
         || rel
@@ -2097,8 +2098,9 @@ fn not_a_path(r: &str) -> Dropped {
 }
 
 fn lower_leaf(v: JsVal, rule: BaseRule) -> Result<Leaf, Dropped> {
-    // The query and fragment of a URL or a module specifier select no other file
-    // (`import(url + '?t=' + Date.now())`): with them a pattern matches nothing.
+    // The query and fragment of a URL or a module specifier select no other
+    // file (`import(url + '?t=' + Date.now())`): with them a pattern
+    // matches nothing.
     let v = match v {
         JsVal::Url(a, val) => JsVal::Url(a, url_path(val)),
         JsVal::Resolved(m, val) if rule == BaseRule::Module => JsVal::Resolved(m, url_path(val)),
@@ -2449,7 +2451,8 @@ mod tests {
             m("new URL('/abs/a.js', import.meta.resolve('eve'))"),
             "dir:/abs/a.js"
         );
-        // The relative part is steps, not text: only a new segment can be appended.
+        // The relative part is steps, not text: only a new segment can be
+        // appended.
         assert_eq!(
             m("path.dirname(require.resolve('eve')) + '/x.js'"),
             "?:require.resolve('eve')/../x.js"
@@ -2466,7 +2469,8 @@ mod tests {
             m("new URL('.', import.meta.resolve('eve')) + 'x.js'"),
             "?:import.meta.resolve('eve')/../x.js"
         );
-        // `path.join` keeps a trailing `/`, `path.resolve` and `path.dirname` drop it.
+        // `path.join` keeps a trailing `/`, `path.resolve` and `path.dirname`
+        // drop it.
         assert_eq!(
             m("new URL('a.js', pathToFileURL(path.join(__dirname, 'fx/')))"),
             "dir:./fx/a.js"
@@ -2629,8 +2633,8 @@ mod tests {
         assert_eq!(l.leaves[0].spec.to_specifier().to_string(), "assets/*.json");
         let o = ev_with("ENV + '/x'", &consts, &apis);
         assert!(o.env);
-        // An unbound receiver is assumed to be `path` only with an anchored first
-        // argument, and the assumption is reported.
+        // An unbound receiver is assumed to be `path` only with an anchored
+        // first argument, and the assumption is reported.
         let o = ev_with("p.join(__dirname, 'x')", &consts, &[]);
         assert_eq!(o.val, JsVal::Path(Anchor::FileDir, Value::str("x")));
         assert!(o.guess.unwrap().contains("assumed to be `path.join`"));

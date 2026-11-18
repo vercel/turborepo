@@ -152,8 +152,8 @@ const READERS: [&str; 4] = [
 fn an_unrelated_change_selects_no_reader() {
     let d = repo();
     let r = d.path();
-    // Fidelity: without the names layer the computed reads are open, and every test
-    // that reaches the reader is selected on any change.
+    // Fidelity: without the names layer the computed reads are open, and every
+    // test that reaches the reader is selected on any change.
     assert_eq!(
         affected_env(
             r,
@@ -165,8 +165,8 @@ fn an_unrelated_change_selects_no_reader() {
     // With it, a change that nothing names selects nothing.
     assert!(affected(r, &["--changed", "README.md"]).is_empty());
     assert!(affected(r, &["--changed", "services/e/src/x.js"]).is_empty());
-    // The floor report: no test reaches open uncertainty; the reads are bounded by
-    // names.
+    // The floor report: no test reaches open uncertainty; the reads are bounded
+    // by names.
     let report = ok_env(r, &["floor", "--tests", "jest"], &[]);
     assert!(
         report.contains("uncertainty floor: 0 of 5 entries"),
@@ -187,8 +187,8 @@ fn an_unrelated_change_selects_no_reader() {
 fn a_change_to_a_named_file_selects_the_tests_that_load_the_name() {
     let d = repo();
     let r = d.path();
-    // 'secrets' is a string of services/a/test/paths.js, loaded with the reader by
-    // a's test.
+    // 'secrets' is a string of services/a/test/paths.js, loaded with the reader
+    // by a's test.
     assert_eq!(
         affected(r, &["--changed", "services/a/secrets/dev.token"]),
         ["services/a/test/token.test.js"]
@@ -210,8 +210,8 @@ fn a_file_added_later_is_named_too() {
     let d = repo();
     let r = d.path();
     ok_env(r, &["graph", "build"], &[]);
-    // Not in the graph, and not next to anything the graph knows: only its shape
-    // matches.
+    // Not in the graph, and not next to anything the graph knows: only its
+    // shape matches.
     write(r, "services/a/secrets/new.token", "n\n");
     assert_eq!(
         affected(

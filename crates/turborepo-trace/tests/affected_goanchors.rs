@@ -106,8 +106,8 @@ impl Repo {
 #[test]
 fn a_root_joined_with_a_literal_segment_names_that_subtree() {
     let r = repo(&[]);
-    // The harness keeps `<root>/services/svc-a`: a file below it selects its tests,
-    // and the test of the function that returns `<root>/services`.
+    // The harness keeps `<root>/services/svc-a`: a file below it selects its
+    // tests, and the test of the function that returns `<root>/services`.
     assert_eq!(
         r.affected("services/svc-a/config.json"),
         [HARNESS, SMOKE, SLO]
@@ -127,9 +127,9 @@ fn a_root_joined_with_a_literal_segment_names_that_subtree() {
         SMOKE,
     ]);
     assert!(why.contains("e2e/harness_test.go:39"), "{why}");
-    // Elsewhere below the root: the harness does not go there. The root itself is
-    // only the working directory of a child process, the base of nothing that
-    // is read.
+    // Elsewhere below the root: the harness does not go there. The root itself
+    // is only the working directory of a child process, the base of nothing
+    // that is read.
     assert_eq!(r.affected("services/web/settings.yaml"), [SLO]);
     // An unrelated edit selects nothing.
     assert_eq!(r.affected("docs/notes.md"), [""; 0]);
@@ -139,8 +139,8 @@ fn a_root_joined_with_a_literal_segment_names_that_subtree() {
 
 #[test]
 fn without_following_the_location_names_everything_below_the_root() {
-    // The coarse rule: each file reaches the root with its parent steps, and names
-    // everything below it.
+    // The coarse rule: each file reaches the root with its parent steps, and
+    // names everything below it.
     let r = repo(&[("TURBO_TRACE_DEBUG_ANCHORS", "0")]);
     assert_eq!(r.affected("docs/notes.md"), [HARNESS, SMOKE, SLO]);
     assert_eq!(

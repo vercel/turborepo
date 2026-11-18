@@ -95,9 +95,9 @@ pub fn restore_terminal_best_effort() -> bool {
         return false;
     }
 
-    // Try to restore terminal state. This is important because if we panic while
-    // the TUI is active, the terminal will be left in a broken state (raw mode,
-    // alternate screen, mouse capture enabled).
+    // Try to restore terminal state. This is important because if we panic
+    // while the TUI is active, the terminal will be left in a broken state
+    // (raw mode, alternate screen, mouse capture enabled).
     //
     // We use raw escape sequences instead of crossterm to avoid any potential
     // panics from crossterm itself.
@@ -143,8 +143,8 @@ mod test {
     use super::*;
 
     // Note: These tests modify global state (TUI_ACTIVE, MOUSE_CAPTURE_ENABLED)
-    // and must run serially to avoid interference with each other or other tests
-    // that check TUI state.
+    // and must run serially to avoid interference with each other or other
+    // tests that check TUI state.
 
     #[test]
     #[serial]
@@ -209,8 +209,8 @@ mod test {
         set_tui_active();
 
         // Should return true indicating restoration was attempted
-        // Note: This will write escape sequences to stdout, but that's harmless in
-        // tests
+        // Note: This will write escape sequences to stdout, but that's harmless
+        // in tests
         assert!(restore_terminal_best_effort());
 
         // Clean up

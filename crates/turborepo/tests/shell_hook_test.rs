@@ -257,7 +257,8 @@ fn journey(shell: &str) {
     assert_eq!(a.bin, b.bin);
     let remove = env_dir(&b);
     let (a, b) = (bin(&a), bin(&b));
-    // Nested, flagged, never set up: untrusted. Flag off: ignored even if set up.
+    // Nested, flagged, never set up: untrusted. Flag off: ignored even if set
+    // up.
     repo(&temp.path().join("a/vendor/c"), true, None, node);
     repo(&temp.path().join("off"), false, Some(&home), node);
     fs::create_dir(temp.path().join("plain")).unwrap();

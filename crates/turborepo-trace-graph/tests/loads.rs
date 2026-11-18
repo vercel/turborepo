@@ -239,7 +239,8 @@ fn an_unrelated_change_selects_nothing() {
 #[test]
 fn a_change_in_a_package_the_load_declares_fires_it() {
     let f = fixture();
-    // `other.ts` is a file nothing imports, of a package the framework declares.
+    // `other.ts` is a file nothing imports, of a package the framework
+    // declares.
     let (first, added) = select(&f, &changed("packages/util/other.ts"), &opts());
     assert!(first.is_empty());
     assert_eq!(
@@ -288,9 +289,9 @@ fn a_change_reached_through_edges_stays_a_change() {
 #[test]
 fn a_fired_load_makes_the_files_that_reach_it_affected() {
     let f = fixture();
-    // `deep` is declared by `util` only. The load in util/loader.ts can reach it,
-    // so loader.ts is affected, and with it `util`, which the framework's load
-    // can reach.
+    // `deep` is declared by `util` only. The load in util/loader.ts can reach
+    // it, so loader.ts is affected, and with it `util`, which the
+    // framework's load can reach.
     let (first, added) = select(&f, &changed("packages/deep/d.ts"), &opts());
     assert!(first.is_empty());
     assert_eq!(
@@ -320,8 +321,8 @@ fn a_changed_third_party_package_affects_its_importer() {
 #[test]
 fn the_rule_alone_is_what_the_entry_package_depends_on() {
     let f = fixture();
-    // Declared three steps away from services/a and services/b (harness, framework,
-    // util).
+    // Declared three steps away from services/a and services/b (harness,
+    // framework, util).
     let (first, added) = select(&f, &changed("packages/util/other.ts"), &rule());
     assert!(first.is_empty());
     assert_eq!(
@@ -365,7 +366,8 @@ fn a_helper_does_not_widen_the_bound_of_an_entry() {
             "step: {}",
             o.loads_step
         );
-        // A change the helper file itself imports is an edge, whoever declares what.
+        // A change the helper file itself imports is an edge, whoever declares
+        // what.
         let (first, _) = select(&f, &changed("packages/util/index.ts"), &o);
         assert_eq!(first.len(), 3);
     }
@@ -442,8 +444,8 @@ fn the_report_says_for_which_packages_a_load_selects() {
     let s = &r.sites[0];
     assert_eq!(g.path(s.node), "packages/framework/normalize.ts");
     assert_eq!(s.reached, 3);
-    // a, b and c hold the entries; together they depend on everything but `leaf`,
-    // the root package and the third-party package.
+    // a, b and c hold the entries; together they depend on everything but
+    // `leaf`, the root package and the third-party package.
     assert_eq!((s.entry_packages, s.covers, r.packages), (3, 10, 12));
     assert!(!s.root_entries);
     let roots: Vec<&str> = s.reach.iter().map(|&p| g.package_info(p).root).collect();

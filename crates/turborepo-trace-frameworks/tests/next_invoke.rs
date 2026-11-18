@@ -289,8 +289,8 @@ fn swr_keys_and_fetchers() {
         jobs[0].contains("/api/jobs") && jobs[0].contains("fetchJobsPage"),
         "{jobs:#?}"
     );
-    // `useTypedSWR('/v1/items/{id}', …)`: the hook's fetcher builds the URL from
-    // the hook's parameter.
+    // `useTypedSWR('/v1/items/{id}', …)`: the hook's fetcher builds the URL
+    // from the hook's parameter.
     let items = sites_of(&s, "components/items.tsx");
     assert!(
         items.iter().any(|l| l.contains(" swr ")
@@ -387,7 +387,8 @@ fn server_actions() {
     assert!(has("bind", "renameTeam"), "{form:#?}");
     assert!(has("call", "deleteTeam"), "{form:#?}");
     assert!(has("hook:useAction", "inviteMember"), "{form:#?}");
-    // The page with the form: the actions of its closure and its own inline action.
+    // The page with the form: the actions of its closure and its own inline
+    // action.
     let page = invoked(&s, "app/teams/new/page");
     for a in ["createTeam", "renameTeam", "deleteTeam", "inviteMember"] {
         assert!(
@@ -535,9 +536,9 @@ fn unknown_bound() {
     assert!(rel.stats.bounded);
     assert_eq!(rel.stats.pages_with_unknown, 2);
     assert_eq!(rel.stats.bound_added, [0; 6]);
-    // In the consumer's relation the bounded unknown (`computeUrl(…)`) is gone; the
-    // URL read from storage comes from outside the code and stays unknown
-    // (every handler). So do the four of the sources page.
+    // In the consumer's relation the bounded unknown (`computeUrl(…)`) is gone;
+    // the URL read from storage comes from outside the code and stays
+    // unknown (every handler). So do the four of the sources page.
     assert_eq!(rel.stats.pages_unbounded, 2);
     assert_eq!(rel.stats.unbounded_sites, 5);
     let b = invoke::build_relation(&app, &g, &root);
@@ -655,10 +656,11 @@ fn link_and_redirect_targets_behind_the_middleware_prefix() {
         "app/[locale]/new/page",
         "navigation app/embed/poll/[id]/page",
     );
-    // `<a href="/">` in the layout: the page of `/[locale]`, which the path alone
-    // names nowhere.
+    // `<a href="/">` in the layout: the page of `/[locale]`, which the path
+    // alone names nowhere.
     has("app/[locale]/login/page", "navigation app/[locale]/page");
-    // The middleware's matcher leaves `/docs` alone: the path is matched as it is.
+    // The middleware's matcher leaves `/docs` alone: the path is matched as it
+    // is.
     let docs: Vec<_> = s.rel.routes["app/[locale]/page"]
         .iter()
         .filter(|i| i.url.as_deref() == Some("/docs/intro"))
@@ -806,8 +808,8 @@ fn an_href_given_to_a_component_is_a_link() {
         ]
     );
     assert!(sites_of(&s, "components/link.tsx").is_empty());
-    // The layout renders the navigation: every page below it links to the new-poll
-    // page and to the login page.
+    // The layout renders the navigation: every page below it links to the
+    // new-poll page and to the login page.
     for route in ["app/[locale]/admin/users/page", "app/[locale]/page"] {
         let v = goes_to(&s, route);
         for line in [

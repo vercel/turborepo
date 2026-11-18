@@ -653,8 +653,8 @@ impl TokenClient for APIClient {
             retry::make_retryable_request(request_builder, retry::RetryStrategy::Timeout).await?;
         let response = response.into_response();
         let status = response.status();
-        // Give a better error message for invalid tokens. This endpoint returns the
-        // following statuses:
+        // Give a better error message for invalid tokens. This endpoint returns
+        // the following statuses:
         // 200: OK
         // 400: Bad Request
         // 403: Forbidden
@@ -712,8 +712,8 @@ impl TokenClient for APIClient {
                 .await?
                 .into_response();
         let status = response.status();
-        // Give a better error message for invalid tokens. This endpoint returns the
-        // following statuses:
+        // Give a better error message for invalid tokens. This endpoint returns
+        // the following statuses:
         // 200: OK
         // 400: Bad Request
         // 403: Forbidden
@@ -963,7 +963,8 @@ impl APIClient {
         team_id: Option<&str>,
         team_slug: Option<&str>,
     ) -> retry::RateLimit {
-        // Keep credentials out of the map, which lives for the lifetime of this client.
+        // Keep credentials out of the map, which lives for the lifetime of this
+        // client.
         let key = (
             team_id.map(str::to_owned),
             team_slug.map(str::to_owned),
@@ -1706,8 +1707,9 @@ mod test {
                 })
                 .await;
             let mut transport = APIClient::build_http_client(None)?;
-            // Exercise saved credentials' redirect policy with a generic test token
-            // so the loopback server does not need an exception to the origin allowlist.
+            // Exercise saved credentials' redirect policy with a generic test
+            // token so the loopback server does not need an
+            // exception to the origin allowlist.
             transport.normal = transport.no_redirect.clone();
             let client =
                 APIClient::new_with_client(transport, server.base_url(), None, None, "test", false);

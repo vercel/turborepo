@@ -1105,7 +1105,8 @@ mod tests {
         };
         // Installed but never recorded, for example by an interrupted setup.
         session.ensure(&selection, stage, |_| Ok(())).unwrap();
-        // Unlike a turbo.lock root, an unrecorded installation is not an opt-in.
+        // Unlike a turbo.lock root, an unrecorded installation is not an
+        // opt-in.
         assert_eq!(find_root(&web, Some(&home)), None);
         let off = changes(None, "/usr/bin", Some(&web), Some(&home), || false);
         assert!(off.path.is_none() && off.notice.is_none());
@@ -1124,8 +1125,8 @@ mod tests {
         let active = changes(None, "/usr/bin", Some(&web), Some(&home), || false);
         assert_eq!(active.path, Some(prepend("/usr/bin", bin)));
         assert!(active.notice.is_none());
-        // A host setup refuses, like Windows arm64, activates nothing, even with
-        // a record an older turbo left there.
+        // A host setup refuses, like Windows arm64, activates nothing, even
+        // with a record an older turbo left there.
         let refused = Host {
             qualified: false,
             pathext: None,

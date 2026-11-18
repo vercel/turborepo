@@ -91,9 +91,9 @@ fn process_exists(pid: i32) -> bool {
 
     #[cfg(not(target_os = "windows"))]
     unsafe {
-        // From the POSIX standard: If sig is 0 (the null signal), error checking
-        // is performed but no signal is actually sent. The null signal can be
-        // used to check the validity of pid.
+        // From the POSIX standard: If sig is 0 (the null signal), error
+        // checking is performed but no signal is actually sent. The
+        // null signal can be used to check the validity of pid.
         let result = libc::kill(pid, 0);
         result == 0
     }
@@ -203,7 +203,8 @@ impl Pidlock {
             // Return an error, because None implies that we would succeed at
             // creating a pid file, but we won't. We require the file to not
             // exist if we're going to create it.
-            // TODO: should we instead try deleting the file like with stale pids?
+            // TODO: should we instead try deleting the file like with stale
+            // pids?
             return Err(PidFileError::IO(io_err, self.path.display().to_string()));
         }
 
@@ -388,7 +389,8 @@ mod tests {
 
         // expect a stale pid file to be cleaned up
         let mut pidfile = Pidlock::new(path.clone());
-        // We clear stale pid files when acquiring them, we expect this to succeed
+        // We clear stale pid files when acquiring them, we expect this to
+        // succeed
         assert!(pidfile.acquire().is_ok());
     }
 
@@ -429,8 +431,8 @@ mod tests {
         drop(file);
 
         let mut pidfile = Pidlock::new(path.clone());
-        // We expect an IO error from trying to read as a utf8 string when it's just
-        // bytes
+        // We expect an IO error from trying to read as a utf8 string when it's
+        // just bytes
         assert_matches!(
             pidfile.acquire(),
             Err(PidlockError::File(PidFileError::IO(..)))

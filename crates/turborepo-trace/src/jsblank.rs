@@ -114,7 +114,8 @@ impl Finder {
     /// The span to blank of the property `it`, if it is a site.
     fn site(&self, it: &ObjectProperty<'_>) -> Option<(&'static str, (u32, u32), Fill)> {
         let name = Self::key(it, self.sites.props)?;
-        // A method has no value expression to replace: only its body can be blanked.
+        // A method has no value expression to replace: only its body can be
+        // blanked.
         let plain = it.kind == PropertyKind::Init
             && !it.shorthand
             && (!it.method || self.sites.what == What::FunctionBodies);

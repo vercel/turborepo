@@ -698,7 +698,8 @@ fn test_cargo_build_executes_caches_and_restores() {
         .join(if cfg!(windows) { "app.exe" } else { "app" });
     assert!(bin.exists(), "cargo build must produce the binary");
 
-    // Warm: the app comes from cache, while its library dependency runs uncached.
+    // Warm: the app comes from cache, while its library dependency runs
+    // uncached.
     let output = run_turbo(
         tempdir.path(),
         &["build", "--filter=app", "--log-order", "grouped"],
@@ -1663,7 +1664,8 @@ fn test_pure_cargo_workspace_filtered_execution() {
         .join(if cfg!(windows) { "app.exe" } else { "app" });
     assert!(bin.exists(), "cargo build must produce the binary");
 
-    // Warm: the app comes from cache, while its library dependency runs uncached.
+    // Warm: the app comes from cache, while its library dependency runs
+    // uncached.
     let output = run_turbo(
         tempdir.path(),
         &["run", "build", "--filter=app", "--log-order", "grouped"],
@@ -2007,7 +2009,8 @@ fn test_query_affected_packages_task_inputs_cross_toolchain() {
         if flag == Some(true) {
             expected.push(json!({"name": "js-pkg"}));
         }
-        // Exact membership also excludes lib-a, lib-a-test-util, and the JS root.
+        // Exact membership also excludes lib-a, lib-a-test-util, and the JS
+        // root.
         assert_eq!(
             result["data"]["affectedPackages"],
             json!({"length": expected.len(), "items": expected}),

@@ -333,9 +333,10 @@ impl JsResolver {
                 Some(normalize(&self.locate(inner, cx, false)?.join(&**rel)))
             }
         };
-        // Node looks for `node_modules` next to the start and in every directory above
-        // it: from a file, that is from its directory (the probe says what would change
-        // it: a directory in the file's place, with a `node_modules` of its own).
+        // Node looks for `node_modules` next to the start and in every
+        // directory above it: from a file, that is from its directory
+        // (the probe says what would change it: a directory in the
+        // file's place, with a `node_modules` of its own).
         let dir = match start {
             None => cx.from_dir.to_path_buf(),
             Some(p) if record::pause(|| cx.fs.is_file(&p)) => {
@@ -360,8 +361,9 @@ impl JsResolver {
                 let place = if located.start().is_none() {
                     Place::Own
                 } else {
-                    // Which package the start belongs to is read from the manifests on the
-                    // way up, and recorded: a `package.json` that appears between the start
+                    // Which package the start belongs to is read from the
+                    // manifests on the way up, and
+                    // recorded: a `package.json` that appears between the start
                     // and the manifest found makes the place another package's.
                     if record::pause(|| self.is_third_party(&dir, cx)) {
                         Place::Installed
@@ -373,8 +375,9 @@ impl JsResolver {
                         Place::Repository
                     }
                 };
-                // A package that is there decides by its manifest: a config input of the
-                // reference although nothing resolved, as for a plain import of it
+                // A package that is there decides by its manifest: a config
+                // input of the reference although nothing
+                // resolved, as for a plain import of it
                 // (editing the manifest resolves the reference again).
                 let manifest = if is_package_spec(located.module()) {
                     record::pause(|| {
@@ -430,7 +433,8 @@ impl JsResolver {
                 _ => Resolution::target(Target::Unresolved),
             }
         };
-        // The manifest of the module's package, unless the trace stops at that package.
+        // The manifest of the module's package, unless the trace stops at that
+        // package.
         if !res.targets.iter().any(|t| matches!(t, Target::External(_)))
             && let Some(m) = file
                 .parent()
@@ -517,8 +521,8 @@ impl JsResolver {
                 record::missing(&path);
             }
         }
-        // Recorded with the levels it passed: a `package.json` nearer to `from` is
-        // another manifest to depend on.
+        // Recorded with the levels it passed: a `package.json` nearer to `from`
+        // is another manifest to depend on.
         if let Some(m) = self.nearest_package_json(cx.fs, from) {
             res.manifests.push(cx.intern(&m));
         }
@@ -548,8 +552,8 @@ impl JsResolver {
             Ok(f) => f,
             Err(m) => return self.not_located(m, false, r, cx),
         };
-        // The literal start as an absolute path: its directory part is steps from the
-        // file.
+        // The literal start as an absolute path: its directory part is steps
+        // from the file.
         let (head, tail) = rest.rsplit_once('/').unwrap_or(("", rest));
         let dir = normalize(&file.join(head.trim_start_matches('/')));
         if let Some(t) = self.third_party(&file, cx) {
@@ -609,8 +613,8 @@ impl JsResolver {
             return Resolution::target(Target::Builtin(b.as_str().into()));
         }
         let mut res = Resolution::none();
-        // The whole load is the module, searched from the file's package: the lockfile
-        // entry is the answer.
+        // The whole load is the module, searched from the file's package: the
+        // lockfile entry is the answer.
         let whole = exact && m.outer && m.place == Place::Own;
         if m.place == Place::Own {
             let kind = match (whole, m.esm) {
@@ -626,7 +630,8 @@ impl JsResolver {
         if whole {
             return res;
         }
-        // The load itself. Its text has a space: no lockfile entry is looked up for it.
+        // The load itself. Its text has a space: no lockfile entry is looked up
+        // for it.
         let package = package_name(&m.module);
         let not_installed = format!(
             "{}: '{}' is not installed (searched from {})",
@@ -634,9 +639,10 @@ impl JsResolver {
             m.module,
             m.from.display()
         );
-        // The record of a registry package, on an edge that says whose lockfile entry
-        // decides (`turborepo_trace_core::located`): the graph store makes it an open
-        // record when that entry is a link to a package of the repository.
+        // The record of a registry package, on an edge that says whose lockfile
+        // entry decides (`turborepo_trace_core::located`): the graph
+        // store makes it an open record when that entry is a link to a
+        // package of the repository.
         let registry = stays_in_package();
         let plain = || format!("{} (not installed)", r.spec);
         let (u, spec) = match m.place {

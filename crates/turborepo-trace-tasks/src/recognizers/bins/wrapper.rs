@@ -276,7 +276,8 @@ fn file_tools(lx: &Lexed) -> (Vec<&'static str>, Vec<&'static str>) {
             let Some(t) = tool_of_package(pkg) else {
                 continue;
             };
-            // Only a CLI entry counts, not library use (`require('esbuild').build(…)`).
+            // Only a CLI entry counts, not library use
+            // (`require('esbuild').build(…)`).
             let resolve = l.ctx.ends_with("resolve(");
             let sub = &l.value[pkg.len()..];
             let cli_path = sub.contains("/bin")

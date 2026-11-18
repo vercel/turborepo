@@ -49,8 +49,8 @@ fn root_deps(set: &TaskSet, id: &str) -> Vec<(String, bool)> {
 #[test]
 fn the_root_format_script_depends_on_the_repository() {
     let (root, set) = set();
-    // The formatter is recognized (no unknown command); without path arguments its
-    // file set is its working directory: the repository.
+    // The formatter is recognized (no unknown command); without path arguments
+    // its file set is its working directory: the repository.
     for id in ["task:.#fmt-select", "task:.#fmt", "task:.#fmt:check"] {
         let t = task(&set, id);
         assert!(t.spec.uncertainties.is_empty(), "{id}: {:?}", t.spec);
@@ -72,8 +72,9 @@ fn the_root_format_script_depends_on_the_repository() {
             .all(|o| !o.links_producer())
     );
     assert!(task(&set, "task:.#fmt:check").spec.outputs.is_empty());
-    // A wrapper around the format script only formats too: it has no outputs of its
-    // own, so it keeps the dependency (and with it the formatter's file set).
+    // A wrapper around the format script only formats too: it has no outputs of
+    // its own, so it keeps the dependency (and with it the formatter's file
+    // set).
     assert_eq!(
         task(&set, "task:.#fmt:all")
             .spec

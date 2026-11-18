@@ -64,7 +64,8 @@ fn tar_with_links(entries: &[TarEntry<'_>]) -> Vec<u8> {
         header.set_entry_type(*kind);
         header.set_mode(0o6755);
         header.set_size(data.len() as u64);
-        // Literal fixture paths ensure tar::Builder does not normalize spelling.
+        // Literal fixture paths ensure tar::Builder does not normalize
+        // spelling.
         header.as_mut_bytes()[..100].fill(0);
         header.as_mut_bytes()[..name.len()].copy_from_slice(name.as_bytes());
         if kind.is_symlink() || kind.is_hard_link() {

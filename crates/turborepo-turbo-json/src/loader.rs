@@ -538,14 +538,16 @@ impl<U: TurboJsonUpdater> TurboJsonLoader<U> {
                 let turbo_json_path = packages.get(package).ok_or_else(|| {
                     Into::<U::Error>::into(LoaderError::TurboJson(Error::NoTurboJSON))
                 })?;
-                // Check if this package is at the repo root. This can happen when
-                // the workspace definition includes "." as a package. In that case,
-                // the package's turbo.json would be the root turbo.json, so we
+                // Check if this package is at the repo root. This can happen
+                // when the workspace definition includes "." as
+                // a package. In that case, the package's
+                // turbo.json would be the root turbo.json, so we
                 // should treat it as root to use the correct schema.
                 // We use to_realpath() to resolve symlinks so that a symlinked
                 // package pointing to the repo root is also detected correctly.
-                // Defer both realpath calls until a config has been read. Missing
-                // configs need neither package nor root canonicalization.
+                // Defer both realpath calls until a config has been read.
+                // Missing configs need neither package nor root
+                // canonicalization.
                 let is_root = || {
                     package == &PackageName::Root
                         || turbo_json_path
@@ -570,8 +572,9 @@ impl<U: TurboJsonUpdater> TurboJsonLoader<U> {
                     is_root,
                 );
                 if let Some(updater) = updater {
-                    // Updaters may synthesize a config from a missing file or fail
-                    // independently. Do not cache their errors or bypass retries.
+                    // Updaters may synthesize a config from a missing file or
+                    // fail independently. Do not cache
+                    // their errors or bypass retries.
                     updater.update_turbo_json(package, turbo_json)
                 } else {
                     if matches!(&turbo_json, Err(err) if err.is_no_turbo_json()) {
@@ -785,7 +788,7 @@ fn load_task_access_trace_turbo_json(
 
 #[cfg(test)]
 mod tests {
-    use std::{fs, path::Path};
+    use std::{fs, path::Path, str::FromStr};
 
     use insta::assert_snapshot;
     use tempfile::tempdir;
@@ -800,7 +803,7 @@ mod tests {
         let relative_path = pkg_path
             .strip_prefix(repo_root.as_std_path())
             .unwrap_or(pkg_path);
-        AnchoredSystemPathBuf::try_from(relative_path.to_str().unwrap()).unwrap()
+        AnchoredSystemPathBuf::from_str(relative_path.to_str().unwrap()).unwrap()
     }
 
     // =========================================================================
@@ -1129,7 +1132,8 @@ mod tests {
             .create_with_contents(r#"{"extends": ["//"], "tasks": {"build": {}}}"#)
             .unwrap();
 
-        // Missing configs are cached for the run; watch rebuilds use a fresh loader.
+        // Missing configs are cached for the run; watch rebuilds use a fresh
+        // loader.
         let loader = TurboJsonLoader::workspace(
             TurboJsonReader::new(repo_root.to_owned()),
             repo_root.join_component(CONFIG_FILE),
@@ -1657,7 +1661,8 @@ mod tests {
         );
 
         // Loading the symlinked package should succeed because the symlink
-        // points to the repo root, and we should detect this via canonicalization
+        // points to the repo root, and we should detect this via
+        // canonicalization
         let pkg_result = loader.load(&PackageName::from("symlink-pkg"));
         assert!(
             pkg_result.is_ok(),
@@ -1832,7 +1837,7 @@ mod tests {
         let root_dir = tempdir().unwrap();
         let base = AbsoluteSystemPath::from_std_path(root_dir.path()).unwrap();
         let repo_root = base.join_component("repo");
-        let directory = AnchoredSystemPathBuf::try_from("alias").unwrap();
+        let directory = AnchoredSystemPathBuf::from_str("alias").unwrap();
         let package = PackageName::from("alias");
         let reader = TurboJsonReader::new(repo_root.clone());
         let make_loader = || {

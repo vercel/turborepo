@@ -1148,10 +1148,10 @@ impl TaskSpec {
         }
         sd(&mut self.inputs);
         sd(&mut self.data_inputs);
-        // The same output recorded with several kinds keeps the one that links most
-        // (the union is never less sound): kinds sort from most to least linking.
-        // (A part's output and the same path written by the task as a whole are both
-        // kept.)
+        // The same output recorded with several kinds keeps the one that links
+        // most (the union is never less sound): kinds sort from most to
+        // least linking. (A part's output and the same path written by
+        // the task as a whole are both kept.)
         self.outputs.sort_by(|a, b| {
             (&a.path, &a.pattern, &a.exclude, &a.part, a.kind)
                 .cmp(&(&b.path, &b.pattern, &b.exclude, &b.part, b.kind))
@@ -1370,7 +1370,8 @@ mod output_kind_tests {
         let k = |p: &str| write_kind(&root.join(p), &root);
         assert_eq!(k("package.json"), OutputKind::InPlace);
         assert_eq!(k("src/a.ts"), OutputKind::InPlace);
-        // Missing, below a build dir, a directory, or outside the repo: an artifact.
+        // Missing, below a build dir, a directory, or outside the repo: an
+        // artifact.
         assert_eq!(k("package.json.tmp"), OutputKind::Artifact);
         assert_eq!(k("dist/a.js"), OutputKind::Artifact);
         assert_eq!(k("src"), OutputKind::Artifact);

@@ -129,12 +129,12 @@ const C: &str = "services/c/test/c.test.js";
 fn cwd_relative_loads_resolve_per_test() {
     let d = services_repo();
     let r = d.path();
-    // An unrelated change selects nothing: the helper's `cwd_dependent` loads are
-    // resolved for every jest test that reaches it.
+    // An unrelated change selects nothing: the helper's `cwd_dependent` loads
+    // are resolved for every jest test that reaches it.
     assert!(affected(r, &["--changed", "README.md"]).is_empty());
-    // Without the per-test resolution (and without the bound that names give the
-    // helper's reads) every test that reaches the helper is selected on every
-    // change.
+    // Without the per-test resolution (and without the bound that names give
+    // the helper's reads) every test that reaches the helper is selected on
+    // every change.
     let off: Vec<String> = ok_env(
         r,
         &["affected", "--tests", "jest", "--changed", "README.md"],
@@ -148,7 +148,8 @@ fn cwd_relative_loads_resolve_per_test() {
     .collect();
     assert_eq!(off, [A, B, C]);
 
-    // A service's routes, and what they import, select that service's test only.
+    // A service's routes, and what they import, select that service's test
+    // only.
     assert_eq!(affected(r, &["--changed", "services/a/src/routes.js"]), [A]);
     assert_eq!(
         affected(r, &["--changed", "services/a/src/handler.js"]),
@@ -193,7 +194,8 @@ fn cwd_relative_loads_resolve_per_test() {
         ["services/a/src/handler.js", "services/a/src/routes.js", A]
     );
 
-    // An entry that is not a test has no known working directory: still uncertain.
+    // An entry that is not a test has no known working directory: still
+    // uncertain.
     let o = ok(
         r,
         &[
@@ -222,9 +224,9 @@ fn cwd_targets_that_appear_or_disappear_select_the_test() {
     let d = services_repo();
     let r = d.path();
     ok(r, &["graph", "build"]);
-    // Service c has no routes. Adding them (in any module form) selects its helper
-    // test, matched through the probes recorded on the test; `plain.test.js` is
-    // not selected.
+    // Service c has no routes. Adding them (in any module form) selects its
+    // helper test, matched through the probes recorded on the test;
+    // `plain.test.js` is not selected.
     for added in [
         "services/c/src/routes.js",
         "services/c/src/routes.ts",
@@ -248,8 +250,8 @@ fn cwd_targets_that_appear_or_disappear_select_the_test() {
         "module.exports = { routes: [] };\n",
     );
     assert_eq!(affected(r, &["--changed", "services/c/src/routes.js"]), [C]);
-    // Deleting a service's routes selects its test (the graph is refreshed first:
-    // the test then probes the missing path).
+    // Deleting a service's routes selects its test (the graph is refreshed
+    // first: the test then probes the missing path).
     std::fs::remove_file(r.join("services/b/src/routes.js")).unwrap();
     assert_eq!(affected(r, &["--changed", "services/b/src/routes.js"]), [B]);
 }
@@ -311,8 +313,8 @@ fn a_pattern_below_the_working_directory_is_resolved_per_test() {
          'src', name));\n",
     );
     let r = d.path();
-    // The file a test loads, and what that file imports, select the test of that
-    // service.
+    // The file a test loads, and what that file imports, select the test of
+    // that service.
     assert_eq!(
         affected(r, &["--changed", "services/a/src/handler.js"]),
         [A]
@@ -462,8 +464,8 @@ fn module_strings_link_route_tables_to_handlers() {
     );
     assert_eq!(affected(r, &["--changed", "services/b/src/lib.js"]), [B]);
 
-    // A table can name a handler before its file exists: adding the file (in any
-    // module form) selects the tests that load the table.
+    // A table can name a handler before its file exists: adding the file (in
+    // any module form) selects the tests that load the table.
     write(
         r,
         "services/b/src/routes.js",
@@ -513,7 +515,8 @@ fn hints_bound_dynamic_loads() {
 
     write(r, "hints.toml", HINTS);
     assert!(affected(r, &["--changed", "README.md"]).is_empty());
-    // test → helper → <cwd>/src/routes → the handlers it names → what they import.
+    // test → helper → <cwd>/src/routes → the handlers it names → what they
+    // import.
     assert_eq!(affected(r, &["--changed", "services/a/src/routes.js"]), [A]);
     assert_eq!(
         affected(r, &["--changed", "services/a/src/handlers/get.js"]),
@@ -531,9 +534,9 @@ fn hints_bound_dynamic_loads() {
         affected(r, &["--no-refresh", "--changed-from", "changes.txt"]),
         [B]
     );
-    // An entry that is not a test: the helper's load has no working directory to
-    // resolve against, so it stays uncertain; the framework's site is bounded
-    // for everyone.
+    // An entry that is not a test: the helper's load has no working directory
+    // to resolve against, so it stays uncertain; the framework's site is
+    // bounded for everyone.
     let o = ok(
         r,
         &[
@@ -552,8 +555,8 @@ fn hints_bound_dynamic_loads() {
         "packages/helper/setup.js"
     );
 
-    // The hints file can live elsewhere (replaying commits that predate it), or be
-    // off.
+    // The hints file can live elsewhere (replaying commits that predate it), or
+    // be off.
     std::fs::rename(r.join("hints.toml"), r.join("elsewhere.toml")).unwrap();
     let elsewhere = r.join("elsewhere.toml");
     let env = [("TURBO_TRACE_DEBUG_HINTS", elsewhere.to_str().unwrap())];

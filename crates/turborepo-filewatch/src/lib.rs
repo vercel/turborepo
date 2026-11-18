@@ -1305,8 +1305,9 @@ fn watch_parents(root: &AbsoluteSystemPath, watcher: &mut Backend) -> Result<(),
         current = parent;
         let watch_result = watcher.watch(current.as_std_path(), RecursiveMode::NonRecursive);
         if is_permission_denied(&watch_result) {
-            // It is expected we hit a permission denied error at some point. We won't
-            // get notifications if someone e.g. deletes all of /home
+            // It is expected we hit a permission denied error at some point. We
+            // won't get notifications if someone e.g. deletes all
+            // of /home
             break;
         } else {
             watch_result?;
@@ -1885,14 +1886,12 @@ fn control_watch_parents(
 
 #[cfg(not(feature = "manual_recursive_watch"))]
 fn non_mutating_ordinary_owner(repo_root: &Path, path: &Path) -> bool {
-    if path == repo_root {
-        return true;
+    let cond = path == repo_root;
+    if cond || cfg!(not(feature = "watch_ancestors")) {
+        cond
+    } else {
+        repo_root.starts_with(path)
     }
-    #[cfg(feature = "watch_ancestors")]
-    if repo_root.starts_with(path) {
-        return true;
-    }
-    false
 }
 
 #[cfg(not(target_os = "macos"))]
@@ -1988,8 +1987,9 @@ async fn wait_for_cookie(
             let path: &Path = path;
             path == (&cookie_path as &AbsoluteSystemPath)
         }) {
-            // We don't need to stop everything if we failed to remove the cookie file
-            // for some reason. We can warn about it though.
+            // We don't need to stop everything if we failed to remove the
+            // cookie file for some reason. We can warn about it
+            // though.
             if let Err(e) = cookie_path.remove() {
                 warn!("failed to remove cookie file {e}");
             }
@@ -2783,8 +2783,8 @@ mod test {
         symlink_path.symlink_to_dir(child_path.as_str()).unwrap();
         expect_filesystem_event!(recv, symlink_path, EventKind::Create(_));
 
-        // we expect that events in the symlinked directory will be raised with the
-        // original path
+        // we expect that events in the symlinked directory will be raised with
+        // the original path
         let symlink_subfile = symlink_path.join_component("symlink_subfile");
         symlink_subfile.create_with_contents("hello").unwrap();
         let expected_subfile_path = child_path.join_component("symlink_subfile");
@@ -3198,13 +3198,14 @@ mod test {
         let repo_root = repo_root.to_realpath().unwrap();
 
         let mut recv = {
-            // create and immediately drop the watcher, which should trigger the exit
-            // channel
+            // create and immediately drop the watcher, which should trigger the
+            // exit channel
             let watcher = FileSystemWatcher::new_with_default_cookie_dir(&repo_root).unwrap();
             watcher.subscribe().await.unwrap()
         };
 
-        // There may be spurious events, but we should expect a close in short order
+        // There may be spurious events, but we should expect a close in short
+        // order
         tokio::time::timeout(Duration::from_millis(100), async move {
             loop {
                 if let Err(e) = recv.recv().await {

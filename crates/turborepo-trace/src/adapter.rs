@@ -119,8 +119,8 @@ impl ScmChanges {
                 };
             }
         };
-        // The debug variable of the engine's tooling (`EXACT_BASE`): the base as
-        // given, for clones without history.
+        // The debug variable of the engine's tooling (`EXACT_BASE`): the base
+        // as given, for clones without history.
         let exact = crate::lockdiff::exact_base(false);
         let git = match Git::new(root.as_std_path(), &resolved, exact) {
             Ok(g) => g,
@@ -131,8 +131,8 @@ impl ScmChanges {
                 };
             }
         };
-        // The queries of `prefetch_requests`, with the same arguments: the base as
-        // given (turbo resolves it again, to the same ref).
+        // The queries of `prefetch_requests`, with the same arguments: the base
+        // as given (turbo resolves it again, to the same ref).
         let changes = queries(base, head, !exact)
             .into_iter()
             .try_fold(BTreeSet::new(), |mut out, q| {
@@ -315,8 +315,8 @@ fn with_status(root: &Path, g: &Git, paths: &BTreeSet<String>) -> anyhow::Result
         }
         for p in &list {
             let base_link = at_base.get(p.as_str()).copied();
-            // A directory in its place now: the file (or link) is deleted, as git
-            // says (the files below it are added).
+            // A directory in its place now: the file (or link) is deleted, as
+            // git says (the files below it are added).
             let now = std::fs::symlink_metadata(root.join(p.as_str())).is_ok_and(|m| !m.is_dir());
             let kind = match (base_link.is_some(), now) {
                 (true, true) => ChangeKind::Modified,
@@ -583,8 +583,9 @@ mod tests {
         write(&r, "keep.txt", "changed on main\n");
         git(&r, &["commit", "-qam", "main moves"]);
         git(&r, &["checkout", "-q", "work"]);
-        // Uncommitted: a modification, a staged addition, an untracked file in a new
-        // directory, a deleted tracked file, a file replaced by a directory.
+        // Uncommitted: a modification, a staged addition, an untracked file in
+        // a new directory, a deleted tracked file, a file replaced by a
+        // directory.
         write(&r, "packages/c/lib/n.js", "module.exports = 5;\n");
         write(&r, "packages/c/staged.js", "1;\n");
         git(&r, &["add", "packages/c/staged.js"]);

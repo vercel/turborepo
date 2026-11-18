@@ -163,7 +163,8 @@ impl ShimArgs {
                 // If we've hit `--` we've reached the args forwarded to tasks.
                 is_forwarded_args = true;
             } else if arg == "--verbosity" {
-                // If we see `--verbosity` we expect the next arg to be a number.
+                // If we see `--verbosity` we expect the next arg to be a
+                // number.
                 remaining_turbo_args.push(arg);
                 found_verbosity_flag = true
             } else if arg.starts_with("--verbosity=") || found_verbosity_flag {
@@ -180,8 +181,9 @@ impl ShimArgs {
                 verbosity = arg[1..].len();
                 remaining_turbo_args.push(arg);
             } else if cwd_flag_idx.is_some() {
-                // We've seen a `--cwd` and therefore add this to the cwds list along with
-                // the index of the `--cwd` (*not* the value)
+                // We've seen a `--cwd` and therefore add this to the cwds list
+                // along with the index of the `--cwd` (*not*
+                // the value)
                 cwds.push((
                     AbsoluteSystemPathBuf::from_unknown(&invocation_dir, arg),
                     idx - 1,
@@ -191,8 +193,9 @@ impl ShimArgs {
                 // If we see a `--cwd` we expect the next arg to be a path.
                 cwd_flag_idx = Some(idx)
             } else if let Some(cwd_arg) = arg.strip_prefix("--cwd=") {
-                // In the case where `--cwd` is passed as `--cwd=./path/to/foo`, that
-                // entire chunk is a single arg, so we need to split it up.
+                // In the case where `--cwd` is passed as `--cwd=./path/to/foo`,
+                // that entire chunk is a single arg, so we need
+                // to split it up.
                 cwds.push((
                     AbsoluteSystemPathBuf::from_unknown(&invocation_dir, cwd_arg),
                     idx,
@@ -202,11 +205,13 @@ impl ShimArgs {
             } else if arg == "--no-color" {
                 no_color = true;
             } else if root_turbo_json_flag_idx.is_some() {
-                // We've seen a `--root-turbo-json` and therefore add this as the path
+                // We've seen a `--root-turbo-json` and therefore add this as
+                // the path
                 root_turbo_json = Some(AbsoluteSystemPathBuf::from_unknown(&invocation_dir, arg));
                 root_turbo_json_flag_idx = None;
             } else if arg == "--root-turbo-json" {
-                // If we see a `--root-turbo-json` we expect the next arg to be a path.
+                // If we see a `--root-turbo-json` we expect the next arg to be
+                // a path.
                 root_turbo_json_flag_idx = Some(idx);
             } else if let Some(path) = arg.strip_prefix("--root-turbo-json=") {
                 // In the case where `--root-turbo-json` is passed as
@@ -215,12 +220,14 @@ impl ShimArgs {
                 root_turbo_json = Some(AbsoluteSystemPathBuf::from_unknown(&invocation_dir, path));
             } else if found_profile_flag {
                 // Previous arg was `--profile`, this arg is the optional value.
-                // If it looks like a flag, it's not our value — treat `--profile`
-                // as having no value and re-process this arg next iteration.
+                // If it looks like a flag, it's not our value — treat
+                // `--profile` as having no value and re-process
+                // this arg next iteration.
                 found_profile_flag = false;
                 if arg.starts_with('-') {
                     profile = Some(String::new());
-                    // Re-process this arg: push it to the remaining CLI arguments
+                    // Re-process this arg: push it to the remaining CLI
+                    // arguments
                     remaining_turbo_args.push(arg);
                 } else {
                     profile = Some(arg.clone());
@@ -451,8 +458,8 @@ impl ShimArgs {
         if self.no_color {
             ColorConfig::disabled_by_user()
         } else if self.color {
-            // Do our best to enable ansi colors, but even if the terminal doesn't support
-            // still emit ansi escape sequences.
+            // Do our best to enable ansi colors, but even if the terminal
+            // doesn't support still emit ansi escape sequences.
             Self::supports_ansi();
             ColorConfig::new(false)
         } else {
@@ -462,8 +469,8 @@ impl ShimArgs {
 
     #[cfg(windows)]
     fn supports_ansi() -> bool {
-        // This call has the side effect of setting ENABLE_VIRTUAL_TERMINAL_PROCESSING
-        // to true. https://learn.microsoft.com/en-us/windows/console/setconsolemode
+        // This call has the side effect of setting
+        // ENABLE_VIRTUAL_TERMINAL_PROCESSING to true. https://learn.microsoft.com/en-us/windows/console/setconsolemode
         crossterm::ansi_support::supports_ansi()
     }
 

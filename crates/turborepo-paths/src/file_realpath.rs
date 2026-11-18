@@ -33,7 +33,8 @@ pub fn file_realpath(file: &File) -> io::Result<PathBuf> {
     };
     let mut buffer = vec![0u16; 260];
     loop {
-        // SAFETY: file owns a live handle and buffer has the advertised capacity.
+        // SAFETY: file owns a live handle and buffer has the advertised
+        // capacity.
         let len = unsafe {
             GetFinalPathNameByHandleW(
                 file.as_raw_handle(),

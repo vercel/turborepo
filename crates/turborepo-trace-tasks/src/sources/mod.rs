@@ -133,7 +133,8 @@ pub fn with_decided_by(f: impl FnOnce() -> Vec<DiscoveredTask>) -> Vec<Discovere
         let (tasks, log) = fsx::with_log(f);
         if !tasks.is_empty() {
             turborepo_trace_core::record::pause(|| {
-                // Each path once (discovery asks about many twice), in the order asked.
+                // Each path once (discovery asks about many twice), in the
+                // order asked.
                 let mut once: std::collections::HashSet<&Path> = std::collections::HashSet::new();
                 let dirs = log.listed.iter().map(|(d, _)| d);
                 for p in log.asked.iter().chain(dirs) {
@@ -241,9 +242,9 @@ impl Workspace {
                 root.join(r)
             }
         };
-        // Manifests read up front, on several threads when nothing observes the reads
-        // (no recording frame, no shared dir cache: plain file reads, as on
-        // this thread).
+        // Manifests read up front, on several threads when nothing observes the
+        // reads (no recording frame, no shared dir cache: plain file
+        // reads, as on this thread).
         let manifests = match read {
             Some(read) => {
                 let threads = std::thread::available_parallelism()
@@ -391,8 +392,9 @@ impl Workspace {
 
     /// The deepest package containing `path` (absolute).
     pub fn package_of(&self, path: &Path) -> Option<&Package> {
-        // Package directories are distinct, so the deepest one containing `path` is its
-        // nearest ancestor (or itself) that is a package directory.
+        // Package directories are distinct, so the deepest one containing
+        // `path` is its nearest ancestor (or itself) that is a package
+        // directory.
         let ix = self.index();
         path.ancestors()
             .find_map(|a| ix.by_dir.get(a))

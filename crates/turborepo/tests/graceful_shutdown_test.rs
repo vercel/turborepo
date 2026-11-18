@@ -1561,7 +1561,8 @@ process.exit(Number(process.env.PARITY_EXIT));
 "#,
                         )
                         .unwrap();
-                        // Invoke below the root so discovery, not cwd, finds it.
+                        // Invoke below the root so discovery, not cwd, finds
+                        // it.
                         let mut cmd = command(&launcher, entry, &root);
                         cmd.current_dir(&app)
                             .args(["--env-mode=loose", "--"])
@@ -1620,8 +1621,9 @@ process.exit(Number(process.env.PARITY_EXIT));
                         run.stop(stop);
                         run.wait_for(&app.join("cleanup.started"));
                         // A request duplicated by the wrapper would make native
-                        // turbo force kill the blocked task. The task's own trap
-                        // count is not checked: pnpm forwards SIGINT to its
+                        // turbo force kill the blocked task. The task's own
+                        // trap count is not checked:
+                        // pnpm forwards SIGINT to its
                         // script, as it does for Ctrl+C on `pnpm run` without
                         // turbo, so the trap may run twice either way.
                         thread::sleep(Duration::from_millis(500));
@@ -1632,8 +1634,9 @@ process.exit(Number(process.env.PARITY_EXIT));
                         let output = &outcome.output;
                         let context = format!("{entry:?} {terminal:?} {stop:?}\n{output}");
                         assert_eq!(outcome.code, 0, "{context}");
-                        // Check markers, not trap output: pnpm's forwarded SIGINT
-                        // can interrupt the trap's `printf` with EINTR.
+                        // Check markers, not trap output: pnpm's forwarded
+                        // SIGINT can interrupt the
+                        // trap's `printf` with EINTR.
                         assert!(app.join("descendant.release").exists(), "{context}");
                         assert_eq!(
                             output.matches("Shutting down Turborepo tasks...").count(),

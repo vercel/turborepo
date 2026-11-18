@@ -152,8 +152,9 @@ pub async fn run(
                 ignore_broken_pipe(writeln!(io::stdout().lock(), "{json}").map_err(Into::into))?;
             }
             Some(OutputFormat::Pretty) | None => {
-                // Preserve the existing partial-output behavior when an argument is missing:
-                // print every valid package before reporting the first missing package.
+                // Preserve the existing partial-output behavior when an
+                // argument is missing: print every valid
+                // package before reporting the first missing package.
                 let valid_count = packages
                     .iter()
                     .position(|package| {

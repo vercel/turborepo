@@ -555,7 +555,8 @@ fn walk_incremental(
     st.dirs
         .extend(old.dirs.iter().filter(|(d, _)| kept(d)).cloned());
     st.dirs.sort_unstable();
-    // Ignore stamps: fresh for the listed directories, cached for the kept ones.
+    // Ignore stamps: fresh for the listed directories, cached for the kept
+    // ones.
     st.files = ignore_stamps(root, fresh.iter().map(String::as_str), true);
     st.files.extend(
         old.files
@@ -616,8 +617,8 @@ fn walk_stamped(root: &Path, out_dir: &Path, threads: usize) -> (Vec<String>, St
         files: Vec::new(),
     };
     st.dirs.sort_unstable();
-    // Every ignore file the walk could have obeyed: present ones (in the list or
-    // not) and the missing candidates in each walked directory, plus
+    // Every ignore file the walk could have obeyed: present ones (in the list
+    // or not) and the missing candidates in each walked directory, plus
     // `.git/info/exclude`.
     st.files = ignore_stamps(root, st.dirs.iter().map(|(d, _)| d.as_str()), true);
     st.files.sort_unstable();
@@ -646,8 +647,9 @@ mod tests {
             std::fs::write(r.join(f), "").unwrap();
         }
         std::fs::write(r.join(".gitignore"), "dist/\n").unwrap();
-        // Symbolic links are no files of the walk, and it does not follow them: to a
-        // directory, to a file, to nothing, and one that an ignore rule covers.
+        // Symbolic links are no files of the walk, and it does not follow them:
+        // to a directory, to a file, to nothing, and one that an ignore
+        // rule covers.
         for (target, link) in [
             ("src", "linked"),
             ("../a.ts", "src/link.ts"),
@@ -661,8 +663,9 @@ mod tests {
             files,
             [".github/actions/a.js", ".gitignore", "a.ts", "src/b.ts"]
         );
-        // They are entries of the tree, kept with the cached walk (the second walk, and
-        // the third that lists `src` again and keeps the rest).
+        // They are entries of the tree, kept with the cached walk (the second
+        // walk, and the third that lists `src` again and keeps the
+        // rest).
         let out = r.join(".turbotrace");
         for round in 0..3 {
             if round == 2 {
@@ -696,7 +699,8 @@ mod tests {
         assert!(w.unchanged.is_none());
         assert_eq!(w.files, ["src/a.ts"]);
         assert_eq!(w.dirs, ["", "src"]);
-        // `.turbotrace/cache` was created inside the root: refresh the root's mtime.
+        // `.turbotrace/cache` was created inside the root: refresh the root's
+        // mtime.
         set_old(r);
         let _ = walk_cached(r, &out, 2);
         let w = walk_cached(r, &out, 2);
@@ -774,12 +778,13 @@ mod tests {
             assert_eq!(w.dirs, dirs);
             w
         };
-        // A file added next to `a/b`, `a/b-x` and `a/b.d`: all three subtrees are kept.
+        // A file added next to `a/b`, `a/b-x` and `a/b.d`: all three subtrees
+        // are kept.
         let w = step(&|| put("a/new.ts"));
         assert_eq!(w.changed, ["a"]);
         assert!(w.files.contains(&"a/b/c/d/w.ts".to_string()));
-        // A file added deep down: only that directory and its ancestors are listed
-        // again.
+        // A file added deep down: only that directory and its ancestors are
+        // listed again.
         let w = step(&|| put("a/b/c/new.ts"));
         assert_eq!(w.changed, ["a/b/c"]);
         // A directory removed, another added with nested content.
@@ -789,7 +794,8 @@ mod tests {
             put("q/r/s.ts");
         });
         assert!(w.dirs.contains(&"e/n/o".to_string()) && !w.dirs.contains(&"e/f".to_string()));
-        // A new ignore file in a changed directory hides an unchanged subdirectory.
+        // A new ignore file in a changed directory hides an unchanged
+        // subdirectory.
         let w = step(&|| std::fs::write(r.join("a/.gitignore"), "b/\n").unwrap());
         assert!(
             !w.files.iter().any(|f| f.starts_with("a/b/")),

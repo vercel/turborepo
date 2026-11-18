@@ -352,9 +352,10 @@ fn split_at_deepest_symlinked_prefix(
         return Ok(None);
     }
 
-    // Walk the literal segments from shallowest to deepest, recording the deepest
-    // one that is a symlink. Intermediate symlinks are followed when lstat'ing
-    // deeper segments, which is exactly why we need to check each segment.
+    // Walk the literal segments from shallowest to deepest, recording the
+    // deepest one that is a symlink. Intermediate symlinks are followed
+    // when lstat'ing deeper segments, which is exactly why we need to check
+    // each segment.
     let mut deepest_symlink_split = None;
     for split in 1..=first_glob {
         let prefix = segments[..split].join("/");
@@ -623,9 +624,9 @@ impl TaskCache {
 
         // If an output watcher is connected, check whether outputs have changed
         // since they were last written. When outputs are already on disk and
-        // unchanged, we can skip the cache restore entirely — avoiding file writes
-        // that would otherwise trigger the file watcher and cause an infinite
-        // rebuild loop in `turbo watch`.
+        // unchanged, we can skip the cache restore entirely — avoiding file
+        // writes that would otherwise trigger the file watcher and
+        // cause an infinite rebuild loop in `turbo watch`.
         let inclusion_strings: Vec<String> = validated_inclusions
             .iter()
             .map(|g| g.as_ref().to_string())
@@ -669,9 +670,10 @@ impl TaskCache {
         let has_changed_outputs = changed_output_count > 0 || scoped_log_changed;
 
         let cache_status = if has_changed_outputs {
-            // Note that we currently don't use the output globs when restoring, but we
-            // could in the future to avoid doing unnecessary file I/O. We also
-            // need to pass along the exclusion globs as well.
+            // Note that we currently don't use the output globs when restoring,
+            // but we could in the future to avoid doing unnecessary
+            // file I/O. We also need to pass along the exclusion
+            // globs as well.
             let cache_status = self
                 .run_cache
                 .cache
@@ -841,7 +843,8 @@ impl TaskCache {
                         .unwrap_or(true)
             });
         }
-        // Scoped logs are implicit outputs, even when a user glob excludes them.
+        // Scoped logs are implicit outputs, even when a user glob excludes
+        // them.
         if self.scoped_log && self.log_file_path.exists() {
             files_to_be_cached.insert(self.log_file_path.clone());
         }
@@ -852,8 +855,8 @@ impl TaskCache {
             }
         }
 
-        // If we're only caching the log output, *and* output globs are not empty,
-        // we should warn the user
+        // If we're only caching the log output, *and* output globs are not
+        // empty, we should warn the user
         if files_to_be_cached.len() == 1 && !self.repo_relative_globs.is_empty() {
             let _ = self.warnings.lock().map(|mut warnings| {
                 warnings.push(format!(
@@ -1703,7 +1706,8 @@ mod test {
 
     #[tokio::test]
     async fn output_watcher_error_type_is_send_sync() {
-        // OutputWatcherError must be Send + Sync for use across async boundaries
+        // OutputWatcherError must be Send + Sync for use across async
+        // boundaries
         fn assert_send_sync<T: Send + Sync>() {}
         assert_send_sync::<OutputWatcherError>();
     }
@@ -2098,9 +2102,10 @@ mod test {
     #[tokio::test]
     #[cfg(unix)]
     async fn save_outputs_follows_intermediate_symlinked_dir() {
-        // A workspace package located behind a symlinked directory: `packages/nested`
-        // is a symlink to `external/nested`, while `deep-pkg/dist` underneath it are
-        // real directories. The symlink is an *intermediate* literal segment of the
+        // A workspace package located behind a symlinked directory:
+        // `packages/nested` is a symlink to `external/nested`, while
+        // `deep-pkg/dist` underneath it are real directories. The
+        // symlink is an *intermediate* literal segment of the
         // output glob, so it must still be followed when caching outputs.
         let temp = tempdir().unwrap();
         let repo_dir = temp.path().join("repo");

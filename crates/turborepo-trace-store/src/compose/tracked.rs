@@ -169,8 +169,9 @@ impl Tracked {
             for r in t.runs.iter() {
                 let r = r.as_str();
                 if r.starts_with("computed:") {
-                    // A task name chosen at run time: any script of the package, or of
-                    // the repository for a root script or a CI job.
+                    // A task name chosen at run time: any script of the
+                    // package, or of the repository for a
+                    // root script or a CI job.
                     if is_script(id) && package_of(id) != "." {
                         next.extend(by_package.get(package_of(id)).into_iter().flatten());
                     } else {
@@ -251,9 +252,10 @@ impl Tracked {
             if !looks {
                 continue;
             }
-            // The file-level group of a source file holds lookups that are not requirements
-            // (the nearest manifest, a tsconfig): the file is what it is without them. That
-            // of a task or part holds its missing inputs: kept.
+            // The file-level group of a source file holds lookups that are not
+            // requirements (the nearest manifest, a tsconfig): the
+            // file is what it is without them. That of a task or
+            // part holds its missing inputs: kept.
             let resolved = if r.index.to_native() == FILE_LEVEL {
                 !g.is_pseudo(n as usize)
             } else {

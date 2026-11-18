@@ -136,8 +136,8 @@ fn known_call(reason: &str) -> Option<Option<(&'static str, &'static [&'static s
     let Some(&known) = KNOWN.iter().find(|(m, _)| *m == module) else {
         return Some(None);
     };
-    // The call as written: `react()`, `react({ include: /\.tsx$/ })`. A truncated
-    // text (`…`) may hide options.
+    // The call as written: `react()`, `react({ include: /\.tsx$/ })`. A
+    // truncated text (`…`) may hide options.
     let args = call
         .split_once('(')
         .and_then(|(_, a)| a.rsplit_once(')'))

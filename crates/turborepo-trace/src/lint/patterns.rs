@@ -138,9 +138,9 @@ fn fix_for(key: &str) -> String {
 pub fn above_root(ctx: &Ctx<'_, '_>) -> Result<Vec<Finding>> {
     let files = tree_files(ctx.derived);
     let tree = Tree::new(&files);
-    // The graph holds the root for a project whose tests the place decides (or may
-    // decide): only the configs of those are loaded. Playwright's configs are no
-    // part of a graph: each is looked at.
+    // The graph holds the root for a project whose tests the place decides (or
+    // may decide): only the configs of those are loaded. Playwright's
+    // configs are no part of a graph: each is looked at.
     let recorded: std::collections::BTreeSet<String> = ctx
         .graph
         .located()

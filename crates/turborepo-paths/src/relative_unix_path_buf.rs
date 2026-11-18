@@ -79,13 +79,14 @@ impl RelativeUnixPathBuf {
             ));
         }
 
-        // Handle the case where we are stripping the entire contents of this path
+        // Handle the case where we are stripping the entire contents of this
+        // path
         if self.0.len() == prefix.0.len() {
             return Self::new("");
         }
 
-        // We now know that this path starts with the prefix, and that this path's
-        // length is greater than the prefix's length
+        // We now know that this path starts with the prefix, and that this
+        // path's length is greater than the prefix's length
         if self.0.as_bytes()[prefix_len] != b'/' {
             let prefix_str = prefix.0.clone();
             let this = self.0.clone();

@@ -326,7 +326,8 @@ impl BerryLockfile {
                 possible_extensions.remove(&descriptor);
             }
 
-            // For Yarn 4, remove any patch sources that are accounted for by a patch
+            // For Yarn 4, remove any patch sources that are accounted for by a
+            // patch
             if let Some(Locator { ident, reference }) = locator.patched_locator() {
                 possible_extensions.remove(&Descriptor {
                     ident,
@@ -464,7 +465,8 @@ impl BerryLockfile {
                 .chain(iter::once("."))
                 .any(|path| locator.is_workspace_path(path))
             {
-                //  We need to track all of the descriptors coming out the workspace
+                //  We need to track all of the descriptors coming out the
+                // workspace
                 for (name, range) in package.dependencies.iter().flatten() {
                     let dependency = self.resolve_dependency(locator, name, range.as_ref())?;
                     let dep_locator = self
@@ -474,8 +476,9 @@ impl BerryLockfile {
                     resolutions.insert(dependency, dep_locator.clone());
                 }
 
-                // Included workspaces will always have their locator listed as a descriptor.
-                // All other descriptors should show up in the other workspace package
+                // Included workspaces will always have their locator listed as
+                // a descriptor. All other descriptors should
+                // show up in the other workspace package
                 // dependencies.
                 resolutions.insert(Descriptor::from(locator.clone()), locator.clone());
             }
@@ -499,13 +502,15 @@ impl BerryLockfile {
                 resolutions.insert(dependency, dep_locator.clone());
             }
 
-            // If the package has an associated patch we include it in the subgraph
+            // If the package has an associated patch we include it in the
+            // subgraph
             if let Some(patch_locator) = self.patches.get(&locator) {
                 patches.insert(locator.as_owned(), patch_locator.clone());
             }
 
-            // Yarn 4 allows workspaces to depend directly on patched dependencies instead
-            // of using resolutions. This results in the patched dependency appearing in the
+            // Yarn 4 allows workspaces to depend directly on patched
+            // dependencies instead of using resolutions. This
+            // results in the patched dependency appearing in the
             // closure instead of the original.
             if locator.patch_file().is_some()
                 && let Some((original, _)) =
@@ -529,9 +534,10 @@ impl BerryLockfile {
                 .get(patch)
                 .ok_or_else(|| Error::MissingDescriptorsForPatchLocator(patch.clone()))?;
 
-            // For each patch descriptor we extract the primary descriptor that each patch
-            // descriptor targets and check if that descriptor is present in the
-            // pruned map and add it if it is present
+            // For each patch descriptor we extract the primary descriptor that
+            // each patch descriptor targets and check if that
+            // descriptor is present in the pruned map and add it if
+            // it is present
             for patch_descriptor in patch_descriptors {
                 let version = patch_descriptor.primary_version().ok_or_else(|| {
                     Error::InvalidPatchDescriptor {
@@ -550,12 +556,12 @@ impl BerryLockfile {
             }
         }
 
-        // Package extension dependencies aren't recorded on the package they extend.
-        // Match their descriptors against reachable peer requirements so merged
-        // lockfile entries retain only the ranges Yarn will reconstruct. Yarn's
-        // @types extensions don't necessarily correspond to peer requirements,
-        // so retain those when their unscoped package is a reachable
-        // dependency.
+        // Package extension dependencies aren't recorded on the package they
+        // extend. Match their descriptors against reachable peer
+        // requirements so merged lockfile entries retain only the
+        // ranges Yarn will reconstruct. Yarn's @types extensions don't
+        // necessarily correspond to peer requirements, so retain those
+        // when their unscoped package is a reachable dependency.
         {
             let mut dependency_names = HashSet::new();
             let mut package_names = HashSet::new();
@@ -750,8 +756,9 @@ impl BerryLockfile {
         self.workspace_path_to_locator
             .get(workspace_path)
             .or_else(|| {
-                // This is an inefficient fallback we use in case our old logic was catching
-                // edge cases that the eager approach misses.
+                // This is an inefficient fallback we use in case our old logic
+                // was catching edge cases that the eager
+                // approach misses.
                 self.locator_package.keys().find(|locator| {
                     locator.reference.starts_with("workspace:")
                         && locator.reference.ends_with(workspace_path)
@@ -1065,8 +1072,8 @@ mod test {
 
     #[test]
     fn test_turbo_version_rejects_non_semver() {
-        // Malicious version strings that could be used for RCE via npx should be
-        // rejected
+        // Malicious version strings that could be used for RCE via npx should
+        // be rejected
         let malicious_versions = [
             "file:./malicious.tgz",
             "https://evil.com/malicious.tgz",
@@ -1076,7 +1083,8 @@ mod test {
         ];
 
         for malicious_version in malicious_versions {
-            // Berry lockfile format has turbo in packages section with version field
+            // Berry lockfile format has turbo in packages section with version
+            // field
             let yaml = format!(
                 r#"__metadata:
   version: 6

@@ -157,9 +157,9 @@ fn unused_reexported_file_is_skipped() {
 
 #[test]
 fn a_test_file_that_reexports_the_changed_file_is_selected() {
-    // What loads a test file may read what it exports (a plugin that turns every
-    // export of a file into a test does): a test file is never a barrel on the
-    // way to an importer.
+    // What loads a test file may read what it exports (a plugin that turns
+    // every export of a file into a test does): a test file is never a
+    // barrel on the way to an importer.
     let d = repo(&[
         (
             "test/c.test.ts",
@@ -194,21 +194,23 @@ fn a_test_file_that_reexports_the_changed_file_is_selected() {
 
 #[test]
 fn a_change_of_what_linking_asks_for_selects() {
-    // Where modules are linked before they run (jest's ES module mode, a browser, a
-    // bundler that checks exports), `export { b } from './b'` in the barrel is
-    // an error for every importer of the barrel once `./b` stops exporting `b`,
-    // whatever name the importer uses: under jest with ES modules the test of
-    // `a` fails with "does not provide an export named 'b'". A file whose
-    // exported or imported names changed is not skipped.
+    // Where modules are linked before they run (jest's ES module mode, a
+    // browser, a bundler that checks exports), `export { b } from './b'` in
+    // the barrel is an error for every importer of the barrel once `./b`
+    // stops exporting `b`, whatever name the importer uses: under jest with
+    // ES modules the test of `a` fails with "does not provide an export
+    // named 'b'". A file whose exported or imported names changed is not
+    // skipped.
     let barrel = "export { a } from './a';\nexport { b } from './b';\n";
     let both = ["test/a.test.ts", "test/b.test.ts"];
     let d = repo(&[("src/index.ts", barrel)]);
     let r = d.path();
     write(r, "src/b.ts", "export const c = 2;\n");
     assert_eq!(affected(r), both);
-    // With changed exports the file is compared: `b` is gone, and the walk ends at
-    // the barrel that asks for it. Without (barrel pruning alone) nothing says
-    // which names changed, and a file whose names differ is not skipped at all.
+    // With changed exports the file is compared: `b` is gone, and the walk ends
+    // at the barrel that asks for it. Without (barrel pruning alone)
+    // nothing says which names changed, and a file whose names differ is
+    // not skipped at all.
     let without = |r: &Path, format: &str| -> String {
         let o = Command::new(support::harness())
             .args(["affected", "--tests", "jest", "--since", "HEAD"])
@@ -456,10 +458,10 @@ fn type_checking_runners_select() {
 
 #[test]
 fn export_star_collisions_select() {
-    // b.ts starts exporting `a`, which a.ts also exports: ambiguous (ESM) or first
-    // wins (CommonJS); either way test/a.test.ts can see it. `b` itself did not
-    // change, so test/b.test.ts cannot (export-level comparison; without it
-    // both are selected).
+    // b.ts starts exporting `a`, which a.ts also exports: ambiguous (ESM) or
+    // first wins (CommonJS); either way test/a.test.ts can see it. `b`
+    // itself did not change, so test/b.test.ts cannot (export-level
+    // comparison; without it both are selected).
     let d = repo(&[]);
     let r = d.path();
     write(r, "src/b.ts", "export const b = 2;\nexport const a = 5;\n");

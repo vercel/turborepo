@@ -311,13 +311,16 @@ pub fn resolve_sites(app: &NextApp, sites: &[UrlSite], ctx: &RequestContext) -> 
                 }
                 // Overlap semantics: every candidate, ...
                 let mut ids: Vec<&String> = mm.candidates.iter().chain(&mm.routes).collect();
-                // ... except that a literal segment of the URL that names a static route
-                // directory goes there: candidates reaching it only through a dynamic segment
-                // (`/api/aliases/**` vs `/[team]/[project]/[[...rest]]`) would need the
-                // whole static subtree to miss, which a request the code wrote for a handler
+                // ... except that a literal segment of the URL that names a
+                // static route directory goes there: candidates
+                // reaching it only through a dynamic segment
+                // (`/api/aliases/**` vs `/[team]/[project]/[[...rest]]`) would
+                // need the whole static subtree to miss, which
+                // a request the code wrote for a handler
                 // does not intend. Not applied through rewrites.
-                // The static directory is looked up in the whole route table, so a request
-                // for a missing handler (`/api/search`) finds nothing rather than the dynamic
+                // The static directory is looked up in the whole route table,
+                // so a request for a missing handler
+                // (`/api/search`) finds nothing rather than the dynamic
                 // page.
                 if s.kind != UrlUse::Navigation && mm.via.is_empty() {
                     let mut prefix: Vec<&String> = Vec::new();
@@ -337,11 +340,13 @@ pub fn resolve_sites(app: &NextApp, sites: &[UrlSite], ctx: &RequestContext) -> 
                         ids.retain(|id| app.table.route(id).is_some_and(static_at));
                         prefix.push(l);
                     }
-                    // A data request (`fetch`, SWR) targets a handler; a page only if the URL
-                    // names it by a static segment (an RSC/HTML fetch). A page matched purely
-                    // through dynamic segments (`/v9/projects/*` vs `/[team]/[project]/[id]`)
-                    // is an API path on another base, and an unknown origin (`${base}/v1/x`)
-                    // is an API base.
+                    // A data request (`fetch`, SWR) targets a handler; a page
+                    // only if the URL names it by a static
+                    // segment (an RSC/HTML fetch). A page matched purely
+                    // through dynamic segments (`/v9/projects/*` vs
+                    // `/[team]/[project]/[id]`)
+                    // is an API path on another base, and an unknown origin
+                    // (`${base}/v1/x`) is an API base.
                     if s.kind == UrlUse::Fetch {
                         let lits: Vec<(usize, &String)> = u
                             .segs
@@ -397,8 +402,9 @@ impl GraphImports {
             }
             let mut m = HashMap::new();
             for e in g.out_edges(n) {
-                // Module edges only: a package specifier also has an edge to the manifest
-                // (`package.json`) consulted to resolve it.
+                // Module edges only: a package specifier also has an edge to
+                // the manifest (`package.json`) consulted to
+                // resolve it.
                 if !matches!(
                     e.kind(),
                     turborepo_trace_graph::RefKind::Import
@@ -566,7 +572,8 @@ pub fn select_e2e<G: GraphView>(
     for m in &app.globals.memberships {
         ov.membership(g_node, &rel(&m.dir), &m.pattern);
     }
-    // Modified env files and public assets are not graph nodes: link changed ones.
+    // Modified env files and public assets are not graph nodes: link changed
+    // ones.
     for c in &changes.files {
         if let Some(r) = in_app(&c.path)
             && (r.starts_with("public/")
@@ -615,9 +622,10 @@ pub fn select_e2e<G: GraphView>(
     // Fetch sites.
     if let Some(sites) = opts.fetch {
         for s in sites {
-            // Navigations are visits only if a test performs them; built URLs are not
-            // requests (the site that uses one is evaluated on its own), and linking them
-            // would chain page closures through redirect helpers.
+            // Navigations are visits only if a test performs them; built URLs
+            // are not requests (the site that uses one is evaluated
+            // on its own), and linking them would chain page
+            // closures through redirect helpers.
             if matches!(s.site.kind, UrlUse::Navigation | UrlUse::Build) {
                 continue;
             }
@@ -930,8 +938,8 @@ fn classify(w: &[String]) -> Reason {
     if has("next:any-route") {
         return Reason::IncompleteVisits;
     }
-    // The route nearest the spec is the visited one; a route deeper in the chain
-    // was reached through a fetch site.
+    // The route nearest the spec is the visited one; a route deeper in the
+    // chain was reached through a fetch site.
     let routes: Vec<&String> = w
         .iter()
         .filter(|x| x.starts_with("route:") || x.starts_with("route-soft:"))

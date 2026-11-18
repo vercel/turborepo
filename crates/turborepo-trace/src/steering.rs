@@ -230,16 +230,16 @@ pub fn default_seed_plan(
         },
     };
     let mut seeds: Vec<(NodeId, Cause)> = Vec::new();
-    // The file itself: its node is the start of the explicit references to it (and
-    // a steering file can be an entry, such as a test of CI tooling).
+    // The file itself: its node is the start of the explicit references to it
+    // (and a steering file can be an entry, such as a test of CI tooling).
     if let Some(n) = g.node_by_path(&c.path) {
         seeds.push((n, own()));
     }
     // Config inputs name the file.
     engine.match_inputs(&c.path, &mut |n| seeds.push((n, own())));
     if matches!(c.kind, ChangeKind::Added | ChangeKind::Deleted) {
-        // A probe counts on a task or a steering file, or when the probed path is a
-        // steering path.
+        // A probe counts on a task or a steering file, or when the probed path
+        // is a steering path.
         engine.match_probes(&c.path, &mut |n, probe| {
             if g.is_task(n) || st.is_steering(g.path(n)) || st.is_steering(probe) {
                 seeds.push((
@@ -367,7 +367,8 @@ impl<'a, 'g> Walk<'a, 'g> {
             return false;
         }
         self.parent.insert(n.0, from);
-        // A task is reported; whether anything flows on from it is the plan's choice.
+        // A task is reported; whether anything flows on from it is the plan's
+        // choice.
         if self.follow.through_tasks || !self.g.is_task(n) {
             self.queue.push_back(n.0);
         }

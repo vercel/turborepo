@@ -263,9 +263,9 @@ fn a_project_moved_to_another_peer_variant_of_its_runner() {
     let r = d.path();
     assert!(selected(r).is_empty(), "nothing changed");
 
-    // Only the importer block of packages/c changes: its vitest is now the jsdom@23
-    // variant, which packages/b already used. No package is added, removed or
-    // changed.
+    // Only the importer block of packages/c changes: its vitest is now the
+    // jsdom@23 variant, which packages/b already used. No package is added,
+    // removed or changed.
     write(r, "pnpm-lock.yaml", &lock("23.2.0", "30.0.0", "1.3.0"));
     assert_eq!(
         selected(r),

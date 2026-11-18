@@ -80,7 +80,8 @@ fn detector_repo() -> tempfile::TempDir {
         "pkg/test/listed.js",
         "exports.listed = (dir) => JSON.parse(process.env['NAMES_' + dir.length] || '[]');\n",
     );
-    // `<dir>/<name>`: for the root this is `<ancestor>/*`, which is not expanded.
+    // `<dir>/<name>`: for the root this is `<ancestor>/*`, which is not
+    // expanded.
     write(r, "pkg/test/detect.test.js", &detector_test(""));
     // `<dir>/<name>/package.json`: expanded, and for the root truncated at the
     // limit.
@@ -117,7 +118,8 @@ fn a_later_alternative_keeps_its_record() {
         affected(r, &["pkg/test/fixtures/mono/app/package.json"]),
         [open, covered]
     );
-    // A manifest the root branch matches beyond the limit: no edge, only the scope.
+    // A manifest the root branch matches beyond the limit: no edge, only the
+    // scope.
     assert_eq!(affected(r, &["zz/package.json"]), [open, covered]);
     let ex = explain(r, "zz/package.json", covered);
     assert!(
@@ -127,16 +129,16 @@ fn a_later_alternative_keeps_its_record() {
         ),
         "{ex}"
     );
-    // The scope is the pattern, not the directory: another file below the root is
-    // outside.
+    // The scope is the pattern, not the directory: another file below the root
+    // is outside.
     assert_eq!(affected(r, &["zz/late.txt"]), [open]);
     assert!(
         ex.contains("covered pkg/test/manifests.test.js:7 pattern_too_broad"),
         "{ex}"
     );
-    // The branch that was not expanded keeps its record: the test is selected for a
-    // file anywhere below the root (as uncertain, or through the names that
-    // bound the read).
+    // The branch that was not expanded keeps its record: the test is selected
+    // for a file anywhere below the root (as uncertain, or through the
+    // names that bound the read).
     let ex = explain(r, "zz/late.txt", open);
     assert!(
         ex.starts_with("affected pkg/test/detect.test.js: ") && ex.contains("pattern_too_broad"),

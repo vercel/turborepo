@@ -1221,16 +1221,20 @@ impl Run {
 
                 let is_monorepo = !self.execution.opts.run_opts.single_package;
 
-                // Run four expensive operations concurrently using rayon::scope:
-                // 1. Package file hashing - walks every package's files and computes hashes
-                // 2. Internal deps hashing - walks root internal dependency packages
-                // 3. Global file hash inputs - globwalks global deps and hashes them
-                // 4. External deps hashing - hashes every package's transitive lockfile
-                //    dependencies (consumed later by the task hasher)
+                // Run four expensive operations concurrently using
+                // rayon::scope:
+                // 1. Package file hashing - walks every package's files and
+                //    computes hashes
+                // 2. Internal deps hashing - walks root internal dependency
+                //    packages
+                // 3. Global file hash inputs - globwalks global deps and hashes
+                //    them
+                // 4. External deps hashing - hashes every package's transitive
+                //    lockfile dependencies (consumed later by the task hasher)
                 //
-                // These are completely independent and dominate the pre-execution
-                // phase. Running them in parallel can significantly reduce wall-clock
-                // time.
+                // These are completely independent and dominate the
+                // pre-execution phase. Running them in parallel
+                // can significantly reduce wall-clock time.
                 let internal_dep_paths = is_monorepo.then(|| {
                     self.pkg_dep_graph()
                         .root_internal_package_dependencies_paths()
@@ -1390,7 +1394,8 @@ impl Run {
     fn global_hashable_inputs<'a>(&'a self, inputs: &'a RunHashInputs) -> GlobalHashableInputs<'a> {
         let pass_through_env = match self.execution.opts.run_opts.env_mode {
             EnvMode::Loose => {
-                // Remove the passthroughs from hash consideration if we're explicitly loose.
+                // Remove the passthroughs from hash consideration if we're
+                // explicitly loose.
                 None
             }
             EnvMode::Strict => self.root_turbo_json().global_pass_through_env.as_deref(),
@@ -1517,13 +1522,14 @@ impl Run {
 
         self.cleanup_proxy(proxy_shutdown).await;
 
-        // When a proxy is present, the signal handler only stops processes on OS
-        // signal. For normal completion without user interruption, we need an
-        // explicit stop here.
+        // When a proxy is present, the signal handler only stops processes on
+        // OS signal. For normal completion without user interruption,
+        // we need an explicit stop here.
         //
         // In watch mode, persistent tasks run as fire-and-forget background
         // processes that outlive the visit() call. The watch coordinator
-        // manages their lifecycle via RunStopper, so we must not kill them here.
+        // manages their lifecycle via RunStopper, so we must not kill them
+        // here.
         if !is_watch {
             self.services.processes.stop().await;
         }
@@ -1551,9 +1557,10 @@ impl Run {
             self.setup_cache_shutdown_handler();
         }
 
-        // If there's no proxy, we need a fallback signal handler for the process
-        // manager When a proxy is present, register_proxy_signal_handler
-        // handles process manager shutdown
+        // If there's no proxy, we need a fallback signal handler for the
+        // process manager When a proxy is present,
+        // register_proxy_signal_handler handles process manager
+        // shutdown
         if proxy_shutdown.is_none() && !is_watch {
             self.setup_process_manager_shutdown_handler();
         }
@@ -1973,8 +1980,9 @@ impl turborepo_query_api::QueryRun for Run {
         {
             Ok(files) => Ok(files),
             Err(_invalid_range) => {
-                // If git range is invalid, return empty set — the affected packages
-                // computation will handle reporting all-packages-changed separately.
+                // If git range is invalid, return empty set — the affected
+                // packages computation will handle reporting
+                // all-packages-changed separately.
                 Ok(turborepo_types::TaskInputChanges::default())
             }
         }

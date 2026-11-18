@@ -493,8 +493,8 @@ pub fn bind(world: &dyn World, roots: &[u32], select: Select) -> Bound {
     let mut spent: HashSet<u32> = HashSet::new();
     let total = MAX_STEPS.max(file_steps().saturating_mul(4));
     let (mut out, settled) = settle(world, total, |b| {
-        // Every file gets its own share of the budget, so that one expensive file does
-        // not leave the sites of the others open.
+        // Every file gets its own share of the budget, so that one expensive
+        // file does not leave the sites of the others open.
         let mut left = total;
         let mut exhausted = false;
         for &f in roots {
@@ -533,7 +533,8 @@ pub fn bind(world: &dyn World, roots: &[u32], select: Select) -> Bound {
         std::mem::take(&mut b.out)
     });
     if !settled {
-        // Loaders kept turning up: the callers of some function are not all known.
+        // Loaders kept turning up: the callers of some function are not all
+        // known.
         out.closed.clear();
         out.tables.clear();
         out.exhausted = true;
@@ -608,8 +609,8 @@ fn settle<T>(
                 continue;
             }
             loaders.entry(module).or_default().push(loader);
-            // Only a module whose users or other holders were asked for can change the
-            // result.
+            // Only a module whose users or other holders were asked for can
+            // change the result.
             let matters = b.asked_users.contains(&module)
                 || b.asked_exports
                     .get(&module)
@@ -776,8 +777,8 @@ fn gave_up() -> Alt {
 }
 
 fn push(out: &mut Vals, a: Alt) {
-    // Duplicates come from the same supplier, next to each other: long lists are
-    // only checked near their end (a duplicate that stays is harmless).
+    // Duplicates come from the same supplier, next to each other: long lists
+    // are only checked near their end (a duplicate that stays is harmless).
     let near = out
         .len()
         .saturating_sub(if out.len() > 256 { 32 } else { 256 });
@@ -891,13 +892,14 @@ impl Binder<'_> {
         if closed_sinks.is_empty() {
             return;
         }
-        // Tables whose every key is bound: a value can only be selected by a supplier.
+        // Tables whose every key is bound: a value can only be selected by a
+        // supplier.
         for t in &facts.tables {
             if !t.keyed_only {
                 continue;
             }
-            // And whose values only reach sites that are closed (a site that does not
-            // depend on holes keeps its own references).
+            // And whose values only reach sites that are closed (a site that
+            // does not depend on holes keeps its own references).
             let all_closed = t
                 .sinks
                 .iter()
@@ -930,9 +932,10 @@ impl Binder<'_> {
 
     /// Binds one sink; `true` when it is closed.
     fn sink(&mut self, file: u32, s: &Sink) -> bool {
-        // An unknown of the file itself among the alternatives keeps the site's record
-        // whatever the callers pass: every entry that reaches the file is selected on
-        // every change, so what the callers pass adds nothing and is not evaluated.
+        // An unknown of the file itself among the alternatives keeps the site's
+        // record whatever the callers pass: every entry that reaches
+        // the file is selected on every change, so what the callers
+        // pass adds nothing and is not evaluated.
         let own_unknown = |x: &X| matches!(x, X::Const(JsVal::Unknown(_)));
         let stays = match &s.value {
             X::Alts(xs) => xs.iter().any(own_unknown),
@@ -949,18 +952,19 @@ impl Binder<'_> {
         };
         let mut vals = self.eval(file, &s.value, here, 0);
         if self.only_strings(file, s, here) {
-            // A container or a function never reaches the site: the test around it
-            // lets strings through and nothing else. An unknown stays (it can be one).
+            // A container or a function never reaches the site: the test around
+            // it lets strings through and nothing else. An unknown
+            // stays (it can be one).
             vals.retain(|a| matches!(a.v, Val::Js(_)));
         }
         let mut home = false;
         let mut deps = Vec::new();
         let mut seen: std::collections::HashSet<(u32, u32, DepValue)> =
             std::collections::HashSet::new();
-        // `TURBO_TRACE_DEBUG_BIND_TRACE=<part of a path>`: the unknown alternatives of
-        // every sink that a matching file supplies (or that stay at home in a
-        // matching site file), with the whole reason text: how the unknown came
-        // about.
+        // `TURBO_TRACE_DEBUG_BIND_TRACE=<part of a path>`: the unknown
+        // alternatives of every sink that a matching file supplies (or
+        // that stay at home in a matching site file), with the whole
+        // reason text: how the unknown came about.
         if let Some(part) = trace_part() {
             for a in &vals {
                 let at_home = a.p.home && (a.p.file == file || a.p.file == NOWHERE);
@@ -1004,9 +1008,10 @@ impl Binder<'_> {
             }
         }
         for a in &vals {
-            // Callers that cannot be enumerated, or an unknown of the file itself (a call
-            // that is not followed, an operation that is not modelled): the site's own
-            // record stays. A piece of a known string (a character, its length) is an
+            // Callers that cannot be enumerated, or an unknown of the file
+            // itself (a call that is not followed, an operation
+            // that is not modelled): the site's own record stays. A
+            // piece of a known string (a character, its length) is an
             // unknown like any other: `.` is a module specifier.
             let own =
                 a.p.file == file && a.p.depth == 0 && matches!(&a.v, Val::Js(JsVal::Unknown(_)));
@@ -1030,7 +1035,8 @@ impl Binder<'_> {
                     if load && s.kind == RefKind::Require => {}
                 Val::Func(..) if load => {}
                 Val::Object(o) if load => {
-                    // An object that brings its own string form can name a module.
+                    // An object that brings its own string form can name a
+                    // module.
                     let own_form = o.open.is_some()
                         || o.props
                             .iter()
@@ -1040,8 +1046,9 @@ impl Binder<'_> {
                     }
                 }
                 Val::Array(arr) if load => {
-                    // The string form of an array is its elements joined by commas: a
-                    // path only when there is one element. A worker or a child process
+                    // The string form of an array is its elements joined by
+                    // commas: a path only when there is one
+                    // element. A worker or a child process
                     // can take a list of arguments: any element.
                     let single = matches!(s.kind, RefKind::DynamicImport | RefKind::Import);
                     let cands: Vec<&Vals> = if !single {
@@ -1082,7 +1089,8 @@ impl Binder<'_> {
                         && self.w.path(p.file).contains(part)
                 })
             {
-                // Which container stands for "not a string": its keys or lengths.
+                // Which container stands for "not a string": its keys or
+                // lengths.
                 let what = match &a.v {
                     Val::Object(o) => format!(
                         "object, keys {:?}, open {}",
@@ -1118,8 +1126,9 @@ impl Binder<'_> {
             }
             for (value, p) in values {
                 if load {
-                    // The site's file holds the module it loads: it is a user of the
-                    // module's exports that the graph has no edge for.
+                    // The site's file holds the module it loads: it is a user
+                    // of the module's exports that the
+                    // graph has no edge for.
                     for t in self.load_targets(file, &value) {
                         self.loads.insert((file, t));
                     }
@@ -1139,7 +1148,8 @@ impl Binder<'_> {
             }
         }
         if self.steps == 0 {
-            // Out of budget: the values are incomplete. Keep the callee's record.
+            // Out of budget: the values are incomplete. Keep the callee's
+            // record.
             return false;
         }
         self.out.deps.extend(deps);
@@ -1257,7 +1267,8 @@ impl Binder<'_> {
             return out;
         }
         let d = depth + 1;
-        // Reads are pushed down to where the value is built ([`Binder::eval_read`]).
+        // Reads are pushed down to where the value is built
+        // ([`Binder::eval_read`]).
         if matches!(x, X::Field(..) | X::AnyField(_) | X::Elem(_)) {
             let (base, path) = read_path(x);
             let vals = self.eval_read(file, base, &path, here, d);
@@ -1294,9 +1305,11 @@ impl Binder<'_> {
                     out.push(gave_up());
                     return out;
                 }
-                // A text longer than any path (generated source that a function is handed
-                // next to the path it reads) is not built: an unknown where its parts come
-                // from, which costs nothing however many alternatives the parts have.
+                // A text longer than any path (generated source that a function
+                // is handed next to the path it reads) is not
+                // built: an unknown where its parts come
+                // from, which costs nothing however many alternatives the parts
+                // have.
                 let longest = |vs: &Vals| vs.iter().map(|a| text_len(&a.v)).max().unwrap_or(0);
                 if longest(&l) + longest(&r) > MAX_TEXT {
                     let floor = [&l, &r]
@@ -1343,8 +1356,8 @@ impl Binder<'_> {
                 let mut never = false;
                 for a in xs {
                     let vals = self.eval(file, a, here, d);
-                    // An operand without a value (a hole nobody fills): the operation
-                    // never runs.
+                    // An operand without a value (a hole nobody fills): the
+                    // operation never runs.
                     never |= vals.is_empty();
                     let mut ps: Vec<Prov> = Vec::new();
                     for v in vals {
@@ -1380,10 +1393,12 @@ impl Binder<'_> {
                 } else {
                     JsVal::Unknown(origin::derive(&reasons.join(" "), "derived value"))
                 };
-                // The supplier of a combination of operands is its deepest one, so every
-                // supplier that is the deepest of some combination supplies the unknown:
-                // the ones at least as deep as the shallowest alternative of every
-                // operand. (One unknown for all of them would leave the others without.)
+                // The supplier of a combination of operands is its deepest one,
+                // so every supplier that is the deepest of some
+                // combination supplies the unknown: the ones at
+                // least as deep as the shallowest alternative of every
+                // operand. (One unknown for all of them would leave the others
+                // without.)
                 let floor = ops
                     .iter()
                     .map(|ps| ps.iter().map(|p| p.depth).min().unwrap_or(0))
@@ -1429,9 +1444,10 @@ impl Binder<'_> {
                         }
                     }
                 }
-                // A key that is `undefined` or `null` reads the properties of those names
-                // (the engine's rule); such keys are not values here, so a table that has
-                // them always yields them.
+                // A key that is `undefined` or `null` reads the properties of
+                // those names (the engine's rule); such keys
+                // are not values here, so a table that has them
+                // always yields them.
                 for t in &tables {
                     if let Val::Object(o) = &t.v {
                         for (name, v) in &o.props {
@@ -1498,9 +1514,10 @@ impl Binder<'_> {
                 }
             }
             X::Reach { base, steps } => {
-                // Everything the reads reach, starting from each value of the base.
-                // Containers are visited once (by identity: a value is shared, not
-                // copied, on its way here).
+                // Everything the reads reach, starting from each value of the
+                // base. Containers are visited once (by
+                // identity: a value is shared, not copied, on
+                // its way here).
                 let mut work = self.eval(file, base, here, d);
                 let mut seen: HashSet<usize> = HashSet::new();
                 while let Some(a) = work.pop() {
@@ -1521,8 +1538,8 @@ impl Binder<'_> {
                     if !fresh {
                         continue;
                     }
-                    // What the reads make of a string (a piece of it) is unknown and
-                    // not read further.
+                    // What the reads make of a string (a piece of it) is
+                    // unknown and not read further.
                     if matches!(&a.v, Val::Js(_)) {
                         for s in steps {
                             match s {
@@ -1534,8 +1551,9 @@ impl Binder<'_> {
                         push(&mut out, a);
                         continue;
                     }
-                    // A function has the properties its file assigns to something by
-                    // name (`f.handler = …`), no elements, and is no array.
+                    // A function has the properties its file assigns to
+                    // something by name (`f.handler = …`),
+                    // no elements, and is no array.
                     if let Val::Func(ff, _) = &a.v {
                         let writes = self.facts(*ff).map(|f| f.writes.clone());
                         let assigned = steps.iter().any(|s| match s {
@@ -1564,7 +1582,8 @@ impl Binder<'_> {
                             Read::Elem => self.elem(&a, &mut next),
                         }
                     }
-                    // Visited once (by identity): no need to look for a duplicate.
+                    // Visited once (by identity): no need to look for a
+                    // duplicate.
                     if out.len() < MAX_ALTS {
                         out.push(a);
                     } else {
@@ -1574,8 +1593,9 @@ impl Binder<'_> {
                 }
             }
             X::Changed { by, prop } => {
-                // The object is changed where a callee that changes it is the one that
-                // is called: the unknown belongs to whoever supplies that callee (the
+                // The object is changed where a callee that changes it is the
+                // one that is called: the unknown belongs to
+                // whoever supplies that callee (the
                 // reading file itself for a function it imports).
                 for (callee, pos) in by {
                     for p in self.changers(file, callee, *pos, prop.as_deref(), here, d) {
@@ -1590,7 +1610,8 @@ impl Binder<'_> {
                 }
             }
         }
-        // The budget also covers what was produced (alternatives are copied around).
+        // The budget also covers what was produced (alternatives are copied
+        // around).
         self.steps = self.steps.saturating_sub(out.len() as u32);
         if let Some(prof) = &mut self.prof {
             let name = match x {
@@ -1875,8 +1896,9 @@ impl Binder<'_> {
                 }
                 Some(DepValue::Path(p)) => self.w.module_at(&p),
                 Some(DepValue::Cwd(s)) => {
-                    // Every working directory a test runs in. Entries without a known
-                    // working directory keep a record (it does not count for tests).
+                    // Every working directory a test runs in. Entries without a
+                    // known working directory keep a record
+                    // (it does not count for tests).
                     push(
                         out,
                         Alt {
@@ -1941,7 +1963,8 @@ impl Binder<'_> {
     /// does more than read them supplies an unknown: it can have changed
     /// them before `loader` looks.
     fn module(&mut self, t: u32, loader: u32, depth: u32) -> Rc<Vals> {
-        // The loader holds the module object: a user of its exports without an edge.
+        // The loader holds the module object: a user of its exports without an
+        // edge.
         self.loads.insert((loader, t));
         let asked = self.asked_exports.entry(t).or_default();
         if !asked.contains(&loader) {
@@ -1983,8 +2006,8 @@ impl Binder<'_> {
         }
         self.module_busy.pop();
         let whole = !out.is_empty();
-        // Exports the facts do not list: re-exports, and exports written in a way that
-        // is not followed.
+        // Exports the facts do not list: re-exports, and exports written in a
+        // way that is not followed.
         let open = (!facts.reexports.is_empty() || facts.exports_open).then(|| {
             vec![Alt {
                 v: Val::Js(unknown(Tag::Import, "an export that is not followed")),
@@ -2050,7 +2073,8 @@ impl Binder<'_> {
                         described = true;
                         writes |= i.writes;
                     }
-                    // A re-export hands the exports to files this check does not see.
+                    // A re-export hands the exports to files this check does
+                    // not see.
                     writes |= gf.reexports.iter().any(|r| r.at == at);
                     described && !writes
                 }
@@ -2167,8 +2191,9 @@ impl Binder<'_> {
                     true
                 }
             };
-            // A callee the reading file knows by itself (an import) changes the object
-            // wherever the read happens; one a caller supplies only where that caller is.
+            // A callee the reading file knows by itself (an import) changes the
+            // object wherever the read happens; one a caller
+            // supplies only where that caller is.
             let p = if c.p.depth > here.depth || c.p.file == NOWHERE {
                 c.p
             } else {
@@ -2190,7 +2215,8 @@ impl Binder<'_> {
         if let Some(b) = self.changes.get(&key) {
             return *b;
         }
-        // A cycle of calls: it changes the object only if one of its members does.
+        // A cycle of calls: it changes the object only if one of its members
+        // does.
         if self.changes_busy.contains(&key) {
             return false;
         }
@@ -2262,8 +2288,9 @@ impl Binder<'_> {
 
     /// `a.name` (`None`: any property).
     fn member(&self, a: &Alt, name: Option<&str>, out: &mut Vals) {
-        // As the receiver of an array method: an array is itself; a string, a function
-        // and an object without such a method have none (the call throws).
+        // As the receiver of an array method: an array is itself; a string, a
+        // function and an object without such a method have none (the
+        // call throws).
         if name == Some(AS_ARRAY) || name == Some(ARRAY_ELEMENT) {
             match &a.v {
                 Val::Array(_) if name == Some(ARRAY_ELEMENT) => self.elem(a, out),
@@ -2540,8 +2567,9 @@ impl Binder<'_> {
         if let Some(u) = self.users.get(&key) {
             return u.clone();
         }
-        // A cycle of re-exports ends here: what is collected between the first visit of
-        // this export and now lacks its users (and is not kept, see below).
+        // A cycle of re-exports ends here: what is collected between the first
+        // visit of this export and now lacks its users (and is not
+        // kept, see below).
         if let Some(i) = self.users_busy.iter().position(|k| *k == key) {
             self.users_hit = self.users_hit.min(i);
             return Rc::new(Vec::new());
@@ -2549,8 +2577,8 @@ impl Binder<'_> {
         let my = self.users_busy.len();
         self.users_busy.push(key.clone());
         let hit_before = std::mem::replace(&mut self.users_hit, usize::MAX);
-        // A set: barrels that re-export each other reach the same user along many
-        // paths.
+        // A set: barrels that re-export each other reach the same user along
+        // many paths.
         let mut out: Vec<Use> = Vec::new();
         let mut seen: std::collections::HashSet<Use> = std::collections::HashSet::new();
         let mut add = |out: &mut Vec<Use>, u: Use| {
@@ -2559,7 +2587,8 @@ impl Binder<'_> {
             }
         };
         let mut importers = self.w.importers(file);
-        // Files that load the module through a bound site hold all of its exports.
+        // Files that load the module through a bound site hold all of its
+        // exports.
         if let Some(ls) = self.loaders.get(&file) {
             importers.extend(ls.iter().map(|l| Importer { file: *l, at: None }));
         }
@@ -2606,7 +2635,8 @@ impl Binder<'_> {
                     outer.push(name);
                 }
                 if r.names.iter().any(|(i, _)| i == "*") || hops >= MAX_HOPS {
-                    // The namespace as an export, or a chain too long to follow.
+                    // The namespace as an export, or a chain too long to
+                    // follow.
                     add(&mut out, Use::Opaque(g));
                     continue;
                 }
@@ -2624,8 +2654,8 @@ impl Binder<'_> {
         }
         let out = Rc::new(out);
         self.users_busy.pop();
-        // Complete unless a lookup inside ran into an export further out that is still
-        // being collected.
+        // Complete unless a lookup inside ran into an export further out that
+        // is still being collected.
         let hit = self.users_hit;
         self.users_hit = hit_before.min(hit);
         if hit >= my {
@@ -2702,8 +2732,8 @@ impl Binder<'_> {
             return Rc::new(vec![home(0)]);
         };
         self.busy.push(key);
-        // The callers are other activations: the frames of calls being evaluated
-        // through their return summary do not apply to them.
+        // The callers are other activations: the frames of calls being
+        // evaluated through their return summary do not apply to them.
         let frames = std::mem::take(&mut self.frames);
         let mut out = Vals::new();
         let depth = here.depth + 1;
@@ -2712,7 +2742,8 @@ impl Binder<'_> {
                 if *escapes {
                     push(&mut out, home(f.line));
                 }
-                // Calls in the file that the engine does not join: `new C(...)`.
+                // Calls in the file that the engine does not join: `new
+                // C(...)`.
                 for c in &facts.calls {
                     if matches!(&c.callee, X::Func(id) if *id == func) {
                         let p = Prov {
@@ -2782,7 +2813,8 @@ impl Binder<'_> {
         self.busy.pop();
         self.frames = frames;
         let out = Rc::new(out);
-        // A value computed while a caller's hole was still open may be incomplete.
+        // A value computed while a caller's hole was still open may be
+        // incomplete.
         if self.steps > 0 && (self.busy.is_empty() || !out.iter().any(|a| a.p.home)) {
             self.holes.insert(memo, out.clone());
         }
@@ -2969,7 +3001,8 @@ fn lower(j: &JsVal, rule: BaseRule) -> Option<DepValue> {
                     Value::Pattern(parts) => match parts.first() {
                         Some(PatPart::Lit(head)) => match head.strip_prefix(ROOT) {
                             Some(rest) if rest.is_empty() || rest.starts_with('/') => {
-                                // The known directory before the first unknown part.
+                                // The known directory before the first unknown
+                                // part.
                                 let rest = rest.trim_start_matches('/');
                                 let dir = match rest.rfind('/') {
                                     Some(i) => &rest[..i],

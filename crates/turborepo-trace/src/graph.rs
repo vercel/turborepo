@@ -239,15 +239,16 @@ pub(crate) fn derived(g: &Graph, stats: bool) -> Result<turborepo_trace_graph::P
     let env = turborepo_trace_core::debug::var_os("ENV").is_none_or(|v| v != "0");
     let env_stats = env.then(|| {
         let decls = hints.as_ref().map_or(&[][..], |h| h.env.as_slice());
-        // A cross-file evaluator for assignments a file cannot evaluate alone plugs in
-        // here (`Graph::env_patch_with`); without one those assignments stay unknown.
+        // A cross-file evaluator for assignments a file cannot evaluate alone
+        // plugs in here (`Graph::env_patch_with`); without one those
+        // assignments stay unknown.
         let (p, s, cached) = g.env_patch_cached(decls, &|_, _| None);
         patch.merge(p);
         (s, cached)
     });
-    // Manual mocks that files other than tests register: an edge from the module to
-    // the mock (`turborepo_trace_store::compose::mocks`). Not a switch: without
-    // it nothing depends on those mocks.
+    // Manual mocks that files other than tests register: an edge from the
+    // module to the mock (`turborepo_trace_store::compose::mocks`). Not a
+    // switch: without it nothing depends on those mocks.
     let (p, mock_edges, mock_cached) = g.mock_patch_cached();
     patch.merge(p);
     if stats && mock_edges > 0 {
@@ -311,8 +312,9 @@ pub(crate) fn open_report(
             members: loc.members.clone(),
             ..stored_options(&root, &out)
         };
-        // The language flags of the last `graph build` (their digest is part of the
-        // options digest: different flags would rebuild every shard).
+        // The language flags of the last `graph build` (their digest is part of
+        // the options digest: different flags would rebuild every
+        // shard).
         let r = turborepo_trace_store::build(&opts, &langs::all(&langs::LangArgs::load(&out)))?;
         turborepo_trace_core::timing::mark("graph: build returned (its locals dropped)");
         if stats {

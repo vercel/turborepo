@@ -240,8 +240,9 @@ pub(crate) fn probe_native_with(
                     .source
                     .strip_prefix("package.json#")
                     .ok_or(StorageError::Declarations)?;
-                // Preserve manager identity, integrity, onFail, and version-field
-                // presence even for advisory alternatives of another manager.
+                // Preserve manager identity, integrity, onFail, and
+                // version-field presence even for advisory
+                // alternatives of another manager.
                 let raw = value.pointer(pointer).ok_or(StorageError::Declarations)?;
                 if pointer == "/packageManager" {
                     sources.push(Declaration {

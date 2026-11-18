@@ -60,8 +60,9 @@ impl Handle {
 
     /// Shutdown the observer, flushing any pending metrics.
     pub fn shutdown(&self) {
-        // We only have an Arc<dyn RunObserver>, so we delegate shutdown to the trait
-        // and let the concrete implementation handle any shared references.
+        // We only have an Arc<dyn RunObserver>, so we delegate shutdown to the
+        // trait and let the concrete implementation handle any shared
+        // references.
         self.inner.shutdown();
     }
 

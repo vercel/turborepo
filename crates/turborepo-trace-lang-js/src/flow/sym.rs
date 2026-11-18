@@ -425,8 +425,8 @@ impl<'a> Engine<'a, '_> {
                     id = *b;
                 }
                 Some(Sym::Elem(b)) => {
-                    // An element handed out by an array method is one step: only an
-                    // array has it.
+                    // An element handed out by an array method is one step:
+                    // only an array has it.
                     match self.sym_node(*b) {
                         Some(Sym::Field(bb, n)) if &**n == AS_ARRAY => {
                             add(ReachStep::Field(ARRAY_ELEMENT.into()));
@@ -462,7 +462,8 @@ impl<'a> Engine<'a, '_> {
     /// caller falls back to an unknown).
     pub(super) fn sym_widen(&mut self, sym: SymbolId, k: usize, v: &V<'a>) -> Option<V<'a>> {
         self.sym.as_ref()?;
-        // Roots with the reads applied to them, and the alternatives without nodes.
+        // Roots with the reads applied to them, and the alternatives without
+        // nodes.
         let mut roots: Vec<(u32, Vec<ReachStep>)> = Vec::new();
         let mut plain: Vec<V<'a>> = Vec::new();
         for l in v.leaves() {
@@ -522,7 +523,8 @@ impl<'a> Engine<'a, '_> {
             reach.push((*root, steps.clone()));
         }
         let w = join(out);
-        // The check: one more evaluation with the widened value must stay inside it.
+        // The check: one more evaluation with the widened value must stay
+        // inside it.
         self.busy_partial(k, w.clone());
         let next = self.definitions_of(sym);
         for l in next.leaves() {

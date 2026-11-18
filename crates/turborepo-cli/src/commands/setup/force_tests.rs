@@ -145,7 +145,8 @@ fn force_late_failures_keep_the_previous_record() {
         }
         let u = Upstream::new(&corrupted, case == 1, drift);
         assert!(corrupted.run(&u, FORCE).is_err(), "case {case}");
-        // Downloads run concurrently, so a corrupt Node may race pnpm's two fetches.
+        // Downloads run concurrently, so a corrupt Node may race pnpm's two
+        // fetches.
         let hits = u.hits();
         assert!(
             if case == 0 {

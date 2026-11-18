@@ -364,8 +364,8 @@ fn prefixed_literal(
         });
         e
     };
-    // The prefix must be a whole identifier start: `br"` is a literal, `abr"` is
-    // not (the caller only calls this at identifier starts).
+    // The prefix must be a whole identifier start: `br"` is a literal, `abr"`
+    // is not (the caller only calls this at identifier starts).
     match (b, at(1), at(2)) {
         (b'r', Some(b'"'), _) | (b'r', Some(b'#'), Some(b'"' | b'#')) => {
             raw_str(out, issues, StrForm::Raw, i + 1)
@@ -413,7 +413,8 @@ fn char_or_lifetime(
     };
     match src.get(q + 1).copied() {
         Some(b'\\') => {
-            // Escape: find the closing quote within a short window (`'\u{10FFFF}'`).
+            // Escape: find the closing quote within a short window
+            // (`'\u{10FFFF}'`).
             let lim = (q + 14).min(n);
             if let Some(p) = memchr3(b'\'', b'\n', b'"', &src[(q + 3).min(lim)..lim])
                 .map(|p| p + (q + 3).min(lim))

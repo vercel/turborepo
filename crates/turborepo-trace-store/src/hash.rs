@@ -327,7 +327,8 @@ mod tests {
         c.save(None).unwrap();
         let c2 = HashCache::open(&db);
         assert_eq!(c2.entries().len(), 1);
-        // A fresh write is hashed again (stat changed) and not persisted (racy window).
+        // A fresh write is hashed again (stat changed) and not persisted (racy
+        // window).
         std::fs::write(&f, "yy").unwrap();
         assert_eq!(c2.hash(&f).unwrap(), xxhash_rust::xxh3::xxh3_128(b"yy"));
         assert!(c2.entries().is_empty());

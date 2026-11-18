@@ -84,8 +84,8 @@ fn without_facts_a_non_pure_importer_ends_the_walk() {
     let (aff, p) = run(&g, &ids, &src, &[("f.ts", &["x"], true)], &[]);
     assert_eq!(aff, ["a.test.ts", "b.test.ts", "c.test.ts"]);
     assert_eq!(p.skipped[0].passed, 0);
-    // The walk still honours the changed names: `y` only would hit `m.ts` just the
-    // same, and a name `m.ts` does not import hits nothing.
+    // The walk still honours the changed names: `y` only would hit `m.ts` just
+    // the same, and a name `m.ts` does not import hits nothing.
     let (aff, _) = run(&g, &ids, &src, &[("f.ts", &["z"], true)], &[]);
     assert!(aff.is_empty(), "{aff:?}");
 }
@@ -177,8 +177,8 @@ fn the_change_travels_through_several_importers() {
 
 #[test]
 fn reads_the_source_cannot_attribute_end_the_walk() {
-    // A dynamic import of f.ts next to the static one: no import declaration to ask
-    // about.
+    // A dynamic import of f.ts next to the static one: no import declaration to
+    // ask about.
     let (mut fx, at) = fixture();
     fx.defs("m.ts", &[("ux", &[(at, "x")])], &[]);
     fx.edge("m.ts", "f.ts", RefKind::DynamicImport, "./f.ts", 999);
@@ -236,12 +236,12 @@ fn a_changed_importer_passes_on_only_as_a_candidate() {
     let (mut fx, at) = fixture();
     fx.defs("m.ts", &[("ux", &[(at, "x")]), ("uy", &[(at, "y")])], &[]);
     let (g, ids, src) = fx.build();
-    // m.ts is modified too and not a candidate: it is a seed, everything behind it
-    // runs.
+    // m.ts is modified too and not a candidate: it is a seed, everything behind
+    // it runs.
     let (aff, _) = run(&g, &ids, &src, &[("f.ts", &["x"], true)], &["m.ts"]);
     assert_eq!(aff, ["a.test.ts", "b.test.ts", "c.test.ts"]);
-    // m.ts is a candidate whose own change is `uy`: its users, plus the users of
-    // what it derives from `x`.
+    // m.ts is a candidate whose own change is `uy`: its users, plus the users
+    // of what it derives from `x`.
     let (aff, _) = run(
         &g,
         &ids,
@@ -262,9 +262,9 @@ fn a_changed_importer_passes_on_only_as_a_candidate() {
 
 #[test]
 fn an_entry_that_reads_none_of_what_changed_is_not_selected() {
-    // Both tests import `x`; the facts of a.test.ts say that no statement reads it
-    // (it names `x` in a type, or reads other members of a table of which one
-    // member changed). b.test.ts has no facts.
+    // Both tests import `x`; the facts of a.test.ts say that no statement reads
+    // it (it names `x` in a type, or reads other members of a table of
+    // which one member changed). b.test.ts has no facts.
     let mut fx = Fx::new();
     let at = fx.import_at("a.test.ts", "f.ts", Some(&["x"]));
     fx.import("b.test.ts", "f.ts", Some(&["x"]));

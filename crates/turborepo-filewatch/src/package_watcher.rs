@@ -121,8 +121,9 @@ impl PackageWatcher {
     pub async fn discover_packages(&self) -> Option<Result<DiscoveryResponse, PackageWatchError>> {
         tracing::debug!("discovering packages using watcher implementation");
 
-        // this can either not have a value ready, or the sender has been dropped. in
-        // either case just report that the value is unavailable
+        // this can either not have a value ready, or the sender has been
+        // dropped. in either case just report that the value is
+        // unavailable
         let mut recv = self.package_discovery_lazy.clone();
         recv.get_immediate().await.map(|resp| {
             resp.map_err(|_| PackageWatchError::Unavailable)
@@ -259,8 +260,8 @@ fn workspace_path_for_event<'a>(
     }
 
     // A directory that still exists is unambiguous. For file events (including
-    // removed files), prefer the parent before testing the path itself: recursive
-    // globs such as `**` can also match the file path.
+    // removed files), prefer the parent before testing the path itself:
+    // recursive globs such as `**` can also match the file path.
     if path.as_std_path().is_dir() && matches_workspace_glob(repo_root, workspace_globs, path) {
         return Some(path);
     }
@@ -339,8 +340,8 @@ impl Subscriber {
         immediate: bool,
         package_state_tx: mpsc::Sender<DiscoveryResult>,
     ) -> (Version, Arc<Debouncer>) {
-        // Every time we're queuing rediscovery, we know our state is no longer valid,
-        // so reset it for any downstream consumers.
+        // Every time we're queuing rediscovery, we know our state is no longer
+        // valid, so reset it for any downstream consumers.
         self.reset_discovery_data();
         let version = Version(self.next_version.fetch_add(1, Ordering::SeqCst));
         let debouncer = if immediate {
@@ -381,8 +382,8 @@ impl Subscriber {
 
         let (version, debouncer) = self.queue_rediscovery(true, package_state_tx.clone());
 
-        // state represents the current state of this process, and is expected to be
-        // updated in place by the various handler functions.
+        // state represents the current state of this process, and is expected
+        // to be updated in place by the various handler functions.
         let mut state = State::Pending {
             debouncer,
             version,
@@ -427,13 +428,14 @@ impl Subscriber {
             ..
         } = state
         {
-            // If this response matches an outstanding rediscovery request, write out the
-            // corresponding state to downstream consumers and update our state
-            // accordingly.
+            // If this response matches an outstanding rediscovery request,
+            // write out the corresponding state to downstream
+            // consumers and update our state accordingly.
             //
-            // Note that depending on events that we received since this request was queued,
-            // we may have a higher version number, at which point we would
-            // ignore this update, as we know it is stale.
+            // Note that depending on events that we received since this request
+            // was queued, we may have a higher version number, at
+            // which point we would ignore this update, as we know
+            // it is stale.
             if package_result.version == *version {
                 if *rerun_after_current {
                     // Invalidations arrived while this discovery was running,
@@ -518,8 +520,9 @@ impl Subscriber {
 
         tracing::trace!("updating the cookies");
 
-        // now that we have updated the state, we should bump the cookies so that
-        // people waiting on downstream cookie watchers can get the new state
+        // now that we have updated the state, we should bump the cookies so
+        // that people waiting on downstream cookie watchers can get the
+        // new state
         self.cookie_tx.register(
             &file_event
                 .paths
@@ -541,8 +544,9 @@ impl Subscriber {
         } = state
         {
             if debouncer.bump() {
-                // We successfully bumped the debouncer, which was already pending,
-                // so a new discovery will happen shortly.
+                // We successfully bumped the debouncer, which was already
+                // pending, so a new discovery will happen
+                // shortly.
                 return;
             }
             // The debounce already fired, so a discovery is running right now.
@@ -561,8 +565,8 @@ impl Subscriber {
         }
     }
 
-    // Checks whether any event path identifies a workspace or a file directly in
-    // one.
+    // Checks whether any event path identifies a workspace or a file directly
+    // in one.
     async fn handle_workspace_changes(
         &mut self,
         state: &mut State,
@@ -571,8 +575,9 @@ impl Subscriber {
     ) {
         let package_state = match state {
             State::Pending { .. } => {
-                // We can't assess this event until we have a valid package manager. To be safe,
-                // bump or queue another rediscovery, since this could race with the discovery
+                // We can't assess this event until we have a valid package
+                // manager. To be safe, bump or queue another
+                // rediscovery, since this could race with the discovery
                 // in progress.
                 self.bump_or_queue_rediscovery(state, package_state_tx);
                 return;
@@ -580,8 +585,8 @@ impl Subscriber {
             State::Ready(package_state) => package_state,
         };
 
-        // If we don't have a valid package manager and workspace globs, nothing to be
-        // done here
+        // If we don't have a valid package manager and workspace globs, nothing
+        // to be done here
         let PackageState::ValidWorkspaces {
             ref filter,
             ref mut workspaces,
@@ -594,7 +599,8 @@ impl Subscriber {
         // here, we can only update if we have a valid package state
         let mut changed = false;
         let mut rediscover = false;
-        // if a path is not a valid utf8 string, it is not a valid path, so ignore
+        // if a path is not a valid utf8 string, it is not a valid path, so
+        // ignore
         for path in file_event
             .paths
             .iter()
@@ -606,7 +612,8 @@ impl Subscriber {
             let Some(path_workspace) =
                 workspace_path_for_event(&self.repo_root, filter, workspaces, &path_file)
             else {
-                // Ignore paths that do not identify a workspace or a direct child of one.
+                // Ignore paths that do not identify a workspace or a direct
+                // child of one.
                 continue;
             };
 
@@ -684,8 +691,8 @@ impl Subscriber {
                     package_manager: package_manager.clone(),
                     workspaces: workspaces.values().cloned().collect(),
                 };
-                // Note that we could implement PartialEq for DiscoveryResponse, but we
-                // would need to sort the workspace data.
+                // Note that we could implement PartialEq for DiscoveryResponse,
+                // but we would need to sort the workspace data.
                 let _ = self.package_discovery_tx.send(Some(Ok(resp)));
             }
         }
@@ -696,8 +703,9 @@ async fn discover_packages(
     repo_root: AbsoluteSystemPathBuf,
     allow_no_package_manager: bool,
 ) -> PackageState {
-    // If we're rediscovering everything, we need to rediscover the package manager.
-    // It may have changed if a lockfile changed or package.json changed.
+    // If we're rediscovering everything, we need to rediscover the package
+    // manager. It may have changed if a lockfile changed or package.json
+    // changed.
     let mut builder = LocalPackageDiscoveryBuilder::new(repo_root.clone(), None, None);
     builder.with_allow_no_package_manager(allow_no_package_manager);
     let discovery = match builder.build() {
@@ -1461,7 +1469,8 @@ mod test {
 
         let npm_lock_file = repo_root.join_component("package-lock.json");
         npm_lock_file.create_with_contents("").unwrap();
-        // now we have an npm lockfile, but we don't have workspaces. Still invalid
+        // now we have an npm lockfile, but we don't have workspaces. Still
+        // invalid
         package_watcher
             .discover_packages_blocking()
             .await

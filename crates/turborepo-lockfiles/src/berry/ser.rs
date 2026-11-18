@@ -19,8 +19,8 @@ impl fmt::Display for LockfileData {
 
         for (key, entry) in &self.packages {
             let wrapped_key = wrap_string(key);
-            // Yaml 1.2 spec says that keys over 1024 characters need to be prefixed with ?
-            // and the : goes in a new line
+            // Yaml 1.2 spec says that keys over 1024 characters need to be
+            // prefixed with ? and the : goes in a new line
             let key_line = match wrapped_key.len() <= 1024 {
                 true => format!("{wrapped_key}:"),
                 false => format!("? {wrapped_key}\n:"),

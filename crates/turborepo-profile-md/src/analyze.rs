@@ -225,7 +225,8 @@ fn compute_function_stats(
         entry.2 += 1; // call_count
     }
 
-    // Second pass: subtract child time from parent's self time, record call edges
+    // Second pass: subtract child time from parent's self time, record call
+    // edges
     for span in spans {
         if let Some(parent_idx) = span.parent_idx {
             let parent = &spans[parent_idx];

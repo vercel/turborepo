@@ -903,7 +903,8 @@ fn test_uv_virtual_environment_cannot_be_cached_as_output() {
 fn test_uv_prune() {
     let tempdir = tempfile::tempdir().unwrap();
     setup_uv_pure_workspace(tempdir.path());
-    // Root tool configuration is hashed into task inputs, so pruned tasks need it.
+    // Root tool configuration is hashed into task inputs, so pruned tasks need
+    // it.
     for (name, contents) in [
         ("conftest.py", "import pytest\n"),
         ("ruff.toml", "line-length = 100\n"),

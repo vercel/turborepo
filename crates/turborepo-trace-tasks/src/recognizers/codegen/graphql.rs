@@ -323,7 +323,8 @@ fn codegen_config(
                 if let Some(b) = get(&pc, "baseTypesPath").as_ref().and_then(as_str)
                     && !b.starts_with('~')
                 {
-                    // Relative to the key directory; an input of the generated files.
+                    // Relative to the key directory; an input of the generated
+                    // files.
                     out.input(fsx::join(&fsx::join(base, &path), &b));
                 }
             }

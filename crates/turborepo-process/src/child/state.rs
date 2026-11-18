@@ -69,8 +69,8 @@ impl ChildStateManager {
         // If a shutdown was initiated we defer to the exit returned by
         // `ShutdownStyle::process` as that will have information if the child
         // responded to a SIGINT or a SIGKILL. The `wait` response this function
-        // gets in that scenario would make it appear that the child was killed by an
-        // external process.
+        // gets in that scenario would make it appear that the child was killed
+        // by an external process.
         if self.shutdown_initiated {
             return;
         }

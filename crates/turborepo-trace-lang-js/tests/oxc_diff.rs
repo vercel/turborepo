@@ -286,8 +286,8 @@ fn oxc(path: &Path, src: &str) -> Option<Refs> {
 /// `….resolve(request, options)`. A text scan (comments and strings count: it
 /// only makes the comparison skip more).
 fn resolves_elsewhere(src: &str) -> bool {
-    // The text of the call arguments starting right after a `(`, and whether a `,`
-    // separates two of them.
+    // The text of the call arguments starting right after a `(`, and whether a
+    // `,` separates two of them.
     fn args(rest: &str) -> (&str, bool) {
         let (mut depth, mut comma) = (0usize, false);
         for (i, c) in rest.char_indices() {

@@ -47,8 +47,8 @@ impl<N: Eq + Hash + Copy + Send + 'static> Walker<N, Start> {
             txs.insert(node, tx);
             rxs.insert(node, rx);
         }
-        // We will be emitting at most txs.len() nodes so emitting a node should never
-        // block
+        // We will be emitting at most txs.len() nodes so emitting a node should
+        // never block
         //
         // Always have at least 1 entry in buffer or this will panic
         let (node_tx, node_rx) = mpsc::channel(std::cmp::max(txs.len(), 1));

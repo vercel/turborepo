@@ -330,8 +330,8 @@ fn the_resolution_step_is_a_switch() {
     // No single step from services/a or from the framework reaches leaf.
     assert!(affected(r, "packages/leaf/index.js", &[], &[]).is_empty());
     assert_eq!(affected(r, "packages/util/other.js", &[], &[]), [A, B]);
-    // services/a depends on leaf through shared: the declared closure selects its
-    // test.
+    // services/a depends on leaf through shared: the declared closure selects
+    // its test.
     assert_eq!(affected(r, "packages/leaf/index.js", &[], CLOSURE), [A]);
     assert_eq!(affected(r, "packages/util/other.js", &[], CLOSURE), [A, B]);
 }
@@ -670,8 +670,8 @@ fn a_change_of_what_every_package_resolves_selects_the_bounded_loads() {
     git(r, &["add", "-A"]);
     git(r, &["commit", "-q", "-m", "base"]);
     assert!(since(r).is_empty());
-    // A script and a third-party package in the root manifest: the same first-party
-    // declarations as before.
+    // A script and a third-party package in the root manifest: the same
+    // first-party declarations as before.
     write(
         r,
         "package.json",
@@ -702,7 +702,8 @@ fn a_change_of_what_every_package_resolves_selects_the_bounded_loads() {
         why.contains("package.json changed what it resolves"),
         "{why}"
     );
-    // Without a base to compare with (`--changed`), a changed root manifest counts.
+    // Without a base to compare with (`--changed`), a changed root manifest
+    // counts.
     assert_eq!(affected(r, "package.json", &[], &[]), [A, B]);
     git(r, &["checkout", "-q", "package.json"]);
     // The layout: a setting that changes nothing about the links, then a public
@@ -753,8 +754,8 @@ fn a_removed_package_selects_the_loads_that_could_reach_it() {
         r#"{"name":"svc-a","version":"1.0.0","dependencies":{"@x/harness":"workspace:*"}}"#,
     );
     assert_eq!(since(r), [A]);
-    // The declaration is left behind (the install is broken: the test cannot pass
-    // as before either).
+    // The declaration is left behind (the install is broken: the test cannot
+    // pass as before either).
     let d = base("", "");
     let r = d.path();
     remove(r, "packages/shared");

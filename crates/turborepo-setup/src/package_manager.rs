@@ -235,7 +235,8 @@ fn dev_request(value: &Value, source: &str) -> Result<Request, Error> {
         invalid(&pointer, message)
     };
     let entry = parse_entry(value).map_err(structural_error)?;
-    // Capabilities precede version types, which precede onFail and version grammar.
+    // Capabilities precede version types, which precede onFail and version
+    // grammar.
     let manager = manager(entry.family, &format!("{source}/name"))?;
     let version = entry.version().map_err(structural_error)?;
     let on_fail = match entry.on_fail.map(Value::as_str) {

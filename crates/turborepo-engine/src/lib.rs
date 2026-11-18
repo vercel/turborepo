@@ -1234,7 +1234,8 @@ mod affected_tasks_tests {
         let affected: HashSet<_> = [TaskId::new("a", "build")].into_iter().collect();
         let engine = engine.retain_affected_tasks(&affected);
 
-        // a and b survive (a affected, b depends on a). x is unrelated and pruned.
+        // a and b survive (a affected, b depends on a). x is unrelated and
+        // pruned.
         assert!(engine.task_definition(&TaskId::new("a", "build")).is_some());
         assert!(engine.task_definition(&TaskId::new("b", "build")).is_some());
         assert!(
@@ -1386,9 +1387,9 @@ mod affected_tasks_tests {
         engine.connect_to_root(&a);
 
         let engine = engine.seal();
-        // b is affected. d depends on b (dependent). b depends on a (dependency).
-        // d also depends on c which depends on a. All four must survive so d's
-        // full dependency diamond can execute.
+        // b is affected. d depends on b (dependent). b depends on a
+        // (dependency). d also depends on c which depends on a. All
+        // four must survive so d's full dependency diamond can execute.
         let affected: HashSet<_> = [TaskId::new("b", "build")].into_iter().collect();
         let engine = engine.retain_affected_tasks(&affected);
 

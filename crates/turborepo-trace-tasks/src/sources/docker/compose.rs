@@ -188,8 +188,8 @@ pub fn tasks(ws: &Workspace, file: &Path) -> Vec<DiscoveredTask> {
     let Some(services) = root.get("services").and_then(Value::as_mapping) else {
         return Vec::new();
     };
-    // Files of the repository the project is configured with: inputs of the whole
-    // file.
+    // Files of the repository the project is configured with: inputs of the
+    // whole file.
     for key in ["configs", "secrets"] {
         for def in root
             .get(key)
@@ -424,7 +424,8 @@ fn service_files(svc: &Value, dir: &Path, env: &BTreeMap<String, String>, spec: 
         None => Vec::new(),
     };
     for f in env_files {
-        // An env file is named relative to the compose file, with or without `./`.
+        // An env file is named relative to the compose file, with or without
+        // `./`.
         let f = if f.starts_with('/') || f.starts_with('~') || f.starts_with('.') {
             f
         } else {

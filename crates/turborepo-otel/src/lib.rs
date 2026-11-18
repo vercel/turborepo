@@ -410,8 +410,9 @@ impl Handle {
     pub fn shutdown(self) {
         tracing::debug!(target: "turborepo_otel", "shutting down otel exporter");
         // SdkMeterProvider::shutdown flushes pending metrics and shuts down the
-        // exporter. The configured timeout applies to the final export operation,
-        // ensuring we don't hang indefinitely on network issues.
+        // exporter. The configured timeout applies to the final export
+        // operation, ensuring we don't hang indefinitely on network
+        // issues.
         if let Err(err) = self.inner.provider.shutdown() {
             debug!(
                 "otel exporter shutdown could not flush metrics (collector may be unreachable): \

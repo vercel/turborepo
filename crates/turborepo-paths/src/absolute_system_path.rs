@@ -407,9 +407,10 @@ impl AbsoluteSystemPath {
 
     // TODO: consider consolidating with `relation_to_path` below
     pub fn contains(&self, other: &Self) -> bool {
-        // On windows, trying to get a relative path between files on different volumes
-        // is an error. We don't care about the error, it's good enough for us to say
-        // that one path doesn't contain the other if they're on different volumes.
+        // On windows, trying to get a relative path between files on different
+        // volumes is an error. We don't care about the error, it's good
+        // enough for us to say that one path doesn't contain the other
+        // if they're on different volumes.
         #[cfg(windows)]
         if self.components().next() != other.components().next() {
             return false;
@@ -583,6 +584,8 @@ impl<'a> TryFrom<&'a Path> for &'a AbsoluteSystemPath {
 
 #[cfg(test)]
 mod tests {
+    use std::str::FromStr;
+
     use anyhow::Result;
     use test_case::test_case;
 
@@ -788,10 +791,10 @@ mod tests {
         #[cfg(not(windows))]
         let root = "/";
 
-        let abs_path = AbsoluteSystemPathBuf::try_from(root)
+        let abs_path = AbsoluteSystemPathBuf::from_str(root)
             .unwrap()
             .join_components(abs_path_components);
-        let other_path = AbsoluteSystemPathBuf::try_from(root)
+        let other_path = AbsoluteSystemPathBuf::from_str(root)
             .unwrap()
             .join_components(other_components);
 
@@ -810,10 +813,10 @@ mod tests {
     fn test_is_parent(parent_components: &[&str], child_components: &[&str], expected: bool) {
         let root = if cfg!(windows) { "C:\\" } else { "/" };
 
-        let parent_path = AbsoluteSystemPathBuf::try_from(root)
+        let parent_path = AbsoluteSystemPathBuf::from_str(root)
             .unwrap()
             .join_components(parent_components);
-        let child_path = AbsoluteSystemPathBuf::try_from(root)
+        let child_path = AbsoluteSystemPathBuf::from_str(root)
             .unwrap()
             .join_components(child_components);
 

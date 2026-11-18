@@ -118,8 +118,8 @@ pub(crate) fn clear_unswallowed(src: &[u8], dialect: Dialect, refs: &mut [RawRef
     if !refs.iter().any(is_load) {
         return;
     }
-    // Blocks are in source order and nest, so one sweep with a stack of the open
-    // blocks finds each reference's innermost block.
+    // Blocks are in source order and nest, so one sweep with a stack of the
+    // open blocks finds each reference's innermost block.
     let blocks = try_blocks(src, dialect);
     let mut order: Vec<usize> = (0..refs.len()).filter(|&i| is_load(&refs[i])).collect();
     order.sort_by_key(|&i| refs[i].span.start);

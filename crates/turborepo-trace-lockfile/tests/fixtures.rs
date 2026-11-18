@@ -226,8 +226,8 @@ fn pnpm_v6_matches_v9() {
     );
     assert_eq!(v6.meta().patched_dependencies["left-pad@1.3.0"].len(), 64);
 
-    // Same tree in both versions: ids differ only for the tarball package, and no
-    // content identity or closure changed.
+    // Same tree in both versions: ids differ only for the tarball package, and
+    // no content identity or closure changed.
     let v9 = load("pnpm/v9/pnpm-lock.yaml");
     let d = diff(&v6, &v9);
     assert!(
@@ -647,8 +647,9 @@ fn detection() {
 
 #[test]
 fn equivalent_trees_across_formats() {
-    // The same logical tree in every format: identical name@version sets (modulo
-    // yarn classic's extra chokidar-lite and pnpm's tarball naming).
+    // The same logical tree in every format: identical name@version sets
+    // (modulo yarn classic's extra chokidar-lite and pnpm's tarball
+    // naming).
     let set = |lock: &Lockfile| -> std::collections::BTreeSet<String> {
         lock.packages()
             .iter()

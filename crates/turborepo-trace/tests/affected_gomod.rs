@@ -178,15 +178,15 @@ fn third_party_imports_without_a_module_cache_leave_no_floor() {
 #[test]
 fn a_bumped_requirement_selects_the_tests_of_its_module() {
     let r = repo();
-    // A direct requirement: go.mod and go.sum change together, as `go get` leaves
-    // them.
+    // A direct requirement: go.mod and go.sum change together, as `go get`
+    // leaves them.
     r.edit("svc/ingest/go.mod", "assert v1.2.0", "assert v1.3.0");
     r.edit("svc/ingest/go.sum", "assert v1.2.0", "assert v1.3.0");
     let sel = r.selected();
-    // Every test of the module: nothing in the repository says which module depends
-    // on the bumped one, so no import of the module is known to be unaffected.
-    // Not the tests of the other modules, which have their own go.mod
-    // (svc/flags requires the same library).
+    // Every test of the module: nothing in the repository says which module
+    // depends on the bumped one, so no import of the module is known to be
+    // unaffected. Not the tests of the other modules, which have their own
+    // go.mod (svc/flags requires the same library).
     assert_eq!(sel, sorted(vec![EMIT, PARSE, PURE]));
     let why = r.harness(&[
         "affected",
@@ -209,8 +209,9 @@ fn a_bumped_requirement_selects_the_tests_of_its_module() {
 #[test]
 fn a_go_sum_change_alone_selects_the_tests_of_its_module() {
     let r = repo();
-    // The hash of an indirect module changes; go.mod is untouched. The module is no
-    // node of the graph, so only the file itself can carry the change.
+    // The hash of an indirect module changes; go.mod is untouched. The module
+    // is no node of the graph, so only the file itself can carry the
+    // change.
     r.edit("svc/ingest/go.sum", "DEEPZIPHASH0", "DEEPZIPHASH1");
     assert_eq!(r.selected(), sorted(vec![EMIT, PARSE, PURE]));
     r.reset();
@@ -229,7 +230,8 @@ fn a_go_sum_change_alone_selects_the_tests_of_its_module() {
 #[test]
 fn a_local_replace_is_a_first_party_edge() {
     let r = repo();
-    // Code of the replaced module: its own tests and the tests of its importers.
+    // Code of the replaced module: its own tests and the tests of its
+    // importers.
     r.edit(
         "pkg/pipeline/routing/routing.go",
         "routes[kind]",
@@ -237,8 +239,9 @@ fn a_local_replace_is_a_first_party_edge() {
     );
     assert_eq!(r.selected(), sorted(vec![EMIT, ROUTING]));
     r.reset();
-    // Its go.mod: its own tests, and every test of the module that replaces it (the
-    // requirements of a replaced module enter that module's build list).
+    // Its go.mod: its own tests, and every test of the module that replaces it
+    // (the requirements of a replaced module enter that module's build
+    // list).
     r.edit("pkg/pipeline/go.mod", "yaml v1.0.0", "yaml v1.1.0");
     r.edit("pkg/pipeline/go.sum", "yaml v1.0.0", "yaml v1.1.0");
     assert_eq!(r.selected(), sorted(vec![EMIT, PARSE, PURE, ROUTING]));
@@ -281,8 +284,8 @@ fn a_workspace_shares_one_build_list() {
 #[test]
 fn a_module_cache_gives_the_same_edges() {
     let r = repo();
-    // The module is downloaded: the import resolves to its files, which belong to
-    // the same opaque package as without the cache.
+    // The module is downloaded: the import resolves to its files, which belong
+    // to the same opaque package as without the cache.
     let m = r.modcache.join("github.com/acme-test/assert@v1.2.0");
     std::fs::create_dir_all(&m).unwrap();
     std::fs::write(m.join("go.mod"), "module github.com/acme-test/assert\n").unwrap();

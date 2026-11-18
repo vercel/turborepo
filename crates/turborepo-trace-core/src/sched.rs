@@ -89,7 +89,8 @@ impl Shared {
             return Arc::clone(&n);
         }
         let node = Arc::new(self.compute_node(file));
-        // Two concurrent `trace()` calls may compute the same node; keep the first.
+        // Two concurrent `trace()` calls may compute the same node; keep the
+        // first.
         Arc::clone(&self.nodes.entry(file).or_insert(node))
     }
 
@@ -338,8 +339,8 @@ impl Shared {
     }
 
     fn successors(&self, edge: &mut Edge) -> (Vec<FileId>, Vec<FileId>) {
-        // Kernel pseudo-filesystems are never part of a deployment or a build input; do
-        // not even resolve their links (`/proc/self`).
+        // Kernel pseudo-filesystems are never part of a deployment or a build
+        // input; do not even resolve their links (`/proc/self`).
         if let Target::File(id) | Target::Dir(id) = &edge.to
             && self.pseudo_fs(&self.interner.path(*id))
         {
@@ -364,8 +365,9 @@ impl Shared {
             Target::Dir(id) => {
                 *id = self.realize_into(*id, &mut links);
                 let dir = self.interner.path(*id);
-                // `.git` is not part of the tree: nothing below it is a dependency, and
-                // how many files it holds says nothing about the repository.
+                // `.git` is not part of the tree: nothing below it is a
+                // dependency, and how many files it holds says
+                // nothing about the repository.
                 let (files, truncated) = if self.fs.is_repository_metadata(&dir) {
                     (Vec::new(), false)
                 } else {
@@ -381,15 +383,17 @@ impl Shared {
                             self.options.max_glob
                         ),
                     );
-                    // A data read (not a module load) of the directory reads contents below
-                    // it only: covered (see `Uncertainty::scope`).
+                    // A data read (not a module load) of the directory reads
+                    // contents below it only: covered (see
+                    // `Uncertainty::scope`).
                     let data = matches!(
                         edge.kind,
                         crate::RefKind::Asset | crate::RefKind::FsRead | crate::RefKind::FsReadDir
                     );
                     edge.uncertainty = Some(if data && edge.flags.contains(RefFlags::NAMES) {
-                        // Names only: the `**` membership the walk recorded covers every
-                        // path that can appear or disappear, and contents are not observed.
+                        // Names only: the `**` membership the walk recorded
+                        // covers every path that can
+                        // appear or disappear, and contents are not observed.
                         Uncertainty::new(
                             UncertaintyKind::PartialSpecifier,
                             edge.span,
@@ -433,8 +437,8 @@ impl Shared {
             return Arc::clone(&r);
         }
         let path = self.interner.path(file);
-        // Memoized per file, so recording here would depend on which file got here
-        // first.
+        // Memoized per file, so recording here would depend on which file got
+        // here first.
         let rp = if self.fs.records() {
             crate::record::pause(|| self.link_resolver.resolve(&self.fs, &path))
         } else {

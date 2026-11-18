@@ -259,7 +259,8 @@ impl MemGraph {
                 Ok(b.build()?)
             }
             Err(e) => {
-                // Prefer a schema error for foreign or future files over a field error.
+                // Prefer a schema error for foreign or future files over a
+                // field error.
                 if let Ok(h) = serde_json::from_slice::<Header>(bytes) {
                     check(h.schema.as_deref(), h.version)?;
                 }

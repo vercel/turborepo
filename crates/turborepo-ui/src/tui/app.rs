@@ -122,7 +122,8 @@ impl<W> App<W> {
         let pane_rows = size.pane_rows();
         let pane_cols = size.pane_cols();
 
-        // Attempt to load previous selection. If there isn't one, go to index 0.
+        // Attempt to load previous selection. If there isn't one, go to index
+        // 0.
         let selected_task_index = preferences
             .active_task()
             .and_then(|active_task| tasks_by_status.active_index(active_task))
@@ -540,9 +541,10 @@ impl<W> App<W> {
         }
 
         if !found_task {
-            // Task might already be running or finished (e.g., from a concurrent
-            // watch run that hasn't fully stopped yet, or from in-flight events
-            // of a prior run). Handle gracefully instead of crashing the TUI.
+            // Task might already be running or finished (e.g., from a
+            // concurrent watch run that hasn't fully stopped yet,
+            // or from in-flight events of a prior run). Handle
+            // gracefully instead of crashing the TUI.
             let in_running = self
                 .tasks_by_status
                 .running
@@ -627,7 +629,8 @@ impl<W> App<W> {
             .ok_or_else(|| Error::TaskNotFound { name: task.into() })?
             .task_result = Some(result);
 
-        // Find the highlighted task from before the list movement in the new list.
+        // Find the highlighted task from before the list movement in the new
+        // list.
         self.select_task(&highlighted_task)?;
 
         Ok(())
@@ -687,7 +690,8 @@ impl<W> App<W> {
             finished: Default::default(),
         };
 
-        // Task that was selected may have been removed, go back to top if this happens
+        // Task that was selected may have been removed, go back to top if this
+        // happens
         if self.select_task(&highlighted_task).is_err() {
             trace!("{highlighted_task} was removed from list");
             self.reset_scroll();
@@ -941,8 +945,8 @@ impl<W> App<W> {
         let pane_left_padding = self.size.pane_left_padding_with_sidebar(has_sidebar);
         let pane_rows = self.size.pane_rows();
         debug!("original mouse event: {event:?}, table_width: {table_width}");
-        // Mouse-down events must start in the content. Drags may reach the pane titles
-        // to scroll.
+        // Mouse-down events must start in the content. Drags may reach the pane
+        // titles to scroll.
         if event.column >= table_width && (event.row > 0 || is_selection_drag) {
             let selection_scroll = if is_selection_drag && event.row == 0 {
                 Some(Direction::Up)
@@ -952,7 +956,8 @@ impl<W> App<W> {
                 None
             };
             event.row = event.row.saturating_sub(1).min(pane_rows.saturating_sub(1));
-            // Subtract the width of the table and the pane's link-safe left padding.
+            // Subtract the width of the table and the pane's link-safe left
+            // padding.
             event.column = event
                 .column
                 .saturating_sub(table_width.saturating_add(pane_left_padding));
@@ -1209,11 +1214,12 @@ pub async fn run_app(
     let (crossterm_tx, crossterm_rx) = mpsc::channel(1024);
     input::start_crossterm_stream(crossterm_tx);
 
-    // Terminal is lazily initialized - only started when a non-cached task runs.
-    // Once allocated it is kept alive across TUI<->stream toggles.
+    // Terminal is lazily initialized - only started when a non-cached task
+    // runs. Once allocated it is kept alive across TUI<->stream toggles.
     let mut terminal: Option<Terminal<CrosstermBackend<Stdout>>> = None;
     let mut display = DisplayState::Inactive;
-    // Raw mode is enabled once on first activation and disabled once at the end.
+    // Raw mode is enabled once on first activation and disabled once at the
+    // end.
     let mut raw_mode_enabled = false;
 
     let (result, callback) = match run_app_inner(
@@ -1384,8 +1390,9 @@ async fn run_app_inner(
                 last_render = Instant::now();
             }
 
-            // Toggling between TUI and streamed logs has terminal/sink side effects
-            // that must happen here (not in `update`, which only mutates `App`).
+            // Toggling between TUI and streamed logs has terminal/sink side
+            // effects that must happen here (not in `update`, which
+            // only mutates `App`).
             if let Event::ToggleStream { scope } = &event {
                 handle_toggle_stream(terminal, display, app, terminal_sink, scope, color_config)?;
                 last_render = Instant::now();
@@ -1401,8 +1408,9 @@ async fn run_app_inner(
                 resize_event = resize_debouncer.update(event);
             }
             if let Some(resize) = resize_event.take().or_else(|| resize_debouncer.query()) {
-                // If we got a resize event, make sure to update ratatui backend even
-                // while streaming, so the view is correct when we return to the TUI.
+                // If we got a resize event, make sure to update ratatui backend
+                // even while streaming, so the view is correct
+                // when we return to the TUI.
                 if let Some(term) = terminal.as_mut() {
                     term.autoresize()?;
                 }
@@ -1625,7 +1633,8 @@ fn enable_input(color_config: ColorConfig, terminal_sink: &TerminalSink) -> io::
 /// raw mode.
 fn enter_alt_screen(terminal: &mut Option<Terminal<CrosstermBackend<Stdout>>>) -> io::Result<()> {
     let mut stdout = io::stdout();
-    // Ensure all pending writes are flushed before we switch to alternative screen
+    // Ensure all pending writes are flushed before we switch to alternative
+    // screen
     stdout.flush()?;
 
     // Track terminal-state modification before issuing the commands: if the
@@ -1702,9 +1711,9 @@ fn leave_alt_screen(terminal: &mut Terminal<CrosstermBackend<Stdout>>) -> io::Re
 
     // On Windows, we must only call DisableMouseCapture if EnableMouseCapture
     // was called first, because crossterm requires the original console mode
-    // to be saved before it can be restored. Calling DisableMouseCapture without
-    // first calling EnableMouseCapture causes "Initial console modes not set"
-    // error.
+    // to be saved before it can be restored. Calling DisableMouseCapture
+    // without first calling EnableMouseCapture causes "Initial console
+    // modes not set" error.
     //
     // On Unix, we can safely always disable mouse capture as it uses escape
     // sequences that are idempotent.
@@ -2969,7 +2978,8 @@ mod test {
             2048,
         );
 
-        // Search for "build" - tasks are sorted alphabetically so build-api comes first
+        // Search for "build" - tasks are sorted alphabetically so build-api
+        // comes first
         app.enter_search()?;
         app.search_enter_char('b')?;
         app.search_enter_char('u')?;
@@ -3259,9 +3269,10 @@ mod test {
 
     #[test]
     fn test_persist_tasks_called_on_cache_hit_only() -> Result<(), Error> {
-        // This test verifies that persist_tasks works correctly for cached tasks.
-        // When all tasks are cache hits, the TUI terminal is never started,
-        // but persist_tasks should still output the task logs.
+        // This test verifies that persist_tasks works correctly for cached
+        // tasks. When all tasks are cache hits, the TUI terminal is
+        // never started, but persist_tasks should still output the task
+        // logs.
         let repo_root_tmp = tempdir()?;
         let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp.path())
             .expect("Failed to create AbsoluteSystemPathBuf");
@@ -3275,7 +3286,8 @@ mod test {
         );
 
         // Simulate a full cache hit scenario:
-        // 1. Set status as cache hit (this doesn't start the task in running state)
+        // 1. Set status as cache hit (this doesn't start the task in running
+        //    state)
         app.set_status(
             "a".to_string(),
             "cached".to_string(),
@@ -3305,7 +3317,8 @@ mod test {
         assert!(tasks_started.contains(&"a".to_string()));
         assert!(tasks_started.contains(&"b".to_string()));
 
-        // 4. Verify persist_tasks doesn't error (it writes to the task's output)
+        // 4. Verify persist_tasks doesn't error (it writes to the task's
+        //    output)
         app.persist_tasks(tasks_started)?;
 
         Ok(())
@@ -3348,7 +3361,8 @@ mod test {
         // This should not error, and should not crash
         app.handle_mouse(mouse_event_col_0)?;
 
-        // Test with sidebar visible - mouse at column >= table_width should work
+        // Test with sidebar visible - mouse at column >= table_width should
+        // work
         let mouse_event_in_pane = MouseEvent {
             kind: MouseEventKind::Down(MouseButton::Left),
             column: table_width_visible,
@@ -3357,7 +3371,8 @@ mod test {
         };
         app.handle_mouse(mouse_event_in_pane)?;
 
-        // Now hide the sidebar using the toggle function (which also resizes terminals)
+        // Now hide the sidebar using the toggle function (which also resizes
+        // terminals)
         app.update_sidebar_toggle();
         assert!(!app.preferences.is_task_list_visible());
 
@@ -4173,7 +4188,8 @@ mod test {
             "UpdateTasks must trigger terminal initialization in watch mode"
         );
 
-        // The run proceeds: each task gets StartTask, Status(Hit), EndTask(CacheHit).
+        // The run proceeds: each task gets StartTask, Status(Hit),
+        // EndTask(CacheHit).
         for task in &tasks {
             app.start_task(task, OutputLogs::Full)?;
             app.set_status(

@@ -508,7 +508,8 @@ function segments(dir) {
             )
             .replace("/** The paths other zones serve. */", "// paths");
         assert!(same_load("m.mjs", HELPER, &head));
-        // The top level changes: another location, another import, a new statement.
+        // The top level changes: another location, another import, a new
+        // statement.
         for head in [
             HELPER.replace(
                 "new URL('./', import.meta.url)",

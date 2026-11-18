@@ -85,7 +85,8 @@ impl Recognizer for OpenapiGenerator {
         .collect_all();
         let pos = positionals(&args);
         let sub = pos.first().copied().unwrap_or("");
-        // openapitools.json (the npm wrapper's version pin and generator presets).
+        // openapitools.json (the npm wrapper's version pin and generator
+        // presets).
         let tools_json = cmd.cwd.join("openapitools.json");
         if cmd.program_name() == Some("openapi-generator-cli") {
             out.config(tools_json.clone());
