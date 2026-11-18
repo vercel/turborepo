@@ -73,17 +73,17 @@ fn explain(root: &Path, graph: &str, changed: &str, entry: &str) -> String {
 ///
 /// ```text
 /// packages/reader/index.js     readText(p): fs.readFileSync(p)             p is a parameter
-/// packages/envlib/index.ts     getEnv(name, fallback): process.env[name], or the fallback
+/// packages/settings/index.ts   envOr(key, otherwise): process.env[key], or the default
 /// packages/config/env.js       [cwd, cwd/../.., location/../..] each as `path` of dotenv-flow's config
-/// packages/secrets/open.ts     join(location, '..', '..', getEnv('KEYS_PATH', '/etc/keys')) -> readText
+/// packages/certs/open.ts       join(location, '..', '..', envOr('CERT_DIR', '/etc/certs')) -> readText
 /// packages/roots/index.js      exports.ROOT = resolve(location, '..', '..')
 /// packages/plain/open.js       join(location, '..', '..', pick()) -> readText   pick is no env helper
-/// services/a/test/a.test.js    config + secrets
+/// services/a/test/a.test.js    config + certs
 /// services/b/test/b.test.js    roots
 /// services/c/test/c.test.js    plain
 /// ```
 ///
-/// `KEYS_PATH` is assigned nowhere: the path with the environment tail stays an
+/// `CERT_DIR` is assigned nowhere: the path with the environment tail stays an
 /// environment read, which the default policy reports and does not count.
 fn repo() -> tempfile::TempDir {
     let d = tempfile::tempdir().unwrap();
@@ -92,7 +92,7 @@ fn repo() -> tempfile::TempDir {
     write(r, "docs/guide.md", "guide\n");
     write(r, ".env.test", "A=1\n");
     for p in [
-        "reader", "envlib", "config", "secrets", "roots", "plain", "other", "known",
+        "reader", "settings", "config", "certs", "roots", "plain", "other", "known",
     ] {
         write(
             r,
@@ -108,9 +108,9 @@ fn repo() -> tempfile::TempDir {
     );
     write(
         r,
-        "packages/envlib/index.ts",
-        "export function getEnv(name: string, fallback: string): string {\n  const value = \
-         process.env[name];\n  if (!value) {\n    return fallback;\n  }\n  return value;\n}\n",
+        "packages/settings/index.ts",
+        "export function envOr(key: string, otherwise: string): string {\n  const found = \
+         process.env[key];\n  if (!found) {\n    return otherwise;\n  }\n  return found;\n}\n",
     );
     write(
         r,
@@ -120,20 +120,20 @@ fn repo() -> tempfile::TempDir {
     write(
         r,
         "packages/config/env.js",
-        "const { resolve } = require('path');\nconst flow = require('dotenv-flow');\nconst paths \
-         = [\n  process.cwd(),\n  resolve(process.cwd(), '..', '..'),\n  resolve(__dirname, '..', \
-         '..'),\n];\nfor (const path of paths) {\n  flow.config({ path: path, default_node_env: \
-         'development' });\n}\n",
+        "const { resolve } = require('path');\nconst flow = require('dotenv-flow');\nconst dirs = \
+         [\n  process.cwd(),\n  resolve(process.cwd(), '..', '..'),\n  resolve(__dirname, '..', \
+         '..'),\n];\nfor (const dir of dirs) {\n  flow.config({ path: dir, node_env: 'test' \
+         });\n}\n",
     );
     write(
         r,
-        "packages/secrets/open.ts",
-        "import { join, isAbsolute } from 'path';\nimport { getEnv } from '../envlib';\nimport { \
-         readText } from '../reader';\nconst keysPath = getEnv('KEYS_PATH', '/etc/keys');\nexport \
-         function open() {\n  const abs = isAbsolute(keysPath) ? keysPath : join(__dirname, '..', \
-         '..', keysPath);\n  return readText(abs);\n}\n",
+        "packages/certs/open.ts",
+        "import { join, isAbsolute } from 'path';\nimport { envOr } from '../settings';\nimport { \
+         readText } from '../reader';\nconst certDir = envOr('CERT_DIR', '/etc/certs');\nexport \
+         function open() {\n  const abs = isAbsolute(certDir) ? certDir : join(__dirname, '..', \
+         '..', certDir);\n  return readText(abs);\n}\n",
     );
-    write(r, "etc/keys/k1", "key\n");
+    write(r, "etc/certs/k1", "cert\n");
     // A repository of some size: the environment registry does not take "any
     // directory below the root" for a variable that is set outside the
     // repository as a list of files (more than 512 match), and leaves an
@@ -186,7 +186,7 @@ fn repo() -> tempfile::TempDir {
         r,
         "services/a/test/a.test.js",
         "require('../../../packages/config/env');\nconst { open } = \
-         require('../../../packages/secrets/open');\ntest('a', () => { open(); });\n",
+         require('../../../packages/certs/open');\ntest('a', () => { open(); });\n",
     );
     write(r, "services/a/.env.local", "B=2\n");
     write(r, "services/a/notes.txt", "n\n");
@@ -262,7 +262,7 @@ fn a_followed_location_names_where_it_goes() {
     );
     assert_eq!(affected(r, ".tt", "services/a/notes.txt", &[]), [B, C]);
     // The default of the helper is a string of the file: a name like any other.
-    assert_eq!(affected(r, ".tt", "etc/keys/k1", &[]), [A, B, C]);
+    assert_eq!(affected(r, ".tt", "etc/certs/k1", &[]), [A, B, C]);
 }
 
 #[test]

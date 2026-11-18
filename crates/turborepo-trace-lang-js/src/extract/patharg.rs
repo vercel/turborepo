@@ -342,14 +342,14 @@ mod tests {
         }
     }
 
-    /// The real shape: a config loader of a package, given a path relative to
-    /// the working directory of the test.
+    /// A config loader of a package, given a path relative to the working
+    /// directory of the test.
     #[test]
     fn a_path_handed_to_an_imported_function() {
-        let src = "import { loadConfigForEdge } from '@scope/routing/next/testing';\nimport { \
-                   SLUGS } from './slugs.mjs';\nit('covers every route', () => {\n  const config \
-                   = loadConfigForEdge('./routes.jsonc');\n  expect(config.paths.filter((p) => \
-                   !SLUGS.has(p))).toEqual([]);\n});\n";
+        let src = "import { KNOWN } from './known.mjs';\nimport { readTable } from \
+                   '@scope/routing/testing';\ntest('no unknown paths', () => {\n  const table = \
+                   readTable('./routes.jsonc');\n  expect(table.paths.every((p) => \
+                   KNOWN.has(p))).toBe(true);\n});\n";
         let got = assets(src);
         assert_eq!(got.len(), 2, "{got:?}");
         assert!(

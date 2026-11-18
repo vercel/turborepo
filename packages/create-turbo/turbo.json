@@ -4,11 +4,13 @@
   "tasks": {
     "test": {
       "dependsOn": ["build"],
-      "command": ["pnpm", "exec", "jest"]
+      "command": ["pnpm", "exec", "jest"],
+      "tags": ["ci"]
     },
     "build": {
       "dependsOn": ["^build"],
-      "command": ["pnpm", "exec", "tsdown"]
+      "command": ["pnpm", "exec", "tsdown"],
+      "tags": ["ci"]
     },
     "lint:prettier": {
       "command": [
@@ -20,6 +22,9 @@
         "--cache",
         "--ignore-path=../../.prettierignore"
       ]
+    },
+    "check-types": {
+      "tags": ["ci"]
     }
   }
 }

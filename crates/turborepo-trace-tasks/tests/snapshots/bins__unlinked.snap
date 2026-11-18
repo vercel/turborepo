@@ -140,7 +140,7 @@ expression: "dump(&root, &set)"
 ## task:packages/web#test
 {
   "commands": [
-    "jest-dd -c jest.unit.config.js [bin-wrapper] Partial"
+    "jest-ci -c jest.unit.config.js [bin-wrapper] Partial"
   ],
   "spec": {
     "inputs": [
@@ -155,7 +155,7 @@ expression: "dump(&root, &set)"
     "configs": [
       "packages/web/jest.unit.config.js",
       "packages/web/package.json",
-      "tools/test-dd/package.json"
+      "tools/ci-runners/package.json"
     ],
     "entries": [
       {
@@ -163,7 +163,7 @@ expression: "dump(&root, &set)"
         "lang": "js"
       },
       {
-        "path": "tools/test-dd/bin/jest-dd.js",
+        "path": "tools/ci-runners/bin/jest-ci.js",
         "lang": "js"
       }
     ],
@@ -171,7 +171,7 @@ expression: "dump(&root, &set)"
       {
         "dir": "packages/web",
         "pattern": "**",
-        "reason": "`jest-dd` not fully recognized"
+        "reason": "`jest-ci` not fully recognized"
       },
       {
         "dir": "packages/web",
@@ -202,7 +202,7 @@ expression: "dump(&root, &set)"
     "uncertainties": [
       {
         "kind": "unknown_command",
-        "detail": "`jest-dd` runs `jest` (inferred from `tools/test-dd/bin/jest-dd.js`, strong evidence)"
+        "detail": "`jest-ci` runs `jest` (inferred from `tools/ci-runners/bin/jest-ci.js`, strong evidence)"
       }
     ],
     "runs": [

@@ -2,10 +2,10 @@
 //! workspace whose root package has scripts the trace cannot read (a service
 //! image build, a notification hook) next to a repository-wide lint config.
 //!
-//! The shape is the one of a large service monorepo: one root shell script
-//! builds the image of the service named by an environment variable, a root
-//! config script lists the services to configure a linter that every service
-//! runs, and CI jobs call tools the task model does not know.
+//! The setup: one root shell script builds the image of the service named by
+//! an environment variable, a root config script lists the services to
+//! configure a linter that every service runs, and CI jobs call tools the task
+//! model does not know.
 // Test code: helpers outside `#[test]` functions unwrap and expect as the tests do.
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
@@ -54,38 +54,41 @@ fn tasks(root: &Path, changed: &str) -> Vec<String> {
 }
 
 const BUILD_IMAGE: &str = r#"#!/usr/bin/env bash
-set -euo pipefail
-SERVICE_DIR="services/$SERVICE"
-BUILD_DIR="."
-if jq -e '.["ci-cd"].prune == true' "$SERVICE_DIR/package.json" > /dev/null; then
-  BUILD_DIR=".pruned-$SERVICE"
-  turbo prune "$SERVICE" --out-dir "$BUILD_DIR"
-  sed 's/^  - tools$//' "$BUILD_DIR/pnpm-workspace.yaml" > "$BUILD_DIR/pnpm-workspace.yaml.tmp" && \
-    mv "$BUILD_DIR/pnpm-workspace.yaml.tmp" "$BUILD_DIR/pnpm-workspace.yaml"
+# The image of one service: `SERVICE=<name> TAG=<tag> ./image.sh`.
+set -eu
+src="services/${SERVICE}"
+ctx=.
+if [ "$(jq -r '.image.slim // false' "$src/package.json")" = true ]; then
+  ctx="out/${SERVICE}"
+  turbo prune "${SERVICE}" --docker --out-dir "$ctx"
+  grep -v '^  - docs$' "$ctx/pnpm-workspace.yaml" > "$ctx/workspace.next" && mv "$ctx/workspace.next" "$ctx/pnpm-workspace.yaml"
 fi
-docker build -t "$TAG" --build-arg "BUILD_DIR=$BUILD_DIR" -f ./Dockerfile-service "$BUILD_DIR"
-docker run --rm "$TAG" cat /tmp/metrics.txt > /tmp/build-metrics.txt
+docker build --tag "$TAG" --file ./images/service.Dockerfile "$ctx"
+docker run --rm "$TAG" cat /tmp/size.txt > /tmp/image-size.txt
 "#;
 
 /// The linter config every service names. It looks for nested workspaces by a
 /// computed path, which makes it a reader of a repository-wide listing.
-const KNIP_CONFIG: &str = r#"const { existsSync, readFileSync } = require('node:fs');
-const { join } = require('node:path');
+const KNIP_CONFIG: &str = r#"const fs = require('node:fs');
+const path = require('node:path');
 
-// Every top-level group named in KNIP_GROUPS that is a workspace of its own.
-const groups = (process.env.KNIP_GROUPS ?? 'services').split(',');
+// Top-level directories (UNUSED_SCOPES) that are workspaces of their own.
+const scopes = (process.env.UNUSED_SCOPES || 'services').split(',');
 const workspaces = {};
-for (const group of groups) {
-  const file = join(__dirname, group, 'pnpm-workspace.yaml');
-  if (!existsSync(file)) continue;
-  for (const line of readFileSync(file, 'utf8').split('\n')) {
-    const m = /^\s*-\s*'?([\w-]+)'?$/.exec(line);
-    if (m) workspaces[`${group}/${m[1]}`] = { entry: ['src/index.ts'] };
-  }
-}
-// The service list is kept in a module; only its text is read here.
-const listed = readFileSync(join(__dirname, 'scripts/services.mjs'), 'utf8');
-module.exports = { workspaces, ignore: listed.includes('legacy') ? ['legacy/**'] : [] };
+scopes.forEach((scope) => {
+  const manifest = path.join(__dirname, scope, 'pnpm-workspace.yaml');
+  if (!fs.existsSync(manifest)) return;
+  fs.readFileSync(manifest, 'utf8')
+    .split('\n')
+    .map((row) => row.match(/^\s*-\s*'?([\w-]+)'?$/))
+    .filter(Boolean)
+    .forEach((m) => {
+      workspaces[scope + '/' + m[1]] = { entry: ['src/index.ts'] };
+    });
+});
+// The list of services lives in a module; this file only reads its text.
+const text = fs.readFileSync(path.join(__dirname, 'scripts/services.mjs'), 'utf8');
+module.exports = { workspaces, ignore: text.includes('legacy') ? ['legacy/**'] : [] };
 "#;
 
 /// A module that the linter config reads as text. Run, it loads a plugin named
@@ -122,9 +125,9 @@ fn service(r: &Path, name: &str) {
   "main": "src/index.ts",
   "scripts": {{
     "build": "node build.mjs",
-    "clean-code": "knip --config ../../knip.config.js --no-config-hints",
-    "clean-code:fix": "pnpm clean-code --fix",
-    "ci:build": "TAG={name} SERVICE={name} pnpm -w build-image",
+    "unused": "knip --config ../../knip.config.js --no-config-hints",
+    "unused:fix": "pnpm unused --fix",
+    "image": "TAG={name} SERVICE={name} pnpm -w image",
     "dev": "nodemon src/index.ts",
     "test": "jest"
   }}
@@ -163,7 +166,7 @@ fn repo() -> tempfile::TempDir {
   "name": "acme",
   "private": true,
   "scripts": {
-    "build-image": "./build-image.sh",
+    "image": "./image.sh",
     "notify": "curl -fsS https://hooks.example.test/deployed",
     "scan": "sg scan services",
     "services": "node scripts/services.mjs",
@@ -173,8 +176,8 @@ fn repo() -> tempfile::TempDir {
 "#,
     );
     write(r, "pnpm-workspace.yaml", "packages:\n  - 'services/*'\n");
-    write(r, "build-image.sh", BUILD_IMAGE);
-    write(r, "Dockerfile-service", "FROM node:22\nCOPY . .\n");
+    write(r, "image.sh", BUILD_IMAGE);
+    write(r, "images/service.Dockerfile", "FROM node:22\nCOPY . .\n");
     write(r, "knip.config.js", KNIP_CONFIG);
     write(
         r,
@@ -221,7 +224,7 @@ fn a_wildcard_listing_does_not_make_its_reader_a_consumer_of_every_build() {
     let sel = tasks(r, "services/svc-a/src/index.ts");
     for id in [
         "task:services/svc-a#build",
-        "task:services/svc-a#clean-code",
+        "task:services/svc-a#unused",
         "task:services/svc-a#test",
         "task:.#size",
     ] {
@@ -229,7 +232,7 @@ fn a_wildcard_listing_does_not_make_its_reader_a_consumer_of_every_build() {
     }
     for id in [
         "task:services/web#build",
-        "task:services/web#clean-code",
+        "task:services/web#unused",
         "task:services/web#test",
     ] {
         assert!(!has(&sel, id), "{id}: {sel:?}");
@@ -248,10 +251,7 @@ fn a_wildcard_listing_does_not_make_its_reader_a_consumer_of_every_build() {
 fn a_file_read_as_bytes_carries_its_own_change_only() {
     let d = repo();
     let r = d.path();
-    let lint = [
-        "task:services/svc-a#clean-code",
-        "task:services/web#clean-code",
-    ];
+    let lint = ["task:services/svc-a#unused", "task:services/web#unused"];
     let sel = tasks(r, "scripts/services.mjs");
     for id in lint.iter().chain(&["task:.#services"]) {
         assert!(has(&sel, id), "{id}: {sel:?}");
@@ -283,21 +283,21 @@ fn a_wildcard_leaves_out_tasks_run_by_hand() {
         args.extend_from_slice(extra);
         harness(r, &args).lines().map(str::to_owned).collect()
     };
-    let fix = "task:services/svc-a#clean-code:fix";
+    let fix = "task:services/svc-a#unused:fix";
     let dev = "task:services/svc-a#dev";
     let sel = with(&["--tasks", "**"]);
-    assert!(has(&sel, "task:services/svc-a#clean-code"), "{sel:?}");
+    assert!(has(&sel, "task:services/svc-a#unused"), "{sel:?}");
     assert!(!has(&sel, fix) && !has(&sel, dev), "{sel:?}");
     let sel = with(&["--tasks", "**", "--all-tasks"]);
     assert!(has(&sel, fix) && has(&sel, dev), "{sel:?}");
-    let sel = with(&["--tasks", "services/svc-a#clean-code:fix"]);
+    let sel = with(&["--tasks", "services/svc-a#unused:fix"]);
     assert_eq!(sel, [fix]);
     // A workflow step that runs the fix variant: part of the automation.
     write(
         r,
         ".github/workflows/fix.yml",
         "name: fix\non: push\njobs:\n  fix:\n    runs-on: ubuntu-latest\n    steps:\n      - \
-         uses: actions/checkout@v4\n      - run: pnpm --filter @acme/svc-a clean-code:fix\n",
+         uses: actions/checkout@v4\n      - run: pnpm --filter @acme/svc-a unused:fix\n",
     );
     let sel = with(&["--tasks", "**"]);
     assert!(has(&sel, fix), "{sel:?}");

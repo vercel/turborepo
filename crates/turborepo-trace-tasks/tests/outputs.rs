@@ -1,8 +1,8 @@
 //! Output classification ([`OutputKind`]): which task outputs take part in
-//! generated-file linking. Fixture: `fixtures/tasks/outputs/`, with monorepo
-//! A's `cron-update-turbo` workflow job that made every change select every
-//! test (its `mv … package.json` made the root manifest an output of a job that
-//! depends on the whole repo).
+//! generated-file linking. Fixture: `fixtures/tasks/outputs/`, with a scheduled
+//! workflow job that would make every change select every test if its
+//! `mv … package.json` made the root manifest an output of a job that depends
+//! on the whole repository.
 
 // Test code: helpers outside `#[test]` functions unwrap and expect as the tests do.
 #![allow(clippy::unwrap_used, clippy::expect_used)]
@@ -18,7 +18,7 @@ use turborepo_trace_tasks::{
     spec::{OutputKind, TaskId},
 };
 
-const CRON: &str = "gha:.github/workflows/cron-update-turbo.yml#update-turbo";
+const CRON: &str = "gha:.github/workflows/pin-node.yml#pin-node";
 
 fn fixture() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -100,7 +100,7 @@ fn ci_job_is_never_a_producer() {
         outputs(&set, &root, CRON),
         [
             ("package.json".to_string(), OutputKind::CiSideEffect),
-            ("package.json.tmp".to_string(), OutputKind::CiSideEffect),
+            ("package.json.next".to_string(), OutputKind::CiSideEffect),
         ]
     );
     assert!(job.spec.outputs.iter().all(|o| !o.links_producer()));
@@ -123,7 +123,7 @@ fn in_place_edits_do_not_link() {
         outputs(&set, &root, "task:.#bump"),
         [
             ("package.json".to_string(), OutputKind::InPlace),
-            ("package.json.tmp".to_string(), OutputKind::Artifact),
+            ("package.json.new".to_string(), OutputKind::Artifact),
         ]
     );
     // A formatter rewrites its files in place.
@@ -187,8 +187,8 @@ fn docker_build_outputs_are_side_effects() {
 
 /// Fixture `fixtures/tasks/turbo-scope/`: a test server's build
 /// declares `$TURBO_ROOT$/**/dist/**/*` (collecting its dependencies' `dist/`
-/// for the cache) and a root task `//#cache-tsbuildinfo-files`
-/// declares other packages' `dist/tsbuildinfo.json`. Declared outputs link only
+/// for the cache) and a root task `//#keep-buildinfo`
+/// declares other packages' `dist/.tsbuildinfo`. Declared outputs link only
 /// inside the declaring package: every `dist/` is produced by its own package's
 /// build, and still is (soundness).
 #[test]
@@ -210,7 +210,7 @@ fn declared_outputs_are_scoped_to_their_package() {
         ["task:packages/lib#build"]
     );
     assert_eq!(
-        producers("packages/lib/dist/tsbuildinfo.json"),
+        producers("packages/lib/dist/.tsbuildinfo"),
         ["task:packages/lib#build"]
     );
     assert_eq!(
@@ -235,11 +235,11 @@ fn declared_outputs_are_scoped_to_their_package() {
         ]
     );
     // `echo` only: the task writes nothing, so none of its declared outputs link.
-    let cache = outputs(&set, &root, "task:.#cache-tsbuildinfo-files");
+    let cache = outputs(&set, &root, "task:.#keep-buildinfo");
     assert!(
         cache
             .iter()
-            .any(|(p, k)| p == "packages/*/dist/tsbuildinfo.json" && *k == OutputKind::CacheOnly),
+            .any(|(p, k)| p == "packages/*/dist/.tsbuildinfo" && *k == OutputKind::CacheOnly),
         "{cache:?}"
     );
     assert!(
@@ -249,9 +249,10 @@ fn declared_outputs_are_scoped_to_their_package() {
     // An `echo` that writes a file is not "no file effect": its declared output
     // links.
     assert_eq!(producers("stamp.txt"), ["task:.#stamp"]);
-    // A `dev:ts` task (`tsc -b -w`, turbo `persistent: true`): its outputs
-    // are recorded but never link, so `lib/dist` is produced by `build` only.
-    let dev = task(&set, "task:packages/lib#dev:ts");
+    // A `watch:types` task (`tsc --build --watch`, turbo `persistent: true`): its
+    // outputs are recorded but never link, so `lib/dist` is produced by `build`
+    // only.
+    let dev = task(&set, "task:packages/lib#watch:types");
     assert!(dev.spec.persistent);
     assert!(!dev.spec.outputs.is_empty(), "tsc -b writes outputs");
     assert!(
@@ -284,7 +285,7 @@ fn linking_outputs(set: &TaskSet, root: &Path, id: &str) -> Vec<(String, Option<
         .collect()
 }
 
-/// Fixture `fixtures/tasks/tsc-solution/` (the shape of a large monorepo): a
+/// Fixture `fixtures/tasks/tsc-solution/`: a
 /// root `tsc -b` over a solution tsconfig, apps whose `type-check` is `tsc -b`
 /// with references to the packages they use, and packages consumed through
 /// their built `dist/`.
@@ -310,31 +311,31 @@ fn tsc_build_outputs_belong_to_their_project() {
     let o = |s: &str| s.to_string();
 
     // The root solution: every output is owned by its project, none by the task.
-    let solution = linking_outputs(&set, &root, "task:.#build:ts-debug");
+    let solution = linking_outputs(&set, &root, "task:.#tsc:all");
     assert_eq!(
         solution,
         [
             (
-                o("apps/docs/node_modules/.cache/tsbuildinfo.json"),
+                o("apps/docs/node_modules/.cache/tsc.tsbuildinfo"),
                 part("apps/docs/tsconfig.json")
             ),
             (
-                o("apps/web/node_modules/.cache/tsbuildinfo.json"),
+                o("apps/web/node_modules/.cache/tsc.tsbuildinfo"),
                 part("apps/web/tsconfig.json")
             ),
             (o("packages/icons/dist"), icons.clone()),
-            (o("packages/icons/dist/tsbuildinfo.json"), icons.clone()),
+            (o("packages/icons/dist/.tsbuildinfo"), icons.clone()),
             (o("packages/patched/dist"), patched.clone()),
-            (o("packages/patched/dist/tsbuildinfo.json"), patched.clone()),
+            (o("packages/patched/dist/.tsbuildinfo"), patched.clone()),
             // `emitDeclarationOnly` (inherited): declarations, not the `index.js` that
             // runtime importers load. A `noEmit` app (inherited too) emits nothing but its
             // build info.
             (o("packages/ui/dist/**/*.d.*ts"), ui.clone()),
             (o("packages/ui/dist/**/*.d.*ts.map"), ui.clone()),
-            (o("packages/ui/dist/tsbuildinfo.json"), ui.clone()),
+            (o("packages/ui/dist/.tsbuildinfo"), ui.clone()),
         ]
     );
-    let t = task(&set, "task:.#build:ts-debug");
+    let t = task(&set, "task:.#tsc:all");
     // The task itself still depends on everything (a valid `--tasks` entry).
     for dir in [
         "apps/web",
@@ -367,8 +368,8 @@ fn tsc_build_outputs_belong_to_their_project() {
         p.configs.iter().map(|c| rel(c)).collect::<Vec<_>>(),
         [
             "packages/ui/tsconfig.json",
-            "tooling/tsconfig/bundler.json",
-            "tooling/tsconfig/base.json"
+            "config/ts/declarations.json",
+            "config/ts/base.json"
         ]
     );
     assert_eq!(
@@ -384,7 +385,7 @@ fn tsc_build_outputs_belong_to_their_project() {
     );
     assert!(p.toolchain.iter().any(|t| t.name == "typescript"));
 
-    // An app's `tsc -b` (turbo `dependsOn: ["typegen", "^build", "^type-check"]`):
+    // An app's `tsc -b` (turbo `dependsOn: ["^build", "^type-check", "typegen"]`):
     // the packages' outputs belong to the packages' projects. So does the app's
     // own project: `web` has no `typegen` script, and the tasks of other
     // packages (`^build`) don't write into this one. Every output belongs to a
@@ -400,7 +401,7 @@ fn tsc_build_outputs_belong_to_their_project() {
             .any(|(o, p)| o.starts_with("packages/") && p.is_none()),
         "{web:?}"
     );
-    let info = o("apps/web/node_modules/.cache/tsbuildinfo.json");
+    let info = o("apps/web/node_modules/.cache/tsc.tsbuildinfo");
     assert!(
         web.contains(&(info, part("apps/web/tsconfig.json"))),
         "{web:?}"
@@ -416,7 +417,7 @@ fn tsc_build_outputs_belong_to_their_project() {
         "{docs:?}"
     );
     assert!(
-        docs.contains(&(o("apps/docs/node_modules/.cache/tsbuildinfo.json"), None)),
+        docs.contains(&(o("apps/docs/node_modules/.cache/tsc.tsbuildinfo"), None)),
         "{docs:?}"
     );
     assert!(

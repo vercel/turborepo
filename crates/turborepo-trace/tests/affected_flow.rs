@@ -67,12 +67,10 @@ fn fixture_helper_called_with_a_table() {
     write(
         r,
         "src/parse.test.js",
-        "const { join } = require('node:path');\nconst { readFileSync } = \
-         require('node:fs');\nconst FIXTURE_DIR = join(__dirname, '..', '__fixtures__');\nconst \
-         FIXTURES = ['one.json', 'two.json'];\nfunction parseFixture(fixtureName) {\n  const \
-         fixturePath = join(FIXTURE_DIR, fixtureName);\n  return \
-         JSON.parse(readFileSync(fixturePath, 'utf8'));\n}\ndescribe.each(FIXTURES)('parse(%s)', \
-         (fixtureName) => {\n  it('parses', () => { parseFixture(fixtureName); });\n});\n",
+        "const fs = require('node:fs');\nconst { join } = require('node:path');\nconst SAMPLES = \
+         join(__dirname, '..', '__fixtures__');\nfunction load(name) {\n  return \
+         JSON.parse(fs.readFileSync(join(SAMPLES, name), 'utf8'));\n}\ndescribe.each(['one.json', \
+         'two.json'])('%s', (name) => {\n  it('loads', () => { load(name); });\n});\n",
     );
     assert_eq!(affected(r, &["unrelated.txt"]), Vec::<String>::new());
     assert_eq!(
@@ -97,13 +95,12 @@ fn local_reader_of_known_directories() {
     write(
         r,
         "src/collect.js",
-        "const fs = require('node:fs');\nconst path = require('node:path');\nconst DEFS_DIR = \
-         path.join(__dirname, '../defs');\nconst QUERIES_DIR = path.join(DEFS_DIR, \
-         'queries');\nconst FRAGMENTS_DIR = path.join(DEFS_DIR, 'fragments');\nfunction \
-         readGqlFiles(dir) {\n  return fs.readdirSync(dir).filter((f) => f.endsWith('.gql'))\n    \
-         .map((fileName) => ({ fileName, doc: fs.readFileSync(path.join(dir, fileName), 'utf-8') \
-         }));\n}\nmodule.exports = { queries: readGqlFiles(QUERIES_DIR), fragments: \
-         readGqlFiles(FRAGMENTS_DIR) };\n",
+        "const fs = require('node:fs');\nconst path = require('node:path');\nconst ROOT = \
+         path.join(__dirname, '../defs');\nfunction loadAll(dir) {\n  return fs\n    \
+         .readdirSync(dir)\n    .filter((name) => name.endsWith('.gql'))\n    .map((name) => \
+         [name, fs.readFileSync(path.join(dir, name), 'utf8')]);\n}\nmodule.exports = {\n  \
+         schemas: loadAll(path.join(ROOT, 'queries')),\n  parts: loadAll(path.join(ROOT, \
+         'fragments')),\n};\n",
     );
     write(
         r,
@@ -132,10 +129,10 @@ fn environment_path_is_not_open() {
     write(
         r,
         "src/client.js",
-        "const { readFileSync } = require('node:fs');\nconst testDatafilePath = \
-         process.env.TEST_DATAFILE;\nconst testDatafile = testDatafilePath\n  ? \
-         JSON.parse(readFileSync(testDatafilePath, 'utf8'))\n  : undefined;\nmodule.exports = { \
-         testDatafile };\n",
+        "const { readFileSync } = require('node:fs');\nconst samplePath = \
+         process.env.SAMPLE_FILE;\nconst sample = samplePath\n  ? \
+         JSON.parse(readFileSync(samplePath, 'utf8'))\n  : undefined;\nmodule.exports = { sample \
+         };\n",
     );
     write(
         r,

@@ -281,7 +281,7 @@ mod tests {
     fn other_words_do_not() {
         for text in [
             "curl -fsS https://hooks.example.test/apps/web",
-            "git config --local include.path ../.gitconfig || true",
+            "git config --local core.hooksPath .hooks || true",
             "changeset publish",
             "aws s3 cp \"$FILE\" s3://bucket/key",
             "node scripts/release.mjs --tag latest",

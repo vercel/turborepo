@@ -63,7 +63,7 @@ fn with_aliases(entries: &str, environment: &str) -> String {
     format!(
         "import {{ fileURLToPath }} from 'node:url';\nimport {{ defineConfig }} from \
          'vitest/config';\n\nexport default defineConfig({{\n  resolve: {{\n    alias: {{\n      \
-         '@': fileURLToPath(new URL('.', import.meta.url)),\n{entries}    }},\n  }},\n  test: \
+         '@': fileURLToPath(new URL('./', import.meta.url)),\n{entries}    }},\n  }},\n  test: \
          {{\n    // Server code runs under node.\n    environment: '{environment}',\n  }},\n}});\n"
     )
 }
@@ -78,11 +78,12 @@ const NO_ALIASES: &str = "import { defineConfig } from 'vitest/config';\n\nexpor
 const STUB_BLOCK: &str = "import { fileURLToPath } from 'node:url';\nimport { defineConfig } from \
                           'vitest/config';\n\nexport default defineConfig({\n  resolve: {\n    \
                           alias: {\n      'server-only': fileURLToPath(\n        new \
-                          URL('./test/server-only-stub.ts', import.meta.url),\n      ),\n    },\n  \
-                          },\n  test: {\n    globals: true,\n    environment: 'node',\n  },\n});\n";
+                          URL('./test/stubs/server-only.ts', import.meta.url),\n      ),\n    \
+                          },\n  },\n  test: {\n    globals: true,\n    environment: 'node',\n  \
+                          },\n});\n";
 
 const STUB_ENTRY: &str = "      'server-only': fileURLToPath(\n        new \
-                          URL('./test/server-only-stub.ts', import.meta.url),\n      ),\n";
+                          URL('./test/stubs/server-only.ts', import.meta.url),\n      ),\n";
 
 /// Two packages, each with a module that imports `server-only` (not installed),
 /// a module that does not, and a test of each. Their test scripts run vitest; a
@@ -122,7 +123,7 @@ fn repo() -> tempfile::TempDir {
             "import 'server-only';\n\nexport const secret = 1;\n",
         );
         write(r, &p("src/plain.ts"), "export const plain = 1;\n");
-        write(r, &p("test/server-only-stub.ts"), "export {};\n");
+        write(r, &p("test/stubs/server-only.ts"), "export {};\n");
         write(
             r,
             &p("test/server.test.ts"),
@@ -173,7 +174,7 @@ fn an_alias_entry_selects_the_tests_that_load_an_importer_of_its_request() {
         &with_aliases(
             &format!(
                 "{STUB_ENTRY}      'client-only': fileURLToPath(new \
-                 URL('./test/server-only-stub.ts', import.meta.url)),\n"
+                 URL('./test/stubs/server-only.ts', import.meta.url)),\n"
             ),
             "node",
         ),

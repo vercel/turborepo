@@ -1,7 +1,6 @@
-// An app's vitest config whose aliases point at directories and files of the app with
-// `path.resolve(__dirname, ...)`. The targets are resolution rules for the runner: the
-// config does not read them. One alias resolves through a `customResolver` that is Node's
-// own resolution.
+// Aliases that point at directories and files of the project through
+// `path.resolve(__dirname, ...)`: resolution rules for the runner, which the config itself
+// does not read. One alias resolves with a `customResolver` that is Node's own resolution.
 import path from 'node:path';
 import { createRequire } from 'node:module';
 import { defineConfig } from 'vitest/config';
@@ -9,19 +8,24 @@ import { defineConfig } from 'vitest/config';
 const require = createRequire(import.meta.url);
 
 export default defineConfig({
-  resolve: {
-    alias: [
-      {
-        find: '@app-config',
-        replacement: path.resolve(__dirname, './src/app.config.ts'),
-      },
-    ],
-  },
   test: {
-    globals: true,
     environment: 'jsdom',
     setupFiles: ['./test/setup.ts'],
+    globals: true,
     alias: [
+      {
+        find: 'next/font/google',
+        replacement: path.resolve(__dirname, './test/mocks/font.ts'),
+      },
+      {
+        find: /^@\/pages\/\(public\)(\/.*)?$/,
+        replacement: path.resolve(__dirname, './src/pages/[lang]/(public)$1'),
+      },
+      {
+        find: /^@acme\/docs\/(.+)$/,
+        replacement: '@acme/docs/$1',
+        customResolver: (request: string): string => require.resolve(request),
+      },
       {
         find: '@acme/client',
         replacement: require.resolve('@acme/client', {
@@ -29,23 +33,16 @@ export default defineConfig({
         }),
       },
       {
-        find: /^@acme\/content\/(.+)$/,
-        replacement: '@acme/content/$1',
-        customResolver: (specifier: string): string => {
-          return require.resolve(specifier);
-        },
-      },
-      {
-        find: /^@\/app\/\(site\)(\/.*)?$/,
-        replacement: path.resolve(__dirname, './src/app/[variant]/(site)$1'),
-      },
-      {
         find: '@',
         replacement: path.resolve(__dirname, './src'),
       },
+    ],
+  },
+  resolve: {
+    alias: [
       {
-        find: 'next/font/google',
-        replacement: path.resolve(__dirname, './test/mocks/font.ts'),
+        find: '#settings',
+        replacement: path.resolve(__dirname, './src/settings.ts'),
       },
     ],
   },

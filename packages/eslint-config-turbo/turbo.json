@@ -3,7 +3,8 @@
   "extends": ["//"],
   "tasks": {
     "build": {
-      "command": ["pnpm", "exec", "bunchee"]
+      "command": ["pnpm", "exec", "bunchee"],
+      "tags": ["ci"]
     },
     "lint:prettier": {
       "command": [
@@ -17,7 +18,8 @@
       ]
     },
     "package:types": {
-      "command": ["pnpm", "exec", "attw", "--profile", "node16", "--pack"]
+      "command": ["pnpm", "exec", "attw", "--profile", "node16", "--pack"],
+      "tags": ["ci"]
     }
   }
 }

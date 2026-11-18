@@ -626,7 +626,7 @@ pub trait ConfigHost {
     }
 
     /// Loads the module of the bare specifier `spec`
-    /// (`@acme/playwright/config`) when the host follows that package as
+    /// (`@acme/browser-kit/preset`) when the host follows that package as
     /// source: a first-party workspace package. `None` (the default): the
     /// package is not followed and the import is a [`ConfigVal::External`]
     /// reference, as for every installed package. `Some(Err)`: a package the
@@ -4467,11 +4467,11 @@ mod tests {
     fn spreads_helpers_and_conditionals() {
         let root = r#"
             const path = require('path');
-            const setupFilesAfterEnv = [];
+            const afterEnv = [];
             const config = {
-              transform: { '^.+\\.(t|j)sx?$': '@swc/jest' },
+              transform: { '^.+\\.[jt]sx?$': '@swc/jest' },
               moduleNameMapper: { '^a$': path.resolve(__dirname, 'a.js') },
-              setupFilesAfterEnv,
+              setupFilesAfterEnv: afterEnv,
             };
             if (process.env.CI) {
               config.reporters = ['summary'];
@@ -4487,9 +4487,9 @@ mod tests {
               ...rootConfig,
               moduleNameMapper,
               setupFilesAfterEnv: [
-                require.resolve('@api/tests/setup.ts'),
+                require.resolve('@acme/test-env/setup.ts'),
                 ...(rootConfig.setupFilesAfterEnv ?? []),
-                require.resolve('./jest-setup.ts'),
+                require.resolve('./setup-tests.ts'),
               ],
             };
             "#,
@@ -4497,7 +4497,7 @@ mod tests {
         );
         assert_eq!(
             cfg(&m),
-            r#"{transform: {^.+\.(t|j)sx?$: "@swc/jest"}, moduleNameMapper: {^b$: "<rootDir>/b"}, setupFilesAfterEnv: [resolve(@api/tests/setup.ts @ /r), resolve(./jest-setup.ts @ /r)], reporters: (null | ["summary"])}"#
+            r#"{transform: {^.+\.[jt]sx?$: "@swc/jest"}, moduleNameMapper: {^b$: "<rootDir>/b"}, setupFilesAfterEnv: [resolve(@acme/test-env/setup.ts @ /r), resolve(./setup-tests.ts @ /r)], reporters: (null | ["summary"])}"#
         );
         assert_eq!(m.loaded, ["./root.js"]);
     }
@@ -4654,19 +4654,19 @@ mod tests {
             br#"
             import { fileURLToPath } from 'node:url';
             import { defineConfig } from 'vitest/config';
-            const projectRoot = fileURLToPath(new URL('.', import.meta.url));
-            const GENERATED = ['app/routes.mjs', 'lib/valid-paths.mjs'];
+            const here = fileURLToPath(new URL('.', import.meta.url));
+            const GENERATED = ['src/manifest.mjs', 'gen/known-ids.mjs'];
             const generatedPattern = GENERATED.map((path) =>
               path.replace(/\./g, '\\.'),
             ).join('|');
             const alias = [
               {
                 find: new RegExp(`^#/(?!(?:${generatedPattern})$)(.*)$`),
-                replacement: `${projectRoot}$1`,
+                replacement: `${here}$1`,
               },
               {
-                find: /^next\/font\/(?:local|google)$/,
-                replacement: fileURLToPath(new URL('./test/font-stub.ts', import.meta.url)),
+                find: /^next\/font\/(google|local)$/,
+                replacement: fileURLToPath(new URL('./test/fonts.ts', import.meta.url)),
               },
             ];
             export default defineConfig({ resolve: { alias } });
@@ -4692,7 +4692,7 @@ mod tests {
         let v = m.config().unwrap();
         assert_eq!(
             show(&v),
-            r#"{resolve: {alias: [{find: /^#/(?!(?:app/routes\.mjs|lib/valid-paths\.mjs)$)(.*)$/, replacement: "/r/app/$1"}, {find: /^next\/font\/(?:local|google)$/, replacement: "/r/app/test/font-stub.ts"}]}}"#
+            r#"{resolve: {alias: [{find: /^#/(?!(?:src/manifest\.mjs|gen/known-ids\.mjs)$)(.*)$/, replacement: "/r/app/$1"}, {find: /^next\/font\/(google|local)$/, replacement: "/r/app/test/fonts.ts"}]}}"#
         );
         let x = m
             .named
@@ -4705,11 +4705,11 @@ mod tests {
         assert_eq!(f("flags"), "/^a/b$/i");
         assert_eq!(f("copy"), "/x+/g");
         assert!(matches!(x.field("unknown"), Some(ConfigVal::Unknown(_))));
-        assert_eq!(f("one"), r#""app/routes-mjs""#);
-        assert_eq!(f("all"), r#""app\\routes.mjs""#);
-        assert_eq!(f("amp"), r#""app[/]routes.mjs""#);
-        assert_eq!(f("upper"), r#""APP/ROUTES.MJS""#);
-        assert_eq!(f("parts"), r#"["lib", "valid-paths.mjs"]"#);
+        assert_eq!(f("one"), r#""src/manifest-mjs""#);
+        assert_eq!(f("all"), r#""src\\manifest.mjs""#);
+        assert_eq!(f("amp"), r#""src[/]manifest.mjs""#);
+        assert_eq!(f("upper"), r#""SRC/MANIFEST.MJS""#);
+        assert_eq!(f("parts"), r#"["gen", "known-ids.mjs"]"#);
         // A regex that is not one literal string needs a regex engine: unknown.
         assert!(matches!(x.field("classRegex"), Some(ConfigVal::Unknown(_))));
         assert_eq!(f("numbers"), r#""1-2-3""#);
@@ -4794,18 +4794,18 @@ mod tests {
         assert_eq!(
             shape(
                 r#"
-                module.exports = (request, options) =>
-                  options.defaultResolver(request, {
-                    ...options,
+                module.exports = (id, ctx) =>
+                  ctx.defaultResolver(id, {
+                    ...ctx,
                     conditions:
-                      request === 'tree-walker'
-                        ? [...(options.conditions ?? []), 'import']
-                        : options.conditions,
+                      id === 'esm-only-pkg'
+                        ? [...(ctx.conditions ?? []), 'import']
+                        : ctx.conditions,
                   });
                 "#
             ),
             Some(FunctionShape::DefaultResolverConditions(Some(vec![
-                "tree-walker".into()
+                "esm-only-pkg".into()
             ])))
         );
         // Several requests, a block body, the literal on the left.
@@ -4921,36 +4921,35 @@ mod tests {
 
     #[test]
     fn next_jest_async_wrapper() {
-        // The shape of `apps/web/jest.config.ts` in a large monorepo.
+        // An async config that awaits the `next/jest` wrapper and edits its result.
         let m = ev(r#"
-            import nextJest from 'next/jest';
             import type { Config } from 'jest';
-            const customConfig: Config = {
-              setupFilesAfterEnv: ['<rootDir>/test/setup.ts'],
-              testMatch: ['./**/*.test.{ts,tsx}'],
-              testPathIgnorePatterns: ['/node_modules/', 'test.mocks'],
+            import nextJest from 'next/jest';
+            const own: Config = {
+              testPathIgnorePatterns: ['/fixtures/'],
+              testMatch: ['**/*.spec.{ts,tsx}'],
+              setupFilesAfterEnv: ['<rootDir>/jest/after-env.ts'],
             };
             export default async (): Promise<Config> => {
-              const config = (await nextJest({ dir: __dirname })(customConfig)()) as Config;
-              const finalConfig = {
-                ...config,
-                transformIgnorePatterns: (config.transformIgnorePatterns ?? []).filter(
-                  (pattern) => !pattern.includes('node_modules'),
+              const wrapped = (await nextJest({ dir: __dirname })(own)()) as Config;
+              return {
+                ...wrapped,
+                transformIgnorePatterns: (wrapped.transformIgnorePatterns ?? []).filter(
+                  (p) => !p.includes('node_modules'),
                 ),
               };
-              return finalConfig;
             };
         "#);
         let v = m.config().unwrap();
         let tm = v.field("testMatch").unwrap();
-        assert_eq!(show(&tm), r#"["./**/*.test.{ts,tsx}"]"#);
+        assert_eq!(show(&tm), r#"["**/*.spec.{ts,tsx}"]"#);
         assert_eq!(
             show(&v.field("testPathIgnorePatterns").unwrap()),
-            r#"["/node_modules/", "/.next/", "/node_modules/", "test.mocks"]"#
+            r#"["/node_modules/", "/.next/", "/fixtures/"]"#
         );
         assert_eq!(
             show(&v.field("setupFilesAfterEnv").unwrap()),
-            r#"["<rootDir>/test/setup.ts"]"#
+            r#"["<rootDir>/jest/after-env.ts"]"#
         );
         // `(x ?? []).filter(...)` on an empty array is exact: no note.
         assert!(

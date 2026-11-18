@@ -13,7 +13,9 @@ use turborepo_env::{DetailedMap, EnvironmentVariableMap, get_global_hashable_env
 use turborepo_hash::{GlobalHashable, TurboHash};
 use turborepo_repository::{
     change_mapper::ROOT_GITATTRIBUTES,
+    package_graph::PackageTaskContext,
     package_manager::{self, PackageManager},
+    toolchain::RootDependencyInputs,
 };
 use turborepo_run_summary::{GlobalEnvVarSummary, GlobalHashSummary};
 use turborepo_scm::SCM;
@@ -214,14 +216,50 @@ fn collect_global_deps(
     )?)
 }
 
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct GlobalHashes {
+    inherited: String,
+    not_inherited: String,
+}
+
+impl GlobalHashes {
+    pub fn for_task(&self, context: &PackageTaskContext<'_>) -> &str {
+        match context.root_dependency_inputs() {
+            RootDependencyInputs::Inherited => &self.inherited,
+            RootDependencyInputs::NotInherited => &self.not_inherited,
+        }
+    }
+}
+
+#[cfg(test)]
+pub(crate) static TEST_GLOBAL_HASHES: std::sync::LazyLock<GlobalHashes> =
+    std::sync::LazyLock::new(|| GlobalHashes {
+        inherited: "global-hash".to_string(),
+        not_inherited: "global-hash".to_string(),
+    });
+
 impl<'a> GlobalHashableInputs<'a> {
     #[tracing::instrument(skip_all)]
-    pub fn calculate_global_hash(&self) -> String {
+    pub fn calculate_global_hashes(&self) -> GlobalHashes {
+        GlobalHashes {
+            inherited: self.hash_with_root_dependencies(
+                self.root_internal_dependencies_hash,
+                self.root_external_dependencies_hash,
+            ),
+            not_inherited: self.hash_with_root_dependencies(None, None),
+        }
+    }
+
+    fn hash_with_root_dependencies(
+        &self,
+        root_internal_dependencies_hash: Option<&str>,
+        root_external_dependencies_hash: Option<&str>,
+    ) -> String {
         let global_hashable = GlobalHashable {
             global_cache_key: self.global_cache_key,
             global_file_hash_map: &self.global_file_hash_map,
-            root_external_dependencies_hash: self.root_external_dependencies_hash,
-            root_internal_dependencies_hash: self.root_internal_dependencies_hash,
+            root_external_dependencies_hash,
+            root_internal_dependencies_hash,
             engines: self.engines.clone().unwrap_or_default(),
             env: self.env,
             resolved_env_vars: self

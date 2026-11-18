@@ -483,12 +483,11 @@ fn shadowing_a_top_level_constant() {
 fn test_tables() {
     assert_eq!(
         show(
-            "const FIXTURES = ['a.json', 'b.json'];\nfunction parseFixture(name: string) { return \
-             readFileSync(join(__dirname, 'fx', name)); }\ndescribe.each(FIXTURES)('parse(%s)', \
-             (fixtureName) => {\n  it('parses', () => { parseFixture(fixtureName); \
-             });\n});\nit.each([['x', 'x.out'], ['y', 'y.out']])('%s', (input, output) => {\n  \
-             readFileSync(join(__dirname, input));\n  readFileSync(join(__dirname, \
-             output));\n});\n"
+            "const SAMPLES = ['a.json', 'b.json'];\nfunction load(file: string) { return \
+             readFileSync(join(__dirname, 'fx', file)); }\ndescribe.each(SAMPLES)('%s', (file) => \
+             {\n  it('loads', () => { load(file); });\n});\nit.each([['x', 'x.out'], ['y', \
+             'y.out']])('%s', (input, output) => {\n  readFileSync(join(__dirname, input));\n  \
+             readFileSync(join(__dirname, output));\n});\n"
         ),
         "fs_read dir:fx/a.json | fx/b.json\nfs_read dir:x | y\nfs_read dir:x.out | y.out"
     );
@@ -512,7 +511,7 @@ fn environment() {
     // A known default stays a reference; the environment part is recorded.
     assert_eq!(
         show(
-            "const dir = process.env.TMP_FOLDER || path.resolve(process.cwd(), \
+            "const dir = process.env.SCRATCH_DIR || path.resolve(process.cwd(), \
              '.tmp');\nreaddirSync(dir);\nconst { CONFIG_DIR = join(__dirname, 'config') } = \
              process.env;\nreadFileSync(join(CONFIG_DIR, 'a.json'));\n"
         ),
@@ -739,8 +738,8 @@ fn eval_keeps_the_token_results() {
     );
 }
 
-/// Values the engine must not mistake for "never a path" (each was a site that
-/// lost its record on a real repository).
+/// Values the engine must not mistake for "never a path" (each would lose the
+/// record of a site that can name a file).
 #[test]
 fn derived_values_are_not_void() {
     // Regex matches are strings derived from the text.
@@ -837,12 +836,12 @@ fn route_registry_built_into_a_set() {
     body.push_str(
         "} as const;\nfunction findLocal(): string | undefined {\n  const custom = \
          join(process.cwd(), 'src', 'routes.ts');\n  if (existsSync(custom)) { return \
-         process.cwd() + '/src/routes'; }\n}\nexport function loadRoutes(additional: (keyof \
-         typeof ROUTES)[] = []) {\n  const routePaths = new Set<string>();\n  const localPath = \
-         findLocal();\n  if (localPath) { routePaths.add(localPath); }\n  for (const name of \
+         process.cwd() + '/src/routes'; }\n}\nexport function collectTables(additional: (keyof \
+         typeof ROUTES)[] = []) {\n  const tablePaths = new Set<string>();\n  const localPath = \
+         findLocal();\n  if (localPath) { tablePaths.add(localPath); }\n  for (const name of \
          additional) {\n    if (!ROUTES[name]) { throw new Error(name); }\n    \
-         routePaths.add(ROUTES[name]);\n  }\n  let merged: unknown[] = [];\n  for (const \
-         routePath of routePaths) {\n    const loaded = require(routePath);\n    merged = \
+         tablePaths.add(ROUTES[name]);\n  }\n  let merged: unknown[] = [];\n  for (const \
+         tablePath of tablePaths) {\n    const loaded = require(tablePath);\n    merged = \
          [...merged, ...loaded.routes];\n  }\n  return { routes: merged };\n}\n",
     );
     let out = show(&body);

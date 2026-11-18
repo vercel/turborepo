@@ -23,8 +23,8 @@
 //! | Value | Added to the file |
 //! |---|---|
 //! | a path below the directory of the assigning file (`path.join(__dirname, 'fixtures/a.json')`) that stays in the repository | an edge to the file when it is a node, a config input when it exists without being one, a probe when it is missing; for a directory, its files and a `**` membership; for a path with unknown segments, the files the glob matches and a membership |
-//! | an absolute path (`/var/run/secrets/x/token`, `/tmp/flags.json`), a path in the temporary directory, a URL | nothing: outside the repository (an absolute path below the repository root counts as a path in it) |
-//! | a relative path (`dev/flags.json`, or `process.cwd()`-relative) | relative to the working directory of whoever runs the reader, which is not known here: every repository file whose path ends with it, and a `**/<path>` membership |
+//! | an absolute path (`/var/run/secrets/x/token`, `/tmp/sample.json`), a path in the temporary directory, a URL | nothing: outside the repository (an absolute path below the repository root counts as a path in it) |
+//! | a relative path (`dev/sample.json`, or `process.cwd()`-relative) | relative to the working directory of whoever runs the reader, which is not known here: every repository file whose path ends with it, and a `**/<path>` membership |
 //! | a variable followed by literal text (`${DATA_DIR}/seed.json`) | the assigned values with the text appended; and, because the variable may also be set outside the repository to any directory, every repository file whose path ends with the text |
 //! | for a module load: a file-anchored path, or `./x` relative to the place the load searches from | the module candidates (extensions, `index` files) as edges and probes; a bare specifier stays open, and so does a load whose variable the repository never assigns or declares (see below) |
 //! | for a module load: a literal path relative to the working directory (`path.resolve(process.cwd(), '../cfg/seed.config.ts')`) | the module candidates in every repository directory that holds one (at most 32 directories), and memberships for a candidate created elsewhere; a path with unknown segments stays open |
@@ -90,8 +90,8 @@
 //!
 //!   ```toml
 //!   [[env]]
-//!   name = "FLAGS_DATAFILE"
-//!   values = ["fixtures/flags.json"] # repository-relative; globs allowed
+//!   name = "FIXTURE_FILE"
+//!   values = ["fixtures/sample.json"] # repository-relative; globs allowed
 //!   ```
 //!
 //! A module load is different from a read: the variable names code. When the
@@ -1388,21 +1388,22 @@ impl Graph {
             }
             h.update(&[2]);
         }
-        let (patch, meta, hit) = self.cached_patch("env", h.digest128(), || {
-            let (p, s) = self.env_patch_with(decls, oracle);
-            let meta = [
-                s.uses,
-                s.resolved,
-                s.kept,
-                s.variables,
-                s.assignments,
-                s.helpers,
-                s.edges,
-            ]
-            .map(|v| v as u64)
-            .to_vec();
-            (p, meta)
-        });
+        let (patch, meta, hit) =
+            self.cached_patch(crate::cache_file::DERIVED_ENV, h.digest128(), || {
+                let (p, s) = self.env_patch_with(decls, oracle);
+                let meta = [
+                    s.uses,
+                    s.resolved,
+                    s.kept,
+                    s.variables,
+                    s.assignments,
+                    s.helpers,
+                    s.edges,
+                ]
+                .map(|v| v as u64)
+                .to_vec();
+                (p, meta)
+            });
         let m = |i: usize| meta.get(i).copied().unwrap_or(0) as usize;
         let stats = EnvStats {
             uses: m(0),
@@ -1739,7 +1740,7 @@ mod tests {
     fn splices_values() {
         let head = conc(CBase::Str, "");
         let abs = conc(CBase::Str, "/var/run/token");
-        let rel = conc(CBase::Str, "dev/flags.json");
+        let rel = conc(CBase::Str, "dev/sample.json");
         let anchored = conc(CBase::Dir("pkg".into()), "fixtures/a.json");
         assert_eq!(splice(&head, &abs, true), Ok(abs.clone()));
         assert_eq!(splice(&head, &anchored, true), Ok(anchored.clone()));
@@ -1748,7 +1749,7 @@ mod tests {
         assert_eq!(splice(&cwd, &abs, true), Ok(abs.clone()));
         assert_eq!(
             splice(&cwd, &rel, true),
-            Ok(conc(CBase::Cwd, "dev/flags.json"))
+            Ok(conc(CBase::Cwd, "dev/sample.json"))
         );
         // After a prefix only plain text can follow.
         let pre = conc(CBase::Str, "config/");

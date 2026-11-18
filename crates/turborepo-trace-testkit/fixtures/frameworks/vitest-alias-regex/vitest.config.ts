@@ -1,49 +1,36 @@
-// A docs app's vitest config: the `#/…` aliases of tsconfig.json, mirrored for vitest, except
-// for build outputs that must stay unresolved. The exception is a negative lookahead built
-// from a list of files with `new RegExp`.
+// An app's vitest config: its `#/…` imports (as in tsconfig.json) map into the project,
+// except build outputs, which must stay unresolved. The exception is a negative lookahead
+// that `new RegExp` builds from a list of files.
 import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vitest/config';
 
-const projectRoot = fileURLToPath(new URL('.', import.meta.url));
+const base = fileURLToPath(new URL('.', import.meta.url));
 
-// Generated files, absent from a clean checkout.
-const GENERATED = [
-  'app/routes.mjs',
-  'lib/valid-paths.mjs',
-  'lib/flag-codes.mjs',
-];
+// Written by the build; a clean checkout has none of them.
+const BUILT = ['src/manifest.mjs', 'gen/known-ids.mjs', 'gen/build-info.mjs'];
 
-const generatedPattern = GENERATED.map((path) =>
-  path.replace(/\./g, '\\.'),
-).join('|');
+const escaped = BUILT.map((file) => file.replace(/\./g, '\\.')).join('|');
 
 const alias = [
   {
-    find: new RegExp(`^#/(?!(?:${generatedPattern})$)(.*)$`),
-    replacement: `${projectRoot}$1`,
+    find: new RegExp(`^#/(?!(?:${escaped})$)(.*)$`),
+    replacement: `${base}$1`,
   },
-  // A build-time marker with no runtime module.
+  // Marker modules that only the framework's compiler understands.
   {
     find: 'server-only',
-    replacement: fileURLToPath(
-      new URL('./test/server-only-stub.ts', import.meta.url),
-    ),
+    replacement: fileURLToPath(new URL('./test/stubs/server-only.ts', import.meta.url)),
   },
-  // Compiler-only modules.
   {
-    find: /^next\/font\/(?:local|google)$/,
-    replacement: fileURLToPath(new URL('./test/font-stub.ts', import.meta.url)),
+    find: /^next\/font\/(google|local)$/,
+    replacement: fileURLToPath(new URL('./test/stubs/fonts.ts', import.meta.url)),
   },
 ];
 
 export default defineConfig({
-  resolve: { alias },
   test: {
-    setupFiles: ['./vitest-setup.ts'],
-    server: {
-      deps: {
-        inline: ['geist', '@acme/ui'],
-      },
-    },
+    server: { deps: { inline: ['@acme/icons', '@acme/ui'] } },
+    setupFiles: ['./test/setup-dom.ts'],
   },
+  resolve: { alias },
 });

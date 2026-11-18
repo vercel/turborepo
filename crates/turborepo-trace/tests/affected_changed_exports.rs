@@ -4,11 +4,10 @@
 //! runs code is still tracked this way when what it does at load time is the
 //! same at both revisions.
 //!
-//! The fixtures keep the shape of two real sites (names changed): a utility
-//! module of a tracking package from which an unused export was removed,
-//! reached by hundreds of tests through a chain of non-pure modules; and a
-//! one-file error predicate with a load-time `Symbol.for` call, imported by a
-//! fetch wrapper that most tests load.
+//! Two setups: a utility module from which an unused export is removed,
+//! reached by many tests through a chain of non-pure modules; and a one-file
+//! error predicate with a load-time `Symbol.for` call, imported by a fetch
+//! wrapper that most tests load.
 // Test code: helpers outside `#[test]` functions unwrap and expect as the tests do.
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
@@ -120,24 +119,24 @@ fn commit(files: &[(&str, &str)]) -> tempfile::TempDir {
     d
 }
 
-const UTILS: &str = "import { COOKIES, PARAMS } from './constants';\nimport type { CookieKey, \
-                     ParamKey, UtmKey } from './types';\n\nexport const isParam = (p: string): p \
-                     is ParamKey => {\n  return p in PARAMS;\n};\n\nexport const isUtm = (p: \
-                     string): p is UtmKey => {\n  return p.startsWith('utm_');\n};\n\n/** Whether \
-                     a key is a tracked cookie key. */\nexport const isCookie = (k: string): k is \
-                     CookieKey => {\n  return k in COOKIES;\n};\n\nexport function \
-                     hasSignal(touch: Record<string, string>): boolean {\n  return \
-                     Object.keys(touch).some((k) => isUtm(k) || isParam(k));\n}\n";
+const UTILS: &str =
+    "import { REGIONS, PURPOSES } from './constants';\nimport type { RegionKey, PurposeKey, \
+     OptKey } from './types';\n\nexport const isPurpose = (p: string): p is PurposeKey => {\n  \
+     return p in PURPOSES;\n};\n\nexport const isOptFlag = (p: string): p is OptKey => {\n  \
+     return p.startsWith('opt_');\n};\n\n/** Whether a key is a known region. */\nexport const \
+     isRegion = (k: string): k is RegionKey => {\n  return k in REGIONS;\n};\n\nexport function \
+     hasChoice(choices: Record<string, string>): boolean {\n  return \
+     Object.keys(choices).some((k) => isOptFlag(k) || isPurpose(k));\n}\n";
 
-/// The utility module without `isCookie` and what only it used.
-const UTILS_WITHOUT_COOKIE: &str =
-    "import { PARAMS } from './constants';\nimport type { ParamKey, UtmKey } from \
-     './types';\n\nexport const isParam = (p: string): p is ParamKey => {\n  return p in \
-     PARAMS;\n};\n\nexport const isUtm = (p: string): p is UtmKey => {\n  return \
-     p.startsWith('utm_');\n};\n\nexport function hasSignal(touch: Record<string, string>): \
-     boolean {\n  return Object.keys(touch).some((k) => isUtm(k) || isParam(k));\n}\n";
+/// The utility module without `isRegion` and what only it used.
+const UTILS_WITHOUT_REGION: &str =
+    "import { PURPOSES } from './constants';\nimport type { PurposeKey, OptKey } from \
+     './types';\n\nexport const isPurpose = (p: string): p is PurposeKey => {\n  return p in \
+     PURPOSES;\n};\n\nexport const isOptFlag = (p: string): p is OptKey => {\n  return \
+     p.startsWith('opt_');\n};\n\nexport function hasChoice(choices: Record<string, string>): \
+     boolean {\n  return Object.keys(choices).some((k) => isOptFlag(k) || isPurpose(k));\n}\n";
 
-/// The tracking package: `utils.ts` is read by `migrate.ts` (module state, not
+/// The tracking package: `utils.ts` is read by `upgrade.ts` (module state, not
 /// pure), which `resolve.ts`, `build.ts` and `service.ts` (a class, a load-time
 /// `new`) pass on. `test/service.test.ts` uses the service,
 /// `test/build.test.ts` only a constant of `build.ts`, `test/utils.test.ts` one
@@ -145,31 +144,32 @@ const UTILS_WITHOUT_COOKIE: &str =
 fn tracking() -> tempfile::TempDir {
     commit(&[
         (
-            "src/attribution/constants.ts",
-            "export const PARAMS = { gclid: 1, fbclid: 1 };\nexport const COOKIES = { _ga: 1 };\n",
+            "src/audience/constants.ts",
+            "export const PURPOSES = { ads: 1, analytics: 1 };\nexport const REGIONS = { eu: 1 \
+             };\n",
         ),
         (
-            "src/attribution/types.ts",
-            "export type ParamKey = 'gclid' | 'fbclid';\nexport type CookieKey = '_ga';\nexport \
-             type UtmKey = `utm_${string}`;\n",
+            "src/audience/types.ts",
+            "export type PurposeKey = 'ads' | 'analytics';\nexport type RegionKey = 'eu';\nexport \
+             type OptKey = `opt_${string}`;\n",
         ),
-        ("src/attribution/utils.ts", UTILS),
+        ("src/audience/utils.ts", UTILS),
         (
-            "src/attribution/migrate.ts",
-            "import { hasSignal } from './utils';\n\nlet ran = false;\n\nexport function \
-             migrate(data: Record<string, string>): boolean {\n  if (ran) return false;\n  ran = \
-             true;\n  return hasSignal(data);\n}\n",
+            "src/audience/upgrade.ts",
+            "import { hasChoice } from './utils';\n\nlet ran = false;\n\nexport function \
+             upgrade(data: Record<string, string>): boolean {\n  if (ran) return false;\n  ran = \
+             true;\n  return hasChoice(data);\n}\n",
         ),
         (
-            "src/attribution/resolve.ts",
-            "import { migrate } from './migrate';\n\nexport function resolveAttribution(data: \
-             Record<string, string>) {\n  return { migrated: migrate(data) };\n}\n",
+            "src/audience/resolve.ts",
+            "import { upgrade } from './upgrade';\n\nexport function resolveAudience(data: \
+             Record<string, string>) {\n  return { upgraded: upgrade(data) };\n}\n",
         ),
         (
             "src/build.ts",
-            "import { resolveAttribution } from './attribution/resolve';\n\nexport const VERSION \
-             = 2;\n\nexport function build(data: Record<string, string>) {\n  return { version: \
-             VERSION, attribution: resolveAttribution(data) };\n}\n",
+            "import { resolveAudience } from './audience/resolve';\n\nexport const VERSION = \
+             2;\n\nexport function build(data: Record<string, string>) {\n  return { version: \
+             VERSION, audience: resolveAudience(data) };\n}\n",
         ),
         (
             "src/service.ts",
@@ -189,8 +189,8 @@ fn tracking() -> tempfile::TempDir {
         ),
         (
             "test/utils.test.ts",
-            "import { isUtm } from '../src/attribution/utils';\ntest('utm', () => \
-             expect(isUtm('utm_x')).toBe(true));\n",
+            "import { isOptFlag } from '../src/audience/utils';\ntest('opt', () => \
+             expect(isOptFlag('opt_x')).toBe(true));\n",
         ),
     ])
 }
@@ -199,7 +199,7 @@ fn tracking() -> tempfile::TempDir {
 fn a_removed_unused_export_selects_nothing() {
     let d = tracking();
     let r = d.path();
-    write(r, "src/attribution/utils.ts", UTILS_WITHOUT_COOKIE);
+    write(r, "src/audience/utils.ts", UTILS_WITHOUT_REGION);
     assert_eq!(affected(r), Vec::<String>::new());
     // Without the export-level comparison (as before): every test that loads the
     // file.
@@ -221,7 +221,7 @@ fn a_removed_unused_export_selects_nothing() {
     assert!(
         e.contains("unaffected test/service.test.ts")
             && e.contains(
-                "src/attribution/utils.ts skipped: only isCookie changed in it, and nothing this \
+                "src/audience/utils.ts skipped: only isRegion changed in it, and nothing this \
                  entry loads uses it"
             ),
         "{e}"
@@ -229,38 +229,41 @@ fn a_removed_unused_export_selects_nothing() {
     let v = json(r);
     assert_eq!(
         v["pruning"]["changed_exports"][0]["path"],
-        "src/attribution/utils.ts"
+        "src/audience/utils.ts"
     );
     assert_eq!(
         v["pruning"]["changed_exports"][0]["names"],
-        serde_json::json!(["isCookie"])
+        serde_json::json!(["isRegion"])
     );
     assert_eq!(v["pruning"]["changed_exports"][0]["entries_skipped"], 3);
 }
 
 #[test]
 fn a_changed_export_selects_the_tests_that_use_it_through_importers() {
-    // The body of `hasSignal`: the service test runs it (service -> build ->
-    // resolve -> migrate), the test of a constant in `build.ts` and the test of
+    // The body of `hasChoice`: the service test runs it (service -> build ->
+    // resolve -> upgrade), the test of a constant in `build.ts` and the test of
     // another predicate don't.
     let d = tracking();
     let r = d.path();
     write(
         r,
-        "src/attribution/utils.ts",
-        &UTILS.replace("isUtm(k) || isParam(k)", "isParam(k) || isUtm(k)"),
+        "src/audience/utils.ts",
+        &UTILS.replace(
+            "isOptFlag(k) || isPurpose(k)",
+            "isPurpose(k) || isOptFlag(k)",
+        ),
     );
     assert_eq!(affected(r), ["test/service.test.ts"]);
     let e = explain(r, "test/service.test.ts");
     assert!(
-        e.contains("src/attribution/utils.ts")
-            && e.contains("src/attribution/migrate.ts")
+        e.contains("src/audience/utils.ts")
+            && e.contains("src/audience/upgrade.ts")
             && e.contains("src/service.ts"),
         "{e}"
     );
     // Which export changed, and the file whose load-time code reads it.
     assert!(
-        e.contains("  src/attribution/utils.ts: only hasSignal changed\n")
+        e.contains("  src/audience/utils.ts: only hasChoice changed\n")
             && e.contains(
                 "  src/service.ts reads build of src/build.ts when it is loaded (a `new \
                  Service`): every entry that loads it is affected\n"
@@ -272,8 +275,8 @@ fn a_changed_export_selects_the_tests_that_use_it_through_importers() {
     assert!(
         e.contains("unaffected test/build.test.ts")
             && e.contains(
-                "  src/attribution/utils.ts skipped: only hasSignal changed in it, and nothing \
-                 this entry loads uses it\n"
+                "  src/audience/utils.ts skipped: only hasChoice changed in it, and nothing this \
+                 entry loads uses it\n"
             ),
         "{e}"
     );
@@ -284,36 +287,33 @@ fn a_changed_export_selects_the_tests_that_use_it_through_importers() {
         affected_env(r, &[("TURBO_TRACE_DEBUG_SYMBOLS", "0")]),
         ["test/build.test.ts", "test/service.test.ts"]
     );
-    // A predicate that both `hasSignal` and a test use.
+    // A predicate that both `hasChoice` and a test use.
     write(
         r,
-        "src/attribution/utils.ts",
-        &UTILS.replace("startsWith('utm_')", "startsWith('utm-')"),
+        "src/audience/utils.ts",
+        &UTILS.replace("startsWith('opt_')", "startsWith('opt-')"),
     );
     assert_eq!(affected(r), ["test/service.test.ts", "test/utils.test.ts"]);
     // A comment and spacing: no export changed.
     write(
         r,
-        "src/attribution/utils.ts",
-        &UTILS.replace(
-            "/** Whether a key is a tracked cookie key. */",
-            "// cookie keys",
-        ),
+        "src/audience/utils.ts",
+        &UTILS.replace("/** Whether a key is a known region. */", "// region keys"),
     );
     assert_eq!(affected(r), Vec::<String>::new());
 }
 
 #[test]
 fn an_importer_that_reads_the_change_at_load_time_selects_its_dependents() {
-    // `registry.ts` calls `hasSignal` while it loads: whatever a test uses of it,
+    // `registry.ts` calls `hasChoice` while it loads: whatever a test uses of it,
     // the change can show.
     let d = tracking();
     let r = d.path();
     write(
         r,
         "src/registry.ts",
-        "import { hasSignal } from './attribution/utils';\nexport const initial = \
-         hasSignal({});\nexport const NAME = 'registry';\n",
+        "import { hasChoice } from './audience/utils';\nexport const initial = \
+         hasChoice({});\nexport const NAME = 'registry';\n",
     );
     write(
         r,
@@ -325,8 +325,11 @@ fn an_importer_that_reads_the_change_at_load_time_selects_its_dependents() {
     git(r, &["commit", "-q", "-m", "registry"]);
     write(
         r,
-        "src/attribution/utils.ts",
-        &UTILS.replace("isUtm(k) || isParam(k)", "isParam(k) || isUtm(k)"),
+        "src/audience/utils.ts",
+        &UTILS.replace(
+            "isOptFlag(k) || isPurpose(k)",
+            "isPurpose(k) || isOptFlag(k)",
+        ),
     );
     assert_eq!(
         affected(r),
@@ -335,56 +338,56 @@ fn an_importer_that_reads_the_change_at_load_time_selects_its_dependents() {
     let e = explain(r, "test/registry.test.ts");
     assert!(
         e.contains(
-            "  src/registry.ts reads hasSignal of src/attribution/utils.ts when it is loaded (a \
-             call of hasSignal): every entry that loads it is affected\n"
+            "  src/registry.ts reads hasChoice of src/audience/utils.ts when it is loaded (a call \
+             of hasChoice): every entry that loads it is affected\n"
         ),
         "{e}"
     );
 }
 
 const PREDICATE: &str =
-    "// The symbol is not exported by the library, so it is defined here.\nconst POSTPONE: symbol \
-     = Symbol.for('lib.postpone');\n\nfunction isPostpone(error: unknown): boolean {\n  return \
-     typeof error === 'object' && error !== null && '$$typeof' in error && error.$$typeof === \
-     POSTPONE;\n}\n\nexport function isInternalError(error: unknown): boolean {\n  if \
-     (isPostpone(error)) return true;\n  if (typeof error !== 'object' || error === null || \
-     !('digest' in error)) return false;\n  const code = String(error.digest).split(';')[0];\n  \
-     return code === 'REDIRECT' || code === 'NOT_FOUND';\n}\n\nexport function describe(error: \
+    "// The library keeps the symbol to itself; the same key gives the same symbol.\nconst DEFER: \
+     symbol = Symbol.for('lib.defer');\n\nfunction isDeferral(error: unknown): boolean {\n  \
+     return typeof error === 'object' && error !== null && '$$typeof' in error && error.$$typeof \
+     === DEFER;\n}\n\nexport function isExpectedError(error: unknown): boolean {\n  if \
+     (isDeferral(error)) return true;\n  if (typeof error !== 'object' || error === null || \
+     !('reason' in error)) return false;\n  const code = String(error.reason).split(':')[0];\n  \
+     return code === 'MOVED' || code === 'MISSING';\n}\n\nexport function describe(error: \
      unknown): string {\n  return String(error);\n}\n";
 
 /// The error predicate (a load-time `Symbol.for`) behind a fetch wrapper:
-/// `fetchApi` calls it, `toFetchError` does not; a hook uses `fetchApi`.
+/// `getJson` calls it, `asOffline` does not; a hook uses `getJson`.
 fn fetching() -> tempfile::TempDir {
     commit(&[
-        ("src/is-internal-error.ts", PREDICATE),
+        ("src/is-expected-error.ts", PREDICATE),
         (
-            "src/fetch-api.ts",
-            "import { isInternalError } from './is-internal-error';\n\nconst NETWORK_ERROR = \
-             'network_error';\n\nexport async function fetchApi(url: string): Promise<unknown> \
-             {\n  try {\n    return await (await fetch(url)).json();\n  } catch (e) {\n    if \
-             (isInternalError(e)) throw e;\n    throw toFetchError(e);\n  }\n}\n\nexport function \
-             toFetchError(e: unknown): Error {\n  return new Error(NETWORK_ERROR + ': ' + \
-             String(e));\n}\n",
+            "src/get-json.ts",
+            "import { isExpectedError } from './is-expected-error';\n\nconst OFFLINE = \
+             'offline';\n\nexport async function getJson(url: string): Promise<unknown> {\n  try \
+             {\n    return await (await fetch(url)).json();\n  } catch (e) {\n    if \
+             (isExpectedError(e)) throw e;\n    throw asOffline(e);\n  }\n}\n\nexport function \
+             asOffline(e: unknown): Error {\n  return new Error(OFFLINE + ': ' + String(e));\n}\n",
         ),
         (
-            "src/use-team.ts",
-            "import { fetchApi } from './fetch-api';\n\nexport const TEAM_KEY = 'team';\n\nexport \
-             function loadTeam(id: string) {\n  return fetchApi('/teams/' + id);\n}\n",
+            "src/use-tenant.ts",
+            "import { getJson } from './get-json';\n\nexport const TENANT_KEY = \
+             'tenant';\n\nexport function loadTenant(id: string) {\n  return getJson('/tenants/' \
+             + id);\n}\n",
         ),
         (
-            "test/team.test.ts",
-            "import { loadTeam } from '../src/use-team';\ntest('team', () => expect(typeof \
-             loadTeam).toBe('function'));\n",
+            "test/tenant.test.ts",
+            "import { loadTenant } from '../src/use-tenant';\ntest('tenant', () => expect(typeof \
+             loadTenant).toBe('function'));\n",
         ),
         (
             "test/key.test.ts",
-            "import { TEAM_KEY } from '../src/use-team';\ntest('key', () => \
-             expect(TEAM_KEY).toBe('team'));\n",
+            "import { TENANT_KEY } from '../src/use-tenant';\ntest('key', () => \
+             expect(TENANT_KEY).toBe('tenant'));\n",
         ),
         (
             "test/error.test.ts",
-            "import { toFetchError } from '../src/fetch-api';\ntest('error', () => \
-             expect(toFetchError(1).message).toContain('network'));\n",
+            "import { asOffline } from '../src/get-json';\ntest('error', () => \
+             expect(asOffline(1).message).toContain('network'));\n",
         ),
     ])
 }
@@ -396,15 +399,15 @@ fn load_time_code_that_did_not_change_does_not_hide_which_export_changed() {
     // One more code in the predicate, and a reworded comment.
     write(
         r,
-        "src/is-internal-error.ts",
+        "src/is-expected-error.ts",
         &PREDICATE
             .replace(
-                "code === 'REDIRECT' ||",
-                "code === 'REDIRECT' || code === 'HANGING' ||",
+                "code === 'MOVED' ||",
+                "code === 'MOVED' || code === 'STALLED' ||",
             )
-            .replace("so it is defined here", "so we define it here"),
+            .replace("gives the same symbol", "yields one symbol"),
     );
-    assert_eq!(affected(r), ["test/team.test.ts"]);
+    assert_eq!(affected(r), ["test/tenant.test.ts"]);
     // As before: a file with a load-time call is a whole-file change.
     assert_eq!(
         affected_env(
@@ -417,13 +420,13 @@ fn load_time_code_that_did_not_change_does_not_hide_which_export_changed() {
         [
             "test/error.test.ts",
             "test/key.test.ts",
-            "test/team.test.ts"
+            "test/tenant.test.ts"
         ]
     );
     let e = explain(r, "test/error.test.ts");
     assert!(
         e.contains(
-            "src/is-internal-error.ts skipped: only isInternalError changed in it, and nothing \
+            "src/is-expected-error.ts skipped: only isExpectedError changed in it, and nothing \
              this entry loads uses it"
         ),
         "{e}"
@@ -431,7 +434,7 @@ fn load_time_code_that_did_not_change_does_not_hide_which_export_changed() {
     // An export nobody uses.
     write(
         r,
-        "src/is-internal-error.ts",
+        "src/is-expected-error.ts",
         &PREDICATE.replace("return String(error);", "return `${error}`;"),
     );
     assert_eq!(affected(r), Vec::<String>::new());
@@ -445,26 +448,26 @@ fn changed_load_time_code_is_a_whole_file_change() {
     // that reads the symbol, nothing else.
     write(
         r,
-        "src/is-internal-error.ts",
-        &PREDICATE.replace("'lib.postpone'", "'lib.postpone.v2'"),
+        "src/is-expected-error.ts",
+        &PREDICATE.replace("'lib.defer'", "'lib.defer.v2'"),
     );
-    assert_eq!(affected(r), ["test/team.test.ts"]);
+    assert_eq!(affected(r), ["test/tenant.test.ts"]);
     // A lookup that runs code at load time (a member access can be a getter): the
     // statement itself changes.
-    let lookup = PREDICATE.replace("Symbol.for('lib.postpone')", "globalThis.symbols.postpone");
-    write(r, "src/is-internal-error.ts", &lookup);
+    let lookup = PREDICATE.replace("Symbol.for('lib.defer')", "globalThis.symbols.defer");
+    write(r, "src/is-expected-error.ts", &lookup);
     git(r, &["commit", "-q", "-am", "lookup"]);
     write(
         r,
-        "src/is-internal-error.ts",
-        &lookup.replace("symbols.postpone", "symbols.postponed"),
+        "src/is-expected-error.ts",
+        &lookup.replace("symbols.defer", "symbols.deferred"),
     );
     assert_eq!(
         affected(r),
         [
             "test/error.test.ts",
             "test/key.test.ts",
-            "test/team.test.ts"
+            "test/tenant.test.ts"
         ]
     );
     let v = json(r);
@@ -479,7 +482,7 @@ fn changed_load_time_code_is_a_whole_file_change() {
     let e = explain(r, "test/error.test.ts");
     assert!(
         e.contains(
-            "  src/is-internal-error.ts counts as changed as a whole: what it does when it is \
+            "  src/is-expected-error.ts counts as changed as a whole: what it does when it is \
              loaded differs between the base and the head (a member access is new or changed)\n"
         ),
         "{e}"
@@ -487,7 +490,7 @@ fn changed_load_time_code_is_a_whole_file_change() {
     // A new load-time statement.
     write(
         r,
-        "src/is-internal-error.ts",
+        "src/is-expected-error.ts",
         &format!("{PREDICATE}console.log('loaded');\n"),
     );
     assert_eq!(
@@ -495,7 +498,7 @@ fn changed_load_time_code_is_a_whole_file_change() {
         [
             "test/error.test.ts",
             "test/key.test.ts",
-            "test/team.test.ts"
+            "test/tenant.test.ts"
         ]
     );
 }
@@ -657,8 +660,8 @@ fn a_modified_test_always_runs() {
     write(
         r,
         "test/key.test.ts",
-        "// the key\nimport { TEAM_KEY } from '../src/use-team';\nfunction unused() \
-         {}\ntest('key', () => expect(TEAM_KEY).toBe('team'));\n",
+        "// the key\nimport { TENANT_KEY } from '../src/use-tenant';\nfunction unused() \
+         {}\ntest('key', () => expect(TENANT_KEY).toBe('tenant'));\n",
     );
     assert_eq!(affected(r), ["test/key.test.ts"]);
 }
@@ -672,23 +675,24 @@ fn whole_module_uses_of_an_importer_select() {
     write(
         r,
         "test/mocked.test.ts",
-        "import { TEAM_KEY } from '../src/use-team';\njest.mock('../src/fetch-api');\ntest('m', \
-         () => expect(TEAM_KEY).toBe('team'));\n",
+        "import { TENANT_KEY } from \
+         '../src/use-tenant';\njest.mock('../src/get-json');\ntest('m', () => \
+         expect(TENANT_KEY).toBe('tenant'));\n",
     );
     write(
         r,
         "test/namespace.test.ts",
-        "import * as api from '../src/fetch-api';\ntest('n', () => \
+        "import * as api from '../src/get-json';\ntest('n', () => \
          expect(Object.keys(api).length).toBe(2));\n",
     );
     git(r, &["add", "-A"]);
     git(r, &["commit", "-q", "-m", "tests"]);
     write(
         r,
-        "src/is-internal-error.ts",
+        "src/is-expected-error.ts",
         &PREDICATE.replace(
-            "code === 'REDIRECT' ||",
-            "code === 'REDIRECT' || code === 'HANGING' ||",
+            "code === 'MOVED' ||",
+            "code === 'MOVED' || code === 'STALLED' ||",
         ),
     );
     assert_eq!(
@@ -696,12 +700,12 @@ fn whole_module_uses_of_an_importer_select() {
         [
             "test/mocked.test.ts",
             "test/namespace.test.ts",
-            "test/team.test.ts"
+            "test/tenant.test.ts"
         ]
     );
 }
 
-/// [`fetching`] plus the load-time wrappers of the real site: a route handler
+/// [`fetching`] plus load-time wrappers: a route handler
 /// wrapped by a first-party tracing wrapper that returns a closure, a data
 /// loader wrapped by React's `cache`, and a registry whose `register` keeps its
 /// argument.
@@ -721,23 +725,23 @@ fn wrappers() -> tempfile::TempDir {
     write(
         r,
         "src/route.ts",
-        "import { withTrace } from './trace';\nimport { fetchApi } from './fetch-api';\n\nexport \
-         const GET = withTrace(async (req) => fetchApi(req.url), { name: 'get' });\n\nexport \
-         const dynamic = 'force-dynamic';\n",
+        "import { withTrace } from './trace';\nimport { getJson } from './get-json';\n\nexport \
+         const GET = withTrace(async (req) => getJson(req.url), { name: 'get' });\n\nexport const \
+         dynamic = 'force-dynamic';\n",
     );
     write(
         r,
         "src/data.ts",
-        "import { cache } from 'react';\nimport { fetchApi } from './fetch-api';\n\nexport const \
-         getProduct = cache(async (slug: string) => fetchApi('/products/' + slug));\n\nexport \
+        "import { cache } from 'react';\nimport { getJson } from './get-json';\n\nexport const \
+         getProduct = cache(async (slug: string) => getJson('/products/' + slug));\n\nexport \
          const PRODUCT_TAG = 'products';\n",
     );
     write(
         r,
         "src/registered.ts",
-        "import { register } from './trace';\nimport { fetchApi } from './fetch-api';\n\nexport \
-         const POST = register(async (req: Request) => fetchApi(req.url));\n\nexport const \
-         runtime = 'nodejs';\n",
+        "import { register } from './trace';\nimport { getJson } from './get-json';\n\nexport \
+         const POST = register(async (req: Request) => getJson(req.url));\n\nexport const runtime \
+         = 'nodejs';\n",
     );
     for (name, import, expect) in [
         ("route", "{ GET } from '../src/route'", "typeof GET"),
@@ -767,10 +771,10 @@ fn a_load_time_call_that_only_builds_a_value_passes_the_change_on_by_name() {
     let r = d.path();
     write(
         r,
-        "src/is-internal-error.ts",
+        "src/is-expected-error.ts",
         &PREDICATE.replace(
-            "code === 'REDIRECT' ||",
-            "code === 'REDIRECT' || code === 'HANGING' ||",
+            "code === 'MOVED' ||",
+            "code === 'MOVED' || code === 'STALLED' ||",
         ),
     );
     // `GET = withTrace(...)` wraps a function that reaches the change: its own test
@@ -785,7 +789,7 @@ fn a_load_time_call_that_only_builds_a_value_passes_the_change_on_by_name() {
             "test/route.test.ts",
             "test/runtime.test.ts",
             "test/tag.test.ts",
-            "test/team.test.ts"
+            "test/tenant.test.ts"
         ]
     );
     let v = json(r);
@@ -806,7 +810,7 @@ fn a_load_time_call_that_only_builds_a_value_passes_the_change_on_by_name() {
             "test/route.test.ts",
             "test/runtime.test.ts",
             "test/tag.test.ts",
-            "test/team.test.ts"
+            "test/tenant.test.ts"
         ]
     );
 }
@@ -830,7 +834,7 @@ fn a_changed_wrapper_is_load_time_code_of_its_callers() {
     assert_eq!(affected(r), ["test/dynamic.test.ts", "test/route.test.ts"]);
 }
 
-/// The shape of a flag registry and what stands around it on the real site: a
+/// A flag registry and what can stand around it: a
 /// declarator in its own file that hands its argument and an adapter to the
 /// flags SDK, the adapter made by the SDK's factory, a registry of one
 /// declaration per export, a schema file built with zod, and a route table
@@ -878,18 +882,18 @@ fn registry() -> tempfile::TempDir {
         ),
         (
             "src/schemas.ts",
-            "import { z } from 'zod';\n\nconst environment = z.enum(['production', \
-             'preview']);\nconst level = z.enum(['error', 'info']);\n\nexport const query = \
-             z.object({\n  env: environment.optional(),\n  limit: \
+            "import { z } from 'zod';\n\nconst environment = z.enum(['live', 'draft']);\nconst \
+             level = z.enum(['error', 'info']);\n\nexport const query = z.object({\n  env: \
+             environment.optional(),\n  limit: \
              z.coerce.number().positive().max(100),\n});\n\nexport const row = z.object({ level, \
              message: z.string() });\n",
         ),
-        ("src/constants.ts", "export const AGENT_NAME = 'Agent';\n"),
+        ("src/constants.ts", "export const BOT_NAME = 'Bot';\n"),
         (
             "src/routes.ts",
-            "import { AGENT_NAME } from './constants';\n\nconst definitions = {\n  '/[team]': { \
-             label: 'Overview' },\n  '/[team]/agent': { label: `${AGENT_NAME} Credits`, visible: \
-             () => true },\n};\n\nexport const Routes = definitions;\n\nexport function \
+            "import { BOT_NAME } from './constants';\n\nconst definitions = {\n  '/[tenant]': { \
+             label: 'Overview' },\n  '/[tenant]/bot': { label: `${BOT_NAME} Usage`, visible: () \
+             => true },\n};\n\nexport const Routes = definitions;\n\nexport function \
              isKnown(path: string): boolean {\n  return path.startsWith('/');\n}\n",
         ),
         (
@@ -914,7 +918,7 @@ fn registry() -> tempfile::TempDir {
         (
             "test/routes.test.ts",
             "import { Routes } from '../src/routes';\ntest('t', () => \
-             expect(Routes['/[team]'].label).toBe('Overview'));\n",
+             expect(Routes['/[tenant]'].label).toBe('Overview'));\n",
         ),
         (
             "test/known.test.ts",
@@ -1117,9 +1121,8 @@ fn schema_builders_and_tables_over_constants_are_compared_by_export() {
         r,
         "src/routes.ts",
         &routes.replace(
-            "  '/[team]': { label: 'Overview' },\n",
-            "  '/[team]': { label: 'Overview' },\n  '/[team]/requests': { label: 'My Requests' \
-             },\n",
+            "  '/[tenant]': { label: 'Overview' },\n",
+            "  '/[tenant]': { label: 'Overview' },\n  '/[tenant]/inbox': { label: 'Inbox' },\n",
         ),
     );
     assert_eq!(affected(r), ["test/routes.test.ts"]);
@@ -1128,11 +1131,7 @@ fn schema_builders_and_tables_over_constants_are_compared_by_export() {
         ["test/known.test.ts", "test/routes.test.ts"]
     );
     // The constant in a label changes too: it is what the template is made from.
-    write(
-        r,
-        "src/constants.ts",
-        "export const AGENT_NAME = 'Assistant';\n",
-    );
+    write(r, "src/constants.ts", "export const BOT_NAME = 'Helper';\n");
     assert_eq!(affected(r), ["test/known.test.ts", "test/routes.test.ts"]);
 }
 
@@ -1143,15 +1142,15 @@ fn permissions() -> tempfile::TempDir {
         (
             "src/permissions.ts",
             "export enum Action {\n  Read = 'read',\n  Write = 'write',\n}\n\nexport enum \
-             Resource {\n  Team = 'team',\n  Project = 'project',\n}\n\nexport type Permissions = \
+             Resource {\n  Tenant = 'tenant',\n  Project = 'project',\n}\n\nexport type Grants = \
              Partial<Record<Resource, Action[]>>;\n",
         ),
         (
             "src/use-permissions.ts",
-            "import { Action, type Permissions, Resource } from './permissions';\n\nexport \
-             function canEditTeam(p: Permissions): boolean {\n  return \
-             Boolean(p[Resource.Team]?.includes(Action.Write));\n}\n\nexport function \
-             canSeeProject(p: Permissions): boolean {\n  return Boolean(p[Resource.Project]);\n}\n",
+            "import { Action, type Grants, Resource } from './permissions';\n\nexport function \
+             canEditTenant(p: Grants): boolean {\n  return \
+             Boolean(p[Resource.Tenant]?.includes(Action.Write));\n}\n\nexport function \
+             canSeeProject(p: Grants): boolean {\n  return Boolean(p[Resource.Project]);\n}\n",
         ),
         (
             "src/all.ts",
@@ -1159,9 +1158,9 @@ fn permissions() -> tempfile::TempDir {
              string[] {\n  return Object.values(Resource);\n}\n",
         ),
         (
-            "test/team.test.ts",
-            "import { canEditTeam } from '../src/use-permissions';\ntest('team', () => \
-             expect(canEditTeam({})).toBe(false));\n",
+            "test/tenant.test.ts",
+            "import { canEditTenant } from '../src/use-permissions';\ntest('tenant', () => \
+             expect(canEditTenant({})).toBe(false));\n",
         ),
         (
             "test/project.test.ts",
@@ -1171,12 +1170,12 @@ fn permissions() -> tempfile::TempDir {
         (
             "test/all.test.ts",
             "import { allResources } from '../src/all';\ntest('all', () => \
-             expect(allResources()).toContain('team'));\n",
+             expect(allResources()).toContain('tenant'));\n",
         ),
         (
             "test/direct.test.ts",
             "import { Resource } from '../src/permissions';\ntest('direct', () => \
-             expect(Resource.Team).toBe('team'));\n",
+             expect(Resource.Tenant).toBe('tenant'));\n",
         ),
     ])
 }
@@ -1203,10 +1202,10 @@ fn a_member_added_to_an_enum_selects_the_code_that_enumerates_it() {
             "test/all.test.ts",
             "test/direct.test.ts",
             "test/project.test.ts",
-            "test/team.test.ts"
+            "test/tenant.test.ts"
         ]
     );
-    let e = explain(r, "test/team.test.ts");
+    let e = explain(r, "test/tenant.test.ts");
     assert!(
         e.contains("src/permissions.ts skipped: only") && e.contains("Resource.Rules"),
         "{e}"
@@ -1215,14 +1214,14 @@ fn a_member_added_to_an_enum_selects_the_code_that_enumerates_it() {
     write(
         r,
         "src/permissions.ts",
-        &src.replace("Team = 'team'", "Team = 'teams'"),
+        &src.replace("Tenant = 'tenant'", "Tenant = 'teams'"),
     );
     assert_eq!(
         affected(r),
         [
             "test/all.test.ts",
             "test/direct.test.ts",
-            "test/team.test.ts"
+            "test/tenant.test.ts"
         ]
     );
     // A member of the other enum, read by one function.
@@ -1231,20 +1230,20 @@ fn a_member_added_to_an_enum_selects_the_code_that_enumerates_it() {
         "src/permissions.ts",
         &src.replace("Write = 'write'", "Write = 'w'"),
     );
-    assert_eq!(affected(r), ["test/team.test.ts"]);
+    assert_eq!(affected(r), ["test/tenant.test.ts"]);
     // An enum whose members get their values from their position is one value.
     let d = permissions();
     let r = d.path();
     let numbered = src.replace(
-        "  Team = 'team',\n  Project = 'project',\n",
-        "  Team,\n  Project,\n",
+        "  Tenant = 'tenant',\n  Project = 'project',\n",
+        "  Tenant,\n  Project,\n",
     );
     write(r, "src/permissions.ts", &numbered);
     git(r, &["commit", "-q", "-am", "numbered"]);
     write(
         r,
         "src/permissions.ts",
-        &numbered.replace("  Team,\n", "  Org,\n  Team,\n"),
+        &numbered.replace("  Tenant,\n", "  Org,\n  Tenant,\n"),
     );
     assert_eq!(
         affected(r),
@@ -1252,7 +1251,7 @@ fn a_member_added_to_an_enum_selects_the_code_that_enumerates_it() {
             "test/all.test.ts",
             "test/direct.test.ts",
             "test/project.test.ts",
-            "test/team.test.ts"
+            "test/tenant.test.ts"
         ]
     );
 }

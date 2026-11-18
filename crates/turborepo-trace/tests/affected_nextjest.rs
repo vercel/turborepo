@@ -21,11 +21,11 @@ fn write(root: &Path, rel: &str, content: &str) {
     std::fs::write(p, content).unwrap();
 }
 
-const JEST_CONFIG: &str = "import nextJest from 'next/jest';\nimport type { Config } from \
-                           'jest';\n\nconst customConfig: Config = {\n  testEnvironment: \
-                           'jsdom',\n  testMatch: ['./**/*.test.{ts,tsx}'],\n};\n\nexport default \
-                           async (): Promise<Config> => {\n  const config = (await nextJest({ \
-                           dir: __dirname })(customConfig)()) as Config;\n  return config;\n};\n";
+const JEST_CONFIG: &str =
+    "import type { Config } from 'jest';\nimport nextJest from 'next/jest';\n\nconst own: Config \
+     = {\n  testMatch: ['**/*.test.{ts,tsx}'],\n  testEnvironment: 'jsdom',\n};\n\nexport default \
+     async (): Promise<Config> => {\n  const wrapped = (await nextJest({ dir: __dirname \
+     })(own)()) as Config;\n  return wrapped;\n};\n";
 
 fn repo() -> tempfile::TempDir {
     let d = tempfile::tempdir().unwrap();
@@ -518,17 +518,17 @@ fn a_module_only_route_functions_use_is_not_an_input() {
     assert_eq!(since(r, &[]), SITE_TEST);
 }
 
-/// The helper of a real application's config (names changed): it takes its own
+/// A helper of an application's config: it takes its own
 /// location when it loads, and a function that only `rewrites()` calls reads a
 /// file and lists the application's directories with a class of a package.
-const ZONES: &str = r#"import fs from 'node:fs';
-import { ZoneConfig } from '@acme/zones/config';
+const SITEMAP: &str = r#"import fs from 'node:fs';
+import { SiteMap } from '@acme/sitemap/config';
 
-const appRoot = new URL('./', import.meta.url);
+const base = new URL('./', import.meta.url);
 
-export function childPaths() {
-  const config = ZoneConfig.fromFile(fs.readFileSync(new URL('zones.jsonc', appRoot), 'utf8'));
-  return segments(new URL('./app', appRoot)).filter((s) => config.has(s));
+export function delegated() {
+  const config = SiteMap.fromFile(fs.readFileSync(new URL('sitemap.jsonc', base), 'utf8'));
+  return segments(new URL('./app', base)).filter((s) => config.has(s));
 }
 
 function segments(dir) {
@@ -548,15 +548,15 @@ fn a_helper_that_reads_the_application_inside_a_function() {
     write(
         r,
         "apps/site/next.config.mjs",
-        "import { withPlugin } from 'next-plugin';\nimport { childPaths } from \
-         './zones.mjs';\n\n// As in the real config: its own location, a name of every path of \
-         the application.\nconst here = new URL('.', import.meta.url);\n\nconst nextConfig = {\n  \
-         transpilePackages: ['@scope/ui'],\n  env: { HERE: here.pathname },\n  async rewrites() \
-         {\n    return childPaths().map((source) => ({ source, destination: '/zone' }));\n  \
+        "import { withPlugin } from 'next-plugin';\nimport { delegated } from \
+         './sitemap.mjs';\n\n// Its own location, a name of every path of the application.\nconst \
+         here = new URL('.', import.meta.url);\n\nconst nextConfig = {\n  transpilePackages: \
+         ['@scope/ui'],\n  env: { HERE: here.pathname },\n  async rewrites() {\n    return \
+         delegated().map((source) => ({ source, destination: '/other-app' }));\n  \
          },\n};\n\nexport default withPlugin(nextConfig);\n",
     );
-    write(r, "apps/site/zones.mjs", ZONES);
-    write(r, "apps/site/zones.jsonc", "{ \"zones\": [] }\n");
+    write(r, "apps/site/sitemap.mjs", SITEMAP);
+    write(r, "apps/site/sitemap.jsonc", "{ \"paths\": [] }\n");
     write(
         r,
         "apps/site/app/docs/page.js",
@@ -567,14 +567,14 @@ fn a_helper_that_reads_the_application_inside_a_function() {
     git(r, &["commit", "-q", "-m", "base"]);
     let all = [("TURBO_TRACE_DEBUG_CONFIG_IMPORTS", "all")];
     // What the function reads and lists is not read when the config loads: the
-    // helper's top level calls nothing of the repository, so `childPaths` runs
+    // helper's top level calls nothing of the repository, so `delegated` runs
     // only in `rewrites()`.
     write(
         r,
         "apps/site/app/blog/page.js",
         "export default function Page() {\n  return null;\n}\n",
     );
-    write(r, "apps/site/zones.jsonc", "{ \"zones\": [\"blog\"] }\n");
+    write(r, "apps/site/sitemap.jsonc", "{ \"paths\": [\"blog\"] }\n");
     assert!(since(r, &[]).is_empty(), "{}", stats(r, &[]));
     // Nor does the config's location name what the helper's function lists (a read
     // with a computed path, bounded by names): no such read runs when the
@@ -587,23 +587,23 @@ fn a_helper_that_reads_the_application_inside_a_function() {
     // An edit inside the function.
     write(
         r,
-        "apps/site/zones.mjs",
-        &ZONES.replace(
+        "apps/site/sitemap.mjs",
+        &SITEMAP.replace(
             "out.push(entry.name);",
             "if (entry.isDirectory()) out.push(entry.name);",
         ),
     );
     assert!(since(r, &[]).is_empty(), "{}", stats(r, &[]));
     assert!(stats(r, &[]).contains(
-        "apps/site/zones.mjs changed, which the config loads through apps/site/zones.mjs: not an \
-         input change for 1 jest test(s)"
+        "apps/site/sitemap.mjs changed, which the config loads through apps/site/sitemap.mjs: not \
+         an input change for 1 jest test(s)"
     ));
     assert_eq!(since(r, &all), SITE_TEST);
     // An edit of what runs when the helper loads.
     write(
         r,
-        "apps/site/zones.mjs",
-        &ZONES.replace(
+        "apps/site/sitemap.mjs",
+        &SITEMAP.replace(
             "new URL('./', import.meta.url)",
             "new URL('../', import.meta.url)",
         ),
@@ -613,8 +613,8 @@ fn a_helper_that_reads_the_application_inside_a_function() {
     // is read at load, and nothing about the helper is left out.
     write(
         r,
-        "apps/site/zones.mjs",
-        &format!("{ZONES}\nexport const paths = childPaths();\n"),
+        "apps/site/sitemap.mjs",
+        &format!("{SITEMAP}\nexport const paths = delegated();\n"),
     );
     git(r, &["add", "-A"]);
     git(
@@ -626,7 +626,7 @@ fn a_helper_that_reads_the_application_inside_a_function() {
             "the helper calls its function at load",
         ],
     );
-    write(r, "apps/site/zones.jsonc", "{ \"zones\": [\"docs\"] }\n");
+    write(r, "apps/site/sitemap.jsonc", "{ \"paths\": [\"docs\"] }\n");
     assert_eq!(since(r, &[]), SITE_TEST);
 }
 
@@ -635,7 +635,7 @@ fn a_file_the_config_reads_in_the_working_directory() {
     let d = repo();
     let r = d.path();
     write(r, ".gitignore", ".turbo/trace/\n");
-    // As in a real application's config: a file of the working directory, read when
+    // A file of the working directory, read when
     // the config loads. The config loads in the jest process, whose working
     // directory is the tests'.
     write(

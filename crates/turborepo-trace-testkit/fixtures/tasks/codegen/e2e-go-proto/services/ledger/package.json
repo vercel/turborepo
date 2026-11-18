@@ -1,0 +1,9 @@
+{
+  "name": "@fx/ledger",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "codegen": "pnpm --filter @fx/schema codegen",
+    "test": "pnpm run codegen && go -C server test ./..."
+  }
+}

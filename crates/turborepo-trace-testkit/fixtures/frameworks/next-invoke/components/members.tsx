@@ -1,6 +1,6 @@
 'use client';
 
-import { useLazySWR } from '../lib/api/swr';
+import { useDeferredSWR } from '../lib/http/hooks';
 import { useTeam } from '../lib/use-team';
 
 export function membersKey(teamId: string): string {
@@ -10,14 +10,14 @@ export function membersKey(teamId: string): string {
 export function Members() {
   const { team } = useTeam();
 
-  const { data } = useLazySWR<{ members: string[] }>(
+  const { data } = useDeferredSWR<{ members: string[] }>(
     team ? membersKey(team.id) : null,
     async (url: string) => {
       const response = await fetch(url, {
         headers: { 'Content-Type': 'application/json' },
       });
       if (!response.ok) {
-        throw new Error('Failed to load members');
+        throw new Error(`members: ${response.status}`);
       }
       return response.json();
     },

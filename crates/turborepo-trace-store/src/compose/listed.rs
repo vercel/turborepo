@@ -13,7 +13,7 @@
 //! leading directories lead into it (`dist/**/*.js`, `.next/types/**/*.ts`), or
 //! one of its literal segments is the output's own name (`**/dist/*.js`). A
 //! link made only by listings that do not name the output is marked
-//! [`RefFlags::LISTED`]. So is every link of an unplaced write (`$BUILD_DIR/
+//! [`RefFlags::LISTED`]. So is every link of an unplaced write (`$OUT/
 //! pnpm-workspace.yaml`: a path with an unexpanded shell variable, which stands
 //! for no file anyone can name).
 //!
@@ -170,7 +170,7 @@ mod tests {
             None
         ));
         // Wildcards alone: the listing would see the output, it does not name it.
-        assert!(!names_output("**", "$BUILD_DIR/pnpm-workspace.yaml", None));
+        assert!(!names_output("**", "$OUT/pnpm-workspace.yaml", None));
         assert!(!names_output("*/*", "packages/ui", Some("dist/**")));
         assert!(!names_output(
             "*/*/package.json",

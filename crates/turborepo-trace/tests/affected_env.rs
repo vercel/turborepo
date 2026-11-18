@@ -4,7 +4,7 @@
 //! ever set outside the repository is none, and an assignment that cannot be
 //! evaluated keeps the reader open.
 //!
-//! The shapes come from real repositories, with the names changed. `--strict`
+//! `--strict`
 //! counts every uncertainty record, so "nothing selected under `--strict`"
 //! means the record is gone.
 // Test code: helpers outside `#[test]` functions unwrap and expect as the tests do.
@@ -71,24 +71,22 @@ fn repo() -> tempfile::TempDir {
     d
 }
 
-/// The reader of the real shape: a datafile path from the environment, through
+/// A reader of a fixture path from the environment, through
 /// a const and a guard, at module level.
-const CLIENT: &str = "const { readFileSync } = require('node:fs');\nconst testDatafilePath = \
-                      process.env.FLAGS_TEST_DATAFILE;\nconst testDatafile = testDatafilePath\n  \
-                      ? JSON.parse(readFileSync(testDatafilePath, 'utf8'))\n  : \
-                      undefined;\nmodule.exports = { testDatafile };\n";
+const CLIENT: &str = "const { readFileSync } = require('node:fs');\nconst pricesPath = \
+                      process.env.PRICES_FIXTURE;\nmodule.exports.prices = pricesPath\n  ? \
+                      JSON.parse(readFileSync(pricesPath, 'utf8'))\n  : [];\n";
 
 const CLIENT_TEST: &str = "require('./client');\ntest('c', () => {});\n";
 
-/// The helper family of the real shape, in a file of its own.
-const HELPERS: &str = "export function assertEnvOr(...names: string[]): string {\n  \
-    for (const name of names) {\n    const value = process.env[name];\n    \
-    if (value) {\n      return value;\n    }\n  }\n  \
-    throw new Error('missing');\n}\n\
-    export function assertEnv(name: string): string {\n  return assertEnvOr(name);\n}\n\
-    export function getEnv(name: string, fallback: string): string {\n  \
-    const value = process.env[name];\n  if (!value) {\n    return fallback;\n  }\n  \
-    return value;\n}\n";
+/// An environment helper family, in a file of its own.
+const HELPERS: &str = "export function firstSet(...keys: string[]): string {\n  for (const key of \
+                       keys) {\n    const found = process.env[key];\n    if (found) {\n      \
+                       return found;\n    }\n  }\n  throw new Error('unset: ' + \
+                       keys.join());\n}\nexport function required(key: string): string {\n  \
+                       return firstSet(key);\n}\nexport function envOr(key: string, otherwise: \
+                       string): string {\n  const found = process.env[key];\n  if (!found) {\n    \
+                       return otherwise;\n  }\n  return found;\n}\n";
 
 /// A setup file assigns the variable to a fixture in the repository: the
 /// fixture is a dependency of the reader, and so is the assignment.
@@ -99,18 +97,18 @@ fn fixture_assigned_in_a_setup_file() {
     write(r, "src/client.js", CLIENT);
     write(r, "src/client.test.js", CLIENT_TEST);
     write(r, "src/other.test.js", "test('o', () => {});\n");
-    write(r, "test/fixtures/flags.json", "{}\n");
+    write(r, "test/fixtures/prices.json", "{}\n");
     write(r, "test/fixtures/unused.json", "{}\n");
     write(
         r,
         "test/setup.js",
-        "const path = require('node:path');\nprocess.env.FLAGS_TEST_DATAFILE = \
-         path.join(__dirname, 'fixtures', 'flags.json');\n",
+        "const path = require('node:path');\nprocess.env.PRICES_FIXTURE = path.join(__dirname, \
+         'fixtures', 'prices.json');\n",
     );
     assert_eq!(affected(r, &["unrelated.txt"]), none());
     assert_eq!(strict(r, &["unrelated.txt"]), none());
     assert_eq!(
-        affected(r, &["test/fixtures/flags.json"]),
+        affected(r, &["test/fixtures/prices.json"]),
         ["src/client.test.js"]
     );
     assert_eq!(affected(r, &["test/fixtures/unused.json"]), none());
@@ -129,10 +127,9 @@ fn helper_with_an_external_fallback() {
     write(
         r,
         "src/token.ts",
-        "import { readFile } from 'node:fs/promises';\nimport { getEnv } from \
-         '../lib/env';\nconst DEFAULT_TOKEN_PATH = \
-         '/var/run/secrets/widget/tokens/token';\nexport async function token() {\n  return \
-         readFile(getEnv('WIDGET_OIDC_TOKEN_PATH', DEFAULT_TOKEN_PATH), 'utf8');\n}\n",
+        "import { readFile } from 'node:fs/promises';\nimport { envOr } from '../lib/env';\nconst \
+         CLIENT_CERT = '/etc/ssl/acme/client.pem';\nexport async function token() {\n  return \
+         readFile(envOr('ACME_CLIENT_CERT', CLIENT_CERT), 'utf8');\n}\n",
     );
     write(
         r,
@@ -156,14 +153,14 @@ fn helper_with_assignments_in_tests() {
     write(
         r,
         "src/token.ts",
-        "import { readFileSync } from 'node:fs';\nimport { assertEnv } from '../lib/env';\nconst \
-         tokenFile = assertEnv('WIDGET_TOKEN_FILE');\nexport const token = () => \
+        "import { readFileSync } from 'node:fs';\nimport { required } from '../lib/env';\nconst \
+         tokenFile = required('SIGNING_KEY_FILE');\nexport const token = () => \
          readFileSync(tokenFile, 'utf8');\n",
     );
     write(
         r,
         "src/token.test.ts",
-        "import { token } from './token';\nprocess.env.WIDGET_TOKEN_FILE = \
+        "import { token } from './token';\nprocess.env.SIGNING_KEY_FILE = \
          '/tmp/widget-token';\ntest('t', () => { token(); });\n",
     );
     write(r, "src/__fixtures__/token.txt", "t\n");
@@ -171,7 +168,7 @@ fn helper_with_assignments_in_tests() {
         r,
         "src/fixture.test.ts",
         "import path from 'node:path';\nimport { token } from './token';\nbeforeAll(() => {\n  \
-         process.env.WIDGET_TOKEN_FILE = path.join(__dirname, '__fixtures__', \
+         process.env.SIGNING_KEY_FILE = path.join(__dirname, '__fixtures__', \
          'token.txt');\n});\ntest('t', () => { token(); });\n",
     );
     assert_eq!(affected(r, &["unrelated.txt"]), none());
@@ -196,8 +193,9 @@ fn unevaluable_assignment_keeps_the_record() {
     write(
         r,
         "src/token.ts",
-        "import { readFileSync } from 'node:fs';\nimport { getEnv } from '../lib/env';\nexport \
-         const token = () => readFileSync(getEnv('WIDGET_TOKEN_FILE', '/etc/widget'), 'utf8');\n",
+        "import { readFileSync } from 'node:fs';\nimport { envOr } from '../lib/env';\nexport \
+         const token = () => readFileSync(envOr('SIGNING_KEY_FILE', '/etc/acme/signing.key'), \
+         'utf8');\n",
     );
     write(
         r,
@@ -208,8 +206,8 @@ fn unevaluable_assignment_keeps_the_record() {
         r,
         "scripts/run.ts",
         "import { spawn } from 'node:child_process';\nimport { locate } from \
-         'some-package';\nspawn('node', ['server.js'], { env: { ...process.env, \
-         WIDGET_TOKEN_FILE: locate() } });\n",
+         'some-package';\nspawn('node', ['server.js'], { env: { ...process.env, SIGNING_KEY_FILE: \
+         locate() } });\n",
     );
     assert_eq!(strict(r, &["unrelated.txt"]), ["src/token.test.ts"]);
     let why = affected_with(r, &["unrelated.txt"], &["--explain", "src/token.test.ts"]).join("\n");
@@ -229,14 +227,14 @@ fn helper_that_is_not_a_template_stays_a_computed_read() {
     write(
         r,
         "lib/env.ts",
-        "export function getEnv(name: string): string {\n  return decode(process.env[name] ?? \
+        "export function envOr(name: string): string {\n  return decode(process.env[name] ?? \
          '');\n}\ndeclare function decode(s: string): string;\n",
     );
     write(
         r,
         "src/token.ts",
-        "import { readFileSync } from 'node:fs';\nimport { getEnv } from '../lib/env';\nexport \
-         const token = () => readFileSync(getEnv('WIDGET_TOKEN_FILE'), 'utf8');\n",
+        "import { readFileSync } from 'node:fs';\nimport { envOr } from '../lib/env';\nexport \
+         const token = () => readFileSync(envOr('SIGNING_KEY_FILE'), 'utf8');\n",
     );
     write(
         r,
@@ -246,7 +244,7 @@ fn helper_that_is_not_a_template_stays_a_computed_read() {
     assert_eq!(strict(r, &["unrelated.txt"]), ["src/token.test.ts"]);
 }
 
-/// The real shape of the largest site: a test server hands a variable to the
+/// A test server hands a variable to the
 /// processes it starts, from a constructor parameter whose default is a
 /// temporary file made by a helper of another file; a test constructs the
 /// server with its own temporary path. The file alone cannot evaluate the
@@ -259,31 +257,30 @@ fn assignment_from_a_constructor_parameter_needs_a_cross_file_evaluator() {
     write(r, "src/client.test.js", CLIENT_TEST);
     write(
         r,
-        "server/temp-file.ts",
-        "import { randomUUID } from 'crypto';\nimport path from 'path';\n\
-         export function tempDir(): string {\n  \
-         return process.env.TMP_FOLDER || path.resolve(__dirname, '../.tmp');\n}\n\
-         export function tempFile({\n  prefix,\n  suffix,\n}: {\n  prefix?: string;\n  suffix?: string;\n} = {}): string {\n  \
-         return path.resolve(\n    tempDir(),\n    `${prefix ?? ''}${randomUUID()}${suffix ?? ''}`,\n  );\n}\n",
+        "server/scratch.ts",
+        "import path from 'path';\nimport { randomUUID } from 'crypto';\nexport function \
+         scratchDir(): string {\n  return process.env.SCRATCH_DIR ?? path.join(__dirname, '..', \
+         '.scratch');\n}\nexport function scratchFile(opts: { prefix?: string; ext?: string } = \
+         {}): string {\n  const name = (opts.prefix || '') + randomUUID() + (opts.ext || '');\n  \
+         return path.join(scratchDir(), name);\n}\n",
     );
     write(
         r,
-        "server/flags.ts",
-        "import { writeFile } from 'node:fs/promises';\nimport { tempFile } from \
-         './temp-file';\nexport const services = { flags: { create: () => new FlagsService() } \
-         };\nexport class FlagsService {\n  constructor(\n    private readonly flagsFile = \
-         tempFile({\n      prefix: 'flags-core-',\n      suffix: '.json',\n    }),\n  ) {}\n  \
-         async start() {\n    await writeFile(this.flagsFile, '{}');\n  }\n  async getTestEnv(): \
-         Promise<Record<string, string>> {\n    return {\n      FLAGS_TEST_DATAFILE: \
-         this.flagsFile,\n      FLAGS_SDK_KEY: 'fake',\n    };\n  }\n}\n",
+        "server/prices.ts",
+        "import { scratchFile } from './scratch';\nimport { writeFile } from \
+         'node:fs/promises';\nexport class PriceBook {\n  constructor(private readonly \
+         catalogFile: string = scratchFile({ prefix: 'prices-', ext: '.json' })) {}\n  async \
+         open() {\n    await writeFile(this.catalogFile, '[]');\n  }\n  childEnv(): { [name: \
+         string]: string } {\n    return { PRICES_FIXTURE: this.catalogFile, PRICES_TOKEN: 'fake' \
+         };\n  }\n}\nexport const registry = { prices: { make: () => new PriceBook() } };\n",
     );
     write(
         r,
-        "server/flags.test.ts",
-        "import os from 'node:os';\nimport path from 'node:path';\nimport { FlagsService } from \
-         './flags';\ntest('flags', async () => {\n  const datafilePath = path.join(os.tmpdir(), \
-         'flags.json');\n  const service = new FlagsService(datafilePath);\n  const env = await \
-         service.getTestEnv();\n  expect(env.FLAGS_TEST_DATAFILE).toBe(datafilePath);\n});\n",
+        "server/prices.test.ts",
+        "import os from 'node:os';\nimport path from 'node:path';\nimport { PriceBook } from \
+         './prices';\ntest('prices', () => {\n  const catalogPath = path.join(os.tmpdir(), \
+         'catalog.json');\n  const book = new PriceBook(catalogPath);\n  \
+         expect(book.childEnv().PRICES_FIXTURE).toBe(catalogPath);\n});\n",
     );
     // The temporary directory is itself a variable; a test points it at a directory
     // it makes.
@@ -291,7 +288,7 @@ fn assignment_from_a_constructor_parameter_needs_a_cross_file_evaluator() {
         r,
         "server/tmp.test.ts",
         "import fs from 'node:fs';\nimport os from 'node:os';\nimport path from \
-         'node:path';\nprocess.env.TMP_FOLDER = fs.mkdtempSync(path.join(os.tmpdir(), \
+         'node:path';\nprocess.env.SCRATCH_DIR = fs.mkdtempSync(path.join(os.tmpdir(), \
          't-'));\ntest('t', () => {});\n",
     );
     let client = "src/client.test.js".to_owned();
@@ -302,7 +299,7 @@ fn assignment_from_a_constructor_parameter_needs_a_cross_file_evaluator() {
     // (`crates/turborepo-trace-store/tests/env_registry.rs`).
     assert!(strict(r, &["unrelated.txt"]).contains(&client));
     // The assigning file is an input of the reader either way.
-    assert!(affected(r, &["server/flags.ts"]).contains(&client));
+    assert!(affected(r, &["server/prices.ts"]).contains(&client));
 }
 
 /// A variable as the directory of a path: whatever sets it, the file read ends
@@ -350,16 +347,16 @@ fn relative_value() {
     let r = d.path();
     write(r, "src/client.js", CLIENT);
     write(r, "src/client.test.js", CLIENT_TEST);
-    write(r, "services/a/dev/local-flags.json", "{}\n");
+    write(r, "services/a/dev/prices.local.json", "{}\n");
     write(
         r,
         "services/a/dev/start.js",
         "require('node:child_process').spawn('node', ['server.js'], {\n  env: { ...process.env, \
-         FLAGS_TEST_DATAFILE: 'dev/local-flags.json' },\n});\n",
+         PRICES_FIXTURE: 'dev/prices.local.json' },\n});\n",
     );
     assert_eq!(strict(r, &["unrelated.txt"]), none());
     assert_eq!(
-        affected(r, &["services/a/dev/local-flags.json"]),
+        affected(r, &["services/a/dev/prices.local.json"]),
         ["src/client.test.js"]
     );
 }
@@ -399,14 +396,14 @@ fn declared_value() {
     let r = d.path();
     write(r, "src/client.js", CLIENT);
     write(r, "src/client.test.js", CLIENT_TEST);
-    write(r, "ci/flags.json", "{}\n");
-    assert_eq!(affected(r, &["ci/flags.json"]), none());
+    write(r, "ci/prices.json", "{}\n");
+    assert_eq!(affected(r, &["ci/prices.json"]), none());
     write(
         r,
         "hints.toml",
-        "[[env]]\nname = \"FLAGS_TEST_DATAFILE\"\nvalues = [\"ci/flags.json\"]\n",
+        "[[env]]\nname = \"PRICES_FIXTURE\"\nvalues = [\"ci/prices.json\"]\n",
     );
-    assert_eq!(affected(r, &["ci/flags.json"]), ["src/client.test.js"]);
+    assert_eq!(affected(r, &["ci/prices.json"]), ["src/client.test.js"]);
     assert_eq!(strict(r, &["unrelated.txt"]), none());
 }
 
@@ -474,13 +471,13 @@ fn patch_is_cached_by_the_manifest() {
     let r = d.path();
     write(r, "src/client.js", CLIENT);
     write(r, "src/client.test.js", CLIENT_TEST);
-    write(r, "test/fixtures/flags.json", "{}\n");
+    write(r, "test/fixtures/prices.json", "{}\n");
     write(r, "test/fixtures/other.json", "{}\n");
     write(
         r,
         "test/setup.js",
-        "const path = require('node:path');\nprocess.env.FLAGS_TEST_DATAFILE = \
-         path.join(__dirname, 'fixtures', 'flags.json');\n",
+        "const path = require('node:path');\nprocess.env.PRICES_FIXTURE = path.join(__dirname, \
+         'fixtures', 'prices.json');\n",
     );
     let stats = |changed: &str| -> (String, Vec<String>) {
         let o = Command::new(support::harness())
@@ -513,10 +510,10 @@ fn patch_is_cached_by_the_manifest() {
             .collect();
         (line, out)
     };
-    let (first, sel) = stats("test/fixtures/flags.json");
+    let (first, sel) = stats("test/fixtures/prices.json");
     assert!(!first.contains("(cached)"), "{first}");
     assert_eq!(sel, ["src/client.test.js"]);
-    let (second, sel) = stats("test/fixtures/flags.json");
+    let (second, sel) = stats("test/fixtures/prices.json");
     assert!(second.contains("(cached)"), "{second}");
     assert_eq!(sel, ["src/client.test.js"]);
     assert_eq!(first, second.replace(" (cached)", ""));
@@ -525,13 +522,13 @@ fn patch_is_cached_by_the_manifest() {
     write(
         r,
         "test/setup.js",
-        "const path = require('node:path');\nprocess.env.FLAGS_TEST_DATAFILE = \
-         path.join(__dirname, 'fixtures', 'other.json');\n",
+        "const path = require('node:path');\nprocess.env.PRICES_FIXTURE = path.join(__dirname, \
+         'fixtures', 'other.json');\n",
     );
     let (third, sel) = stats("test/fixtures/other.json");
     assert!(!third.contains("(cached)"), "{third}");
     assert_eq!(sel, ["src/client.test.js"]);
-    let (_, sel) = stats("test/fixtures/flags.json");
+    let (_, sel) = stats("test/fixtures/prices.json");
     assert!(sel.is_empty(), "{sel:?}");
 }
 

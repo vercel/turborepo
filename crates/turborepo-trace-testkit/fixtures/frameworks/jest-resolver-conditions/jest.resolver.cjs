@@ -1,9 +1,6 @@
-// One dependency only exports an `import` entry: resolve it with that condition added.
-module.exports = (request, options) =>
-  options.defaultResolver(request, {
-    ...options,
-    conditions:
-      request === 'tree-walker'
-        ? [...(options.conditions ?? []), 'import']
-        : options.conditions,
+// One dependency has only an `import` entry: resolve it with that condition added.
+module.exports = (id, ctx) =>
+  ctx.defaultResolver(id, {
+    ...ctx,
+    conditions: id === 'esm-only-pkg' ? [...(ctx.conditions ?? []), 'import'] : ctx.conditions,
   });

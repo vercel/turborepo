@@ -91,7 +91,7 @@ pub struct Walk {
 
 /// A digest identifying the current walk cache file, if any.
 pub fn cache_token(out_dir: &Path) -> Option<u128> {
-    std::fs::read(crate::cache_dir(out_dir).join("walk"))
+    std::fs::read(crate::cache_dir(out_dir).join(crate::cache_file::WALK))
         .ok()
         .map(|b| xxhash_rust::xxh3::xxh3_128(&b))
 }
@@ -101,7 +101,7 @@ pub fn cache_token(out_dir: &Path) -> Option<u128> {
 /// directories and their ancestors are listed again; every other directory's
 /// subtree comes from the cache.
 pub fn walk_cached(root: &Path, out_dir: &Path, threads: usize) -> Walk {
-    let cache = crate::cache_dir(out_dir).join("walk");
+    let cache = crate::cache_dir(out_dir).join(crate::cache_file::WALK);
     let old = std::fs::read(&cache).ok();
     let mut incremental = None;
     if let Some(bytes) = &old

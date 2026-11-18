@@ -557,8 +557,8 @@ fn ci_job_in_place_edit_does_not_select_everything() {
 }
 
 /// M1: a jest config that default-exports an async function wrapping
-/// `nextJest({ dir })(customConfig)()` (the shape of a large Next.js app) used
-/// to yield zero tests, silently.
+/// `nextJest({ dir })(own)()` in an async config used to yield zero tests,
+/// silently.
 #[test]
 fn next_jest_async_config_discovers_tests() {
     let d = tempfile::tempdir().unwrap();
@@ -567,25 +567,24 @@ fn next_jest_async_config_discovers_tests() {
     write(
         r,
         "jest.config.ts",
-        r#"import nextJest from 'next/jest';
-import type { Config } from 'jest';
+        r#"import type { Config } from 'jest';
+import nextJest from 'next/jest';
 
-const customConfig: Config = {
-  setupFilesAfterEnv: ['<rootDir>/test/setup.ts'],
+const own: Config = {
+  testPathIgnorePatterns: ['/fixtures/'],
+  testMatch: ['**/*.test.{ts,tsx}'],
+  setupFilesAfterEnv: ['<rootDir>/test/after-env.ts'],
   testEnvironment: 'jsdom',
-  testMatch: ['./**/*.test.{ts,tsx}'],
-  testPathIgnorePatterns: ['/node_modules/', 'test.mocks'],
 };
 
 export default async (): Promise<Config> => {
-  const config = (await nextJest({ dir: __dirname })(customConfig)()) as Config;
-  const finalConfig = {
-    ...config,
-    transformIgnorePatterns: (config.transformIgnorePatterns ?? []).filter(
-      (pattern) => !pattern.includes('node_modules'),
+  const wrapped = (await nextJest({ dir: __dirname })(own)()) as Config;
+  return {
+    ...wrapped,
+    transformIgnorePatterns: (wrapped.transformIgnorePatterns ?? []).filter(
+      (p) => !p.includes('node_modules'),
     ),
   };
-  return finalConfig;
 };
 "#,
     );
@@ -604,14 +603,14 @@ export default async (): Promise<Config> => {
     }
     write(r, "src/a.ts", "export const a = 1;\n");
     write(r, "src/b.ts", "export const b = 1;\n");
-    write(r, "test/setup.ts", "export {};\n");
+    write(r, "test/after-env.ts", "export {};\n");
     write(
         r,
         "src/a.test.ts",
         "import { a } from './a';\ntest('a', () => expect(a).toBe(1));\n",
     );
     assert_eq!(affected(r, &["src/a.ts"]), ["src/a.test.ts"]);
-    assert_eq!(affected(r, &["test/setup.ts"]), ["src/a.test.ts"]);
+    assert_eq!(affected(r, &["test/after-env.ts"]), ["src/a.test.ts"]);
     assert!(affected(r, &["src/b.ts"]).is_empty());
 }
 
@@ -633,13 +632,13 @@ fn optional_requires_in_jest_setup_are_not_uncertain() {
         r,
         "tests/setup.js",
         r#"try {
-  require.resolve('@api/user-auth/utils/is-vercelian');
-  jest.mock('@api/user-auth/utils/is-vercelian', () => ({
-    ...jest.requireActual('@api/user-auth/utils/is-vercelian'),
-    isMFAEnforced: jest.fn().mockReturnValue(false),
+  require.resolve('@shop/session/lib/guard');
+  jest.mock('@shop/session/lib/guard', () => ({
+    ...jest.requireActual('@shop/session/lib/guard'),
+    hasSecondFactor: () => true,
   }));
 } catch {
-  // @api/user-auth not installed in this workspace
+  // optional: only some checkouts have the session package
 }
 try { require('./local-optional'); } catch (e) {}
 "#,
@@ -673,14 +672,14 @@ fn only_the_governing_tsconfig_is_an_input() {
     write(
         r,
         "tsconfig.json",
-        r#"{"files":[],"references":[{"path":"apps/site"},{"path":"packages/gate"},{"path":"packages/other"}]}"#,
+        r#"{"files":[],"references":[{"path":"apps/site"},{"path":"packages/ledger"},{"path":"packages/other"}]}"#,
     );
     write(
         r,
         "tsconfig.base.json",
         r#"{"compilerOptions":{"strict":true}}"#,
     );
-    for p in ["gate", "other"] {
+    for p in ["ledger", "other"] {
         write(
             r,
             &format!("packages/{p}/package.json"),
@@ -705,7 +704,7 @@ fn only_the_governing_tsconfig_is_an_input() {
     write(
         r,
         "apps/site/tsconfig.json",
-        r#"{"extends":"./tsconfig.paths.json","include":["**/*.ts"],"references":[{"path":"../../packages/gate"},{"path":"../../packages/other"}]}"#,
+        r#"{"extends":"./tsconfig.paths.json","include":["**/*.ts"],"references":[{"path":"../../packages/ledger"},{"path":"../../packages/other"}]}"#,
     );
     write(
         r,
@@ -746,7 +745,7 @@ fn only_the_governing_tsconfig_is_an_input() {
     };
     for (c, edited) in [
         (
-            "packages/gate/tsconfig.json",
+            "packages/ledger/tsconfig.json",
             r#"{"extends":"../../tsconfig.base.json","compilerOptions":{"composite":true,"strict":false},"include":["src"]}"#,
         ),
         (

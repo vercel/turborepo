@@ -1457,11 +1457,10 @@ mod tests {
 
     #[test]
     fn directories_handed_to_dotenv_flow_name_their_env_files() {
-        let src = "import { resolve } from 'path';\nimport { config as loadEnvFiles } from \
-                   'dotenv-flow';\nif (process.env.NODE_ENV !== 'production') {\nconst paths = \
-                   [\nprocess.cwd(),\nresolve(process.cwd(), '..', '..'),\nresolve(__dirname, \
-                   '..', '..'),\n];\nfor (const path of paths) {\nloadEnvFiles({ path: path, \
-                   default_node_env: 'development' });\n}\n}\n";
+        let src = "import dotenvFlow from 'dotenv-flow';\nimport { resolve } from 'path';\nif \
+                   (!process.env.CI) {\nconst dirs = [\nprocess.cwd(),\nresolve(process.cwd(), \
+                   '..', '..'),\nresolve(__dirname, '..', '..'),\n];\nfor (const dir of dirs) \
+                   {\ndotenvFlow.config({ path: dir, node_env: 'test' });\n}\n}\n";
         let (list, marks) = entries(src);
         assert_eq!(list, ["C  .env*", "C ../.. .env*", "L ../.. .env*"]);
         // Nothing of the coarse marks is left, and the `..` are part of the entries.
@@ -1785,11 +1784,11 @@ mod tests {
 
     #[test]
     fn an_environment_tail_is_a_conditional_entry_and_a_use() {
-        let src = "import { getEnv } from '@fx/envlib';\nimport { loadKey } from \
-                   '@fx/keys';\nimport { isAbsolute, join } from 'path';\nconst keysPath = \
-                   getEnv('KEYS_PATH', '/etc/keys');\nexport async function open(id: string) \
-                   {\nconst abs = isAbsolute(keysPath) ? keysPath : join(__dirname, '..', '..', \
-                   keysPath);\nreturn await loadKey(abs, id);\n}\n";
+        let src = "import { envOr } from '@acme/settings';\nimport { readCert } from \
+                   '@acme/certs';\nimport { isAbsolute, join } from 'path';\nconst certDir = \
+                   envOr('CERT_DIR', '/etc/certs');\nexport async function cert(name: string) \
+                   {\nconst dir = isAbsolute(certDir) ? certDir : join(__dirname, '..', '..', \
+                   certDir);\nreturn await readCert(dir, name);\n}\n";
         let (n, escapes) = names(src);
         assert_eq!(n.anchor, None);
         assert_eq!(n.ups, 0);
@@ -1800,11 +1799,11 @@ mod tests {
             (false, "../..", "**", true, 7)
         );
         // The use is where the path leaves: the argument of the imported function.
-        assert_eq!(escapes[0].detail, "abs");
+        assert_eq!(escapes[0].detail, "dir");
         assert_eq!(escapes.len(), 1);
         assert_eq!(escapes[0].origin, Origin::Call);
         assert_eq!(escapes[0].value.calls.len(), 1);
-        assert_eq!(escapes[0].value.calls[0].export, "getEnv");
+        assert_eq!(escapes[0].value.calls[0].export, "envOr");
         // A variable read directly.
         let (n, escapes) = names(
             "import { join } from 'path'; export const dir = join(__dirname, '..', \
@@ -1815,13 +1814,13 @@ mod tests {
         assert_eq!(escapes[0].origin, Origin::Env);
         // Nor is a call that is given no variable name: an ordinary escape, no record.
         let (n, escapes) = names(
-            "import { randomUUID } from 'node:crypto'; import path from 'node:path';\nexport \
-             function tempFile(): string { return path.resolve(__dirname, '../.tmp', \
-             `${randomUUID()}`); }",
+            "import path from 'node:path'; import { randomUUID } from 'node:crypto';\nexport \
+             function scratchFile(): string { return path.resolve(__dirname, '../.scratch', \
+             `${randomUUID()}.json`); }",
         );
         assert_eq!(
             (&*n.anchored[0].rel, n.anchored[0].conditional),
-            ("../.tmp", false)
+            ("../.scratch", false)
         );
         assert!(escapes.is_empty());
         // A tail with a parameter in it is not the environment's alone.

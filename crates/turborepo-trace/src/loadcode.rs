@@ -394,18 +394,18 @@ mod tests {
         }
     }
 
-    /// The shape of a real helper: a file-relative location, a function that
-    /// reads files and lists directories, a package whose values only the
+    /// A helper with a file-relative location, a function that reads files and
+    /// lists directories, a package whose values only the
     /// function uses.
     const HELPER: &str = r#"import fs from 'node:fs';
-import { Config } from '@acme/zones/config';
+import { Config } from '@acme/sitemap/config';
 
-const appRoot = new URL('./', import.meta.url);
+const here = new URL('./', import.meta.url);
 
-/** The paths other zones serve. */
-export function childPaths() {
-  const config = Config.fromFile(fs.readFileSync(new URL('zones.jsonc', appRoot), 'utf8'));
-  return segments(new URL('./app', appRoot)).filter((s) => config.has(s));
+/** The paths that another app serves. */
+export function delegated() {
+  const config = Config.fromFile(fs.readFileSync(new URL('sitemap.jsonc', here), 'utf8'));
+  return segments(new URL('./app', here)).filter((s) => config.has(s));
 }
 
 function segments(dir) {
@@ -421,7 +421,10 @@ function segments(dir) {
     fn a_module_that_only_defines_things_is_inert() {
         assert_eq!(
             inert(HELPER),
-            Ok(vec!["node:fs".to_owned(), "@acme/zones/config".to_owned()])
+            Ok(vec![
+                "node:fs".to_owned(),
+                "@acme/sitemap/config".to_owned()
+            ])
         );
         for src in [
             "export const a = 1;\nexport const b = [a, 'x', `y${a}`];\nexport default { a, b, f() \
@@ -506,7 +509,7 @@ function segments(dir) {
                 "out.push(entry.name);",
                 "if (entry.isDirectory()) out.push(entry.name);",
             )
-            .replace("/** The paths other zones serve. */", "// paths");
+            .replace("/** The paths that another app serves. */", "// paths");
         assert!(same_load("m.mjs", HELPER, &head));
         // The top level changes: another location, another import, a new statement.
         for head in [
@@ -514,7 +517,7 @@ function segments(dir) {
                 "new URL('./', import.meta.url)",
                 "new URL('../', import.meta.url)",
             ),
-            HELPER.replace("'@acme/zones/config'", "'@acme/zones/other'"),
+            HELPER.replace("'@acme/sitemap/config'", "'@acme/sitemap/other'"),
             format!("{HELPER}\nprocess.env.ZONES = '1';\n"),
             HELPER.replace(
                 "function segments(dir)",

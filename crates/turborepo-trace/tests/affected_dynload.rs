@@ -67,10 +67,10 @@ fn services_repo() -> tempfile::TempDir {
     write(
         r,
         "packages/helper/setup.js",
-        "const fs = require('fs');\nconst path = require('path');\nexports.loadRoutes = function \
-         () {\n  return require(process.cwd() + '/src/routes');\n};\nexports.seed = function () \
-         {\n  if (!fs.existsSync(path.join(process.cwd(), 'fixtures', 'seed.json'))) return \
-         null;\n  return JSON.parse(fs.readFileSync(path.join(process.cwd(), 'fixtures', \
+        "const fs = require('fs');\nconst path = require('path');\nexports.collectTables = \
+         function () {\n  return require(process.cwd() + '/src/routes');\n};\nexports.seed = \
+         function () {\n  if (!fs.existsSync(path.join(process.cwd(), 'fixtures', 'seed.json'))) \
+         return null;\n  return JSON.parse(fs.readFileSync(path.join(process.cwd(), 'fixtures', \
          'seed.json'), 'utf8'));\n};\n",
     );
     for s in ["a", "b", "c"] {
@@ -87,8 +87,8 @@ fn services_repo() -> tempfile::TempDir {
         write(
             r,
             &format!("services/{s}/test/{s}.test.js"),
-            "const { loadRoutes } = require('../../../packages/helper/setup');\ntest('routes', () \
-             => { loadRoutes(); });\n",
+            "const { collectTables } = require('../../../packages/helper/setup');\ntest('routes', \
+             () => { collectTables(); });\n",
         );
     }
     write(
@@ -115,7 +115,7 @@ fn services_repo() -> tempfile::TempDir {
     write(
         r,
         "tools/run.js",
-        "require('../packages/helper/setup').loadRoutes();\n",
+        "require('../packages/helper/setup').collectTables();\n",
     );
     write(r, "README.md", "x\n");
     d
@@ -352,12 +352,12 @@ fn a_pattern_over_the_working_directory_itself_stays_open() {
     );
 }
 
-/// The real chain behind a framework that loads route tables and imports the
+/// A chain behind a framework that loads route tables and imports the
 /// handler modules they name by path, with the two sites the analysis cannot
 /// bound declared in the hints file:
 ///
 /// ```text
-/// packages/framework/normalize.js   import(spec)               (spec: a handler path from a route table)
+/// packages/framework/expand.js      import(entry)              (entry: a handler path from a route table)
 /// packages/helper/setup.js          for (const p of paths) require(p)   (<cwd>/src/routes, collected in a Set)
 /// services/a/src/routes.js          { handler: 'services/a/src/handlers/get' }
 /// services/a/src/handlers/get.js → ../lib.js
@@ -369,18 +369,17 @@ fn framework_repo() -> tempfile::TempDir {
     write(r, "package.json", r#"{"name":"r","version":"1.0.0"}"#);
     write(
         r,
-        "packages/framework/normalize.js",
-        "exports.normalize = function ({ spec }) {\n  return { handler: () => import(spec), \
-         modulePath: spec };\n};\n",
+        "packages/framework/expand.js",
+        "exports.expand = function ({ entry }) {\n  return { source: entry, handler: () => \
+         import(entry) };\n};\n",
     );
     write(
         r,
         "packages/helper/setup.js",
-        "const { normalize } = require('../framework/normalize');\nexports.setupEndpoint = \
-         function () {\n  const paths = new Set();\n  paths.add(process.cwd() + '/src/routes');\n  \
-         const out = [];\n  for (const p of paths) {\n    const loaded = require(p);\n    for \
-         (const route of loaded.routes) out.push(normalize({ spec: route.handler }));\n  }\n  \
-         return out;\n};\n",
+        "const { expand } = require('../framework/expand');\nexports.startService = function () \
+         {\n  const paths = new Set();\n  paths.add(process.cwd() + '/src/routes');\n  const out \
+         = [];\n  for (const p of paths) {\n    const loaded = require(p);\n    for (const route \
+         of loaded.routes) out.push(expand({ entry: route.handler }));\n  }\n  return out;\n};\n",
     );
     for s in ["a", "b"] {
         write(
@@ -414,15 +413,15 @@ fn framework_repo() -> tempfile::TempDir {
         write(
             r,
             &format!("services/{s}/test/{s}.test.js"),
-            "const { setupEndpoint } = \
-             require('../../../packages/helper/setup');\ntest('endpoint', () => { \
-             setupEndpoint(); });\n",
+            "const { startService } = \
+             require('../../../packages/helper/setup');\ntest('endpoint', () => { startService(); \
+             });\n",
         );
     }
     write(
         r,
         "tools/run.js",
-        "require('../packages/helper/setup').setupEndpoint();\n",
+        "require('../packages/helper/setup').startService();\n",
     );
     write(r, "README.md", "x\n");
     d
@@ -437,7 +436,7 @@ kinds = ["computed_specifier"]
 cwd-loads = ["./src/routes"]
 
 [[hint]]
-files = "packages/framework/normalize.js"
+files = "packages/framework/expand.js"
 loads = "module-strings"
 "#;
 
@@ -495,7 +494,7 @@ cwd-loads = ["./src/routes"]
 
 # The framework imports the handler modules that route tables name.
 [[hint]]
-files = "packages/framework/normalize.js"
+files = "packages/framework/expand.js"
 loads = "module-strings"
 
 [[hint]]
@@ -521,7 +520,7 @@ fn hints_bound_dynamic_loads() {
     );
     assert_eq!(affected(r, &["--changed", "services/b/src/lib.js"]), [B]);
     assert_eq!(
-        affected(r, &["--changed", "packages/framework/normalize.js"]),
+        affected(r, &["--changed", "packages/framework/expand.js"]),
         [A, B]
     );
     // A handler added to a service's directory (the hint's membership).

@@ -8,7 +8,10 @@ use turbopath::{
 };
 use turborepo_lockfiles::Lockfile;
 
-use super::{ExternalDependencyChange, PackageGraph, PackageName, ROOT_PKG_NAME, WorkspacePackage};
+use super::{
+    ExternalDependencyChange, PackageGraph, PackageName, ROOT_PKG_NAME, RootDependencyInputs,
+    WorkspacePackage,
+};
 use crate::{
     external_resolution::{
         ExternalFileHashes, ExternalPackageIdentity, ExternalResolutionChanges,
@@ -805,8 +808,11 @@ impl PackageGraph {
     ) -> Result<Vec<ExternalDependencyChange>, ChangedPackagesError> {
         let changes = compare_resolution_data(current, previous, global_change, ROOT_PKG_NAME)
             .map_err(|_| ChangedPackagesError::ResolutionUnavailable)?;
-        let all_changes = || {
+        let inheriting_changes = || {
             self.package_task_contexts()
+                .filter(|context| {
+                    context.root_dependency_inputs() == RootDependencyInputs::Inherited
+                })
                 .map(|context| ExternalDependencyChange {
                     package: WorkspacePackage {
                         name: context.package().clone(),
@@ -818,7 +824,7 @@ impl PackageGraph {
                 .collect()
         };
         let ExternalResolutionChanges::Packages(changes) = changes else {
-            return Ok(all_changes());
+            return Ok(inheriting_changes());
         };
         changes
             .into_iter()

@@ -1447,7 +1447,7 @@ func f(name string) {
 
     #[test]
     fn paths_joined_from_the_location_are_assets_wherever_they_are() {
-        // Returned by a helper (the real shape), passed to a function, bound to a name,
+        // Returned by a helper, passed to a function, bound to a name,
         // and given to a tracked API: one reference each, none twice.
         let src = r#"package a
 
@@ -1457,9 +1457,9 @@ import (
 	"runtime"
 )
 
-func schemaPath() string {
-	_, thisFile, _, _ := runtime.Caller(0)
-	return filepath.Join(filepath.Dir(thisFile), "..", "schemas", "job.schema.json")
+func specFile() string {
+	_, self, _, _ := runtime.Caller(0)
+	return filepath.Join(filepath.Dir(self), "..", "specs", "order.json")
 }
 
 func other() {
@@ -1485,7 +1485,7 @@ func other() {
             [
                 (
                     RefKind::Asset,
-                    "../schemas/job.schema.json".to_owned(),
+                    "../specs/order.json".to_owned(),
                     Base::FileDir
                 ),
                 (RefKind::Asset, "data/a.json".to_owned(), Base::FileDir),

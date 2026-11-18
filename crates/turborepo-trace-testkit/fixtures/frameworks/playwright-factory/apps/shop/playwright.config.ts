@@ -1,9 +1,9 @@
-import { defineConfig } from '@acme/playwright/config';
+import { defineConfig } from '@acme/browser-kit/preset';
 
-const config = defineConfig(__dirname);
+const base = defineConfig(__dirname);
 
 export default {
-  ...config,
+  ...base,
   testDir: './spec',
   testMatch: '*.spec.ts',
 };

@@ -1,25 +1,25 @@
 'use client';
 
-import { typedFetch } from '../lib/api/typed';
-import { apiFetch } from '../lib/api/fetch-api';
-import { useTypedSWR } from '../lib/api/swr';
-import { API_ITEMS_VERSION, API_ROUTES } from '../lib/api/endpoints';
+import { callPath } from '../lib/http/typed';
+import { request } from '../lib/http/client';
+import { usePathSWR } from '../lib/http/hooks';
+import { itemsPath, ROUTES } from '../lib/http/routes';
 
 export function Items({ id }: { id: string }) {
-  const { data } = useTypedSWR('/v1/items/{id}', id ? { id } : null);
+  const { data } = usePathSWR('/v1/items/{id}', id ? { id } : null);
 
   async function load() {
-    return typedFetch('/v1/items/{id}', 'get', { id, expand: true });
+    return callPath('/v1/items/{id}', 'get', { id, expand: true });
   }
 
   async function remove() {
-    await apiFetch(`${API_ITEMS_VERSION('v1')}/${encodeURIComponent(id)}`, {
+    await request(`${itemsPath('v1')}/${encodeURIComponent(id)}`, {
       method: 'DELETE',
     });
   }
 
   async function ping() {
-    return apiFetch(API_ROUTES.HEALTH);
+    return request(ROUTES.health);
   }
 
   return (

@@ -207,6 +207,8 @@ async fn run_inner(
     let scm = run.scm().clone();
     let run_cache = run.run_cache().clone();
     let cache_config = run.opts().cache_opts.cache;
+    let cache_max_age = run.opts().cache_opts.cache_max_age;
+    let cache_max_size = run.opts().cache_opts.cache_max_size;
     let root_turbo_json = run.opts().repo_opts.root_turbo_json_path.clone();
     // `--filter` narrows the output only: selection always sees the whole
     // repository.
@@ -296,6 +298,12 @@ async fn run_inner(
             Ok(false) => {}
             Err(error) => eprintln!("turbo trace: {error}"),
         }
+    }
+    // The graph directory follows `cacheMaxAge` and `cacheMaxSize` as the task
+    // cache does: the store is cleaned (`gc`) and the limits are applied to the
+    // rest. A store that holds exactly the snapshot costs nothing.
+    if cache_max_age.is_some() || cache_max_size.is_some() {
+        turborepo_trace::evict_graph(root.as_std_path(), cache_max_age, cache_max_size);
     }
     Ok(code)
 }

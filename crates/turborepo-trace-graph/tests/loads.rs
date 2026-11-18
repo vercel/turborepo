@@ -10,12 +10,12 @@ use turborepo_trace_graph::{
     MemGraph, NodeSet, Origin, PackageId, Policy, RefFlags, RefKind, UncertaintyKind, Verdict,
 };
 
-/// The shape of a service repository whose test harness boots a framework that
-/// loads handler modules by a string (names changed):
+/// A service repository whose test harness boots a framework that loads
+/// handler modules by a string:
 ///
 /// ```text
-/// packages/framework   normalize.ts: import(spec), spec a parameter      declares util
-/// packages/util        index.ts (imported by normalize.ts), other.ts, loader.ts: require(x)
+/// packages/framework   expand.ts: import(spec), spec a parameter         declares util
+/// packages/util        index.ts (imported by expand.ts), other.ts, loader.ts: require(x)
 ///                                                                       declares deep
 /// packages/deep        d.ts
 /// packages/harness     setup.ts imports the framework                    declares framework
@@ -55,7 +55,7 @@ fn fixture() -> Fixture {
     let file = |gb: &mut turborepo_trace_graph::GraphBuilder, path: &str, p: PackageId| {
         gb.add_file(path, p, Some("js"), false)
     };
-    let normalize = file(&mut gb, "packages/framework/normalize.ts", framework);
+    let expand = file(&mut gb, "packages/framework/expand.ts", framework);
     let util_index = file(&mut gb, "packages/util/index.ts", util);
     file(&mut gb, "packages/util/other.ts", util);
     let loader = file(&mut gb, "packages/util/loader.ts", util);
@@ -73,8 +73,8 @@ fn fixture() -> Fixture {
     file(&mut gb, "packages/far/f.ts", far);
     let c_test = file(&mut gb, "services/c/c.test.ts", c);
     gb.edge(c_test, setup, RefKind::Import);
-    gb.edge(normalize, util_index, RefKind::Import);
-    gb.edge(setup, normalize, RefKind::Import);
+    gb.edge(expand, util_index, RefKind::Import);
+    gb.edge(setup, expand, RefKind::Import);
     gb.edge(a_test, setup, RefKind::Import);
     gb.edge(a_test, routes, RefKind::Import);
     gb.add_edge(
@@ -84,10 +84,10 @@ fn fixture() -> Fixture {
     );
     gb.edge(b_test, setup, RefKind::Import);
     gb.uncertainty(
-        normalize,
+        expand,
         UncertaintyKind::ComputedSpecifier,
         42,
-        "spec; parameter normalize#0",
+        "spec; parameter expand#0",
     )
     .uncertainty_class(Effect::Load, Origin::Param);
     gb.uncertainty(loader, UncertaintyKind::ComputedSpecifier, 3, "x")
@@ -189,7 +189,7 @@ fn a_load_is_bounded_only_when_the_option_is_on() {
     let f = fixture();
     let g = &f.g;
     let e = Engine::new(g);
-    let site = g.node_by_path("packages/framework/normalize.ts").unwrap();
+    let site = g.node_by_path("packages/framework/expand.ts").unwrap();
     let d = |o: &AffectedOptions| {
         let u = g.uncertainties(site).next().unwrap();
         e.disposition_of(site, &u, o)
@@ -440,7 +440,7 @@ fn the_report_says_for_which_packages_a_load_selects() {
     // util/loader.ts is reached by no test.
     assert_eq!(r.sites.len(), 1);
     let s = &r.sites[0];
-    assert_eq!(g.path(s.node), "packages/framework/normalize.ts");
+    assert_eq!(g.path(s.node), "packages/framework/expand.ts");
     assert_eq!(s.reached, 3);
     // a, b and c hold the entries; together they depend on everything but `leaf`,
     // the root package and the third-party package.

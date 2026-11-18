@@ -83,32 +83,32 @@ module.exports = {
   },
 };
 `;
-// `next/jest`, with its SWC transformer wrapped by a file of the repository that runs a
-// Babel pass first (the shape of an app that adds a Babel plugin to its tests).
+// `next/jest`, with its SWC transformer replaced by a file of the repository that runs a
+// Babel pass first and then hands the code on to SWC.
 const NEXT_CONFIG = `module.exports = async () => {
-  const config = await nextJest({ dir: __dirname })(custom)();
+  const base = await nextJest({ dir: __dirname })(custom)();
+  const swcEntry = require.resolve('next/dist/build/swc/jest-transformer');
   return {
-    ...config,
+    ...base,
     transform: Object.fromEntries(
-      Object.entries(config.transform ?? {}).map(([pattern, transformer]) => {
-        if (Array.isArray(transformer) && transformer[0] === require.resolve('next/dist/build/swc/jest-transformer')) {
-          return [pattern, ['<rootDir>/../../nextwrap.cjs', transformer[1]]];
-        }
-        return [pattern, transformer];
-      }),
+      Object.entries(base.transform || {}).map(([glob, entry]) =>
+        Array.isArray(entry) && entry[0] === swcEntry
+          ? [glob, ['<rootDir>/../../nextwrap.cjs', entry[1]]]
+          : [glob, entry],
+      ),
     ),
   };
 };
 `;
-const NEXTWRAP = `const { transformSync } = require('@babel/core');
-const { createTransformer } = require('next/dist/build/swc/jest-transformer');
+const NEXTWRAP = `const babel = require('@babel/core');
+const nextSwc = require('next/dist/build/swc/jest-transformer');
 module.exports = {
-  createTransformer(options) {
-    const swc = createTransformer(options);
+  createTransformer(opts) {
+    const inner = nextSwc.createTransformer(opts);
     return {
-      process(source, filename, jestOptions) {
-        const pre = transformSync(source, { filename, babelrc: false, configFile: false, parserOpts: { plugins: ['typescript', 'jsx'] }, plugins: [] });
-        return swc.process(pre.code, filename, jestOptions);
+      process(code, file, ctx) {
+        const once = babel.transformSync(code, { filename: file, babelrc: false, configFile: false, parserOpts: { plugins: ['typescript', 'jsx'] }, plugins: [] });
+        return inner.process(once.code, file, ctx);
       },
     };
   },

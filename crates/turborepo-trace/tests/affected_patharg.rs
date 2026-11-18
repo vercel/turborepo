@@ -1,11 +1,11 @@
 //! A file path handed to an imported function
 //! (`crates/turborepo-trace-lang-js/src/extract/patharg.rs`).
 //!
-//! The shape comes from a real app: a jest test loads the app's routing config
-//! through a helper of a third-party package,
-//! `loadConfigForEdge('./routes.jsonc')`, and checks every route against a list
-//! in code. A change that adds a route to the config fails the test;
-//! the read happens inside the package, so the path literal is the only link.
+//! The setup: a jest test loads the app's routing table through a helper of a
+//! third-party package, `readTable('./routes.jsonc')`, and checks every route
+//! against a list in code. A change that adds a route to the config fails the
+//! test; the read happens inside the package, so the path literal is the only
+//! link.
 // Test code: helpers outside `#[test]` functions unwrap and expect as the tests do.
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
@@ -33,24 +33,22 @@ fn repo() -> tempfile::TempDir {
     write(
         r,
         "apps/site/routes.jsonc",
-        "{\n  // child applications\n  \"applications\": { \"docs\": { \"routing\": [{ \"paths\": \
-         [\"/docs\", \"/docs/:path*\"] }] } }\n}\n",
+        "{\n  // served elsewhere\n  \"mounts\": [{ \"app\": \"docs\", \"paths\": [\"/docs\", \
+         \"/docs/*\"] }]\n}\n",
     );
     write(
         r,
-        "apps/site/app/lib/forbidden-slugs.mjs",
-        "export const FORBIDDEN_SLUGS = new Set(['docs', 'shop']);\n",
+        "apps/site/app/lib/reserved.mjs",
+        "export const RESERVED = new Set(['docs', 'shop']);\n",
     );
     write(
         r,
-        "apps/site/app/lib/forbidden-slugs.test.ts",
-        "import { loadConfigForEdge } from '@scope/routing/next/testing';\nimport { \
-         FORBIDDEN_SLUGS } from './forbidden-slugs.mjs';\n\ndescribe('forbidden slugs', () => {\n  \
-         it('has the first path segment of every route', () => {\n    const config = \
-         loadConfigForEdge('./routes.jsonc');\n    const paths = \
-         config.getChildApplications().flatMap((app) => app.routing.flatMap((group) => \
-         group.paths));\n    const errors = paths.map((p) => p.split('/')[1]).filter((s) => \
-         !FORBIDDEN_SLUGS.has(s));\n    expect(errors).toEqual([]);\n  });\n});\n",
+        "apps/site/app/lib/reserved.test.ts",
+        "import { RESERVED } from './reserved.mjs';\nimport { readTable } from \
+         '@scope/routing/testing';\n\ntest('every mounted path starts with a reserved segment', \
+         () => {\n  const table = readTable('./routes.jsonc');\n  const firsts = \
+         table.mounts.flatMap((m) => m.paths).map((p) => p.split('/')[1]);\n  \
+         expect(firsts.filter((s) => !RESERVED.has(s))).toEqual([]);\n});\n",
     );
     write(r, "apps/site/app/lib/other.ts", "export const other = 1;\n");
     write(
@@ -96,7 +94,7 @@ fn selected(root: &Path, path: &str, extra: &[&str]) -> Vec<String> {
         .collect()
 }
 
-const SLUGS_TEST: &str = "apps/site/app/lib/forbidden-slugs.test.ts";
+const SLUGS_TEST: &str = "apps/site/app/lib/reserved.test.ts";
 
 #[test]
 fn the_config_handed_to_a_package_helper_selects_the_test() {

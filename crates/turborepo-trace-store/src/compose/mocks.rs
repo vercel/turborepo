@@ -111,7 +111,7 @@ impl Graph {
     /// made again.
     pub fn mock_patch_cached(&self) -> (Patch, usize, bool) {
         let (patch, meta, kept) = self.carried_patch(
-            "mocks",
+            crate::cache_file::DERIVED_MOCKS,
             3,
             |_, _| true,
             || {

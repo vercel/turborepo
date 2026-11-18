@@ -1,9 +1,9 @@
-// testMatch with plain groups (`(test|spec)`), which picomatch reads as alternatives, and a
-// negated pattern that leaves the integration tests out.
+// Plain groups in testMatch (`(spec|test)`), which picomatch reads as alternatives, and a
+// negated pattern that leaves the slow tests out.
 module.exports = {
   testMatch: [
-    '**/__tests__/**/*.(test|spec).[jt]s?(x)',
-    '**/*.(test|spec).[jt]s?(x)',
-    '!**/__tests__/integration/**',
+    '**/*.(spec|test).[jt]s?(x)',
+    '**/__tests__/**/*.(spec|test).[jt]s?(x)',
+    '!**/__tests__/slow/**',
   ],
 };

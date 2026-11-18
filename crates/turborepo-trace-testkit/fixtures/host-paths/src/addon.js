@@ -1,8 +1,8 @@
-// A precompiler that loads a native addon installed on the machine image.
+// Loads a native module that the machine image provides.
 const path = require('node:path');
-const nodeMajor = process.versions.node.split('.')[0];
-function load(options) {
-  const addonPath = options.addonPath ?? `/usr/local/lib/bytecode-precompiler-node${nodeMajor}.node`;
-  return require(path.resolve(addonPath));
+const abi = process.versions.modules;
+function open(config) {
+  const file = config.nativeFile ?? `/usr/local/lib/imagecodec-${abi}.node`;
+  return require(path.resolve(file));
 }
-module.exports = { load, plugin: () => require('/opt/tool/plugin.js') };
+module.exports = { open, extra: () => require('/opt/tool/plugin.js') };

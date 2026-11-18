@@ -159,7 +159,7 @@ mod tests {
     #[test]
     fn formatters_in_write_mode() {
         for line in [
-            "oxfmt --write --ignore-path .gitignore --no-error-on-unmatched-pattern",
+            "oxfmt --no-error-on-unmatched-pattern --write",
             "oxfmt .",
             "prettier --write .",
             "prettier -w src && oxfmt",

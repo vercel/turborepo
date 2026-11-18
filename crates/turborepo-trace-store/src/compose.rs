@@ -300,7 +300,7 @@ impl Graph {
             .unwrap_or(0) as u32;
         // An unchanged manifest: the composed parts from the previous run.
         let ckey = cache::key(&manifest);
-        let cpath = crate::cache_dir(out).join("composed");
+        let cpath = crate::cache_dir(out).join(crate::cache_file::COMPOSED);
         let use_cache = turborepo_trace_core::debug::var_os("NO_COMPOSED_CACHE").is_none();
         if use_cache {
             let shard_files: Vec<usize> = shards.iter().map(|s| s.get().files.len()).collect();
@@ -345,7 +345,7 @@ impl Graph {
                     tables: OnceLock::new(),
                     inverted: OnceLock::new(),
                     graph_dir: Some(out.to_path_buf()),
-                    tables_cache: Some(crate::cache_dir(out).join("tables")),
+                    tables_cache: Some(crate::cache_dir(out).join(crate::cache_file::TABLES)),
                     entry_cwds: Vec::new(),
                     cwd_root_always: cwd::root_always_by_switch(),
                     cwd_notes: Default::default(),
@@ -359,7 +359,7 @@ impl Graph {
                         let _ = crate::write_atomic(&cpath, &cache::Composed::encode(&g, ckey));
                         reuse::stamp(out, &g.manifest);
                         tables::rekey(
-                            &crate::cache_dir(out).join("tables"),
+                            &crate::cache_dir(out).join(crate::cache_file::TABLES),
                             Graph::tables_key_of(&old, g.nodes.len()),
                             g.tables_key(),
                         );
@@ -612,7 +612,7 @@ impl Graph {
             tables: OnceLock::new(),
             inverted: OnceLock::new(),
             graph_dir: Some(out.to_path_buf()),
-            tables_cache: Some(crate::cache_dir(out).join("tables")),
+            tables_cache: Some(crate::cache_dir(out).join(crate::cache_file::TABLES)),
             entry_cwds: Vec::new(),
             cwd_root_always: cwd::root_always_by_switch(),
             cwd_notes: Default::default(),

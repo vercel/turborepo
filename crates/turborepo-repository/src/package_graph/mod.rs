@@ -28,6 +28,7 @@ use crate::{
     package_json::PackageJson,
     package_manager::PackageManager,
     relationships::RelationshipTarget,
+    toolchain::RootDependencyInputs,
 };
 
 pub mod builder;
@@ -400,6 +401,13 @@ impl<'a> PackageTaskContext<'a> {
 
     pub fn toolchain(&self) -> Option<&'a crate::toolchain::ToolchainId> {
         self.toolchain
+    }
+
+    pub fn root_dependency_inputs(&self) -> RootDependencyInputs {
+        RootDependencyInputs::for_namespace(
+            self.kind == PackageTaskContextKind::Root,
+            self.toolchain,
+        )
     }
 }
 
@@ -1617,9 +1625,9 @@ impl PackageGraph {
             self.node_lookup.get(node).cloned(),
             petgraph::Direction::Outgoing,
         );
-        // Add in all root dependencies as they're implied dependencies for every
-        // package in the graph.
-        dependencies.extend(self.root_internal_dependencies());
+        if self.node_root_dependency_inputs(node) == RootDependencyInputs::Inherited {
+            dependencies.extend(self.root_internal_dependencies());
+        }
         dependencies.remove(node);
         dependencies
     }
@@ -1636,9 +1644,8 @@ impl PackageGraph {
     /// If the package graph contains cycles, the returned set will include
     /// all members of any cycle reachable from `node`.
     pub fn ancestors(&self, node: &PackageNode) -> HashSet<&PackageNode> {
-        // If node is a root dep, then *every* package is an ancestor of this one
         let mut dependents = if self.root_internal_dependencies().contains(node) {
-            return self.graph.node_weights().collect();
+            return self.inheriting_nodes_and_dependents(&self.inheriting_node_indices(), [node]);
         } else {
             turborepo_graph_utils::transitive_closure(
                 &self.graph,
@@ -1665,6 +1672,84 @@ impl PackageGraph {
                 PackageNode::Root => None,
             })
             .collect()
+    }
+
+    /// Whether `package` inherits the root JavaScript package's dependency
+    /// closure. Unknown names inherit.
+    pub fn root_dependency_inputs(&self, package: &PackageName) -> RootDependencyInputs {
+        self.package_task_context(package)
+            .map_or(RootDependencyInputs::Inherited, |context| {
+                context.root_dependency_inputs()
+            })
+    }
+
+    fn node_root_dependency_inputs(&self, node: &PackageNode) -> RootDependencyInputs {
+        match node {
+            PackageNode::Root => RootDependencyInputs::Inherited,
+            PackageNode::Workspace(package) => self.root_dependency_inputs(package),
+        }
+    }
+
+    /// Every task namespace that inherits root dependency inputs, root first.
+    pub fn packages_with_root_dependency_inputs(&self) -> impl Iterator<Item = PackageName> + '_ {
+        self.package_task_contexts()
+            .filter(|context| context.root_dependency_inputs() == RootDependencyInputs::Inherited)
+            .map(|context| context.package().clone())
+    }
+
+    pub fn every_package_inherits_root_dependencies(&self) -> bool {
+        self.package_task_contexts()
+            .all(|context| context.root_dependency_inputs() == RootDependencyInputs::Inherited)
+    }
+
+    /// Marks every inheriting namespace changed by `root_internal_dep`,
+    /// replacing any existing reason.
+    pub fn mark_root_dependency_change(
+        &self,
+        changed: &mut HashMap<WorkspacePackage, crate::change_mapper::PackageInclusionReason>,
+        root_internal_dep: &PackageName,
+    ) {
+        for context in self.package_task_contexts() {
+            if context.root_dependency_inputs() == RootDependencyInputs::Inherited {
+                changed.insert(
+                    WorkspacePackage {
+                        name: context.package().clone(),
+                        path: context.directory().to_owned(),
+                    },
+                    crate::change_mapper::PackageInclusionReason::RootInternalDepChanged {
+                        root_internal_dep: root_internal_dep.clone(),
+                    },
+                );
+            }
+        }
+    }
+
+    fn inheriting_node_indices(&self) -> Vec<petgraph::graph::NodeIndex> {
+        self.graph
+            .node_indices()
+            .filter(|index| {
+                self.node_root_dependency_inputs(&self.graph[*index])
+                    == RootDependencyInputs::Inherited
+            })
+            .collect()
+    }
+
+    fn inheriting_nodes_and_dependents<'b>(
+        &self,
+        inheriting: &[petgraph::graph::NodeIndex],
+        seeds: impl IntoIterator<Item = &'b PackageNode>,
+    ) -> HashSet<&PackageNode> {
+        if inheriting.len() == self.graph.node_count() {
+            return self.graph.node_weights().collect();
+        }
+        let seeds = seeds
+            .into_iter()
+            .filter_map(|node| self.node_lookup.get(node).copied());
+        turborepo_graph_utils::transitive_closure(
+            &self.graph,
+            inheriting.iter().copied().chain(seeds),
+            petgraph::Direction::Incoming,
+        )
     }
 
     pub fn root_internal_package_dependencies_paths(&self) -> Vec<&AnchoredSystemPath> {
@@ -2034,11 +2119,13 @@ impl PackageGraph {
         identity_order.sort();
 
         let root_internal_dependencies = self.root_internal_dependencies();
+        let inheriting = self.inheriting_node_indices();
         for (external_pkg, rdeps) in dependents.iter_mut() {
             if root_external_dependencies.contains(external_pkg)
                 || !root_internal_dependencies.is_disjoint(rdeps)
             {
-                rdeps.extend(self.graph.node_weights().cloned());
+                let dependents = self.inheriting_nodes_and_dependents(&inheriting, rdeps.iter());
+                rdeps.extend(dependents.into_iter().cloned());
             } else {
                 let transitive_rdeps = turborepo_graph_utils::transitive_closure(
                     &self.graph,

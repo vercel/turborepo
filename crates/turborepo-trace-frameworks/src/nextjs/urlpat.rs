@@ -245,7 +245,7 @@ pub fn reason_is_query(reason: &str) -> bool {
 }
 
 /// Whether a wildcard named `reason` likely holds an origin (`baseURL`,
-/// `getBaseUrl()`).
+/// `origin()`).
 pub fn reason_is_origin(reason: &str) -> bool {
     let r = reason.to_ascii_lowercase();
     [

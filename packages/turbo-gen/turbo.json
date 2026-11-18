@@ -8,16 +8,19 @@
       "command": ["node", "scripts/embed-templates.mjs"]
     },
     "check-types": {
-      "dependsOn": ["^build", "build:embed"]
+      "dependsOn": ["^build", "build:embed"],
+      "tags": ["ci"]
     },
     "test": {
       "dependsOn": ["build"],
-      "command": ["pnpm", "exec", "jest"]
+      "command": ["pnpm", "exec", "jest"],
+      "tags": ["ci"]
     },
     "build": {
       "dependsOn": ["^build", "build:embed"],
       "outputs": ["dist/**"],
-      "command": ["pnpm", "run", "build"]
+      "command": ["pnpm", "run", "build"],
+      "tags": ["ci"]
     }
   }
 }
