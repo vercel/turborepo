@@ -100,11 +100,27 @@
     },
     "//#lint": {
       "inputs": ["!pnpm-lock.yaml"],
-      "command": ["pnpm", "exec", "oxlint", "--deny-warnings", "."],
+      // Every nested oxlint config lives under the ignored examples/ directory,
+      // and oxlint still loads them, so it fails on example-only dependencies.
+      "command": [
+        "pnpm",
+        "exec",
+        "oxlint",
+        "--disable-nested-config",
+        "--deny-warnings",
+        "."
+      ],
       "tags": ["ci"]
     },
     "//#lint:fix": {
-      "command": ["pnpm", "exec", "oxlint", "--fix", "."]
+      "command": [
+        "pnpm",
+        "exec",
+        "oxlint",
+        "--disable-nested-config",
+        "--fix",
+        "."
+      ]
     },
     "//#format": {
       "command": ["pnpm", "exec", "oxfmt", "--check"],
