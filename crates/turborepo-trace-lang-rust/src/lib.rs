@@ -113,6 +113,12 @@ pub const APIS: &[ApiEntry] = &[
         .base(BaseRule::PackageRoot),
 ];
 
+/// Version of what the cargo project model records, part of the
+/// language's `config_key`: a graph stored by an older model is not reused.
+/// (1: a crate's target directories are recorded for every file of the crate,
+/// also when the workspace's crate graph was the first to read the crate.)
+const MODEL_VERSION: u32 = 1;
+
 /// Where third-party crates live: the cargo registry, git checkouts and
 /// `vendor/`.
 pub const BOUNDARY: PackageBoundary = PackageBoundary::CARGO;
@@ -192,7 +198,7 @@ impl Language for RustLanguage {
     }
 
     fn config_key(&self) -> String {
-        format!("{:?}", self.opts)
+        format!("model-{MODEL_VERSION}/{:?}", self.opts)
     }
 
     fn resolver(&self, project: &ProjectCx<'_>) -> Box<dyn Resolver> {

@@ -4244,9 +4244,7 @@ mod probes_tasks {
     }
 
     #[test]
-    #[ignore = "before the branch too: two cold builds of a cargo workspace with two crates differ \
-                in about one run of five (listings of a crate's target directories, shard keys)"]
-    fn cargo_cold_builds_differ() {
+    fn cold_builds_of_a_cargo_workspace_are_equal() {
         let mut out = Vec::new();
         for (alias, tool) in [(false, true), (false, false)] {
             let (n, first) = cold_twice(alias, tool);
@@ -4426,10 +4424,6 @@ mod probes_tasks {
     }
 
     #[test]
-    #[ignore = "open: with the Rust language two cold builds of a cargo workspace differ in about \
-                one run of five (the listings of a crate's target directories); the alias's \
-                binaries themselves are keyed (`CargoAliases::discover`, `with_decided_by`; the \
-                same case without Rust passes)"]
     fn a_binary_of_the_crate_an_alias_runs_appears() {
         one("alias bin", Set::Port, false, &tool_crate, &|r| {
             write(r, "crates/tool/src/bin/extra.rs", "fn main() {}\n")
@@ -5006,9 +5000,6 @@ mod probes_tasks {
     }
 
     #[test]
-    #[ignore = "open: with the Rust language two cold builds of a cargo workspace differ in about \
-                one run of five (the listings of a crate's target directories); every other \
-                difference is fixed (`cargo_alias_js_only` passes)"]
     fn cargo_alias_port() {
         cargo_alias(Set::Port);
     }
@@ -5604,8 +5595,11 @@ mod probes_tasks {
         }
 
         #[test]
-        #[ignore = "as `cargo_alias_port`, open: run by hand to see which steps fail besides the \
-                    listings of a crate's target directories"]
+        #[ignore = "open: with the Rust language a refresh after some of the link steps differs \
+                    from a cold build (shard keys when the directory of binaries is a link or \
+                    where it leads appears, the order of edges when the configuration directory is \
+                    a link); two cold builds are equal \
+                    (`cold_builds_of_a_cargo_workspace_are_equal`)"]
         fn cargo_links_port() {
             cargo_links(Set::Port);
         }
