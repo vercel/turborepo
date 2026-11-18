@@ -444,8 +444,8 @@ impl Listings {
 
     fn valid(&self) -> &[bool] {
         // Nested rayon work: never inside `get_or_init`, which blocks the workers that
-        // ask meanwhile (see `crate::once`; this deadlocked untouched refreshes
-        // of a large monorepo). The build computes it once up front, off the
+        // ask meanwhile (see `crate::once`; this can deadlock a refresh with no
+        // changes). The build computes it once up front, off the
         // pool ([`Listings::warm`]).
         crate::once::init_once(&self.valid, || {
             self.dirs
@@ -3962,8 +3962,8 @@ pub(crate) enum PendingKey {
 /// The records of the sets of key observations that the analyses of one shard
 /// name, by the set's identity: computed by the first file that names a set,
 /// for every chunk of files. (A set that every file below a config names, the
-/// load of that config, was normalized once per chunk of 32 files: on a
-/// repository of 30,000 files a thousand times.)
+/// load of that config, was normalized once per chunk of 32 files: hundreds of
+/// times in a big repository.)
 type KeyNorms = dashmap::DashMap<usize, Arc<std::sync::OnceLock<KeyRecords>>>;
 
 /// Where a file's records come from when a shard is assembled.

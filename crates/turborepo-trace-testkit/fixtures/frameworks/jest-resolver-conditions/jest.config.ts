@@ -1,27 +1,23 @@
-// A Next.js site's jest config with a custom resolver module. The resolver is the default
-// resolver with one more export condition for one request (jest.resolver.cjs).
-import nextJest from 'next/jest';
+// A Next.js app's jest config with a resolver module of its own: the default resolver with
+// one more export condition for one request (jest.resolver.cjs).
 import type { Config } from 'jest';
+import nextJest from 'next/jest';
 
-const customConfig: Config = {
-  resolver: '<rootDir>/jest.resolver.cjs',
-  moduleNameMapper: {
-    // Matches paths in tsconfig.json
-    '#/(.*)': '<rootDir>/$1',
-  },
-  testEnvironment: 'jsdom',
+const own: Config = {
   testMatch: ['<rootDir>/**/*.test.{ts,tsx}'],
   setupFilesAfterEnv: ['<rootDir>/jest.setup.ts'],
+  testEnvironment: 'jsdom',
+  resolver: '<rootDir>/jest.resolver.cjs',
+  // the `#/` imports of the app
+  moduleNameMapper: { '^#/(.*)$': '<rootDir>/$1' },
 };
 
 export default async (): Promise<Config> => {
-  const config = (await nextJest({ dir: __dirname })(customConfig)()) as Config;
-
-  const finalConfig = {
-    ...config,
-    transformIgnorePatterns: (config.transformIgnorePatterns ?? []).filter(
-      (pattern) => !pattern.includes('node_modules'),
+  const wrapped = (await nextJest({ dir: __dirname })(own)()) as Config;
+  return {
+    ...wrapped,
+    transformIgnorePatterns: (wrapped.transformIgnorePatterns ?? []).filter(
+      (p) => !p.includes('node_modules'),
     ),
   };
-  return finalConfig;
 };

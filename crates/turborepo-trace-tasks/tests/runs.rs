@@ -1,7 +1,7 @@
 //! The "runs" relation (`turborepo_trace_tasks::runs`) and job definitions
 //! (`sources::gha::def`) over `fixtures/tasks/gha-runs`: a monorepo whose unit
-//! tests run in a reusable workflow called once per computed shard (`turbo
-//! <pipeline task> $FILTERS`), with an e2e job, a lint job, deploy jobs and a
+//! tests run in a reusable workflow called once per computed slice (`turbo
+//! <pipeline task> $SCOPE`), with an e2e job, a lint job, deploy jobs and a
 //! job whose script starts tests itself.
 
 // Test code: helpers outside `#[test]` functions unwrap and expect as the tests do.
@@ -81,7 +81,7 @@ fn package_scripts_run_their_tests() {
 #[test]
 fn jobs_run_what_their_steps_start() {
     let (root, set) = set();
-    let q = "gha:.github/workflows/quality.yml";
+    let q = "gha:.github/workflows/review.yml";
     // `pnpm --filter @acme/e2e test`.
     assert_eq!(runs(&set, &root, &format!("{q}#e2e")), ["@acme/e2e#test"]);
     // `pnpm check-format`: a script that starts no tests.
@@ -92,15 +92,15 @@ fn jobs_run_what_their_steps_start() {
     // A reusable workflow call runs the called jobs; `needs:` runs nothing.
     assert_eq!(
         runs(&set, &root, &format!("{q}#test-packages")),
-        ["gha:.github/workflows/checks.yml#checks"]
+        ["gha:.github/workflows/batch.yml#run"]
     );
     assert!(runs(&set, &root, &format!("{q}#summary")).is_empty());
     // A script without launch words.
-    assert!(runs(&set, &root, &format!("{q}#metadata")).is_empty());
-    // `turbo ci:checks $FILTERS`: the pipeline task, what it depends on in
+    assert!(runs(&set, &root, &format!("{q}#plan")).is_empty());
+    // `turbo ci:verify $SCOPE`: the pipeline task, what it depends on in
     // turbo.json, and the computed word (which could name any task).
-    let checks = runs(&set, &root, "gha:.github/workflows/checks.yml#checks");
-    for want in ["*#ci:checks", "*#test", "*#typecheck", "computed"] {
+    let checks = runs(&set, &root, "gha:.github/workflows/batch.yml#run");
+    for want in ["*#ci:verify", "*#test", "*#typecheck", "computed"] {
         assert!(checks.iter().any(|r| r == want), "{want} in {checks:?}");
     }
     assert!(!checks.iter().any(|r| r == "unknown"), "{checks:?}");
@@ -166,18 +166,17 @@ fn definitions_follow_local_actions() {
     let root = fixture();
     let read = |p: &str| std::fs::read_to_string(root.join(p)).ok();
     let mut defs = Defs::new(&read);
-    let quality = defs.workflow(".github/workflows/quality.yml").unwrap();
-    let files =
-        |job: &str| -> Vec<&str> { quality[job].files.iter().map(String::as_str).collect() };
+    let review = defs.workflow(".github/workflows/review.yml").unwrap();
+    let files = |job: &str| -> Vec<&str> { review[job].files.iter().map(String::as_str).collect() };
     assert_eq!(
         files("e2e"),
         [
             ".github/actions/install/action.yml",
             ".github/actions/setup-node/action.yml",
-            ".github/workflows/quality.yml",
+            ".github/workflows/review.yml",
         ]
     );
-    assert_eq!(files("metadata"), [".github/workflows/quality.yml"]);
+    assert_eq!(files("plan"), [".github/workflows/review.yml"]);
 
     // Editing the nested action changes the jobs that install, in every workflow.
     let nested = ".github/actions/setup-node/action.yml";
@@ -191,7 +190,7 @@ fn definitions_follow_local_actions() {
     };
     let mut new_defs = Defs::new(&read_new);
     let mut changed = Vec::new();
-    for wf in ["quality", "checks", "deploy", "nightly"] {
+    for wf in ["review", "batch", "deploy", "nightly"] {
         let rel = format!(".github/workflows/{wf}.yml");
         let old = defs.workflow(&rel).unwrap();
         let new = new_defs.workflow(&rel).unwrap();
@@ -202,9 +201,9 @@ fn definitions_follow_local_actions() {
     assert_eq!(
         changed,
         [
-            "quality#e2e",
-            "quality#lint",
-            "checks#checks",
+            "review#e2e",
+            "review#lint",
+            "batch#run",
             "deploy#deploy",
             "nightly#smoke"
         ]

@@ -1,11 +1,11 @@
 import { useQuery, useMutation } from '@tanstack/react-query';
-import { apiFetch } from './api/fetch-api';
+import { request } from './http/client';
 
 // A custom hook around the query: the invocation belongs to every component that uses it.
 export function useJobsQuery(teamId: string) {
   return useQuery({
     queryKey: ['jobs', teamId],
-    queryFn: () => apiFetch(`/jobs?teamId=${teamId}`),
+    queryFn: () => request(`/jobs?teamId=${teamId}`),
   });
 }
 

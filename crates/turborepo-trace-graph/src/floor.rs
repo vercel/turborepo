@@ -33,9 +33,8 @@
 //!    rescans the row of every entry of the picked site instead: `O(picks · S +
 //!    Σ r² / 2)` over entries that reach `r` sites, if every site is picked.
 //!
-//! Measured on a graph of 94k nodes and 1.4M edges with 15k entries and 3.8k
-//! sites: about 50 ms and 60 MB on one thread, so nothing here runs in
-//! parallel.
+//! The work is linear in the graph's size and stays small next to the graph
+//! build, so nothing here runs in parallel.
 
 use std::{
     collections::{BTreeMap, HashMap},

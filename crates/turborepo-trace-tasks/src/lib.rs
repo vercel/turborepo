@@ -401,11 +401,11 @@ pub fn analyze_package(ws: &Workspace, pkg: &Package, opts: &Options) -> Vec<Tas
                 && line_recognition.iter().all(|r| *r == Recognition::Ignored)
                 && spec.uncertainties.is_empty()
             {
-                // Every command has no file effect (`echo "dummy target for caching"`): the
+                // Every command has no file effect (`echo "cache target only"`): the
                 // task writes nothing, so its declared outputs are only what
-                // turbo restores from the cache. A root task such as
-                // `//#cache-tsbuildinfo-files` declares every package's
-                // `dist/tsbuildinfo.json` that way.
+                // turbo restores from the cache. A root task that only caches
+                // build info can declare every package's `dist/.tsbuildinfo`
+                // that way.
                 for o in &mut spec.outputs {
                     if o.kind == spec::OutputKind::Declared {
                         o.kind = spec::OutputKind::CacheOnly;
@@ -475,7 +475,7 @@ pub fn analyze_package(ws: &Workspace, pkg: &Package, opts: &Options) -> Vec<Tas
     type TaskDef = (TaskId, (Vec<&'static str>, Vec<sources::DiscoveredTask>));
     let defs: Vec<TaskDef> = defs.into_iter().collect();
     // Tasks are independent (each records in its own frame): a package with many
-    // (the root of a big monorepo: hundreds of workflow jobs and scripts) is
+    // (a workspace root can hold hundreds of workflow jobs and scripts) is
     // analyzed on several threads, each with this thread's shared dir cache and
     // pause state, in task order.
     const PARALLEL_MIN: usize = 16;

@@ -2,10 +2,10 @@
 //! bare import resolves to the opaque package node of the version its own pnpm
 //! lockfile importer pins, not to another importer's (the root's) version of
 //! the same name, and not to whatever a `node_modules` directory above the
-//! repository root holds (Node's walk-up leaves the repository; checkouts under
-//! `~/ws` reached `~/ws/node_modules/async-retry` 1.3.3 instead of
-//! `published-packages/cosmosdb`'s 1.3.1). So a lockfile bump of that
-//! importer's dependency selects its importers.
+//! repository root holds (Node's walk-up leaves the repository: a checkout
+//! next to other projects can reach a stray `../node_modules/<name>` of
+//! another version). So a lockfile bump of that importer's dependency selects
+//! its importers.
 
 // Test code: helpers outside `#[test]` functions unwrap and expect as the tests do.
 #![allow(clippy::unwrap_used, clippy::expect_used)]
@@ -48,12 +48,12 @@ fn an_install_above_the_repository_does_not_decide() {
     let outer = std::fs::canonicalize(t.path()).unwrap();
     write(
         &outer,
-        "node_modules/retry-lib/package.json",
-        r#"{"name":"retry-lib","version":"9.9.9","main":"index.js"}"#,
+        "node_modules/backoff-lib/package.json",
+        r#"{"name":"backoff-lib","version":"9.9.9","main":"index.js"}"#,
     );
     write(
         &outer,
-        "node_modules/retry-lib/index.js",
+        "node_modules/backoff-lib/index.js",
         "module.exports = 1;\n",
     );
     let r = outer.join("repo");
@@ -68,23 +68,23 @@ fn check(r: &Path) {
     write(
         &r,
         "package.json",
-        r#"{"name":"root","private":true,"dependencies":{"retry-lib":"^2.0.0"}}"#,
+        r#"{"name":"root","private":true,"dependencies":{"backoff-lib":"^2.0.0"}}"#,
     );
     write(&r, "pnpm-workspace.yaml", "packages:\n  - 'packages/*'\n");
     write(
         &r,
         "packages/a/package.json",
-        r#"{"name":"a","version":"1.0.0","dependencies":{"retry-lib":"1.0.0"}}"#,
+        r#"{"name":"a","version":"1.0.0","dependencies":{"backoff-lib":"1.0.0"}}"#,
     );
     write(
         &r,
         "packages/a/src/index.ts",
-        "import retry from 'retry-lib';\nexport const r = retry;\n",
+        "import backoff from 'backoff-lib';\nexport const r = backoff;\n",
     );
     write(
         &r,
         "src/root.ts",
-        "import retry from 'retry-lib';\nexport const r = retry;\n",
+        "import backoff from 'backoff-lib';\nexport const r = backoff;\n",
     );
     write(
         &r,
@@ -93,22 +93,22 @@ fn check(r: &Path) {
 importers:
   .:
     dependencies:
-      retry-lib:
+      backoff-lib:
         specifier: ^2.0.0
         version: 2.0.0
   packages/a:
     dependencies:
-      retry-lib:
+      backoff-lib:
         specifier: 1.0.0
         version: 1.0.0
 packages:
-  retry-lib@1.0.0:
+  backoff-lib@1.0.0:
     resolution: {integrity: sha512-one}
-  retry-lib@2.0.0:
+  backoff-lib@2.0.0:
     resolution: {integrity: sha512-two}
 snapshots:
-  retry-lib@1.0.0: {}
-  retry-lib@2.0.0: {}
+  backoff-lib@1.0.0: {}
+  backoff-lib@2.0.0: {}
 "#,
     );
     let out = r.join(".turbotrace");
@@ -123,16 +123,16 @@ snapshots:
     let g = Graph::open(&out).unwrap();
     let a = deps(&g, "packages/a/src/index.ts");
     assert!(
-        a.contains(&"node_modules/retry-lib@1.0.0".to_string()),
+        a.contains(&"node_modules/backoff-lib@1.0.0".to_string()),
         "packages/a pins 1.0.0: {a:?}"
     );
     assert!(
-        !a.contains(&"node_modules/retry-lib@2.0.0".to_string()),
+        !a.contains(&"node_modules/backoff-lib@2.0.0".to_string()),
         "not the root's version: {a:?}"
     );
     let root = deps(&g, "src/root.ts");
     assert!(
-        root.contains(&"node_modules/retry-lib@2.0.0".to_string()),
+        root.contains(&"node_modules/backoff-lib@2.0.0".to_string()),
         "the root pins 2.0.0: {root:?}"
     );
     let detail: Vec<String> = g
@@ -156,7 +156,7 @@ snapshots:
         .map(|u| format!("{:?} {}", u.kind, u.detail))
         .collect();
     assert!(
-        !unc.iter().any(|u| u.contains("retry-lib")),
+        !unc.iter().any(|u| u.contains("backoff-lib")),
         "no unresolved_specifier for a pinned dependency: {unc:?}"
     );
 }

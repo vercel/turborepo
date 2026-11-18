@@ -387,8 +387,8 @@ fn registry() {
 }
 
 /// M1: `export default async () => ({ ...(await nextJest({ dir })(custom)())
-/// })` (the shape of `apps/web/jest.config.ts` in a large monorepo) used to
-/// yield zero tests.
+/// })`, an async config that awaits the `next/jest` wrapper, used to yield
+/// zero tests.
 #[test]
 fn jest_next_async_wrapper() {
     let r = run(&Jest, "jest-next-async", "jest.config.ts");
@@ -398,7 +398,7 @@ fn jest_next_async_wrapper() {
         p.global
             .entries
             .iter()
-            .any(|e| matches!(&e.target, Target::Path(t) if t.ends_with("test/setup.ts"))),
+            .any(|e| matches!(&e.target, Target::Path(t) if t.ends_with("test/after-env.ts"))),
         "setupFilesAfterEnv from the custom config"
     );
     assert!(
@@ -429,9 +429,7 @@ fn jest_next_async_wrapper() {
         .map(|e| format!("{:?}", e.target))
         .collect();
     assert!(
-        transforms
-            .iter()
-            .any(|t| t.contains("test/compiler-transformer.cjs")),
+        transforms.iter().any(|t| t.contains("test/swc-wrap.cjs")),
         "{transforms:?}"
     );
     assert!(
@@ -600,7 +598,7 @@ fn vitest_known_plugins_are_not_uncertain() {
 
 /// A vite alias whose `find` is `new RegExp(...)` over a template string, built
 /// from a list with `.map(x => x.replace(/\./g, '\\.')).join('|')` inside a
-/// negative lookahead, with the replacement `${projectRoot}$1` (`projectRoot`:
+/// negative lookahead, with the replacement `${base}$1` (`base`:
 /// `fileURLToPath(new URL('.', import.meta.url))`, which ends with `/`). The
 /// whole `resolve.alias` field used to be unknown (`computed_specifier` on
 /// every test of the project). It is evaluated exactly: the lookahead excludes
@@ -622,24 +620,27 @@ fn vitest_regex_alias_from_new_regexp() {
         [abs("lib/util")]
     );
     for generated in [
-        "#/app/routes.mjs",
-        "#/lib/valid-paths.mjs",
-        "#/lib/flag-codes.mjs",
+        "#/src/manifest.mjs",
+        "#/gen/known-ids.mjs",
+        "#/gen/build-info.mjs",
     ] {
         assert!(p.resolution.apply(generated).is_none(), "{generated}");
     }
     // Only the exact names are excluded.
     assert_eq!(
-        p.resolution.apply("#/app/routes.mjs.map").unwrap().requests,
-        [abs("app/routes.mjs.map")]
+        p.resolution
+            .apply("#/src/manifest.mjs.map")
+            .unwrap()
+            .requests,
+        [abs("src/manifest.mjs.map")]
     );
     assert_eq!(
         p.resolution.apply("server-only").unwrap().requests,
-        [abs("test/server-only-stub.ts")]
+        [abs("test/stubs/server-only.ts")]
     );
     assert_eq!(
         p.resolution.apply("next/font/google").unwrap().requests,
-        [abs("test/font-stub.ts")]
+        [abs("test/stubs/fonts.ts")]
     );
     assert!(p.resolution.apply("next/font/other").is_none());
 }
@@ -667,9 +668,9 @@ fn vitest_config_values_are_reported() {
         paths,
         [
             "src",
-            "src/app/[variant]",
-            "src/app/[variant]/(site)$1",
-            "src/app.config.ts",
+            "src/pages/[lang]",
+            "src/pages/[lang]/(public)$1",
+            "src/settings.ts",
             "test/mocks/font.ts",
             "vendor",
         ]
@@ -684,8 +685,8 @@ fn vitest_config_values_are_reported() {
         .collect();
     assert_eq!(modelled.len(), 1, "{modelled:?}");
     assert!(
-        modelled[0].starts_with("(specifier: string)")
-            && modelled[0].contains("require.resolve(specifier)"),
+        modelled[0].starts_with("(request: string)")
+            && modelled[0].contains("require.resolve(request)"),
         "{modelled:?}"
     );
     // The aliases themselves.
@@ -695,18 +696,21 @@ fn vitest_config_values_are_reported() {
         [abs("src/lib/a")]
     );
     assert_eq!(
-        p.resolution.apply("@/app/(site)/page").unwrap().requests,
-        [abs("src/app/[variant]/(site)/page")]
+        p.resolution
+            .apply("@/pages/(public)/page")
+            .unwrap()
+            .requests,
+        [abs("src/pages/[lang]/(public)/page")]
     );
     assert_eq!(
-        p.resolution.apply("@acme/content/posts").unwrap().requests,
-        ["@acme/content/posts"]
+        p.resolution.apply("@acme/docs/guides").unwrap().requests,
+        ["@acme/docs/guides"]
     );
 }
 
-/// `plugins: [react(), wgslVitePlugin({ minify: true })]`: the second plugin is
-/// a loader for `.wgsl` modules. The project is not uncertain as a whole; the
-/// adapter reports the loader with its suffixes, and the graph makes the
+/// `plugins: [react({ jsxRuntime: 'automatic' }), wgsl()]`: the second plugin
+/// is a loader for `.wgsl` modules. The project is not uncertain as a whole;
+/// the adapter reports the loader with its suffixes, and the graph makes the
 /// importers of such modules uncertain.
 #[test]
 fn vitest_loader_plugin_is_scoped() {
@@ -811,7 +815,7 @@ fn jest_resolver_that_only_changes_conditions() {
         .chain(&r.inputs.uncertainties)
         .collect();
     assert!(all.is_empty(), "{all:?}");
-    assert_eq!(p.resolution.condition_requests, ["tree-walker"]);
+    assert_eq!(p.resolution.condition_requests, ["esm-only-pkg"]);
     assert!(
         p.global
             .entries

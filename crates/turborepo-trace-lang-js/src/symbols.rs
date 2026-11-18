@@ -3299,31 +3299,31 @@ mod tests {
         }]
     }
 
-    /// The shape of the real site (a utility module of a tracking package): one
-    /// unused export and its import are removed, the other exports are
-    /// untouched.
+    /// A utility module: one unused export and its import are removed, the
+    /// other exports are untouched.
     #[test]
     fn a_removed_export_changes_only_itself() {
-        let base = "import { COOKIES, PARAMS } from './constants';\nimport type { CookieKey, \
-                    ParamKey, UtmKey } from './types';\nexport const isParam = (p: string): p is \
-                    ParamKey => p in PARAMS;\nexport const isUtm = (p: string): p is UtmKey => \
-                    p.startsWith('utm_');\n/** doc */\nexport const isCookie = (k: string): k is \
-                    CookieKey => k in COOKIES;\nexport function hasSignal(t: Record<string, \
-                    string>): boolean {\n  return Object.keys(t).some((k) => isUtm(k) || \
-                    isParam(k));\n}\n";
-        let head = "import { PARAMS } from './constants';\nimport type { ParamKey, UtmKey } from \
-                    './types';\nexport const isParam = (p: string): p is ParamKey => p in \
-                    PARAMS;\nexport const isUtm = (p: string): p is UtmKey => \
-                    p.startsWith('utm_');\nexport function hasSignal(t: Record<string, string>): \
-                    boolean {\n  return Object.keys(t).some((k) => isUtm(k) || isParam(k));\n}\n";
+        let base = "import { REGIONS, PURPOSES } from './constants';\nimport type { RegionKey, \
+                    PurposeKey, OptKey } from './types';\nexport const isPurpose = (p: string): p \
+                    is PurposeKey => p in PURPOSES;\nexport const isOptFlag = (p: string): p is \
+                    OptKey => p.startsWith('opt_');\n/** doc */\nexport const isRegion = (k: \
+                    string): k is RegionKey => k in REGIONS;\nexport function hasChoice(t: \
+                    Record<string, string>): boolean {\n  return Object.keys(t).some((k) => \
+                    isOptFlag(k) || isPurpose(k));\n}\n";
+        let head = "import { PURPOSES } from './constants';\nimport type { PurposeKey, OptKey } \
+                    from './types';\nexport const isPurpose = (p: string): p is PurposeKey => p \
+                    in PURPOSES;\nexport const isOptFlag = (p: string): p is OptKey => \
+                    p.startsWith('opt_');\nexport function hasChoice(t: Record<string, string>): \
+                    boolean {\n  return Object.keys(t).some((k) => isOptFlag(k) || \
+                    isPurpose(k));\n}\n";
         assert_eq!(
             ch(base, head),
             Changed {
                 evaluation: false,
                 load_time: None,
-                exports: names(&["isCookie"]),
+                exports: names(&["isRegion"]),
                 members: BTreeMap::new(),
-                rebound: names(&["isCookie"]),
+                rebound: names(&["isRegion"]),
                 reordered: false,
             }
         );
@@ -3659,10 +3659,11 @@ mod tests {
                     trace(() => handler(req, ctx), options);\n}\n";
         assert_eq!(depth(wrap, "withTrace"), 1);
         // A wrapper factory: two calls build values, the third runs the component.
-        let hoc = "export function withInterceptors<P>() {\n  return (interceptors, create, \
-                   options) => {\n    return function Intercepted(props) {\n      return trace(() \
-                   => create(props), options);\n    };\n  };\n}\n";
-        assert_eq!(depth(hoc, "withInterceptors"), 2);
+        let hoc =
+            "export function withPlugins<P>() {\n  return (plugins, create, options) => {\n    \
+             return function Wrapped(props) {\n      return trace(() => create(props), \
+             options);\n    };\n  };\n}\n";
+        assert_eq!(depth(hoc, "withPlugins"), 2);
         for (src, name, d) in [
             ("export const id = (x) => x;", "id", 1),
             (
@@ -4004,9 +4005,9 @@ mod tests {
 
     #[test]
     fn members_of_enums_and_tables_are_compared_one_by_one() {
-        // The shape of a permissions enum: one member is added.
+        // An enum of resources: one member is added.
         let base = "export enum Action { Read = 'read', Write = 'write' }\nexport enum Resource \
-                    {\n  Team = 'team',\n  Project = 'project',\n}\nexport type Permissions = \
+                    {\n  Tenant = 'tenant',\n  Project = 'project',\n}\nexport type Grants = \
                     Partial<Record<Resource, Action[]>>;\nexport const LIMITS = { free: 1, pro: \
                     10 } as const;\n";
         let head = base.replace(
@@ -4014,18 +4015,18 @@ mod tests {
             "  Project = 'project',\n  Rules = 'rules',\n",
         );
         let c = ch(base, &head);
-        assert_eq!(c.exports, names(&["Permissions", "Resource"]));
+        assert_eq!(c.exports, names(&["Grants", "Resource"]));
         assert_eq!(c.members.get("Resource"), Some(&names(&["Rules"])));
         assert_eq!(c.members.len(), 1);
         // A changed value, a removed member; an object table.
         let head = base
-            .replace("Team = 'team'", "Team = 'teams'")
+            .replace("Tenant = 'tenant'", "Tenant = 'tenants'")
             .replace("  Project = 'project',\n", "")
             .replace("pro: 10", "pro: 20, max: 99");
         let c = ch(base, &head);
         assert_eq!(
             c.members.get("Resource"),
-            Some(&names(&["Project", "Team"]))
+            Some(&names(&["Project", "Tenant"]))
         );
         assert_eq!(c.members.get("LIMITS"), Some(&names(&["max", "pro"])));
         // Not member by member: a member without a literal value (its value depends on

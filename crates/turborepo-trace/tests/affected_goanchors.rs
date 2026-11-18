@@ -10,7 +10,7 @@
 //! | Package | Shape |
 //! |---|---|
 //! | `e2e` | a harness that takes the repository root from its own location, runs a child process there, and keeps `<root>/services/svc-a` in a struct field that another method reads with a parameter |
-//! | `tools/slo` | a function that returns `<root>/services` from its own location; the test lists it and reads a file of every service |
+//! | `tools/audit` | a function that returns `<root>/services` from its own location; the test lists it and reads a file of every service |
 //!
 //! A runtime oracle in the trace's development repository runs the same tests
 //! with `go test` under `strace` and checks that every file they open is
@@ -27,7 +27,7 @@ use std::{
 
 const HARNESS: &str = "e2e/harness_test.go";
 const SMOKE: &str = "e2e/smoke_test.go";
-const SLO: &str = "tools/slo/slo_test.go";
+const AUDIT: &str = "tools/audit/owners_test.go";
 
 fn copy_dir(from: &Path, to: &Path) {
     std::fs::create_dir_all(to).unwrap();
@@ -110,12 +110,12 @@ fn a_root_joined_with_a_literal_segment_names_that_subtree() {
     // and the test of the function that returns `<root>/services`.
     assert_eq!(
         r.affected("services/svc-a/config.json"),
-        [HARNESS, SMOKE, SLO]
+        [HARNESS, SMOKE, AUDIT]
     );
     r.write("services/svc-a/data/added.bin", "x\n");
     assert_eq!(
         r.affected("services/svc-a/data/added.bin"),
-        [HARNESS, SMOKE, SLO]
+        [HARNESS, SMOKE, AUDIT]
     );
     let why = r.run(&[
         "affected",
@@ -130,7 +130,7 @@ fn a_root_joined_with_a_literal_segment_names_that_subtree() {
     // Elsewhere below the root: the harness does not go there. The root itself is
     // only the working directory of a child process, the base of nothing that
     // is read.
-    assert_eq!(r.affected("services/web/settings.yaml"), [SLO]);
+    assert_eq!(r.affected("services/web/settings.yaml"), [AUDIT]);
     // An unrelated edit selects nothing.
     assert_eq!(r.affected("docs/notes.md"), [""; 0]);
     r.write("services.txt", "x\n");
@@ -142,9 +142,9 @@ fn without_following_the_location_names_everything_below_the_root() {
     // The coarse rule: each file reaches the root with its parent steps, and names
     // everything below it.
     let r = repo(&[("TURBO_TRACE_DEBUG_ANCHORS", "0")]);
-    assert_eq!(r.affected("docs/notes.md"), [HARNESS, SMOKE, SLO]);
+    assert_eq!(r.affected("docs/notes.md"), [HARNESS, SMOKE, AUDIT]);
     assert_eq!(
         r.affected("services/web/settings.yaml"),
-        [HARNESS, SMOKE, SLO]
+        [HARNESS, SMOKE, AUDIT]
     );
 }

@@ -6,11 +6,10 @@
 //! an external reference, and a module loaded from one keeps a record
 //! ([`turborepo_trace_core::resolve_path::assets`], "Host paths").
 //!
-//! The sources (`fixtures/host-paths/src`) have the shapes of real sites of two
-//! large monorepos, with other names: a browser service listing `/tmp` to
-//! delete stale profile directories, a test probing candidate shells, process
-//! helpers reading `/proc/<pid>/stat`, a precompiler loading a native addon
-//! from `/usr/local/lib`. Each test builds its own "machine": a temporary
+//! The sources (`fixtures/host-paths/src`) are small made-up programs that
+//! read machine paths: a cleanup job listing `/tmp`, a test looking for a
+//! shell, a process monitor reading `/proc/<pid>/stat`, a loader of a native
+//! addon from `/usr/local/lib`. Each test builds its own "machine": a temporary
 //! directory with a repository (`repo/`) and host files next to it (`host/`),
 //! which the source names instead of `/tmp`, `/proc` and `/bin`, so the old
 //! behavior (the unconfined trace) can be shown on the same source. The whole
@@ -33,7 +32,7 @@ fn fixture(src: &str, dir: &str) -> String {
         .replace(&format!("`{dir}"), "`HOST")
 }
 
-/// A service that deletes stale browser profile directories lists `/tmp`. The
+/// A cleanup job that removes stale cache directories lists `/tmp`. The
 /// listing used to be expanded on the build machine: one edge and one node per
 /// file that happened to be there (555 on one machine, 600 with forty more
 /// files in `/tmp`).
@@ -44,8 +43,8 @@ fn listing() -> String {
     )
 }
 
-/// A helper that probes candidate shells (`/bin/sh`, `/bin/bash`, `/bin/dash`)
-/// and skips the missing ones. The existing ones used to become nodes, through
+/// A helper that looks for shells (`/bin/sh`, `/bin/bash`, `/bin/dash`) and
+/// keeps the ones that exist. The existing ones used to become nodes, through
 /// the build machine's symlinks (`/bin/sh` was `/usr/bin/dash` there).
 fn shells() -> String {
     fixture(
@@ -64,7 +63,7 @@ fn proc() -> String {
     )
 }
 
-/// A precompiler that loads a native addon installed on the machine image.
+/// A loader of a native module that the machine image provides.
 const ADDON: &str = include_str!("../../turborepo-trace-testkit/fixtures/host-paths/src/addon.js");
 
 /// The record of a listing of an absolute directory: in the reading in which
@@ -91,7 +90,7 @@ impl Lab {
         lab.write("repo/package.json", r#"{"name":"r","version":"1.0.0"}"#);
         lab.write("repo/src/data/a.json", "{}");
         lab.write("repo/src/data/b.json", "{}");
-        lab.write("host/profile-1/lock", "");
+        lab.write("host/cache-1/lock", "");
         lab.write("host/a.txt", "");
         lab.write("host/sh", "");
         lab.write("host/41/stat", "");
@@ -284,7 +283,7 @@ fn listing_a_host_directory_is_an_external_reference() {
             "host/42/stat",
             "host/a.txt",
             "host/addon.node",
-            "host/profile-1/lock",
+            "host/cache-1/lock",
             "host/sh"
         ]
     );
@@ -384,12 +383,12 @@ fn a_module_loaded_from_outside_the_repository_keeps_a_record() {
                 the build machine"),
         "{records:?}"
     );
-    // The addon: one alternative is unknown (`options.addonPath`), the other a host
+    // The addon: one alternative is unknown (`config.nativeFile`), the other a host
     // path.
     assert!(
         records
             .iter()
-            .any(|d| d.contains("bytecode-precompiler-node") || d.contains("addonPath")),
+            .any(|d| d.contains("imagecodec-") || d.contains("nativeFile")),
         "{records:?}"
     );
     assert!(new.host_targets().is_empty());

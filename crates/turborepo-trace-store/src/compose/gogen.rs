@@ -4,9 +4,9 @@
 //! gitignored and written by a generator task before the tests run:
 //!
 //! ```text
-//! services/ops/app/go.mod            module example.test/ops/app
-//! services/ops/app/api/connect.go    import "example.test/ops/app/gen/acme/ops/v1"
-//! packages/ops-proto                 generate:go = buf generate   (out: ../../services/ops/app/gen)
+//! services/ledger/server/go.mod           module example.test/ledger/server
+//! services/ledger/server/api/handlers.go  import "example.test/ledger/server/gen/acme/ledger/v1"
+//! packages/schema                         codegen = buf generate   (out: ../../services/ledger/server/gen)
 //! ```
 //!
 //! In a fresh checkout the import does not resolve: `package … is not in main
@@ -77,16 +77,17 @@ pub(super) fn below(output: &str, dir: &str) -> bool {
 mod tests {
     use super::*;
 
-    const DETAIL: &str =
-        "package example.test/ops/app/gen/acme/ops/v1 is not in main module example.test/ops/app";
+    const DETAIL: &str = "package example.test/ledger/server/gen/acme/ledger/v1 is not in main \
+                          module example.test/ledger/server";
 
     #[test]
     fn the_directory_is_the_import_below_the_module_root() {
-        let nodes = ["services/ops/app/go.mod", "go.mod"];
+        let nodes = ["services/ledger/server/go.mod", "go.mod"];
         let is_node = |p: &str| nodes.contains(&p);
         assert_eq!(
-            missing_package_dir("services/ops/app/api/connect.go", DETAIL, is_node).as_deref(),
-            Some("services/ops/app/gen/acme/ops/v1")
+            missing_package_dir("services/ledger/server/api/handlers.go", DETAIL, is_node)
+                .as_deref(),
+            Some("services/ledger/server/gen/acme/ledger/v1")
         );
         // The nearest go.mod decides.
         assert_eq!(
@@ -100,7 +101,7 @@ mod tests {
         );
         // No go.mod above the file, another kind of record, a file that is not Go.
         assert_eq!(
-            missing_package_dir("services/ops/app/api/connect.go", DETAIL, |_| false),
+            missing_package_dir("services/ledger/server/api/handlers.go", DETAIL, |_| false),
             None
         );
         assert_eq!(
@@ -129,12 +130,21 @@ mod tests {
     #[test]
     fn output_directories() {
         assert!(below(
-            "services/ops/app/gen",
-            "services/ops/app/gen/acme/ops/v1"
+            "services/ledger/server/gen",
+            "services/ledger/server/gen/acme/ledger/v1"
         ));
-        assert!(below("services/ops/app/gen", "services/ops/app/gen"));
-        assert!(!below("services/ops/app/gen", "services/ops/app/generated"));
-        assert!(!below("services/ops/app/gen", "services/ops/app"));
+        assert!(below(
+            "services/ledger/server/gen",
+            "services/ledger/server/gen"
+        ));
+        assert!(!below(
+            "services/ledger/server/gen",
+            "services/ledger/server/generated"
+        ));
+        assert!(!below(
+            "services/ledger/server/gen",
+            "services/ledger/server"
+        ));
         assert!(below("", "anything"));
     }
 }

@@ -142,35 +142,35 @@ pub(super) const WRAP: &str = r#"export function wrapCache<T extends any[], V>(
 pub(super) const ROUTES: &str = r#"import { existsSync } from 'fs';
 import { join } from 'path';
 
-const ROUTES_BY_SERVICE = {
+const TABLES = {
   'svc-a': 'services/svc-a/src/routes',
   'svc-b': 'services/svc-b/src/routes.ts',
 };
 
-export type ServiceName = keyof typeof ROUTES_BY_SERVICE;
+export type ServiceName = keyof typeof TABLES;
 
-function localRoutes(): string | undefined {
-  const custom = join(process.cwd(), 'src', 'routes.ts');
-  if (existsSync(custom)) {
-    return process.cwd() + '/src/routes';
+function ownTable(): string | undefined {
+  const own = join(process.cwd(), 'src', 'routes.ts');
+  if (existsSync(own)) {
+    return `${process.cwd()}/src/routes`;
   }
 }
 
-export function loadRoutes(extra: ServiceName[] = []) {
+export function collectTables(extra: ServiceName[] = []) {
   const paths = new Set<string>();
-  const local = localRoutes();
+  const local = ownTable();
   if (local) {
     paths.add(local);
   }
   for (const name of extra) {
-    if (!ROUTES_BY_SERVICE[name]) {
-      throw new Error(`Invalid value: ${name}`);
+    if (!TABLES[name]) {
+      throw new Error(`no table for `);
     }
-    paths.add(ROUTES_BY_SERVICE[name]);
+    paths.add(TABLES[name]);
   }
   let merged: unknown[] = [];
-  for (const routePath of paths) {
-    const loaded = require(routePath);
+  for (const tablePath of paths) {
+    const loaded = require(tablePath);
     merged = [...merged, ...loaded.routes];
   }
   return { routes: merged };
@@ -181,22 +181,22 @@ interface Opts {
   seed?: boolean;
 }
 
-export function setupEndpoint(opts: Opts = {}) {
+export function startService(opts: Opts = {}) {
   const { extraRoutes = [] } = opts;
-  const definition = loadRoutes(extraRoutes);
+  const definition = collectTables(extraRoutes);
   return { definition, seed: opts.seed ?? true };
 }
 "#;
 
 #[test]
 fn table_read_by_a_key_from_callers() {
-    let f = facts(ROUTES, "setup-endpoint.ts");
+    let f = facts(ROUTES, "start-service.ts");
     println!("{f}");
     assert!(f.contains("sink require:32 (resolved)"), "{f}");
-    assert!(f.contains("[setupEndpoint#0.extraRoutes[]]"), "{f}");
-    assert!(f.contains("[loadRoutes#0[]]"), "{f}");
+    assert!(f.contains("[startService#0.extraRoutes[]]"), "{f}");
+    assert!(f.contains("[collectTables#0[]]"), "{f}");
     assert!(f.contains("table 2 value(s) keyed only"), "{f}");
-    assert!(f.contains("fn loadRoutes: named returns"), "{f}");
+    assert!(f.contains("fn collectTables: named returns"), "{f}");
     assert!(f.contains("import fs\n"), "{f}");
 }
 
@@ -309,7 +309,7 @@ fn facts_survive_the_cache_format() {
         (CONFIG_MAP, "config-map.ts"),
         (WRAPPED, "get-key.ts"),
         (WRAP, "wrap.ts"),
-        (ROUTES, "setup-endpoint.ts"),
+        (ROUTES, "start-service.ts"),
     ] {
         let f = file_facts(src.as_bytes(), Path::new(name)).expect(name);
         let bytes = encode(&f);
@@ -508,17 +508,17 @@ const ALL: Select = Select {
 
 fn routes_repo(extra: &[(&'static str, &'static str)]) -> Repo {
     let mut files = vec![
-        ("helpers/setup-endpoint.ts", ROUTES),
+        ("helpers/start-service.ts", ROUTES),
         (
             "pkg/a.test.ts",
-            "import { setupEndpoint } from '@scope/helpers';\nconst { client } = setupEndpoint({ \
+            "import { startService } from '@scope/helpers';\nconst { client } = startService({ \
              extraRoutes: ['svc-a'] });\n",
         ),
         (
             "pkg/b.test.ts",
-            "import { setupEndpoint } from '@scope/helpers';\nsetupEndpoint();\n",
+            "import { startService } from '@scope/helpers';\nstartService();\n",
         ),
-        ("helpers/index.ts", "export * from './setup-endpoint';\n"),
+        ("helpers/index.ts", "export * from './start-service';\n"),
     ];
     files.extend_from_slice(extra);
     let mut r = Repo::new(&files);
@@ -529,14 +529,14 @@ fn routes_repo(extra: &[(&'static str, &'static str)]) -> Repo {
 #[test]
 fn a_key_selects_the_table_values_at_the_caller() {
     let r = routes_repo(&[]);
-    let b = r.bound(&["helpers/setup-endpoint.ts"], LOADS);
+    let b = r.bound(&["helpers/start-service.ts"], LOADS);
     println!("{b}");
     assert_eq!(
         b,
-        "closed helpers/setup-endpoint.ts resolved [services/svc-a/src/routes, \
+        "closed helpers/start-service.ts resolved [services/svc-a/src/routes, \
          services/svc-b/src/routes.ts]\ndep pkg/a.test.ts:2 require spec \
-         services/svc-a/src/routes <- helpers/setup-endpoint.ts:32\ntable \
-         helpers/setup-endpoint.ts [services/svc-a/src/routes, services/svc-b/src/routes.ts]"
+         services/svc-a/src/routes <- helpers/start-service.ts:32\ntable helpers/start-service.ts \
+         [services/svc-a/src/routes, services/svc-b/src/routes.ts]"
     );
 }
 
@@ -544,13 +544,13 @@ fn a_key_selects_the_table_values_at_the_caller() {
 fn an_unknown_key_selects_every_value_at_that_caller() {
     let r = routes_repo(&[(
         "tools/lifecycle.ts",
-        "import { loadRoutes } from '@scope/helpers';\nexport const routes = \
-         loadRoutes([process.argv[2]]);\n",
+        "import { collectTables } from '@scope/helpers';\nexport const routes = \
+         collectTables([process.argv[2]]);\n",
     )]);
-    let b = r.bound(&["helpers/setup-endpoint.ts"], LOADS);
+    let b = r.bound(&["helpers/start-service.ts"], LOADS);
     println!("{b}");
     assert!(
-        b.contains("closed helpers/setup-endpoint.ts resolved"),
+        b.contains("closed helpers/start-service.ts resolved"),
         "{b}"
     );
     assert!(
@@ -576,13 +576,13 @@ fn an_unknown_key_selects_every_value_at_that_caller() {
 fn an_escaping_use_is_bound_where_it_escapes() {
     let r = routes_repo(&[(
         "pkg/c.test.ts",
-        "import { setupEndpoint } from '@scope/helpers';\nconst variants = \
-         [setupEndpoint];\nvariants.forEach((s) => s());\n",
+        "import { startService } from '@scope/helpers';\nconst variants = \
+         [startService];\nvariants.forEach((s) => s());\n",
     )]);
-    let b = r.bound(&["helpers/setup-endpoint.ts"], LOADS);
+    let b = r.bound(&["helpers/start-service.ts"], LOADS);
     println!("{b}");
     assert!(
-        b.contains("closed helpers/setup-endpoint.ts resolved"),
+        b.contains("closed helpers/start-service.ts resolved"),
         "{b}"
     );
     assert!(
@@ -603,10 +603,10 @@ fn an_escaping_use_is_bound_where_it_escapes() {
 fn a_load_the_facts_do_not_describe_is_bound_at_the_loader() {
     let mut r = routes_repo(&[(
         "pkg/d.test.ts",
-        "const h = require('@scope/helpers');\nh.setupEndpoint({ extraRoutes: ['svc-b'] });\n",
+        "const h = require('@scope/helpers');\nh.startService({ extraRoutes: ['svc-b'] });\n",
     )]);
     r.dynamic.push(("pkg/d.test.ts", "helpers/index.ts"));
-    let b = r.bound(&["helpers/setup-endpoint.ts"], LOADS);
+    let b = r.bound(&["helpers/start-service.ts"], LOADS);
     println!("{b}");
     // The barrel is loaded with `require`: whoever does it may call anything with
     // anything.
@@ -615,7 +615,7 @@ fn a_load_the_facts_do_not_describe_is_bound_at_the_loader() {
         "{b}"
     );
     assert!(
-        b.contains("closed helpers/setup-endpoint.ts resolved"),
+        b.contains("closed helpers/start-service.ts resolved"),
         "{b}"
     );
 }
@@ -624,19 +624,19 @@ fn a_load_the_facts_do_not_describe_is_bound_at_the_loader() {
 fn an_escape_inside_the_callee_keeps_it_open() {
     let src = ROUTES.replace(
         "interface Opts {",
-        "export const registry = [loadRoutes];\n\ninterface Opts {",
+        "export const registry = [collectTables];\n\ninterface Opts {",
     );
     let mut r = Repo::new(&[
-        ("helpers/setup-endpoint.ts", &src),
+        ("helpers/start-service.ts", &src),
         (
             "pkg/a.test.ts",
-            "import { setupEndpoint } from '@scope/helpers';\nsetupEndpoint({ extraRoutes: \
+            "import { startService } from '@scope/helpers';\nstartService({ extraRoutes: \
              ['svc-a'] });\n",
         ),
     ]);
     r.aliases
-        .push(("@scope/helpers", "helpers/setup-endpoint.ts"));
-    let b = r.bound(&["helpers/setup-endpoint.ts"], LOADS);
+        .push(("@scope/helpers", "helpers/start-service.ts"));
+    let b = r.bound(&["helpers/start-service.ts"], LOADS);
     println!("{b}");
     assert!(!b.contains("closed"), "{b}");
     assert!(!b.contains("table"), "{b}");
@@ -820,10 +820,10 @@ fn thousands_of_callers_with_distinct_options() {
     // Every caller passes a different options object; the option the table is read
     // with has two values.
     let mut files: Vec<(String, String)> = vec![
-        ("helpers/setup-endpoint.ts".to_owned(), ROUTES.to_owned()),
+        ("helpers/start-service.ts".to_owned(), ROUTES.to_owned()),
         (
             "helpers/index.ts".to_owned(),
-            "export * from './setup-endpoint';\n".to_owned(),
+            "export * from './start-service';\n".to_owned(),
         ),
     ];
     for i in 0..1500 {
@@ -831,7 +831,7 @@ fn thousands_of_callers_with_distinct_options() {
         files.push((
             format!("pkg/t{i}.test.ts"),
             format!(
-                "import {{ setupEndpoint }} from '@scope/helpers';\nsetupEndpoint({{ extraRoutes: \
+                "import {{ startService }} from '@scope/helpers';\nstartService({{ extraRoutes: \
                  ['{svc}'], seed: false, tag: 't{i}' }});\n"
             ),
         ));
@@ -842,7 +842,7 @@ fn thousands_of_callers_with_distinct_options() {
         .collect();
     let mut r = Repo::new(&refs);
     r.aliases.push(("@scope/helpers", "helpers/index.ts"));
-    let root = r.id("helpers/setup-endpoint.ts").unwrap();
+    let root = r.id("helpers/start-service.ts").unwrap();
     let b = bind(&r, &[root], LOADS);
     assert!(!b.exhausted);
     let opens: Vec<_> = b
@@ -910,41 +910,41 @@ fn too_many_combinations_keep_the_site_open() {
 /// The shape of an endpoint harness and a framework: the harness loads the
 /// route modules a key selects and the one of the working directory, and hands
 /// their tables to the framework, which loads every handler they name.
-const HARNESS: &str = r#"import { fromConfig } from '@scope/framework';
+const HARNESS: &str = r#"import { mountAll } from '@scope/framework';
 
-const ROUTES_BY_SERVICE = {
+const TABLES = {
   'svc-a': 'services/svc-a/src/routes',
   'svc-b': 'services/svc-b/src/routes',
 };
 
-export function setupEndpoint(opts: { extraRoutes?: string[] } = {}) {
+export function startService(opts: { extraRoutes?: string[] } = {}) {
   const { extraRoutes = [] } = opts;
   const paths = new Set<string>();
   paths.add(process.cwd() + '/src/routes');
   for (const name of extraRoutes) {
-    paths.add(ROUTES_BY_SERVICE[name]);
+    paths.add(TABLES[name]);
   }
   let merged: unknown[] = [];
-  for (const routePath of paths) {
-    const loaded = require(routePath);
+  for (const tablePath of paths) {
+    const loaded = require(tablePath);
     merged = [...merged, ...loaded.routes];
   }
-  return fromConfig({ routes: merged });
+  return mountAll({ routes: merged });
 }
 "#;
 
-const FRAMEWORK: &str = r#"function normalize(spec: any) {
-  return () => import(spec);
+const FRAMEWORK: &str = r#"function toLoader(entry: any) {
+  return () => import(entry);
 }
 
-export function fromConfig(config: { routes: any[] }) {
-  return config.routes.map((group) => group.handler.map((h: any) => normalize(h.handler)));
+export function mountAll(config: { routes: any[] }) {
+  return config.routes.map((group) => group.handler.map((h: any) => toLoader(h.handler)));
 }
 "#;
 
 fn harness_repo() -> Repo {
     let mut r = Repo::new(&[
-        ("helpers/setup-endpoint.ts", HARNESS),
+        ("helpers/start-service.ts", HARNESS),
         ("framework/index.ts", FRAMEWORK),
         (
             "services/svc-a/src/routes.ts",
@@ -963,12 +963,12 @@ fn harness_repo() -> Repo {
         ),
         (
             "pkg/a.test.ts",
-            "import { setupEndpoint } from '@scope/helpers';\nsetupEndpoint({ extraRoutes: \
+            "import { startService } from '@scope/helpers';\nstartService({ extraRoutes: \
              ['svc-a'] });\n",
         ),
     ]);
     r.aliases
-        .push(("@scope/helpers", "helpers/setup-endpoint.ts"));
+        .push(("@scope/helpers", "helpers/start-service.ts"));
     r.aliases.push(("@scope/framework", "framework/index.ts"));
     r.aliases
         .push(("services/svc-a/src/routes", "services/svc-a/src/routes.ts"));
@@ -979,7 +979,7 @@ fn harness_repo() -> Repo {
 
 #[test]
 fn a_bound_require_is_followed_into_the_module() {
-    let f = facts(HARNESS, "setup-endpoint.ts");
+    let f = facts(HARNESS, "start-service.ts");
     println!("{f}");
     assert!(f.contains("require("), "{f}");
     let m = facts(
@@ -1010,7 +1010,7 @@ fn a_bound_require_is_followed_into_the_module() {
     // The route module of the working directory: evaluated for the tests' working
     // directories; the record on the harness does not count for tests.
     assert!(
-        b.contains("dep helpers/setup-endpoint.ts:20 dynamic_import cwd-per-test"),
+        b.contains("dep helpers/start-service.ts:20 dynamic_import cwd-per-test"),
         "{b}"
     );
     assert!(!b.contains(" open "), "{b}");
@@ -1429,17 +1429,17 @@ fn a_method_can_change_its_receiver_a_function_read_from_it_cannot() {
 
 const NORMALIZE: &str = r#"import { isFunction, isString } from './util';
 
-export function normalize({ spec, merge }: any): any[] {
-  if (Array.isArray(spec)) {
-    return spec.map((item: any) => normalize({ spec: item, merge })).flat();
+export function expand({ entry, combine }: any): any[] {
+  if (Array.isArray(entry)) {
+    return entry.map((item: any) => expand({ entry: item, combine })).flat();
   }
-  if (isFunction(spec)) {
-    return [{ handler: spec }];
+  if (isFunction(entry)) {
+    return [{ handler: entry }];
   }
-  if (isString(spec)) {
-    return [{ handler: () => import(spec), modulePath: spec }];
+  if (isString(entry)) {
+    return [{ handler: () => import(entry), source: entry }];
   }
-  return normalize({ spec: spec.handler, merge }).map(merge(spec));
+  return expand({ entry: entry.handler, combine }).map(combine(entry));
 }
 "#;
 
@@ -1449,53 +1449,50 @@ const UTIL: &str = "export function isFunction(x: unknown) {\n  return typeof x 
 
 #[test]
 fn a_function_that_walks_its_argument_by_calling_itself() {
-    let f = facts(NORMALIZE, "normalize.ts");
+    let f = facts(NORMALIZE, "expand.ts");
     println!("{f}");
     // The binding that the recursion fills is everything its reads reach, not
     // unknown.
-    assert!(f.contains("reach(normalize#0"), "{f}");
-    let test = "import { normalize } from '../framework/normalize';\nconst merge = (s: any) => \
-                (h: any) => ({ ...s, ...h });\nnormalize({ spec: [{ tracing: true, handler: [{ \
-                method: 'GET', path: '/x', handler: './handlers/get', tags: ['public'] }, { \
-                method: 'POST', path: '/x', handler: [{ handler: './handlers/post' }] }, { \
-                handler: () => 1 }] }], merge });\n";
+    assert!(f.contains("reach(expand#0"), "{f}");
+    let test = "import { expand } from '../framework/expand';\nconst combine = (s: any) => (h: \
+                any) => ({ ...s, ...h });\nexpand({ entry: [{ traced: true, handler: [{ method: \
+                'GET', path: '/x', handler: './handlers/get', labels: ['open'] }, { method: \
+                'POST', path: '/x', handler: [{ handler: './handlers/post' }] }, { handler: () => \
+                1 }] }], combine });\n";
     let repo = |util: &str, extra: &[(&str, &str)]| {
         let mut files = vec![
-            ("framework/normalize.ts", NORMALIZE),
+            ("framework/expand.ts", NORMALIZE),
             ("framework/util.ts", util),
             ("app/a.test.ts", test),
         ];
         files.extend_from_slice(extra);
         let mut r = Repo::new(&files);
         r.aliases
-            .push(("../framework/normalize", "framework/normalize.ts"));
+            .push(("../framework/expand", "framework/expand.ts"));
         r
     };
-    let out = repo(UTIL, &[]).bound(&["framework/normalize.ts"], LOADS);
+    let out = repo(UTIL, &[]).bound(&["framework/expand.ts"], LOADS);
     println!("{out}");
     // The handlers at every depth, and nothing else of the table: no method, path
     // or tag, no object, array or function.
     assert_eq!(
         out,
-        "closed framework/normalize.ts record\ndep app/a.test.ts:3 dynamic_import spec \
-         ./handlers/get <- framework/normalize.ts:11\ndep app/a.test.ts:3 dynamic_import spec \
-         ./handlers/post <- framework/normalize.ts:11"
+        "closed framework/expand.ts record\ndep app/a.test.ts:3 dynamic_import spec \
+         ./handlers/get <- framework/expand.ts:11\ndep app/a.test.ts:3 dynamic_import spec \
+         ./handlers/post <- framework/expand.ts:11"
     );
     // A caller whose value is not known keeps its own record.
     let out = repo(
         UTIL,
         &[(
             "app/b.test.ts",
-            "import { normalize } from '../framework/normalize';\nnormalize({ spec: \
-             JSON.parse(process.env.ROUTES!), merge: (s: any) => (h: any) => h });\n",
+            "import { expand } from '../framework/expand';\nexpand({ entry: \
+             JSON.parse(process.env.ROUTES!), combine: (s: any) => (h: any) => h });\n",
         )],
     )
-    .bound(&["framework/normalize.ts"], LOADS);
+    .bound(&["framework/expand.ts"], LOADS);
     println!("{out}");
-    assert!(
-        out.contains("closed framework/normalize.ts record"),
-        "{out}"
-    );
+    assert!(out.contains("closed framework/expand.ts record"), "{out}");
     assert!(
         out.contains("dep app/b.test.ts:2 dynamic_import open"),
         "{out}"
@@ -1510,7 +1507,7 @@ fn a_function_that_walks_its_argument_by_calling_itself() {
          false;\n}\nexport function isString(x: unknown) {\n  return typeof x === 'string';\n}\n",
         &[],
     )
-    .bound(&["framework/normalize.ts"], LOADS);
+    .bound(&["framework/expand.ts"], LOADS);
     println!("{out}");
     assert!(!out.contains("closed"), "{out}");
 }

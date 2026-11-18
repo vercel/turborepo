@@ -1,8 +1,8 @@
 //! Entry specs that name a file whose path has glob metacharacters.
 //!
-//! The shape comes from a real app: Next.js route directories are called
-//! `[teamSlug]`, `(dashboard)` and `~`, and tests live next to the components
-//! below them. `[teamSlug]` is a character class to the glob matcher, so the
+//! Next.js route directories can be called `[org]`, `(shop)` and `~`, and
+//! tests can live next to the components below them. `[org]` is a character
+//! class to the glob matcher, so the
 //! path of such a test, taken as a pattern, matched no file: `affected
 //! --explain <path>` without `--tests` then printed `unaffected` for a test
 //! that a changed file reaches through two plain imports.
@@ -13,7 +13,7 @@ mod support;
 
 use std::{path::Path, process::Command};
 
-const DIR: &str = "apps/site/app/(dashboard)/[teamSlug]/(team)/~/keys/_components";
+const DIR: &str = "apps/site/app/(shop)/[org]/(admin)/~/coupons/_components";
 
 fn write(root: &Path, rel: &str, content: &str) {
     let p = root.join(rel);
@@ -34,20 +34,21 @@ fn repo() -> tempfile::TempDir {
     write(r, "apps/site/jest.config.js", "module.exports = {};\n");
     write(
         r,
-        &format!("{DIR}/expiration-field.tsx"),
-        "export function ExpirationField(props: { value: string }) {\n  return <input \
+        &format!("{DIR}/discount-input.tsx"),
+        "export function DiscountInput(props: { value: string }) {\n  return <input \
          value={props.value} />;\n}\n",
     );
     write(
         r,
-        &format!("{DIR}/create-key.tsx"),
-        "import { ExpirationField } from './expiration-field';\n\nexport function CreateKey() {\n  return <ExpirationField value=\"never\" />;\n}\n",
+        &format!("{DIR}/new-coupon.tsx"),
+        "import { DiscountInput } from './discount-input';\n\nexport function NewCoupon() {\n  \
+         return <DiscountInput value=\"10%\" />;\n}\n",
     );
     write(
         r,
-        &format!("{DIR}/create-key.test.tsx"),
-        "import { CreateKey } from './create-key';\n\ntest('renders', () => {\n  \
-         expect(CreateKey).toBeDefined();\n});\n",
+        &format!("{DIR}/new-coupon.test.tsx"),
+        "import { NewCoupon } from './new-coupon';\n\ntest('renders', () => {\n  \
+         expect(NewCoupon).toBeDefined();\n});\n",
     );
     // An unrelated module and its test in the same directory.
     write(r, &format!("{DIR}/other.ts"), "export const other = 1;\n");
@@ -81,8 +82,8 @@ fn run(root: &Path, args: &[&str]) -> String {
 #[test]
 fn explain_takes_a_path_with_brackets_as_the_file() {
     let d = repo();
-    let test = format!("{DIR}/create-key.test.tsx");
-    let changed = format!("{DIR}/expiration-field.tsx");
+    let test = format!("{DIR}/new-coupon.test.tsx");
+    let changed = format!("{DIR}/discount-input.tsx");
     // Without `--tests` (the explained file is an entry by itself) and with it.
     for tests in [&[][..], &["--tests", "jest"][..]] {
         for policy in [&[][..], &["--on-uncertain", "ignore"][..]] {
@@ -95,7 +96,7 @@ fn explain_takes_a_path_with_brackets_as_the_file() {
                 first.starts_with(&format!("affected {test}: modified {changed}")),
                 "{args:?}: {out}"
             );
-            assert!(first.contains("create-key.tsx"), "{args:?}: {out}");
+            assert!(first.contains("new-coupon.tsx"), "{args:?}: {out}");
         }
     }
 }
@@ -103,7 +104,7 @@ fn explain_takes_a_path_with_brackets_as_the_file() {
 #[test]
 fn an_unrelated_edit_leaves_the_bracket_path_unaffected() {
     let d = repo();
-    let test = format!("{DIR}/create-key.test.tsx");
+    let test = format!("{DIR}/new-coupon.test.tsx");
     let changed = format!("{DIR}/other.ts");
     for tests in [&[][..], &["--tests", "jest"][..]] {
         let mut args = vec![
@@ -127,8 +128,8 @@ fn an_unrelated_edit_leaves_the_bracket_path_unaffected() {
 #[test]
 fn a_positional_entry_with_brackets_is_the_file() {
     let d = repo();
-    let test = format!("{DIR}/create-key.test.tsx");
-    let changed = format!("{DIR}/expiration-field.tsx");
+    let test = format!("{DIR}/new-coupon.test.tsx");
+    let changed = format!("{DIR}/discount-input.tsx");
     let out = run(
         d.path(),
         &[
@@ -167,7 +168,7 @@ fn patterns_stay_patterns() {
         "{out}"
     );
     // `**` over the route directories still finds the test.
-    let changed = format!("{DIR}/expiration-field.tsx");
+    let changed = format!("{DIR}/discount-input.tsx");
     let out = run(
         d.path(),
         &[
@@ -182,7 +183,7 @@ fn patterns_stay_patterns() {
     );
     assert_eq!(
         out.lines().collect::<Vec<_>>(),
-        [format!("{DIR}/create-key.test.tsx").as_str()],
+        [format!("{DIR}/new-coupon.test.tsx").as_str()],
         "{out}"
     );
 }
@@ -193,7 +194,7 @@ fn a_pattern_that_matches_nothing_has_no_verdict() {
     // The path of a file that does not exist, with a class: a pattern without
     // matches. It is reported as no entry, never as `unaffected`.
     let spec = format!("{DIR}/[missing]/gone.test.tsx");
-    let changed = format!("{DIR}/expiration-field.tsx");
+    let changed = format!("{DIR}/discount-input.tsx");
     let out = run(
         d.path(),
         &[

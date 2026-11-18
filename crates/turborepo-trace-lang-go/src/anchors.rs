@@ -1614,22 +1614,21 @@ mod tests {
     fn what_reaches_package_scope_escapes() {
         // The shapes of a harness: a function that returns the root, with and without
         // resolving links.
-        let plain = "package e2e\nfunc repoRoot() string {\n\t_, file, _, _ := \
-                     runtime.Caller(0)\n\treturn filepath.Clean(filepath.Join(filepath.Dir(file), \
+        let plain = "package e2e\nfunc moduleRoot() string {\n\t_, src, _, _ := \
+                     runtime.Caller(0)\n\treturn filepath.Clean(filepath.Join(filepath.Dir(src), \
                      \"..\", \"..\", \"..\"))\n}\n";
         assert_eq!(entries(plain), some(&[(4, "../../..")]));
-        let links = "package e2e\nfunc repoRoot() string {\n\t_, file, _, _ := \
-                     runtime.Caller(0)\n\troot := \
-                     filepath.Clean(filepath.Join(filepath.Dir(file), \"..\", \"..\", \
-                     \"..\"))\n\tif real, err := filepath.EvalSymlinks(root); err == nil \
-                     {\n\t\treturn real\n\t}\n\treturn root\n}\n";
+        let links = "package e2e\nfunc moduleRoot() string {\n\t_, src, _, _ := \
+                     runtime.Caller(0)\n\troot := filepath.Clean(filepath.Join(filepath.Dir(src), \
+                     \"..\", \"..\", \"..\"))\n\tif resolved, err := filepath.EvalSymlinks(root); \
+                     err == nil {\n\t\treturn resolved\n\t}\n\treturn root\n}\n";
         assert_eq!(entries(links), some(&[(6, "../../..")]));
         // A subdirectory is all that is returned.
-        let services = "package d\nfunc servicesDir(t *testing.T) string {\n\t_, thisFile, _, ok \
-                        := runtime.Caller(0)\n\tif !ok {\n\t\tt.Fatalf(\"no \
-                        caller\")\n\t}\n\treturn filepath.Join(filepath.Dir(thisFile), \"..\", \
-                        \"..\", \"..\", \"..\", \"services\")\n}\n";
-        assert_eq!(entries(services), some(&[(7, "../../../../services")]));
+        let fixtures = "package d\nfunc fixturesDir(t *testing.T) string {\n\t_, self, _, found \
+                        := runtime.Caller(0)\n\tif !found {\n\t\tt.Fatal(\"caller \
+                        unknown\")\n\t}\n\treturn filepath.Join(filepath.Dir(self), \"..\", \
+                        \"..\", \"..\", \"..\", \"fixtures\")\n}\n";
+        assert_eq!(entries(fixtures), some(&[(7, "../../../../fixtures")]));
         for (body, line) in [
             // A struct field, a composite literal, a map, a slice, a channel.
             ("\th := &harness{repoRoot: root, n: 1}\n\t_ = h", 5),
@@ -1694,7 +1693,7 @@ mod tests {
             "package p\nfunc f() {\n\tg(runtime.Caller(0))\n}\n",
             // The file itself is handed on: the parent step of whoever gets it only removes
             // the file name.
-            "package p\nfunc thisFile() string {\n\t_, file, _, _ := runtime.Caller(0)\n\treturn \
+            "package p\nfunc here() string {\n\t_, file, _, _ := runtime.Caller(0)\n\treturn \
              file\n}\n",
             "package p\nfunc f() {\n\t_, file, _, _ := runtime.Caller(0)\n\tother.Use(file)\n}\n",
             "package p\nfunc f() {\n\t_, file, _, _ := runtime.Caller(0)\n\tother.Use(file + \
@@ -1723,10 +1722,10 @@ mod tests {
     #[test]
     fn names_of_a_followed_file() {
         use crate::names::{names, names_with};
-        let src = "package d\nfunc servicesDir(t *testing.T) string {\n\t_, thisFile, _, ok := \
-                   runtime.Caller(0)\n\tif !ok {\n\t\tt.Fatalf(\"no caller\")\n\t}\n\treturn \
-                   filepath.Join(filepath.Dir(thisFile), \"..\", \"..\", \"..\", \"..\", \
-                   \"services\")\n}\n";
+        let src = "package d\nfunc fixturesDir(t *testing.T) string {\n\t_, self, _, found := \
+                   runtime.Caller(0)\n\tif !found {\n\t\tt.Fatal(\"caller \
+                   unknown\")\n\t}\n\treturn filepath.Join(filepath.Dir(self), \"..\", \"..\", \
+                   \"..\", \"..\", \"fixtures\")\n}\n";
         // Without following: everything below the location, raised by five parent
         // steps.
         let coarse = names_with(src.as_bytes(), false, false);
@@ -1743,7 +1742,7 @@ mod tests {
         assert_eq!((n.anchor, n.ups), (None, 0));
         assert_eq!(
             n.encode(),
-            "names:0,0,0,0,0\n7\tservices\n@L\t7\t../../../../services\t**"
+            "names:0,0,0,0,0\n7\tfixtures\n@L\t7\t../../../../fixtures\t**"
         );
         assert!(!n.names[0].climbs);
         // Parent steps elsewhere in the file still count, for every entry.
@@ -1793,8 +1792,8 @@ mod tests {
         // bracket removed.
         let src = "package p\nfunc TestX(t *testing.T) {\n\t_, file, _, _ := \
                    runtime.Caller(0)\n\troot := filepath.Clean(filepath.Join(filepath.Dir(file), \
-                   \"..\", \"..\"))\n\tif real, err := filepath.EvalSymlinks(root); err == nil \
-                   {\n\t\troot = real\n\t}\n\tcmd := exec.Command(\"go\", \"run\", \
+                   \"..\", \"..\"))\n\tif resolved, err := filepath.EvalSymlinks(root); err == \
+                   nil {\n\t\troot = resolved\n\t}\n\tcmd := exec.Command(\"go\", \"run\", \
                    \"./cmd/gen\")\n\tcmd.Dir = root\n\th := &harness{root: root, dirs: \
                    []string{root + \"/a/\" + name}}\n\tload(t, (root), fmt.Sprintf(\"%s/x\", \
                    root))\n\tif root == other || strings.HasPrefix(other, root) \

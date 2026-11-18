@@ -1,7 +1,7 @@
 //! Playwright configs that come from a factory in a workspace package
 //! (`fixtures/frameworks/playwright-factory`): `defineConfig(__dirname)` of
-//! `@acme/playwright/config`. The factory is followed for Playwright only; jest
-//! and vitest keep treating a package's `defineConfig(x)` as `x`.
+//! `@acme/browser-kit/preset`. The factory is followed for Playwright only;
+//! jest and vitest keep treating a package's `defineConfig(x)` as `x`.
 
 // Test code: helpers outside `#[test]` functions unwrap and expect as the tests do.
 #![allow(clippy::unwrap_used, clippy::expect_used)]
@@ -90,17 +90,18 @@ fn factory_of_a_workspace_package_is_followed() {
     assert_eq!(
         specs(&root, &inputs),
         [
-            "apps/docs/app/cls.e2e.chromium.ts",
-            "apps/docs/app/navigation.e2e.ts"
+            "apps/docs/app/guide.e2e.ts",
+            "apps/docs/app/scroll.e2e.chromium.ts"
         ]
     );
     assert_eq!(
         discovery_uncertainties(&inputs),
         Vec::<&FrameworkUncertainty>::new()
     );
-    // What is left is what the environment decides elsewhere (`CI`, `DEVTOOLS`, the
-    // base URL): notes on the factory's files, none on a field, each one once
-    // (the factory is evaluated for the import and again for the call).
+    // What is left is what the environment decides elsewhere (`CI`,
+    // `WIDE_VIEWPORT`, the base URL): notes on the factory's files, none on a
+    // field, each one once (the factory is evaluated for the import and again
+    // for the call).
     let all = uncertainties(&inputs);
     for (i, u) in all.iter().enumerate() {
         assert!(!all[..i].contains(u), "twice: {u:?}");
@@ -109,13 +110,13 @@ fn factory_of_a_workspace_package_is_followed() {
         assert!(
             u.field.is_none()
                 && u.kind == UncertaintyKind::EnvDependent
-                && u.file.starts_with(root.join("tooling/playwright/src")),
+                && u.file.starts_with(root.join("packages/browser-kit/src")),
             "{u:?}"
         );
     }
 
     // The factory's projects. `testDir: './'` is the config file's directory. What
-    // the environment decides (`TEST_TYPE`) is united.
+    // the environment decides (`E2E_SUITE`) is united.
     let names: Vec<&str> = inputs.projects.iter().map(|p| p.name.as_str()).collect();
     assert_eq!(names, ["chromium", "firefox", "webkit"]);
     for p in &inputs.projects {
@@ -135,8 +136,7 @@ fn factory_of_a_workspace_package_is_followed() {
         ["**/*.e2e.ts", "**/*.spec.ts"]
     );
 
-    // `join(__dirname, '../../src', 'config/global-setup.ts')` is relative to the
-    // factory.
+    // `join(__dirname, '..', 'src/hooks/start.ts')` is relative to the factory.
     let entries = &inputs.projects[0].global.entries;
     let entry = |role: InputRole| {
         entries
@@ -147,13 +147,13 @@ fn factory_of_a_workspace_package_is_followed() {
     assert_eq!(
         entry(InputRole::GlobalSetup),
         Some(Target::Path(
-            root.join("tooling/playwright/src/config/global-setup.ts")
+            root.join("packages/browser-kit/src/hooks/start.ts")
         ))
     );
     assert_eq!(
         entry(InputRole::GlobalTeardown),
         Some(Target::Path(
-            root.join("tooling/playwright/src/config/global-teardown.ts")
+            root.join("packages/browser-kit/src/hooks/stop.ts")
         ))
     );
 
@@ -162,8 +162,8 @@ fn factory_of_a_workspace_package_is_followed() {
         files(&root, &inputs),
         [
             "apps/docs/playwright.config.ts",
-            "tooling/playwright/src/config/index.ts",
-            "tooling/playwright/src/utils/get-base-url.ts"
+            "packages/browser-kit/src/origin.ts",
+            "packages/browser-kit/src/preset.ts"
         ]
     );
 }
@@ -204,11 +204,11 @@ fn cts_config_requires_the_factory() {
 fn unknown_test_match_of_a_factory_is_reported() {
     let root = fixture();
     let (inputs, _) = playwright::load_config(&root.join("apps/opaque/playwright.config.ts"));
-    // `testMatch: specPattern(cwd)`, a call into an installed package.
+    // `testMatch: specPattern(dir)`, a call into an installed package.
     let unc = discovery_uncertainties(&inputs);
     assert_eq!(unc.len(), 1, "{unc:?}");
     assert_eq!(unc[0].field.as_deref(), Some("testMatch"));
-    assert!(unc[0].detail.contains("specPattern(cwd)"), "{unc:?}");
+    assert!(unc[0].detail.contains("specPattern(dir)"), "{unc:?}");
     // Not no specs, and not silently: Playwright's default pattern, next to the
     // report.
     assert_eq!(inputs.projects.len(), 1);
@@ -223,7 +223,7 @@ fn unknown_test_match_of_a_factory_is_reported() {
         files(&root, &inputs),
         [
             "apps/opaque/playwright.config.ts",
-            "tooling/playwright/src/config/opaque.ts"
+            "packages/browser-kit/src/opaque.ts"
         ]
     );
 }
@@ -293,7 +293,7 @@ fn jest_and_vitest_do_not_follow_factories() {
             vec!["testMatch".to_string(), "passWithNoTests".to_string()],
             vec![
                 "apps/legacy/jest.config.ts".to_string(),
-                "tooling/playwright/src/config/project.ts".to_string()
+                "packages/browser-kit/src/project.ts".to_string()
             ],
             0
         )

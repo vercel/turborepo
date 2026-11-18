@@ -3,14 +3,13 @@
 //! path-like strings of the test's code, like the same reads in JS, instead of
 //! selecting the test on every change. All under the default policy.
 //!
-//! The repository is `fixtures/go/names`, the shapes of real sites with other
-//! names:
+//! The repository is `fixtures/go/names`, small made-up packages:
 //!
 //! | Package | Shape |
 //! |---|---|
 //! | `config` | a loader that reads its `path` parameter; its test writes the file below `t.TempDir()` and loads it |
 //! | `extract` | a test that reads back, below `t.TempDir()`, what the code under test wrote |
-//! | `tools/schema` | a test that reads a file found from `runtime.Caller`, through two helpers |
+//! | `tools/spec` | a test that reads a file found from `runtime.Caller`, through two helpers |
 //! | `data/loader` | a struct field joined with a parameter; the test passes `"../fixtures"` |
 // Test code: helpers outside `#[test]` functions unwrap and expect as the tests do.
 #![allow(clippy::unwrap_used, clippy::expect_used)]
@@ -24,7 +23,7 @@ use std::{
 
 const CONFIG: &str = "config/config_test.go";
 const EXTRACT: &str = "extract/extract_test.go";
-const SCHEMA: &str = "tools/schema/schema_test.go";
+const SPEC: &str = "tools/spec/spec_test.go";
 const LOADER: &str = "data/loader/loader_test.go";
 
 fn copy_dir(from: &Path, to: &Path) {
@@ -143,12 +142,12 @@ fn a_file_the_strings_of_a_test_name_selects_it() {
 #[test]
 fn a_literal_path_from_the_location_of_a_file_is_a_reference() {
     let r = repo();
-    // `filepath.Join(filepath.Dir(thisFile), "schemas", "job.schema.json")`,
+    // `filepath.Join(filepath.Dir(self), "specs", "order.json")`,
     // returned by a helper and read through another: an edge to exactly that
     // file.
-    let schema = "tools/schema/schemas/job.schema.json";
-    assert_eq!(r.affected(schema), [SCHEMA]);
-    let deps = r.run(&["deps", SCHEMA], &[]);
+    let schema = "tools/spec/specs/order.json";
+    assert_eq!(r.affected(schema), [SPEC]);
+    let deps = r.run(&["deps", SPEC], &[]);
     assert!(deps.lines().any(|l| l == schema), "{deps}");
     // The file does not use its location for anything else: a sibling of the schema
     // that no string names is not a dependency through the location. (It still
@@ -166,8 +165,8 @@ fn a_file_written_below_a_temp_dir_names_no_repository_file() {
     // message that mentions the name is no path either.
     assert_eq!(r.affected("defaults/settings.yaml"), [""; 0]);
     // The same for a file that a test only looks for below a temporary directory.
-    r.write("docs/doomed.txt", "x\n");
-    assert_eq!(r.affected("docs/doomed.txt"), [""; 0]);
+    r.write("docs/stray.txt", "x\n");
+    assert_eq!(r.affected("docs/stray.txt"), [""; 0]);
 }
 
 #[test]
@@ -184,6 +183,6 @@ fn a_test_with_a_computed_read_reads_below_its_package_directory() {
     // further up.
     r.write("data/other/extra.txt", "x\n");
     assert_eq!(r.affected("data/other/extra.txt"), [LOADER]);
-    r.write("tools/schema/extra/notes.txt", "x\n");
-    assert_eq!(r.affected("tools/schema/extra/notes.txt"), [SCHEMA]);
+    r.write("tools/spec/extra/notes.txt", "x\n");
+    assert_eq!(r.affected("tools/spec/extra/notes.txt"), [SPEC]);
 }

@@ -1,9 +1,9 @@
 //! Services a task starts before the tests it runs
 //! (`crates/turborepo-trace/src/services.rs`).
 //!
-//! The shape comes from a real monorepo: a Go service with TypeScript
-//! integration tests that reach it over HTTP. The CI job runs `docker compose
-//! up --wait` in the service's directory (the compose file builds the service
+//! The setup: a Go service with TypeScript integration tests that reach it
+//! over HTTP. The CI job runs `docker compose up --wait` in the service's
+//! directory (the compose file builds the service
 //! from its Dockerfile and mounts config files into third-party containers),
 //! then `pnpm integration`. No import leads from the tests to the Go code, the
 //! Dockerfile, the compose file or the mounted files.
@@ -36,34 +36,30 @@ fn git(root: &Path, args: &[&str]) {
 }
 
 const WORKFLOW: &str = "\
-name: Integration
+name: Stack tests
 on: [pull_request]
 jobs:
-  ingest-integration:
-    name: Integration tests - ingest
-    runs-on: ubuntu-latest
+  ingest-stack:
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
-      - name: Start service and dependencies
-        run: |
-          cd services/ingest
-          docker compose up --wait
-      - name: Run integration tests
-        run: |
-          cd services/ingest
-          pnpm integration
-  other-e2e:
-    name: E2E tests - other
-    runs-on: ubuntu-latest
+      - name: Boot the ingest stack
+        working-directory: services/ingest
+        run: docker compose up --wait
+      - name: Stack suite
+        working-directory: services/ingest
+        run: pnpm integration
+  other-stack:
+    runs-on: ubuntu-24.04
     env:
       COMPOSE_FILE: 'packages/other/docker-compose.e2e.yml'
     steps:
       - uses: actions/checkout@v4
-      - name: Start docker compose
+      - name: Boot
         run: |
           docker compose version
           docker compose up -d
-      - name: Run tests against docker compose
+      - name: Suite
         run: pnpm --filter=@fx/other run test
 ";
 
@@ -96,11 +92,11 @@ FROM golang:1.24-alpine AS builder
 WORKDIR /build
 COPY services/ingest/app services/ingest/app
 COPY pkg/schema pkg/schema
-RUN go build -o server ./services/ingest/app
+RUN go build -o /out/ingestd ./services/ingest/app
 
-FROM alpine AS runtime
-COPY --from=builder /build/server .
-CMD [\"./server\"]
+FROM alpine:3.20
+COPY --from=builder /out/ingestd /usr/local/bin/ingestd
+ENTRYPOINT [\"ingestd\"]
 ";
 
 /// The repository: the Go service with its integration tests and CI job, a
@@ -379,7 +375,7 @@ fn the_reason_names_the_service_and_the_task() {
         why.contains("affected services/ingest/integration/events.test.ts")
             && why.contains("services/ingest/app/main.go")
             && why.contains("docker:services/ingest/docker-compose.yml")
-            && why.contains("gha:.github/workflows/integration.yml#ingest-integration"),
+            && why.contains("gha:.github/workflows/integration.yml#ingest-stack"),
         "{why}"
     );
 }

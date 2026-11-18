@@ -4,8 +4,8 @@
 //! Tailwind scans source files for class candidates and generates one
 //! stylesheet. The **strict** model ([`TailwindMode::Strict`], the default) is
 //! therefore: every scanned file is an input of the stylesheet, and the
-//! stylesheet is a global input of every route. On a real app that collapses
-//! selection to "run everything" for most UI commits.
+//! stylesheet is a global input of every route. In an app styled this way that
+//! collapses selection to "run everything" for most UI commits.
 //!
 //! The **token** heuristic ([`TailwindMode::Tokens`], opt-in) says a changed
 //! file affects the stylesheet only if its set of class-candidate tokens

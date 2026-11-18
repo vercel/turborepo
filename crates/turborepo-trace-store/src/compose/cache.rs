@@ -353,7 +353,7 @@ mod tests {
                 r,
                 &format!("packages/{p}/package.json"),
                 &format!(
-                    r#"{{"name":"{p}","version":"1.0.0","scripts":{{"clean-code":"knip --directory ../.. --workspace packages/{p}"}}}}"#
+                    r#"{{"name":"{p}","version":"1.0.0","scripts":{{"unused":"knip --directory ../.. --workspace packages/{p}"}}}}"#
                 ),
             );
             write(

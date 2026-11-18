@@ -1,5 +1,5 @@
 'use strict';
-// Shapes seen while tracing a real API server (M2).
+// Shapes of published packages (M2).
 
 // dd-trace: a ternary between two exporters.
 const inAWSLambda = process.env.AWS_LAMBDA_FUNCTION_NAME !== undefined;

@@ -1,9 +1,9 @@
 //! `affected --since` on lockfile changes that leave every manifest
 //! alone: a project's test runner is re-resolved to another peer variant, or a
-//! dependency of the runner is bumped. The shape comes from a real pnpm
-//! monorepo: two packages that declare `vitest` and no DOM library were moved
-//! from the `jsdom@27` variant of vitest to the `jsdom@23` variant by an
-//! unrelated change, and their tests failed (`PointerEvent is not defined`).
+//! dependency of the runner is bumped. In a pnpm workspace, packages that
+//! declare `vitest` and no DOM library can be moved from one `jsdom` peer
+//! variant of vitest to another by an unrelated change, and their tests can
+//! fail because of it.
 //!
 //! The repositories have no `node_modules`, like a fresh clone: packages are
 //! linked through the lockfile.

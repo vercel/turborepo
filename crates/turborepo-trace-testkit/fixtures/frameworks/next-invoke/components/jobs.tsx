@@ -1,23 +1,24 @@
 'use client';
 
 import { useMemo } from 'react';
-import { useLazySWR } from '../lib/api/swr';
-import { API_ROUTES } from '../lib/api/endpoints';
+import { useDeferredSWR } from '../lib/http/hooks';
+import { ROUTES } from '../lib/http/routes';
 
-async function fetchJobsPage(url: string): Promise<{ jobs: string[] }> {
-  const res = await fetch(url);
-  return res.json();
+async function loadJobs(key: string): Promise<{ jobs: string[] }> {
+  return (await fetch(key)).json();
 }
 
-export function Jobs({ teamId, enabled }: { teamId: string; enabled: boolean }) {
-  const url = useMemo(() => {
-    if (!enabled || !teamId) return null;
-    const params = new URLSearchParams({ teamId });
-    return `${API_ROUTES.JOBS}?${params.toString()}`;
-  }, [enabled, teamId]);
+export function Jobs({ team, active }: { team: string; active: boolean }) {
+  const key = useMemo(() => {
+    if (!(active && team)) {
+      return null;
+    }
+    const search = new URLSearchParams({ team, page: '1' });
+    return `${ROUTES.jobs}?${search.toString()}`;
+  }, [active, team]);
 
-  const { data } = useLazySWR<{ jobs: string[] }, Error>(url, fetchJobsPage, {
-    refreshInterval: 1000,
+  const { data } = useDeferredSWR<{ jobs: string[] }, Error>(key, loadJobs, {
+    refreshInterval: 5000,
   });
   return <ul>{data?.jobs.length}</ul>;
 }

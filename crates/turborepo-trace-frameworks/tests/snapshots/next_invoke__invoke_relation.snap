@@ -65,8 +65,8 @@ expression: "serde_json::to_string_pretty(&s.rel).unwrap()"
         "file": "components/items.tsx",
         "line": 22,
         "via": [
-          "apiFetch",
-          "apiFetchInternal",
+          "request",
+          "send",
           "fetch"
         ],
         "sites": 1
@@ -80,9 +80,9 @@ expression: "serde_json::to_string_pretty(&s.rel).unwrap()"
         "file": "components/items.tsx",
         "line": 12,
         "via": [
-          "typedFetch",
-          "apiFetch",
-          "apiFetchInternal",
+          "callPath",
+          "request",
+          "send",
           "fetch"
         ],
         "sites": 2
@@ -100,8 +100,8 @@ expression: "serde_json::to_string_pretty(&s.rel).unwrap()"
         "file": "components/items.tsx",
         "line": 22,
         "via": [
-          "apiFetch",
-          "apiFetchInternal",
+          "request",
+          "send",
           "fetch"
         ],
         "sites": 1
@@ -118,9 +118,9 @@ expression: "serde_json::to_string_pretty(&s.rel).unwrap()"
         "file": "components/items.tsx",
         "line": 12,
         "via": [
-          "typedFetch",
-          "apiFetch",
-          "apiFetchInternal",
+          "callPath",
+          "request",
+          "send",
           "fetch"
         ],
         "sites": 2
@@ -138,8 +138,8 @@ expression: "serde_json::to_string_pretty(&s.rel).unwrap()"
         "file": "components/items.tsx",
         "line": 22,
         "via": [
-          "apiFetch",
-          "apiFetchInternal",
+          "request",
+          "send",
           "fetch"
         ],
         "sites": 1
@@ -156,9 +156,9 @@ expression: "serde_json::to_string_pretty(&s.rel).unwrap()"
         "file": "components/items.tsx",
         "line": 12,
         "via": [
-          "typedFetch",
-          "apiFetch",
-          "apiFetchInternal",
+          "callPath",
+          "request",
+          "send",
           "fetch"
         ],
         "sites": 2
@@ -176,8 +176,8 @@ expression: "serde_json::to_string_pretty(&s.rel).unwrap()"
         "file": "components/items.tsx",
         "line": 22,
         "via": [
-          "apiFetch",
-          "apiFetchInternal",
+          "request",
+          "send",
           "fetch"
         ],
         "sites": 1
@@ -194,9 +194,9 @@ expression: "serde_json::to_string_pretty(&s.rel).unwrap()"
         "file": "components/items.tsx",
         "line": 12,
         "via": [
-          "typedFetch",
-          "apiFetch",
-          "apiFetchInternal",
+          "callPath",
+          "request",
+          "send",
           "fetch"
         ],
         "sites": 2
@@ -205,17 +205,17 @@ expression: "serde_json::to_string_pretty(&s.rel).unwrap()"
         "kind": "fetch",
         "target": {
           "external": {
-            "origin": "https://app.example.com",
+            "origin": "https://web.example.test",
             "pattern": "/api/health"
           }
         },
         "method": "GET",
-        "url": "https://app.example.com/api/health",
+        "url": "https://web.example.test/api/health",
         "file": "components/items.tsx",
         "line": 22,
         "via": [
-          "apiFetch",
-          "apiFetchInternal",
+          "request",
+          "send",
           "fetch"
         ],
         "sites": 1
@@ -224,17 +224,17 @@ expression: "serde_json::to_string_pretty(&s.rel).unwrap()"
         "kind": "fetch",
         "target": {
           "external": {
-            "origin": "https://app.example.com",
+            "origin": "https://web.example.test",
             "pattern": "/api/v1/items/*"
           }
         },
-        "url": "https://app.example.com/api/v1/items/*",
+        "url": "https://web.example.test/api/v1/items/*",
         "file": "components/items.tsx",
         "line": 12,
         "via": [
-          "typedFetch",
-          "apiFetch",
-          "apiFetchInternal",
+          "callPath",
+          "request",
+          "send",
           "fetch"
         ],
         "sites": 2
@@ -243,17 +243,17 @@ expression: "serde_json::to_string_pretty(&s.rel).unwrap()"
         "kind": "fetch",
         "target": {
           "external": {
-            "origin": "https://app.example.com",
+            "origin": "https://web.example.test",
             "pattern": "/health"
           }
         },
         "method": "GET",
-        "url": "https://app.example.com/health",
+        "url": "https://web.example.test/health",
         "file": "components/items.tsx",
         "line": 22,
         "via": [
-          "apiFetch",
-          "apiFetchInternal",
+          "request",
+          "send",
           "fetch"
         ],
         "sites": 1
@@ -262,17 +262,17 @@ expression: "serde_json::to_string_pretty(&s.rel).unwrap()"
         "kind": "fetch",
         "target": {
           "external": {
-            "origin": "https://app.example.com",
+            "origin": "https://web.example.test",
             "pattern": "/v1/items/*"
           }
         },
-        "url": "https://app.example.com/v1/items/*",
+        "url": "https://web.example.test/v1/items/*",
         "file": "components/items.tsx",
         "line": 12,
         "via": [
-          "typedFetch",
-          "apiFetch",
-          "apiFetchInternal",
+          "callPath",
+          "request",
+          "send",
           "fetch"
         ],
         "sites": 2
@@ -287,8 +287,8 @@ expression: "serde_json::to_string_pretty(&s.rel).unwrap()"
         "file": "components/dash.tsx",
         "line": 11,
         "via": [
-          "apiFetch",
-          "apiFetchInternal",
+          "request",
+          "send",
           "fetch"
         ],
         "sites": 1
@@ -301,9 +301,9 @@ expression: "serde_json::to_string_pretty(&s.rel).unwrap()"
         "method": "GET",
         "url": "/api/jobs",
         "file": "components/jobs.tsx",
-        "line": 19,
+        "line": 20,
         "via": [
-          "useLazySWR → fetchJobsPage",
+          "useDeferredSWR → loadJobs",
           "fetch"
         ],
         "sites": 1
@@ -318,9 +318,9 @@ expression: "serde_json::to_string_pretty(&s.rel).unwrap()"
         "file": "components/items.tsx",
         "line": 9,
         "via": [
-          "useTypedSWR",
-          "apiFetch",
-          "apiFetchInternal",
+          "usePathSWR",
+          "request",
+          "send",
           "fetch"
         ],
         "sites": 1
@@ -338,8 +338,8 @@ expression: "serde_json::to_string_pretty(&s.rel).unwrap()"
         "file": "components/dash.tsx",
         "line": 11,
         "via": [
-          "apiFetch",
-          "apiFetchInternal",
+          "request",
+          "send",
           "fetch"
         ],
         "sites": 1
@@ -357,9 +357,9 @@ expression: "serde_json::to_string_pretty(&s.rel).unwrap()"
         "file": "components/items.tsx",
         "line": 9,
         "via": [
-          "useTypedSWR",
-          "apiFetch",
-          "apiFetchInternal",
+          "usePathSWR",
+          "request",
+          "send",
           "fetch"
         ],
         "sites": 1
@@ -377,8 +377,8 @@ expression: "serde_json::to_string_pretty(&s.rel).unwrap()"
         "file": "components/dash.tsx",
         "line": 11,
         "via": [
-          "apiFetch",
-          "apiFetchInternal",
+          "request",
+          "send",
           "fetch"
         ],
         "sites": 1
@@ -396,9 +396,9 @@ expression: "serde_json::to_string_pretty(&s.rel).unwrap()"
         "file": "components/items.tsx",
         "line": 9,
         "via": [
-          "useTypedSWR",
-          "apiFetch",
-          "apiFetchInternal",
+          "usePathSWR",
+          "request",
+          "send",
           "fetch"
         ],
         "sites": 1
@@ -416,8 +416,8 @@ expression: "serde_json::to_string_pretty(&s.rel).unwrap()"
         "file": "components/dash.tsx",
         "line": 11,
         "via": [
-          "apiFetch",
-          "apiFetchInternal",
+          "request",
+          "send",
           "fetch"
         ],
         "sites": 1
@@ -435,9 +435,9 @@ expression: "serde_json::to_string_pretty(&s.rel).unwrap()"
         "file": "components/items.tsx",
         "line": 9,
         "via": [
-          "useTypedSWR",
-          "apiFetch",
-          "apiFetchInternal",
+          "usePathSWR",
+          "request",
+          "send",
           "fetch"
         ],
         "sites": 1
@@ -446,17 +446,17 @@ expression: "serde_json::to_string_pretty(&s.rel).unwrap()"
         "kind": "swr",
         "target": {
           "external": {
-            "origin": "https://app.example.com",
+            "origin": "https://web.example.test",
             "pattern": "/api/dash"
           }
         },
         "method": "GET",
-        "url": "https://app.example.com/api/dash",
+        "url": "https://web.example.test/api/dash",
         "file": "components/dash.tsx",
         "line": 11,
         "via": [
-          "apiFetch",
-          "apiFetchInternal",
+          "request",
+          "send",
           "fetch"
         ],
         "sites": 1
@@ -465,18 +465,18 @@ expression: "serde_json::to_string_pretty(&s.rel).unwrap()"
         "kind": "swr",
         "target": {
           "external": {
-            "origin": "https://app.example.com",
+            "origin": "https://web.example.test",
             "pattern": "/api/v1/items/*"
           }
         },
         "method": "GET",
-        "url": "https://app.example.com/api/v1/items/*",
+        "url": "https://web.example.test/api/v1/items/*",
         "file": "components/items.tsx",
         "line": 9,
         "via": [
-          "useTypedSWR",
-          "apiFetch",
-          "apiFetchInternal",
+          "usePathSWR",
+          "request",
+          "send",
           "fetch"
         ],
         "sites": 1
@@ -485,17 +485,17 @@ expression: "serde_json::to_string_pretty(&s.rel).unwrap()"
         "kind": "swr",
         "target": {
           "external": {
-            "origin": "https://app.example.com",
+            "origin": "https://web.example.test",
             "pattern": "/dash"
           }
         },
         "method": "GET",
-        "url": "https://app.example.com/dash",
+        "url": "https://web.example.test/dash",
         "file": "components/dash.tsx",
         "line": 11,
         "via": [
-          "apiFetch",
-          "apiFetchInternal",
+          "request",
+          "send",
           "fetch"
         ],
         "sites": 1
@@ -504,18 +504,18 @@ expression: "serde_json::to_string_pretty(&s.rel).unwrap()"
         "kind": "swr",
         "target": {
           "external": {
-            "origin": "https://app.example.com",
+            "origin": "https://web.example.test",
             "pattern": "/v1/items/*"
           }
         },
         "method": "GET",
-        "url": "https://app.example.com/v1/items/*",
+        "url": "https://web.example.test/v1/items/*",
         "file": "components/items.tsx",
         "line": 9,
         "via": [
-          "useTypedSWR",
-          "apiFetch",
-          "apiFetchInternal",
+          "usePathSWR",
+          "request",
+          "send",
           "fetch"
         ],
         "sites": 1
@@ -546,8 +546,8 @@ expression: "serde_json::to_string_pretty(&s.rel).unwrap()"
         "file": "lib/use-jobs-query.ts",
         "line": 8,
         "via": [
-          "apiFetch",
-          "apiFetchInternal",
+          "request",
+          "send",
           "fetch"
         ],
         "sites": 1
@@ -579,8 +579,8 @@ expression: "serde_json::to_string_pretty(&s.rel).unwrap()"
         "file": "lib/use-jobs-query.ts",
         "line": 8,
         "via": [
-          "apiFetch",
-          "apiFetchInternal",
+          "request",
+          "send",
           "fetch"
         ],
         "sites": 1
@@ -598,8 +598,8 @@ expression: "serde_json::to_string_pretty(&s.rel).unwrap()"
         "file": "lib/use-jobs-query.ts",
         "line": 8,
         "via": [
-          "apiFetch",
-          "apiFetchInternal",
+          "request",
+          "send",
           "fetch"
         ],
         "sites": 1
@@ -617,8 +617,8 @@ expression: "serde_json::to_string_pretty(&s.rel).unwrap()"
         "file": "lib/use-jobs-query.ts",
         "line": 8,
         "via": [
-          "apiFetch",
-          "apiFetchInternal",
+          "request",
+          "send",
           "fetch"
         ],
         "sites": 1
@@ -627,17 +627,17 @@ expression: "serde_json::to_string_pretty(&s.rel).unwrap()"
         "kind": "query",
         "target": {
           "external": {
-            "origin": "https://app.example.com",
+            "origin": "https://web.example.test",
             "pattern": "/api/jobs"
           }
         },
         "method": "GET",
-        "url": "https://app.example.com/api/jobs",
+        "url": "https://web.example.test/api/jobs",
         "file": "lib/use-jobs-query.ts",
         "line": 8,
         "via": [
-          "apiFetch",
-          "apiFetchInternal",
+          "request",
+          "send",
           "fetch"
         ],
         "sites": 1
@@ -646,17 +646,17 @@ expression: "serde_json::to_string_pretty(&s.rel).unwrap()"
         "kind": "query",
         "target": {
           "external": {
-            "origin": "https://app.example.com",
+            "origin": "https://web.example.test",
             "pattern": "/jobs"
           }
         },
         "method": "GET",
-        "url": "https://app.example.com/jobs",
+        "url": "https://web.example.test/jobs",
         "file": "lib/use-jobs-query.ts",
         "line": 8,
         "via": [
-          "apiFetch",
-          "apiFetchInternal",
+          "request",
+          "send",
           "fetch"
         ],
         "sites": 1
@@ -668,16 +668,16 @@ expression: "serde_json::to_string_pretty(&s.rel).unwrap()"
         "target": {
           "external": {
             "origin": "",
-            "pattern": "/api/v9/projects"
+            "pattern": "/api/v3/reports"
           }
         },
         "method": "GET",
-        "url": "/api/v9/projects",
+        "url": "/api/v3/reports",
         "file": "components/backend.tsx",
         "line": 8,
         "via": [
-          "apiFetch",
-          "apiFetchInternal",
+          "request",
+          "send",
           "fetch"
         ],
         "sites": 1
@@ -687,16 +687,16 @@ expression: "serde_json::to_string_pretty(&s.rel).unwrap()"
         "target": {
           "external": {
             "origin": "",
-            "pattern": "/v9/projects"
+            "pattern": "/v3/reports"
           }
         },
         "method": "GET",
-        "url": "/v9/projects",
+        "url": "/v3/reports",
         "file": "components/backend.tsx",
         "line": 8,
         "via": [
-          "apiFetch",
-          "apiFetchInternal",
+          "request",
+          "send",
           "fetch"
         ],
         "sites": 1
@@ -706,16 +706,16 @@ expression: "serde_json::to_string_pretty(&s.rel).unwrap()"
         "target": {
           "external": {
             "origin": "<origin>",
-            "pattern": "/api/v9/projects"
+            "pattern": "/api/v3/reports"
           }
         },
         "method": "GET",
-        "url": "<origin>/api/v9/projects",
+        "url": "<origin>/api/v3/reports",
         "file": "components/backend.tsx",
         "line": 8,
         "via": [
-          "apiFetch",
-          "apiFetchInternal",
+          "request",
+          "send",
           "fetch"
         ],
         "sites": 1
@@ -725,54 +725,16 @@ expression: "serde_json::to_string_pretty(&s.rel).unwrap()"
         "target": {
           "external": {
             "origin": "<origin>",
-            "pattern": "/v9/projects"
+            "pattern": "/v3/reports"
           }
         },
         "method": "GET",
-        "url": "<origin>/v9/projects",
+        "url": "<origin>/v3/reports",
         "file": "components/backend.tsx",
         "line": 8,
         "via": [
-          "apiFetch",
-          "apiFetchInternal",
-          "fetch"
-        ],
-        "sites": 1
-      },
-      {
-        "kind": "fetch",
-        "target": {
-          "external": {
-            "origin": "https://app.example.com",
-            "pattern": "/api/v9/projects"
-          }
-        },
-        "method": "GET",
-        "url": "https://app.example.com/api/v9/projects",
-        "file": "components/backend.tsx",
-        "line": 8,
-        "via": [
-          "apiFetch",
-          "apiFetchInternal",
-          "fetch"
-        ],
-        "sites": 1
-      },
-      {
-        "kind": "fetch",
-        "target": {
-          "external": {
-            "origin": "https://app.example.com",
-            "pattern": "/v9/projects"
-          }
-        },
-        "method": "GET",
-        "url": "https://app.example.com/v9/projects",
-        "file": "components/backend.tsx",
-        "line": 8,
-        "via": [
-          "apiFetch",
-          "apiFetchInternal",
+          "request",
+          "send",
           "fetch"
         ],
         "sites": 1
@@ -797,12 +759,50 @@ expression: "serde_json::to_string_pretty(&s.rel).unwrap()"
       {
         "kind": "fetch",
         "target": {
+          "external": {
+            "origin": "https://web.example.test",
+            "pattern": "/api/v3/reports"
+          }
+        },
+        "method": "GET",
+        "url": "https://web.example.test/api/v3/reports",
+        "file": "components/backend.tsx",
+        "line": 8,
+        "via": [
+          "request",
+          "send",
+          "fetch"
+        ],
+        "sites": 1
+      },
+      {
+        "kind": "fetch",
+        "target": {
+          "external": {
+            "origin": "https://web.example.test",
+            "pattern": "/v3/reports"
+          }
+        },
+        "method": "GET",
+        "url": "https://web.example.test/v3/reports",
+        "file": "components/backend.tsx",
+        "line": 8,
+        "via": [
+          "request",
+          "send",
+          "fetch"
+        ],
+        "sites": 1
+      },
+      {
+        "kind": "fetch",
+        "target": {
           "unknown": "call: computeUrl(props.kind)"
         },
         "file": "components/unknown.tsx",
         "line": 10,
         "via": [
-          "apiFetch"
+          "request"
         ],
         "sites": 1
       },
@@ -869,7 +869,7 @@ expression: "serde_json::to_string_pretty(&s.rel).unwrap()"
         "file": "components/sources.tsx",
         "line": 32,
         "via": [
-          "apiFetch"
+          "request"
         ],
         "sites": 1
       },
@@ -1157,8 +1157,8 @@ expression: "serde_json::to_string_pretty(&s.rel).unwrap()"
     "external_origins": {
       "": 7,
       "<origin>": 7,
-      "https://app.example.com": 7,
-      "https://status.example.com": 1
+      "https://status.example.com": 1,
+      "https://web.example.test": 7
     },
     "wrappers": 0,
     "routes": 15,

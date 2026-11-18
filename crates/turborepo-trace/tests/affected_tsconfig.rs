@@ -10,7 +10,7 @@
 //! vitest tests, unless a project that uses `vite-tsconfig-paths` can load a
 //! file below the config; type-check tasks see it as before.
 //!
-//! The shape is a real monorepo's: a package config that extends a shared
+//! The setup: a package config that extends a shared
 //! config package (linked in `node_modules`), has `compilerOptions.types` and a
 //! list of references to sibling packages, and gains one more reference. Argued
 //! from the tools' sources, not from a runtime oracle.
@@ -54,31 +54,31 @@ fn git(root: &Path, args: &[&str]) {
     );
 }
 
-const GATE_TSCONFIG: &str = "packages/gate/tsconfig.json";
+const LEDGER_TSCONFIG: &str = "packages/ledger/tsconfig.json";
 
-/// The config of `packages/gate` with the given references and compiler
+/// The config of `packages/ledger` with the given references and compiler
 /// options.
-fn gate_tsconfig(references: &[&str], options: &str) -> String {
+fn ledger_tsconfig(references: &[&str], options: &str) -> String {
     let refs: Vec<String> = references
         .iter()
         .map(|r| format!("    {{ \"path\": \"{r}\" }}"))
         .collect();
     format!(
-        "{{\n  \"extends\": [\"@acme/typescript-config/base.json\"],\n  \"compilerOptions\": {{ \
-         {options} }},\n  \"references\": [\n{}\n  ]\n}}\n",
+        "{{\n  \"extends\": [\"@acme/tsconfig/base.json\"],\n  \"compilerOptions\": {{ {options} \
+         }},\n  \"references\": [\n{}\n  ]\n}}\n",
         refs.join(",\n")
     )
 }
 
-/// Commits the working tree as the new base, with the config of `packages/gate`
-/// as it was.
+/// Commits the working tree as the new base, with the config of
+/// `packages/ledger` as it was.
 fn commit(r: &Path, message: &str) {
-    write(r, GATE_TSCONFIG, &gate_tsconfig(&BASE_REFS, TYPES));
+    write(r, LEDGER_TSCONFIG, &ledger_tsconfig(&BASE_REFS, TYPES));
     git(r, &["add", "-A"]);
     git(r, &["commit", "-q", "--allow-empty", "-m", message]);
 }
 
-const BASE_REFS: [&str; 2] = ["../headers", "../iam"];
+const BASE_REFS: [&str; 2] = ["../cookies", "../roles"];
 const TYPES: &str = "\"types\": [\"vitest/globals\"]";
 
 fn package(r: &Path, dir: &str, name: &str, scripts: &str) {
@@ -87,19 +87,19 @@ fn package(r: &Path, dir: &str, name: &str, scripts: &str) {
         &format!("{dir}/package.json"),
         &format!(
             "{{\"name\":\"{name}\",\"version\":\"1.0.0\",\"scripts\":{{{scripts}}},\"\
-             devDependencies\":{{\"@acme/typescript-config\":\"workspace:*\"}}}}"
+             devDependencies\":{{\"@acme/tsconfig\":\"workspace:*\"}}}}"
         ),
     );
     // The workspace link of the shared config package, as an install leaves it.
-    let link = r.join(dir).join("node_modules/@acme/typescript-config");
+    let link = r.join(dir).join("node_modules/@acme/tsconfig");
     std::fs::create_dir_all(link.parent().unwrap()).unwrap();
     let up = "../".repeat(dir.split('/').count() + 2);
-    turborepo_trace_core::os::symlink(format!("{up}tooling/typescript-config"), link).unwrap();
+    turborepo_trace_core::os::symlink(format!("{up}shared/tsconfig"), link).unwrap();
 }
 
-const V_A: &str = "packages/gate/src/a.test.ts";
-const V_B: &str = "packages/gate/src/b.test.ts";
-const J_C: &str = "packages/gate/jest/c.test.js";
+const V_A: &str = "packages/ledger/src/a.test.ts";
+const V_B: &str = "packages/ledger/src/b.test.ts";
+const J_C: &str = "packages/ledger/jest/c.test.js";
 const P_T: &str = "packages/plug/src/p.test.ts";
 
 fn repo() -> tempfile::TempDir {
@@ -114,12 +114,12 @@ fn repo() -> tempfile::TempDir {
     write(r, ".gitignore", ".turbo/trace/\nnode_modules/\n");
     write(
         r,
-        "tooling/typescript-config/package.json",
-        r#"{"name":"@acme/typescript-config","version":"1.0.0"}"#,
+        "shared/tsconfig/package.json",
+        r#"{"name":"@acme/tsconfig","version":"1.0.0"}"#,
     );
     write(
         r,
-        "tooling/typescript-config/base.json",
+        "shared/tsconfig/base.json",
         "{\n  // shared options\n  \"compilerOptions\": { \"strict\": true, \"module\": \
          \"esnext\", \"moduleResolution\": \"bundler\" }\n}\n",
     );
@@ -127,73 +127,73 @@ fn repo() -> tempfile::TempDir {
     // test.
     package(
         r,
-        "packages/gate",
-        "@acme/gate",
+        "packages/ledger",
+        "@acme/ledger",
         "\"test\":\"vitest run\",\"typecheck\":\"tsc --noEmit\"",
     );
-    write(r, GATE_TSCONFIG, &gate_tsconfig(&BASE_REFS, TYPES));
+    write(r, LEDGER_TSCONFIG, &ledger_tsconfig(&BASE_REFS, TYPES));
     write(
         r,
-        "packages/gate/vitest.config.ts",
+        "packages/ledger/vitest.config.ts",
         "import { defineConfig } from 'vitest/config';\n\nexport default defineConfig({ test: { \
          include: ['src/**/*.test.ts'] } });\n",
     );
     write(
         r,
-        "packages/gate/jest.config.js",
+        "packages/ledger/jest.config.js",
         "module.exports = { testMatch: ['<rootDir>/jest/**/*.test.js'] };\n",
     );
     for stem in ["a", "b"] {
         write(
             r,
-            &format!("packages/gate/src/{stem}.ts"),
+            &format!("packages/ledger/src/{stem}.ts"),
             &format!("export const {stem} = 1;\n"),
         );
         write(
             r,
-            &format!("packages/gate/src/{stem}.test.ts"),
+            &format!("packages/ledger/src/{stem}.test.ts"),
             &format!(
                 "import {{ expect, test }} from 'vitest';\nimport {{ {stem} }} from \
                  './{stem}';\n\ntest('{stem}', () => {{\n  expect({stem}).toBe(1);\n}});\n"
             ),
         );
     }
-    write(r, "packages/gate/jest/c.js", "module.exports = 1;\n");
+    write(r, "packages/ledger/jest/c.js", "module.exports = 1;\n");
     write(
         r,
-        "packages/gate/jest/c.test.js",
+        "packages/ledger/jest/c.test.js",
         "const c = require('./c');\n\ntest('c', () => {\n  expect(c).toBe(1);\n});\n",
     );
     // The projects it references.
-    for name in ["headers", "iam", "otel"] {
+    for name in ["cookies", "roles", "metrics"] {
         let dir = format!("packages/{name}");
         package(r, &dir, &format!("@acme/{name}"), "");
         write(r, &format!("{dir}/src/index.ts"), "export const x = 1;\n");
     }
     write(
         r,
-        "packages/headers/tsconfig.json",
-        "{ \"extends\": [\"@acme/typescript-config/base.json\"] }\n",
+        "packages/cookies/tsconfig.json",
+        "{ \"extends\": [\"@acme/tsconfig/base.json\"] }\n",
     );
     write(
         r,
-        "packages/iam/tsconfig.json",
-        "{ \"extends\": [\"@acme/typescript-config/base.json\"], \"include\": [\"**/*.ts\", \
-         \"**/*.tsx\"] }\n",
+        "packages/roles/tsconfig.json",
+        "{ \"extends\": [\"@acme/tsconfig/base.json\"], \"include\": [\"**/*.ts\", \"**/*.tsx\"] \
+         }\n",
     );
     write(
         r,
-        "packages/otel/tsconfig.json",
-        "{\n  \"extends\": [\"@acme/typescript-config/base.json\"],\n  \"include\": [\"src\", \
-         \"build.ts\"],\n  \"exclude\": [\"node_modules\", \"dist\"],\n  \"references\": [{ \
-         \"path\": \"../headers\" }]\n}\n",
+        "packages/metrics/tsconfig.json",
+        "{\n  \"extends\": [\"@acme/tsconfig/base.json\"],\n  \"include\": [\"src\", \
+         \"scripts/emit.ts\"],\n  \"exclude\": [\"dist\"],\n  \"references\": [{ \"path\": \
+         \"../cookies\" }]\n}\n",
     );
     // A vitest project whose config loads a plugin that reads tsconfig files.
     package(r, "packages/plug", "@acme/plug", "\"test\":\"vitest run\"");
     write(
         r,
         "packages/plug/tsconfig.json",
-        &gate_tsconfig(&BASE_REFS, TYPES),
+        &ledger_tsconfig(&BASE_REFS, TYPES),
     );
     write(
         r,
@@ -269,7 +269,7 @@ fn stats(r: &Path) -> String {
 /// The rule off.
 const OFF: [(&str, &str); 1] = [("TURBO_TRACE_DEBUG_TSCONFIG_FIELDS", "0")];
 
-const WITH_OTEL: [&str; 3] = ["../otel", "../headers", "../iam"];
+const WITH_METRICS: [&str; 3] = ["../metrics", "../cookies", "../roles"];
 
 #[test]
 fn a_reference_to_a_project_elsewhere_is_not_an_input_of_transpile_only_tests() {
@@ -277,7 +277,7 @@ fn a_reference_to_a_project_elsewhere_is_not_an_input_of_transpile_only_tests() 
     let r = d.path();
     // The real change: one more referenced project, a sibling package with its own
     // `include`.
-    write(r, GATE_TSCONFIG, &gate_tsconfig(&WITH_OTEL, TYPES));
+    write(r, LEDGER_TSCONFIG, &ledger_tsconfig(&WITH_METRICS, TYPES));
     // Without the rule every test below the config is selected, through the config
     // only.
     assert_eq!(tests_env(r, &OFF), [J_C, V_A, V_B]);
@@ -285,9 +285,9 @@ fn a_reference_to_a_project_elsewhere_is_not_an_input_of_transpile_only_tests() 
     let err = stats(r);
     assert!(
         err.contains(
-            "tsconfig packages/gate/tsconfig.json: only `references` changed (../otel), and no \
-             referenced project that came or went can include a file of packages/gate: not an \
-             input change for tests that only transpile"
+            "tsconfig packages/ledger/tsconfig.json: only `references` changed (../metrics), and \
+             no referenced project that came or went can include a file of packages/ledger: not \
+             an input change for tests that only transpile"
         ),
         "{err}"
     );
@@ -296,24 +296,25 @@ fn a_reference_to_a_project_elsewhere_is_not_an_input_of_transpile_only_tests() 
     let explained = String::from_utf8(run_env(r, &args, &[]).stdout).unwrap();
     assert!(
         explained.contains(&format!("unaffected {V_A}"))
-            && explained
-                .contains("note: tsconfig packages/gate/tsconfig.json: only `references` changed"),
+            && explained.contains(
+                "note: tsconfig packages/ledger/tsconfig.json: only `references` changed"
+            ),
         "{explained}"
     );
     // The type check reads the whole file.
     assert!(
-        tasks(r).contains(&"task:packages/gate#typecheck".to_owned()),
+        tasks(r).contains(&"task:packages/ledger#typecheck".to_owned()),
         "{:?}",
         tasks(r)
     );
     // A reference that goes away, and comments.
-    write(r, GATE_TSCONFIG, &gate_tsconfig(&["../iam"], TYPES));
+    write(r, LEDGER_TSCONFIG, &ledger_tsconfig(&["../roles"], TYPES));
     assert_eq!(tests_env(r, &OFF), [J_C, V_A, V_B]);
     assert!(tests(r).is_empty());
     write(
         r,
-        GATE_TSCONFIG,
-        &format!("// the gate\n{}", gate_tsconfig(&BASE_REFS, TYPES)),
+        LEDGER_TSCONFIG,
+        &format!("// the ledger\n{}", ledger_tsconfig(&BASE_REFS, TYPES)),
     );
     assert_eq!(tests_env(r, &OFF), [J_C, V_A, V_B]);
     assert!(tests(r).is_empty());
@@ -328,7 +329,7 @@ fn a_project_with_a_plugin_that_reads_references_keeps_the_whole_file() {
     write(
         r,
         "packages/plug/tsconfig.json",
-        &gate_tsconfig(&WITH_OTEL, TYPES),
+        &ledger_tsconfig(&WITH_METRICS, TYPES),
     );
     assert_eq!(tests(r), [P_T]);
     let err = stats(r);
@@ -351,7 +352,7 @@ fn everything_else_is_a_whole_file_change() {
         assert_eq!(tests(r), all, "{why}");
         let err = stats(r);
         assert!(
-            err.contains("tsconfig packages/gate/tsconfig.json: a whole-file change:")
+            err.contains("tsconfig packages/ledger/tsconfig.json: a whole-file change:")
                 && err.contains(why),
             "{why}: {err}"
         );
@@ -359,9 +360,9 @@ fn everything_else_is_a_whole_file_change() {
     // A compiler option, alone or with a reference.
     write(
         r,
-        GATE_TSCONFIG,
-        &gate_tsconfig(
-            &WITH_OTEL,
+        LEDGER_TSCONFIG,
+        &ledger_tsconfig(
+            &WITH_METRICS,
             "\"types\": [\"vitest/globals\"], \"jsx\": \"react-jsx\"",
         ),
     );
@@ -369,41 +370,44 @@ fn everything_else_is_a_whole_file_change() {
     // The same projects in another order: the first one that includes a file wins.
     write(
         r,
-        GATE_TSCONFIG,
-        &gate_tsconfig(&["../iam", "../headers"], TYPES),
+        LEDGER_TSCONFIG,
+        &ledger_tsconfig(&["../roles", "../cookies"], TYPES),
     );
     whole(r, "the order of the referenced projects changed");
     // A project below the config's directory can include its files.
     write(
         r,
-        "packages/gate/sub/tsconfig.lib.json",
+        "packages/ledger/sub/tsconfig.lib.json",
         "{ \"include\": [\"../src\"] }\n",
     );
     write(
         r,
-        GATE_TSCONFIG,
-        &gate_tsconfig(&["./sub/tsconfig.lib.json", "../headers", "../iam"], TYPES),
+        LEDGER_TSCONFIG,
+        &ledger_tsconfig(
+            &["./sub/tsconfig.lib.json", "../cookies", "../roles"],
+            TYPES,
+        ),
     );
     whole(r, "is in, above or below the config's directory");
     // A project elsewhere whose `include` climbs out of its directory.
-    std::fs::remove_dir_all(r.join("packages/gate/sub")).unwrap();
+    std::fs::remove_dir_all(r.join("packages/ledger/sub")).unwrap();
     write(
         r,
-        "packages/otel/tsconfig.json",
-        "{ \"include\": [\"src\", \"../gate/src\"] }\n",
+        "packages/metrics/tsconfig.json",
+        "{ \"include\": [\"src\", \"../ledger/src\"] }\n",
     );
-    commit(r, "otel includes gate");
-    write(r, GATE_TSCONFIG, &gate_tsconfig(&WITH_OTEL, TYPES));
+    commit(r, "metrics includes ledger");
+    write(r, LEDGER_TSCONFIG, &ledger_tsconfig(&WITH_METRICS, TYPES));
     whole(
         r,
-        "packages/otel includes files from packages/gate/src, which holds or is held by the \
+        "packages/metrics includes files from packages/ledger/src, which holds or is held by the \
          directory of the config",
     );
     // A referenced project that does not exist: Vite fails on it.
     write(
         r,
-        GATE_TSCONFIG,
-        &gate_tsconfig(&["../missing", "../headers", "../iam"], TYPES),
+        LEDGER_TSCONFIG,
+        &ledger_tsconfig(&["../missing", "../cookies", "../roles"], TYPES),
     );
     whole(
         r,
@@ -415,27 +419,27 @@ fn everything_else_is_a_whole_file_change() {
     commit(r, "base again");
     write(
         r,
-        GATE_TSCONFIG,
-        &gate_tsconfig(&["../missing", "../headers", "../iam"], TYPES),
+        LEDGER_TSCONFIG,
+        &ledger_tsconfig(&["../missing", "../cookies", "../roles"], TYPES),
     );
     git(r, &["add", "-A"]);
     git(r, &["commit", "-q", "-m", "a dangling reference"]);
-    write(r, GATE_TSCONFIG, &gate_tsconfig(&BASE_REFS, TYPES));
+    write(r, LEDGER_TSCONFIG, &ledger_tsconfig(&BASE_REFS, TYPES));
     whole(r, "the referenced project packages/missing does not load");
     commit(r, "base again");
     // A referenced project that changes in the same diff.
     write(
         r,
-        "packages/otel/tsconfig.json",
+        "packages/metrics/tsconfig.json",
         "{ \"include\": [\"src\"] }\n",
     );
-    write(r, GATE_TSCONFIG, &gate_tsconfig(&WITH_OTEL, TYPES));
-    whole(r, "packages/otel/tsconfig.json changes in the same diff");
+    write(r, LEDGER_TSCONFIG, &ledger_tsconfig(&WITH_METRICS, TYPES));
+    whole(r, "packages/metrics/tsconfig.json changes in the same diff");
     // A list TypeScript reports.
     write(
         r,
-        GATE_TSCONFIG,
-        &gate_tsconfig(&BASE_REFS, TYPES).replace("{ \"path\": \"../iam\" }", "\"../iam\""),
+        LEDGER_TSCONFIG,
+        &ledger_tsconfig(&BASE_REFS, TYPES).replace("{ \"path\": \"../roles\" }", "\"../roles\""),
     );
     whole(r, "`references` is not a list of projects at one revision");
 }
@@ -444,9 +448,9 @@ fn everything_else_is_a_whole_file_change() {
 fn a_project_that_inherits_what_it_includes() {
     let d = repo();
     let r = d.path();
-    // `headers` has no `include` of its own and extends a config that has none:
+    // `cookies` has no `include` of its own and extends a config that has none:
     // `**/*` below its own directory.
-    write(r, GATE_TSCONFIG, &gate_tsconfig(&["../iam"], TYPES));
+    write(r, LEDGER_TSCONFIG, &ledger_tsconfig(&["../roles"], TYPES));
     assert!(tests(r).is_empty());
     // An extended config that defines `include` relative to the repository root
     // reaches every package.
@@ -457,22 +461,22 @@ fn a_project_that_inherits_what_it_includes() {
     );
     write(
         r,
-        "packages/headers/tsconfig.json",
+        "packages/cookies/tsconfig.json",
         "{ \"extends\": \"../../tsconfig.base.json\" }\n",
     );
-    commit(r, "headers inherits include");
-    write(r, GATE_TSCONFIG, &gate_tsconfig(&["../iam"], TYPES));
+    commit(r, "cookies inherits include");
+    write(r, LEDGER_TSCONFIG, &ledger_tsconfig(&["../roles"], TYPES));
     assert_eq!(tests(r), [J_C, V_A, V_B]);
     assert!(stats(r).contains("includes files from the repository root"));
     // An `extends` whose package is not installed: the tracer's loader goes on
     // without that base, and what the base would add is not known.
     write(
         r,
-        "packages/headers/tsconfig.json",
+        "packages/cookies/tsconfig.json",
         "{ \"extends\": \"@acme/not-installed/base.json\" }\n",
     );
-    commit(r, "headers extends a missing package");
-    write(r, GATE_TSCONFIG, &gate_tsconfig(&["../iam"], TYPES));
+    commit(r, "cookies extends a missing package");
+    write(r, LEDGER_TSCONFIG, &ledger_tsconfig(&["../roles"], TYPES));
     assert_eq!(tests(r), [J_C, V_A, V_B]);
     assert!(stats(r).contains("`extends` names a package that is not installed here"));
 }
@@ -528,16 +532,16 @@ fn a_config_that_is_not_there_next_to_changed_references() {
         with
     };
 
-    // `headers`, which the configs of `gate` and `plug` reference, extends a
+    // `cookies`, which the configs of `ledger` and `plug` reference, extends a
     // generated config that is not there.
     let d = repo();
     let r = d.path();
-    let headers = "packages/headers/tsconfig.json";
-    let generated = "packages/headers/.generated/tsconfig.json";
+    let cookies = "packages/cookies/tsconfig.json";
+    let generated = "packages/cookies/.generated/tsconfig.json";
     let names_generated = "{ \"extends\": \"./.generated/tsconfig.json\" }\n";
     let before = floor(r, &scratch.path().join("base"), &[]);
-    write(r, headers, names_generated);
-    commit(r, "headers extends a generated config");
+    write(r, cookies, names_generated);
+    commit(r, "cookies extends a generated config");
     // Covered, not open: without the rule the tests below the two referencing
     // configs are on the floor.
     let referencing = [J_C, V_A, V_B, P_T];
@@ -547,27 +551,27 @@ fn a_config_that_is_not_there_next_to_changed_references() {
     // The project that names the missing config changes.
     write(
         r,
-        headers,
+        cookies,
         "{ \"extends\": \"./.generated/tsconfig.json\", \"compilerOptions\": {} }\n",
     );
     assert_eq!(both(r, "t1", "the naming project changes"), referencing);
-    write(r, headers, names_generated);
+    write(r, cookies, names_generated);
     // The reference to it goes: the project does not parse with its chain, so
     // nothing says that Vite could not have used it.
-    write(r, GATE_TSCONFIG, &gate_tsconfig(&["../iam"], TYPES));
+    write(r, LEDGER_TSCONFIG, &ledger_tsconfig(&["../roles"], TYPES));
     assert_eq!(both(r, "t1", "the reference goes"), all);
     let err = stats(r);
     assert!(
-        err.contains("tsconfig packages/gate/tsconfig.json: a whole-file change:")
+        err.contains("tsconfig packages/ledger/tsconfig.json: a whole-file change:")
             && err.contains(
-                "the referenced project packages/headers does not load: Tsconfig not found \
-                 packages/headers/.generated/tsconfig.json"
+                "the referenced project packages/cookies does not load: Tsconfig not found \
+                 packages/cookies/.generated/tsconfig.json"
             ),
         "{err}"
     );
-    write(r, GATE_TSCONFIG, &gate_tsconfig(&BASE_REFS, TYPES));
+    write(r, LEDGER_TSCONFIG, &ledger_tsconfig(&BASE_REFS, TYPES));
     // The generated config appears: the project loads and includes no file below
-    // the referencing configs, as before `headers` named it. Whatever that
+    // the referencing configs, as before `cookies` named it. Whatever that
     // selects, the rule is no part of it. (A project that loads and comes to be
     // broken: `a_referenced_project_that_comes_to_be_broken`.)
     write(r, generated, "{}\n");
@@ -576,42 +580,40 @@ fn a_config_that_is_not_there_next_to_changed_references() {
     // A referenced project that is not there, at both revisions.
     let d = repo();
     let r = d.path();
-    let dangling = gate_tsconfig(&["../missing", "../headers", "../iam"], TYPES);
-    write(r, GATE_TSCONFIG, &dangling);
+    let dangling = ledger_tsconfig(&["../missing", "../cookies", "../roles"], TYPES);
+    write(r, LEDGER_TSCONFIG, &dangling);
     git(r, &["add", "-A"]);
     git(r, &["commit", "-q", "-m", "a dangling reference"]);
     assert_eq!(floor(r, &scratch.path().join("dangling"), &[]), before);
     assert!(both(r, "t2", "nothing changed").is_empty());
-    // It appears, and includes no file below `gate`: as for the generated config
+    // It appears, and includes no file below `ledger`: as for the generated config
     // above.
     write(r, "packages/missing/tsconfig.json", "{}\n");
     both(r, "t2", "the referenced project appears");
     // The dangling reference goes (the project is not there): Vite failed on it
     // before.
     std::fs::remove_dir_all(r.join("packages/missing")).unwrap();
-    write(r, GATE_TSCONFIG, &gate_tsconfig(&BASE_REFS, TYPES));
+    write(r, LEDGER_TSCONFIG, &ledger_tsconfig(&BASE_REFS, TYPES));
     assert_eq!(both(r, "t2", "the dangling reference goes"), all);
 
-    // The config of `gate` itself extends a generated config, and its references
+    // The config of `ledger` itself extends a generated config, and its references
     // change.
     let d = repo();
     let r = d.path();
     let broken = |refs: &[&str]| {
-        gate_tsconfig(refs, TYPES).replace(
-            "@acme/typescript-config/base.json",
-            "./.generated/tsconfig.json",
-        )
+        ledger_tsconfig(refs, TYPES)
+            .replace("@acme/tsconfig/base.json", "./.generated/tsconfig.json")
     };
-    write(r, GATE_TSCONFIG, &broken(&BASE_REFS));
+    write(r, LEDGER_TSCONFIG, &broken(&BASE_REFS));
     git(r, &["add", "-A"]);
     git(
         r,
-        &["commit", "-q", "-m", "gate extends a generated config"],
+        &["commit", "-q", "-m", "ledger extends a generated config"],
     );
     assert_eq!(floor(r, &scratch.path().join("own"), &[]), before);
     assert!(both(r, "t3", "nothing changed").is_empty());
     // Only the references: no transform reads them, and the config loads no better.
-    write(r, GATE_TSCONFIG, &broken(&WITH_OTEL));
+    write(r, LEDGER_TSCONFIG, &broken(&WITH_METRICS));
     let only_references = both(r, "t3", "only the references change");
     assert!(
         only_references.is_empty(),
@@ -620,9 +622,9 @@ fn a_config_that_is_not_there_next_to_changed_references() {
     );
     // With the generated config appearing in the same diff the config loads:
     // selected, whatever the references are.
-    write(r, "packages/gate/.generated/tsconfig.json", "{}\n");
+    write(r, "packages/ledger/.generated/tsconfig.json", "{}\n");
     assert_eq!(both(r, "t3", "references and the generated config"), all);
-    write(r, GATE_TSCONFIG, &broken(&BASE_REFS));
+    write(r, LEDGER_TSCONFIG, &broken(&BASE_REFS));
     assert_eq!(both(r, "t3", "the generated config appears"), all);
 }
 
@@ -654,19 +656,19 @@ fn a_referenced_project_that_comes_to_be_broken() {
         refreshed
     };
 
-    // `headers`, which the configs of `gate` and `plug` reference, extends a
+    // `cookies`, which the configs of `ledger` and `plug` reference, extends a
     // generated config that is there.
     let d = repo();
     let r = d.path();
-    let headers = "packages/headers/tsconfig.json";
-    let generated = "packages/headers/.generated/tsconfig.json";
+    let cookies = "packages/cookies/tsconfig.json";
+    let generated = "packages/cookies/.generated/tsconfig.json";
     write(
         r,
-        headers,
+        cookies,
         "{ \"extends\": \"./.generated/tsconfig.json\" }\n",
     );
     write(r, generated, "{}\n");
-    commit(r, "headers extends a generated config");
+    commit(r, "cookies extends a generated config");
     // A graph traced with a missing config as an open record, for the floor.
     let open = scratch.path().join("open");
     let before = floor(r, &open, &off);
@@ -695,7 +697,7 @@ fn a_referenced_project_that_comes_to_be_broken() {
     let open = scratch.path().join("open-2");
     let before = floor(r, &open, &off);
     assert!(check(r, "nothing changed").is_empty());
-    std::fs::remove_file(r.join(headers)).unwrap();
+    std::fs::remove_file(r.join(cookies)).unwrap();
     assert_eq!(check(r, "the referenced config is deleted"), referencing);
     assert_eq!(floor(r, &open, &off), before + 4);
     assert_eq!(
@@ -707,25 +709,25 @@ fn a_referenced_project_that_comes_to_be_broken() {
     let d = repo();
     let r = d.path();
     assert!(check(r, "nothing changed").is_empty());
-    write(r, headers, "{ \"extends\": [\n");
+    write(r, cookies, "{ \"extends\": [\n");
     assert_eq!(
         check(r, "the referenced config does not parse"),
         referencing
     );
 
-    // The project comes to include the sources of `gate`: it governs them now, and
-    // its config is their input.
+    // The project comes to include the sources of `ledger`: it governs them now,
+    // and its config is their input.
     let d = repo();
     let r = d.path();
     assert!(check(r, "nothing changed").is_empty());
     write(
         r,
-        headers,
-        "{ \"extends\": [\"@acme/typescript-config/base.json\"], \"include\": \
-         [\"../gate/src/**/*.ts\"] }\n",
+        cookies,
+        "{ \"extends\": [\"@acme/tsconfig/base.json\"], \"include\": [\"../ledger/src/**/*.ts\"] \
+         }\n",
     );
     assert_eq!(
-        check(r, "the referenced project includes files of gate"),
+        check(r, "the referenced project includes files of ledger"),
         [V_A, V_B]
     );
 
@@ -736,9 +738,9 @@ fn a_referenced_project_that_comes_to_be_broken() {
     assert!(check(r, "nothing changed").is_empty());
     write(
         r,
-        headers,
-        "{ \"extends\": [\"@acme/typescript-config/base.json\"], \"compilerOptions\": { \
-         \"strict\": false } }\n",
+        cookies,
+        "{ \"extends\": [\"@acme/tsconfig/base.json\"], \"compilerOptions\": { \"strict\": false \
+         } }\n",
     );
     assert!(check(r, "an option of the referenced project").is_empty());
 }

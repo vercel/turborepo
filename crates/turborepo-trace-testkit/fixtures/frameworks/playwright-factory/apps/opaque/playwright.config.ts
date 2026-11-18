@@ -1,3 +1,3 @@
-import { defineConfig } from '@acme/playwright/opaque';
+import { defineConfig } from '@acme/browser-kit/opaque';
 
 export default defineConfig(__dirname);

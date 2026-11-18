@@ -1,8 +1,8 @@
 //! Static wrapper detection for first-party binaries: does a bin run a known
 //! tool?
 //!
-//! Many internal binaries wrap a tool (`jest-dd` runs jest with Datadog
-//! instrumentation, `tsc-build` runs tsc). A cheap lexical scan of the bin
+//! Many first-party binaries wrap a tool (`jest-ci` runs jest with a CI
+//! reporter, `tsc-emit` runs tsc). A cheap lexical scan of the bin
 //! entry and its first-party relative imports (inside the bin's package, at
 //! most [`MAX_FILES`] files) collects string literals with the code just before
 //! them, and decides:
@@ -451,7 +451,7 @@ mod tests {
             "fs.readFileSync(path.join(process.cwd(), 'a'))"
         )));
         assert!(reads_cwd(&lex("path.resolve('openapi.json')")));
-        assert!(!reads_cwd(&lex("require.resolve('dd-trace/ci/init')")));
+        assert!(!reads_cwd(&lex("require.resolve('reporter/register')")));
         assert!(!reads_cwd(&lex("path.resolve(__dirname, 'a')")));
     }
 }

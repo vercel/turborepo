@@ -1,5 +1,3 @@
-import { defineConfig } from '@acme/playwright/config';
+import { defineConfig } from '@acme/browser-kit/preset';
 
-const config = defineConfig(__dirname);
-
-export default config;
+export default defineConfig(__dirname);

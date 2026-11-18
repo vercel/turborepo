@@ -1,0 +1,19 @@
+# A scheduled job that rewrites the root manifest: `jq` is a program nothing
+# recognizes, so the job depends on the whole repository, and `mv … package.json`
+# writes the root manifest in the runner.
+name: Pin Node
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "30 4 1 * *"
+jobs:
+  pin-node:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - name: Write the engines field
+        run: |
+          jq ".engines.node = \"$NODE_RANGE\"" package.json > package.json.next
+          mv package.json.next package.json
+          pnpm install --lockfile-only

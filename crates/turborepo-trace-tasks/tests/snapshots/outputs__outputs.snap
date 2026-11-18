@@ -6,7 +6,7 @@ task:.#build
   dist/**  declared  (links)
 task:.#bump
   package.json  in_place  (no link)
-  package.json.tmp  artifact  (links)
+  package.json.new  artifact  (links)
 task:.#copy-assets
   dist/logo.svg  artifact  (links)
 task:.#format
@@ -17,6 +17,6 @@ task:.#gen-stdout
   src/generated/api-stdout.ts  generated  (links)
 task:.#image
   image.id  ci_side_effect  (no link)
-gha:.github/workflows/cron-update-turbo.yml#update-turbo
+gha:.github/workflows/pin-node.yml#pin-node
   package.json  ci_side_effect  (no link)
-  package.json.tmp  ci_side_effect  (no link)
+  package.json.next  ci_side_effect  (no link)

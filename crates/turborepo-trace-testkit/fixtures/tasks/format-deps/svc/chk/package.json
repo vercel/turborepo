@@ -4,6 +4,6 @@
   "scripts": {
     "generate": "gen-chk --out src/gen && pnpm -w fmt:check",
     "generate:fix": "gen-chk --out src/gen && pnpm -w lint:fix",
-    "format": "pnpm -w fmt-select src"
+    "format": "pnpm -w format:files src"
   }
 }

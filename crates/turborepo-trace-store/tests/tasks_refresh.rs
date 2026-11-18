@@ -459,15 +459,15 @@ fn edits_of_the_workflow_fixture() {
         std::fs::write(p, s.replacen(from, to, 1)).unwrap();
     };
     edit(
-        ".github/workflows/quality.yml",
+        ".github/workflows/review.yml",
         "runs-on: ubuntu-latest",
         "runs-on: ubuntu-24.04",
     );
     r.refreshed_equals_cold("job key edited");
     edit(
-        ".github/workflows/checks.yml",
-        "turbo ci:checks $FILTERS",
-        "turbo ci:checks --filter=@acme/a",
+        ".github/workflows/batch.yml",
+        "turbo ci:verify $SCOPE",
+        "turbo ci:verify --filter=@acme/a",
     );
     r.refreshed_equals_cold("step command edited");
     edit(
