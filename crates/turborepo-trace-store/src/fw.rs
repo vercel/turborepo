@@ -72,7 +72,7 @@ pub const GRAPH_FRAMEWORKS: &[(&str, &str)] = &[
 ];
 
 /// Version of the framework integration, part of the options digest.
-pub const INTEGRATION_VERSION: &str = "frameworks-17";
+pub const INTEGRATION_VERSION: &str = "frameworks-18";
 
 /// The adapters of [`GRAPH_FRAMEWORKS`] that are compiled in.
 fn adapters() -> Vec<(&'static dyn Framework, &'static str)> {
@@ -958,16 +958,31 @@ impl<'a> Fw<'a> {
                 if self.tracer.fs().is_host_path(&p) {
                     return None;
                 }
+                // The runner loads what a symbolic link leads to: the edge goes there and
+                // crosses the links, as an import's edge does. A link that leaves the
+                // repository keeps its own path.
+                let (real, real_id, links) = self.tracer.realize(&p);
+                let inside = !self.tracer.fs().is_host_path(&real);
                 if self.tracer.fs().is_file(&p) {
+                    let (succ, links) = if inside {
+                        (real_id, links)
+                    } else {
+                        (self.tracer.intern(&p), Vec::new())
+                    };
                     Some(FwEdge {
                         kind,
                         phase,
                         spec: format!("{label} {}", self.display(&p)),
-                        succ: vec![self.tracer.intern(&p)],
-                        links: Vec::new(),
+                        succ: vec![succ],
+                        links,
                         uncertainty: None,
                     })
                 } else {
+                    // A link that leads to nothing: the file it would lead to is a probe
+                    // too, so that the file's coming selects the test.
+                    if inside && *real != *p {
+                        obs.missing.push(real.to_path_buf());
+                    }
                     obs.missing.push(p);
                     None
                 }

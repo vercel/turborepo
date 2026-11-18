@@ -388,6 +388,14 @@ impl Tracer {
         self.shared.interner.intern(path)
     }
 
+    /// Where `path` really is, the way an import's target is found: its
+    /// symbolic links below the base resolved, with the links crossed. A
+    /// link that leads to nothing gives the path it would lead to.
+    pub fn realize(&self, path: &Path) -> (Arc<Path>, FileId, Vec<FileId>) {
+        let r = self.shared.realize(self.shared.interner.intern(path));
+        (self.shared.interner.path(r.real), r.real, r.links.clone())
+    }
+
     /// Drops all caches.
     pub fn clear_cache(&self) {
         self.shared.fs.clear();
