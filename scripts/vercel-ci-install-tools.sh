@@ -31,3 +31,7 @@ chmod +x "$turbo"
 # No turbo.lock is committed, so setup has to resolve one.
 "$turbo" setup --no-frozen
 "$turbo" --version
+
+# Vercel CI hides the output of its planning step, which runs `turbo query`
+# next. Run a query here so a failure shows up in the install log.
+"$turbo" query '{ packages { items { name } } }' > /dev/null
