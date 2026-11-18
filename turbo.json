@@ -70,7 +70,8 @@
     },
     "turborepo-crates#format": {
       "cache": true,
-      "command": ["cargo", "fmt", "--check"]
+      "command": ["cargo", "fmt", "--check"],
+      "tags": ["ci"]
     },
     // Match the stricter cargo alias used by the Rust lint CI job.
     "turborepo-crates#lint": {
