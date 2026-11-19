@@ -551,6 +551,8 @@ fn turbo_download_command(
         }
         PackageManager::Berry => ("yarn", vec!["dlx".into(), package]),
         PackageManager::Bun => ("bun", vec!["x".into(), package]),
+        // vlx reads flags as its own until a `--`
+        PackageManager::Vlt => ("vlx", vec!["--yes".into(), "--".into(), package]),
         PackageManager::Nub { .. } => ("nubx", vec![package]),
         PackageManager::Aube { .. } => ("aubx", vec![package]),
     }
@@ -1141,6 +1143,7 @@ mod tests {
             (PackageManager::Pnpm6, "pnpm", vec!["dlx"]),
             (PackageManager::Pnpm9, "pnpm", vec!["dlx"]),
             (PackageManager::Bun, "bun", vec!["x"]),
+            (PackageManager::Vlt, "vlx", vec!["--yes", "--"]),
             (
                 PackageManager::Nub {
                     lockfile: Box::new(PackageManager::Npm),

@@ -7,7 +7,7 @@ Package manager lockfile parsing, analysis, and serialization. Tracks which exte
 ## Architecture
 
 ```
-Lockfile (npm, pnpm, yarn, bun)
+Lockfile (npm, pnpm, yarn, bun, vlt)
     └── turborepo-lockfiles
         ├── Parse lockfile format
         ├── Build dependency subgraph per package
@@ -20,6 +20,7 @@ Supported formats:
 - Yarn 1 (`yarn.lock`)
 - Yarn Berry (`yarn.lock` v2+)
 - Bun (`bun.lockb`)
+- vlt (`vlt-lock.json`)
 
 ## Notes
 

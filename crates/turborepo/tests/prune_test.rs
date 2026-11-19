@@ -313,6 +313,140 @@ fn test_prune_production_docker_excludes_dev_dependencies() {
     assert!(!tempdir.path().join("out/json/packages/util").exists());
 }
 
+// --- vlt ---
+
+const VLT_LOCKFILE: &str = r#"{
+  "lockfileVersion": 1,
+  "options": {},
+  "nodes": {
+    "~npm~is-buffer@2.0.5": [2,"is-buffer"],
+    "~npm~kind-of@6.0.3": [0,"kind-of"],
+    "~npm~left-pad@1.3.0": [0,"left-pad"]
+  },
+  "edges": {
+    "workspace~packages+app is-buffer": "dev ^2.0.5 ~npm~is-buffer@2.0.5",
+    "workspace~packages+app devtool": "dev workspace:* workspace~packages+devtool",
+    "workspace~packages+app lib": "prod workspace:* workspace~packages+lib",
+    "workspace~packages+devtool kind-of": "prod ^6.0.3 ~npm~kind-of@6.0.3",
+    "workspace~packages+other left-pad": "prod ^1.3.0 ~npm~left-pad@1.3.0"
+  }
+}
+"#;
+
+fn setup_vlt_prune(dir: &Path) {
+    use serde_json::json;
+
+    let write = |path: &str, contents: String| {
+        let path = dir.join(path);
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        fs::write(path, contents).unwrap();
+    };
+    write(
+        "package.json",
+        json!({"name": "vlt-prune", "private": true, "packageManager": "vlt@1.8.0"}).to_string(),
+    );
+    write(
+        "vlt.json",
+        json!({"workspaces": ["packages/*"]}).to_string(),
+    );
+    write("turbo.json", json!({"tasks": {"build": {}}}).to_string());
+    write("vlt-lock.json", VLT_LOCKFILE.to_string());
+    for (name, dependencies) in [
+        (
+            "app",
+            json!({
+                "dependencies": {"lib": "workspace:*"},
+                "devDependencies": {"is-buffer": "^2.0.5", "devtool": "workspace:*"}
+            }),
+        ),
+        ("lib", json!({})),
+        ("devtool", json!({"dependencies": {"kind-of": "^6.0.3"}})),
+        ("other", json!({"dependencies": {"left-pad": "^1.3.0"}})),
+    ] {
+        let mut package = json!({"name": name, "version": "1.0.0"});
+        package
+            .as_object_mut()
+            .unwrap()
+            .extend(dependencies.as_object().unwrap().clone());
+        write(
+            &format!("packages/{name}/package.json"),
+            package.to_string(),
+        );
+    }
+}
+
+#[test]
+fn test_prune_vlt() {
+    let tempdir = tempfile::tempdir().unwrap();
+    let dir = tempdir.path();
+    setup_vlt_prune(dir);
+
+    let output = run_turbo(dir, &["prune", "app"]);
+    assert!(output.status.success(), "{}", combined_output(&output));
+    let out = dir.join("out");
+    assert_eq!(ls_dir(&out.join("packages")), ["app", "devtool", "lib"]);
+    // vlt reads its workspaces and settings from vlt.json
+    assert_eq!(
+        fs::read_to_string(out.join("vlt.json")).unwrap(),
+        fs::read_to_string(dir.join("vlt.json")).unwrap()
+    );
+    // everything but `other` and its dependency
+    assert_eq!(
+        fs::read_to_string(out.join("vlt-lock.json")).unwrap(),
+        r#"{
+  "lockfileVersion": 1,
+  "options": {},
+  "nodes": {
+    "~npm~is-buffer@2.0.5": [2,"is-buffer"],
+    "~npm~kind-of@6.0.3": [0,"kind-of"]
+  },
+  "edges": {
+    "workspace~packages+app is-buffer": "dev ^2.0.5 ~npm~is-buffer@2.0.5",
+    "workspace~packages+app devtool": "dev workspace:* workspace~packages+devtool",
+    "workspace~packages+app lib": "prod workspace:* workspace~packages+lib",
+    "workspace~packages+devtool kind-of": "prod ^6.0.3 ~npm~kind-of@6.0.3"
+  }
+}
+"#
+    );
+}
+
+#[test]
+fn test_prune_vlt_production() {
+    let tempdir = tempfile::tempdir().unwrap();
+    let dir = tempdir.path();
+    setup_vlt_prune(dir);
+
+    let output = run_turbo(dir, &["prune", "app", "--production"]);
+    assert!(output.status.success(), "{}", combined_output(&output));
+    let out = dir.join("out");
+    assert_eq!(ls_dir(&out.join("packages")), ["app", "lib"]);
+    // vlt always installs devDependencies, so the workspace left behind is
+    // gone from both the manifest and the lockfile
+    let app: serde_json::Value =
+        serde_json::from_str(&fs::read_to_string(out.join("packages/app/package.json")).unwrap())
+            .unwrap();
+    assert_eq!(
+        app["devDependencies"],
+        serde_json::json!({"is-buffer": "^2.0.5"})
+    );
+    assert_eq!(
+        fs::read_to_string(out.join("vlt-lock.json")).unwrap(),
+        r#"{
+  "lockfileVersion": 1,
+  "options": {},
+  "nodes": {
+    "~npm~is-buffer@2.0.5": [2,"is-buffer"]
+  },
+  "edges": {
+    "workspace~packages+app is-buffer": "dev ^2.0.5 ~npm~is-buffer@2.0.5",
+    "workspace~packages+app lib": "prod workspace:* workspace~packages+lib"
+  }
+}
+"#
+    );
+}
+
 // --- docker.t ---
 
 #[test]

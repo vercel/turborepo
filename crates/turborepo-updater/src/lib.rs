@@ -149,6 +149,7 @@ pub fn display_update_check(config: UpdateCheckConfig) -> Result<(), UpdateNotif
                 style("pnpm dlx @turbo/codemod@latest update").cyan().bold()
             }
             PackageManager::Bun => style("bunx @turbo/codemod@latest update").cyan().bold(),
+            PackageManager::Vlt => style("vlx @turbo/codemod@latest update").cyan().bold(),
             PackageManager::Nub { .. } => style("nubx @turbo/codemod@latest update").cyan().bold(),
             PackageManager::Aube { .. } => style("aubx @turbo/codemod@latest update").cyan().bold(),
         };
