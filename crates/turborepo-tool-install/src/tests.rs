@@ -87,6 +87,33 @@ fn a_second_repository_with_the_same_selection_stages_nothing_and_shares_the_env
     assert_ne!(three.env, one.env);
 }
 
+/// On Windows, `link.exe` cannot open a file whose path has more than 259
+/// characters. Rust's MSVC targets link with it by default, and it opens the
+/// standard library in the toolchain's tree.
+#[test]
+fn a_tree_leaves_room_for_the_rust_standard_library_on_windows() {
+    // The longest file that `link.exe` opens in a nightly toolchain.
+    const LIBRARY: &str = "toolchains/nightly-2026-07-03-x86_64-pc-windows-msvc/lib/rustlib/\
+                           x86_64-pc-windows-msvc/lib/\
+                           librustc_std_workspace_alloc-2d73472aa3fb9785.rlib";
+    let f = fixture();
+    let (repo, rust) = (repo(), tool("rust"));
+    ensure(
+        &f.store,
+        repo.path(),
+        std::slice::from_ref(&rust),
+        &Cell::new(0),
+    );
+    let tree = f.store.sealed_tree(&rust).unwrap().unwrap();
+    // The default store for the longest local Windows user name, 20
+    // characters. Only the lengths matter, so this runs on Unix.
+    let library = Path::new("C:/Users/aaaaaaaaaaaaaaaaaaaa/AppData/Local/turborepo/tools")
+        .join(tree.strip_prefix(f.store.root()).unwrap())
+        .join(LIBRARY);
+    let length = library.as_os_str().len();
+    assert!(length <= 259, "the path has {length} characters");
+}
+
 #[test]
 fn tools_that_stage_the_same_artifact_differently_never_share_a_tree() {
     let f = fixture();

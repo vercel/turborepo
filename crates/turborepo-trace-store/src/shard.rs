@@ -26,9 +26,9 @@ use std::path::Path;
 use rkyv::{Archive, Deserialize, Serialize, util::AlignedVec};
 
 /// Version of the shard layout. Bump on any change to the types in this module.
-/// (44: the key of a Python project's shard has what its package discovery
-/// asked.)
-pub const FORMAT_VERSION: u32 = 44;
+/// (45: the key of a file that imports a workspace package through a lockfile
+/// link has the config chain that governs the link's resolution.)
+pub const FORMAT_VERSION: u32 = 45;
 
 const MAGIC: &[u8; 8] = b"DTSHARD\0";
 const HEADER: usize = 32;

@@ -1,0 +1,999 @@
+{
+  "schemaVersion": 0,
+  "tools": {
+    "node": {
+      "adapter": "node",
+      "version": "24.22.3",
+      "declarations": [
+        {
+          "file": "package.json",
+          "field": "engines.node",
+          "request": "24.x"
+        }
+      ],
+      "options": {
+        "bundled-npm": [
+          "11.19.1"
+        ]
+      },
+      "installation": {
+        "kind": "managed",
+        "artifacts": {
+          "macos-x64": {
+            "distribution": {
+              "url": "https://nodejs.org/dist/v24.22.3/node-v24.22.3-darwin-x64.tar.gz",
+              "sha256": "977614af0504c81045e7fd85596dbca0e5f951b96681516dadafedcca8c447f7",
+              "format": "tar-gz",
+              "rootPrefix": "node-v24.22.3-darwin-x64",
+              "executables": {
+                "node": "bin/node",
+                "npm": "bin/npm",
+                "npx": "bin/npx"
+              }
+            }
+          },
+          "macos-arm64": {
+            "distribution": {
+              "url": "https://nodejs.org/dist/v24.22.3/node-v24.22.3-darwin-arm64.tar.gz",
+              "sha256": "ff6e17d4874b76d272212b908cc020d6e815fba5a6c7eaaa06add725840307fd",
+              "format": "tar-gz",
+              "rootPrefix": "node-v24.22.3-darwin-arm64",
+              "executables": {
+                "node": "bin/node",
+                "npm": "bin/npm",
+                "npx": "bin/npx"
+              }
+            }
+          },
+          "linux-x64-gnu": {
+            "distribution": {
+              "url": "https://nodejs.org/dist/v24.22.3/node-v24.22.3-linux-x64.tar.gz",
+              "sha256": "061ec3e3062115705b56b51fa9cc330ab50d34b6969387d4e4b1a50c6809acc2",
+              "format": "tar-gz",
+              "rootPrefix": "node-v24.22.3-linux-x64",
+              "executables": {
+                "node": "bin/node",
+                "npm": "bin/npm",
+                "npx": "bin/npx"
+              }
+            }
+          },
+          "linux-arm64-gnu": {
+            "distribution": {
+              "url": "https://nodejs.org/dist/v24.22.3/node-v24.22.3-linux-arm64.tar.gz",
+              "sha256": "261af2af250dfd7e9f25cf151d1b2713a0adf8f10a9ad116c4947f68627affe8",
+              "format": "tar-gz",
+              "rootPrefix": "node-v24.22.3-linux-arm64",
+              "executables": {
+                "node": "bin/node",
+                "npm": "bin/npm",
+                "npx": "bin/npx"
+              }
+            }
+          },
+          "windows-x64": {
+            "distribution": {
+              "url": "https://nodejs.org/dist/v24.22.3/node-v24.22.3-win-x64.zip",
+              "sha256": "e612af99f626ab415ea225af6bce5c971feb448cb5cae250bb1c3fa50c5f7d9f",
+              "format": "zip",
+              "rootPrefix": "node-v24.22.3-win-x64",
+              "executables": {
+                "node": "node.exe",
+                "npm": "npm.cmd",
+                "npx": "npx.cmd"
+              }
+            }
+          },
+          "windows-arm64": {
+            "distribution": {
+              "url": "https://nodejs.org/dist/v24.22.3/node-v24.22.3-win-arm64.zip",
+              "sha256": "b3cc74a295b39d4f273271e96f58c06dd2b35757ca12abec64c7d0598b434f14",
+              "format": "zip",
+              "rootPrefix": "node-v24.22.3-win-arm64",
+              "executables": {
+                "node": "node.exe",
+                "npm": "npm.cmd",
+                "npx": "npx.cmd"
+              }
+            }
+          }
+        }
+      }
+    },
+    "pnpm": {
+      "adapter": "pnpm",
+      "version": "12.0.0",
+      "declarations": [
+        {
+          "file": "package.json",
+          "field": "/packageManager",
+          "request": "pnpm@12.0.0"
+        }
+      ],
+      "installation": {
+        "kind": "managed",
+        "artifacts": {
+          "macos-x64": {
+            "native": {
+              "url": "https://registry.npmjs.org/@pnpm/exe.darwin-x64/-/exe.darwin-x64-12.0.0.tgz",
+              "sha512": "42e73727a73d7064f2f8b0e0cf570b56008d394f48111bb20250e8123d030a294aaafa39d09c75195f24ef88b09f827d7c548a926f09af036fb530e3dee5a750",
+              "format": "tar-gz",
+              "rootPrefix": "package",
+              "executables": {
+                "pn": "pnpm",
+                "pnpm": "pnpm",
+                "pnpx": "pnpm",
+                "pnx": "pnpm"
+              }
+            },
+            "package": {
+              "url": "https://registry.npmjs.org/pnpm/-/pnpm-12.0.0.tgz",
+              "sha256": "5ef12ab545a211627c23f05eb589a051e6c207a3f2c3382add8f0573400b871d",
+              "format": "tar-gz",
+              "rootPrefix": "package",
+              "executables": {}
+            }
+          },
+          "macos-arm64": {
+            "native": {
+              "url": "https://registry.npmjs.org/@pnpm/exe.darwin-arm64/-/exe.darwin-arm64-12.0.0.tgz",
+              "sha512": "b2a7a83df54c21f4216f0cc3acaada5d8db29f2b960a516acef7c89b3012ff273312bbb59b9486bd0f648053c3bd0cc967d01eb5e76025e0d90baa98bc7f3fb5",
+              "format": "tar-gz",
+              "rootPrefix": "package",
+              "executables": {
+                "pn": "pnpm",
+                "pnpm": "pnpm",
+                "pnpx": "pnpm",
+                "pnx": "pnpm"
+              }
+            },
+            "package": {
+              "url": "https://registry.npmjs.org/pnpm/-/pnpm-12.0.0.tgz",
+              "sha256": "5ef12ab545a211627c23f05eb589a051e6c207a3f2c3382add8f0573400b871d",
+              "format": "tar-gz",
+              "rootPrefix": "package",
+              "executables": {}
+            }
+          },
+          "linux-x64-gnu": {
+            "native": {
+              "url": "https://registry.npmjs.org/@pnpm/exe.linux-x64/-/exe.linux-x64-12.0.0.tgz",
+              "sha512": "e91b25fb311630e9aeb3bbfbffd277384f0432f1f23407f16260df9a1406e09d3df393ae4f71b71e8f4d4861e39019f8694e1b82495689f4617b51d7f1d512cb",
+              "format": "tar-gz",
+              "rootPrefix": "package",
+              "executables": {
+                "pn": "pnpm",
+                "pnpm": "pnpm",
+                "pnpx": "pnpm",
+                "pnx": "pnpm"
+              }
+            },
+            "package": {
+              "url": "https://registry.npmjs.org/pnpm/-/pnpm-12.0.0.tgz",
+              "sha256": "5ef12ab545a211627c23f05eb589a051e6c207a3f2c3382add8f0573400b871d",
+              "format": "tar-gz",
+              "rootPrefix": "package",
+              "executables": {}
+            }
+          },
+          "linux-arm64-gnu": {
+            "native": {
+              "url": "https://registry.npmjs.org/@pnpm/exe.linux-arm64/-/exe.linux-arm64-12.0.0.tgz",
+              "sha512": "7171c75bc338ac03ec60d90a64ef5655ca4b2cae798bd11a22c64f7c8a94b98d9ea297792ea9c5c8181ee781c2875182d32097f324a7d216088bee0ec801280e",
+              "format": "tar-gz",
+              "rootPrefix": "package",
+              "executables": {
+                "pn": "pnpm",
+                "pnpm": "pnpm",
+                "pnpx": "pnpm",
+                "pnx": "pnpm"
+              }
+            },
+            "package": {
+              "url": "https://registry.npmjs.org/pnpm/-/pnpm-12.0.0.tgz",
+              "sha256": "5ef12ab545a211627c23f05eb589a051e6c207a3f2c3382add8f0573400b871d",
+              "format": "tar-gz",
+              "rootPrefix": "package",
+              "executables": {}
+            }
+          },
+          "windows-x64": {
+            "native": {
+              "url": "https://registry.npmjs.org/@pnpm/exe.win32-x64/-/exe.win32-x64-12.0.0.tgz",
+              "sha512": "e5d2856a3204589d5a8be2875c526fb2463abdc85bba798bc12515db2c1b2f299c9898df6395c95698333c2c88a1508c546d331e8aebebafa133c87c6f76917d",
+              "format": "tar-gz",
+              "rootPrefix": "package",
+              "executables": {
+                "pn": "pnpm.exe",
+                "pnpm": "pnpm.exe",
+                "pnpx": "pnpm.exe",
+                "pnx": "pnpm.exe"
+              }
+            },
+            "package": {
+              "url": "https://registry.npmjs.org/pnpm/-/pnpm-12.0.0.tgz",
+              "sha256": "5ef12ab545a211627c23f05eb589a051e6c207a3f2c3382add8f0573400b871d",
+              "format": "tar-gz",
+              "rootPrefix": "package",
+              "executables": {}
+            }
+          },
+          "windows-arm64": {
+            "native": {
+              "url": "https://registry.npmjs.org/@pnpm/exe.win32-arm64/-/exe.win32-arm64-12.0.0.tgz",
+              "sha512": "3b917be80e28545ae90c6745c44b334484e139205f8c7747e5cd34ea047eed44c27e25ebba4af55dfa8fba78142350d771247981bf6306c3d0a9064e02838ec7",
+              "format": "tar-gz",
+              "rootPrefix": "package",
+              "executables": {
+                "pn": "pnpm.exe",
+                "pnpm": "pnpm.exe",
+                "pnpx": "pnpm.exe",
+                "pnx": "pnpm.exe"
+              }
+            },
+            "package": {
+              "url": "https://registry.npmjs.org/pnpm/-/pnpm-12.0.0.tgz",
+              "sha256": "5ef12ab545a211627c23f05eb589a051e6c207a3f2c3382add8f0573400b871d",
+              "format": "tar-gz",
+              "rootPrefix": "package",
+              "executables": {}
+            }
+          }
+        }
+      }
+    },
+    "rust": {
+      "adapter": "rust",
+      "version": "nightly-2026-07-03",
+      "declarations": [
+        {
+          "file": "rust-toolchain.toml",
+          "field": "toolchain.channel",
+          "request": "nightly-2026-07-03"
+        },
+        {
+          "file": "rust-toolchain.toml",
+          "field": "toolchain.components",
+          "request": "[\"rustfmt\",\"clippy\"]"
+        },
+        {
+          "file": "rust-toolchain.toml",
+          "field": "toolchain.profile",
+          "request": "minimal"
+        }
+      ],
+      "options": {
+        "components": [
+          "clippy",
+          "rustfmt"
+        ],
+        "profile": [
+          "minimal"
+        ]
+      },
+      "installation": {
+        "kind": "managed",
+        "artifacts": {
+          "macos-x64": {
+            "cargo": {
+              "url": "https://static.rust-lang.org/dist/2026-07-03/cargo-nightly-x86_64-apple-darwin.tar.gz",
+              "sha256": "a51a242109656f8538b688ca3bb2ae7d37abbdbc466a57ca604167cac9579720",
+              "format": "tar-gz",
+              "alternates": {
+                "tar-xz": {
+                  "url": "https://static.rust-lang.org/dist/2026-07-03/cargo-nightly-x86_64-apple-darwin.tar.xz",
+                  "sha256": "28e890b8551c98e0ddcc0ed178022132fe30a2c7a15a65abf94ff81fd52c6b87"
+                }
+              },
+              "rootPrefix": "cargo-nightly-x86_64-apple-darwin/cargo",
+              "executables": {
+                "cargo": "bin/cargo"
+              }
+            },
+            "clippy-preview": {
+              "url": "https://static.rust-lang.org/dist/2026-07-03/clippy-nightly-x86_64-apple-darwin.tar.gz",
+              "sha256": "209faeb92a56c0cf5150991717251623a81005935a9f64fecf4c1c8f4e4b75e3",
+              "format": "tar-gz",
+              "alternates": {
+                "tar-xz": {
+                  "url": "https://static.rust-lang.org/dist/2026-07-03/clippy-nightly-x86_64-apple-darwin.tar.xz",
+                  "sha256": "dcb59ad17c9296c0a434d876081edf11452f5e2584b9cadcea84288ebe7da941"
+                }
+              },
+              "rootPrefix": "clippy-nightly-x86_64-apple-darwin/clippy-preview",
+              "executables": {
+                "cargo-clippy": "bin/cargo-clippy",
+                "clippy-driver": "bin/clippy-driver"
+              }
+            },
+            "rust-std": {
+              "url": "https://static.rust-lang.org/dist/2026-07-03/rust-std-nightly-x86_64-apple-darwin.tar.gz",
+              "sha256": "f47330aa9478589d7ed8719afed386914659620ddd5f13ef3ea682ec41c7765b",
+              "format": "tar-gz",
+              "alternates": {
+                "tar-xz": {
+                  "url": "https://static.rust-lang.org/dist/2026-07-03/rust-std-nightly-x86_64-apple-darwin.tar.xz",
+                  "sha256": "6cb5f01c9eb2b772b90a6488c528caa99771ae83a41b824a4ff15f0a42ade249"
+                }
+              },
+              "rootPrefix": "rust-std-nightly-x86_64-apple-darwin/rust-std-x86_64-apple-darwin",
+              "executables": {}
+            },
+            "rustc": {
+              "url": "https://static.rust-lang.org/dist/2026-07-03/rustc-nightly-x86_64-apple-darwin.tar.gz",
+              "sha256": "7f8c5493587a2bff39ef65f164a84b4de2b5991b7b6d154bfde38c9081bd9ca9",
+              "format": "tar-gz",
+              "alternates": {
+                "tar-xz": {
+                  "url": "https://static.rust-lang.org/dist/2026-07-03/rustc-nightly-x86_64-apple-darwin.tar.xz",
+                  "sha256": "38c0697fd5cb27c79601248676d952ad817f0048d489b67a50ed2c99147d0952"
+                }
+              },
+              "rootPrefix": "rustc-nightly-x86_64-apple-darwin/rustc",
+              "executables": {
+                "rustc": "bin/rustc",
+                "rustdoc": "bin/rustdoc"
+              }
+            },
+            "rustfmt-preview": {
+              "url": "https://static.rust-lang.org/dist/2026-07-03/rustfmt-nightly-x86_64-apple-darwin.tar.gz",
+              "sha256": "9e1a6fa3b42f4932ded7149154e145ca86c67434beda71735cda0f910e13208b",
+              "format": "tar-gz",
+              "alternates": {
+                "tar-xz": {
+                  "url": "https://static.rust-lang.org/dist/2026-07-03/rustfmt-nightly-x86_64-apple-darwin.tar.xz",
+                  "sha256": "6c4d68331e7861fb814445c2a5f99385d9bd310f1235e35629c6fc4aa9f39d4f"
+                }
+              },
+              "rootPrefix": "rustfmt-nightly-x86_64-apple-darwin/rustfmt-preview",
+              "executables": {
+                "cargo-fmt": "bin/cargo-fmt",
+                "rustfmt": "bin/rustfmt"
+              }
+            }
+          },
+          "macos-arm64": {
+            "cargo": {
+              "url": "https://static.rust-lang.org/dist/2026-07-03/cargo-nightly-aarch64-apple-darwin.tar.gz",
+              "sha256": "b417579054e8e6c9eb96df61d3784072d75f484a2305dd58961ca5b93033f86d",
+              "format": "tar-gz",
+              "alternates": {
+                "tar-xz": {
+                  "url": "https://static.rust-lang.org/dist/2026-07-03/cargo-nightly-aarch64-apple-darwin.tar.xz",
+                  "sha256": "f9d6c27f21432aacdddee0197eccfb9befe27e41c9c3c3baaeae21801390b24e"
+                }
+              },
+              "rootPrefix": "cargo-nightly-aarch64-apple-darwin/cargo",
+              "executables": {
+                "cargo": "bin/cargo"
+              }
+            },
+            "clippy-preview": {
+              "url": "https://static.rust-lang.org/dist/2026-07-03/clippy-nightly-aarch64-apple-darwin.tar.gz",
+              "sha256": "4b7a3acd1b1dba7deb9ec3ea9ff11019eba787979a8e05f364058bc4df85977a",
+              "format": "tar-gz",
+              "alternates": {
+                "tar-xz": {
+                  "url": "https://static.rust-lang.org/dist/2026-07-03/clippy-nightly-aarch64-apple-darwin.tar.xz",
+                  "sha256": "d64ec269b6c3b513f6db9de4707872fa733ae3e132ce2fd56152b33a8a5e329e"
+                }
+              },
+              "rootPrefix": "clippy-nightly-aarch64-apple-darwin/clippy-preview",
+              "executables": {
+                "cargo-clippy": "bin/cargo-clippy",
+                "clippy-driver": "bin/clippy-driver"
+              }
+            },
+            "rust-std": {
+              "url": "https://static.rust-lang.org/dist/2026-07-03/rust-std-nightly-aarch64-apple-darwin.tar.gz",
+              "sha256": "b38fd0d8a3caac7dce04ada6df70e3b69eab5056209c808e4f8e608641c05a11",
+              "format": "tar-gz",
+              "alternates": {
+                "tar-xz": {
+                  "url": "https://static.rust-lang.org/dist/2026-07-03/rust-std-nightly-aarch64-apple-darwin.tar.xz",
+                  "sha256": "1b6cc122dab5507de3a03e4023ba0ba1dae879b28d7f508cc33523d5135522a7"
+                }
+              },
+              "rootPrefix": "rust-std-nightly-aarch64-apple-darwin/rust-std-aarch64-apple-darwin",
+              "executables": {}
+            },
+            "rustc": {
+              "url": "https://static.rust-lang.org/dist/2026-07-03/rustc-nightly-aarch64-apple-darwin.tar.gz",
+              "sha256": "240fe10ada6db3d1355a574d1a4e52dce65f64ad26f56efcab2e4159613a5046",
+              "format": "tar-gz",
+              "alternates": {
+                "tar-xz": {
+                  "url": "https://static.rust-lang.org/dist/2026-07-03/rustc-nightly-aarch64-apple-darwin.tar.xz",
+                  "sha256": "e35a5e946b46ee3c48beff8f2b504b327061ee1dd1fdb972008bbc80d6b08b2c"
+                }
+              },
+              "rootPrefix": "rustc-nightly-aarch64-apple-darwin/rustc",
+              "executables": {
+                "rustc": "bin/rustc",
+                "rustdoc": "bin/rustdoc"
+              }
+            },
+            "rustfmt-preview": {
+              "url": "https://static.rust-lang.org/dist/2026-07-03/rustfmt-nightly-aarch64-apple-darwin.tar.gz",
+              "sha256": "1edef7265af07affb68008fb05d413d71b84eb956bbbfda7c58b930ed9b8be05",
+              "format": "tar-gz",
+              "alternates": {
+                "tar-xz": {
+                  "url": "https://static.rust-lang.org/dist/2026-07-03/rustfmt-nightly-aarch64-apple-darwin.tar.xz",
+                  "sha256": "1f0f66cc1ee6199e8cea85f68b842eac19458799046079e8a14ae5ac72dffce0"
+                }
+              },
+              "rootPrefix": "rustfmt-nightly-aarch64-apple-darwin/rustfmt-preview",
+              "executables": {
+                "cargo-fmt": "bin/cargo-fmt",
+                "rustfmt": "bin/rustfmt"
+              }
+            }
+          },
+          "linux-x64-gnu": {
+            "cargo": {
+              "url": "https://static.rust-lang.org/dist/2026-07-03/cargo-nightly-x86_64-unknown-linux-gnu.tar.gz",
+              "sha256": "a6b2ae598129a4098bbdc27960c4588735d817ee7000f4e97d79637c9a2f3899",
+              "format": "tar-gz",
+              "alternates": {
+                "tar-xz": {
+                  "url": "https://static.rust-lang.org/dist/2026-07-03/cargo-nightly-x86_64-unknown-linux-gnu.tar.xz",
+                  "sha256": "f2ff375d36c15603dad26d70b4c353c167b43973692b1f057a598f726612dd84"
+                }
+              },
+              "rootPrefix": "cargo-nightly-x86_64-unknown-linux-gnu/cargo",
+              "executables": {
+                "cargo": "bin/cargo"
+              }
+            },
+            "clippy-preview": {
+              "url": "https://static.rust-lang.org/dist/2026-07-03/clippy-nightly-x86_64-unknown-linux-gnu.tar.gz",
+              "sha256": "2426c49581a93f1ed20ef628b98260434015a970013bcaad35524f717dc58bd1",
+              "format": "tar-gz",
+              "alternates": {
+                "tar-xz": {
+                  "url": "https://static.rust-lang.org/dist/2026-07-03/clippy-nightly-x86_64-unknown-linux-gnu.tar.xz",
+                  "sha256": "777afcbdf4d31ae99b63ad22873b2488e6e20502b0156945357198b12305c988"
+                }
+              },
+              "rootPrefix": "clippy-nightly-x86_64-unknown-linux-gnu/clippy-preview",
+              "executables": {
+                "cargo-clippy": "bin/cargo-clippy",
+                "clippy-driver": "bin/clippy-driver"
+              }
+            },
+            "rust-std": {
+              "url": "https://static.rust-lang.org/dist/2026-07-03/rust-std-nightly-x86_64-unknown-linux-gnu.tar.gz",
+              "sha256": "d4ca901c15c6790287c472e5a5dbcb2a19e0ea858f1289a8c45e57f78cc14042",
+              "format": "tar-gz",
+              "alternates": {
+                "tar-xz": {
+                  "url": "https://static.rust-lang.org/dist/2026-07-03/rust-std-nightly-x86_64-unknown-linux-gnu.tar.xz",
+                  "sha256": "7fd733405f7aefac314398727c9a02c108fa003a37399f2f2421710810212435"
+                }
+              },
+              "rootPrefix": "rust-std-nightly-x86_64-unknown-linux-gnu/rust-std-x86_64-unknown-linux-gnu",
+              "executables": {}
+            },
+            "rustc": {
+              "url": "https://static.rust-lang.org/dist/2026-07-03/rustc-nightly-x86_64-unknown-linux-gnu.tar.gz",
+              "sha256": "b8ae9d28f91865c9f495b529d06573e11c64735ba9a00c47105e2abcde3d48ff",
+              "format": "tar-gz",
+              "alternates": {
+                "tar-xz": {
+                  "url": "https://static.rust-lang.org/dist/2026-07-03/rustc-nightly-x86_64-unknown-linux-gnu.tar.xz",
+                  "sha256": "f24c968957a924e1e3b43c81ef0a12d429fe8b5e5eac4c00b66b425c6c678a4d"
+                }
+              },
+              "rootPrefix": "rustc-nightly-x86_64-unknown-linux-gnu/rustc",
+              "executables": {
+                "rustc": "bin/rustc",
+                "rustdoc": "bin/rustdoc"
+              }
+            },
+            "rustfmt-preview": {
+              "url": "https://static.rust-lang.org/dist/2026-07-03/rustfmt-nightly-x86_64-unknown-linux-gnu.tar.gz",
+              "sha256": "fd927fbb22a4a3469103bdc70de83f410c2f364c9a5a1ad4db16a8795f6498dd",
+              "format": "tar-gz",
+              "alternates": {
+                "tar-xz": {
+                  "url": "https://static.rust-lang.org/dist/2026-07-03/rustfmt-nightly-x86_64-unknown-linux-gnu.tar.xz",
+                  "sha256": "67ea88cfaff1f78c98c59c5ffa6ab508a93b5b7ead8f3b1d3cebe6d1ae3a76f6"
+                }
+              },
+              "rootPrefix": "rustfmt-nightly-x86_64-unknown-linux-gnu/rustfmt-preview",
+              "executables": {
+                "cargo-fmt": "bin/cargo-fmt",
+                "rustfmt": "bin/rustfmt"
+              }
+            }
+          },
+          "linux-arm64-gnu": {
+            "cargo": {
+              "url": "https://static.rust-lang.org/dist/2026-07-03/cargo-nightly-aarch64-unknown-linux-gnu.tar.gz",
+              "sha256": "a04153b7f0faa24a4b00cce7a0f939b62550603e4a1cef9d849a5e46dc454560",
+              "format": "tar-gz",
+              "alternates": {
+                "tar-xz": {
+                  "url": "https://static.rust-lang.org/dist/2026-07-03/cargo-nightly-aarch64-unknown-linux-gnu.tar.xz",
+                  "sha256": "604ec3fa2d4d95c792b80f6758c869af9cb0504ffc8d8ac59503feb2e3f4b9c0"
+                }
+              },
+              "rootPrefix": "cargo-nightly-aarch64-unknown-linux-gnu/cargo",
+              "executables": {
+                "cargo": "bin/cargo"
+              }
+            },
+            "clippy-preview": {
+              "url": "https://static.rust-lang.org/dist/2026-07-03/clippy-nightly-aarch64-unknown-linux-gnu.tar.gz",
+              "sha256": "da55888b20242093c8e273eaedad31bc4fbd2dce203c2fcb70d9f59fb209b2af",
+              "format": "tar-gz",
+              "alternates": {
+                "tar-xz": {
+                  "url": "https://static.rust-lang.org/dist/2026-07-03/clippy-nightly-aarch64-unknown-linux-gnu.tar.xz",
+                  "sha256": "2a9633c174a4f5e5521e364ff1acf56a2fb7b7ea274b86f831a62d8550b11503"
+                }
+              },
+              "rootPrefix": "clippy-nightly-aarch64-unknown-linux-gnu/clippy-preview",
+              "executables": {
+                "cargo-clippy": "bin/cargo-clippy",
+                "clippy-driver": "bin/clippy-driver"
+              }
+            },
+            "rust-std": {
+              "url": "https://static.rust-lang.org/dist/2026-07-03/rust-std-nightly-aarch64-unknown-linux-gnu.tar.gz",
+              "sha256": "a7540aa5a338fea2efad227f657941ee74fbae0f892c85c12bcb3991bcb0629d",
+              "format": "tar-gz",
+              "alternates": {
+                "tar-xz": {
+                  "url": "https://static.rust-lang.org/dist/2026-07-03/rust-std-nightly-aarch64-unknown-linux-gnu.tar.xz",
+                  "sha256": "f3c136412f312c57fbe6383d58a13f94e9f2c4bb6ab328e157e0771c7c38bc84"
+                }
+              },
+              "rootPrefix": "rust-std-nightly-aarch64-unknown-linux-gnu/rust-std-aarch64-unknown-linux-gnu",
+              "executables": {}
+            },
+            "rustc": {
+              "url": "https://static.rust-lang.org/dist/2026-07-03/rustc-nightly-aarch64-unknown-linux-gnu.tar.gz",
+              "sha256": "eac8323c8b2ca65d30ef2db637134bf9350ce40125c7757feacab2b83ad76816",
+              "format": "tar-gz",
+              "alternates": {
+                "tar-xz": {
+                  "url": "https://static.rust-lang.org/dist/2026-07-03/rustc-nightly-aarch64-unknown-linux-gnu.tar.xz",
+                  "sha256": "8cf25e63c5fc96bada7b3b8ae4c38f3e307bd088eea7c4a9b8f384bd62ff2cd3"
+                }
+              },
+              "rootPrefix": "rustc-nightly-aarch64-unknown-linux-gnu/rustc",
+              "executables": {
+                "rustc": "bin/rustc",
+                "rustdoc": "bin/rustdoc"
+              }
+            },
+            "rustfmt-preview": {
+              "url": "https://static.rust-lang.org/dist/2026-07-03/rustfmt-nightly-aarch64-unknown-linux-gnu.tar.gz",
+              "sha256": "85fc81dfcf96e85c3b769f772dc585c349559f216058b022d3726cc6c80720bf",
+              "format": "tar-gz",
+              "alternates": {
+                "tar-xz": {
+                  "url": "https://static.rust-lang.org/dist/2026-07-03/rustfmt-nightly-aarch64-unknown-linux-gnu.tar.xz",
+                  "sha256": "1bedf4be51a7a88fa6f649fda975090a8850154a11b3791f9fde71b0883ed715"
+                }
+              },
+              "rootPrefix": "rustfmt-nightly-aarch64-unknown-linux-gnu/rustfmt-preview",
+              "executables": {
+                "cargo-fmt": "bin/cargo-fmt",
+                "rustfmt": "bin/rustfmt"
+              }
+            }
+          },
+          "linux-x64-musl": {
+            "cargo": {
+              "url": "https://static.rust-lang.org/dist/2026-07-03/cargo-nightly-x86_64-unknown-linux-musl.tar.gz",
+              "sha256": "ac408a96d7ac646be4a6aa2b856a51ab24df1b09deaa91d2deb005d0715ef1d9",
+              "format": "tar-gz",
+              "alternates": {
+                "tar-xz": {
+                  "url": "https://static.rust-lang.org/dist/2026-07-03/cargo-nightly-x86_64-unknown-linux-musl.tar.xz",
+                  "sha256": "3dc8341d4e3b7a8acb2bab00112c1f1b21bfbca5cb8e05f23da045ed6c2313c0"
+                }
+              },
+              "rootPrefix": "cargo-nightly-x86_64-unknown-linux-musl/cargo",
+              "executables": {
+                "cargo": "bin/cargo"
+              }
+            },
+            "clippy-preview": {
+              "url": "https://static.rust-lang.org/dist/2026-07-03/clippy-nightly-x86_64-unknown-linux-musl.tar.gz",
+              "sha256": "e1b4b3a2f1243c48db33ca8d6231e027246dd0ff6d91c1e0c4ff75b7349f7396",
+              "format": "tar-gz",
+              "alternates": {
+                "tar-xz": {
+                  "url": "https://static.rust-lang.org/dist/2026-07-03/clippy-nightly-x86_64-unknown-linux-musl.tar.xz",
+                  "sha256": "fedac6abbbb0e639a1bfe2a0053886a653085ef95555caeb14ffecdddf4fa3e1"
+                }
+              },
+              "rootPrefix": "clippy-nightly-x86_64-unknown-linux-musl/clippy-preview",
+              "executables": {
+                "cargo-clippy": "bin/cargo-clippy",
+                "clippy-driver": "bin/clippy-driver"
+              }
+            },
+            "rust-std": {
+              "url": "https://static.rust-lang.org/dist/2026-07-03/rust-std-nightly-x86_64-unknown-linux-musl.tar.gz",
+              "sha256": "7f2bffe4945afabafa5d6c805cfbc07c5e1b469c6a3d919eda2e9befdab7b523",
+              "format": "tar-gz",
+              "alternates": {
+                "tar-xz": {
+                  "url": "https://static.rust-lang.org/dist/2026-07-03/rust-std-nightly-x86_64-unknown-linux-musl.tar.xz",
+                  "sha256": "6f3f6a70408c5cd3cf13342cfbf2799174430844034ab8f745d4fc1350fe29d3"
+                }
+              },
+              "rootPrefix": "rust-std-nightly-x86_64-unknown-linux-musl/rust-std-x86_64-unknown-linux-musl",
+              "executables": {}
+            },
+            "rustc": {
+              "url": "https://static.rust-lang.org/dist/2026-07-03/rustc-nightly-x86_64-unknown-linux-musl.tar.gz",
+              "sha256": "5dea245696571fc155b24e2dcd5eb066434bbb8598dd1f2bd250bce1aae8a3ac",
+              "format": "tar-gz",
+              "alternates": {
+                "tar-xz": {
+                  "url": "https://static.rust-lang.org/dist/2026-07-03/rustc-nightly-x86_64-unknown-linux-musl.tar.xz",
+                  "sha256": "c8002c244a7c0c9dd409643d7e8aee2ab286df6e1b34d0cd9f46924418de3e16"
+                }
+              },
+              "rootPrefix": "rustc-nightly-x86_64-unknown-linux-musl/rustc",
+              "executables": {
+                "rustc": "bin/rustc",
+                "rustdoc": "bin/rustdoc"
+              }
+            },
+            "rustfmt-preview": {
+              "url": "https://static.rust-lang.org/dist/2026-07-03/rustfmt-nightly-x86_64-unknown-linux-musl.tar.gz",
+              "sha256": "e9221b0d5715ec83a186b52348cbc8480185b349a9a9a2f6283a5fae54849e75",
+              "format": "tar-gz",
+              "alternates": {
+                "tar-xz": {
+                  "url": "https://static.rust-lang.org/dist/2026-07-03/rustfmt-nightly-x86_64-unknown-linux-musl.tar.xz",
+                  "sha256": "1f58789bc2aea15dcb57e9313cdb33ccb89cc94a370777e4f7c4856ae2547101"
+                }
+              },
+              "rootPrefix": "rustfmt-nightly-x86_64-unknown-linux-musl/rustfmt-preview",
+              "executables": {
+                "cargo-fmt": "bin/cargo-fmt",
+                "rustfmt": "bin/rustfmt"
+              }
+            }
+          },
+          "linux-arm64-musl": {
+            "cargo": {
+              "url": "https://static.rust-lang.org/dist/2026-07-03/cargo-nightly-aarch64-unknown-linux-musl.tar.gz",
+              "sha256": "7c27dae5ab53a6141f5104a7af30012256849043071952c2031c55fa382a49a7",
+              "format": "tar-gz",
+              "alternates": {
+                "tar-xz": {
+                  "url": "https://static.rust-lang.org/dist/2026-07-03/cargo-nightly-aarch64-unknown-linux-musl.tar.xz",
+                  "sha256": "1b95540a9ebb22277b06648b32ed73f4de872acd261896a7a0fa4ec2f8fe5d74"
+                }
+              },
+              "rootPrefix": "cargo-nightly-aarch64-unknown-linux-musl/cargo",
+              "executables": {
+                "cargo": "bin/cargo"
+              }
+            },
+            "clippy-preview": {
+              "url": "https://static.rust-lang.org/dist/2026-07-03/clippy-nightly-aarch64-unknown-linux-musl.tar.gz",
+              "sha256": "b3cf59cbf03e64175aae3253b7b681f2da73a2b6a42f5297023d2c0bcdd44f06",
+              "format": "tar-gz",
+              "alternates": {
+                "tar-xz": {
+                  "url": "https://static.rust-lang.org/dist/2026-07-03/clippy-nightly-aarch64-unknown-linux-musl.tar.xz",
+                  "sha256": "41ce3f34294c01b47a77117c77199c57ef8353845c16369368f12b0771eac6bc"
+                }
+              },
+              "rootPrefix": "clippy-nightly-aarch64-unknown-linux-musl/clippy-preview",
+              "executables": {
+                "cargo-clippy": "bin/cargo-clippy",
+                "clippy-driver": "bin/clippy-driver"
+              }
+            },
+            "rust-std": {
+              "url": "https://static.rust-lang.org/dist/2026-07-03/rust-std-nightly-aarch64-unknown-linux-musl.tar.gz",
+              "sha256": "8f6481936f862169e50c3504e1b85b295ba617246c20c94d97281a6331a172f9",
+              "format": "tar-gz",
+              "alternates": {
+                "tar-xz": {
+                  "url": "https://static.rust-lang.org/dist/2026-07-03/rust-std-nightly-aarch64-unknown-linux-musl.tar.xz",
+                  "sha256": "7567d89b1312ac0410332eabd08bf8e6f542661176c5d83ffb2e86171ef5760a"
+                }
+              },
+              "rootPrefix": "rust-std-nightly-aarch64-unknown-linux-musl/rust-std-aarch64-unknown-linux-musl",
+              "executables": {}
+            },
+            "rustc": {
+              "url": "https://static.rust-lang.org/dist/2026-07-03/rustc-nightly-aarch64-unknown-linux-musl.tar.gz",
+              "sha256": "694a516766881a30cf79614bfe91bbd028854ffc6b2063d64b4bfd3107e314df",
+              "format": "tar-gz",
+              "alternates": {
+                "tar-xz": {
+                  "url": "https://static.rust-lang.org/dist/2026-07-03/rustc-nightly-aarch64-unknown-linux-musl.tar.xz",
+                  "sha256": "91af5b2d58e1b8cf78c1b592123e3aa8ed6ba3fff0beb3fd2b31fb441a977e95"
+                }
+              },
+              "rootPrefix": "rustc-nightly-aarch64-unknown-linux-musl/rustc",
+              "executables": {
+                "rustc": "bin/rustc",
+                "rustdoc": "bin/rustdoc"
+              }
+            },
+            "rustfmt-preview": {
+              "url": "https://static.rust-lang.org/dist/2026-07-03/rustfmt-nightly-aarch64-unknown-linux-musl.tar.gz",
+              "sha256": "e5a887e388ebd1cb08b1bfac19891d97e422ce3eafd9fa499749e5d546b688ec",
+              "format": "tar-gz",
+              "alternates": {
+                "tar-xz": {
+                  "url": "https://static.rust-lang.org/dist/2026-07-03/rustfmt-nightly-aarch64-unknown-linux-musl.tar.xz",
+                  "sha256": "b69b63eec477dbbfa411b3a272800b959e21e1f000d5d120a80824abe19a3707"
+                }
+              },
+              "rootPrefix": "rustfmt-nightly-aarch64-unknown-linux-musl/rustfmt-preview",
+              "executables": {
+                "cargo-fmt": "bin/cargo-fmt",
+                "rustfmt": "bin/rustfmt"
+              }
+            }
+          },
+          "windows-x64": {
+            "cargo": {
+              "url": "https://static.rust-lang.org/dist/2026-07-03/cargo-nightly-x86_64-pc-windows-msvc.tar.gz",
+              "sha256": "b7457267075cc070ed3142bf4dbfeaf9085c33a0629e0cd47c38df360d5f45ef",
+              "format": "tar-gz",
+              "alternates": {
+                "tar-xz": {
+                  "url": "https://static.rust-lang.org/dist/2026-07-03/cargo-nightly-x86_64-pc-windows-msvc.tar.xz",
+                  "sha256": "fecc420cb07ec3bde6038949c14ea772141106d3d3fbdc544df2375d33636112"
+                }
+              },
+              "rootPrefix": "cargo-nightly-x86_64-pc-windows-msvc/cargo",
+              "executables": {
+                "cargo": "bin/cargo.exe"
+              }
+            },
+            "clippy-preview": {
+              "url": "https://static.rust-lang.org/dist/2026-07-03/clippy-nightly-x86_64-pc-windows-msvc.tar.gz",
+              "sha256": "ff6f180a2569469e32623075d3bb5c9051f7d3508eef92a6317d8a06be682633",
+              "format": "tar-gz",
+              "alternates": {
+                "tar-xz": {
+                  "url": "https://static.rust-lang.org/dist/2026-07-03/clippy-nightly-x86_64-pc-windows-msvc.tar.xz",
+                  "sha256": "25c38e12456f217c16e5397e6383c0577cce25f45b501c7d872cbf77b14acb67"
+                }
+              },
+              "rootPrefix": "clippy-nightly-x86_64-pc-windows-msvc/clippy-preview",
+              "executables": {
+                "cargo-clippy": "bin/cargo-clippy.exe",
+                "clippy-driver": "bin/clippy-driver.exe"
+              }
+            },
+            "rust-std": {
+              "url": "https://static.rust-lang.org/dist/2026-07-03/rust-std-nightly-x86_64-pc-windows-msvc.tar.gz",
+              "sha256": "9dd808f7e3fe9cc717f497243027530f7dd3ef8f8dbcc362053d64e50c297d1e",
+              "format": "tar-gz",
+              "alternates": {
+                "tar-xz": {
+                  "url": "https://static.rust-lang.org/dist/2026-07-03/rust-std-nightly-x86_64-pc-windows-msvc.tar.xz",
+                  "sha256": "acbdc7783c7cad456d9fd1730b31f419aab28031b974a1c8d1e15437fa3dd23e"
+                }
+              },
+              "rootPrefix": "rust-std-nightly-x86_64-pc-windows-msvc/rust-std-x86_64-pc-windows-msvc",
+              "executables": {}
+            },
+            "rustc": {
+              "url": "https://static.rust-lang.org/dist/2026-07-03/rustc-nightly-x86_64-pc-windows-msvc.tar.gz",
+              "sha256": "5c938d1a1a158f655ce17a570e5c401b9f4af4dfd8d3c4174a2ab019f674d402",
+              "format": "tar-gz",
+              "alternates": {
+                "tar-xz": {
+                  "url": "https://static.rust-lang.org/dist/2026-07-03/rustc-nightly-x86_64-pc-windows-msvc.tar.xz",
+                  "sha256": "11c52af3a9a64ab23cf7e5b99c6e4952c14f58ad9712815c27314a4f516e254b"
+                }
+              },
+              "rootPrefix": "rustc-nightly-x86_64-pc-windows-msvc/rustc",
+              "executables": {
+                "rustc": "bin/rustc.exe",
+                "rustdoc": "bin/rustdoc.exe"
+              }
+            },
+            "rustfmt-preview": {
+              "url": "https://static.rust-lang.org/dist/2026-07-03/rustfmt-nightly-x86_64-pc-windows-msvc.tar.gz",
+              "sha256": "2ca3f54009c48cf4bb9aabbd7b01ea3b45047dd23625ec683c5d636803c3726b",
+              "format": "tar-gz",
+              "alternates": {
+                "tar-xz": {
+                  "url": "https://static.rust-lang.org/dist/2026-07-03/rustfmt-nightly-x86_64-pc-windows-msvc.tar.xz",
+                  "sha256": "f4a49c91be406408a5eab2315a33c2d6f26c1e1399f2b306fb148806dd4d5eff"
+                }
+              },
+              "rootPrefix": "rustfmt-nightly-x86_64-pc-windows-msvc/rustfmt-preview",
+              "executables": {
+                "cargo-fmt": "bin/cargo-fmt.exe",
+                "rustfmt": "bin/rustfmt.exe"
+              }
+            }
+          },
+          "windows-arm64": {
+            "cargo": {
+              "url": "https://static.rust-lang.org/dist/2026-07-03/cargo-nightly-aarch64-pc-windows-msvc.tar.gz",
+              "sha256": "1be119a147c3bf87efec4408f9a3e0ef78812b796844e96282f1bc2ba361f803",
+              "format": "tar-gz",
+              "alternates": {
+                "tar-xz": {
+                  "url": "https://static.rust-lang.org/dist/2026-07-03/cargo-nightly-aarch64-pc-windows-msvc.tar.xz",
+                  "sha256": "8329850af03068b6002ee153991e322234477f3196b00c5e019b960b9c878e82"
+                }
+              },
+              "rootPrefix": "cargo-nightly-aarch64-pc-windows-msvc/cargo",
+              "executables": {
+                "cargo": "bin/cargo.exe"
+              }
+            },
+            "clippy-preview": {
+              "url": "https://static.rust-lang.org/dist/2026-07-03/clippy-nightly-aarch64-pc-windows-msvc.tar.gz",
+              "sha256": "236bd3c2ecd28bff5e02744db1d36379ab02f8add3595c2cc95f6efe56acd60d",
+              "format": "tar-gz",
+              "alternates": {
+                "tar-xz": {
+                  "url": "https://static.rust-lang.org/dist/2026-07-03/clippy-nightly-aarch64-pc-windows-msvc.tar.xz",
+                  "sha256": "8874242e8cacd4173ccdd1ebefab7ed913379cd729ebe253bb4da9fd04e3ddcf"
+                }
+              },
+              "rootPrefix": "clippy-nightly-aarch64-pc-windows-msvc/clippy-preview",
+              "executables": {
+                "cargo-clippy": "bin/cargo-clippy.exe",
+                "clippy-driver": "bin/clippy-driver.exe"
+              }
+            },
+            "rust-std": {
+              "url": "https://static.rust-lang.org/dist/2026-07-03/rust-std-nightly-aarch64-pc-windows-msvc.tar.gz",
+              "sha256": "c35361938a9571288dd12c2f75373d665a2ce8d7ecb6f6487f8b31d6c16067ca",
+              "format": "tar-gz",
+              "alternates": {
+                "tar-xz": {
+                  "url": "https://static.rust-lang.org/dist/2026-07-03/rust-std-nightly-aarch64-pc-windows-msvc.tar.xz",
+                  "sha256": "d631d20a54a8c42c65a8826bb024f5d8a53f188db3938203ba6f9bd6083be079"
+                }
+              },
+              "rootPrefix": "rust-std-nightly-aarch64-pc-windows-msvc/rust-std-aarch64-pc-windows-msvc",
+              "executables": {}
+            },
+            "rustc": {
+              "url": "https://static.rust-lang.org/dist/2026-07-03/rustc-nightly-aarch64-pc-windows-msvc.tar.gz",
+              "sha256": "7a378f7922133c4adceda813313485da5d0c7cdda068847bca54760c5f5aa029",
+              "format": "tar-gz",
+              "alternates": {
+                "tar-xz": {
+                  "url": "https://static.rust-lang.org/dist/2026-07-03/rustc-nightly-aarch64-pc-windows-msvc.tar.xz",
+                  "sha256": "68c63f32ec7edf071910eb190bfce443bf919dbe84b94694d66c4b99dacf1048"
+                }
+              },
+              "rootPrefix": "rustc-nightly-aarch64-pc-windows-msvc/rustc",
+              "executables": {
+                "rustc": "bin/rustc.exe",
+                "rustdoc": "bin/rustdoc.exe"
+              }
+            },
+            "rustfmt-preview": {
+              "url": "https://static.rust-lang.org/dist/2026-07-03/rustfmt-nightly-aarch64-pc-windows-msvc.tar.gz",
+              "sha256": "d509ca0c19143af506f2267d8422af9e9a5a66e6b2721591ccfad837ab6402cc",
+              "format": "tar-gz",
+              "alternates": {
+                "tar-xz": {
+                  "url": "https://static.rust-lang.org/dist/2026-07-03/rustfmt-nightly-aarch64-pc-windows-msvc.tar.xz",
+                  "sha256": "ec9834a0ecc811051cd79a8f27f293109efdffeef7a8018303b7a356fdb752dc"
+                }
+              },
+              "rootPrefix": "rustfmt-nightly-aarch64-pc-windows-msvc/rustfmt-preview",
+              "executables": {
+                "cargo-fmt": "bin/cargo-fmt.exe",
+                "rustfmt": "bin/rustfmt.exe"
+              }
+            }
+          }
+        }
+      }
+    },
+    "rustup": {
+      "adapter": "rustup",
+      "version": "1.29.3",
+      "declarations": [
+        {
+          "file": "rust-toolchain.toml"
+        }
+      ],
+      "installation": {
+        "kind": "managed",
+        "artifacts": {
+          "macos-x64": {
+            "rustup-init": {
+              "url": "https://static.rust-lang.org/rustup/archive/1.29.3/x86_64-apple-darwin/rustup-init",
+              "sha256": "bc107f1fb0228de7fa32413c89c1b305cea9cd256e94b01150cd054128145429",
+              "format": "binary",
+              "executables": {
+                "rustup": "bin/rustup"
+              }
+            }
+          },
+          "macos-arm64": {
+            "rustup-init": {
+              "url": "https://static.rust-lang.org/rustup/archive/1.29.3/aarch64-apple-darwin/rustup-init",
+              "sha256": "63752a1919a3a4793173ec70f8f212621a7ce38ba6a246095984482f4de20f9f",
+              "format": "binary",
+              "executables": {
+                "rustup": "bin/rustup"
+              }
+            }
+          },
+          "linux-x64-gnu": {
+            "rustup-init": {
+              "url": "https://static.rust-lang.org/rustup/archive/1.29.3/x86_64-unknown-linux-gnu/rustup-init",
+              "sha256": "b1c8cb14e30889e7e2999e6b69e62d9e9b9ffc0f4df8180564d306d9680e6c55",
+              "format": "binary",
+              "executables": {
+                "rustup": "bin/rustup"
+              }
+            }
+          },
+          "linux-arm64-gnu": {
+            "rustup-init": {
+              "url": "https://static.rust-lang.org/rustup/archive/1.29.3/aarch64-unknown-linux-gnu/rustup-init",
+              "sha256": "9f608c142e0e38a78957d0661ba1dfaf0b6fb37184cfaa4b9a0aa57af6184282",
+              "format": "binary",
+              "executables": {
+                "rustup": "bin/rustup"
+              }
+            }
+          },
+          "linux-x64-musl": {
+            "rustup-init": {
+              "url": "https://static.rust-lang.org/rustup/archive/1.29.3/x86_64-unknown-linux-musl/rustup-init",
+              "sha256": "1552169aba2836777136ccff7a381e95c17233b5d8250cd5e10ae3cb971bfcfc",
+              "format": "binary",
+              "executables": {
+                "rustup": "bin/rustup"
+              }
+            }
+          },
+          "linux-arm64-musl": {
+            "rustup-init": {
+              "url": "https://static.rust-lang.org/rustup/archive/1.29.3/aarch64-unknown-linux-musl/rustup-init",
+              "sha256": "956deacdc27ab82ae7ac821d5d3e9e95e4795d476d17efe99743bb8531ca1031",
+              "format": "binary",
+              "executables": {
+                "rustup": "bin/rustup"
+              }
+            }
+          },
+          "windows-x64": {
+            "rustup-init": {
+              "url": "https://static.rust-lang.org/rustup/archive/1.29.3/x86_64-pc-windows-msvc/rustup-init.exe",
+              "sha256": "38027d51d69a5d05493627a0634dbea52d6cd793c8f072d2373d3f4163eec7db",
+              "format": "binary",
+              "executables": {
+                "rustup": "bin/rustup.exe"
+              }
+            }
+          },
+          "windows-arm64": {
+            "rustup-init": {
+              "url": "https://static.rust-lang.org/rustup/archive/1.29.3/aarch64-pc-windows-msvc/rustup-init.exe",
+              "sha256": "407e0d72f81d26a01f9d032b8317908cbb2917ba22765474b682b41390792ad9",
+              "format": "binary",
+              "executables": {
+                "rustup": "bin/rustup.exe"
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

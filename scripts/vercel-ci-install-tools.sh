@@ -8,5 +8,4 @@ set -euo pipefail
 runtime="$(dirname "$(pwd)")/.vercel-ci-runtime"
 npm install --prefix "$runtime" --no-audit --no-fund turbo@canary
 
-# No turbo.lock is committed, so setup has to resolve one.
-"$runtime/node_modules/.bin/turbo" setup --no-frozen
+"$runtime/node_modules/.bin/turbo" setup --frozen

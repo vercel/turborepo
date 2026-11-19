@@ -4,11 +4,11 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "svelte-kit sync --watch",
-    "build": "svelte-kit sync && tsc --noEmit",
+    "dev": "tsc --noEmit --watch",
+    "build": "tsc --noEmit",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
-    "check-types": "svelte-kit sync && tsc --noEmit",
+    "check-types": "tsc --noEmit",
     "test:unit": "vitest run"
   },
   "sideEffects": [
@@ -22,12 +22,11 @@
     }
   },
   "peerDependencies": {
-    "svelte": "5.56.9"
+    "svelte": "5.58.0"
   },
   "devDependencies": {
     "@repo/eslint-config": "workspace:*",
     "@repo/typescript-config": "workspace:*",
-    "@sveltejs/kit": "catalog:sveltejs",
     "@sveltejs/vite-plugin-svelte": "catalog:sveltejs",
     "@types/node": "26.2.0",
     "@vitest/browser-playwright": "4.1.10",
@@ -35,7 +34,7 @@
     "globals": "17.11.0",
     "playwright": "1.62.1",
     "svelte": "catalog:sveltejs",
-    "typescript": "7.0.2",
+    "typescript": "6.0.3",
     "vite": "8.2.1",
     "vitest": "4.1.10",
     "vitest-browser-svelte": "3.0.0"
