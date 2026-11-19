@@ -271,12 +271,26 @@ impl UserStore {
         }
         // Setup creates each Cargo home without its parents.
         create_directory(&self.cargo_homes(), owner_only_directory)?;
+        self.move_cargo_home(&repo)?;
         Ok(SetupSession {
             store: self,
             repo,
             reuse,
             verified: RefCell::default(),
         })
+    }
+
+    /// The Cargo home used to be `cargo-home` in the repository's directory.
+    /// Moving it keeps its configuration, credentials and crates in use. A
+    /// Cargo home already in place wins, and a link is never followed.
+    fn move_cargo_home(&self, repo: &Path) -> Result<(), Error> {
+        let (old, new) = (self.repo(repo).join("cargo-home"), self.cargo_home(repo));
+        let movable =
+            fs::symlink_metadata(&old).is_ok_and(|m| m.is_dir() && !m.file_type().is_symlink());
+        if movable && fs::symlink_metadata(&new).is_err() {
+            fs::rename(&old, &new)?;
+        }
+        Ok(())
     }
 
     /// The recorded environment `env` for the canonical repository root
