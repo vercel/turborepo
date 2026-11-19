@@ -23,8 +23,10 @@ This Turborepo includes the following packages/apps:
 
 ### Apps
 
-- `docs`: a [SvelteKit](https://svelte.dev/docs/kit) app
-- `web`: another [SvelteKit](https://svelte.dev/docs/kit) app
+- `docs`: a [SvelteKit 3](https://svelte.dev/docs/kit) app
+- `web`: another [SvelteKit 3](https://svelte.dev/docs/kit) app
+
+App configuration lives in `vite.config.ts`. Both apps use Node subpath imports (`#lib`) for their `src/lib` directory.
 
 ### Packages
 
@@ -39,7 +41,7 @@ A package containing a shared `tsconfig` file.
 #### `ui`
 
 A stub Svelte component library shared by both `web` and `docs` applications. The package supports Svelte components and
-runes in `.svelte.ts` files, which are not supported in the SvelteKit-generated `tsconfig`.
+runes in `.svelte.ts` files and uses the shared TypeScript configuration without depending on SvelteKit.
 
 See the Svelte documentation's [packaging](https://svelte.dev/docs/kit/packaging) page for more information about Svelte
 component libraries.
@@ -61,7 +63,7 @@ The following tasks are provided:
 
 This Turborepo has tools already set up for you:
 
-- [TypeScript 7](https://www.typescriptlang.org/) for static type checking
+- [TypeScript 6](https://www.typescriptlang.org/) for static type checking
 - [ESLint 10](https://eslint.org/) for code linting
 - [Prettier](https://prettier.io) for code formatting
 - [Vitest](https://vitest.dev/) for unit and component testing

@@ -1,4 +1,4 @@
-import { defineConfig } from 'vite';
+import { defineConfig } from 'vitest/config';
 import { playwright } from '@vitest/browser-playwright';
 
 export default defineConfig({
@@ -6,7 +6,7 @@ export default defineConfig({
 		expect: { requireAssertions: true },
 		projects: [
 			{
-				extends: './vite.config.js',
+				extends: './vite.config.ts',
 				test: {
 					name: 'client',
 					browser: {
@@ -19,7 +19,7 @@ export default defineConfig({
 				}
 			},
 			{
-				extends: './vite.config.js',
+				extends: './vite.config.ts',
 				test: {
 					name: 'server',
 					environment: 'node',
