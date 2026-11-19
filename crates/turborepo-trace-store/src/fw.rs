@@ -72,7 +72,7 @@ pub const GRAPH_FRAMEWORKS: &[(&str, &str)] = &[
 ];
 
 /// Version of the framework integration, part of the options digest.
-pub const INTEGRATION_VERSION: &str = "frameworks-17";
+pub const INTEGRATION_VERSION: &str = "frameworks-18";
 
 /// The adapters of [`GRAPH_FRAMEWORKS`] that are compiled in.
 fn adapters() -> Vec<(&'static dyn Framework, &'static str)> {
@@ -958,16 +958,26 @@ impl<'a> Fw<'a> {
                 if self.tracer.fs().is_host_path(&p) {
                     return None;
                 }
+                let (real, real_id, links) = self.tracer.realize(&p);
+                let inside = !self.tracer.fs().is_host_path(&real);
                 if self.tracer.fs().is_file(&p) {
+                    let (succ, links) = if inside {
+                        (real_id, links)
+                    } else {
+                        (self.tracer.intern(&p), Vec::new())
+                    };
                     Some(FwEdge {
                         kind,
                         phase,
                         spec: format!("{label} {}", self.display(&p)),
-                        succ: vec![self.tracer.intern(&p)],
-                        links: Vec::new(),
+                        succ: vec![succ],
+                        links,
                         uncertainty: None,
                     })
                 } else {
+                    if inside && *real != *p {
+                        obs.missing.push(real.to_path_buf());
+                    }
                     obs.missing.push(p);
                     None
                 }

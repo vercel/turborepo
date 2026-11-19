@@ -832,23 +832,10 @@ fn a_manifest_config_gives_what_a_config_file_gives() {
     );
 }
 
-/// Review probe: a file that a config
-/// names as a setup file or an environment is a symbolic link to a file. The
-/// runner loads what the link leads to, so a change of that file changes the
-/// run; the graph records the link's path only, and the change selects nothing.
-/// (With git: a setup file that is a link to nothing whose target appears
-/// selects nothing either, `--strict` included; refreshes see it.)
-#[test]
-#[ignore = "probe: a setup file behind a link is not followed to its target"]
-fn a_setup_file_that_is_a_link_selects_through_what_it_leads_to() {
-    let link = |r: &Path, at: &str| {
-        let p = r.join(at);
-        let _ = std::fs::remove_file(&p);
-        turborepo_trace_core::os::symlink("lib/real.js", p).unwrap();
-    };
-    let real = [("lib/real.js", "globalThis.s = 1;\n")];
-    let mut failures = Vec::new();
-    for (runner, config) in [
+/// The jest and vitest configs that name a setup file or an environment by
+/// path, with the file a symbolic link to `setup.js`'s target.
+fn setup_link_configs() -> [(&'static str, (&'static str, &'static str)); 4] {
+    [
         (
             "jest",
             (
@@ -881,7 +868,61 @@ fn a_setup_file_that_is_a_link_selects_through_what_it_leads_to() {
                  ['./setup.js'] } };\n",
             ),
         ),
-    ] {
+    ]
+}
+
+/// A setup file that is a link to nothing in the base tree, and the file it
+/// leads to appears: the runner loads that file now, so its coming selects the
+/// test.
+#[test]
+fn a_setup_file_that_links_to_nothing_selects_when_its_target_appears() {
+    let git = |r: &Path, args: &[&str]| {
+        let o = Command::new("git")
+            .args(["-c", "user.email=t@t", "-c", "user.name=t"])
+            .args(["-c", "commit.gpgsign=false"])
+            .args(args)
+            .current_dir(r)
+            .output()
+            .unwrap();
+        assert!(o.status.success(), "git {args:?}");
+    };
+    let mut failures = Vec::new();
+    for (runner, config) in setup_link_configs() {
+        let d = repo(config, "", &[]);
+        let r = d.path();
+        std::fs::create_dir_all(r.join("lib")).unwrap();
+        turborepo_trace_core::os::symlink("lib/real.js", r.join("setup.js")).unwrap();
+        git(r, &["init", "-q"]);
+        git(r, &["add", "-A"]);
+        git(r, &["commit", "-qm", "base"]);
+        write(r, "lib/real.js", "globalThis.s = 1;\n");
+        for strict in [false, true] {
+            let mut args = vec!["affected", "--tests", runner, "--since", "HEAD"];
+            if strict {
+                args.push("--strict");
+            }
+            let out = run(r, &args, &[]);
+            if !out.lines().any(|l| l == TEST) {
+                failures.push(format!("{runner} {} strict={strict}", config.1.trim()));
+            }
+        }
+    }
+    assert!(failures.is_empty(), "{failures:#?}");
+}
+
+/// A file that a config names as a setup file or an environment is a symbolic
+/// link to a file. The runner loads what the link leads to, so a change of that
+/// file changes the run, as a change of the link does.
+#[test]
+fn a_setup_file_that_is_a_link_selects_through_what_it_leads_to() {
+    let link = |r: &Path, at: &str| {
+        let p = r.join(at);
+        let _ = std::fs::remove_file(&p);
+        turborepo_trace_core::os::symlink("lib/real.js", p).unwrap();
+    };
+    let real = [("lib/real.js", "globalThis.s = 1;\n")];
+    let mut failures = Vec::new();
+    for (runner, config) in setup_link_configs() {
         let d = repo(config, "", &real);
         link(d.path(), "setup.js");
         if selected(d.path(), runner, "setup.js", &[]) != [TEST] {
@@ -889,6 +930,30 @@ fn a_setup_file_that_is_a_link_selects_through_what_it_leads_to() {
         }
         if selected(d.path(), runner, "lib/real.js", &[]) != [TEST] {
             failures.push(format!("{runner} {}: what it leads to", config.1.trim()));
+        }
+    }
+    assert!(failures.is_empty(), "{failures:#?}");
+}
+
+/// A setup file or an environment that is a symbolic link into an installed
+/// package: the link is an input at its own path, so a change that makes it
+/// lead to another file of the package selects the test.
+#[test]
+fn a_setup_file_that_links_into_a_package_selects_by_the_link() {
+    let package = [
+        (
+            "node_modules/env/package.json",
+            r#"{"name":"env","version":"1.0.0"}"#,
+        ),
+        ("node_modules/env/index.js", "globalThis.s = 1;\n"),
+    ];
+    let mut failures = Vec::new();
+    for (runner, config) in setup_link_configs() {
+        let d = repo(config, "", &package);
+        turborepo_trace_core::os::symlink("node_modules/env/index.js", d.path().join("setup.js"))
+            .unwrap();
+        if selected(d.path(), runner, "setup.js", &[]) != [TEST] {
+            failures.push(format!("{runner} {}", config.1.trim()));
         }
     }
     assert!(failures.is_empty(), "{failures:#?}");

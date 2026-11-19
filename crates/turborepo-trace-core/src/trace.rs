@@ -388,6 +388,13 @@ impl Tracer {
         self.shared.interner.intern(path)
     }
 
+    /// Resolves the symbolic links of `path`: the real path, its id, and the
+    /// links crossed.
+    pub fn realize(&self, path: &Path) -> (Arc<Path>, FileId, Vec<FileId>) {
+        let r = self.shared.realize(self.shared.interner.intern(path));
+        (self.shared.interner.path(r.real), r.real, r.links.clone())
+    }
+
     /// Drops all caches.
     pub fn clear_cache(&self) {
         self.shared.fs.clear();

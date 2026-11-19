@@ -198,6 +198,14 @@ impl HashCache {
             return Ok(e.hash);
         }
         let meta = std::fs::metadata(path)?;
+        // Only a regular file has content to hash: a device or a pipe (reached
+        // through a symbolic link, say) may never end.
+        if !meta.is_file() {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                "not a regular file",
+            ));
+        }
         let st = stamp(&meta);
         if let Some(e) = cached
             && e.stamp == st
@@ -306,6 +314,18 @@ fn now_ns() -> i128 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(unix)]
+    #[test]
+    fn hashes_regular_files_only() {
+        let t = tempfile::tempdir().unwrap();
+        let link = t.path().join("stream");
+        std::os::unix::fs::symlink("/dev/null", &link).unwrap();
+        let c = HashCache::open(&t.path().join("cache/hashes"));
+        assert!(c.hash(&link).is_err());
+        assert!(c.hash(t.path()).is_err());
+        assert_eq!(c.hash_many(&[link]), [None]);
+    }
 
     #[test]
     fn caches_by_stat() {
