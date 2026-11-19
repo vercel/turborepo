@@ -433,34 +433,43 @@ pub fn chdir_calls(src: &[u8]) -> Vec<turborepo_trace_core::Span> {
     let sig: Vec<usize> = (0..toks.len()).filter(|&i| !toks[i].is_comment()).collect();
     let roots = TempRoots::possible(src).then(|| TempRoots::of(src, &toks));
     let tok = |k: usize| toks[sig[k]];
+    // The opening parenthesis of each closing one, found once for the file.
+    let mut opens: Option<Vec<Option<usize>>> = None;
+    // Per open brace: whether it is an interface type's.
+    let mut braces: Vec<bool> = Vec::new();
     let mut out = Vec::new();
     for k in 0..sig.len() {
+        if tok(k).is_punct(src, b'{') {
+            braces.push(k > 0 && tok(k - 1).is_ident(src, b"interface"));
+        } else if tok(k).is_punct(src, b'}') {
+            braces.pop();
+        }
         if !(tok(k).is_ident(src, b"Chdir")
             && sig.get(k + 1).is_some_and(|&i| toks[i].is_punct(src, b'(')))
         {
+            continue;
+        }
+        // A method of an interface type declares it too.
+        if braces.last() == Some(&true) {
             continue;
         }
         // `func Chdir(` and `func (r T) Chdir(` declare it.
         let declared = k > 0
             && (tok(k - 1).is_ident(src, b"func")
                 || (tok(k - 1).is_punct(src, b')') && {
-                    let mut depth = 0i32;
-                    let mut j = k - 1;
-                    loop {
-                        let t = tok(j);
-                        if t.is_punct(src, b')') {
-                            depth += 1;
-                        } else if t.is_punct(src, b'(') {
-                            depth -= 1;
-                            if depth == 0 {
-                                break j > 0 && tok(j - 1).is_ident(src, b"func");
+                    let opens = opens.get_or_insert_with(|| {
+                        let mut opens = vec![None; sig.len()];
+                        let mut stack = Vec::new();
+                        for (j, open) in opens.iter_mut().enumerate() {
+                            if tok(j).is_punct(src, b'(') {
+                                stack.push(j);
+                            } else if tok(j).is_punct(src, b')') {
+                                *open = stack.pop();
                             }
                         }
-                        if j == 0 {
-                            break false;
-                        }
-                        j -= 1;
-                    }
+                        opens
+                    });
+                    opens[k - 1].is_some_and(|j| j > 0 && tok(j - 1).is_ident(src, b"func"))
                 }));
         if declared {
             continue;
@@ -609,11 +618,14 @@ fn scan(src: &[u8], followed: Option<&Followed>) -> Strings {
                     // `filepath.Split` gives the directory too.
                     b"Dir" | b"Split"
                         if !in_literal
+                            && next(1).is_some_and(|n| n.is_punct(src, b'('))
                             && !followed.is_some_and(|f| part(&f.dirs, at))
-                            && (pkgs.iter().any(|&p| after(p))
-                                || (dot_pkg
-                                    && !prev(1).is_some_and(|p| p.is_punct(src, b'.'))))
-                            && next(1).is_some_and(|n| n.is_punct(src, b'(')) =>
+                            && match prev(1) {
+                                Some(p) if p.is_punct(src, b'.') => prev(2).is_some_and(|r| {
+                                    r.kind == Kind::Ident && pkgs.contains(r.text(src))
+                                }),
+                                _ => dot_pkg,
+                            } =>
                     {
                         out.parents = (out.parents + 1).min(MAX_PARENTS);
                         steps.push(here);
@@ -696,8 +708,13 @@ fn scan(src: &[u8], followed: Option<&Followed>) -> Strings {
 /// The names the file imports `path/filepath` and `path` as (`filepath`,
 /// `path`, or an alias: `fp "path/filepath"`), and whether one of them is
 /// imported into the file's scope (`import . "path/filepath"`).
-fn path_packages<'s>(src: &'s [u8], toks: &[Tok], sig: &[usize]) -> (Vec<&'s [u8]>, bool) {
-    let mut names: Vec<&'s [u8]> = vec![b"filepath", b"path"];
+fn path_packages<'s>(
+    src: &'s [u8],
+    toks: &[Tok],
+    sig: &[usize],
+) -> (std::collections::HashSet<&'s [u8]>, bool) {
+    let mut names: std::collections::HashSet<&'s [u8]> =
+        [&b"filepath"[..], b"path"].into_iter().collect();
     let mut dot = false;
     let tok = |k: usize| toks[sig[k]];
     let mut k = 0;
@@ -718,7 +735,7 @@ fn path_packages<'s>(src: &'s [u8], toks: &[Tok], sig: &[usize]) -> (Vec<&'s [u8
                 if matches!(value.as_deref(), Some("path/filepath" | "path")) && k > 0 {
                     let b = tok(k - 1);
                     if b.kind == Kind::Ident && !b.is_ident(src, b"import") {
-                        names.push(b.text(src));
+                        names.insert(b.text(src));
                     } else if b.is_punct(src, b'.') {
                         dot = true;
                     }
@@ -733,6 +750,10 @@ fn path_packages<'s>(src: &'s [u8], toks: &[Tok], sig: &[usize]) -> (Vec<&'s [u8
     }
     (names, dot)
 }
+
+/// The tokens [`steps_repeat`] looks back through the type arguments of an
+/// instantiated type in a loop's clauses (`[]T[A, B]{`).
+const MAX_TYPE_ARGUMENTS: usize = 64;
 
 /// Whether one of the counted parent steps of a file (`steps`: the significant
 /// tokens of the `Dir` / `Split` calls) can run more than once, so that their
@@ -784,6 +805,8 @@ fn steps_repeat(src: &[u8], toks: &[Tok], sig: &[usize], steps: &[usize]) -> boo
     let mut current: Option<&[u8]> = None;
     // The last brace closed was a type's.
     let mut closed_type = false;
+    // How often each identifier is in the file, counted once.
+    let mut uses: Option<std::collections::HashMap<&[u8], u32>> = None;
     let mut next_step = 0usize;
     for k in 0..sig.len() {
         let t = tok(k);
@@ -806,10 +829,18 @@ fn steps_repeat(src: &[u8], toks: &[Tok], sig: &[usize], steps: &[usize]) -> boo
                     .any(|f| matches!(f, Frame::Loop | Frame::Literal))
                 || current.is_some_and(|name| {
                     !entry(name)
-                        || (0..sig.len())
-                            .filter(|&j| tok(j).is_ident(src, name))
-                            .count()
-                            > 1
+                        || uses
+                            .get_or_insert_with(|| {
+                                let mut uses = std::collections::HashMap::new();
+                                for j in 0..sig.len() {
+                                    if tok(j).kind == Kind::Ident {
+                                        *uses.entry(tok(j).text(src)).or_insert(0u32) += 1;
+                                    }
+                                }
+                                uses
+                            })
+                            .get(name)
+                            .is_some_and(|&n| n > 1)
                 });
             if repeats {
                 return true;
@@ -854,19 +885,46 @@ fn steps_repeat(src: &[u8], toks: &[Tok], sig: &[usize], steps: &[usize]) -> boo
                     // A composite literal in a loop's clauses: `[]T{`, `[]*T{`, `[]pkg.T{`,
                     // `map[K]V{`, `[]struct{ … }{`. A type name alone before the brace
                     // would need parentheses there, so another brace is the body.
-                    let composite = (prev(1).is_some_and(|p| p.is_punct(src, b'}')) && closed_type)
-                        || (prev(1).is_some_and(|p| p.kind == Kind::Ident) && {
-                            let mut j = 2;
-                            if prev(2).is_some_and(|p| p.is_punct(src, b'.'))
-                                && prev(3).is_some_and(|p| p.kind == Kind::Ident)
+                    // A type name `n` tokens back, after the brackets of a slice, an array
+                    // or a map: `]T`, `]*T`, `]pkg.T`.
+                    let element = |n: usize| {
+                        prev(n).is_some_and(|p| p.kind == Kind::Ident) && {
+                            let mut j = n + 1;
+                            if prev(j).is_some_and(|p| p.is_punct(src, b'.'))
+                                && prev(j + 1).is_some_and(|p| p.kind == Kind::Ident)
                             {
-                                j = 4;
+                                j += 2;
                             }
                             while prev(j).is_some_and(|p| p.is_punct(src, b'*')) {
                                 j += 1;
                             }
                             prev(j).is_some_and(|p| p.is_punct(src, b']'))
-                        });
+                        }
+                    };
+                    // An instantiated type name, `]T[A, B]`: the name before the type
+                    // arguments. Arguments that go on for longer are taken for a type.
+                    let instantiated = || {
+                        let mut open = 0i32;
+                        for j in 1..=MAX_TYPE_ARGUMENTS {
+                            match prev(j) {
+                                Some(p) if p.is_punct(src, b']') => open += 1,
+                                Some(p) if p.is_punct(src, b'[') => {
+                                    open -= 1;
+                                    if open == 0 {
+                                        return element(j + 1);
+                                    }
+                                }
+                                Some(_) => {}
+                                None => return false,
+                            }
+                        }
+                        true
+                    };
+                    let composite = (prev(1).is_some_and(|p| p.is_punct(src, b'}')) && closed_type)
+                        || element(1)
+                        || (prev(1).is_some_and(|p| p.is_punct(src, b']'))
+                            && for_at.last() == Some(&depth)
+                            && instantiated());
                     let frame = if type_brace {
                         Frame::Type
                     } else if declared.is_some() && depth == 0 {
@@ -1228,6 +1286,9 @@ func load(dir string) {
             "func TestG(t *testing.T) {\n\tvar f func(string) string\n\t_ = f\n\tif ok \
              {\n\t}\n\td = filepath.Dir(d)\n}\n",
             "func init() {\n\td = filepath.Dir(d)\n}\n",
+            // An index before the body of a loop is no instantiated type.
+            "func TestG(t *testing.T) {\n\tfor i < n[0] {\n\t\ti++\n\t}\n\td = \
+             filepath.Dir(d)\n}\n",
         ] {
             assert!(!repeats(body), "{body}");
         }
@@ -1243,6 +1304,10 @@ func load(dir string) {
              {2},\n\t} {\n\t\t_ = s\n\t\td = filepath.Dir(d)\n\t}\n}\n",
             "func TestG(t *testing.T) {\n\tfor _, s := range map[string]int{\n\t\t\"a\": 1,\n\t} \
              {\n\t\td = filepath.Dir(d)\n\t}\n}\n",
+            "func TestG(t *testing.T) {\n\tfor _, s := range []Box[int]{{1}, {2}} {\n\t\td = \
+             filepath.Dir(d)\n\t}\n}\n",
+            "func TestG(t *testing.T) {\n\tfor _, s := range []*pkg.Pair[string, \
+             []int]{\n\t\t{},\n\t} {\n\t\td = filepath.Dir(d)\n\t}\n}\n",
             "func TestG(t *testing.T) {\n\tup := func(p string) string { return filepath.Dir(p) \
              }\n\t_ = up\n}\n",
             "func up(p string) string {\n\tif p != \"\" {\n\t\treturn \
@@ -1329,6 +1394,13 @@ var x = "fixtures/a.json"
                  string) error { return nil }\n"
             ),
             0
+        );
+        assert_eq!(
+            calls(
+                "package p\ntype FS interface {\n\tChdir(dir string) error\n}\nfunc f(fs FS) \
+                 {\n\tfs.Chdir(\"..\")\n}\n"
+            ),
+            1
         );
         let n = names(
             b"package p\nfunc TestX(t *testing.T) {\n\tt.Chdir(dir)\n}\n",

@@ -411,6 +411,8 @@ fn settle(g: &Graph, root: &Path, files: &mut [FileNames]) {
         .collect();
     // Per directory: whether a symbolic link is below it.
     let mut links: std::collections::HashMap<String, bool> = std::collections::HashMap::new();
+    // Per path: whether it is a symbolic link.
+    let mut probes: std::collections::HashMap<PathBuf, bool> = std::collections::HashMap::new();
     // The parent steps of every directory's Go files.
     let mut ups: std::collections::HashMap<&str, u32> = std::collections::HashMap::new();
     for f in files.iter() {
@@ -436,7 +438,7 @@ fn settle(g: &Graph, root: &Path, files: &mut [FileNames]) {
                 .entry(d.to_owned())
                 .or_insert_with(|| has_link_below(root, d))
                 || names.iter().any(|(shape, _, k, _)| {
-                    (1..=k_of(*k)).any(|j| has_link_on(root, ancestor(d, j), shape))
+                    (1..=k_of(*k)).any(|j| has_link_on(root, ancestor(d, j), shape, &mut probes))
                 }));
         if moved.contains(d) || linked {
             for (shape, line, _, at) in names {
@@ -456,6 +458,9 @@ fn settle(g: &Graph, root: &Path, files: &mut [FileNames]) {
 /// Most entries [`has_link_below`] looks at; a larger tree is taken to have a
 /// link.
 const MAX_LINK_SCAN: usize = 20_000;
+
+/// The paths [`has_link_on`] asks the file system about in one query.
+const MAX_LINK_PROBES: usize = 100_000;
 
 /// Whether a symbolic link is at or below the directory `dir` (repository
 /// relative) of the tree at `root`: a path spelled below it can lead anywhere.
@@ -495,11 +500,28 @@ fn has_link_below(root: &Path, dir: &str) -> bool {
 /// Whether a symbolic link is on the way from the directory `base`
 /// (repository relative) down the segments of `shape`: the place of a string
 /// that climbs to `base` leads elsewhere.
-fn has_link_on(root: &Path, base: &str, shape: &str) -> bool {
+///
+/// `probes` holds what a query has asked the file system so far. Past
+/// [`MAX_LINK_PROBES`] paths a place counts as linked, so its strings stay
+/// unanchored.
+fn has_link_on(
+    root: &Path,
+    base: &str,
+    shape: &str,
+    probes: &mut std::collections::HashMap<PathBuf, bool>,
+) -> bool {
     let mut p = root.join(base);
     shape.split('/').filter(|s| !s.is_empty()).any(|seg| {
         p.push(seg);
-        std::fs::symlink_metadata(&p).is_ok_and(|m| m.file_type().is_symlink())
+        if let Some(&link) = probes.get(&p) {
+            return link;
+        }
+        if probes.len() >= MAX_LINK_PROBES {
+            return true;
+        }
+        let link = std::fs::symlink_metadata(&p).is_ok_and(|m| m.file_type().is_symlink());
+        probes.insert(p.clone(), link);
+        link
     })
 }
 
@@ -1213,14 +1235,29 @@ mod tests {
         std::fs::create_dir_all(root.join("svc/a/testdata/deep")).unwrap();
         std::fs::create_dir_all(root.join("shared")).unwrap();
         assert!(!has_link_below(root, "svc/a"));
-        assert!(!has_link_on(root, "svc", "shared/x.json"));
+        assert!(!has_link_on(
+            root,
+            "svc",
+            "shared/x.json",
+            &mut Default::default()
+        ));
         std::os::unix::fs::symlink("../../../../shared", root.join("svc/a/testdata/deep/data"))
             .unwrap();
         assert!(has_link_below(root, "svc/a"));
         assert!(!has_link_below(root, "shared"));
         std::os::unix::fs::symlink("../shared", root.join("svc/shared")).unwrap();
-        assert!(has_link_on(root, "svc", "shared/x.json"));
-        assert!(!has_link_on(root, "", "shared/x.json"));
+        assert!(has_link_on(
+            root,
+            "svc",
+            "shared/x.json",
+            &mut Default::default()
+        ));
+        assert!(!has_link_on(
+            root,
+            "",
+            "shared/x.json",
+            &mut Default::default()
+        ));
     }
 
     #[test]
