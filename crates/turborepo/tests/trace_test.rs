@@ -2003,6 +2003,148 @@ fn the_graph_travels_through_the_turbo_cache() {
     assert!(!stderr(&output).contains("restored"), "{}", stderr(&output));
 }
 
+/// A remote cache that holds the artifacts of the local cache directory
+/// `cache`, read-only: `HEAD` and `GET /v8/artifacts/<key>` answer for each of
+/// them, and everything else is a 404 (also the batched existence query, as on
+/// a server without that endpoint).
+#[cfg(unix)]
+fn remote_cache_of(cache: &Path) -> httpmock::MockServer {
+    let server = httpmock::MockServer::start();
+    server.mock(|when, then| {
+        when.path("/v8/artifacts/status");
+        then.status(200)
+            .json_body(serde_json::json!({"status": "enabled"}));
+    });
+    for name in cached_artifacts(cache) {
+        let key = name.strip_suffix(".tar.zst").unwrap().to_owned();
+        let body = fs::read(cache.join(&name)).unwrap();
+        server.mock(|when, then| {
+            when.path(format!("/v8/artifacts/{key}"));
+            then.status(200).body(body);
+        });
+    }
+    server
+}
+
+/// Every `transport.graph` below `root` (the packed graph's name while it is
+/// fetched or put), outside `.git`.
+#[cfg(unix)]
+fn transport_files(root: &Path) -> Vec<String> {
+    fn walk(root: &Path, dir: &Path, out: &mut Vec<String>) {
+        for entry in fs::read_dir(dir).unwrap() {
+            let entry = entry.unwrap();
+            let path = entry.path();
+            if entry.file_type().unwrap().is_dir() {
+                if entry.file_name() != ".git" {
+                    walk(root, &path, out);
+                }
+            } else if entry.file_name() == "transport.graph" {
+                out.push(path.strip_prefix(root).unwrap().display().to_string());
+            }
+        }
+    }
+    let mut out = Vec::new();
+    walk(root, root, &mut out);
+    out
+}
+
+/// A test that reads every entry of the repository root: any change selects
+/// it, also a file added at the root or below `.turbo`.
+#[cfg(unix)]
+const JEST_ROOT: &str = "packages/app/test/root.test.js";
+
+/// The `trace_jest` fixture as a repository that does not ignore `.turbo`,
+/// with [`JEST_ROOT`], committed on `main`.
+#[cfg(unix)]
+fn fixture_without_dot_turbo_ignored() -> tempfile::TempDir {
+    let dir = fixture("trace_jest");
+    fs::write(dir.path().join(".gitignore"), "node_modules/\n.npmrc\n").unwrap();
+    fs::write(
+        dir.path().join(JEST_ROOT),
+        "const { readdirSync, readFileSync } = require('fs');\nconst { join } = \
+         require('path');\nconst root = join(__dirname, '../../..');\ntest('root', () => {\n  for \
+         (const name of readdirSync(root)) {\n    readFileSync(join(root, name));\n  }\n});\n",
+    )
+    .unwrap();
+    git(dir.path(), &["add", "-A"]);
+    git(dir.path(), &["commit", "--quiet", "-m", "root listing"]);
+    dir
+}
+
+/// The selection of `turbo trace <args>` with `env`, which must succeed, and
+/// its stderr.
+#[cfg(unix)]
+#[track_caller]
+fn selected(dir: &Path, args: &[&str], env: &[(&str, &str)]) -> (Vec<String>, String) {
+    let output = trace_with_env(dir, args, env);
+    assert!(output.status.success(), "{}", stderr(&output));
+    (
+        stdout(&output).lines().map(str::to_owned).collect(),
+        stderr(&output),
+    )
+}
+
+/// The graph of the merge base comes from the remote cache into the graph
+/// directory, is installed, and is gone afterwards: the packed graph is in no
+/// place of the working tree, and is no change of the repository, which here
+/// does not ignore `.turbo`.
+#[cfg(unix)]
+#[test]
+fn the_graph_from_the_remote_cache_is_installed_and_is_not_a_change() {
+    let scratch = tempfile::tempdir().unwrap();
+    let cache = scratch.path().join("turbo-cache");
+    let none = Vec::<String>::new();
+
+    // CI on `main` builds the graph and puts it into the cache.
+    let main = fixture_without_dot_turbo_ignored();
+    let (tests, err) = selected(
+        main.path(),
+        &[
+            "affected",
+            "--base",
+            "HEAD",
+            "--cache-dir",
+            cache.to_str().unwrap(),
+        ],
+        &[("CI", "1")],
+    );
+    assert!(err.contains("put the graph of"), "{err}");
+    assert_eq!(tests, none);
+    assert_eq!(transport_files(main.path()), none);
+
+    // The same artifacts in a remote cache, and a fresh clone that reads only
+    // that cache, on a branch with a commit that changes no file.
+    let server = remote_cache_of(&cache);
+    let api = server.base_url();
+    let remote = [
+        ("TURBO_API", api.as_str()),
+        ("TURBO_TOKEN", "token"),
+        ("TURBO_TEAM", "team"),
+    ];
+    let fresh = scratch.path().join("fresh");
+    clone(main.path(), &fresh);
+    git(&fresh, &["checkout", "--quiet", "-b", "feature"]);
+    git(
+        &fresh,
+        &["commit", "--quiet", "--allow-empty", "-m", "nothing"],
+    );
+    let args = ["affected", "--base", "main", "--cache=remote:r"];
+    let (tests, err) = selected(&fresh, &args, &remote);
+    assert_eq!(tests, none, "{err}");
+    assert_eq!(transport_files(&fresh), none);
+    assert!(err.contains("restored the graph of"), "{err}");
+    // A second run in the same checkout finds the graph.
+    let (tests, err) = selected(&fresh, &args, &remote);
+    assert_eq!(tests, none, "{err}");
+    assert!(!err.contains("restored"), "{err}");
+
+    // A packed graph that an interrupted run left in the graph directory is
+    // no change either.
+    fs::write(fresh.join(".turbo/trace/transport.graph"), "left behind\n").unwrap();
+    let (tests, err) = selected(&fresh, &args, &remote);
+    assert_eq!(tests, none, "{err}");
+}
+
 /// A package whose runner the trace does not cover (mocha): its test task runs
 /// whole, and says so.
 #[cfg(unix)]
