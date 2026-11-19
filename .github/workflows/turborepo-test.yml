@@ -298,24 +298,16 @@ jobs:
         shell: bash
         run: echo "INSTA_WORKSPACE_ROOT=$GITHUB_WORKSPACE" >> "$GITHUB_ENV"
 
+      # Managed Rust needs fixes that no stable release has yet: #15077 for
+      # Windows and #15080 for macOS. Remove `turbo-version` once a stable
+      # release includes them.
       - name: Install Global Turbo
         uses: ./.github/actions/install-global-turbo
+        with:
+          turbo-version: canary
 
       - name: Install managed tools
-        if: runner.os != 'Windows'
         run: turbo setup --tools-only
-
-      # Managed tasks use a Cargo home inside the tool store. On Windows, that
-      # path is too long for Cargo to check out Git dependencies, and Cargo
-      # fails with "path too long". This job removes turbo.lock on Windows, and
-      # its tasks use the tools on PATH. `--skip-worktree` hides the removal
-      # from Git, so the checkout stays clean.
-      - name: Run tasks without managed tools
-        if: runner.os == 'Windows'
-        shell: bash
-        run: |
-          git update-index --skip-worktree turbo.lock
-          rm turbo.lock
 
       # The nextest invocation (and its excludes) lives in turbo.json as
       # the turborepo-crates#test command; dogfooding the task command
