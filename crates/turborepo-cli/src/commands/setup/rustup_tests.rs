@@ -246,7 +246,7 @@ fn locked_rust_setup_is_private_atomic_repeatable_and_reinstallable() {
         .map(|entry| entry.unwrap().file_name())
         .collect();
     home_entries.sort();
-    assert_eq!(home_entries, ["envs", "repos", "tmp", "trees"]);
+    assert_eq!(home_entries, ["cargo", "envs", "repos", "tmp", "trees"]);
     let repos: Vec<_> = fs::read_dir(repo.owned.home().join("repos"))
         .unwrap()
         .map(|entry| entry.unwrap().path())
@@ -476,8 +476,12 @@ fn locked_cargo_dependencies_prefetch_with_the_managed_toolchain_and_home() {
     fs::write(root.join("stale"), "").unwrap();
     assert_eq!(repo.run(&upstream, &["--frozen"]).unwrap(), 101);
     let args = fs::read_to_string(root.join("cargo-args")).unwrap();
-    let fetch = "fetch --locked toolchain cargo-home";
-    assert_eq!(args.lines().collect::<Vec<_>>(), [fetch; 3]);
+    let home = repo.cargo_home();
+    let fetch = format!(
+        "fetch --locked toolchain {}",
+        home.file_name().unwrap().to_str().unwrap()
+    );
+    assert_eq!(args.lines().collect::<Vec<_>>(), [fetch.as_str(); 3]);
     assert!(repo.cargo_home().is_dir());
     assert!(!root.join(".turbo/cargo-home").exists());
     assert_eq!(fs::read(root.join("Cargo.lock")).unwrap(), b"version = 4\n");

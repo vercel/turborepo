@@ -157,3 +157,20 @@ fn check_and_forced_setup_treat_a_tree_file_others_can_write_as_damage() {
     assert_eq!(staged.get(), 2, "forced setup reused the tree");
     f.store.check(&selection).unwrap();
 }
+
+/// The move stays inside a store that only this user can access.
+#[test]
+fn setup_moves_a_cargo_home_out_of_the_repository_directory() {
+    let f = fixture();
+    let root = fs::canonicalize(f.repo.path()).unwrap();
+    let old = f.store.repo(&root).join("cargo-home");
+    fs::create_dir_all(&old).unwrap();
+    fs::write(old.join("config.toml"), "[net]\noffline = true\n").unwrap();
+    drop(f.store.begin_setup(f.repo.path(), Reuse::Sealed).unwrap());
+    let moved = f.store.cargo_home(&root).join("config.toml");
+    assert_eq!(
+        fs::read_to_string(moved).unwrap(),
+        "[net]\noffline = true\n"
+    );
+    assert!(!old.exists());
+}
