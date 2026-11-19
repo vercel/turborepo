@@ -61,7 +61,8 @@ pub struct Launch {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub args: Vec<LaunchArg>,
     /// A directory in the program's tree that a Unix launcher puts first in
-    /// `DYLD_FALLBACK_LIBRARY_PATH`, which only macOS reads. Never a managed
+    /// `DYLD_FALLBACK_LIBRARY_PATH`, which only macOS reads, unless the store's
+    /// path has a colon. Never a managed
     /// variable: activation would give it to every task, and macOS removes
     /// `DYLD_*` variables whenever a system program such as `/bin/sh` starts.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -266,20 +267,26 @@ pub(crate) fn unix_launcher(
         let _ = writeln!(script, "{}={value}", var.name());
         names.push(var.name());
     }
-    if let Some(directory) = &launch.dyld_fallback {
-        // dyld searches its default directories only while the variable is
-        // unset, so the launcher names them too, like the rustup proxy.
-        let directory = TreeRef::new(launch.program.tool.clone(), directory.clone());
-        let _ = writeln!(
-            script,
-            "DYLD_FALLBACK_LIBRARY_PATH={}\":${{DYLD_FALLBACK_LIBRARY_PATH:-${{HOME:+$HOME/lib:}}/\
-             usr/local/lib:/usr/lib}}\"",
-            path(&directory)
-        );
-        names.push("DYLD_FALLBACK_LIBRARY_PATH");
-    }
     if !names.is_empty() {
         let _ = writeln!(script, "export {}", names.join(" "));
+    }
+    if let Some(directory) = &launch.dyld_fallback {
+        // dyld searches its default directories only while the variable is
+        // unset, so the launcher names them too, like the rustup proxy. The
+        // value is a `:`-separated list: a store or home with a colon would
+        // name a directory that neither is, so the launcher leaves it out.
+        let directory = TreeRef::new(launch.program.tool.clone(), directory.clone());
+        let _ = write!(
+            script,
+            concat!(
+                "case \"$store\" in *:*) ;; *)\n",
+                "case \"${{HOME:-}}\" in ''|*:*) fallback=/usr/local/lib:/usr/lib;; *) \
+                 fallback=\"$HOME/lib:/usr/local/lib:/usr/lib\";; esac\n",
+                "DYLD_FALLBACK_LIBRARY_PATH={}\":${{DYLD_FALLBACK_LIBRARY_PATH:-$fallback}}\"\n",
+                "export DYLD_FALLBACK_LIBRARY_PATH;; esac\n",
+            ),
+            path(&directory)
+        );
     }
     script.push_str("exec ");
     script.push_str(&path(&launch.program));

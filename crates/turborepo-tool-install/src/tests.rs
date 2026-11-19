@@ -397,9 +397,24 @@ fn setups_racing_on_the_same_missing_tree_both_succeed_and_leave_one_tree() {
     }
 }
 
-/// macOS removes `DYLD_*` variables when a system program such as `/bin/sh`
-/// starts, so a fixture script cannot report what its launcher exported. The
-/// launcher's text is the evidence.
+/// What a launcher sets `DYLD_FALLBACK_LIBRARY_PATH` to. macOS removes
+/// `DYLD_*` variables when a system program such as `/bin/sh` starts, so a
+/// fixture program cannot report it. This evaluates everything but the
+/// launcher's final `exec` in one shell instead.
+fn dyld_fallback(launcher: &Path, home: &str) -> String {
+    let script = r#"eval "$(sed '$d' "$0")"; printf %s "${DYLD_FALLBACK_LIBRARY_PATH-unset}""#;
+    let output = Command::new("/bin/sh")
+        .args(["-c", script])
+        .arg(launcher)
+        .env_clear()
+        .env("PATH", "/usr/bin:/bin")
+        .env("HOME", home)
+        .output()
+        .unwrap();
+    assert!(output.status.success(), "{output:?}");
+    String::from_utf8(output.stdout).unwrap()
+}
+
 #[test]
 fn a_launcher_puts_its_fallback_directory_before_the_dyld_defaults() {
     let f = fixture();
@@ -414,14 +429,31 @@ fn a_launcher_puts_its_fallback_directory_before_the_dyld_defaults() {
     let mut runner = tool("runner");
     runner.executables = BTreeMap::from([("run".into(), launch(Some("lib")))]);
     ensure(&f.store, repo.path(), &[runner.clone()], &Cell::new(0));
-    let script = fs::read_to_string(repo.path().join(".turbo/bin/run")).unwrap();
-    let tree = format!("trees/{}/root", TreeSpecKey::of(&runner));
-    let expected = format!(
-        "DYLD_FALLBACK_LIBRARY_PATH=\"$store\"'/{tree}/lib'\":${{DYLD_FALLBACK_LIBRARY_PATH:\
-         -${{HOME:+$HOME/lib:}}/usr/local/lib:/usr/lib}}\"\nexport \
-         DYLD_FALLBACK_LIBRARY_PATH\nexec \"$store\"'/{tree}/bin/tool' \"$@\"\n"
+    let launcher = fs::canonicalize(repo.path().join(".turbo/bin/run")).unwrap();
+    let lib = f
+        .store
+        .root()
+        .join("trees")
+        .join(TreeSpecKey::of(&runner))
+        .join("root/lib");
+    let lib = lib.display();
+    // dyld uses its default directories only while the variable is unset, so
+    // the launcher names them after its own.
+    assert_eq!(
+        dyld_fallback(&launcher, "/home/me"),
+        format!("{lib}:/home/me/lib:/usr/local/lib:/usr/lib")
     );
-    assert!(script.ends_with(&expected), "{script}");
+    // The value is a `:`-separated list. A home or a store with a colon would
+    // name directories that neither is.
+    assert_eq!(
+        dyld_fallback(&launcher, "/home/a:b"),
+        format!("{lib}:/usr/local/lib:/usr/lib")
+    );
+    let colon = tempfile::tempdir().unwrap();
+    let bin = colon.path().join("a:b/envs/key/bin");
+    fs::create_dir_all(&bin).unwrap();
+    fs::copy(&launcher, bin.join("run")).unwrap();
+    assert_eq!(dyld_fallback(&bin.join("run"), "/home/me"), "unset");
 
     // A launcher without one serializes as before, so its environment keeps
     // its key and needs no new setup.
