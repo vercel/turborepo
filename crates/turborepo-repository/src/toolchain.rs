@@ -907,23 +907,103 @@ fn pnpm_direct_command(
     (node.is_file() && pnpm_cli.is_file()).then(|| (node, vec![pnpm_cli.into_os_string()]))
 }
 
+/// The program and leading arguments of a `.cmd` file that only forwards its
+/// arguments, as `turbo setup` writes one for each export that is not an
+/// `.exe`:
+///
+/// ```text
+/// @"C:\store\trees\<tree>\root\node.exe" "C:\store\trees\<tree>\root\bin\pnpm.mjs" %*
+/// ```
+///
+/// `None` for every other file, so that cmd.exe still runs whatever this
+/// cannot read exactly.
+#[cfg(windows)]
+fn forwarded_command(
+    package_manager_binary: &std::path::Path,
+) -> Option<(std::path::PathBuf, Vec<OsString>)> {
+    let extension = package_manager_binary.extension()?.to_str()?;
+    if !extension.eq_ignore_ascii_case("cmd") {
+        return None;
+    }
+    let script = std::fs::read_to_string(package_manager_binary).ok()?;
+    let line = script.strip_suffix('\n').unwrap_or(&script);
+    let line = line.strip_suffix('\r').unwrap_or(line);
+    if line.contains(['\r', '\n']) {
+        return None;
+    }
+    let mut rest = line.strip_prefix('@')?.strip_suffix(" %*")?;
+    let mut words = Vec::new();
+    while !rest.is_empty() {
+        let word = match rest.strip_prefix('"') {
+            Some(quoted) => {
+                let (word, after) = quoted.split_once('"')?;
+                rest = after;
+                // cmd.exe expands these even between quotes.
+                (!word.contains(['%', '!'])).then_some(word)?
+            }
+            None => {
+                let end = rest.find(' ').unwrap_or(rest.len());
+                let (word, after) = rest.split_at(end);
+                rest = after;
+                word.bytes()
+                    .all(|b| b.is_ascii_alphanumeric() || b"-_.+".contains(&b))
+                    .then_some(word)?
+            }
+        };
+        if word.is_empty() {
+            return None;
+        }
+        words.push(word);
+        rest = match rest.strip_prefix(' ') {
+            Some(rest) => rest,
+            None if rest.is_empty() => rest,
+            None => return None,
+        };
+    }
+    let (program, args) = words.split_first()?;
+    let program = std::path::PathBuf::from(program);
+    program
+        .is_absolute()
+        .then(|| (program, args.iter().map(OsString::from).collect()))
+}
+
 #[cfg(windows)]
 pub(crate) fn package_manager_command(
     package_manager: &PackageManager,
     package_manager_binary: &std::path::Path,
 ) -> (OsString, Vec<OsString>) {
-    if package_manager == &PackageManager::Npm
-        && let Some((node, npm_cli)) = npm_direct_command(package_manager_binary)
+    // A managed environment's bin has a forwarder to the package manager, not
+    // the package manager's own files.
+    let forwarded = forwarded_command(package_manager_binary);
+    let (binary, leading) = match &forwarded {
+        Some((program, args)) => (program.as_path(), args.as_slice()),
+        None => (package_manager_binary, [].as_slice()),
+    };
+
+    if leading.is_empty()
+        && package_manager == &PackageManager::Npm
+        && let Some((node, npm_cli)) = npm_direct_command(binary)
     {
         return (node.into_os_string(), vec![npm_cli]);
     }
 
-    if matches!(
-        package_manager,
-        PackageManager::Pnpm | PackageManager::Pnpm6 | PackageManager::Pnpm9
-    ) && let Some((program, args)) = pnpm_direct_command(package_manager_binary)
+    if leading.is_empty()
+        && matches!(
+            package_manager,
+            PackageManager::Pnpm | PackageManager::Pnpm6 | PackageManager::Pnpm9
+        )
+        && let Some((program, args)) = pnpm_direct_command(binary)
     {
         return (program.into_os_string(), args);
+    }
+
+    // Like `npm.cmd`, a forwarder would leave cmd.exe at its batch termination
+    // prompt after Ctrl+C. An executable that it names runs without cmd.exe.
+    let executable = binary
+        .extension()
+        .is_some_and(|extension| extension.eq_ignore_ascii_case("exe"));
+    if forwarded.is_some() && executable {
+        return (binary.as_os_str().to_owned(), leading.to_vec());
     }
 
     (package_manager_binary.as_os_str().to_owned(), Vec::new())
@@ -1308,6 +1388,110 @@ mod tests {
 
         assert_eq!(program, npm_cmd.into_os_string());
         assert!(args.is_empty());
+    }
+
+    /// A managed environment on Windows: each tool's files in its own
+    /// directory, and a `bin` whose `.cmd` files forward to them.
+    #[cfg(windows)]
+    fn forwarder(
+        bin: &std::path::Path,
+        name: &str,
+        words: &[&std::path::Path],
+    ) -> std::path::PathBuf {
+        let words: Vec<_> = words
+            .iter()
+            .map(|word| format!("\"{}\"", word.display()))
+            .collect();
+        std::fs::create_dir_all(bin).unwrap();
+        let forwarder = bin.join(name);
+        std::fs::write(&forwarder, format!("@{} %*\r\n", words.join(" "))).unwrap();
+        forwarder
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn a_forwarder_to_npm_cmd_unwraps_to_node_and_npm_cli() {
+        let tempdir = tempfile::tempdir().unwrap();
+        let tree = tempdir.path().join("trees").join("node").join("root");
+        let node = tree.join("node.exe");
+        let npm_cli = tree
+            .join("node_modules")
+            .join("npm")
+            .join("bin")
+            .join("npm-cli.js");
+        std::fs::create_dir_all(npm_cli.parent().unwrap()).unwrap();
+        for file in [&tree.join("npm.cmd"), &node, &npm_cli] {
+            std::fs::write(file, "").unwrap();
+        }
+        let bin = tempdir.path().join("envs").join("env").join("bin");
+        let npm_cmd = forwarder(&bin, "npm.cmd", &[&tree.join("npm.cmd")]);
+        // The environment's `node.exe` is beside the forwarder, and npm's
+        // files are not.
+        std::fs::write(bin.join("node.exe"), "").unwrap();
+
+        let (program, args) = package_manager_command(&PackageManager::Npm, &npm_cmd);
+
+        assert_eq!(program, node.into_os_string());
+        assert_eq!(args, vec![npm_cli.into_os_string()]);
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn a_forwarder_to_an_executable_unwraps_to_its_command() {
+        let tempdir = tempfile::tempdir().unwrap();
+        let bin = tempdir.path().join("envs").join("env").join("bin");
+        let node = tempdir.path().join("trees").join("node").join("node.exe");
+        let pnpm_cli = tempdir.path().join("trees").join("pnpm").join("pnpm.mjs");
+        let pnpm_exe = tempdir.path().join("trees").join("pnpm").join("pnpm.exe");
+
+        // pnpm as a JavaScript entry point on the managed Node.js.
+        let pnpm_cmd = forwarder(&bin, "pnpm.cmd", &[&node, &pnpm_cli]);
+        let (program, args) = package_manager_command(&PackageManager::Pnpm, &pnpm_cmd);
+        assert_eq!(program, node.clone().into_os_string());
+        assert_eq!(args, vec![pnpm_cli.clone().into_os_string()]);
+
+        // Native pnpm.
+        let pnpm_cmd = forwarder(&bin, "pnpm.cmd", &[&pnpm_exe]);
+        let (program, args) = package_manager_command(&PackageManager::Pnpm, &pnpm_cmd);
+        assert_eq!(program, pnpm_exe.into_os_string());
+        assert!(args.is_empty());
+
+        // Every package manager, not only the ones with their own shims.
+        let yarn_js = tempdir.path().join("trees").join("yarn").join("yarn.js");
+        let yarn_cmd = forwarder(&bin, "yarn.cmd", &[&node, &yarn_js]);
+        let (program, args) = package_manager_command(&PackageManager::Berry, &yarn_cmd);
+        assert_eq!(program, node.into_os_string());
+        assert_eq!(args, vec![yarn_js.into_os_string()]);
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn a_cmd_file_that_does_more_than_forward_runs_as_it_is() {
+        let tempdir = tempfile::tempdir().unwrap();
+        let node = tempdir.path().join("node.exe");
+        let node = node.display();
+        for script in [
+            // cmd.exe would expand a variable.
+            "@\"%~dp0\\node.exe\" %*\r\n".to_owned(),
+            format!("@\"{node}\" \"%USERPROFILE%\\cli.js\" %*\r\n"),
+            // More than one command.
+            format!("@\"{node}\" %*\r\n@echo done\r\n"),
+            format!("@\"{node}\" & echo done %*\r\n"),
+            format!("@\"{node}\" > log.txt %*\r\n"),
+            // Arguments that it does not pass on.
+            format!("@\"{node}\"\r\n"),
+            // A program that cmd.exe would find on PATH.
+            "@\"node.exe\" %*\r\n".to_owned(),
+            "@node.exe %*\r\n".to_owned(),
+        ] {
+            let yarn_cmd = tempdir.path().join("yarn.cmd");
+            std::fs::write(&yarn_cmd, &script).unwrap();
+
+            let (program, args) = package_manager_command(&PackageManager::Berry, &yarn_cmd);
+
+            assert_eq!(program, yarn_cmd.into_os_string(), "{script}");
+            assert!(args.is_empty(), "{script}");
+        }
     }
 
     #[cfg(windows)]
