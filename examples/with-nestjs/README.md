@@ -4,7 +4,7 @@ This is a community-maintained example. If you experience a problem, please subm
 
 ## Using this example
 
-Use Node.js 26.12.0 or newer and pnpm 12.14.0 (the version pinned in `packageManager`). Create the example, then install dependencies and start development from its root:
+Use Node.js 26.13.1 or newer and pnpm 12.21.0 (the version pinned in `packageManager`). Create the example, then install dependencies and start development from its root:
 
 ```bash
 npx create-turbo@latest -e with-nestjs
