@@ -289,6 +289,13 @@ fn locked_selections_must_satisfy_declarations_and_official_shapes() {
         RustPlan::from_lock(&lock(tool.clone()), Platform::LinuxArm64Gnu),
         Err(Error::MissingTarget)
     ));
+    // Only macOS launchers name the toolchain's `lib`: its `rust-lld` finds
+    // `libLLVM.dylib` nowhere else, and Linux's finds it through its rpath.
+    let linux = RustPlan::from_lock(&lock(tool.clone()), TARGET).unwrap();
+    assert!(matches!(
+        &linux.inventory_tool().executables["rustc"],
+        turborepo_tool_install::Export::Launch(launch) if launch.dyld_fallback.is_none()
+    ));
     let plan = RustPlan::from_lock(&lock(tool), Platform::MacosArm64).unwrap();
     let rustc = turborepo_tool_install::TreeRef::new(
         "rust",
@@ -299,6 +306,7 @@ fn locked_selections_must_satisfy_declarations_and_official_shapes() {
         turborepo_tool_install::Export::Launch(turborepo_tool_install::Launch {
             program: rustc,
             args: Vec::new(),
+            dyld_fallback: Some("toolchains/1.99.0-aarch64-apple-darwin/lib".into()),
         })
     );
 }

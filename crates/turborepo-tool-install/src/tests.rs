@@ -397,6 +397,79 @@ fn setups_racing_on_the_same_missing_tree_both_succeed_and_leave_one_tree() {
     }
 }
 
+/// What a launcher sets `DYLD_FALLBACK_LIBRARY_PATH` to. macOS removes
+/// `DYLD_*` variables when a system program such as `/bin/sh` starts, so a
+/// fixture program cannot report it. This evaluates everything but the
+/// launcher's final `exec` in one shell instead.
+fn dyld_fallback(launcher: &Path, home: &str) -> String {
+    let script = r#"eval "$(sed '$d' "$0")"; printf %s "${DYLD_FALLBACK_LIBRARY_PATH-unset}""#;
+    let output = Command::new("/bin/sh")
+        .args(["-c", script])
+        .arg(launcher)
+        .env_clear()
+        .env("PATH", "/usr/bin:/bin")
+        .env("HOME", home)
+        .output()
+        .unwrap();
+    assert!(output.status.success(), "{output:?}");
+    String::from_utf8(output.stdout).unwrap()
+}
+
+#[test]
+fn a_launcher_puts_its_fallback_directory_before_the_dyld_defaults() {
+    let f = fixture();
+    let repo = repo();
+    let launch = |dyld_fallback: Option<&str>| {
+        Export::Launch(Launch {
+            program: TreeRef::new("runner", "bin/tool"),
+            args: Vec::new(),
+            dyld_fallback: dyld_fallback.map(Into::into),
+        })
+    };
+    let mut runner = tool("runner");
+    runner.executables = BTreeMap::from([("run".into(), launch(Some("lib")))]);
+    ensure(&f.store, repo.path(), &[runner.clone()], &Cell::new(0));
+    let launcher = fs::canonicalize(repo.path().join(".turbo/bin/run")).unwrap();
+    let lib = f
+        .store
+        .root()
+        .join("trees")
+        .join(TreeSpecKey::of(&runner))
+        .join("root/lib");
+    let lib = lib.display();
+    // dyld uses its default directories only while the variable is unset, so
+    // the launcher names them after its own.
+    assert_eq!(
+        dyld_fallback(&launcher, "/home/me"),
+        format!("{lib}:/home/me/lib:/usr/local/lib:/usr/lib")
+    );
+    // The value is a `:`-separated list. A home or a store with a colon would
+    // name directories that neither is.
+    assert_eq!(
+        dyld_fallback(&launcher, "/home/a:b"),
+        format!("{lib}:/usr/local/lib:/usr/lib")
+    );
+    let colon = tempfile::tempdir().unwrap();
+    let bin = colon.path().join("a:b/envs/key/bin");
+    fs::create_dir_all(&bin).unwrap();
+    fs::copy(&launcher, bin.join("run")).unwrap();
+    assert_eq!(dyld_fallback(&bin.join("run"), "/home/me"), "unset");
+
+    // A launcher without one serializes as before, so its environment keeps
+    // its key and needs no new setup.
+    assert!(
+        !serde_json::to_string(&launch(None))
+            .unwrap()
+            .contains("dyld_fallback")
+    );
+    // The directory goes into a script, so it needs the script-safe spelling.
+    runner.executables = BTreeMap::from([("run".into(), launch(Some("li'b")))]);
+    assert!(matches!(
+        Selection::new(vec![runner]),
+        Err(Error::UnsafePath)
+    ));
+}
+
 #[test]
 fn launchers_run_other_trees_without_an_inherited_environment_and_leave_cargo_home_to_activation() {
     let f = fixture();
@@ -410,6 +483,7 @@ fn launchers_run_other_trees_without_an_inherited_environment_and_leave_cargo_ho
                 LaunchArg::Tree(TreeRef::new("runner", "resource")),
                 LaunchArg::Word("--flag".into()),
             ],
+            dyld_fallback: None,
         }),
     )]);
     runner.vars = BTreeMap::from([

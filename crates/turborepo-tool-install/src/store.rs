@@ -532,6 +532,7 @@ impl UserStore {
                     &crate::Launch {
                         program: TreeRef::new(tool.id.clone(), path.clone()),
                         args: Vec::new(),
+                        dyld_fallback: None,
                     },
                     tree,
                 )?),

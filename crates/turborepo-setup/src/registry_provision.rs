@@ -626,6 +626,7 @@ impl RegistryPlan {
                     let launch = Launch {
                         program: TreeRef::new("node", node_binary.clone()),
                         args: vec![LaunchArg::Tree(TreeRef::new(id, entry.clone()))],
+                        dyld_fallback: None,
                     };
                     (name.clone(), Export::Launch(launch))
                 })
@@ -639,7 +640,12 @@ impl RegistryPlan {
                         _ => Vec::new(),
                     };
                     let program = TreeRef::new(id, NATIVE_BINARY);
-                    (name.clone(), Export::Launch(Launch { program, args }))
+                    let launch = Launch {
+                        program,
+                        args,
+                        dyld_fallback: None,
+                    };
+                    (name.clone(), Export::Launch(launch))
                 })
                 .collect(),
         };
