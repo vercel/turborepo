@@ -397,6 +397,47 @@ fn setups_racing_on_the_same_missing_tree_both_succeed_and_leave_one_tree() {
     }
 }
 
+/// macOS removes `DYLD_*` variables when a system program such as `/bin/sh`
+/// starts, so a fixture script cannot report what its launcher exported. The
+/// launcher's text is the evidence.
+#[test]
+fn a_launcher_puts_its_fallback_directory_before_the_dyld_defaults() {
+    let f = fixture();
+    let repo = repo();
+    let launch = |dyld_fallback: Option<&str>| {
+        Export::Launch(Launch {
+            program: TreeRef::new("runner", "bin/tool"),
+            args: Vec::new(),
+            dyld_fallback: dyld_fallback.map(Into::into),
+        })
+    };
+    let mut runner = tool("runner");
+    runner.executables = BTreeMap::from([("run".into(), launch(Some("lib")))]);
+    ensure(&f.store, repo.path(), &[runner.clone()], &Cell::new(0));
+    let script = fs::read_to_string(repo.path().join(".turbo/bin/run")).unwrap();
+    let tree = format!("trees/{}/root", TreeSpecKey::of(&runner));
+    let expected = format!(
+        "DYLD_FALLBACK_LIBRARY_PATH=\"$store\"'/{tree}/lib'\":${{DYLD_FALLBACK_LIBRARY_PATH:\
+         -${{HOME:+$HOME/lib:}}/usr/local/lib:/usr/lib}}\"\nexport \
+         DYLD_FALLBACK_LIBRARY_PATH\nexec \"$store\"'/{tree}/bin/tool' \"$@\"\n"
+    );
+    assert!(script.ends_with(&expected), "{script}");
+
+    // A launcher without one serializes as before, so its environment keeps
+    // its key and needs no new setup.
+    assert!(
+        !serde_json::to_string(&launch(None))
+            .unwrap()
+            .contains("dyld_fallback")
+    );
+    // The directory goes into a script, so it needs the script-safe spelling.
+    runner.executables = BTreeMap::from([("run".into(), launch(Some("li'b")))]);
+    assert!(matches!(
+        Selection::new(vec![runner]),
+        Err(Error::UnsafePath)
+    ));
+}
+
 #[test]
 fn launchers_run_other_trees_without_an_inherited_environment_and_leave_cargo_home_to_activation() {
     let f = fixture();
@@ -410,6 +451,7 @@ fn launchers_run_other_trees_without_an_inherited_environment_and_leave_cargo_ho
                 LaunchArg::Tree(TreeRef::new("runner", "resource")),
                 LaunchArg::Word("--flag".into()),
             ],
+            dyld_fallback: None,
         }),
     )]);
     runner.vars = BTreeMap::from([

@@ -60,6 +60,12 @@ pub struct Launch {
     pub program: TreeRef,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub args: Vec<LaunchArg>,
+    /// A directory in the program's tree that a Unix launcher puts first in
+    /// `DYLD_FALLBACK_LIBRARY_PATH`, which only macOS reads. Never a managed
+    /// variable: activation would give it to every task, and macOS removes
+    /// `DYLD_*` variables whenever a system program such as `/bin/sh` starts.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub dyld_fallback: Option<String>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -184,6 +190,9 @@ pub(crate) fn validate(tool: &Tool) -> Result<(), Error> {
                         script_word(word)?;
                     }
                 }
+                if let Some(directory) = &launch.dyld_fallback {
+                    script_path(directory)?;
+                }
             }
         }
     }
@@ -257,6 +266,18 @@ pub(crate) fn unix_launcher(
         let _ = writeln!(script, "{}={value}", var.name());
         names.push(var.name());
     }
+    if let Some(directory) = &launch.dyld_fallback {
+        // dyld searches its default directories only while the variable is
+        // unset, so the launcher names them too, like the rustup proxy.
+        let directory = TreeRef::new(launch.program.tool.clone(), directory.clone());
+        let _ = writeln!(
+            script,
+            "DYLD_FALLBACK_LIBRARY_PATH={}\":${{DYLD_FALLBACK_LIBRARY_PATH:-${{HOME:+$HOME/lib:}}/\
+             usr/local/lib:/usr/lib}}\"",
+            path(&directory)
+        );
+        names.push("DYLD_FALLBACK_LIBRARY_PATH");
+    }
     if !names.is_empty() {
         let _ = writeln!(script, "export {}", names.join(" "));
     }
@@ -276,6 +297,7 @@ pub(crate) fn unix_launcher(
 }
 
 /// Transfers control to `program`, preserving `%*` and its exit status.
+/// Windows has no `DYLD_FALLBACK_LIBRARY_PATH`, so `dyld_fallback` is unused.
 /// `tree` names a selected tool's absolute tree root: `%~dp0` would be the
 /// stable junction's path, not the environment's, so paths are absolute.
 #[cfg(windows)]

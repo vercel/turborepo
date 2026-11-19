@@ -216,11 +216,18 @@ impl RustPlan {
             ),
             (ManagedVar::CargoHome, VarValue::RepoCargoHome),
         ]);
+        // The rustup proxy puts the toolchain's `lib` on the loader's fallback
+        // path, and these launchers run the toolchain without it. On macOS,
+        // `rust-lld` finds `libLLVM.dylib` only there: its rpath names a
+        // directory that the toolchain does not have.
+        let dyld_fallback = matches!(platform, Platform::MacosX64 | Platform::MacosArm64)
+            .then(|| format!("{toolchain}/lib"));
         let export = |path: &str| match &proxy_sha256 {
             Some(_) => Export::File(PROXY.to_owned()),
             None => Export::Launch(Launch {
                 program: TreeRef::new("rust", format!("{toolchain}/{path}")),
                 args: Vec::new(),
+                dyld_fallback: dyld_fallback.clone(),
             }),
         };
         let executables = (parts.values())

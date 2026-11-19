@@ -113,6 +113,7 @@ impl GoPlan {
                     let launch = Launch {
                         program,
                         args: Vec::new(),
+                        dyld_fallback: None,
                     };
                     (name.clone(), Export::Launch(launch))
                 })
