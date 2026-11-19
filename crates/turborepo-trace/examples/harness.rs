@@ -341,6 +341,7 @@ pub mod affected {
                 no_refresh: c.no_refresh,
                 stats: c.stats,
                 change_source: None,
+                cache_dirs: Vec::new(),
             }
         }
     }

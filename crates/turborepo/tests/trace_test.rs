@@ -2145,6 +2145,53 @@ fn the_graph_from_the_remote_cache_is_installed_and_is_not_a_change() {
     assert_eq!(tests, none, "{err}");
 }
 
+/// What the graph's transport writes into turbo's local cache directory is no
+/// change of a repository that does not ignore `.turbo`: the entry CI puts
+/// there, and the entry a fetch from the remote cache leaves there.
+#[cfg(unix)]
+#[test]
+fn the_cache_entries_of_the_graph_are_not_a_change() {
+    let none = Vec::<String>::new();
+    let main = fixture_without_dot_turbo_ignored();
+    let args = ["affected", "--base", "HEAD"];
+    let (tests, err) = selected(main.path(), &args, &[("CI", "1")]);
+    assert!(err.contains("put the graph of"), "{err}");
+    assert_eq!(tests, none);
+    let cache = main.path().join(".turbo/cache");
+    assert_eq!(cached_artifacts(&cache).len(), 1);
+    // The cache entry is there now, untracked.
+    let (tests, err) = selected(main.path(), &args, &[("CI", "1")]);
+    assert_eq!(tests, none, "{err}");
+
+    // A fresh clone fetches from the remote cache, and the local cache takes
+    // the entry before the changes are read.
+    let server = remote_cache_of(&cache);
+    let api = server.base_url();
+    let remote = [
+        ("TURBO_API", api.as_str()),
+        ("TURBO_TOKEN", "token"),
+        ("TURBO_TEAM", "team"),
+    ];
+    let scratch = tempfile::tempdir().unwrap();
+    let fresh = scratch.path().join("fresh");
+    clone(main.path(), &fresh);
+    git(&fresh, &["checkout", "--quiet", "-b", "feature"]);
+    git(
+        &fresh,
+        &["commit", "--quiet", "--allow-empty", "-m", "nothing"],
+    );
+    let args = ["affected", "--base", "main", "--cache=local:rw,remote:r"];
+    let (tests, err) = selected(&fresh, &args, &remote);
+    assert!(err.contains("restored the graph of"), "{err}");
+    assert_eq!(cached_artifacts(&fresh.join(".turbo/cache")).len(), 1);
+    assert_eq!(tests, none, "{err}");
+
+    // Another file in the cache directory is a change.
+    fs::write(fresh.join(".turbo/cache/notes.txt"), "n\n").unwrap();
+    let (tests, _) = selected(&fresh, &args, &remote);
+    assert_eq!(tests, [JEST_ROOT]);
+}
+
 /// A package whose runner the trace does not cover (mocha): its test task runs
 /// whole, and says so.
 #[cfg(unix)]

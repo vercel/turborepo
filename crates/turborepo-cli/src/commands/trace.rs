@@ -207,6 +207,8 @@ async fn run_inner(
     let scm = run.scm().clone();
     let run_cache = run.run_cache().clone();
     let cache_config = run.opts().cache_opts.cache;
+    let cache_dir =
+        AbsoluteSystemPathBuf::from_unknown(&root, run.opts().cache_opts.cache_dir.clone());
     let cache_max_age = run.opts().cache_opts.cache_max_age;
     let cache_max_size = run.opts().cache_opts.cache_max_size;
     let root_turbo_json = run.opts().repo_opts.root_turbo_json_path.clone();
@@ -228,6 +230,7 @@ async fn run_inner(
         packages: &packages,
         scm: &scm,
         root_turbo_json: &root_turbo_json,
+        cache_dir: &cache_dir,
     };
 
     // `affected` starts from the graph of a nearby commit in turbo's cache when

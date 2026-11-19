@@ -34,6 +34,12 @@ pub struct Repo<'a> {
     /// `affected` selects every test ([`Reason::AllTestsChanged`]), and `why`
     /// and `lint` fail.
     pub root_turbo_json: &'a AbsoluteSystemPath,
+    /// turbo's local cache directory (`run.opts().cache_opts.cache_dir`,
+    /// resolved against the root). The command writes there itself (the
+    /// graph's transport), so when it is inside the repository, the cache
+    /// entries in it are no changes of the repository, as the graph
+    /// directory's files are not.
+    pub cache_dir: &'a AbsoluteSystemPath,
 }
 
 /// Why the trace cannot read the repository's task configuration as turbo
@@ -258,6 +264,7 @@ fn command(repo: &Repo<'_>, req: &AffectedRequest) -> AffectedCmd {
             graph: None,
             members: members(repo.packages),
         },
+        cache_dirs: vec![repo.cache_dir.as_std_path().to_path_buf()],
         ..AffectedCmd::default()
     }
 }
