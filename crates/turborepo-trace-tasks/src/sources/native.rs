@@ -218,6 +218,8 @@ fn main_packages(dir: &Path) -> Vec<String> {
                 if name.starts_with(['.', '_'])
                     || matches!(name, "testdata" | "vendor")
                     || fsx::is_file(&p.join("go.mod"))
+                    // `./...` does not follow a symbolic link to a directory.
+                    || fsx::is_link(p)
                 {
                     continue;
                 }

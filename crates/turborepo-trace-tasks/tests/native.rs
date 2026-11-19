@@ -7,6 +7,7 @@
 
 use std::path::{Path, PathBuf};
 
+use turborepo_trace_frameworks::fsx;
 use turborepo_trace_tasks::{
     Options, TaskSet, discover,
     sources::Workspace,
@@ -15,8 +16,16 @@ use turborepo_trace_tasks::{
 
 /// A new repository below the temporary directory, resolved (macOS links it).
 fn repo(name: &str, files: &[(&str, &str)]) -> PathBuf {
-    let dir = std::env::temp_dir().join(format!("trace-native-{name}-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&dir);
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_nanos();
+    let dir = std::env::temp_dir().join(format!(
+        "trace-native-{name}-{}-{nanos}",
+        std::process::id()
+    ));
+    // A directory of the test's own: never one that is already there.
+    std::fs::create_dir(&dir).unwrap();
     for (rel, text) in files {
         let p = dir.join(rel);
         std::fs::create_dir_all(p.parent().unwrap()).unwrap();
@@ -216,7 +225,15 @@ fn go_modules_have_the_tasks_turbo_derives() {
             ("tools/other/main.go", "package main\n"),
         ],
     );
-    let set = tasks(&root, &[".", "apps/api", "packages/lib", "tools/other"]);
+    // A linked directory is no part of the module, as for `go build ./...`: its
+    // main package does not count. (Through the cache of a graph build, which
+    // lists a link to a directory as a directory.)
+    #[cfg(unix)]
+    std::os::unix::fs::symlink(root.join("packages/lib/cmd"), root.join("apps/api/linked"))
+        .unwrap();
+    let set = fsx::with_fs(&fsx::cache(), || {
+        tasks(&root, &[".", "apps/api", "packages/lib", "tools/other"])
+    });
     assert_eq!(
         names(&set, "apps/api"),
         ["build", "dev", "format", "lint", "test"]
