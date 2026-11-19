@@ -175,6 +175,19 @@ fn install(file: &Path, root: &Path, out: &Path) -> Result<artifact::UnpackRepor
     artifact::unpack(file, out, root, &expect, &[LangArgs::FILE], false)
 }
 
+/// The first symbolic link among the directories from `root` (not itself) down
+/// to `dir`.
+fn link_on_the_way(root: &Path, dir: &Path) -> Option<PathBuf> {
+    let mut p = root.to_path_buf();
+    for part in dir.strip_prefix(root).ok()?.components() {
+        p.push(part);
+        if std::fs::symlink_metadata(&p).is_ok_and(|m| m.file_type().is_symlink()) {
+            return Some(p);
+        }
+    }
+    None
+}
+
 /// Fetches and installs the graph of the first of `candidates` that turbo's
 /// cache holds, when the repository at `root` has no graph yet. `Ok(None)`:
 /// there is a graph already, or the cache holds none of the candidates.
@@ -195,6 +208,14 @@ pub async fn restore(
         return Ok(None);
     };
     let t1 = Instant::now();
+    // The cache writes below the graph directory: never through a symbolic link of
+    // the checkout, which may lead out of it.
+    if let Some(link) = link_on_the_way(root.as_std_path(), &out) {
+        return Err(format!(
+            "the graph is not fetched: {} is a symbolic link",
+            link.display()
+        ));
+    }
     std::fs::create_dir_all(&out).map_err(|e| format!("{}: {e}", out.display()))?;
     let anchor = AbsoluteSystemPathBuf::try_from(out.as_path()).map_err(|e| e.to_string())?;
     let file = out.join(FILE);
@@ -299,5 +320,22 @@ mod tests {
         assert_eq!(a.len(), 16);
         assert!(a.bytes().all(|c| c.is_ascii_hexdigit()));
         assert_eq!(a, graph_key("0123456789abcdef0123456789abcdef01234567"));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_link_on_the_way_to_the_graph_directory_is_found() {
+        let d = tempfile::tempdir().unwrap();
+        let root = d.path().join("repo");
+        let elsewhere = d.path().join("elsewhere");
+        std::fs::create_dir_all(&root).unwrap();
+        std::fs::create_dir_all(&elsewhere).unwrap();
+        let out = graph_dir(&root);
+        assert_eq!(link_on_the_way(&root, &out), None);
+        std::fs::create_dir_all(&out).unwrap();
+        assert_eq!(link_on_the_way(&root, &out), None);
+        std::fs::remove_dir_all(root.join(".turbo")).unwrap();
+        std::os::unix::fs::symlink(&elsewhere, root.join(".turbo")).unwrap();
+        assert_eq!(link_on_the_way(&root, &out), Some(root.join(".turbo")));
     }
 }
