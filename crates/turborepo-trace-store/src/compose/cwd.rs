@@ -413,6 +413,18 @@ impl Graph {
     /// test runner may run each in (repository relative, `""` for the
     /// root).
     pub fn tests_with_cwds(&self) -> HashMap<u32, Vec<&str>> {
+        self.tests_with_cwds_of(&[])
+    }
+
+    /// [`Graph::tests_with_cwds`] for the runs of `frameworks` only (empty, or
+    /// with `all`: every framework). A file that two frameworks take for a
+    /// test (a jest project in a package, and a vitest project above it whose
+    /// patterns match the file too) has one working directory per run: a
+    /// runner started for one framework's project is not in the directory
+    /// of the other's.
+    pub fn tests_with_cwds_of(&self, frameworks: &[String]) -> HashMap<u32, Vec<&str>> {
+        let asked =
+            |f: &str| frameworks.is_empty() || frameworks.iter().any(|t| t == f || t == "all");
         let mut out: HashMap<u32, Vec<&str>> = HashMap::new();
         for (ni, node) in self.nodes.iter().enumerate() {
             if node.shard == NONE {
@@ -424,6 +436,7 @@ impl Graph {
             for t in tests[lo..]
                 .iter()
                 .take_while(|t| t.file.to_native() == node.file)
+                .filter(|t| asked(t.framework.as_str()))
             {
                 let v = out.entry(ni as u32).or_default();
                 for c in t.cwds.iter() {
