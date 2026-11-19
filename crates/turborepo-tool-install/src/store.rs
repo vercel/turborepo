@@ -34,8 +34,16 @@ use crate::{
 const TREE_REVISION: u32 = 2;
 /// Bump when environment rendering changes, so no turbo trusts shims another
 /// rendered differently.
-const ENV_REVISION: u32 = 1;
+const ENV_REVISION: u32 = 2;
 const SEAL_SCHEMA: u32 = 1;
+/// Hex characters of the spec's digest in a tree's name: its first 128 bits.
+///
+/// The name is short for Windows. There, `link.exe` cannot open a file whose
+/// path has more than 259 characters. Rust's MSVC targets link with it by
+/// default, and it opens the standard library in the toolchain's tree. In
+/// the default store, the longest of those paths leaves 33 characters for the
+/// user name.
+const TREE_KEY_LEN: usize = 32;
 
 /// Names a selection's environment: the SHA-256 of its canonical tool list.
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
@@ -125,8 +133,8 @@ struct TreeSpec {
     staging: Staging,
 }
 
-/// A tool's tree spec and the key that names its directory: the hash of the
-/// spec's canonical serialization.
+/// A tool's tree spec and the key that names its directory: the start of the
+/// hash of the spec's canonical serialization.
 struct TreeId {
     spec: TreeSpec,
     key: String,
@@ -143,10 +151,9 @@ impl TreeId {
         };
         let mut bytes = format!("turbo-tree\0{TREE_REVISION}\0").into_bytes();
         bytes.extend(serde_json::to_vec(&spec)?);
-        Ok(Self {
-            spec,
-            key: sha256_hex(&bytes),
-        })
+        let mut key = sha256_hex(&bytes);
+        key.truncate(TREE_KEY_LEN);
+        Ok(Self { spec, key })
     }
 }
 
