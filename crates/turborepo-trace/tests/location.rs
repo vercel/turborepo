@@ -5195,14 +5195,11 @@ fn edits_and_moves_of_a_lockfile_link() {
     );
 }
 
-/// The same where the edit is not seen: the importing package's key holds
-/// nothing of the config that governs the virtual file inside the link's
-/// target.
+/// The same with the checkout outside a `node_modules` directory: the config
+/// that governs the virtual file inside the link's target is a key observation
+/// of the importer, so an edit of it in place traces the importer again, with
+/// or without a move.
 #[test]
-#[ignore = "note: the tsconfig of a lockfile link's target package gains or loses aliases in \
-            place: the importer's shard is not traced again (its key names nothing of that \
-            config), with or without a move; the refreshed graph loses the test on a change of the \
-            aliased file"]
 fn a_lockfile_link_whose_target_config_gains_or_loses_aliases() {
     use MoveStep::*;
     let with = |r: &Path| link(r, LINK_WITH);
