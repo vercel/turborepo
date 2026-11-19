@@ -260,7 +260,7 @@ fn trees(report: &str) -> String {
                 .unwrap_or_else(|| panic!("{line}"));
             let (key, rest) = tree.split_once("/root").unwrap_or_else(|| panic!("{line}"));
             assert!(
-                key.len() == 64 && key.chars().all(|c| c.is_ascii_hexdigit()),
+                key.len() == 32 && key.chars().all(|c| c.is_ascii_hexdigit()),
                 "{line}"
             );
             format!("{indent}Installed: <tree>{rest}")
