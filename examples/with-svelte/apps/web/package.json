@@ -3,6 +3,10 @@
   "version": "0.0.1",
   "private": true,
   "type": "module",
+  "imports": {
+    "#lib": "./src/lib/index.ts",
+    "#lib/*": "./src/lib/*"
+  },
   "scripts": {
     "dev": "vite dev",
     "build": "svelte-kit sync && vite build",
@@ -31,7 +35,7 @@
     "prettier-plugin-svelte": "catalog:sveltejs",
     "svelte": "catalog:sveltejs",
     "tslib": "2.8.1",
-    "typescript": "7.0.2",
+    "typescript": "6.0.3",
     "vite": "8.2.1",
     "vitest": "4.1.10",
     "vitest-browser-svelte": "3.0.0"
