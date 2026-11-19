@@ -3828,6 +3828,13 @@ impl TargetCx<'_> {
                     }
                 };
             }
+            // A link of the tree that leads into the package is an input at its own
+            // path: a diff that makes it lead to another file names the link only.
+            for l in links {
+                if l.starts_with(repo) && !cx.ids.is_third_party(&l.join("x")) {
+                    acc.extra.reads.push(l.clone());
+                }
+            }
             let id = cx.ids.of_root(cx.fs(), &proot, &pname);
             let suffix = Path::new("node_modules").join(&pname);
             let location = links

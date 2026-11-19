@@ -934,3 +934,27 @@ fn a_setup_file_that_is_a_link_selects_through_what_it_leads_to() {
     }
     assert!(failures.is_empty(), "{failures:#?}");
 }
+
+/// A setup file or an environment that is a symbolic link into an installed
+/// package: the link is an input at its own path, so a change that makes it
+/// lead to another file of the package selects the test.
+#[test]
+fn a_setup_file_that_links_into_a_package_selects_by_the_link() {
+    let package = [
+        (
+            "node_modules/env/package.json",
+            r#"{"name":"env","version":"1.0.0"}"#,
+        ),
+        ("node_modules/env/index.js", "globalThis.s = 1;\n"),
+    ];
+    let mut failures = Vec::new();
+    for (runner, config) in setup_link_configs() {
+        let d = repo(config, "", &package);
+        turborepo_trace_core::os::symlink("node_modules/env/index.js", d.path().join("setup.js"))
+            .unwrap();
+        if selected(d.path(), runner, "setup.js", &[]) != [TEST] {
+            failures.push(format!("{runner} {}", config.1.trim()));
+        }
+    }
+    assert!(failures.is_empty(), "{failures:#?}");
+}
