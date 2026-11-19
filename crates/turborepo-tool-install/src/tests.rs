@@ -477,6 +477,23 @@ fn launchers_run_other_trees_without_an_inherited_environment_and_leave_cargo_ho
         f.store.activate(&root, selection.key()),
         Err(Error::UnsafePath)
     ));
+    // Never a Cargo home whose private parent setup has not created: Cargo
+    // would create both for every user to read.
+    fs::remove_file(f.store.cargo_home(&root)).unwrap();
+    fs::remove_dir(f.store.cargo_homes()).unwrap();
+    assert!(matches!(
+        f.store.activate(&root, selection.key()),
+        Err(Error::NotInstalled(_))
+    ));
+    // Nor one whose parent other users can read.
+    fs::create_dir(f.store.cargo_homes()).unwrap();
+    fs::set_permissions(f.store.cargo_homes(), fs::Permissions::from_mode(0o755)).unwrap();
+    assert!(matches!(
+        f.store.activate(&root, selection.key()),
+        Err(Error::UnsafePath)
+    ));
+    let setup = f.store.begin_setup(repo.path(), Reuse::Sealed);
+    assert!(matches!(setup, Err(Error::UnsafePath)));
 }
 
 /// The tree key, as the store names directories, without exposing it.
@@ -510,4 +527,39 @@ fn managed_variable_names_are_their_serialized_names() {
     let names: Vec<_> = ManagedVar::ALL.iter().map(|var| var.name()).collect();
     assert!(names.windows(2).all(|pair| pair[0] < pair[1]));
     assert_eq!(ManagedVar::from_name("PATH"), None);
+}
+
+#[test]
+fn setup_moves_a_cargo_home_out_of_the_repository_directory() {
+    let f = fixture();
+    let repo = repo();
+    let root = fs::canonicalize(repo.path()).unwrap();
+    let (old, new) = (
+        f.store.repo(&root).join("cargo-home"),
+        f.store.cargo_home(&root),
+    );
+    let setup = || drop(f.store.begin_setup(repo.path(), Reuse::Sealed).unwrap());
+    let config = |home: &Path| fs::read_to_string(home.join("config.toml")).ok();
+
+    // Its configuration, such as an offline policy, stays in use.
+    fs::create_dir_all(&old).unwrap();
+    fs::write(old.join("config.toml"), "[net]\noffline = true\n").unwrap();
+    setup();
+    assert_eq!(config(&new).as_deref(), Some("[net]\noffline = true\n"));
+    assert!(!old.exists());
+
+    // A Cargo home that is already in place wins.
+    fs::create_dir_all(&old).unwrap();
+    fs::write(old.join("config.toml"), "").unwrap();
+    setup();
+    assert_eq!(config(&new).as_deref(), Some("[net]\noffline = true\n"));
+    assert_eq!(config(&old).as_deref(), Some(""));
+
+    // A link is never followed.
+    let elsewhere = tempfile::tempdir().unwrap();
+    fs::remove_dir_all(&old).unwrap();
+    fs::remove_dir_all(&new).unwrap();
+    symlink(elsewhere.path(), &old).unwrap();
+    setup();
+    assert!(!new.exists());
 }

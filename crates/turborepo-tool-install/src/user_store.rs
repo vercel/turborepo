@@ -16,6 +16,9 @@ use crate::{Error, create_private_directory, real_directory};
 /// Overrides the default store location.
 pub const TOOL_STORE_VAR: &str = "TURBO_TOOL_STORE";
 
+/// Bytes of the root's digest in a Cargo home's name.
+const CARGO_HOME_NAME_BYTES: usize = 16;
+
 /// A located store root: absolute, canonical, a real directory owned by this
 /// user that nobody else can write, and neither inside nor around the
 /// repository it was located for.
@@ -127,10 +130,24 @@ impl UserStore {
         store.join("repos").join(name)
     }
 
+    /// The directory holding every repository's Cargo home.
+    pub fn cargo_homes(&self) -> PathBuf {
+        self.root.join("cargo")
+    }
+
     /// The repository's private `CARGO_HOME`, which Cargo creates on first
-    /// use.
+    /// use, named by the first 128 bits of the SHA-256 of its canonical
+    /// root's native bytes.
+    ///
+    /// The path is short, and outside [`UserStore::repo`], for Windows. There,
+    /// libgit2 rejects a Git dependency checkout when the Cargo home and the
+    /// dependency's repository name total more than 146 characters, whatever
+    /// `LongPathsEnabled` says. In the default store, this path leaves 68 of
+    /// those characters for the user name and the repository name.
     pub fn cargo_home(&self, canonical_root: &Path) -> PathBuf {
-        self.repo(canonical_root).join("cargo-home")
+        let digest = Sha256::digest(canonical_root.as_os_str().as_encoded_bytes());
+        self.cargo_homes()
+            .join(hex::encode(&digest[..CARGO_HOME_NAME_BYTES]))
     }
 }
 

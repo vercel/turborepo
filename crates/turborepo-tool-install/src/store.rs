@@ -23,9 +23,10 @@ use std::{
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    Error, Export, Staging, Tool, TreeRef, UserStore, VarValue, directory, is_sha256,
-    make_read_only, read_bounded, real_directory, relative_path, repo_turbo::RepoTurbo, selection,
-    sha256_hex, shim_name, sync_directory, sync_tree, tree_hash, validate_tools, write_private,
+    Error, Export, Staging, Tool, TreeRef, UserStore, VarValue, create_directory, directory,
+    is_sha256, make_read_only, owner_only_directory, read_bounded, real_directory, relative_path,
+    repo_turbo::RepoTurbo, selection, sha256_hex, shim_name, sync_directory, sync_tree, tree_hash,
+    validate_tools, write_private,
 };
 
 /// Bump when the store's tree layout or seal changes. A change in how one
@@ -268,12 +269,28 @@ impl UserStore {
         for dir in ["tmp", "trees", "envs", "repos"] {
             directory(&self.root.join(dir))?;
         }
+        // Setup creates each Cargo home without its parents.
+        create_directory(&self.cargo_homes(), owner_only_directory)?;
+        self.move_cargo_home(&repo)?;
         Ok(SetupSession {
             store: self,
             repo,
             reuse,
             verified: RefCell::default(),
         })
+    }
+
+    /// The Cargo home used to be `cargo-home` in the repository's directory.
+    /// Moving it keeps its configuration, credentials and crates in use. A
+    /// Cargo home already in place wins, and a link is never followed.
+    fn move_cargo_home(&self, repo: &Path) -> Result<(), Error> {
+        let (old, new) = (self.repo(repo).join("cargo-home"), self.cargo_home(repo));
+        let movable =
+            fs::symlink_metadata(&old).is_ok_and(|m| m.is_dir() && !m.file_type().is_symlink());
+        if movable && fs::symlink_metadata(&new).is_err() {
+            fs::rename(&old, &new)?;
+        }
+        Ok(())
     }
 
     /// The recorded environment `env` for the canonical repository root
@@ -307,6 +324,15 @@ impl UserStore {
                     VarValue::Tree(reference) => self.tree_path(&selection, &dir, reference),
                     VarValue::Word(word) => word.into(),
                     VarValue::RepoCargoHome => {
+                        // Setup creates the homes' directory private. Cargo
+                        // would create a missing one that others can read,
+                        // and a later setup would reject it.
+                        match owner_only_directory(&self.cargo_homes()) {
+                            Err(Error::Io(e)) if e.kind() == io::ErrorKind::NotFound => {
+                                return Err(Error::NotInstalled("Cargo home".into()));
+                            }
+                            result => result?,
+                        }
                         let home = self.cargo_home(repo);
                         // Cargo creates a missing home on first use; a link or
                         // a file there would redirect a private one.

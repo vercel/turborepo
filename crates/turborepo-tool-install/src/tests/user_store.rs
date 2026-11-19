@@ -22,12 +22,38 @@ fn a_store_is_created_private_and_keys_each_repository_by_its_canonical_root() {
 
     let root = fs::canonicalize(repo.path()).unwrap();
     let name = hex::encode(Sha256::digest(root.as_os_str().as_encoded_bytes()));
-    let state = store.root().join("repos").join(name);
-    assert_eq!(store.repo(&root), state);
-    assert_eq!(store.cargo_home(&root), state.join("cargo-home"));
+    assert_eq!(store.repo(&root), store.root().join("repos").join(&name));
+    assert_eq!(
+        store.cargo_home(&root),
+        store.root().join("cargo").join(&name[..32])
+    );
     assert!(
-        !store.repos().exists(),
+        !store.repos().exists() && !store.cargo_homes().exists(),
         "locating creates no repository state"
+    );
+}
+
+/// On Windows, libgit2 checks out a Git dependency at
+/// `<CARGO_HOME>/git/checkouts/<name>-<16 hex>/<7 hex>/.git/` and reserves 68
+/// more characters for its longest internal file. It rejects the checkout
+/// with "path too long" when the total exceeds `MAX_PATH`, 260, so the Cargo
+/// home and the dependency's repository name share 146 characters.
+#[test]
+fn the_cargo_home_leaves_room_for_git_dependencies_on_windows() {
+    const CARGO_HOME_AND_NAME: usize =
+        260 - 68 - "/git/checkouts/-0123456789abcdef/0123456/.git/".len();
+    assert_eq!(CARGO_HOME_AND_NAME, 146);
+
+    // The default store for the longest local Windows user name, 20
+    // characters. Only the lengths matter, so this runs on every platform.
+    let store = UserStore {
+        root: PathBuf::from("C:/Users/aaaaaaaaaaaaaaaaaaaa/AppData/Local/turborepo/tools"),
+    };
+    let cargo_home = store.cargo_home(Path::new("C:/repository"));
+    let name = CARGO_HOME_AND_NAME.saturating_sub(cargo_home.as_os_str().len());
+    assert!(
+        name >= 40,
+        "a Git dependency's repository name can be at most {name} characters"
     );
 }
 

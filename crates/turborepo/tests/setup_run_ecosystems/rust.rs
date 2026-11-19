@@ -16,7 +16,7 @@ root=$(pwd -P)
 id="path+file://$root/crates/app#0.1.0"
 case "$1" in
 metadata) printf '{"packages":[{"id":"%s","name":"app","source":null,"manifest_path":"%s/crates/app/Cargo.toml","dependencies":[],"targets":[{"name":"app","kind":["lib"]}]}],"workspace_members":["%s"],"target_directory":"%s/target","metadata":{"name":"demo"}}\n' "$id" "$root" "$id" "$root" ;;
-build) echo "managed-cargo $* toolchain=$RUSTUP_TOOLCHAIN cargo_home=${CARGO_HOME##*/repos/*/} secret=${JOURNEY_SECRET:-filtered}" ;;
+build) echo "managed-cargo $* toolchain=$RUSTUP_TOOLCHAIN cargo_home=${CARGO_HOME##*/turborepo/tools/} secret=${JOURNEY_SECRET:-filtered}" ;;
 *) exit 1 ;;
 esac
 "#;
@@ -143,7 +143,7 @@ fn rust_setup_then_plain_run_uses_the_locked_toolchain_without_host_rust() {
     journey.runs_managed(
         "crates/app",
         &["build"],
-        &["managed-cargo build", &toolchain, "cargo_home=cargo-home"],
+        &["managed-cargo build", &toolchain, "cargo_home=cargo/"],
     );
     // turbo's own Cargo discovery and compiler identity used the managed tools.
     let calls = journey.calls();
