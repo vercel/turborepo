@@ -2104,3 +2104,142 @@ fn tests_takes_only_the_frameworks_it_supports() {
     let selected = affected(dir.path(), &["--changed", JEST_MUL, "--tests", "jest"]);
     assert_selects(&selected, &[JEST_MUL], &[JEST_ADD]);
 }
+
+// ---------------------------------------------------------------------------
+// Gate on: package scripts that start `go test` (`trace_go_scripts`).
+//
+// Each service's `test` script starts `go test` another way: `cd app && go
+// test ./...` (`billing`), `go -C engine test -race ./...` (`search`),
+// `gotestsum … -- -tags=integration ./...` (`queue`, with a module of its own
+// in `tools`), `go test ./one/... ./two/...` over a `go.work` (`batch`), a
+// shell script file (`mail`) and one without an extension (`ops`). The root's
+// `test` script is `turbo run test`, and `tools/lint` is a module in the root
+// package.
+
+/// One selected test of `--json`: its package, its task (empty: none) and the
+/// type of its reason.
+#[cfg(unix)]
+#[derive(Debug, PartialEq, Eq)]
+struct Row {
+    package: String,
+    task: String,
+    reason: String,
+}
+
+#[cfg(unix)]
+fn row(package: &str, task: &str, reason: &str) -> Row {
+    Row {
+        package: package.to_owned(),
+        task: task.to_owned(),
+        reason: reason.to_owned(),
+    }
+}
+
+/// `turbo trace affected --json <args>`: the selected tests by path.
+#[cfg(unix)]
+fn affected_rows(dir: &Path, args: &[&str]) -> BTreeMap<String, Row> {
+    let mut words = vec!["affected", "--json"];
+    words.extend_from_slice(args);
+    let output = trace(dir, &words);
+    assert!(
+        output.status.success(),
+        "turbo trace {words:?} failed\nstdout:\n{}\nstderr:\n{}",
+        stdout(&output),
+        stderr(&output)
+    );
+    let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(json["uncoveredTasks"]["length"], 0, "{json}");
+    json["affectedTests"]["items"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|item| {
+            (
+                item["path"].as_str().unwrap().to_owned(),
+                Row {
+                    package: item["package"].as_str().unwrap().to_owned(),
+                    task: item["task"].as_str().unwrap_or_default().to_owned(),
+                    reason: item["reason"]["__typename"].as_str().unwrap().to_owned(),
+                },
+            )
+        })
+        .collect()
+}
+
+#[cfg(unix)]
+fn rows(expected: &[(&str, Row)]) -> BTreeMap<String, Row> {
+    expected
+        .iter()
+        .map(|(path, r)| ((*path).to_owned(), row(&r.package, &r.task, &r.reason)))
+        .collect()
+}
+
+/// A Go test belongs to turbo's package around it, and its task is the script
+/// of that package that starts it: also where the script runs `go test` in a
+/// directory below the package, which is the Go module.
+#[cfg(unix)]
+#[test]
+fn a_go_test_has_the_task_of_the_script_that_starts_it() {
+    let dir = fixture("trace_go_scripts");
+    for (changed, test, package) in [
+        (
+            "services/billing/app/invoice/invoice.go",
+            "services/billing/app/invoice/invoice_test.go",
+            "billing",
+        ),
+        (
+            "services/search/engine/index/index.go",
+            "services/search/engine/index/index_test.go",
+            "search",
+        ),
+        (
+            "services/queue/worker/worker.go",
+            "services/queue/worker/worker_test.go",
+            "queue",
+        ),
+        (
+            "services/batch/two/two.go",
+            "services/batch/two/two_test.go",
+            "batch",
+        ),
+        (
+            "services/mail/smtp/smtp.go",
+            "services/mail/smtp/smtp_test.go",
+            "mail",
+        ),
+        // A script file that is not read command by command: its text names
+        // `go test`.
+        ("services/ops/ops.go", "services/ops/ops_test.go", "ops"),
+    ] {
+        assert_eq!(
+            affected_rows(dir.path(), &["--changed", changed]),
+            rows(&[(
+                test,
+                row(package, &format!("{package}#test"), "FileChanged")
+            )]),
+            "{changed}"
+        );
+        // The filter keeps the tests of the package it names.
+        assert_eq!(
+            affected(dir.path(), &["--changed", changed, "--filter", package]),
+            BTreeSet::from([test.to_owned()]),
+            "{changed}"
+        );
+    }
+    // `./...` stays in its module: no script starts the tests of the module
+    // below the package's.
+    assert_eq!(
+        affected_rows(dir.path(), &["--changed", "services/queue/tools/tools.go"]),
+        rows(&[(
+            "services/queue/tools/tools_test.go",
+            row("queue", "", "FileChanged")
+        )])
+    );
+    // The root's `turbo run test` starts the scripts of the other packages:
+    // their tests are not the root script's, and no script tests the module in
+    // the root package.
+    assert_eq!(
+        affected_rows(dir.path(), &["--changed", "tools/lint/lint.go"]),
+        rows(&[("tools/lint/lint_test.go", row("//", "", "FileChanged"))])
+    );
+}

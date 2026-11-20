@@ -311,14 +311,40 @@ impl<'g> Runs<'g> {
         self.walk(start, false)
     }
 
+    /// What the command of the package script at `start` starts in its own
+    /// package: its own records, and those of the scripts of the same package
+    /// that it runs (`pnpm run test:unit`). Not what the scripts of other
+    /// packages start (`turbo run test` in the root package).
+    pub(crate) fn of_own_command(&self, start: NodeId) -> JobRuns {
+        let package = |n: NodeId| {
+            let id = self.recs.get(&n)?.id.as_str();
+            id.strip_prefix("task:")?
+                .rsplit_once('#')
+                .map(|(dir, _)| dir)
+        };
+        let own = package(start);
+        self.walk_where(start, false, &|n| own.is_some() && package(n) == own)
+    }
+
     /// [`Runs::of`]; with `own_deps` off, without the task dependencies of
     /// `start` itself.
     fn walk(&self, start: NodeId, own_deps: bool) -> JobRuns {
+        self.walk_where(start, own_deps, &|_| true)
+    }
+
+    /// [`Runs::walk`] over the tasks that `follow` admits (`start` is always
+    /// read).
+    fn walk_where(
+        &self,
+        start: NodeId,
+        own_deps: bool,
+        follow: &dyn Fn(NodeId) -> bool,
+    ) -> JobRuns {
         let mut out = JobRuns::default();
         let mut seen: BTreeSet<NodeId> = BTreeSet::new();
         let mut todo = vec![start];
         while let Some(n) = todo.pop() {
-            if !seen.insert(n) {
+            if !seen.insert(n) || (n != start && !follow(n)) {
                 continue;
             }
             let Some(rec) = self.recs.get(&n) else {
@@ -687,6 +713,56 @@ pub fn effects(
     fx
 }
 
+/// Whether `go test` started in `launch` (for the packages below it) runs the
+/// test file at `path`: a `./...` pattern stays in its module (it does not
+/// enter a directory below `launch` that has a `go.mod`, which `has_go_mod`
+/// tells), and it leaves out `vendor`, `testdata` and the directories whose
+/// name starts with `.` or `_`.
+///
+/// A launch at the repository root runs every test below it: the root also
+/// stands for a launch that the text of a script names without saying where
+/// ([`turborepo_trace_tasks::runs`]).
+pub(crate) fn go_test_runs(launch: &str, path: &str, has_go_mod: &dyn Fn(&str) -> bool) -> bool {
+    let launch = launch.trim_end_matches('/');
+    if launch.is_empty() || launch == "." {
+        return true;
+    }
+    let Some(rest) = path
+        .strip_prefix(launch)
+        .and_then(|rest| rest.strip_prefix('/'))
+    else {
+        return false;
+    };
+    // The directories from the launch's down to the file's.
+    let dirs = rest.rsplit_once('/').map_or("", |(dirs, _)| dirs);
+    let mut dir = launch.to_owned();
+    for d in dirs.split('/').filter(|d| !d.is_empty()) {
+        if d == "vendor" || d == "testdata" || d.starts_with('.') || d.starts_with('_') {
+            return false;
+        }
+        dir.push('/');
+        dir.push_str(d);
+        if has_go_mod(&dir) {
+            return false;
+        }
+    }
+    true
+}
+
+/// Tells whether a directory (relative to `root`) has a `go.mod`, for
+/// [`go_test_runs`]: asked once per directory.
+pub(crate) fn go_mod_dirs(root: &Path) -> impl Fn(&str) -> bool + '_ {
+    let known: std::cell::RefCell<HashMap<String, bool>> = Default::default();
+    move |dir: &str| {
+        if let Some(&has) = known.borrow().get(dir) {
+            return has;
+        }
+        let has = root.join(dir).join("go.mod").is_file();
+        known.borrow_mut().insert(dir.to_owned(), has);
+        has
+    }
+}
+
 impl Effects {
     /// Adds the verdicts to `report`: among `entries`, the changed jobs, the
     /// tests they run and the readers of dropped files are affected.
@@ -754,5 +830,55 @@ mod tests {
         assert!(under("apps/web", "apps/web/x.test.ts"));
         assert!(under("apps/web/x.test.ts", "apps/web/x.test.ts"));
         assert!(!under("apps/we", "apps/web/x.test.ts"));
+    }
+
+    #[test]
+    fn go_test_stays_in_its_module_and_skips_what_the_pattern_skips() {
+        // Modules: the package's, and one of its own below it.
+        let has_go_mod = |dir: &str| matches!(dir, "services/queue" | "services/queue/tools");
+        for (launch, path, runs) in [
+            ("services/queue", "services/queue/q_test.go", true),
+            ("services/queue", "services/queue/worker/w_test.go", true),
+            // A launch below the module's directory.
+            (
+                "services/queue/worker",
+                "services/queue/worker/w_test.go",
+                true,
+            ),
+            // The repository root: everything.
+            (".", "pkg/p_test.go", true),
+            (".", "services/queue/tools/t_test.go", true),
+            (".", "services/queue/vendor/dep/d_test.go", true),
+            // A module of its own below the launch directory.
+            ("services/queue", "services/queue/tools/t_test.go", false),
+            (
+                "services/queue",
+                "services/queue/tools/deep/t_test.go",
+                false,
+            ),
+            ("services", "services/queue/q_test.go", false),
+            // Directories a `./...` pattern leaves out.
+            (
+                "services/queue",
+                "services/queue/vendor/dep/d_test.go",
+                false,
+            ),
+            (
+                "services/queue",
+                "services/queue/a/testdata/x/d_test.go",
+                false,
+            ),
+            ("services/queue", "services/queue/_old/d_test.go", false),
+            ("services/queue", "services/queue/.cache/d_test.go", false),
+            // Not below the launch directory.
+            ("services/queue", "services/mail/m_test.go", false),
+            ("services/que", "services/queue/q_test.go", false),
+        ] {
+            assert_eq!(
+                go_test_runs(launch, path, &has_go_mod),
+                runs,
+                "{launch} {path}"
+            );
+        }
     }
 }

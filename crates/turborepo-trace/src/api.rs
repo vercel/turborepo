@@ -1,6 +1,6 @@
 //! The typed API of `turbo trace`: a request in, a report out.
 
-use std::{io::Write, path::PathBuf, sync::Arc};
+use std::{collections::BTreeMap, io::Write, path::PathBuf, sync::Arc};
 
 use serde::Serialize;
 use turbopath::AbsoluteSystemPath;
@@ -386,33 +386,67 @@ fn report(
 ) -> AffectedTests {
     let mut items = Vec::new();
     let mut uncovered = Vec::new();
-    for pkg in &doc.packages {
-        let package = package_name(repo.packages, &pkg.dir).unwrap_or_else(|| pkg.name.clone());
-        if req
-            .packages
-            .as_ref()
-            .is_some_and(|keep| !keep.contains(&package))
+    // The scripts that start tests, by the directory of their package.
+    let mut scripts: BTreeMap<&str, Vec<&crate::selection::Task>> = BTreeMap::new();
+    for t in doc.packages.iter().flat_map(|pkg| &pkg.tasks) {
+        if let Some((dir, _)) =
+            t.id.strip_prefix("task:")
+                .and_then(|rest| rest.rsplit_once('#'))
         {
-            continue;
+            let dir = if dir.is_empty() { "." } else { dir };
+            scripts.entry(dir).or_default().push(t);
         }
+    }
+    for tasks in scripts.values_mut() {
+        tasks.sort_by(|a, b| a.id.cmp(&b.id));
+    }
+    let has_go_mod = crate::workflows::go_mod_dirs(repo.root.as_std_path());
+    let kept = |package: &str| {
+        req.packages
+            .as_ref()
+            .is_none_or(|keep| keep.iter().any(|k| k == package))
+    };
+    for pkg in &doc.packages {
+        // The scripts of the graph's package of the tests below, as the selection
+        // lists them.
         let mut tasks: Vec<&crate::selection::Task> = pkg.tasks.iter().collect();
         tasks.sort_by(|a, b| a.id.cmp(&b.id));
-        let task_of = |path: &str, frameworks: &[String]| {
-            tasks
-                .iter()
-                .find(|t| {
-                    t.runs.iter().any(|l| {
-                        (frameworks.is_empty() || frameworks.contains(&l.framework))
-                            && under(&l.dir, path)
-                    })
-                })
-                .map(|t| format!("{package}#{}", t.name))
-        };
+        // turbo's package of a test: the nearest one around the file. The graph's
+        // package of a file can be another (a Go module, a crate, a `package.json`
+        // that is no workspace member), below or above turbo's.
         let mut push = |path: &str, frameworks: &[String], reason: Reason| {
+            let (dir, package) = containing_package(repo.packages, path);
+            if !kept(&package) {
+                return;
+            }
+            let covers = |l: &crate::selection::Launch| {
+                (frameworks.is_empty() || frameworks.contains(&l.framework))
+                    && under(&l.dir, path)
+                    && (l.framework != "gotest"
+                        || crate::workflows::go_test_runs(&l.dir, path, &has_go_mod))
+            };
+            let task = if dir == pkg.dir {
+                // The graph's package is turbo's: one of its scripts, by what the
+                // script and the scripts it runs start.
+                tasks.iter().find(|t| t.runs.iter().any(covers))
+            } else {
+                // Another package of turbo's holds the file: one of that package's
+                // scripts, by what it starts itself. What the scripts of other
+                // packages start is not counted: the root's `turbo run test` runs
+                // them all, and a launch that the text of one of them names
+                // without a directory would make the root script the task of
+                // every test.
+                scripts
+                    .get(dir.as_str())
+                    .into_iter()
+                    .flatten()
+                    .find(|t| t.own_runs.iter().any(covers))
+            }
+            .map(|t| format!("{package}#{}", t.name));
             items.push(AffectedTest {
                 path: path.to_owned(),
-                package: package.clone(),
-                task: task_of(path, frameworks),
+                package,
+                task,
                 reason,
             });
         };
@@ -435,6 +469,10 @@ fn report(
                     push(p, &[], Reason::UnknownTest);
                 }
             }
+        }
+        let package = package_name(repo.packages, &pkg.dir).unwrap_or_else(|| pkg.name.clone());
+        if !kept(&package) {
+            continue;
         }
         for t in &pkg.tasks {
             if let Some(why) = &t.unmapped {
@@ -460,6 +498,19 @@ fn everything_reason(why: &str) -> Reason {
     Reason::AllTestsChanged {
         description: why.to_owned(),
     }
+}
+
+/// turbo's package that holds the file at `path` (root-relative): its
+/// directory (`.`: the root) and its name (`//`: the root).
+fn containing_package(packages: &Packages, path: &str) -> (String, String) {
+    let mut dir = path;
+    while let Some((parent, _)) = dir.rsplit_once('/') {
+        if let Some(name) = package_name(packages, parent) {
+            return (parent.to_owned(), name);
+        }
+        dir = parent;
+    }
+    (".".to_owned(), "//".to_owned())
 }
 
 /// `path` (root-relative) is `dir` or below it (`.`: the root).
