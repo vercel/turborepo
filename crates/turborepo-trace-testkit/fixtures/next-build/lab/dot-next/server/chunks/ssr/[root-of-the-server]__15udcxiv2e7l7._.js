@@ -1,0 +1,3 @@
+module.exports=[54799,(a,b,c)=>{b.exports=a.x("crypto",()=>require("crypto"))},93695,(a,b,c)=>{b.exports=a.x("next/dist/shared/lib/no-fallback-error.external.js",()=>require("next/dist/shared/lib/no-fallback-error.external.js"))},81111,(a,b,c)=>{b.exports=a.x("node:stream",()=>require("node:stream"))},40149,a=>{"use strict";a.s(["r",0,function(a){return"Legacy item "+a},"U",0,function(){return"Legacy index"}])}];
+
+//# sourceMappingURL=%5Broot-of-the-server%5D__15udcxiv2e7l7._.js.map

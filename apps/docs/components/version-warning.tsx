@@ -35,15 +35,15 @@ export function VersionWarning() {
   }
 
   return (
-    <div className="mb-4 rounded-lg border border-blue-500/50 bg-blue-500/10 p-3 text-sm">
-      <div className="flex items-center gap-2 font-medium text-blue-600 dark:text-blue-500">
+    <div className="mb-4 rounded-lg border border-blue-700/50 bg-blue-700/10 p-3 text-sm">
+      <div className="flex items-center gap-2 font-medium text-blue-900">
         <InfoIcon className="size-4" />
         <span>Version: {version}</span>
       </div>
       <p className="mt-2 text-muted-foreground">
         <Link
           href={`https://${PRODUCTION_DOMAIN}`}
-          className="font-medium text-blue-600 underline underline-offset-2 hover:text-blue-500 dark:text-blue-500 dark:hover:text-blue-400"
+          className="font-medium text-blue-900 underline underline-offset-2 hover:text-blue-700"
         >
           Visit the latest documentation.
         </Link>

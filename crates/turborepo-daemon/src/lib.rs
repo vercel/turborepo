@@ -23,8 +23,6 @@
 #![allow(unused_features, reason = "impl_trait_in_assoc_type is actually used")]
 #![feature(impl_trait_in_assoc_type)]
 #![deny(clippy::all)]
-#![allow(clippy::needless_lifetimes)]
-#![allow(clippy::uninlined_format_args)]
 
 mod bump_timeout;
 mod bump_timeout_layer;
@@ -32,32 +30,65 @@ mod client;
 mod connector;
 mod default_timeout_layer;
 pub mod endpoint;
+mod lifecycle;
+mod package_changes_watcher;
+mod package_discovery;
 mod server;
 
 use std::{collections::HashSet, path::PathBuf, sync::Arc};
 
 pub use client::{DaemonClient, DaemonError};
 pub use connector::{DaemonConnector, DaemonConnectorError};
+pub use lifecycle::{
+    DaemonLifecycleCommand, DaemonLifecycleOutput, DaemonStatus, clean_daemon, clean_daemon_files,
+    daemon_log_filename, follow_daemon_logs, run_lifecycle_command, serve,
+};
+pub use package_changes_watcher::RediscoveringPackageChangesWatcher;
+pub use package_discovery::DaemonPackageDiscovery;
 pub use server::{CloseReason, FileWatching, TurboGrpcService};
 use sha2::{Digest, Sha256};
 use tokio::sync::broadcast;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPathBuf, PathError};
-use turborepo_repository::package_graph::PackageName;
+use turborepo_repository::package_graph::{PackageName, RepositoryDiscoverySnapshot};
 
-/// Trait for watching package changes. Implemented by consumers who need
-/// to integrate with turbo.json configuration.
+#[derive(Debug, Clone, thiserror::Error)]
+pub enum RepositoryDiscoveryError {
+    #[error("repository discovery unavailable")]
+    Unavailable,
+    #[error("repository discovery failed: {0}")]
+    InvalidState(String),
+}
+
+/// Trait for watching package changes and publishing the repository discovery
+/// generation used to classify them.
 pub trait PackageChangesWatcher: Send + Sync {
-    /// Get a receiver for package change events
+    /// Get a receiver for package change events.
     fn package_changes(
         &self,
     ) -> impl std::future::Future<Output = broadcast::Receiver<PackageChangeEvent>> + Send;
+
+    /// Return the latest completed repository discovery generation without
+    /// waiting for initialization.
+    fn repository_discovery(
+        &self,
+    ) -> impl std::future::Future<
+        Output = Option<Result<Arc<RepositoryDiscoverySnapshot>, RepositoryDiscoveryError>>,
+    > + Send;
+
+    /// Wait for the first repository discovery generation.
+    fn repository_discovery_blocking(
+        &self,
+    ) -> impl std::future::Future<
+        Output = Result<Arc<RepositoryDiscoverySnapshot>, RepositoryDiscoveryError>,
+    > + Send;
 }
 
 /// Arguments passed to a PackageChangesWatcher factory
 pub struct PackageChangesWatcherArgs {
     pub repo_root: AbsoluteSystemPathBuf,
-    pub file_events: turborepo_filewatch::OptionalWatch<
-        broadcast::Receiver<Result<notify::Event, turborepo_filewatch::NotifyError>>,
+    pub file_events: turborepo_filewatch::WatchSource,
+    pub package_discovery: tokio::sync::watch::Receiver<
+        Option<Result<turborepo_repository::discovery::DiscoveryResponse, String>>,
     >,
     pub hash_watcher: std::sync::Arc<turborepo_filewatch::hash_watcher::HashWatcher>,
     pub custom_turbo_json_path: Option<AbsoluteSystemPathBuf>,
@@ -210,35 +241,7 @@ pub mod proto {
     /// - Bump the minor version if adding new features, such that clients can
     ///   mandate at least some set of features on the target server.
     /// - Bump the patch version if making backwards compatible bug fixes.
-    pub const VERSION: &str = "2.0.0";
-
-    impl From<PackageManager> for turborepo_repository::package_manager::PackageManager {
-        fn from(pm: PackageManager) -> Self {
-            match pm {
-                PackageManager::Npm => Self::Npm,
-                PackageManager::Yarn => Self::Yarn,
-                PackageManager::Berry => Self::Berry,
-                PackageManager::Pnpm => Self::Pnpm,
-                PackageManager::Pnpm6 => Self::Pnpm6,
-                PackageManager::Pnpm9 => Self::Pnpm9,
-                PackageManager::Bun => Self::Bun,
-            }
-        }
-    }
-
-    impl From<turborepo_repository::package_manager::PackageManager> for PackageManager {
-        fn from(pm: turborepo_repository::package_manager::PackageManager) -> Self {
-            match pm {
-                turborepo_repository::package_manager::PackageManager::Npm => Self::Npm,
-                turborepo_repository::package_manager::PackageManager::Yarn => Self::Yarn,
-                turborepo_repository::package_manager::PackageManager::Berry => Self::Berry,
-                turborepo_repository::package_manager::PackageManager::Pnpm => Self::Pnpm,
-                turborepo_repository::package_manager::PackageManager::Pnpm6 => Self::Pnpm6,
-                turborepo_repository::package_manager::PackageManager::Pnpm9 => Self::Pnpm9,
-                turborepo_repository::package_manager::PackageManager::Bun => Self::Bun,
-            }
-        }
-    }
+    pub const VERSION: &str = "3.1.0";
 }
 
 #[cfg(test)]

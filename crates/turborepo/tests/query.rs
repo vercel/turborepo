@@ -8,7 +8,7 @@ fn test_query() -> Result<(), anyhow::Error> {
         "query",
         "get packages" => ["query { packages { items { name } } }"],
         "get packages with equals filter" => ["query { packages(filter: { equal: { field: NAME, value: \"my-app\" } }) { items { name } } }"],
-        "get package that doesn't exist" => ["query { package(name: \"doesnotexist\") { path } }"],
+        "get package that doesn't exist" => ["query { package(name: \"doesnotexist\") { path } }"]; 2,
         "get packages with less than 1 dependents" => ["query { packages(filter: {lessThan: {field: DIRECT_DEPENDENT_COUNT, value: 1}}) { items { name directDependents { length } } } }"],
         "get packages with more than 0 dependents" => ["query { packages(filter: {greaterThan: {field: DIRECT_DEPENDENT_COUNT, value: 0}}) { items { name directDependents { length } } } }"],
         "get packages that have a task named `build`" => ["query { packages(filter: {has: { field: TASK_NAME, value: \"build\" }}) { items { name } } }"],
@@ -52,6 +52,7 @@ fn test_ast() -> Result<(), anyhow::Error> {
         "npm@10.5.0",
         "query",
         "get `main.ts` with ast" => ["query { file(path: \"main.ts\") { path ast } }"],
+        "get `main.ts` with dependencies including ast" => ["query { file(path: \"main.ts\") { path dependencies { files { items { path ast } } } } }"],
     );
 
     Ok(())
@@ -129,6 +130,30 @@ fn test_task_queries() -> Result<(), anyhow::Error> {
         "get tasks for lib-b with dependents and dependencies" => ["query { package(name: \"lib-b\") { tasks { items { fullName allDependents { items { fullName } } } } } }"],
         "get tasks for app-a with indirect dependencies" => ["query { package(name: \"app-a\") { tasks { items { fullName indirectDependencies { items { fullName } } } } } }"],
         "get tasks for lib-b with indirect dependents" => ["query { package(name: \"lib-b\") { tasks { items { fullName indirectDependents { items { fullName } } } } } }"],
+    );
+
+    Ok(())
+}
+
+#[test]
+fn test_task_log_files() -> Result<(), anyhow::Error> {
+    check_json_output!(
+        "task_log_file",
+        "npm@10.5.0",
+        "query",
+        "get each task's log file" => ["query { packages { items { tasks { items { fullName logFile } } } } }"],
+    );
+
+    Ok(())
+}
+
+#[test]
+fn test_task_hashes() -> Result<(), anyhow::Error> {
+    check_json_output!(
+        "task_hash",
+        "npm@10.5.0",
+        "query",
+        "get each task's hash" => ["query { packages { items { tasks { items { fullName hash hashReason } } } } }"],
     );
 
     Ok(())

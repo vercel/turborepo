@@ -1,0 +1,51 @@
+# Prisma: `prisma generate|migrate|db|format|validate`.
+# Schema location, in Prisma's order: `--schema`; `schema` in `prisma.config.*` (relative to
+# it); `prisma.schema` in the nearest package.json; `./prisma/schema.prisma`,
+# `./schema.prisma`, then the folder `./prisma/schema/` (missing defaults are probes).
+# The `prisma-*` scanners read the schema: folders, generator outputs (the default client is
+# the packages `@prisma/client` and `.prisma/client`), datasource `env("X")` names.
+id = "prisma"
+programs = ["prisma"]
+toolchain = ["npm:prisma"]
+flags = ["--schema", "--config", "--generator", "--name|-n", "--file", "--url", "--output|-o", "--from-schema-datamodel", "--to-schema-datamodel", "--from-schema", "--to-schema", "--from-migrations", "--to-migrations", "--from-url", "--to-url", "--from-schema-datasource", "--to-schema-datasource", "--from-config-datasource", "--to-config-datasource", "--shadow-database-url", "--applied", "--rolled-back", "--port|-p", "--browser|-b"]
+ignore = ["", "version", "-v", "--version", "help", "debug", "studio", "init", "platform", "mcp", "login", "logout"]
+# Every recognized subcommand reads the schema and the config's extra directories.
+always = [{ scan = "prisma-schema", on = "schema" }, { membership = "config_dirs", reason = "prisma config" }]
+
+[config]
+label = "prisma.config"
+flag = "--config"
+names = ["prisma.config.ts", "prisma.config.mts", "prisma.config.cts", "prisma.config.js", "prisma.config.mjs", "prisma.config.cjs", ".config/prisma.ts", ".config/prisma.js"]
+
+[values]
+schema = { flag = "--schema", field = "schema", pkg = "prisma.schema", default = ["prisma/schema.prisma", "schema.prisma", "prisma/schema/"], dir_glob = "**/*.prisma", reason = "prisma schema folder" }
+migrations = { field = "migrations.path", default = "migrations", default_base = "schema" }
+seed = { field = "migrations.seed", pkg = "prisma.seed" }
+config_dirs = { field = ["views.path", "typedSql.path"] }
+diff_schemas = { flag = ["--from-schema-datamodel", "--to-schema-datamodel", "--from-schema", "--to-schema", "--from-schema-datasource", "--to-schema-datasource"] }
+diff_migrations = { flag = ["--from-migrations", "--to-migrations"] }
+
+[groups]
+generate = [{ tool = "npm:@prisma/client" }, { scan = "prisma-generators", on = "schema" }]
+env = [{ scan = "prisma-env", on = "schema" }]
+migrations = [{ membership = "migrations", reason = "prisma migrations" }]
+# The seed command is recognized like any other command line.
+seed = [{ run = "seed" }]
+
+[sub]
+generate = ["generate"]
+validate = []
+format = [{ scan = "prisma-format", on = "schema" }]
+"migrate dev" = ["env", "migrations", { output = "migrations" }, { use = "generate", unless = ["--skip-generate"] }, { use = "seed", unless = ["--skip-seed"] }]
+"migrate reset" = ["env", "migrations", { use = "generate", unless = ["--skip-generate"] }, { use = "seed", unless = ["--skip-seed"] }]
+"migrate deploy|migrate status|migrate resolve" = ["env", "migrations"]
+"migrate diff" = [
+  { input = "diff_schemas", reason = "prisma schema" },
+  { membership = "diff_migrations", reason = "prisma migrations" },
+  { output = "--output" },
+  { use = "env", when = ["--from-url|--to-url|--from-config-datasource|--to-config-datasource"] },
+]
+"db push" = ["env", { use = "generate", unless = ["--skip-generate"] }]
+"db pull" = ["env", { scan = "prisma-format", on = "schema" }, { uncertain = "env_dependent", detail = "`prisma db pull` reads the database schema" }]
+"db seed" = ["seed"]
+"db execute" = ["env", { input = "--file" }]

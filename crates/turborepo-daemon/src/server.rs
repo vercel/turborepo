@@ -3,11 +3,13 @@
 //! This module houses the daemon server. For more information, go to the
 //! [daemon module](std::daemon).
 
+#![allow(clippy::result_large_err)]
+
 use std::{
     collections::{HashMap, HashSet},
     sync::{
-        atomic::{AtomicBool, Ordering},
         Arc, Mutex, OnceLock,
+        atomic::{AtomicBool, Ordering},
     },
     time::{Duration, Instant},
 };
@@ -27,19 +29,19 @@ use tower::ServiceBuilder;
 use tracing::{error, info, trace, warn};
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPathBuf, PathError};
 use turborepo_filewatch::{
+    FileSystemWatcher, WatchError, WatchScope,
     cookies::CookieWriter,
     globwatcher::{Error as GlobWatcherError, GlobError, GlobSet, GlobWatcher},
     hash_watcher::{Error as HashWatcherError, HashSpec, HashWatcher, InputGlobs},
-    package_watcher::{PackageWatchError, PackageWatcher},
-    FileSystemWatcher, WatchError,
+    package_watcher::PackageWatcher,
 };
 use turborepo_repository::package_manager;
 use turborepo_scm::SCM;
 
-use super::{bump_timeout::BumpTimeout, endpoint::SocketOpenError, proto, PackageChangeEvent};
+use super::{PackageChangeEvent, bump_timeout::BumpTimeout, endpoint::SocketOpenError, proto};
 use crate::{
-    bump_timeout_layer::BumpTimeoutLayer, default_timeout_layer::DefaultTimeoutLayer,
-    endpoint::listen_socket, PackageChangesWatcher, PackageChangesWatcherArgs, Paths,
+    PackageChangesWatcher, PackageChangesWatcherArgs, Paths, bump_timeout_layer::BumpTimeoutLayer,
+    default_timeout_layer::DefaultTimeoutLayer, endpoint::listen_socket,
 };
 
 #[derive(Debug)]
@@ -148,22 +150,22 @@ impl<W: PackageChangesWatcher + 'static> FileWatching<W> {
         F: Fn(PackageChangesWatcherArgs) -> W + Send + Sync + 'static,
     {
         let watcher = Arc::new(FileSystemWatcher::new_with_default_cookie_dir(&repo_root)?);
-        let recv = watcher.watch();
+        let source = watcher.source();
 
         let cookie_writer = CookieWriter::new(
             watcher.cookie_dir(),
             Duration::from_millis(100),
-            recv.clone(),
+            source.clone(),
         );
         let glob_watcher = Arc::new(GlobWatcher::new(
             repo_root.clone(),
             cookie_writer.clone(),
-            recv.clone(),
+            source.clone(),
         ));
         let package_watcher = Arc::new(
             PackageWatcher::new(
                 repo_root.clone(),
-                recv.clone(),
+                source.clone(),
                 cookie_writer,
                 allow_no_package_manager,
             )
@@ -173,7 +175,7 @@ impl<W: PackageChangesWatcher + 'static> FileWatching<W> {
         let hash_watcher = Arc::new(HashWatcher::new(
             repo_root.clone(),
             package_watcher.watch_discovery(),
-            recv.clone(),
+            source,
             scm,
         ));
 
@@ -193,10 +195,10 @@ impl<W: PackageChangesWatcher + 'static> FileWatching<W> {
     pub fn get_or_init_package_changes_watcher(&self) -> Arc<W> {
         self.package_changes_watcher
             .get_or_init(|| {
-                let recv = self.watcher.watch();
                 let args = PackageChangesWatcherArgs {
                     repo_root: self.repo_root.clone(),
-                    file_events: recv,
+                    file_events: self.watcher.source(),
+                    package_discovery: self.package_watcher.watch_discovery(),
                     hash_watcher: self.hash_watcher.clone(),
                     custom_turbo_json_path: self.custom_turbo_json_path.clone(),
                     allow_no_package_manager: self.allow_no_package_manager,
@@ -357,7 +359,6 @@ struct TurboGrpcServiceInner<W: PackageChangesWatcher + 'static> {
     times_saved: Arc<Mutex<HashMap<String, u64>>>,
     start_time: Instant,
     log_file: AbsoluteSystemPathBuf,
-    package_watcher: Arc<PackageWatcher>,
 }
 
 type TurboGrpcServiceInnerInit<W> = Result<
@@ -392,8 +393,6 @@ impl<W: PackageChangesWatcher + 'static> TurboGrpcServiceInner<W> {
         )?;
 
         tracing::debug!("initing package discovery");
-        // Note that we're cloning the Arc, not the package watcher itself
-        let package_watcher = Arc::clone(&file_watching.package_watcher);
 
         // exit_root_watch delivers a signal to the root watch loop to exit.
         // In the event that the server shuts down via some other mechanism, this
@@ -408,7 +407,6 @@ impl<W: PackageChangesWatcher + 'static> TurboGrpcServiceInner<W> {
 
         Ok((
             TurboGrpcServiceInner {
-                package_watcher,
                 shutdown: trigger_shutdown,
                 file_watching,
                 times_saved: Arc::new(Mutex::new(HashMap::new())),
@@ -494,15 +492,45 @@ impl<W: PackageChangesWatcher + 'static> TurboGrpcServiceInner<W> {
     }
 }
 
+fn discovery_response(
+    snapshot: &turborepo_repository::package_graph::RepositoryDiscoverySnapshot,
+) -> proto::DiscoverPackagesResponse {
+    proto::DiscoverPackagesResponse {
+        scopes: snapshot
+            .scopes
+            .iter()
+            .map(|scope| proto::RepositoryScope {
+                name: scope.name.as_str().to_string(),
+                toolchain: scope.toolchain.as_str().to_string(),
+                manifest_path: scope.manifest_path.to_string(),
+                tasks: scope.tasks.clone(),
+            })
+            .collect(),
+        workspace_roots: snapshot
+            .workspace_roots
+            .iter()
+            .map(|root| proto::RepositoryWorkspaceRoot {
+                toolchain: root.toolchain.as_str().to_string(),
+                kind: root.kind.clone(),
+                path: root.path.to_string(),
+            })
+            .collect(),
+    }
+}
+
 async fn watch_root<W: PackageChangesWatcher + 'static>(
     filewatching_access: FileWatching<W>,
     root: AbsoluteSystemPathBuf,
     trigger_shutdown: mpsc::Sender<()>,
     mut exit_signal: oneshot::Receiver<()>,
 ) -> Result<(), WatchError> {
+    let watched_root = root.clone();
     let mut recv_events = filewatching_access
         .watcher
-        .subscribe()
+        .source()
+        .subscribe(WatchScope::predicate(move |path| {
+            path == watched_root.as_std_path()
+        }))
         .await
         // we can only encounter an error here if the file watcher is closed (a recv error)
         .map_err(|_| WatchError::Setup("file watching shut down".to_string()))?;
@@ -524,7 +552,7 @@ async fn watch_root<W: PackageChangesWatcher + 'static>(
                     // before triggering a shutdown
                     Ok(event) if event.paths.iter().any(|p| p == (&root as &AbsoluteSystemPath)) => !root.exists(),
                     Ok(_) => false,
-                    Err(_) => true
+                    Err(error) => !error.is_invalidation()
                 };
                 if should_trigger_shutdown {
                     warn!("Root watcher triggering shutdown");
@@ -652,22 +680,17 @@ impl<W: PackageChangesWatcher + 'static> proto::turbod_server::Turbod for TurboG
         &self,
         _request: tonic::Request<proto::DiscoverPackagesRequest>,
     ) -> Result<tonic::Response<proto::DiscoverPackagesResponse>, tonic::Status> {
-        match self.package_watcher.discover_packages().await {
-            Some(Ok(packages)) => Ok(tonic::Response::new(proto::DiscoverPackagesResponse {
-                package_files: packages
-                    .workspaces
-                    .into_iter()
-                    .map(|d| proto::PackageFiles {
-                        package_json: d.package_json.to_string(),
-                        turbo_json: d.turbo_json.map(|t| t.to_string()),
-                    })
-                    .collect(),
-                package_manager: proto::PackageManager::from(packages.package_manager).into(),
-            })),
-            None | Some(Err(PackageWatchError::Unavailable)) => {
-                Err(tonic::Status::unavailable("package discovery unavailable"))
-            }
-            Some(Err(PackageWatchError::InvalidState(reason))) => {
+        match self
+            .file_watching
+            .get_or_init_package_changes_watcher()
+            .repository_discovery()
+            .await
+        {
+            Some(Ok(snapshot)) => Ok(tonic::Response::new(discovery_response(&snapshot))),
+            None | Some(Err(crate::RepositoryDiscoveryError::Unavailable)) => Err(
+                tonic::Status::unavailable("repository discovery unavailable"),
+            ),
+            Some(Err(crate::RepositoryDiscoveryError::InvalidState(reason))) => {
                 Err(tonic::Status::failed_precondition(reason))
             }
         }
@@ -677,22 +700,17 @@ impl<W: PackageChangesWatcher + 'static> proto::turbod_server::Turbod for TurboG
         &self,
         _request: tonic::Request<proto::DiscoverPackagesRequest>,
     ) -> Result<tonic::Response<proto::DiscoverPackagesResponse>, tonic::Status> {
-        match self.package_watcher.discover_packages_blocking().await {
-            Ok(packages) => Ok(tonic::Response::new(proto::DiscoverPackagesResponse {
-                package_files: packages
-                    .workspaces
-                    .into_iter()
-                    .map(|d| proto::PackageFiles {
-                        package_json: d.package_json.to_string(),
-                        turbo_json: d.turbo_json.map(|t| t.to_string()),
-                    })
-                    .collect(),
-                package_manager: proto::PackageManager::from(packages.package_manager).into(),
-            })),
-            Err(PackageWatchError::Unavailable) => {
-                Err(tonic::Status::unavailable("package discovery unavailable"))
-            }
-            Err(PackageWatchError::InvalidState(reason)) => {
+        match self
+            .file_watching
+            .get_or_init_package_changes_watcher()
+            .repository_discovery_blocking()
+            .await
+        {
+            Ok(snapshot) => Ok(tonic::Response::new(discovery_response(&snapshot))),
+            Err(crate::RepositoryDiscoveryError::Unavailable) => Err(tonic::Status::unavailable(
+                "repository discovery unavailable",
+            )),
+            Err(crate::RepositoryDiscoveryError::InvalidState(reason)) => {
                 Err(tonic::Status::failed_precondition(reason))
             }
         }
@@ -828,8 +846,8 @@ mod test {
 
     use super::compare_versions;
     use crate::{
-        proto::VersionRange, CloseReason, PackageChangeEvent, PackageChangesWatcher, Paths,
-        TurboGrpcService,
+        CloseReason, PackageChangeEvent, PackageChangesWatcher, Paths, TurboGrpcService,
+        proto::VersionRange,
     };
 
     // A simple mock for PackageChangesWatcher for testing
@@ -847,6 +865,26 @@ mod test {
     impl PackageChangesWatcher for MockPackageChangesWatcher {
         async fn package_changes(&self) -> broadcast::Receiver<PackageChangeEvent> {
             self.tx.subscribe()
+        }
+
+        async fn repository_discovery(
+            &self,
+        ) -> Option<
+            Result<
+                std::sync::Arc<turborepo_repository::package_graph::RepositoryDiscoverySnapshot>,
+                crate::RepositoryDiscoveryError,
+            >,
+        > {
+            None
+        }
+
+        async fn repository_discovery_blocking(
+            &self,
+        ) -> Result<
+            std::sync::Arc<turborepo_repository::package_graph::RepositoryDiscoverySnapshot>,
+            crate::RepositoryDiscoveryError,
+        > {
+            Err(crate::RepositoryDiscoveryError::Unavailable)
         }
     }
 

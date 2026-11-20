@@ -8,17 +8,102 @@ use std::{
 };
 
 use tar::{EntryType, Header};
-use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPath, IntoUnix};
+use turbopath::{
+    AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPath, AnchoredSystemPathBuf, IntoUnix,
+};
 
+use super::{RestoreManifest, zstd_sink::ZstdSink};
 use crate::CacheError;
+
+/// Most worker threads zstd uses to compress one cache archive.
+const MAX_ZSTD_WORKERS: usize = 4;
+
+/// Creates the zstd encoder for cache archives: level 3, multithreaded.
+///
+/// zstd splits its input into jobs of several MiB and compresses them on
+/// worker threads. Archives smaller than one job come out byte-identical to
+/// single-threaded compression, and the compressed bytes don't depend on the
+/// number of workers, so machines with different core counts write identical
+/// archives. The worker count must never be 0: zstd treats 0 as
+/// single-threaded mode, whose output differs for large archives.
+fn archive_encoder<W: Write>(writer: W) -> Result<zstd::Encoder<'static, W>, CacheError> {
+    let workers = std::thread::available_parallelism()
+        .map_or(1, |cores| cores.get())
+        .min(MAX_ZSTD_WORKERS);
+    archive_encoder_with_workers(writer, workers)
+}
+
+fn archive_encoder_with_workers<W: Write>(
+    writer: W,
+    workers: usize,
+) -> Result<zstd::Encoder<'static, W>, CacheError> {
+    let mut encoder = zstd::Encoder::new(writer, 0)?;
+    encoder.multithread(u32::try_from(workers).unwrap_or(1))?;
+    Ok(encoder)
+}
 
 /// Atomic counter to ensure unique temp filenames within a single process.
 /// Combined with PID, this guarantees uniqueness across concurrent tasks.
 static TEMP_FILE_COUNTER: AtomicU64 = AtomicU64::new(0);
 
+#[cfg(unix)]
+struct ArchiveAnchor {
+    directory: fs::File,
+    real_path: AbsoluteSystemPathBuf,
+}
+
+#[cfg(unix)]
+impl ArchiveAnchor {
+    fn open(anchor: &AbsoluteSystemPath) -> Result<Self, CacheError> {
+        Ok(Self {
+            directory: fs::File::open(anchor.as_std_path())?,
+            real_path: anchor.to_realpath()?,
+        })
+    }
+}
+
+#[cfg(windows)]
+struct WindowsArchiveAnchor {
+    requested_path: AbsoluteSystemPathBuf,
+    real_path: AbsoluteSystemPathBuf,
+}
+
+#[cfg(windows)]
+impl WindowsArchiveAnchor {
+    fn open(anchor: &AbsoluteSystemPath) -> Result<Self, CacheError> {
+        Ok(Self {
+            requested_path: anchor.to_owned(),
+            real_path: anchor.to_realpath()?,
+        })
+    }
+
+    fn matches(&self, anchor: &AbsoluteSystemPath) -> bool {
+        self.requested_path.as_str() == anchor.as_str()
+    }
+}
+
+/// A directory opened while walking from the archive anchor to an output's
+/// parent, kept so later outputs in the same directory can reuse it.
+#[cfg(unix)]
+struct OpenDir {
+    name: String,
+    file: fs::File,
+    path: AbsoluteSystemPathBuf,
+}
+
+enum ArchivedEntry {
+    /// A regular file, with the metadata of the opened file that was archived.
+    File(fs::Metadata),
+    Directory,
+    /// A symlink, with the target it was archived with, in Unix form.
+    Symlink(camino::Utf8PathBuf),
+    Other,
+}
+
 enum ArchiveSource {
     Regular {
         file: fs::File,
+        file_info: fs::Metadata,
         header: Header,
     },
     Symlink {
@@ -55,12 +140,53 @@ fn generate_temp_path(final_path: &AbsoluteSystemPath) -> AbsoluteSystemPathBuf 
 /// Implements [`Drop`] to clean up temporary files if `finish()` is not called.
 /// This ensures no orphaned temp files remain on disk after errors or panics.
 pub struct CacheWriter<'a> {
-    builder: tar::Builder<Box<dyn Write + 'a>>,
+    builder: tar::Builder<ArchiveSink<'a>>,
     /// The temporary path where the archive is being written.
     /// On `finish()`, this will be atomically renamed to `final_path`.
     temp_path: Option<AbsoluteSystemPathBuf>,
     /// The final destination path for the archive.
     final_path: Option<AbsoluteSystemPathBuf>,
+    // Retains a verified anchor for this archive so every output does not need
+    // to reopen and canonicalize the same root directory.
+    #[cfg(unix)]
+    anchor: Option<ArchiveAnchor>,
+    // Directories opened (from the anchor down) for the previous output.
+    // Task outputs are added in sorted order, so consecutive outputs share
+    // most of this chain and only the differing suffix is reopened. Any order
+    // is correct; an unsorted one just reopens more directories.
+    #[cfg(unix)]
+    dir_stack: Vec<OpenDir>,
+    #[cfg(windows)]
+    windows_anchor: Option<WindowsArchiveAnchor>,
+}
+
+/// Where the tar stream goes.
+enum ArchiveSink<'a> {
+    Writer(Box<dyn Write + 'a>),
+    /// Compressed archives written to the local cache. Must be finished
+    /// explicitly; see [`CacheWriter::finish`].
+    ZstdFile(ZstdSink<BufWriter<fs::File>>),
+    /// Compressed archives built in a spool for upload; see
+    /// [`CacheWriter::spooled`].
+    ZstdSpool(ZstdSink<BufWriter<tempfile::SpooledTempFile>>),
+}
+
+impl Write for ArchiveSink<'_> {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        match self {
+            ArchiveSink::Writer(writer) => writer.write(buf),
+            ArchiveSink::ZstdFile(sink) => sink.write(buf),
+            ArchiveSink::ZstdSpool(sink) => sink.write(buf),
+        }
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        match self {
+            ArchiveSink::Writer(writer) => writer.flush(),
+            ArchiveSink::ZstdFile(sink) => sink.flush(),
+            ArchiveSink::ZstdSpool(sink) => sink.flush(),
+        }
+    }
 }
 
 impl Drop for CacheWriter<'_> {
@@ -105,10 +231,17 @@ impl<'a> CacheWriter<'a> {
     /// After calling this method, the `Drop` implementation will not attempt
     /// to clean up the temp file since it has been successfully renamed.
     pub fn finish(mut self) -> Result<(), CacheError> {
-        // Finish the tar archive - this writes the tar footer and flushes data.
-        // The underlying zstd encoder (if used) has `auto_finish()` which ensures
-        // compression is finalized when the encoder is dropped.
+        // Finish the tar archive - this writes the tar footer.
         self.builder.finish()?;
+        // Compressed local archives are completed and flushed before the
+        // rename, so the final path never names a partially written file.
+        // Other writers' zstd encoders (if used) have `auto_finish()`, which
+        // finalizes compression when the encoder is dropped.
+        match self.builder.get_mut() {
+            ArchiveSink::ZstdFile(sink) => drop(sink.finish()?),
+            ArchiveSink::ZstdSpool(sink) => drop(sink.finish()?),
+            ArchiveSink::Writer(_) => {}
+        }
 
         // Take the paths before the rename. If rename succeeds, Drop won't try
         // to clean up. If rename fails, we return the error and Drop will clean up.
@@ -124,26 +257,75 @@ impl<'a> CacheWriter<'a> {
         Ok(())
     }
 
+    /// Makes a compressed archive in memory that moves to an anonymous
+    /// temporary file once it exceeds `memory_threshold` bytes. Large archives
+    /// are compressed on a dedicated thread like [`CacheWriter::create`]'s.
+    /// Get the archive with [`CacheWriter::finish_spooled`].
+    pub(crate) fn spooled(memory_threshold: usize) -> Result<CacheWriter<'static>, CacheError> {
+        let spool = BufWriter::new(tempfile::spooled_tempfile(memory_threshold));
+        let zw = archive_encoder(spool)?;
+        Ok(CacheWriter {
+            builder: tar::Builder::new(ArchiveSink::ZstdSpool(ZstdSink::new(zw))),
+            temp_path: None,
+            final_path: None,
+            #[cfg(unix)]
+            anchor: None,
+            #[cfg(unix)]
+            dir_stack: Vec::new(),
+            #[cfg(windows)]
+            windows_anchor: None,
+        })
+    }
+
+    /// Finishes an archive made by [`CacheWriter::spooled`] and returns the
+    /// complete compressed archive, positioned at its end.
+    pub(crate) fn finish_spooled(mut self) -> Result<tempfile::SpooledTempFile, CacheError> {
+        self.builder.finish()?;
+        let ArchiveSink::ZstdSpool(sink) = self.builder.get_mut() else {
+            return Err(std::io::Error::other(
+                "finish_spooled called on an archive not made by CacheWriter::spooled",
+            )
+            .into());
+        };
+        let spool = sink
+            .finish()?
+            .into_inner()
+            .map_err(|err| err.into_error())?;
+        Ok(spool)
+    }
+
     pub fn from_writer(writer: impl Write + 'a, use_compression: bool) -> Result<Self, CacheError> {
         if use_compression {
-            let zw = zstd::Encoder::new(writer, 0)?.auto_finish();
+            let zw = archive_encoder(writer)?.auto_finish();
             Ok(CacheWriter {
-                builder: tar::Builder::new(Box::new(zw)),
+                builder: tar::Builder::new(ArchiveSink::Writer(Box::new(zw))),
                 temp_path: None,
                 final_path: None,
+                #[cfg(unix)]
+                anchor: None,
+                #[cfg(unix)]
+                dir_stack: Vec::new(),
+                #[cfg(windows)]
+                windows_anchor: None,
             })
         } else {
             Ok(CacheWriter {
-                builder: tar::Builder::new(Box::new(writer)),
+                builder: tar::Builder::new(ArchiveSink::Writer(Box::new(writer))),
                 temp_path: None,
                 final_path: None,
+                #[cfg(unix)]
+                anchor: None,
+                #[cfg(unix)]
+                dir_stack: Vec::new(),
+                #[cfg(windows)]
+                windows_anchor: None,
             })
         }
     }
 
     // Makes a new CacheArchive at the specified path
     // Wires up the chain of writers:
-    // tar::Builder -> zstd::Encoder (optional) -> BufWriter -> File
+    // tar::Builder -> ZstdFileSink (optional) -> BufWriter -> File
     //
     // Uses atomic write pattern: writes to a temporary file, then renames
     // to the final path on `finish()`. This ensures concurrent safety when
@@ -162,35 +344,120 @@ impl<'a> CacheWriter<'a> {
         let is_compressed = path.extension() == Some("zst");
 
         if is_compressed {
-            let zw = zstd::Encoder::new(file_buffer, 0)?.auto_finish();
+            let zw = archive_encoder(file_buffer)?;
 
             Ok(CacheWriter {
-                builder: tar::Builder::new(Box::new(zw)),
+                builder: tar::Builder::new(ArchiveSink::ZstdFile(ZstdSink::new(zw))),
                 temp_path: Some(temp_path),
                 final_path: Some(path.to_owned()),
+                #[cfg(unix)]
+                anchor: None,
+                #[cfg(unix)]
+                dir_stack: Vec::new(),
+                #[cfg(windows)]
+                windows_anchor: None,
             })
         } else {
             Ok(CacheWriter {
-                builder: tar::Builder::new(Box::new(file_buffer)),
+                builder: tar::Builder::new(ArchiveSink::Writer(Box::new(file_buffer))),
                 temp_path: Some(temp_path),
                 final_path: Some(path.to_owned()),
+                #[cfg(unix)]
+                anchor: None,
+                #[cfg(unix)]
+                dir_stack: Vec::new(),
+                #[cfg(windows)]
+                windows_anchor: None,
             })
         }
     }
 
+    #[cfg(unix)]
+    fn archive_anchor(
+        &mut self,
+        anchor: &AbsoluteSystemPath,
+    ) -> Result<&ArchiveAnchor, CacheError> {
+        if self.anchor.is_none() {
+            self.anchor = Some(ArchiveAnchor::open(anchor)?);
+        }
+        match self.anchor.as_ref() {
+            Some(anchor) => Ok(anchor),
+            None => unreachable!("archive anchor must be initialized"),
+        }
+    }
+
+    #[cfg(windows)]
+    fn windows_archive_anchor(
+        &mut self,
+        anchor: &AbsoluteSystemPath,
+    ) -> Result<&WindowsArchiveAnchor, CacheError> {
+        if self
+            .windows_anchor
+            .as_ref()
+            .is_none_or(|cached| !cached.matches(anchor))
+        {
+            self.windows_anchor = Some(WindowsArchiveAnchor::open(anchor)?);
+        }
+        match self.windows_anchor.as_ref() {
+            Some(anchor) => Ok(anchor),
+            None => unreachable!("Windows archive anchor must be initialized"),
+        }
+    }
+
+    pub(crate) fn add_files(
+        &mut self,
+        anchor: &AbsoluteSystemPath,
+        files: &[AnchoredSystemPathBuf],
+    ) -> Result<RestoreManifest, CacheError> {
+        let mut manifest = RestoreManifest::new();
+        for file in files {
+            let entry = self.add_file(anchor, file)?;
+            let unix_path = file.to_unix();
+            match entry {
+                ArchivedEntry::File(metadata) => {
+                    let _ = manifest.record_file_metadata(unix_path.as_str().to_owned(), &metadata);
+                }
+                ArchivedEntry::Directory => {
+                    manifest.record_dir(unix_path.as_str().to_owned());
+                }
+                ArchivedEntry::Symlink(target) => {
+                    manifest.record_symlink(unix_path.as_str().to_owned(), target.as_str());
+                }
+                ArchivedEntry::Other => {}
+            }
+        }
+        Ok(manifest)
+    }
+
     // Adds a user-cached item to the tar
-    pub(crate) fn add_file(
+    fn add_file(
         &mut self,
         anchor: &AbsoluteSystemPath,
         file_path: &AnchoredSystemPath,
-    ) -> Result<(), CacheError> {
+    ) -> Result<ArchivedEntry, CacheError> {
+        #[cfg(unix)]
+        let source = {
+            self.archive_anchor(anchor)?;
+            let Some(archive_anchor) = self.anchor.as_ref() else {
+                unreachable!("archive anchor must be initialized")
+            };
+            archive_source(archive_anchor, &mut self.dir_stack, file_path)?
+        };
+        #[cfg(windows)]
+        let source = archive_source(self.windows_archive_anchor(anchor)?, file_path)?;
+        #[cfg(not(any(unix, windows)))]
         let source = archive_source(anchor, file_path)?;
         let mut file_path = file_path.to_unix();
 
         match source {
-            ArchiveSource::Regular { file, mut header } => {
+            ArchiveSource::Regular {
+                file,
+                file_info,
+                mut header,
+            } => {
                 file_path.make_canonical_for_tar(false);
                 self.append_data(&mut header, file_path.as_str(), file)?;
+                Ok(ArchivedEntry::File(file_info))
             }
             ArchiveSource::Symlink { target, mut header } => {
                 file_path.make_canonical_for_tar(false);
@@ -198,15 +465,19 @@ impl<'a> CacheWriter<'a> {
                 // Unix-style. This will get restored to a system path.
                 let target = target.into_unix();
                 self.append_link(&mut header, file_path.as_str(), &target)?;
+                Ok(ArchivedEntry::Symlink(target))
             }
             ArchiveSource::Other { mut header } => {
-                file_path
-                    .make_canonical_for_tar(matches!(header.entry_type(), EntryType::Directory));
+                let is_dir = matches!(header.entry_type(), EntryType::Directory);
+                file_path.make_canonical_for_tar(is_dir);
                 self.append_data(&mut header, file_path.as_str(), &mut std::io::empty())?;
+                Ok(if is_dir {
+                    ArchivedEntry::Directory
+                } else {
+                    ArchivedEntry::Other
+                })
             }
         }
-
-        Ok(())
     }
 
     fn create_header(file_info: &fs::Metadata) -> Result<Header, CacheError> {
@@ -260,7 +531,11 @@ fn archive_source(
     if path_info.is_file() {
         let (file, file_info) = open_regular_file_for_archive(&source_path)?;
         let header = CacheWriter::create_header(&file_info)?;
-        Ok(ArchiveSource::Regular { file, header })
+        Ok(ArchiveSource::Regular {
+            file,
+            file_info,
+            header,
+        })
     } else if path_info.is_symlink() {
         let target = source_path.read_link()?.into_unix();
         let header = CacheWriter::create_header(&path_info)?;
@@ -273,24 +548,28 @@ fn archive_source(
 
 #[cfg(windows)]
 fn archive_source(
-    anchor: &AbsoluteSystemPath,
+    anchor: &WindowsArchiveAnchor,
     file_path: &AnchoredSystemPath,
 ) -> Result<ArchiveSource, CacheError> {
-    let source_path = anchor.resolve(file_path);
+    let source_path = anchor.requested_path.resolve(file_path);
     let path_info = source_path.symlink_metadata()?;
 
     if path_info.is_file() {
         let (file, file_info) = open_regular_file_for_archive(&source_path)?;
-        ensure_windows_handle_is_under_anchor(anchor, &file)?;
+        ensure_windows_handle_is_under_anchor(&anchor.real_path, &file)?;
         let header = CacheWriter::create_header(&file_info)?;
-        Ok(ArchiveSource::Regular { file, header })
+        Ok(ArchiveSource::Regular {
+            file,
+            file_info,
+            header,
+        })
     } else if path_info.is_symlink() {
-        ensure_windows_parent_is_under_anchor(anchor, &source_path)?;
+        ensure_windows_parent_is_under_anchor(&anchor.real_path, &source_path)?;
         let target = source_path.read_link()?.into_unix();
         let header = CacheWriter::create_header(&path_info)?;
         Ok(ArchiveSource::Symlink { target, header })
     } else {
-        ensure_windows_path_is_under_anchor(anchor, &source_path)?;
+        ensure_windows_path_is_under_anchor(&anchor.real_path, &source_path)?;
         let header = CacheWriter::create_header(&path_info)?;
         Ok(ArchiveSource::Other { header })
     }
@@ -298,26 +577,31 @@ fn archive_source(
 
 #[cfg(unix)]
 fn archive_source(
-    anchor: &AbsoluteSystemPath,
+    anchor: &ArchiveAnchor,
+    dir_stack: &mut Vec<OpenDir>,
     file_path: &AnchoredSystemPath,
 ) -> Result<ArchiveSource, CacheError> {
     use std::os::unix::io::AsRawFd;
 
-    let (parent, file_name) = open_parent_dir(anchor, file_path)?;
-    let file_info = fstatat_no_follow(parent.as_raw_fd(), &file_name)?;
+    let (parent, file_name) = open_parent_dir(anchor, dir_stack, file_path)?;
+    let file_info = fstatat_no_follow(parent.as_raw_fd(), file_name)?;
     let file_type = file_info.st_mode & libc::S_IFMT;
 
     if file_type == libc::S_IFREG {
-        let file = open_file_at(parent.as_raw_fd(), &file_name)?;
+        let file = open_file_at(parent.as_raw_fd(), file_name)?;
         let file_info = file.metadata()?;
         if !file_info.is_file() {
             return Err(CacheError::CreateUnsupportedFileType(Backtrace::capture()));
         }
 
         let header = CacheWriter::create_header(&file_info)?;
-        Ok(ArchiveSource::Regular { file, header })
+        Ok(ArchiveSource::Regular {
+            file,
+            file_info,
+            header,
+        })
     } else if file_type == libc::S_IFLNK {
-        let target = read_link_at(parent.as_raw_fd(), &file_name)?;
+        let target = read_link_at(parent.as_raw_fd(), file_name)?;
         let header = create_header_from_stat(&file_info)?;
         Ok(ArchiveSource::Symlink { target, header })
     } else {
@@ -326,38 +610,59 @@ fn archive_source(
     }
 }
 
+/// Opens the parent directory of `file_path` one component at a time from
+/// the anchor, reusing the directories in `dir_stack` that the previous output
+/// shares with this one. Every directory on the stack was opened by this same
+/// walk, so reuse keeps the no-follow and internal-symlink checks intact.
 #[cfg(unix)]
-fn open_parent_dir(
-    anchor: &AbsoluteSystemPath,
-    file_path: &AnchoredSystemPath,
-) -> Result<(fs::File, String), CacheError> {
+fn open_parent_dir<'a, 'p>(
+    anchor: &'a ArchiveAnchor,
+    dir_stack: &'a mut Vec<OpenDir>,
+    file_path: &'p AnchoredSystemPath,
+) -> Result<(&'a fs::File, &'p str), CacheError> {
     use std::os::unix::io::AsRawFd;
 
-    let mut dir = fs::File::open(anchor.as_std_path())?;
-    let real_anchor = anchor.to_realpath()?;
-    let mut dir_path = real_anchor.clone();
-    let mut components = file_path.components().peekable();
+    let mut components = file_path
+        .components()
+        .map(|component| component.as_str())
+        .collect::<Vec<_>>();
+    let Some(file_name) = components.pop() else {
+        return Err(CacheError::InvalidFilePath(
+            file_path.to_string(),
+            Backtrace::capture(),
+        ));
+    };
 
-    while let Some(component) = components.next() {
-        let component = component.as_str();
-        if components.peek().is_none() {
-            return Ok((dir, component.to_string()));
-        }
+    let shared = dir_stack
+        .iter()
+        .zip(&components)
+        .take_while(|(open, component)| open.name == **component)
+        .count();
+    dir_stack.truncate(shared);
 
-        let (next_dir, next_dir_path) = open_dir_at_allowing_internal_symlink(
-            &real_anchor,
-            &dir_path,
-            dir.as_raw_fd(),
+    for component in &components[shared..] {
+        let (parent_fd, parent_path) = match dir_stack.last() {
+            Some(dir) => (dir.file.as_raw_fd(), &dir.path),
+            None => (anchor.directory.as_raw_fd(), &anchor.real_path),
+        };
+        let (file, path) = open_dir_at_allowing_internal_symlink(
+            &anchor.real_path,
+            parent_path,
+            parent_fd,
             component,
         )?;
-        dir = next_dir;
-        dir_path = next_dir_path;
+        dir_stack.push(OpenDir {
+            name: (*component).to_string(),
+            file,
+            path,
+        });
     }
 
-    Err(CacheError::InvalidFilePath(
-        file_path.to_string(),
-        Backtrace::capture(),
-    ))
+    let parent = match dir_stack.last() {
+        Some(dir) => &dir.file,
+        None => &anchor.directory,
+    };
+    Ok((parent, file_name))
 }
 
 #[cfg(unix)]
@@ -369,7 +674,7 @@ fn open_dir_at_allowing_internal_symlink(
 ) -> Result<(fs::File, AbsoluteSystemPathBuf), CacheError> {
     match open_dir_at(parent_fd, component) {
         Ok(file) => {
-            let path = parent_path.join_component(component).to_realpath()?;
+            let path = parent_path.join_component(component);
             Ok((file, path))
         }
         Err(CacheError::IO(err, _)) if err.kind() == std::io::ErrorKind::NotADirectory => {
@@ -385,7 +690,7 @@ fn open_dir_at_allowing_internal_symlink(
                 return Err(CacheError::CreateUnsupportedFileType(Backtrace::capture()));
             }
 
-            let real_target = file_realpath(&file, &target_path)?;
+            let real_target = file_realpath(&file)?;
             if !real_target.starts_with(real_anchor) {
                 return Err(CacheError::LinkOutsideOfDirectory(
                     link_target.to_string(),
@@ -400,20 +705,10 @@ fn open_dir_at_allowing_internal_symlink(
 }
 
 #[cfg(unix)]
-fn file_realpath(
-    file: &fs::File,
-    fallback_path: &AbsoluteSystemPath,
-) -> Result<AbsoluteSystemPathBuf, CacheError> {
-    use std::os::unix::io::AsRawFd;
-
-    for fd_dir in ["/proc/self/fd", "/dev/fd"] {
-        let fd_path = std::path::PathBuf::from(format!("{}/{}", fd_dir, file.as_raw_fd()));
-        if let Ok(realpath) = std::fs::read_link(fd_path) {
-            return Ok(AbsoluteSystemPathBuf::try_from(realpath.as_path())?);
-        }
-    }
-
-    fallback_path.to_realpath().map_err(Into::into)
+fn file_realpath(file: &fs::File) -> Result<AbsoluteSystemPathBuf, CacheError> {
+    Ok(AbsoluteSystemPathBuf::try_from(turbopath::file_realpath(
+        file,
+    )?)?)
 }
 
 #[cfg(unix)]
@@ -593,12 +888,11 @@ fn open_regular_file_for_archive(
 
 #[cfg(windows)]
 fn ensure_windows_handle_is_under_anchor(
-    anchor: &AbsoluteSystemPath,
+    real_anchor: &AbsoluteSystemPath,
     file: &fs::File,
 ) -> Result<(), CacheError> {
-    let anchor = anchor.to_realpath()?;
     let file_path = windows_final_path(file)?;
-    if windows_path_is_under(file_path.as_path(), anchor.as_std_path()) {
+    if windows_path_is_under(file_path.as_path(), real_anchor.as_std_path()) {
         Ok(())
     } else {
         Err(CacheError::LinkOutsideOfDirectory(
@@ -610,23 +904,22 @@ fn ensure_windows_handle_is_under_anchor(
 
 #[cfg(windows)]
 fn ensure_windows_parent_is_under_anchor(
-    anchor: &AbsoluteSystemPath,
+    real_anchor: &AbsoluteSystemPath,
     source_path: &AbsoluteSystemPath,
 ) -> Result<(), CacheError> {
     let parent = source_path.parent().ok_or_else(|| {
         CacheError::InvalidFilePath(source_path.to_string(), Backtrace::capture())
     })?;
-    ensure_windows_path_is_under_anchor(anchor, parent)
+    ensure_windows_path_is_under_anchor(real_anchor, parent)
 }
 
 #[cfg(windows)]
 fn ensure_windows_path_is_under_anchor(
-    anchor: &AbsoluteSystemPath,
+    real_anchor: &AbsoluteSystemPath,
     path: &AbsoluteSystemPath,
 ) -> Result<(), CacheError> {
-    let anchor = anchor.to_realpath()?;
     let path = path.to_realpath()?;
-    if windows_path_is_under(path.as_std_path(), anchor.as_std_path()) {
+    if windows_path_is_under(path.as_std_path(), real_anchor.as_std_path()) {
         Ok(())
     } else {
         Err(CacheError::LinkOutsideOfDirectory(
@@ -638,41 +931,7 @@ fn ensure_windows_path_is_under_anchor(
 
 #[cfg(windows)]
 fn windows_final_path(file: &fs::File) -> Result<std::path::PathBuf, CacheError> {
-    use std::os::windows::io::AsRawHandle;
-
-    use windows_sys::Win32::Storage::FileSystem::{
-        FILE_NAME_NORMALIZED, GetFinalPathNameByHandleW, VOLUME_NAME_DOS,
-    };
-
-    let mut buffer = vec![0u16; 260];
-    loop {
-        let len = unsafe {
-            GetFinalPathNameByHandleW(
-                file.as_raw_handle(),
-                buffer.as_mut_ptr(),
-                buffer.len() as u32,
-                FILE_NAME_NORMALIZED | VOLUME_NAME_DOS,
-            )
-        };
-        if len == 0 {
-            return Err(std::io::Error::last_os_error().into());
-        }
-
-        let len = len as usize;
-        if len < buffer.len() {
-            let path = String::from_utf16(&buffer[..len]).map_err(|e| {
-                std::io::Error::new(
-                    std::io::ErrorKind::InvalidData,
-                    format!("Windows returned invalid UTF-16 path: {e}"),
-                )
-            })?;
-            return Ok(std::path::PathBuf::from(strip_windows_verbatim_prefix(
-                &path,
-            )));
-        }
-
-        buffer.resize(len + 1, 0);
-    }
+    Ok(turbopath::file_realpath(file)?)
 }
 
 #[cfg(windows)]
@@ -1154,6 +1413,63 @@ mod tests {
     }
 
     #[test]
+    fn large_compressed_archive_matches_single_pass_encoding() -> Result<()> {
+        // Larger than the zstd sink's pipeline threshold, so `create` moves
+        // compression to a worker thread partway through the archive.
+        let input_dir = tempdir()?;
+        let anchor = AbsoluteSystemPathBuf::try_from(input_dir.path())?;
+        let dist = anchor.join_component("dist");
+        dist.create_dir_all()?;
+        let mut files = vec![AnchoredSystemPathBuf::from_raw("dist")?];
+        for i in 0..6 {
+            let contents: String = (0..60_000)
+                .map(|line| format!("export const value_{i}_{line} = {};\n", line * 31 % 977))
+                .collect();
+            dist.join_component(&format!("chunk-{i}.js"))
+                .create_with_contents(contents)?;
+            files.push(AnchoredSystemPathBuf::from_raw(format!(
+                "dist/chunk-{i}.js"
+            ))?);
+        }
+
+        let archive_dir = tempdir()?;
+        let archive_path = AbsoluteSystemPathBuf::try_from(archive_dir.path().join("out.tar.zst"))?;
+        let mut cache_archive = CacheWriter::create(&archive_path)?;
+        for file in &files {
+            cache_archive.add_file(&anchor, file)?;
+        }
+        cache_archive.finish()?;
+
+        let mut single_pass = Vec::new();
+        {
+            let mut cache_archive = CacheWriter::from_writer(&mut single_pass, true)?;
+            for file in &files {
+                cache_archive.add_file(&anchor, file)?;
+            }
+            cache_archive.finish()?;
+        }
+        let written = std::fs::read(archive_path.as_std_path())?;
+        assert!(!written.is_empty());
+        assert!(written == single_pass, "pipelined archive differs");
+
+        let restore_dir = tempdir()?;
+        let restore_path = AbsoluteSystemPathBuf::try_from(restore_dir.path())?;
+        let (restored, _) = CacheReader::open(&archive_path)?.restore(&restore_path, None)?;
+        assert_eq!(restored, files);
+        for i in 0..6 {
+            let name = format!("chunk-{i}.js");
+            assert_eq!(
+                restore_path
+                    .join_component("dist")
+                    .join_component(&name)
+                    .read()?,
+                dist.join_component(&name).read()?
+            );
+        }
+        Ok(())
+    }
+
+    #[test]
     fn test_compression() -> Result<()> {
         let mut buffer = Vec::new();
         let mut encoder = zstd::Encoder::new(&mut buffer, 0)?.auto_finish();
@@ -1166,6 +1482,32 @@ mod tests {
         decoder.read_to_string(&mut out)?;
 
         assert_eq!(out, "hello world");
+
+        Ok(())
+    }
+
+    /// Machines with different core counts must write identical artifacts, so
+    /// the compressed bytes can't depend on the zstd worker count.
+    #[test]
+    fn test_archive_compression_independent_of_worker_count() -> Result<()> {
+        // Compressible but non-repeating input that spans several zstd jobs, so
+        // the multithreaded encoder really splits it.
+        let mut state: u32 = 1;
+        let mut input = Vec::with_capacity(20 << 20);
+        while input.len() < 20 << 20 {
+            state = state.wrapping_mul(1_103_515_245).wrapping_add(12_345);
+            write!(input, "token{} ", state >> 20)?;
+        }
+
+        let compress = |workers| -> Result<Vec<u8>> {
+            let mut encoder = archive_encoder_with_workers(Vec::new(), workers)?;
+            encoder.write_all(&input)?;
+            Ok(encoder.finish()?)
+        };
+        let one_worker = compress(1)?;
+        assert_eq!(one_worker, compress(2)?);
+        assert_eq!(one_worker, compress(4)?);
+        assert_eq!(zstd::decode_all(&one_worker[..])?, input);
 
         Ok(())
     }
@@ -1285,6 +1627,61 @@ mod tests {
             "No temp files should remain after finish(): {:?}",
             temp_files
         );
+
+        Ok(())
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn cache_writer_refreshes_windows_anchor_before_checking_junction() -> Result<()> {
+        let root_dir = tempdir()?;
+        let root = AbsoluteSystemPathBuf::try_from(root_dir.path())?;
+        let first_file = AnchoredSystemPathBuf::from_raw("first.txt")?;
+        root.resolve(&first_file).create_with_contents("first")?;
+
+        let input = root.join_component("input");
+        input.create_dir_all()?;
+        let outside = root.join_component("outside");
+        outside.create_dir_all()?;
+        outside
+            .join_component("secret.txt")
+            .create_with_contents("secret")?;
+
+        let junction = input.join_component("linked");
+        let status = std::process::Command::new("cmd")
+            .args(["/C", "mklink", "/J", junction.as_str(), outside.as_str()])
+            .status()?;
+        assert!(status.success(), "failed to create test junction");
+
+        let mut writer = CacheWriter::from_writer(std::io::sink(), false)?;
+        writer.add_file(&root, &first_file)?;
+        let escaping_file = AnchoredSystemPathBuf::from_raw("linked/secret.txt")?;
+        assert!(writer.add_file(&input, &escaping_file).is_err());
+
+        std::fs::remove_dir(junction.as_std_path())?;
+        Ok(())
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn cache_writer_refreshes_windows_anchor() -> Result<()> {
+        let first_dir = tempdir()?;
+        let first_dir_path = AbsoluteSystemPathBuf::try_from(first_dir.path())?;
+        let second_dir = tempdir()?;
+        let second_dir_path = AbsoluteSystemPathBuf::try_from(second_dir.path())?;
+        let file = AnchoredSystemPathBuf::from_raw("output.txt")?;
+
+        first_dir_path
+            .resolve(&file)
+            .create_with_contents("first")?;
+        second_dir_path
+            .resolve(&file)
+            .create_with_contents("second")?;
+
+        let mut writer = CacheWriter::from_writer(std::io::sink(), false)?;
+        writer.add_file(&first_dir_path, &file)?;
+        writer.add_file(&second_dir_path, &file)?;
+        writer.finish()?;
 
         Ok(())
     }

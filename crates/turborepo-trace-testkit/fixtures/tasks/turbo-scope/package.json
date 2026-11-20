@@ -1,0 +1,14 @@
+{
+  "name": "turbo-scope",
+  "private": true,
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "stamp": "echo built > stamp.txt",
+    "keep-buildinfo": "echo \"Nothing to run: this task only gives the cache a place for the build info.\""
+  },
+  "devDependencies": {
+    "turbo": "2.0.0"
+  }
+}

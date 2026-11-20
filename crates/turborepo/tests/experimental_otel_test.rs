@@ -26,12 +26,15 @@ fn test_otel_env_vars_do_not_break_run() {
     let tempdir = tempfile::tempdir().unwrap();
     setup_otel_fixture(tempdir.path());
 
+    // Exercise the env configuration without depending on a running collector.
     let output = run_turbo_with_env(
         tempdir.path(),
         &["run", "build", "--filter=my-app"],
         &[
             ("TURBO_EXPERIMENTAL_OTEL_ENABLED", "1"),
             ("TURBO_EXPERIMENTAL_OTEL_ENDPOINT", "https://localhost:4318"),
+            ("TURBO_EXPERIMENTAL_OTEL_METRICS_RUN_SUMMARY", "0"),
+            ("TURBO_EXPERIMENTAL_OTEL_TIMEOUT_MS", "1000"),
             ("TURBO_CACHE_DIR", ".turbo/cache-experimental-otel"),
         ],
     );
@@ -45,15 +48,22 @@ fn test_otel_cli_flags_do_not_break_run() {
     let tempdir = tempfile::tempdir().unwrap();
     setup_otel_fixture(tempdir.path());
 
-    // Prime the cache first
-    run_turbo_with_env(
+    // Prime the cache without attempting to export metrics to a missing collector.
+    let primed = run_turbo_with_env(
         tempdir.path(),
         &["run", "build", "--filter=my-app"],
         &[
             ("TURBO_EXPERIMENTAL_OTEL_ENABLED", "1"),
             ("TURBO_EXPERIMENTAL_OTEL_ENDPOINT", "https://localhost:4318"),
+            ("TURBO_EXPERIMENTAL_OTEL_METRICS_RUN_SUMMARY", "0"),
+            ("TURBO_EXPERIMENTAL_OTEL_TIMEOUT_MS", "1000"),
             ("TURBO_CACHE_DIR", ".turbo/cache-experimental-otel"),
         ],
+    );
+    assert!(
+        primed.status.success(),
+        "cache priming failed: {}",
+        String::from_utf8_lossy(&primed.stderr)
     );
 
     let output = run_turbo_with_env(
@@ -64,6 +74,8 @@ fn test_otel_cli_flags_do_not_break_run() {
             "--filter=my-app",
             "--experimental-otel-enabled",
             "--experimental-otel-endpoint=https://localhost:4318",
+            "--experimental-otel-metrics-run-summary=false",
+            "--experimental-otel-timeout-ms=1000",
         ],
         &[("TURBO_CACHE_DIR", ".turbo/cache-experimental-otel")],
     );

@@ -1,0 +1,2064 @@
+---
+source: crates/turborepo-trace-lang-js/tests/resolve_dynamic.rs
+expression: run.json(&run.root)
+---
+{
+  "version": 1,
+  "base": "<fixture>",
+  "entries": [
+    {
+      "path": "main.js",
+      "files": [
+        "main.js",
+        "node_modules/.prisma/client/index.js",
+        "node_modules/.prisma/client/libquery_engine-debian-openssl-3.0.x.so.node",
+        "node_modules/.prisma/client/package.json",
+        "node_modules/.prisma/client/schema.prisma",
+        "node_modules/@esbuild/linux-x64/bin/esbuild",
+        "node_modules/@esbuild/linux-x64/package.json",
+        "node_modules/@img/sharp-libvips-linux-x64/lib/libvips-cpp.so.42",
+        "node_modules/@img/sharp-libvips-linux-x64/package.json",
+        "node_modules/@img/sharp-libvips-linux-x64/versions.json",
+        "node_modules/@img/sharp-linux-x64/lib/sharp-linux-x64.node",
+        "node_modules/@img/sharp-linux-x64/package.json",
+        "node_modules/@mapbox/node-pre-gyp/lib/node-pre-gyp.js",
+        "node_modules/@mapbox/node-pre-gyp/package.json",
+        "node_modules/@msgpackr-extract/msgpackr-extract-linux-x64/node.abi115.node",
+        "node_modules/@msgpackr-extract/msgpackr-extract-linux-x64/package.json",
+        "node_modules/@prisma/client/index.js",
+        "node_modules/@prisma/client/package.json",
+        "node_modules/abi-pkg/index.js",
+        "node_modules/abi-pkg/lib/binding/node-v115-linux-x64/abi.node",
+        "node_modules/abi-pkg/lib/binding/node-v127-linux-x64/abi.node",
+        "node_modules/abi-pkg/package.json",
+        "node_modules/better-sqlite3/build/Release/better_sqlite3.node",
+        "node_modules/better-sqlite3/build/Release/libhelper.so.1",
+        "node_modules/better-sqlite3/lib/binding.js",
+        "node_modules/better-sqlite3/lib/index.js",
+        "node_modules/better-sqlite3/package.json",
+        "node_modules/better-sqlite3/prebuilds/linux-x64.node",
+        "node_modules/bindings/bindings.js",
+        "node_modules/bindings/package.json",
+        "node_modules/direct-addon/build/Release/direct.node",
+        "node_modules/direct-addon/index.js",
+        "node_modules/direct-addon/lib/libdirect.so",
+        "node_modules/direct-addon/package.json",
+        "node_modules/esbuild/lib/main.js",
+        "node_modules/esbuild/package.json",
+        "node_modules/gyp-pkg/index.js",
+        "node_modules/gyp-pkg/package.json",
+        "node_modules/gyp-pkg/prebuilds/linux-x64/node.napi.glibc.node",
+        "node_modules/msgpackr-extract/index.js",
+        "node_modules/msgpackr-extract/package.json",
+        "node_modules/nobin-pkg/index.js",
+        "node_modules/nobin-pkg/package.json",
+        "node_modules/node-gyp-build-optional-packages/index.js",
+        "node_modules/node-gyp-build-optional-packages/package.json",
+        "node_modules/node-gyp-build/index.js",
+        "node_modules/node-gyp-build/package.json",
+        "node_modules/pregyp-pkg/lib/binding/napi-v6-linux-x64/addon.node",
+        "node_modules/pregyp-pkg/lib/index.js",
+        "node_modules/pregyp-pkg/package.json",
+        "node_modules/semver/index.js",
+        "node_modules/semver/package.json",
+        "node_modules/semver/preload.js",
+        "node_modules/sharp/lib/index.js",
+        "node_modules/sharp/lib/sharp.js",
+        "node_modules/sharp/package.json",
+        "package.json"
+      ]
+    }
+  ],
+  "files": [
+    {
+      "path": "main.js",
+      "reasons": [
+        "initial"
+      ],
+      "parents": [],
+      "parsed": true,
+      "lang": "js"
+    },
+    {
+      "path": "node_modules/.prisma/client/index.js",
+      "reasons": [
+        "dependency"
+      ],
+      "parents": [
+        "node_modules/@prisma/client/index.js"
+      ],
+      "parsed": true,
+      "lang": "js"
+    },
+    {
+      "path": "node_modules/.prisma/client/libquery_engine-debian-openssl-3.0.x.so.node",
+      "reasons": [
+        "asset"
+      ],
+      "parents": [
+        "node_modules/.prisma/client/index.js"
+      ],
+      "parsed": false
+    },
+    {
+      "path": "node_modules/.prisma/client/package.json",
+      "reasons": [
+        "manifest"
+      ],
+      "parents": [
+        "node_modules/.prisma/client/index.js",
+        "node_modules/@prisma/client/index.js"
+      ],
+      "parsed": false
+    },
+    {
+      "path": "node_modules/.prisma/client/schema.prisma",
+      "reasons": [
+        "asset"
+      ],
+      "parents": [
+        "node_modules/.prisma/client/index.js"
+      ],
+      "parsed": false
+    },
+    {
+      "path": "node_modules/@esbuild/linux-x64/bin/esbuild",
+      "reasons": [
+        "asset"
+      ],
+      "parents": [
+        "node_modules/esbuild/lib/main.js"
+      ],
+      "parsed": false
+    },
+    {
+      "path": "node_modules/@esbuild/linux-x64/package.json",
+      "reasons": [
+        "asset"
+      ],
+      "parents": [
+        "node_modules/esbuild/lib/main.js"
+      ],
+      "parsed": false
+    },
+    {
+      "path": "node_modules/@img/sharp-libvips-linux-x64/lib/libvips-cpp.so.42",
+      "reasons": [
+        "asset"
+      ],
+      "parents": [
+        "node_modules/sharp/lib/index.js"
+      ],
+      "parsed": false
+    },
+    {
+      "path": "node_modules/@img/sharp-libvips-linux-x64/package.json",
+      "reasons": [
+        "asset"
+      ],
+      "parents": [
+        "node_modules/sharp/lib/index.js"
+      ],
+      "parsed": false
+    },
+    {
+      "path": "node_modules/@img/sharp-libvips-linux-x64/versions.json",
+      "reasons": [
+        "asset"
+      ],
+      "parents": [
+        "node_modules/sharp/lib/index.js"
+      ],
+      "parsed": false
+    },
+    {
+      "path": "node_modules/@img/sharp-linux-x64/lib/sharp-linux-x64.node",
+      "reasons": [
+        "asset"
+      ],
+      "parents": [
+        "node_modules/sharp/lib/index.js"
+      ],
+      "parsed": false
+    },
+    {
+      "path": "node_modules/@img/sharp-linux-x64/package.json",
+      "reasons": [
+        "asset"
+      ],
+      "parents": [
+        "node_modules/sharp/lib/index.js"
+      ],
+      "parsed": false
+    },
+    {
+      "path": "node_modules/@mapbox/node-pre-gyp/lib/node-pre-gyp.js",
+      "reasons": [
+        "dependency"
+      ],
+      "parents": [
+        "node_modules/abi-pkg/index.js",
+        "node_modules/pregyp-pkg/lib/index.js"
+      ],
+      "parsed": true,
+      "lang": "js"
+    },
+    {
+      "path": "node_modules/@mapbox/node-pre-gyp/package.json",
+      "reasons": [
+        "manifest"
+      ],
+      "parents": [
+        "node_modules/@mapbox/node-pre-gyp/lib/node-pre-gyp.js",
+        "node_modules/abi-pkg/index.js",
+        "node_modules/pregyp-pkg/lib/index.js"
+      ],
+      "parsed": false
+    },
+    {
+      "path": "node_modules/@msgpackr-extract/msgpackr-extract-linux-x64/node.abi115.node",
+      "reasons": [
+        "asset"
+      ],
+      "parents": [
+        "node_modules/msgpackr-extract/index.js"
+      ],
+      "parsed": false
+    },
+    {
+      "path": "node_modules/@msgpackr-extract/msgpackr-extract-linux-x64/package.json",
+      "reasons": [
+        "asset"
+      ],
+      "parents": [
+        "node_modules/msgpackr-extract/index.js"
+      ],
+      "parsed": false
+    },
+    {
+      "path": "node_modules/@prisma/client/index.js",
+      "reasons": [
+        "dependency"
+      ],
+      "parents": [
+        "main.js"
+      ],
+      "parsed": true,
+      "lang": "js"
+    },
+    {
+      "path": "node_modules/@prisma/client/package.json",
+      "reasons": [
+        "manifest"
+      ],
+      "parents": [
+        "main.js",
+        "node_modules/@prisma/client/index.js"
+      ],
+      "parsed": false
+    },
+    {
+      "path": "node_modules/abi-pkg/index.js",
+      "reasons": [
+        "dependency"
+      ],
+      "parents": [
+        "main.js"
+      ],
+      "parsed": true,
+      "lang": "js"
+    },
+    {
+      "path": "node_modules/abi-pkg/lib/binding/node-v115-linux-x64/abi.node",
+      "reasons": [
+        "asset"
+      ],
+      "parents": [
+        "node_modules/abi-pkg/index.js"
+      ],
+      "parsed": false
+    },
+    {
+      "path": "node_modules/abi-pkg/lib/binding/node-v127-linux-x64/abi.node",
+      "reasons": [
+        "asset"
+      ],
+      "parents": [
+        "node_modules/abi-pkg/index.js"
+      ],
+      "parsed": false
+    },
+    {
+      "path": "node_modules/abi-pkg/package.json",
+      "reasons": [
+        "manifest"
+      ],
+      "parents": [
+        "main.js",
+        "node_modules/abi-pkg/index.js"
+      ],
+      "parsed": false
+    },
+    {
+      "path": "node_modules/better-sqlite3/build/Release/better_sqlite3.node",
+      "reasons": [
+        "asset"
+      ],
+      "parents": [
+        "node_modules/better-sqlite3/lib/binding.js",
+        "node_modules/better-sqlite3/lib/index.js"
+      ],
+      "parsed": false
+    },
+    {
+      "path": "node_modules/better-sqlite3/build/Release/libhelper.so.1",
+      "reasons": [
+        "sharedlib"
+      ],
+      "parents": [
+        "node_modules/better-sqlite3/lib/binding.js",
+        "node_modules/better-sqlite3/lib/index.js"
+      ],
+      "parsed": false
+    },
+    {
+      "path": "node_modules/better-sqlite3/lib/binding.js",
+      "reasons": [
+        "dependency"
+      ],
+      "parents": [
+        "node_modules/better-sqlite3/lib/index.js"
+      ],
+      "parsed": true,
+      "lang": "js"
+    },
+    {
+      "path": "node_modules/better-sqlite3/lib/index.js",
+      "reasons": [
+        "dependency"
+      ],
+      "parents": [
+        "main.js"
+      ],
+      "parsed": true,
+      "lang": "js"
+    },
+    {
+      "path": "node_modules/better-sqlite3/package.json",
+      "reasons": [
+        "manifest"
+      ],
+      "parents": [
+        "main.js",
+        "node_modules/better-sqlite3/lib/binding.js",
+        "node_modules/better-sqlite3/lib/index.js"
+      ],
+      "parsed": false
+    },
+    {
+      "path": "node_modules/better-sqlite3/prebuilds/linux-x64.node",
+      "reasons": [
+        "asset"
+      ],
+      "parents": [
+        "node_modules/better-sqlite3/lib/binding.js"
+      ],
+      "parsed": false
+    },
+    {
+      "path": "node_modules/bindings/bindings.js",
+      "reasons": [
+        "dependency"
+      ],
+      "parents": [
+        "node_modules/better-sqlite3/lib/index.js",
+        "node_modules/nobin-pkg/index.js"
+      ],
+      "parsed": true,
+      "lang": "js"
+    },
+    {
+      "path": "node_modules/bindings/package.json",
+      "reasons": [
+        "manifest"
+      ],
+      "parents": [
+        "node_modules/better-sqlite3/lib/index.js",
+        "node_modules/bindings/bindings.js",
+        "node_modules/nobin-pkg/index.js"
+      ],
+      "parsed": false
+    },
+    {
+      "path": "node_modules/direct-addon/build/Release/direct.node",
+      "reasons": [
+        "dependency"
+      ],
+      "parents": [
+        "node_modules/direct-addon/index.js"
+      ],
+      "parsed": false
+    },
+    {
+      "path": "node_modules/direct-addon/index.js",
+      "reasons": [
+        "dependency"
+      ],
+      "parents": [
+        "main.js"
+      ],
+      "parsed": true,
+      "lang": "js"
+    },
+    {
+      "path": "node_modules/direct-addon/lib/libdirect.so",
+      "reasons": [
+        "sharedlib"
+      ],
+      "parents": [
+        "node_modules/direct-addon/index.js"
+      ],
+      "parsed": false
+    },
+    {
+      "path": "node_modules/direct-addon/package.json",
+      "reasons": [
+        "manifest"
+      ],
+      "parents": [
+        "main.js",
+        "node_modules/direct-addon/index.js"
+      ],
+      "parsed": false
+    },
+    {
+      "path": "node_modules/esbuild/lib/main.js",
+      "reasons": [
+        "dependency"
+      ],
+      "parents": [
+        "main.js"
+      ],
+      "parsed": true,
+      "lang": "js"
+    },
+    {
+      "path": "node_modules/esbuild/package.json",
+      "reasons": [
+        "manifest"
+      ],
+      "parents": [
+        "main.js",
+        "node_modules/esbuild/lib/main.js"
+      ],
+      "parsed": false
+    },
+    {
+      "path": "node_modules/gyp-pkg/index.js",
+      "reasons": [
+        "dependency"
+      ],
+      "parents": [
+        "main.js"
+      ],
+      "parsed": true,
+      "lang": "js"
+    },
+    {
+      "path": "node_modules/gyp-pkg/package.json",
+      "reasons": [
+        "manifest"
+      ],
+      "parents": [
+        "main.js",
+        "node_modules/gyp-pkg/index.js"
+      ],
+      "parsed": false
+    },
+    {
+      "path": "node_modules/gyp-pkg/prebuilds/linux-x64/node.napi.glibc.node",
+      "reasons": [
+        "asset"
+      ],
+      "parents": [
+        "node_modules/gyp-pkg/index.js"
+      ],
+      "parsed": false
+    },
+    {
+      "path": "node_modules/msgpackr-extract/index.js",
+      "reasons": [
+        "dependency"
+      ],
+      "parents": [
+        "main.js"
+      ],
+      "parsed": true,
+      "lang": "js"
+    },
+    {
+      "path": "node_modules/msgpackr-extract/package.json",
+      "reasons": [
+        "manifest"
+      ],
+      "parents": [
+        "main.js",
+        "node_modules/msgpackr-extract/index.js"
+      ],
+      "parsed": false
+    },
+    {
+      "path": "node_modules/nobin-pkg/index.js",
+      "reasons": [
+        "dependency"
+      ],
+      "parents": [
+        "main.js"
+      ],
+      "parsed": true,
+      "lang": "js"
+    },
+    {
+      "path": "node_modules/nobin-pkg/package.json",
+      "reasons": [
+        "manifest"
+      ],
+      "parents": [
+        "main.js",
+        "node_modules/nobin-pkg/index.js"
+      ],
+      "parsed": false
+    },
+    {
+      "path": "node_modules/node-gyp-build-optional-packages/index.js",
+      "reasons": [
+        "dependency"
+      ],
+      "parents": [
+        "node_modules/msgpackr-extract/index.js"
+      ],
+      "parsed": true,
+      "lang": "js"
+    },
+    {
+      "path": "node_modules/node-gyp-build-optional-packages/package.json",
+      "reasons": [
+        "manifest"
+      ],
+      "parents": [
+        "node_modules/msgpackr-extract/index.js",
+        "node_modules/node-gyp-build-optional-packages/index.js"
+      ],
+      "parsed": false
+    },
+    {
+      "path": "node_modules/node-gyp-build/index.js",
+      "reasons": [
+        "dependency"
+      ],
+      "parents": [
+        "node_modules/gyp-pkg/index.js"
+      ],
+      "parsed": true,
+      "lang": "js"
+    },
+    {
+      "path": "node_modules/node-gyp-build/package.json",
+      "reasons": [
+        "manifest"
+      ],
+      "parents": [
+        "node_modules/gyp-pkg/index.js",
+        "node_modules/node-gyp-build/index.js"
+      ],
+      "parsed": false
+    },
+    {
+      "path": "node_modules/pregyp-pkg/lib/binding/napi-v6-linux-x64/addon.node",
+      "reasons": [
+        "asset"
+      ],
+      "parents": [
+        "node_modules/pregyp-pkg/lib/index.js"
+      ],
+      "parsed": false
+    },
+    {
+      "path": "node_modules/pregyp-pkg/lib/index.js",
+      "reasons": [
+        "dependency"
+      ],
+      "parents": [
+        "main.js"
+      ],
+      "parsed": true,
+      "lang": "js"
+    },
+    {
+      "path": "node_modules/pregyp-pkg/package.json",
+      "reasons": [
+        "manifest"
+      ],
+      "parents": [
+        "main.js",
+        "node_modules/pregyp-pkg/lib/index.js"
+      ],
+      "parsed": false
+    },
+    {
+      "path": "node_modules/semver/index.js",
+      "reasons": [
+        "dependency"
+      ],
+      "parents": [
+        "main.js"
+      ],
+      "parsed": true,
+      "lang": "js"
+    },
+    {
+      "path": "node_modules/semver/package.json",
+      "reasons": [
+        "manifest"
+      ],
+      "parents": [
+        "main.js",
+        "node_modules/semver/index.js"
+      ],
+      "parsed": false
+    },
+    {
+      "path": "node_modules/semver/preload.js",
+      "reasons": [
+        "asset"
+      ],
+      "parents": [
+        "node_modules/semver/index.js"
+      ],
+      "parsed": false
+    },
+    {
+      "path": "node_modules/sharp/lib/index.js",
+      "reasons": [
+        "dependency"
+      ],
+      "parents": [
+        "main.js"
+      ],
+      "parsed": true,
+      "lang": "js"
+    },
+    {
+      "path": "node_modules/sharp/lib/sharp.js",
+      "reasons": [
+        "dependency"
+      ],
+      "parents": [
+        "node_modules/sharp/lib/index.js"
+      ],
+      "parsed": true,
+      "lang": "js"
+    },
+    {
+      "path": "node_modules/sharp/package.json",
+      "reasons": [
+        "manifest"
+      ],
+      "parents": [
+        "main.js",
+        "node_modules/sharp/lib/index.js",
+        "node_modules/sharp/lib/sharp.js"
+      ],
+      "parsed": false
+    },
+    {
+      "path": "package.json",
+      "reasons": [
+        "manifest"
+      ],
+      "parents": [
+        "main.js"
+      ],
+      "parsed": false
+    }
+  ],
+  "edges": [
+    {
+      "from": "main.js",
+      "kind": "require",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "better-sqlite3",
+      "span": [
+        0,
+        25
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "node_modules/better-sqlite3/lib/index.js"
+      }
+    },
+    {
+      "from": "main.js",
+      "kind": "manifest",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "better-sqlite3",
+      "span": [
+        0,
+        25
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "node_modules/better-sqlite3/package.json"
+      }
+    },
+    {
+      "from": "main.js",
+      "kind": "manifest",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "better-sqlite3",
+      "span": [
+        0,
+        25
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "package.json"
+      }
+    },
+    {
+      "from": "main.js",
+      "kind": "require",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "gyp-pkg",
+      "span": [
+        27,
+        45
+      ],
+      "line": 2,
+      "target": {
+        "type": "file",
+        "path": "node_modules/gyp-pkg/index.js"
+      }
+    },
+    {
+      "from": "main.js",
+      "kind": "manifest",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "gyp-pkg",
+      "span": [
+        27,
+        45
+      ],
+      "line": 2,
+      "target": {
+        "type": "file",
+        "path": "node_modules/gyp-pkg/package.json"
+      }
+    },
+    {
+      "from": "main.js",
+      "kind": "require",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "pregyp-pkg",
+      "span": [
+        47,
+        68
+      ],
+      "line": 3,
+      "target": {
+        "type": "file",
+        "path": "node_modules/pregyp-pkg/lib/index.js"
+      }
+    },
+    {
+      "from": "main.js",
+      "kind": "manifest",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "pregyp-pkg",
+      "span": [
+        47,
+        68
+      ],
+      "line": 3,
+      "target": {
+        "type": "file",
+        "path": "node_modules/pregyp-pkg/package.json"
+      }
+    },
+    {
+      "from": "main.js",
+      "kind": "require",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "abi-pkg",
+      "span": [
+        70,
+        88
+      ],
+      "line": 4,
+      "target": {
+        "type": "file",
+        "path": "node_modules/abi-pkg/index.js"
+      }
+    },
+    {
+      "from": "main.js",
+      "kind": "manifest",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "abi-pkg",
+      "span": [
+        70,
+        88
+      ],
+      "line": 4,
+      "target": {
+        "type": "file",
+        "path": "node_modules/abi-pkg/package.json"
+      }
+    },
+    {
+      "from": "main.js",
+      "kind": "require",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "sharp",
+      "span": [
+        90,
+        106
+      ],
+      "line": 5,
+      "target": {
+        "type": "file",
+        "path": "node_modules/sharp/lib/index.js"
+      }
+    },
+    {
+      "from": "main.js",
+      "kind": "manifest",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "sharp",
+      "span": [
+        90,
+        106
+      ],
+      "line": 5,
+      "target": {
+        "type": "file",
+        "path": "node_modules/sharp/package.json"
+      }
+    },
+    {
+      "from": "main.js",
+      "kind": "require",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "esbuild",
+      "span": [
+        108,
+        126
+      ],
+      "line": 6,
+      "target": {
+        "type": "file",
+        "path": "node_modules/esbuild/lib/main.js"
+      }
+    },
+    {
+      "from": "main.js",
+      "kind": "manifest",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "esbuild",
+      "span": [
+        108,
+        126
+      ],
+      "line": 6,
+      "target": {
+        "type": "file",
+        "path": "node_modules/esbuild/package.json"
+      }
+    },
+    {
+      "from": "main.js",
+      "kind": "require",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "@prisma/client",
+      "span": [
+        128,
+        153
+      ],
+      "line": 7,
+      "target": {
+        "type": "file",
+        "path": "node_modules/@prisma/client/index.js"
+      }
+    },
+    {
+      "from": "main.js",
+      "kind": "manifest",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "@prisma/client",
+      "span": [
+        128,
+        153
+      ],
+      "line": 7,
+      "target": {
+        "type": "file",
+        "path": "node_modules/@prisma/client/package.json"
+      }
+    },
+    {
+      "from": "main.js",
+      "kind": "require",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "msgpackr-extract",
+      "span": [
+        155,
+        182
+      ],
+      "line": 8,
+      "target": {
+        "type": "file",
+        "path": "node_modules/msgpackr-extract/index.js"
+      }
+    },
+    {
+      "from": "main.js",
+      "kind": "manifest",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "msgpackr-extract",
+      "span": [
+        155,
+        182
+      ],
+      "line": 8,
+      "target": {
+        "type": "file",
+        "path": "node_modules/msgpackr-extract/package.json"
+      }
+    },
+    {
+      "from": "main.js",
+      "kind": "require",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "semver",
+      "span": [
+        184,
+        201
+      ],
+      "line": 9,
+      "target": {
+        "type": "file",
+        "path": "node_modules/semver/index.js"
+      }
+    },
+    {
+      "from": "main.js",
+      "kind": "manifest",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "semver",
+      "span": [
+        184,
+        201
+      ],
+      "line": 9,
+      "target": {
+        "type": "file",
+        "path": "node_modules/semver/package.json"
+      }
+    },
+    {
+      "from": "main.js",
+      "kind": "require",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "direct-addon",
+      "span": [
+        203,
+        226
+      ],
+      "line": 10,
+      "target": {
+        "type": "file",
+        "path": "node_modules/direct-addon/index.js"
+      }
+    },
+    {
+      "from": "main.js",
+      "kind": "manifest",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "direct-addon",
+      "span": [
+        203,
+        226
+      ],
+      "line": 10,
+      "target": {
+        "type": "file",
+        "path": "node_modules/direct-addon/package.json"
+      }
+    },
+    {
+      "from": "main.js",
+      "kind": "require",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "nobin-pkg",
+      "span": [
+        228,
+        248
+      ],
+      "line": 11,
+      "target": {
+        "type": "file",
+        "path": "node_modules/nobin-pkg/index.js"
+      }
+    },
+    {
+      "from": "main.js",
+      "kind": "manifest",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "nobin-pkg",
+      "span": [
+        228,
+        248
+      ],
+      "line": 11,
+      "target": {
+        "type": "file",
+        "path": "node_modules/nobin-pkg/package.json"
+      }
+    },
+    {
+      "from": "node_modules/.prisma/client/index.js",
+      "kind": "asset",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "special-case prisma: schema.prisma",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "node_modules/.prisma/client/schema.prisma"
+      }
+    },
+    {
+      "from": "node_modules/.prisma/client/index.js",
+      "kind": "native_addon",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "special-case prisma: libquery_engine-debian-openssl-3.0.x.so.node",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "node_modules/.prisma/client/libquery_engine-debian-openssl-3.0.x.so.node"
+      }
+    },
+    {
+      "from": "node_modules/.prisma/client/index.js",
+      "kind": "manifest",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "package.json scope",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "node_modules/.prisma/client/package.json"
+      }
+    },
+    {
+      "from": "node_modules/@mapbox/node-pre-gyp/lib/node-pre-gyp.js",
+      "kind": "manifest",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "package.json scope",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "node_modules/@mapbox/node-pre-gyp/package.json"
+      }
+    },
+    {
+      "from": "node_modules/@prisma/client/index.js",
+      "kind": "require",
+      "phase": "runtime",
+      "flags": [],
+      "spec": ".prisma/client/index",
+      "span": [
+        17,
+        48
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "node_modules/.prisma/client/index.js"
+      }
+    },
+    {
+      "from": "node_modules/@prisma/client/index.js",
+      "kind": "manifest",
+      "phase": "runtime",
+      "flags": [],
+      "spec": ".prisma/client/index",
+      "span": [
+        17,
+        48
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "node_modules/.prisma/client/package.json"
+      }
+    },
+    {
+      "from": "node_modules/@prisma/client/index.js",
+      "kind": "manifest",
+      "phase": "runtime",
+      "flags": [],
+      "spec": ".prisma/client/index",
+      "span": [
+        17,
+        48
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "node_modules/@prisma/client/package.json"
+      }
+    },
+    {
+      "from": "node_modules/abi-pkg/index.js",
+      "kind": "require",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "@mapbox/node-pre-gyp",
+      "span": [
+        15,
+        46
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "node_modules/@mapbox/node-pre-gyp/lib/node-pre-gyp.js"
+      }
+    },
+    {
+      "from": "node_modules/abi-pkg/index.js",
+      "kind": "native_addon",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "special-case @mapbox/node-pre-gyp: lib/binding/*-linux-x64/abi.node",
+      "span": [
+        15,
+        46
+      ],
+      "line": 1,
+      "target": {
+        "type": "glob",
+        "pattern": "node_modules/abi-pkg/lib/binding/*-linux-x64/abi.node",
+        "matches": [
+          "node_modules/abi-pkg/lib/binding/node-v115-linux-x64/abi.node",
+          "node_modules/abi-pkg/lib/binding/node-v127-linux-x64/abi.node"
+        ],
+        "truncated": false
+      },
+      "uncertainty": "partial_specifier"
+    },
+    {
+      "from": "node_modules/abi-pkg/index.js",
+      "kind": "manifest",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "@mapbox/node-pre-gyp",
+      "span": [
+        15,
+        46
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "node_modules/@mapbox/node-pre-gyp/package.json"
+      }
+    },
+    {
+      "from": "node_modules/abi-pkg/index.js",
+      "kind": "manifest",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "@mapbox/node-pre-gyp",
+      "span": [
+        15,
+        46
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "node_modules/abi-pkg/package.json"
+      }
+    },
+    {
+      "from": "node_modules/better-sqlite3/lib/binding.js",
+      "kind": "native_addon",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "special-case better-sqlite3: ../build/Release/better_sqlite3.node",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "glob",
+        "pattern": "node_modules/better-sqlite3/build/Release/better_sqlite3.node",
+        "matches": [
+          "node_modules/better-sqlite3/build/Release/better_sqlite3.node"
+        ],
+        "truncated": false
+      }
+    },
+    {
+      "from": "node_modules/better-sqlite3/lib/binding.js",
+      "kind": "native_addon",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "special-case better-sqlite3: ../prebuilds/linux-x64.node",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "glob",
+        "pattern": "node_modules/better-sqlite3/prebuilds/linux-x64.node",
+        "matches": [
+          "node_modules/better-sqlite3/prebuilds/linux-x64.node"
+        ],
+        "truncated": false
+      }
+    },
+    {
+      "from": "node_modules/better-sqlite3/lib/binding.js",
+      "kind": "shared_lib",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "special-case sharedlib: better-sqlite3",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "glob",
+        "pattern": "node_modules/better-sqlite3/**/*.{so,so.*,dylib}",
+        "matches": [
+          "node_modules/better-sqlite3/build/Release/libhelper.so.1"
+        ],
+        "truncated": false
+      }
+    },
+    {
+      "from": "node_modules/better-sqlite3/lib/binding.js",
+      "kind": "manifest",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "package.json scope",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "node_modules/better-sqlite3/package.json"
+      }
+    },
+    {
+      "from": "node_modules/better-sqlite3/lib/binding.js",
+      "kind": "require",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "<unknown>",
+      "span": [
+        123,
+        140
+      ],
+      "line": 3,
+      "target": {
+        "type": "unresolved"
+      },
+      "uncertainty": "computed_specifier"
+    },
+    {
+      "from": "node_modules/better-sqlite3/lib/index.js",
+      "kind": "require",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "./binding",
+      "span": [
+        16,
+        36
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "node_modules/better-sqlite3/lib/binding.js"
+      }
+    },
+    {
+      "from": "node_modules/better-sqlite3/lib/index.js",
+      "kind": "require",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "bindings",
+      "span": [
+        52,
+        71
+      ],
+      "line": 2,
+      "target": {
+        "type": "file",
+        "path": "node_modules/bindings/bindings.js"
+      }
+    },
+    {
+      "from": "node_modules/better-sqlite3/lib/index.js",
+      "kind": "native_addon",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "special-case bindings: build/Release/*.node",
+      "span": [
+        52,
+        71
+      ],
+      "line": 2,
+      "target": {
+        "type": "glob",
+        "pattern": "node_modules/better-sqlite3/build/Release/*.node",
+        "matches": [
+          "node_modules/better-sqlite3/build/Release/better_sqlite3.node"
+        ],
+        "truncated": false
+      }
+    },
+    {
+      "from": "node_modules/better-sqlite3/lib/index.js",
+      "kind": "shared_lib",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "special-case sharedlib: better-sqlite3",
+      "span": [
+        52,
+        71
+      ],
+      "line": 2,
+      "target": {
+        "type": "glob",
+        "pattern": "node_modules/better-sqlite3/**/*.{so,so.*,dylib}",
+        "matches": [
+          "node_modules/better-sqlite3/build/Release/libhelper.so.1"
+        ],
+        "truncated": false
+      }
+    },
+    {
+      "from": "node_modules/better-sqlite3/lib/index.js",
+      "kind": "manifest",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "bindings",
+      "span": [
+        52,
+        71
+      ],
+      "line": 2,
+      "target": {
+        "type": "file",
+        "path": "node_modules/better-sqlite3/package.json"
+      }
+    },
+    {
+      "from": "node_modules/better-sqlite3/lib/index.js",
+      "kind": "manifest",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "bindings",
+      "span": [
+        52,
+        71
+      ],
+      "line": 2,
+      "target": {
+        "type": "file",
+        "path": "node_modules/bindings/package.json"
+      }
+    },
+    {
+      "from": "node_modules/bindings/bindings.js",
+      "kind": "manifest",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "package.json scope",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "node_modules/bindings/package.json"
+      }
+    },
+    {
+      "from": "node_modules/direct-addon/index.js",
+      "kind": "require",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "./build/Release/direct.node",
+      "span": [
+        17,
+        55
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "node_modules/direct-addon/build/Release/direct.node"
+      }
+    },
+    {
+      "from": "node_modules/direct-addon/index.js",
+      "kind": "shared_lib",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "special-case sharedlib: direct-addon",
+      "span": [
+        17,
+        55
+      ],
+      "line": 1,
+      "target": {
+        "type": "glob",
+        "pattern": "node_modules/direct-addon/**/*.{so,so.*,dylib}",
+        "matches": [
+          "node_modules/direct-addon/lib/libdirect.so"
+        ],
+        "truncated": false
+      }
+    },
+    {
+      "from": "node_modules/direct-addon/index.js",
+      "kind": "manifest",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "./build/Release/direct.node",
+      "span": [
+        17,
+        55
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "node_modules/direct-addon/package.json"
+      }
+    },
+    {
+      "from": "node_modules/esbuild/lib/main.js",
+      "kind": "asset",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "special-case esbuild: optional dependency @esbuild/linux-x64",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "glob",
+        "pattern": "node_modules/@esbuild/linux-x64/**",
+        "matches": [
+          "node_modules/@esbuild/linux-x64/bin/esbuild",
+          "node_modules/@esbuild/linux-x64/package.json"
+        ],
+        "truncated": false
+      }
+    },
+    {
+      "from": "node_modules/esbuild/lib/main.js",
+      "kind": "manifest",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "package.json scope",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "node_modules/esbuild/package.json"
+      }
+    },
+    {
+      "from": "node_modules/gyp-pkg/index.js",
+      "kind": "require",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "node-gyp-build",
+      "span": [
+        17,
+        42
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "node_modules/node-gyp-build/index.js"
+      }
+    },
+    {
+      "from": "node_modules/gyp-pkg/index.js",
+      "kind": "native_addon",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "special-case node-gyp-build: prebuilds/linux-x64/*.node",
+      "span": [
+        17,
+        42
+      ],
+      "line": 1,
+      "target": {
+        "type": "glob",
+        "pattern": "node_modules/gyp-pkg/prebuilds/linux-x64/*.node",
+        "matches": [
+          "node_modules/gyp-pkg/prebuilds/linux-x64/node.napi.glibc.node"
+        ],
+        "truncated": false
+      }
+    },
+    {
+      "from": "node_modules/gyp-pkg/index.js",
+      "kind": "manifest",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "node-gyp-build",
+      "span": [
+        17,
+        42
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "node_modules/gyp-pkg/package.json"
+      }
+    },
+    {
+      "from": "node_modules/gyp-pkg/index.js",
+      "kind": "manifest",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "node-gyp-build",
+      "span": [
+        17,
+        42
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "node_modules/node-gyp-build/package.json"
+      }
+    },
+    {
+      "from": "node_modules/msgpackr-extract/index.js",
+      "kind": "require",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "node-gyp-build-optional-packages",
+      "span": [
+        17,
+        60
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "node_modules/node-gyp-build-optional-packages/index.js"
+      }
+    },
+    {
+      "from": "node_modules/msgpackr-extract/index.js",
+      "kind": "native_addon",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "special-case node-gyp-build-optional-packages: optional package @msgpackr-extract/msgpackr-extract-linux-x64",
+      "span": [
+        17,
+        60
+      ],
+      "line": 1,
+      "target": {
+        "type": "glob",
+        "pattern": "node_modules/@msgpackr-extract/msgpackr-extract-linux-x64/**",
+        "matches": [
+          "node_modules/@msgpackr-extract/msgpackr-extract-linux-x64/node.abi115.node",
+          "node_modules/@msgpackr-extract/msgpackr-extract-linux-x64/package.json"
+        ],
+        "truncated": false
+      }
+    },
+    {
+      "from": "node_modules/msgpackr-extract/index.js",
+      "kind": "manifest",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "node-gyp-build-optional-packages",
+      "span": [
+        17,
+        60
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "node_modules/msgpackr-extract/package.json"
+      }
+    },
+    {
+      "from": "node_modules/msgpackr-extract/index.js",
+      "kind": "manifest",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "node-gyp-build-optional-packages",
+      "span": [
+        17,
+        60
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "node_modules/node-gyp-build-optional-packages/package.json"
+      }
+    },
+    {
+      "from": "node_modules/nobin-pkg/index.js",
+      "kind": "require",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "bindings",
+      "span": [
+        17,
+        36
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "node_modules/bindings/bindings.js"
+      }
+    },
+    {
+      "from": "node_modules/nobin-pkg/index.js",
+      "kind": "native_addon",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "special-case bindings: native addon",
+      "span": [
+        17,
+        36
+      ],
+      "line": 1,
+      "target": {
+        "type": "unresolved"
+      },
+      "uncertainty": "unresolved_specifier"
+    },
+    {
+      "from": "node_modules/nobin-pkg/index.js",
+      "kind": "manifest",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "bindings",
+      "span": [
+        17,
+        36
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "node_modules/bindings/package.json"
+      }
+    },
+    {
+      "from": "node_modules/nobin-pkg/index.js",
+      "kind": "manifest",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "bindings",
+      "span": [
+        17,
+        36
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "node_modules/nobin-pkg/package.json"
+      }
+    },
+    {
+      "from": "node_modules/node-gyp-build-optional-packages/index.js",
+      "kind": "manifest",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "package.json scope",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "node_modules/node-gyp-build-optional-packages/package.json"
+      }
+    },
+    {
+      "from": "node_modules/node-gyp-build/index.js",
+      "kind": "manifest",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "package.json scope",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "node_modules/node-gyp-build/package.json"
+      }
+    },
+    {
+      "from": "node_modules/pregyp-pkg/lib/index.js",
+      "kind": "require",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "@mapbox/node-pre-gyp",
+      "span": [
+        15,
+        46
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "node_modules/@mapbox/node-pre-gyp/lib/node-pre-gyp.js"
+      }
+    },
+    {
+      "from": "node_modules/pregyp-pkg/lib/index.js",
+      "kind": "native_addon",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "special-case @mapbox/node-pre-gyp: lib/binding/napi-v6-linux-x64/addon.node",
+      "span": [
+        15,
+        46
+      ],
+      "line": 1,
+      "target": {
+        "type": "glob",
+        "pattern": "node_modules/pregyp-pkg/lib/binding/napi-v6-linux-x64/addon.node",
+        "matches": [
+          "node_modules/pregyp-pkg/lib/binding/napi-v6-linux-x64/addon.node"
+        ],
+        "truncated": false
+      }
+    },
+    {
+      "from": "node_modules/pregyp-pkg/lib/index.js",
+      "kind": "manifest",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "@mapbox/node-pre-gyp",
+      "span": [
+        15,
+        46
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "node_modules/@mapbox/node-pre-gyp/package.json"
+      }
+    },
+    {
+      "from": "node_modules/pregyp-pkg/lib/index.js",
+      "kind": "manifest",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "@mapbox/node-pre-gyp",
+      "span": [
+        15,
+        46
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "node_modules/pregyp-pkg/package.json"
+      }
+    },
+    {
+      "from": "node_modules/pregyp-pkg/lib/index.js",
+      "kind": "require",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "<unknown>",
+      "span": [
+        143,
+        153
+      ],
+      "line": 3,
+      "target": {
+        "type": "unresolved"
+      },
+      "uncertainty": "computed_specifier"
+    },
+    {
+      "from": "node_modules/semver/index.js",
+      "kind": "asset",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "special-case semver: preload.js",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "node_modules/semver/preload.js"
+      }
+    },
+    {
+      "from": "node_modules/semver/index.js",
+      "kind": "manifest",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "package.json scope",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "node_modules/semver/package.json"
+      }
+    },
+    {
+      "from": "node_modules/sharp/lib/index.js",
+      "kind": "asset",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "special-case sharp: optional dependency @img/sharp-libvips-linux-x64",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "glob",
+        "pattern": "node_modules/@img/sharp-libvips-linux-x64/**",
+        "matches": [
+          "node_modules/@img/sharp-libvips-linux-x64/lib/libvips-cpp.so.42",
+          "node_modules/@img/sharp-libvips-linux-x64/package.json",
+          "node_modules/@img/sharp-libvips-linux-x64/versions.json"
+        ],
+        "truncated": false
+      }
+    },
+    {
+      "from": "node_modules/sharp/lib/index.js",
+      "kind": "asset",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "special-case sharp: optional dependency @img/sharp-linux-x64",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "glob",
+        "pattern": "node_modules/@img/sharp-linux-x64/**",
+        "matches": [
+          "node_modules/@img/sharp-linux-x64/lib/sharp-linux-x64.node",
+          "node_modules/@img/sharp-linux-x64/package.json"
+        ],
+        "truncated": false
+      }
+    },
+    {
+      "from": "node_modules/sharp/lib/index.js",
+      "kind": "require",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "./sharp",
+      "span": [
+        17,
+        35
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "node_modules/sharp/lib/sharp.js"
+      }
+    },
+    {
+      "from": "node_modules/sharp/lib/index.js",
+      "kind": "manifest",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "./sharp",
+      "span": [
+        17,
+        35
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "node_modules/sharp/package.json"
+      }
+    },
+    {
+      "from": "node_modules/sharp/lib/sharp.js",
+      "kind": "manifest",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "package.json scope",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "node_modules/sharp/package.json"
+      }
+    },
+    {
+      "from": "node_modules/sharp/lib/sharp.js",
+      "kind": "require",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "@img/sharp-*/sharp.node",
+      "span": [
+        17,
+        68
+      ],
+      "line": 1,
+      "target": {
+        "type": "unresolved"
+      },
+      "uncertainty": "pattern_too_broad"
+    }
+  ],
+  "uncertainties": [
+    {
+      "file": "node_modules/abi-pkg/index.js",
+      "kind": "partial_specifier",
+      "detail": "@mapbox/node-pre-gyp: binary.module_path placeholders not known statically: node_abi",
+      "spec": "special-case @mapbox/node-pre-gyp: lib/binding/*-linux-x64/abi.node",
+      "span": [
+        15,
+        46
+      ],
+      "line": 1,
+      "col": 16
+    },
+    {
+      "file": "node_modules/better-sqlite3/lib/binding.js",
+      "kind": "computed_specifier",
+      "detail": "computed specifier <unknown>",
+      "spec": "<unknown>",
+      "span": [
+        123,
+        140
+      ],
+      "line": 3,
+      "col": 18
+    },
+    {
+      "file": "node_modules/nobin-pkg/index.js",
+      "kind": "unresolved_specifier",
+      "detail": "bindings: no native addon for linux-x64 found in <fixture>/node_modules/nobin-pkg (searched build/*.node, build/Debug/*.node, build/Release/*.node, out/Debug/*.node, Debug/*.node, out/Release/*.node, Release/*.node, build/default/*.node, compiled/*/linux/x64/*.node, addon-build/release/install-root/*.node, addon-build/debug/install-root/*.node, addon-build/default/install-root/*.node, lib/binding/node-v*-linux-x64/*.node)",
+      "spec": "special-case bindings: native addon",
+      "span": [
+        17,
+        36
+      ],
+      "line": 1,
+      "col": 18
+    },
+    {
+      "file": "node_modules/pregyp-pkg/lib/index.js",
+      "kind": "computed_specifier",
+      "detail": "computed specifier <unknown>",
+      "spec": "<unknown>",
+      "span": [
+        143,
+        153
+      ],
+      "line": 3,
+      "col": 18
+    },
+    {
+      "file": "node_modules/sharp/lib/sharp.js",
+      "kind": "pattern_too_broad",
+      "detail": "runtimePlatform; pattern @img/sharp-*/sharp.node: package name not known statically; not expanded",
+      "spec": "@img/sharp-*/sharp.node",
+      "span": [
+        17,
+        68
+      ],
+      "line": 1,
+      "col": 18
+    }
+  ],
+  "symlinks": {},
+  "stats": {
+    "entries": 1,
+    "files": 57,
+    "parsed_files": 19,
+    "edges": 78,
+    "uncertainties": 5
+  }
+}

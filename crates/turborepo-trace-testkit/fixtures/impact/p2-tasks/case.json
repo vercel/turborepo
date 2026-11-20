@@ -1,0 +1,40 @@
+{
+  "description": "P2 task sources (§19): a Taskfile task with declared `sources`/`generates` (src/generated/schema.js), an npm script running a shell script that sources a helper by a script-relative path (src/generated/client.js), and a Taskfile task running the cargo `xtask` alias (src/generated/version.js, written by Rust code). Generated files are gitignored; the oracle never runs generators, so the tests that load them are declared with expect_affected.",
+  "mutations": [
+    {
+      "name": "taskfile-sources-edit",
+      "description": "edit a schema matched only by the Taskfile task's `sources: [schema/*.json]` (the generator lists the directory at run time)",
+      "ops": [{ "op": "replace", "path": "schema/api.json", "find": "\"api\"", "with": "\"api v2\"" }],
+      "expect_affected": ["test/schema.test.js"]
+    },
+    {
+      "name": "taskfile-sources-add",
+      "description": "add a schema file: a new member of `schema/*.json`",
+      "ops": [{ "op": "write", "path": "schema/users.json", "content": "{ \"title\": \"users\" }\n" }],
+      "expect_affected": ["test/schema.test.js"]
+    },
+    {
+      "name": "sourced-shell-edit",
+      "description": "edit tools/sh/env.sh, sourced by scripts/gen-client.sh through \"$(dirname \"$0\")/../tools/sh/env.sh\"",
+      "ops": [{ "op": "replace", "path": "tools/sh/env.sh", "find": "CLIENT_NAME=api", "with": "CLIENT_NAME=api2" }],
+      "expect_affected": ["test/client.test.js"]
+    },
+    {
+      "name": "xtask-source-edit",
+      "description": "edit xtask/src/codegen.rs, a module of the xtask crate run by `cargo xtask codegen`",
+      "ops": [{ "op": "replace", "path": "xtask/src/codegen.rs", "find": "\"1.0.0\"", "with": "\"1.0.1\"" }],
+      "expect_affected": ["test/version.test.js"]
+    },
+    {
+      "name": "taskfile-edit",
+      "description": "edit the Taskfile itself (a config of its tasks)",
+      "ops": [{ "op": "replace", "path": "Taskfile.yml", "find": "node scripts/gen-schema.js", "with": "node scripts/gen-schema.js --pretty" }],
+      "expect_affected": ["test/schema.test.js", "test/version.test.js"]
+    },
+    {
+      "name": "edit-plain",
+      "description": "control: edit a source no generator reads",
+      "ops": [{ "op": "append", "path": "src/plain.js", "text": "\n// edited\n" }]
+    }
+  ]
+}

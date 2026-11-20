@@ -13,28 +13,28 @@ use std::{
     sync::{Arc, RwLock, RwLockReadGuard, RwLockWriteGuard},
 };
 
+use dashmap::DashMap;
 pub use global_hash::*;
 use rayon::prelude::*;
 use serde::Serialize;
 use thiserror::Error;
 use tracing::debug;
 use turbopath::{
-    AbsoluteSystemPath, AnchoredSystemPath, AnchoredSystemPathBuf, RelativeUnixPathBuf,
+    AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPath, AnchoredSystemPathBuf,
+    RelativeUnixPathBuf,
 };
 use turborepo_cache::CacheHitMetadata;
 use turborepo_engine::TaskNode;
-use turborepo_env::{
-    BUILTIN_PASS_THROUGH_ENV, BySource, CompiledWildcards, DetailedMap, EnvironmentVariableMap,
-};
+use turborepo_env::{BySource, DetailedMap, EnvironmentVariableMap, WildcardMapCache};
 use turborepo_frameworks::{Framework, Slug as FrameworkSlug, infer_framework};
-use turborepo_hash::{FileHashes, LockFilePackagesRef, TaskHashable, TurboHash};
-use turborepo_repository::package_graph::{PackageInfo, PackageName};
+use turborepo_hash::{FileHashes, TaskHashable, TurboHash};
+use turborepo_repository::package_graph::{PackageGraph, PackageName, PackageTaskContext};
 use turborepo_scm::{RepoGitIndex, SCM};
 use turborepo_task_id::TaskId;
-use turborepo_telemetry::events::{generic::GenericEventBuilder, task::PackageTaskEventBuilder};
+use turborepo_telemetry::events::task::PackageTaskEventBuilder;
 use turborepo_types::{
-    EnvMode, HashTrackerCacheHitMetadata, HashTrackerDetailedMap, HashTrackerInfo, RunOptsHashInfo,
-    TaskDefinitionHashInfo, TaskInputs,
+    EffectiveTaskInputs, EnvMode, HashTrackerCacheHitMetadata, HashTrackerDetailedMap,
+    HashTrackerInfo, RunOptsHashInfo, TaskCommandOverride, TaskDefinitionHashInfo, TaskInputs,
 };
 
 fn env_var_names_for_debug_log(env_vars: &EnvironmentVariableMap) -> Vec<String> {
@@ -45,8 +45,23 @@ fn env_var_names_for_debug_log(env_vars: &EnvironmentVariableMap) -> Vec<String>
 pub enum Error {
     #[error("Missing pipeline entry: {0}")]
     MissingPipelineEntry(TaskId<'static>),
-    #[error("Missing package.json for {0}.")]
-    MissingPackageJson(String),
+    #[error("Missing authoritative package task context for {0}.")]
+    MissingPackageContext(String),
+    #[error("Task {task_id} does not belong to package context {package}.")]
+    TaskPackageMismatch {
+        task_id: TaskId<'static>,
+        package: PackageName,
+    },
+    #[error("Missing external dependency fingerprint for {0}.")]
+    MissingExternalDependencyHash(PackageName),
+    #[error(
+        "Package context repository root {context_root} does not match hashing repository root \
+         {repo_root}."
+    )]
+    ContextRepositoryRootMismatch {
+        context_root: AbsoluteSystemPathBuf,
+        repo_root: AbsoluteSystemPathBuf,
+    },
     #[error("Cannot find package-file hash for {0}.")]
     MissingPackageFileHash(String),
     #[error("Missing hash for dependent task {0}.")]
@@ -69,14 +84,12 @@ pub enum Error {
     #[error(transparent)]
     Env(#[from] turborepo_env::Error),
     #[error(transparent)]
-    Regex(#[from] regex::Error),
-    #[error(transparent)]
     Path(#[from] turbopath::PathError),
     #[error(transparent)]
     Hash(#[from] turborepo_hash::Error),
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub struct PackageInputsHashes {
     hashes: HashMap<TaskId<'static>, String>,
     expanded_hashes: HashMap<TaskId<'static>, Arc<FileHashes>>,
@@ -86,29 +99,55 @@ pub const JIT_DEFERRED_TASK_HASH_MESSAGE: &str = "Deferred because JIT hashing m
 pub const DEPENDENCY_OUTPUTS_DEFERRED_TASK_HASH_MESSAGE: &str =
     "Deferred because dependencyOutputs hashing mode was used.";
 
+fn validate_task_context(
+    task_id: &TaskId<'static>,
+    package_context: &PackageTaskContext<'_>,
+    repository_root: &AbsoluteSystemPath,
+) -> Result<(), Error> {
+    if package_context.repository_root() != repository_root {
+        return Err(Error::ContextRepositoryRootMismatch {
+            context_root: package_context.repository_root().to_owned(),
+            repo_root: repository_root.to_owned(),
+        });
+    }
+    let task_package = task_id.to_workspace_name();
+    if &task_package == package_context.package() {
+        Ok(())
+    } else {
+        Err(Error::TaskPackageMismatch {
+            task_id: task_id.clone(),
+            package: package_context.package().clone(),
+        })
+    }
+}
+
 impl PackageInputsHashes {
     #[tracing::instrument(skip(
         all_tasks,
-        workspaces,
+        package_graph,
         task_definitions,
         repo_root,
         scm,
-        _telemetry,
         pre_built_index
     ))]
     pub fn calculate_file_hashes<'a, T>(
         scm: &SCM,
         all_tasks: impl Iterator<Item = &'a TaskNode>,
-        workspaces: HashMap<&PackageName, &PackageInfo>,
+        package_graph: &PackageGraph,
         task_definitions: &HashMap<TaskId<'static>, T>,
         repo_root: &AbsoluteSystemPath,
-        _telemetry: &GenericEventBuilder,
         pre_built_index: Option<&RepoGitIndex>,
         needs_expanded_hashes: bool,
     ) -> Result<PackageInputsHashes, Error>
     where
         T: TaskDefinitionHashInfo + Sync,
     {
+        if package_graph.repo_root() != repo_root {
+            return Err(Error::ContextRepositoryRootMismatch {
+                context_root: package_graph.repo_root().to_owned(),
+                repo_root: repo_root.to_owned(),
+            });
+        }
         tracing::trace!(scm_manual=%scm.is_manual(), "scm running in {} mode", if scm.is_manual() { "manual" } else { "git" });
 
         // Use the pre-built index if provided, otherwise build one on the spot.
@@ -116,20 +155,18 @@ impl PackageInputsHashes {
         let repo_index = match pre_built_index {
             Some(idx) => Some(idx),
             None => {
-                owned_index = scm.build_repo_index(workspaces.len());
+                owned_index = scm.build_repo_index(package_graph.len());
                 owned_index.as_ref()
             }
         };
 
-        // Phase 1: Collect task metadata and group by (package_path, inputs) for dedup.
-        // Multiple tasks in the same package with identical inputs produce the same
-        // file hashes — no need to globwalk and hash the same files repeatedly.
         struct TaskInfo<'b> {
             task_id: TaskId<'static>,
             package_path: &'b AnchoredSystemPath,
-            inputs: &'b TaskInputs,
+            inputs: EffectiveTaskInputs<'b>,
         }
 
+        let collect_span = tracing::info_span!("collect_task_hash_keys").entered();
         let mut task_infos = Vec::new();
         for task in all_tasks {
             let TaskNode::Task(task_id) = task else {
@@ -139,34 +176,27 @@ impl PackageInputsHashes {
                 .get(task_id)
                 .ok_or_else(|| Error::MissingPipelineEntry(task_id.clone()))?;
             let workspace_name = task_id.to_workspace_name();
-            let pkg = workspaces
-                .get(&workspace_name)
-                .ok_or_else(|| Error::MissingPackageJson(workspace_name.to_string()))?;
-            let package_path = pkg
-                .package_json_path
-                .parent()
-                .unwrap_or_else(|| AnchoredSystemPath::empty());
-            let inputs = task_definition.inputs();
+            let package_path = package_graph
+                .package_task_context(&workspace_name)
+                .map(|context| context.directory())
+                .ok_or_else(|| Error::MissingPackageContext(workspace_name.to_string()))?;
             task_infos.push(TaskInfo {
                 task_id: task_id.clone(),
                 package_path,
-                inputs,
+                inputs: EffectiveTaskInputs {
+                    declared: task_definition.inputs(),
+                    tracked_outputs: task_definition.outputs(),
+                },
             });
         }
 
-        // Build dedup key: (package_path_str, globs, default, eager)
-        type HashKey = (AnchoredSystemPathBuf, Vec<String>, bool, bool);
-        let mut unique_keys: Vec<HashKey> = Vec::new();
-        let mut key_indices: HashMap<HashKey, usize> = HashMap::new();
+        type HashKey<'a> = (AnchoredSystemPathBuf, EffectiveTaskInputs<'a>);
+        let mut unique_keys: Vec<HashKey<'_>> = Vec::new();
+        let mut key_indices: HashMap<HashKey<'_>, usize> = HashMap::new();
         let mut task_key_map: Vec<usize> = Vec::with_capacity(task_infos.len());
 
         for info in &task_infos {
-            let key: HashKey = (
-                info.package_path.to_owned(),
-                info.inputs.globs.clone(),
-                info.inputs.default,
-                info.inputs.eager,
-            );
+            let key = (info.package_path.to_owned(), info.inputs);
             let idx = match key_indices.entry(key) {
                 std::collections::hash_map::Entry::Occupied(e) => *e.get(),
                 std::collections::hash_map::Entry::Vacant(e) => {
@@ -184,27 +214,69 @@ impl PackageInputsHashes {
             unique_hash_keys = unique_keys.len(),
             "file hash deduplication"
         );
+        drop(collect_span);
 
-        // Phase 2: Compute file hashes in parallel across unique keys.
+        // Phase 2: Compute file hashes in parallel across unique keys. The
+        // summary hash of each `FileHashes` is computed here too, once per
+        // unique key, so distribution below never re-hashes for the many
+        // tasks that share a key.
         // EMFILE (too many open files) errors are handled via retry-with-backoff
         // in the globwalk and hash_objects layers, so we can safely parallelize
         // all keys on rayon without worrying about fd exhaustion.
-        let file_hash_results: Vec<Result<Arc<FileHashes>, Error>> = unique_keys
+        let hash_span = tracing::info_span!("hash_unique_inputs").entered();
+        let file_hash_results: Vec<Result<(Arc<FileHashes>, String), Error>> = unique_keys
             .into_par_iter()
-            .map(|(package_path, globs, default, eager)| {
-                if !eager {
-                    return Ok(Arc::new(FileHashes(Vec::new())));
+            .map(|(package_path, effective_inputs)| {
+                let inputs = effective_inputs.declared;
+                let mut file_hashes = if !inputs.eager {
+                    Arc::new(FileHashes(Vec::new()))
+                } else {
+                    let all_globs: Vec<_> = inputs.all_globs().collect();
+                    let mut hashes = scm.get_package_file_hashes(
+                        repo_root,
+                        &package_path,
+                        &all_globs,
+                        inputs.default,
+                        None,
+                        repo_index,
+                    )?;
+                    if let Some(authored) = inputs.explicit_override_globs() {
+                        hashes.extend(scm.get_explicit_input_file_hashes(
+                            repo_root,
+                            &package_path,
+                            authored,
+                            repo_index,
+                        )?);
+                    }
+                    let mut hashes: Vec<_> = hashes.into_iter().collect();
+                    hashes.sort_unstable_by(|(a, _), (b, _)| a.cmp(b));
+                    Arc::new(FileHashes(hashes))
+                };
+                let tracked_outputs = scm.get_tracked_output_hashes(
+                    repo_root,
+                    &package_path,
+                    &effective_inputs.tracked_outputs.inclusions,
+                    &effective_inputs.tracked_outputs.exclusions,
+                    repo_index,
+                )?;
+                if !tracked_outputs.is_empty() {
+                    file_hashes = combine_file_hashes(
+                        &file_hashes,
+                        &FileHashes(tracked_outputs.into_iter().collect()),
+                    );
                 }
-
-                file_hashes_for_inputs(scm, repo_root, &package_path, &globs, default, repo_index)
+                let hash = file_hashes.as_ref().hash();
+                Ok((file_hashes, hash))
             })
             .collect();
 
-        let file_hash_results: Vec<Arc<FileHashes>> = file_hash_results
+        let file_hash_results: Vec<(Arc<FileHashes>, String)> = file_hash_results
             .into_iter()
             .collect::<Result<Vec<_>, _>>()?;
+        drop(hash_span);
 
         // Phase 3: Distribute shared results to individual tasks.
+        let _span = tracing::info_span!("distribute_task_file_hashes").entered();
         let mut hashes = HashMap::with_capacity(task_infos.len());
         let mut expanded_hashes = if needs_expanded_hashes {
             HashMap::with_capacity(task_infos.len())
@@ -214,12 +286,10 @@ impl PackageInputsHashes {
 
         for (i, info) in task_infos.into_iter().enumerate() {
             let key_idx = task_key_map[i];
-            let file_hashes = &file_hash_results[key_idx];
+            let (file_hashes, hash) = &file_hash_results[key_idx];
 
-            let hash = file_hashes.as_ref().hash();
-
-            hashes.insert(info.task_id.clone(), hash);
-            if needs_expanded_hashes || info.inputs.has_deferred_inputs() {
+            hashes.insert(info.task_id.clone(), hash.clone());
+            if needs_expanded_hashes || info.inputs.declared.has_deferred_inputs() {
                 expanded_hashes.insert(info.task_id, Arc::clone(file_hashes));
             }
         }
@@ -229,6 +299,23 @@ impl PackageInputsHashes {
             expanded_hashes,
         })
     }
+}
+
+/// Collect the stored external resolution fingerprint for every task namespace.
+#[tracing::instrument(skip_all)]
+pub fn compute_external_deps_hashes(
+    package_graph: &PackageGraph,
+) -> Result<HashMap<String, String>, Error> {
+    package_graph
+        .package_resolution_states()
+        .into_iter()
+        .map(|(package, resolution)| {
+            let hash = resolution.task_hash().ok_or_else(|| {
+                Error::MissingExternalDependencyHash(PackageName::from(package.as_str()))
+            })?;
+            Ok((package, hash.to_string()))
+        })
+        .collect()
 }
 
 #[derive(Default, Debug, Clone)]
@@ -251,6 +338,25 @@ pub struct TaskHashTrackerState {
     package_task_inputs_expanded_hashes: HashMap<TaskId<'static>, Arc<FileHashes>>,
 }
 
+/// Information shared by eager and deferred hashing of one task.
+pub struct TaskHashRequest<'a, 'context, 'dep, T> {
+    pub task_id: &'a TaskId<'static>,
+    pub task_definition: &'a T,
+    pub task_env_mode: EnvMode,
+    pub package_context: &'a PackageTaskContext<'context>,
+    pub dependency_set: &'a [&'dep TaskNode],
+    pub telemetry: PackageTaskEventBuilder,
+}
+
+/// Repository and dependency outputs needed only for deferred task hashing.
+pub struct DeferredHashInputs<'a> {
+    pub scm: &'a SCM,
+    pub repo_root: &'a AbsoluteSystemPath,
+    pub repo_index: Option<&'a RepoGitIndex>,
+    pub dependency_output_hashes: Option<Arc<FileHashes>>,
+    pub dependency_output_producers: &'a HashSet<TaskId<'static>>,
+}
+
 /// Caches package-inputs hashes, and package-task hashes.
 pub struct TaskHasher<'a, R> {
     hashes: HashMap<TaskId<'static>, String>,
@@ -258,18 +364,39 @@ pub struct TaskHasher<'a, R> {
     env_at_execution_start: &'a EnvironmentVariableMap,
     global_env: EnvironmentVariableMap,
     global_env_patterns: &'a [String],
-    global_hash: &'a str,
+    global_hashes: &'a GlobalHashes,
+    repository_root: &'a AbsoluteSystemPath,
     task_hash_tracker: TaskHashTracker,
-    compiled_builtins: Option<CompiledWildcards>,
+    /// Builtin pass-through env vars matched against the environment once at
+    /// construction; the set is invariant for the lifetime of the hasher.
+    builtin_pass_through_env: EnvironmentVariableMap,
+    /// Memoized wildcard matches so tasks sharing the same `env` or
+    /// `passThroughEnv` patterns don't recompile regexes and rescan the
+    /// environment.
+    wildcard_cache: WildcardMapCache,
     external_deps_hash_cache: HashMap<String, String>,
+    /// Memoized framework inference keyed by package name. Inference scans
+    /// every known framework's dependency matchers against the package's
+    /// external declarations, and the result is identical for every task in
+    /// the package, so compute it once per package instead of once per task.
+    framework_cache: DashMap<String, Option<&'static Framework>>,
 }
 
 impl<'a, R: RunOptsHashInfo> TaskHasher<'a, R> {
+    pub fn validate_package_context(
+        &self,
+        task_id: &TaskId<'static>,
+        package_context: &PackageTaskContext<'_>,
+    ) -> Result<(), Error> {
+        validate_task_context(task_id, package_context, self.repository_root)
+    }
+
     pub fn new(
         package_inputs_hashes: PackageInputsHashes,
         run_opts: &'a R,
         env_at_execution_start: &'a EnvironmentVariableMap,
-        global_hash: &'a str,
+        global_hashes: &'a GlobalHashes,
+        repository_root: &'a AbsoluteSystemPath,
         global_env: EnvironmentVariableMap,
         global_env_patterns: &'a [String],
     ) -> Self {
@@ -278,92 +405,128 @@ impl<'a, R: RunOptsHashInfo> TaskHasher<'a, R> {
             expanded_hashes,
         } = package_inputs_hashes;
 
-        let compiled_builtins = CompiledWildcards::compile(BUILTIN_PASS_THROUGH_ENV).ok();
+        let builtin_pass_through_env = env_at_execution_start
+            .builtin_pass_through_env()
+            .unwrap_or_default();
 
         Self {
             hashes,
             run_opts,
             env_at_execution_start,
-            global_hash,
+            global_hashes,
+            repository_root,
             global_env,
             global_env_patterns,
             task_hash_tracker: TaskHashTracker::new(expanded_hashes),
-            compiled_builtins,
+            builtin_pass_through_env,
+            wildcard_cache: WildcardMapCache::default(),
             external_deps_hash_cache: HashMap::new(),
+            framework_cache: DashMap::new(),
         }
     }
 
-    /// Pre-compute and cache external dependency hashes for all packages.
-    /// Many tasks share the same package, so this avoids re-sorting
-    /// transitive dependencies for every task.
+    /// Cache stored external resolution fingerprints for all task namespaces.
     #[tracing::instrument(skip_all)]
-    pub fn precompute_external_deps_hashes<'b>(
+    pub fn precompute_external_deps_hashes(
         &mut self,
-        workspaces: impl Iterator<Item = (&'b PackageName, &'b PackageInfo)>,
-    ) {
+        package_graph: &PackageGraph,
+    ) -> Result<(), Error> {
         if self.run_opts.single_package() {
-            return;
+            return Ok(());
         }
-        let ws: Vec<_> = workspaces.collect();
-        self.external_deps_hash_cache = ws
-            .par_iter()
-            .map(|(name, info)| {
-                let hash = get_external_deps_hash(&info.transitive_dependencies);
-                (name.as_str().to_owned(), hash)
-            })
-            .collect();
+        self.external_deps_hash_cache = compute_external_deps_hashes(package_graph)?;
+        Ok(())
     }
 
-    #[tracing::instrument(skip(self, task_definition, task_env_mode, workspace, dependency_set))]
-    pub fn calculate_task_hash<T: TaskDefinitionHashInfo>(
-        &self,
-        task_id: &TaskId<'static>,
-        task_definition: &T,
-        task_env_mode: EnvMode,
-        workspace: &PackageInfo,
-        dependency_set: &[&TaskNode],
-        telemetry: PackageTaskEventBuilder,
-    ) -> Result<String, Error> {
-        let hash_of_files = self
-            .hashes
-            .get(task_id)
-            .ok_or_else(|| Error::MissingPackageFileHash(task_id.to_string()))?;
-        self.calculate_task_hash_with_file_hash(
-            task_id,
-            task_definition,
-            task_env_mode,
-            workspace,
-            dependency_set,
-            telemetry,
-            hash_of_files,
-            None,
-        )
+    /// Install an externally computed dependency-hash cache (see
+    /// [`compute_external_deps_hashes`]). Lets callers compute the cache
+    /// concurrently with other startup work instead of serially during
+    /// hasher construction.
+    pub fn set_external_deps_hash_cache(&mut self, cache: HashMap<String, String>) {
+        self.external_deps_hash_cache = cache;
+    }
+
+    /// Per-package external dependency hashes computed for task hashing.
+    /// Exposed so run-summary construction can reuse them instead of
+    /// re-sorting and re-hashing each package's transitive closure.
+    pub fn external_deps_hash_cache(&self) -> &HashMap<String, String> {
+        &self.external_deps_hash_cache
     }
 
     #[tracing::instrument(skip(
         self,
         task_definition,
         task_env_mode,
-        workspace,
-        dependency_set,
-        scm,
-        repo_index
+        package_context,
+        dependency_set
     ))]
-    pub fn calculate_task_hash_with_deferred_inputs<T: TaskDefinitionHashInfo>(
+    pub fn calculate_task_hash<T: TaskDefinitionHashInfo>(
         &self,
         task_id: &TaskId<'static>,
         task_definition: &T,
         task_env_mode: EnvMode,
-        workspace: &PackageInfo,
+        package_context: &PackageTaskContext<'_>,
         dependency_set: &[&TaskNode],
         telemetry: PackageTaskEventBuilder,
-        scm: &SCM,
-        repo_root: &AbsoluteSystemPath,
-        repo_index: Option<&RepoGitIndex>,
-        dependency_output_hashes: Option<Arc<FileHashes>>,
-        dependency_output_producers: &HashSet<TaskId<'static>>,
     ) -> Result<String, Error> {
-        let package_path = workspace.package_path();
+        self.validate_package_context(task_id, package_context)?;
+        let hash_of_files = self
+            .hashes
+            .get(task_id)
+            .ok_or_else(|| Error::MissingPackageFileHash(task_id.to_string()))?;
+        self.calculate_task_hash_with_file_hash(
+            TaskHashRequest {
+                task_id,
+                task_definition,
+                task_env_mode,
+                package_context,
+                dependency_set,
+                telemetry,
+            },
+            hash_of_files,
+            None,
+        )
+    }
+
+    #[tracing::instrument(
+        skip_all,
+        fields(
+            task_id = ?task.task_id,
+            telemetry = ?task.telemetry,
+            repo_root = ?inputs.repo_root,
+            dependency_output_hashes = ?inputs.dependency_output_hashes,
+            dependency_output_producers = ?inputs.dependency_output_producers
+        )
+    )]
+    pub fn calculate_task_hash_with_deferred_inputs<T: TaskDefinitionHashInfo>(
+        &self,
+        task: TaskHashRequest<'_, '_, '_, T>,
+        inputs: DeferredHashInputs<'_>,
+    ) -> Result<String, Error> {
+        let TaskHashRequest {
+            task_id,
+            task_definition,
+            task_env_mode,
+            package_context,
+            dependency_set,
+            telemetry,
+        } = task;
+        let DeferredHashInputs {
+            scm,
+            repo_root,
+            repo_index,
+            dependency_output_hashes,
+            dependency_output_producers,
+        } = inputs;
+        validate_task_context(task_id, package_context, repo_root)?;
+        self.validate_package_context(task_id, package_context)?;
+        if repo_root != self.repository_root {
+            return Err(Error::ContextRepositoryRootMismatch {
+                context_root: self.repository_root.to_owned(),
+                repo_root: repo_root.to_owned(),
+            });
+        }
+        let package_path = package_context.directory();
         let jit_hashes = task_definition
             .inputs()
             .has_jit_inputs()
@@ -395,12 +558,14 @@ impl<'a, R: RunOptsHashInfo> TaskHasher<'a, R> {
             .insert_expanded_inputs(task_id.clone(), combined_hashes);
 
         self.calculate_task_hash_with_file_hash(
-            task_id,
-            task_definition,
-            task_env_mode,
-            workspace,
-            dependency_set,
-            telemetry,
+            TaskHashRequest {
+                task_id,
+                task_definition,
+                task_env_mode,
+                package_context,
+                dependency_set,
+                telemetry,
+            },
             &hash_of_files,
             Some(dependency_output_producers),
         )
@@ -411,35 +576,65 @@ impl<'a, R: RunOptsHashInfo> TaskHasher<'a, R> {
         task_id: &TaskId<'static>,
         task_definition: &T,
         task_env_mode: EnvMode,
+        package_context: &PackageTaskContext<'_>,
     ) -> Result<(), Error> {
-        let env_vars = self.calculate_env_vars(task_id, task_definition, task_env_mode, None)?;
+        self.validate_package_context(task_id, package_context)?;
+        // Report the same framework and inferred env vars that the hash will
+        // include once it is computed at execution time, so a dry run doesn't
+        // hide them.
+        let framework = self.infer_framework(task_id, package_context);
+        let env_vars =
+            self.calculate_env_vars(task_id, task_definition, task_env_mode, framework)?;
         self.task_hash_tracker.insert_hash(
             task_id.clone(),
             env_vars,
             Arc::from(deferred_task_hash_message(task_definition.inputs())),
-            None,
+            framework.map(|f| f.slug()),
         );
         Ok(())
     }
 
-    fn calculate_task_hash_with_file_hash<T: TaskDefinitionHashInfo>(
+    /// Infers the framework of a task's package, if framework inference is
+    /// enabled. The result only depends on the package's external
+    /// declarations, so it's memoized per package and shared by all of the
+    /// package's tasks. A racing recompute between `get` and `insert`
+    /// produces the same value, so it's harmless.
+    fn infer_framework(
         &self,
         task_id: &TaskId<'static>,
-        task_definition: &T,
-        task_env_mode: EnvMode,
-        workspace: &PackageInfo,
-        dependency_set: &[&TaskNode],
-        telemetry: PackageTaskEventBuilder,
+        package_context: &PackageTaskContext<'_>,
+    ) -> Option<&'static Framework> {
+        if !self.run_opts.framework_inference() {
+            return None;
+        }
+        if let Some(cached) = self.framework_cache.get(task_id.package()) {
+            return *cached;
+        }
+        let is_monorepo = !self.run_opts.single_package();
+        let inferred = infer_framework(package_context.external_declarations(), is_monorepo);
+        self.framework_cache
+            .insert(task_id.package().to_string(), inferred);
+        inferred
+    }
+
+    fn calculate_task_hash_with_file_hash<T: TaskDefinitionHashInfo>(
+        &self,
+        task: TaskHashRequest<'_, '_, '_, T>,
         hash_of_files: &str,
         excluded_dependency_hashes: Option<&HashSet<TaskId<'static>>>,
     ) -> Result<String, Error> {
-        let do_framework_inference = self.run_opts.framework_inference();
+        let TaskHashRequest {
+            task_id,
+            task_definition,
+            task_env_mode,
+            package_context,
+            dependency_set,
+            telemetry,
+        } = task;
         let is_monorepo = !self.run_opts.single_package();
 
-        // See if we can infer a framework
-        let framework = do_framework_inference
-            .then(|| infer_framework(workspace, is_monorepo))
-            .flatten()
+        let framework = self
+            .infer_framework(task_id, package_context)
             .inspect(|framework| {
                 debug!("auto detected framework for {}", task_id.package());
                 debug!(
@@ -453,17 +648,19 @@ impl<'a, R: RunOptsHashInfo> TaskHasher<'a, R> {
         let env_vars =
             self.calculate_env_vars(task_id, task_definition, task_env_mode, framework)?;
 
-        let outputs = task_definition.hashable_outputs(task_id);
+        let outputs = task_definition.hashable_outputs(task_id, package_context.log_namespace());
         let task_dependency_hashes =
             self.calculate_dependency_hashes(dependency_set, excluded_dependency_hashes)?;
-        let ext_hash_fallback;
         let external_deps_hash: Option<&str> = if !is_monorepo {
             None
-        } else if let Some(cached) = self.external_deps_hash_cache.get(task_id.package()) {
-            Some(cached.as_str())
         } else {
-            ext_hash_fallback = get_external_deps_hash(&workspace.transitive_dependencies);
-            Some(ext_hash_fallback.as_str())
+            Some(
+                self.external_deps_hash_cache
+                    .get(task_id.package())
+                    .ok_or_else(|| {
+                        Error::MissingExternalDependencyHash(package_context.package().clone())
+                    })?,
+            )
         };
 
         if !env_vars.all.is_empty() {
@@ -477,13 +674,15 @@ impl<'a, R: RunOptsHashInfo> TaskHasher<'a, R> {
 
         let hashable_env_pairs = env_vars.all.to_hashable();
 
-        let package_dir = workspace.package_path().to_unix();
-        let is_root_package = package_dir.is_empty();
+        let package_dir = package_context.directory().to_unix();
         // We wrap in an Option to mimic Go's serialization of nullable values
-        let optional_package_dir = (!is_root_package).then_some(package_dir);
+        // and retain the existing bytes for every context located at the
+        // repository directory, including aggregate Cargo task namespaces.
+        // Task identity was independently validated against the context.
+        let optional_package_dir = (!package_dir.is_empty()).then_some(package_dir);
 
         let task_hashable = TaskHashable {
-            global_hash: self.global_hash,
+            global_hash: self.global_hashes.for_task(package_context),
             task_dependency_hashes,
             package_dir: optional_package_dir,
             hash_of_files,
@@ -496,6 +695,12 @@ impl<'a, R: RunOptsHashInfo> TaskHasher<'a, R> {
             resolved_env_vars: hashable_env_pairs,
             pass_through_env: task_definition.pass_through_env().unwrap_or_default(),
             env_mode: task_env_mode,
+            command_override: match task_definition.command() {
+                Some(TaskCommandOverride::Argv(argv)) => argv.as_slice(),
+                _ => &[],
+            },
+            command_opt_out: matches!(task_definition.command(), Some(TaskCommandOverride::OptOut)),
+            experimental_ci: task_definition.experimental_ci(),
         };
 
         let task_hash = task_hashable.calculate_task_hash()?;
@@ -535,34 +740,47 @@ impl<'a, R: RunOptsHashInfo> TaskHasher<'a, R> {
                 }
             }
 
-            let combined_env_patterns: Vec<String> = task_definition
-                .env()
-                .iter()
-                .chain(
-                    self.global_env_patterns
-                        .iter()
-                        .filter(|p| p.starts_with('!')),
-                )
-                .cloned()
-                .collect();
+            // `globalEnv` exclusions opt every package out of the inferred
+            // variables they match. They only filter inference: a variable the
+            // task lists in its own `env` stays in its hash, as it does in a
+            // package without a detected framework.
+            computed_wildcards.extend(
+                self.global_env_patterns
+                    .iter()
+                    .filter(|p| p.starts_with('!'))
+                    .cloned(),
+            );
 
-            self.env_at_execution_start
-                .hashable_task_env(&computed_wildcards, &combined_env_patterns)
+            let inference = self
+                .wildcard_cache
+                .get_or_compute(self.env_at_execution_start, &computed_wildcards)
                 .map_err(|err| Error::EnvPattern {
                     task_id: task_id.clone().into_owned(),
                     err,
-                })
+                })?;
+            let user_env_var_set = self
+                .wildcard_cache
+                .get_or_compute(self.env_at_execution_start, task_definition.env())
+                .map_err(|err| Error::EnvPattern {
+                    task_id: task_id.clone().into_owned(),
+                    err,
+                })?;
+
+            Ok(DetailedMap::from_task_env_parts(
+                &inference.resolved,
+                &user_env_var_set.maps,
+            ))
         } else {
-            let all_env_var_map = self
-                .env_at_execution_start
-                .from_wildcards(task_definition.env())?;
+            let matched = self
+                .wildcard_cache
+                .get_or_compute(self.env_at_execution_start, task_definition.env())?;
 
             Ok(DetailedMap {
                 by_source: BySource {
-                    explicit: all_env_var_map.clone(),
+                    explicit: matched.resolved.clone(),
                     matching: EnvironmentVariableMap::default(),
                 },
-                all: all_env_var_map,
+                all: matched.resolved.clone(),
             })
         }
     }
@@ -625,20 +843,16 @@ impl<'a, R: RunOptsHashInfo> TaskHasher<'a, R> {
     ) -> Result<EnvironmentVariableMap, Error> {
         match task_env_mode {
             EnvMode::Strict => {
-                let pass_through_env_vars = match &self.compiled_builtins {
-                    Some(compiled_builtins) => {
-                        self.env_at_execution_start.pass_through_env_compiled(
-                            compiled_builtins,
-                            &self.global_env,
-                            task_definition.pass_through_env().unwrap_or_default(),
-                        )?
-                    }
-                    None => self.env_at_execution_start.pass_through_env(
-                        &[] as &[&str],
-                        &self.global_env,
-                        task_definition.pass_through_env().unwrap_or_default(),
-                    )?,
-                };
+                let task_pass_through = self.wildcard_cache.get_or_compute(
+                    self.env_at_execution_start,
+                    task_definition.pass_through_env().unwrap_or_default(),
+                )?;
+
+                let pass_through_env_vars = turborepo_env::pass_through_env_from_parts(
+                    &self.builtin_pass_through_env,
+                    &self.global_env,
+                    &task_pass_through.maps,
+                );
 
                 let tracker_env = self
                     .task_hash_tracker
@@ -662,25 +876,6 @@ pub fn deferred_task_hash_message(inputs: &TaskInputs) -> &'static str {
     } else {
         JIT_DEFERRED_TASK_HASH_MESSAGE
     }
-}
-
-pub fn get_external_deps_hash(
-    transitive_dependencies: &Option<HashSet<turborepo_lockfiles::Package>>,
-) -> String {
-    let Some(transitive_dependencies) = transitive_dependencies else {
-        return "".into();
-    };
-
-    // Collect references instead of cloning each Package (which has two Strings).
-    let mut transitive_deps: Vec<&turborepo_lockfiles::Package> =
-        transitive_dependencies.iter().collect();
-
-    transitive_deps.sort_unstable_by(|a, b| match a.key.cmp(&b.key) {
-        std::cmp::Ordering::Equal => a.version.cmp(&b.version),
-        other => other,
-    });
-
-    LockFilePackagesRef(transitive_deps).hash()
 }
 
 pub fn get_internal_deps_hash(
@@ -943,7 +1138,1232 @@ impl turborepo_task_executor::HashTrackerProvider for TaskHashTracker {
 
 #[cfg(test)]
 mod test {
+    use std::sync::Arc;
+
+    use serde_json::json;
+    use tempfile::tempdir;
+    use turbopath::{AbsoluteSystemPathBuf, AnchoredSystemPathBuf};
+    use turborepo_repository::{
+        external_resolution::{
+            CARGO_RESOLUTION_DOMAIN, ExternalPackageIdentity, ExternalResolutionData,
+            ExternalResolutionDomain, PackageResolution, ResolutionCompleteness,
+        },
+        package_graph::{PackageGraph, PackageTaskContextKind},
+        package_json::PackageJson,
+        relationships::{DependencyKind, Relationship},
+        toolchain::{
+            DiscoverPackagesFuture, DiscoveredPackage, DiscoveredPackages, RepositoryContributor,
+            ToolchainId, WorkspaceRoot,
+        },
+    };
+    use turborepo_types::{RunOptsHashInfo, TaskDefinition};
+
     use super::*;
+
+    #[path = "dependency_outputs_test.rs"]
+    mod dependency_outputs;
+    #[path = "jit_inputs_test.rs"]
+    mod jit_inputs;
+    #[path = "structured_inputs_test.rs"]
+    mod structured_inputs;
+    #[path = "tracked_outputs_test.rs"]
+    mod tracked_outputs;
+
+    struct TestRunOpts {
+        single_package: bool,
+    }
+
+    impl RunOptsHashInfo for TestRunOpts {
+        fn framework_inference(&self) -> bool {
+            false
+        }
+
+        fn single_package(&self) -> bool {
+            self.single_package
+        }
+
+        fn pass_through_args(&self) -> &[String] {
+            &[]
+        }
+    }
+
+    async fn javascript_graph(repo_root: &AbsoluteSystemPathBuf) -> PackageGraph {
+        javascript_graph_at(repo_root, "packages").await
+    }
+
+    async fn javascript_graph_at(
+        repo_root: &AbsoluteSystemPathBuf,
+        packages_dir: &str,
+    ) -> PackageGraph {
+        let root_json = json!({
+            "name": "root",
+            "packageManager": "npm@10.0.0",
+            "workspaces": [format!("{packages_dir}/*")]
+        });
+        repo_root
+            .join_component("package.json")
+            .create_with_contents(serde_json::to_string(&root_json).unwrap())
+            .unwrap();
+        let app_json = repo_root.join_components(&[packages_dir, "app", "package.json"]);
+        app_json.ensure_dir().unwrap();
+        app_json
+            .create_with_contents(serde_json::to_string(&json!({ "name": "app" })).unwrap())
+            .unwrap();
+        let other_json = repo_root.join_components(&[packages_dir, "other", "package.json"]);
+        other_json.ensure_dir().unwrap();
+        other_json
+            .create_with_contents(serde_json::to_string(&json!({ "name": "other" })).unwrap())
+            .unwrap();
+
+        PackageGraph::builder(repo_root, PackageJson::from_value(root_json).unwrap())
+            .build()
+            .await
+            .unwrap()
+    }
+
+    struct InferenceOpts(bool);
+    impl RunOptsHashInfo for InferenceOpts {
+        fn framework_inference(&self) -> bool {
+            self.0
+        }
+
+        fn single_package(&self) -> bool {
+            false
+        }
+
+        fn pass_through_args(&self) -> &[String] {
+            &[]
+        }
+    }
+
+    /// A monorepo with a Next.js package `web` and a plain package `other`.
+    async fn nextjs_graph_at(repo_root: &AbsoluteSystemPathBuf) -> PackageGraph {
+        use turborepo_repository::{
+            discovery::{DiscoveryResponse, PackageDiscovery},
+            package_manager::PackageManager,
+        };
+
+        struct InjectedDiscovery;
+        impl PackageDiscovery for InjectedDiscovery {
+            async fn discover_packages(
+                &self,
+            ) -> Result<DiscoveryResponse, turborepo_repository::discovery::Error> {
+                Ok(DiscoveryResponse {
+                    package_manager: PackageManager::Npm,
+                    workspaces: vec![],
+                })
+            }
+
+            async fn discover_packages_blocking(
+                &self,
+            ) -> Result<DiscoveryResponse, turborepo_repository::discovery::Error> {
+                self.discover_packages().await
+            }
+        }
+
+        PackageGraph::builder(
+            repo_root,
+            PackageJson::from_value(json!({ "name": "root" })).unwrap(),
+        )
+        .with_package_discovery(InjectedDiscovery)
+        .with_package_jsons(Some(HashMap::from([
+            (
+                repo_root.join_components(&["apps", "web", "package.json"]),
+                PackageJson::from_value(json!({
+                    "name": "web",
+                    "dependencies": { "next": "^15.0.0" }
+                }))
+                .unwrap(),
+            ),
+            (
+                repo_root.join_components(&["packages", "other", "package.json"]),
+                PackageJson::from_value(json!({ "name": "other" })).unwrap(),
+            ),
+        ])))
+        .build()
+        .await
+        .unwrap()
+    }
+
+    #[tokio::test]
+    async fn nextjs_inference_changes_only_its_task_hash_and_env_projection() {
+        let tmp = tempdir().unwrap();
+        let repo_root =
+            AbsoluteSystemPathBuf::new(tmp.path().to_string_lossy().to_string()).unwrap();
+        let graph = nextjs_graph_at(&repo_root).await;
+
+        let task_id = TaskId::new("web", "build").into_owned();
+        let other_task_id = TaskId::new("other", "build").into_owned();
+        let definition = TaskDefinition::default();
+        let file_hash = FileHashes(Vec::new()).hash();
+        let external_hashes = compute_external_deps_hashes(&graph).unwrap();
+        let calculate = |enabled: bool, public_value: &str, unrelated_value: &str| {
+            let opts = InferenceOpts(enabled);
+            let env = EnvironmentVariableMap::from(HashMap::from([
+                ("NEXT_PUBLIC_MESSAGE".to_string(), public_value.to_string()),
+                ("UNRELATED_VALUE".to_string(), unrelated_value.to_string()),
+            ]));
+            let mut hasher = TaskHasher::new(
+                PackageInputsHashes {
+                    hashes: HashMap::from([
+                        (task_id.clone(), file_hash.clone()),
+                        (other_task_id.clone(), file_hash.clone()),
+                    ]),
+                    expanded_hashes: HashMap::new(),
+                },
+                &opts,
+                &env,
+                &crate::global_hash::TEST_GLOBAL_HASHES,
+                &repo_root,
+                EnvironmentVariableMap::default(),
+                &[],
+            );
+            let mut hashes = HashMap::new();
+            // The graph's own external fingerprints are used by final monorepo hashes.
+            hasher.set_external_deps_hash_cache(external_hashes.clone());
+            for (package, id) in [("web", &task_id), ("other", &other_task_id)] {
+                let hash = hasher
+                    .calculate_task_hash(
+                        id,
+                        &definition,
+                        EnvMode::Strict,
+                        &graph
+                            .package_task_context(&PackageName::from(package))
+                            .unwrap(),
+                        &[],
+                        PackageTaskEventBuilder::new(package, "build"),
+                    )
+                    .unwrap();
+                hashes.insert(package, hash);
+            }
+            let tracker = hasher.task_hash_tracker();
+            let projected = tracker.env_vars(&task_id).unwrap();
+            let strict_env = hasher.env(&task_id, EnvMode::Strict, &definition).unwrap();
+            (
+                hashes,
+                tracker.framework(&task_id),
+                tracker.framework(&other_task_id),
+                projected,
+                strict_env,
+            )
+        };
+
+        let (enabled, framework, other_framework, projected, strict_env) =
+            calculate(true, "first", "one");
+        let (changed_public, _, _, changed_projection, _) = calculate(true, "second", "one");
+        let (changed_unrelated, _, _, _, _) = calculate(true, "first", "two");
+        let (
+            disabled,
+            disabled_framework,
+            disabled_other_framework,
+            disabled_projection,
+            disabled_env,
+        ) = calculate(false, "first", "one");
+        let (disabled_changed, _, _, _, _) = calculate(false, "second", "one");
+
+        assert_eq!(framework.unwrap().as_str(), "nextjs");
+        assert!(other_framework.is_none());
+        assert!(disabled_framework.is_none());
+        assert!(disabled_other_framework.is_none());
+        assert_eq!(
+            projected.by_source.matching.names(),
+            ["NEXT_PUBLIC_MESSAGE"]
+        );
+        assert!(projected.by_source.explicit.is_empty());
+        assert_eq!(
+            projected.all.get("NEXT_PUBLIC_MESSAGE").map(String::as_str),
+            Some("first")
+        );
+        assert_eq!(
+            changed_projection
+                .all
+                .get("NEXT_PUBLIC_MESSAGE")
+                .map(String::as_str),
+            Some("second")
+        );
+        assert_eq!(
+            strict_env.get("NEXT_PUBLIC_MESSAGE").map(String::as_str),
+            Some("first")
+        );
+        assert!(strict_env.get("UNRELATED_VALUE").is_none());
+        assert!(disabled_projection.all.is_empty());
+        // NEXT_* is built-in pass-through even without framework inference;
+        // unlike the tracked projection, pass-through does not enter the hash.
+        assert_eq!(
+            disabled_env.get("NEXT_PUBLIC_MESSAGE").map(String::as_str),
+            Some("first")
+        );
+
+        assert_ne!(enabled["web"], changed_public["web"]);
+        assert_eq!(enabled["web"], changed_unrelated["web"]);
+        assert_eq!(disabled["web"], disabled_changed["web"]);
+        assert_ne!(enabled["web"], disabled["web"]);
+        assert_eq!(enabled["other"], changed_public["other"]);
+        assert_eq!(enabled["other"], changed_unrelated["other"]);
+        assert_eq!(enabled["other"], disabled["other"]);
+    }
+
+    #[tokio::test]
+    async fn deferred_hash_reports_the_framework_env_its_final_hash_uses() {
+        let tmp = tempdir().unwrap();
+        let repo_root =
+            AbsoluteSystemPathBuf::new(tmp.path().to_string_lossy().to_string()).unwrap();
+        let graph = nextjs_graph_at(&repo_root).await;
+        let external_hashes = compute_external_deps_hashes(&graph).unwrap();
+
+        let task_id = TaskId::new("web", "codegen").into_owned();
+        let other_task_id = TaskId::new("other", "codegen").into_owned();
+        // Opting out of NEXT_PUBLIC_* does not opt out of the skew protection
+        // conditional, so VERCEL_DEPLOYMENT_ID stays in the hash.
+        let definition = TaskDefinition {
+            env: vec!["!NEXT_PUBLIC_*".to_string()],
+            ..Default::default()
+        };
+        let env = EnvironmentVariableMap::from(HashMap::from([
+            (
+                "VERCEL_SKEW_PROTECTION_ENABLED".to_string(),
+                "1".to_string(),
+            ),
+            ("VERCEL_DEPLOYMENT_ID".to_string(), "dpl_123".to_string()),
+        ]));
+        let file_hash = FileHashes(Vec::new()).hash();
+
+        let project = |deferred: bool| {
+            let opts = InferenceOpts(true);
+            let mut hasher = TaskHasher::new(
+                PackageInputsHashes {
+                    hashes: HashMap::from([
+                        (task_id.clone(), file_hash.clone()),
+                        (other_task_id.clone(), file_hash.clone()),
+                    ]),
+                    expanded_hashes: HashMap::new(),
+                },
+                &opts,
+                &env,
+                &crate::global_hash::TEST_GLOBAL_HASHES,
+                &repo_root,
+                EnvironmentVariableMap::default(),
+                &[],
+            );
+            hasher.set_external_deps_hash_cache(external_hashes.clone());
+            for (package, id) in [("web", &task_id), ("other", &other_task_id)] {
+                let context = graph
+                    .package_task_context(&PackageName::from(package))
+                    .unwrap();
+                if deferred {
+                    hasher
+                        .insert_deferred_hash(id, &definition, EnvMode::Strict, &context)
+                        .unwrap();
+                } else {
+                    hasher
+                        .calculate_task_hash(
+                            id,
+                            &definition,
+                            EnvMode::Strict,
+                            &context,
+                            &[],
+                            PackageTaskEventBuilder::new(package, "codegen"),
+                        )
+                        .unwrap();
+                }
+            }
+            let tracker = hasher.task_hash_tracker();
+            (
+                tracker.framework(&task_id),
+                tracker.env_vars(&task_id).unwrap(),
+                tracker.framework(&other_task_id),
+                tracker.env_vars(&other_task_id).unwrap(),
+            )
+        };
+
+        let (framework, env_vars, other_framework, other_env_vars) = project(true);
+        let (hashed_framework, hashed_env_vars, _, _) = project(false);
+
+        assert_eq!(framework.as_ref().unwrap().as_str(), "nextjs");
+        assert_eq!(
+            env_vars.by_source.matching.names(),
+            ["VERCEL_DEPLOYMENT_ID"]
+        );
+        assert_eq!(env_vars.all.to_hashable(), ["VERCEL_DEPLOYMENT_ID=dpl_123"]);
+        assert_eq!(framework, hashed_framework);
+        assert_eq!(
+            env_vars.all.to_hashable(),
+            hashed_env_vars.all.to_hashable()
+        );
+        assert_eq!(
+            env_vars.by_source.matching.to_hashable(),
+            hashed_env_vars.by_source.matching.to_hashable()
+        );
+        assert!(other_framework.is_none());
+        assert!(other_env_vars.all.is_empty());
+    }
+
+    #[tokio::test]
+    async fn global_env_exclusions_opt_out_of_inference_but_keep_task_env() {
+        let tmp = tempdir().unwrap();
+        let repo_root =
+            AbsoluteSystemPathBuf::new(tmp.path().to_string_lossy().to_string()).unwrap();
+        let graph = nextjs_graph_at(&repo_root).await;
+        let external_hashes = compute_external_deps_hashes(&graph).unwrap();
+
+        let task_id = TaskId::new("web", "build").into_owned();
+        let other_task_id = TaskId::new("other", "build").into_owned();
+        // Opt out of inferred NEXT_PUBLIC_* globally, but declare one of them
+        // explicitly on the task.
+        let global_env_patterns = vec!["!NEXT_PUBLIC_*".to_string()];
+        let definition = TaskDefinition {
+            env: vec!["NEXT_PUBLIC_API_URL".to_string()],
+            ..Default::default()
+        };
+        let file_hash = FileHashes(Vec::new()).hash();
+
+        let calculate = |api_url: &str, deferred: bool| {
+            let opts = InferenceOpts(true);
+            let env = EnvironmentVariableMap::from(HashMap::from([
+                ("NEXT_PUBLIC_API_URL".to_string(), api_url.to_string()),
+                ("NEXT_PUBLIC_INFERRED".to_string(), "inferred".to_string()),
+            ]));
+            let mut hasher = TaskHasher::new(
+                PackageInputsHashes {
+                    hashes: HashMap::from([
+                        (task_id.clone(), file_hash.clone()),
+                        (other_task_id.clone(), file_hash.clone()),
+                    ]),
+                    expanded_hashes: HashMap::new(),
+                },
+                &opts,
+                &env,
+                &crate::global_hash::TEST_GLOBAL_HASHES,
+                &repo_root,
+                EnvironmentVariableMap::default(),
+                &global_env_patterns,
+            );
+            hasher.set_external_deps_hash_cache(external_hashes.clone());
+            let mut hashes = HashMap::new();
+            for (package, id) in [("web", &task_id), ("other", &other_task_id)] {
+                let context = graph
+                    .package_task_context(&PackageName::from(package))
+                    .unwrap();
+                if deferred {
+                    hasher
+                        .insert_deferred_hash(id, &definition, EnvMode::Strict, &context)
+                        .unwrap();
+                } else {
+                    let hash = hasher
+                        .calculate_task_hash(
+                            id,
+                            &definition,
+                            EnvMode::Strict,
+                            &context,
+                            &[],
+                            PackageTaskEventBuilder::new(package, "build"),
+                        )
+                        .unwrap();
+                    hashes.insert(package, hash);
+                }
+            }
+            let tracker = hasher.task_hash_tracker();
+            (
+                hashes,
+                tracker.framework(&task_id),
+                tracker.env_vars(&task_id).unwrap(),
+                tracker.env_vars(&other_task_id).unwrap(),
+            )
+        };
+
+        let (first, framework, env_vars, other_env_vars) = calculate("preview", false);
+        let (second, _, _, _) = calculate("production", false);
+        let (_, _, deferred_env_vars, _) = calculate("preview", true);
+
+        assert_eq!(framework.unwrap().as_str(), "nextjs");
+        // The global exclusion still opts the package out of inference...
+        assert!(env_vars.by_source.matching.is_empty());
+        // ...but the variable the task declares stays in its hash, exactly as
+        // it does in a package without a detected framework.
+        for projection in [&env_vars, &other_env_vars, &deferred_env_vars] {
+            assert_eq!(
+                projection.all.to_hashable(),
+                ["NEXT_PUBLIC_API_URL=preview"]
+            );
+            assert_eq!(
+                projection.by_source.explicit.names(),
+                ["NEXT_PUBLIC_API_URL"]
+            );
+        }
+        assert_ne!(first["web"], second["web"]);
+        assert_ne!(first["other"], second["other"]);
+    }
+
+    const FIXTURE_RUSTC_VERSION: &str = concat!(
+        "rustc 1.96.0-nightly (f5eca4fcf 2026-04-09)\n",
+        "binary: rustc\n",
+        "commit-hash: f5eca4fcf\n",
+        "host: x86_64-unknown-linux-gnu\n",
+        "release: 1.96.0-nightly",
+    );
+
+    struct CargoFixtureContributor {
+        repo_root: AbsoluteSystemPathBuf,
+    }
+
+    impl RepositoryContributor for CargoFixtureContributor {
+        fn id(&self) -> ToolchainId {
+            ToolchainId::RUST
+        }
+
+        fn discover_packages(&self) -> DiscoverPackagesFuture<'_> {
+            Box::pin(async move {
+                let crate_name = "cargo-app".to_string();
+                let workspace_name = "cargo-workspace".to_string();
+                let compiler = ExternalPackageIdentity::new("rustc", FIXTURE_RUSTC_VERSION);
+                let packages = vec![
+                    DiscoveredPackage::package(
+                        Some(crate_name.clone()),
+                        PackageJson::default(),
+                        self.repo_root
+                            .join_components(&["crates", "app", "Cargo.toml"]),
+                    )
+                    .with_native_relationships(Vec::new()),
+                    DiscoveredPackage::aggregate(
+                        workspace_name.clone(),
+                        PackageJson::default(),
+                        self.repo_root.join_component("Cargo.toml"),
+                    )
+                    .with_native_relationships(vec![Relationship::internal(
+                        crate_name.clone(),
+                        DependencyKind::Production,
+                    )]),
+                ];
+                let resolution = ExternalResolutionDomain::new(
+                    CARGO_RESOLUTION_DOMAIN.clone(),
+                    ToolchainId::RUST,
+                    AnchoredSystemPathBuf::default(),
+                    [crate_name.clone(), workspace_name.clone()],
+                    [AnchoredSystemPathBuf::from_raw("Cargo.lock").unwrap()],
+                    ExternalResolutionData::Resolved {
+                        completeness: ResolutionCompleteness::Complete,
+                        packages: vec![
+                            PackageResolution::new(crate_name, [compiler.clone()]),
+                            PackageResolution::new(workspace_name, [compiler]),
+                        ],
+                    },
+                );
+                Ok(DiscoveredPackages::new(
+                    packages,
+                    vec![WorkspaceRoot::new("cargo", self.repo_root.clone())],
+                )
+                .with_external_resolution(resolution))
+            })
+        }
+
+        fn discover_package_scopes(
+            &self,
+        ) -> turborepo_repository::toolchain::DiscoverPackageScopesFuture<'_> {
+            Box::pin(async move {
+                let output = self.discover_packages().await?;
+                Ok(
+                    turborepo_repository::toolchain::DiscoveredPackageScopes::from_full_observation(
+                        output.packages(),
+                        output.workspace_roots(),
+                    ),
+                )
+            })
+        }
+    }
+
+    async fn cargo_graph(repo_root: &AbsoluteSystemPathBuf) -> PackageGraph {
+        PackageGraph::builder_optional(repo_root, None)
+            .with_package_jsons(Some(HashMap::new()))
+            .with_contributor(Arc::new(CargoFixtureContributor {
+                repo_root: repo_root.clone(),
+            }))
+            .build()
+            .await
+            .unwrap()
+    }
+
+    struct UvFixtureContributor {
+        repo_root: AbsoluteSystemPathBuf,
+    }
+
+    impl RepositoryContributor for UvFixtureContributor {
+        fn id(&self) -> ToolchainId {
+            ToolchainId::PYTHON
+        }
+
+        fn discover_packages(&self) -> DiscoverPackagesFuture<'_> {
+            Box::pin(async move {
+                Ok(DiscoveredPackages::new(
+                    vec![
+                        DiscoveredPackage::package(
+                            Some("py-app".to_string()),
+                            PackageJson::default(),
+                            self.repo_root.join_components(&[
+                                "packages",
+                                "py-app",
+                                "pyproject.toml",
+                            ]),
+                        )
+                        .with_native_relationships(Vec::new()),
+                    ],
+                    vec![WorkspaceRoot::new("uv", self.repo_root.clone())],
+                ))
+            })
+        }
+
+        fn discover_package_scopes(
+            &self,
+        ) -> turborepo_repository::toolchain::DiscoverPackageScopesFuture<'_> {
+            Box::pin(async move {
+                let output = self.discover_packages().await?;
+                Ok(
+                    turborepo_repository::toolchain::DiscoveredPackageScopes::from_full_observation(
+                        output.packages(),
+                        output.workspace_roots(),
+                    ),
+                )
+            })
+        }
+    }
+
+    fn task_hasher<'a>(
+        task_id: &TaskId<'static>,
+        run_opts: &'a TestRunOpts,
+        env: &'a EnvironmentVariableMap,
+        repository_root: &'a AbsoluteSystemPath,
+    ) -> TaskHasher<'a, TestRunOpts> {
+        let mut hashes = HashMap::new();
+        hashes.insert(task_id.clone(), FileHashes(Vec::new()).hash());
+        TaskHasher::new(
+            PackageInputsHashes {
+                hashes,
+                expanded_hashes: HashMap::new(),
+            },
+            run_opts,
+            env,
+            &crate::global_hash::TEST_GLOBAL_HASHES,
+            repository_root,
+            EnvironmentVariableMap::default(),
+            &[],
+        )
+    }
+
+    fn context_hash(graph: &PackageGraph, package: PackageName, single_package: bool) -> String {
+        let task_id = TaskId::new(package.as_str(), "build").into_owned();
+        let definition = TaskDefinition::default();
+        let opts = TestRunOpts { single_package };
+        let env = EnvironmentVariableMap::default();
+        let mut hasher = task_hasher(&task_id, &opts, &env, graph.repo_root());
+        if !single_package {
+            hasher.precompute_external_deps_hashes(graph).unwrap();
+        }
+        hasher
+            .calculate_task_hash(
+                &task_id,
+                &definition,
+                EnvMode::Strict,
+                &graph.package_task_context(&package).unwrap(),
+                &[],
+                PackageTaskEventBuilder::new(package.as_str(), "build"),
+            )
+            .unwrap()
+    }
+
+    fn monorepo_context_hash(graph: &PackageGraph, package: PackageName) -> String {
+        let task_id = TaskId::new(package.as_str(), "build").into_owned();
+        let definition = TaskDefinition::default();
+        let opts = TestRunOpts {
+            single_package: false,
+        };
+        let env = EnvironmentVariableMap::default();
+        let mut hasher = task_hasher(&task_id, &opts, &env, graph.repo_root());
+        hasher.precompute_external_deps_hashes(graph).unwrap();
+        hasher
+            .calculate_task_hash(
+                &task_id,
+                &definition,
+                EnvMode::Strict,
+                &graph.package_task_context(&package).unwrap(),
+                &[],
+                PackageTaskEventBuilder::new(package.as_str(), "build"),
+            )
+            .unwrap()
+    }
+
+    #[tokio::test]
+    async fn uv_virtual_environment_hashes_but_python_selector_is_projected() {
+        let tmp = tempdir().unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(tmp.path()).unwrap();
+        let graph = PackageGraph::builder_optional(&root, None)
+            .with_package_jsons(Some(HashMap::new()))
+            .with_contributor(Arc::new(UvFixtureContributor {
+                repo_root: root.clone(),
+            }))
+            .build()
+            .await
+            .unwrap();
+        let task_id = TaskId::new("py-app", "build").into_owned();
+        let package = graph
+            .package_task_context(&PackageName::from("py-app"))
+            .unwrap();
+        let definition = TaskDefinition {
+            env: turborepo_repository::uv::HASHED_ENV_VARS
+                .iter()
+                .map(|name| (*name).to_string())
+                .collect(),
+            pass_through_env: Some(
+                ["UV_PYTHON", "HOME", "XDG_CONFIG_HOME"]
+                    .map(str::to_string)
+                    .to_vec(),
+            ),
+            ..Default::default()
+        };
+        let opts = TestRunOpts {
+            single_package: true,
+        };
+        let hash_with = |name: Option<(&str, &str)>| {
+            let env = EnvironmentVariableMap::from(
+                name.into_iter()
+                    .map(|(key, value)| (key.to_string(), value.to_string()))
+                    .collect::<HashMap<_, _>>(),
+            );
+            let hasher = task_hasher(&task_id, &opts, &env, &root);
+            let hash = hasher
+                .calculate_task_hash(
+                    &task_id,
+                    &definition,
+                    EnvMode::Strict,
+                    &package,
+                    &[],
+                    PackageTaskEventBuilder::new("py-app", "build"),
+                )
+                .unwrap();
+            (
+                hash,
+                hasher.env(&task_id, EnvMode::Strict, &definition).unwrap(),
+            )
+        };
+        let baseline = hash_with(None).0;
+        for (name, first, second) in [
+            ("VIRTUAL_ENV", "/repo/envs/first", "/repo/envs/second"),
+            (
+                "UV_PROJECT_ENVIRONMENT",
+                "/repo/envs/project-a",
+                "/repo/envs/project-b",
+            ),
+        ] {
+            let first_hash = hash_with(Some((name, first))).0;
+            assert_ne!(first_hash, baseline, "{name}");
+            assert_ne!(first_hash, hash_with(Some((name, second))).0, "{name}");
+        }
+        for (name, value) in [
+            ("UV_PYTHON", "python3.13"),
+            ("HOME", "/repo/home-a"),
+            ("HOME", "/repo/home-b"),
+            ("XDG_CONFIG_HOME", "/repo/config"),
+        ] {
+            let (hash, strict_env) = hash_with(Some((name, value)));
+            assert_eq!(hash, baseline, "{name} must not hash its raw value");
+            assert_eq!(strict_env.get(name).map(String::as_str), Some(value));
+        }
+    }
+
+    #[tokio::test]
+    async fn cargo_semantic_environment_changes_hash_without_hashing_locations() {
+        let tmp = tempdir().unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(tmp.path()).unwrap();
+        let graph = cargo_graph(&root).await;
+        let task_id = TaskId::new("cargo-app", "build").into_owned();
+        let context = graph
+            .package_task_context(&PackageName::from("cargo-app"))
+            .unwrap();
+        let definition = TaskDefinition {
+            env: turborepo_repository::cargo::HASHED_ENV_VARS
+                .iter()
+                .map(|name| (*name).to_string())
+                .collect(),
+            pass_through_env: Some(vec!["RUSTUP_HOME".to_string()]),
+            ..Default::default()
+        };
+        let opts = TestRunOpts {
+            single_package: true,
+        };
+        let hash_with = |name: Option<(&str, &str)>| {
+            let env = EnvironmentVariableMap::from(
+                name.into_iter()
+                    .map(|(key, value)| (key.to_string(), value.to_string()))
+                    .collect::<HashMap<_, _>>(),
+            );
+            let hasher = task_hasher(&task_id, &opts, &env, &root);
+            let hash = hasher
+                .calculate_task_hash(
+                    &task_id,
+                    &definition,
+                    EnvMode::Strict,
+                    &context,
+                    &[],
+                    PackageTaskEventBuilder::new("cargo-app", "build"),
+                )
+                .unwrap();
+            (
+                hash,
+                hasher.env(&task_id, EnvMode::Strict, &definition).unwrap(),
+                env,
+            )
+        };
+        let (baseline, _, _) = hash_with(None);
+        for (name, value) in [
+            ("CARGO_ENCODED_RUSTFLAGS", "--cfg\x1fturbo_env_hash_test"),
+            ("RUSTDOCFLAGS", "--cfg turbo_env_hash_test"),
+            ("CARGO_PROFILE_DEV_LTO", "true"),
+            ("CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER", "clang"),
+            ("CC_aarch64_unknown_linux_gnu", "clang"),
+            ("TARGET_CFLAGS", "-DTURBO_ENV_HASH_TEST"),
+            ("CROSS_COMPILE", "aarch64-linux-gnu-"),
+            ("WASI_SYSROOT", "/opt/wasi-sysroot"),
+            ("WASM_MUSL_SYSROOT", "/opt/wasm-musl-sysroot"),
+            ("RUSTUP_TOOLCHAIN", "stable"),
+        ] {
+            assert_ne!(hash_with(Some((name, value))).0, baseline, "{name}");
+        }
+        for (name, value) in [
+            ("CARGO_HTTP_TIMEOUT", "120"),
+            ("CARGO_HOME", "/some/cargo-home"),
+            ("CARGO_HOME", "/another/cargo-home"),
+            ("CARGO_TARGET_DIR", "/some/target"),
+            ("RUSTUP_HOME", "/some/rustup-home"),
+        ] {
+            let (hash, strict, env) = hash_with(Some((name, value)));
+            assert_eq!(hash, baseline, "{name} is not hashed verbatim");
+            assert_eq!(
+                strict.get(name).map(String::as_str),
+                (name == "RUSTUP_HOME").then_some(value)
+            );
+            let hasher = task_hasher(&task_id, &opts, &env, &root);
+            assert_eq!(
+                hasher
+                    .env(&task_id, EnvMode::Loose, &definition)
+                    .unwrap()
+                    .get(name)
+                    .map(String::as_str),
+                Some(value)
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn scoped_log_paths_separate_equal_hash_inputs_and_invalidate_legacy_entries() {
+        let tmp = tempdir().unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(tmp.path()).unwrap();
+        let unshared = javascript_graph(&root).await;
+        let legacy_hash = context_hash(&unshared, PackageName::Root, true);
+        let shared = cargo_graph(&root).await;
+        // Both contexts use the same directory, task name, empty file hash,
+        // definition, and global hash. Ignore external resolution here to prove
+        // that log identity alone distinguishes them.
+        let root_hash = context_hash(&shared, PackageName::Root, true);
+        let aggregate_hash = context_hash(&shared, PackageName::from("cargo-workspace"), true);
+        assert_ne!(root_hash, aggregate_hash);
+        assert_ne!(root_hash, legacy_hash);
+        assert_ne!(aggregate_hash, legacy_hash);
+        assert_eq!(
+            context_hash(&unshared, PackageName::Root, true),
+            legacy_hash
+        );
+    }
+
+    #[tokio::test]
+    async fn task_hash_uses_identity_bound_context_and_rejects_mismatch() {
+        let tmp = tempdir().unwrap();
+        let repo_root =
+            AbsoluteSystemPathBuf::new(tmp.path().to_string_lossy().to_string()).unwrap();
+        let graph = javascript_graph(&repo_root).await;
+        let package_name = PackageName::from("app");
+        let package_context = graph.package_task_context(&package_name).unwrap();
+        assert_eq!(package_context.kind(), PackageTaskContextKind::Package);
+        let task_id = TaskId::new("app", "build");
+        let definition = TaskDefinition::default();
+        let opts = TestRunOpts {
+            single_package: true,
+        };
+        let env = EnvironmentVariableMap::default();
+        let hasher = task_hasher(&task_id, &opts, &env, &repo_root);
+
+        let package_hash = hasher
+            .calculate_task_hash(
+                &task_id,
+                &definition,
+                EnvMode::Strict,
+                &package_context,
+                &[],
+                PackageTaskEventBuilder::new("app", "build"),
+            )
+            .unwrap();
+        assert!(!package_hash.is_empty());
+        assert_eq!(
+            package_context.directory().to_unix().as_str(),
+            "packages/app"
+        );
+
+        let mismatch = hasher
+            .calculate_task_hash(
+                &task_id,
+                &definition,
+                EnvMode::Strict,
+                &graph.package_task_context(&PackageName::Root).unwrap(),
+                &[],
+                PackageTaskEventBuilder::new("app", "build"),
+            )
+            .unwrap_err();
+        assert!(matches!(mismatch, Error::TaskPackageMismatch { .. }));
+
+        let monorepo_opts = TestRunOpts {
+            single_package: false,
+        };
+        let error = task_hasher(&task_id, &monorepo_opts, &env, &repo_root)
+            .calculate_task_hash(
+                &task_id,
+                &definition,
+                EnvMode::Strict,
+                &package_context,
+                &[],
+                PackageTaskEventBuilder::new("app", "build"),
+            )
+            .unwrap_err();
+        assert!(
+            matches!(error, Error::MissingExternalDependencyHash(name) if name == package_name)
+        );
+    }
+
+    #[tokio::test]
+    async fn task_hash_uses_resolution_knowledge() {
+        let tmp = tempdir().unwrap();
+        let repo_root =
+            AbsoluteSystemPathBuf::new(tmp.path().to_string_lossy().to_string()).unwrap();
+        let graph = javascript_graph(&repo_root).await;
+        let package = PackageName::from("app");
+        let context = graph
+            .package_task_context(&package)
+            .expect("authoritative scope has a task context");
+
+        let task_id = TaskId::new("app", "build");
+        let definition = TaskDefinition::default();
+        let opts = TestRunOpts {
+            single_package: true,
+        };
+        let env = EnvironmentVariableMap::default();
+        let hasher = task_hasher(&task_id, &opts, &env, &repo_root);
+        let hash = hasher
+            .calculate_task_hash(
+                &task_id,
+                &definition,
+                EnvMode::Strict,
+                &context,
+                &[],
+                PackageTaskEventBuilder::new("app", "build"),
+            )
+            .unwrap();
+
+        assert!(!hash.is_empty());
+        hasher
+            .insert_deferred_hash(&task_id, &definition, EnvMode::Strict, &context)
+            .unwrap();
+        assert_eq!(
+            compute_external_deps_hashes(&graph)
+                .unwrap()
+                .get(package.as_str())
+                .map(String::as_str),
+            Some("")
+        );
+    }
+
+    #[tokio::test]
+    async fn deferred_hash_rejects_context_from_another_repository() {
+        let first_tmp = tempdir().unwrap();
+        let first_root =
+            AbsoluteSystemPathBuf::new(first_tmp.path().to_string_lossy().to_string()).unwrap();
+        let first_graph = javascript_graph_at(&first_root, "packages").await;
+        let second_tmp = tempdir().unwrap();
+        let second_root =
+            AbsoluteSystemPathBuf::new(second_tmp.path().to_string_lossy().to_string()).unwrap();
+        let second_graph = javascript_graph_at(&second_root, "apps").await;
+        let package = PackageName::from("app");
+        let foreign_context = first_graph.package_task_context(&package).unwrap();
+        assert_ne!(
+            foreign_context.directory(),
+            second_graph
+                .package_task_context(&package)
+                .unwrap()
+                .directory()
+        );
+
+        let task_id = TaskId::new("app", "build");
+        let definition = TaskDefinition::default();
+        let opts = TestRunOpts {
+            single_package: true,
+        };
+        let env = EnvironmentVariableMap::default();
+        let hasher = task_hasher(&task_id, &opts, &env, &second_root);
+        let regular_error = hasher
+            .calculate_task_hash(
+                &task_id,
+                &definition,
+                EnvMode::Strict,
+                &foreign_context,
+                &[],
+                PackageTaskEventBuilder::new("app", "build"),
+            )
+            .unwrap_err();
+        assert!(matches!(
+            regular_error,
+            Error::ContextRepositoryRootMismatch { .. }
+        ));
+
+        let error = hasher
+            .calculate_task_hash_with_deferred_inputs(
+                TaskHashRequest {
+                    task_id: &task_id,
+                    task_definition: &definition,
+                    task_env_mode: EnvMode::Strict,
+                    package_context: &foreign_context,
+                    dependency_set: &[],
+                    telemetry: PackageTaskEventBuilder::new("app", "build"),
+                },
+                DeferredHashInputs {
+                    scm: &SCM::new(&second_root),
+                    repo_root: &second_root,
+                    repo_index: None,
+                    dependency_output_hashes: None,
+                    dependency_output_producers: &HashSet::new(),
+                },
+            )
+            .unwrap_err();
+
+        assert!(matches!(error, Error::ContextRepositoryRootMismatch { .. }));
+    }
+
+    #[tokio::test]
+    async fn file_hashing_hashes_only_requested_graph_scopes() {
+        let tmp = tempdir().unwrap();
+        let repo_root =
+            AbsoluteSystemPathBuf::new(tmp.path().to_string_lossy().to_string()).unwrap();
+        let graph = javascript_graph(&repo_root).await;
+        repo_root
+            .join_components(&["packages", "app", "input.txt"])
+            .create_with_contents("app")
+            .unwrap();
+        repo_root
+            .join_components(&["packages", "other", "input.txt"])
+            .create_with_contents("other")
+            .unwrap();
+
+        let task_id = TaskId::new("app", "build");
+        let tasks = [TaskNode::Task(task_id.clone())];
+        let definitions = HashMap::from([(task_id.clone(), TaskDefinition::default())]);
+        let hashes = PackageInputsHashes::calculate_file_hashes(
+            &SCM::new(&repo_root),
+            tasks.iter(),
+            &graph,
+            &definitions,
+            &repo_root,
+            None,
+            true,
+        )
+        .unwrap();
+        let expanded = hashes.expanded_hashes.get(&task_id).unwrap();
+
+        assert!(
+            expanded
+                .0
+                .iter()
+                .any(|(path, _)| path.as_str() == "input.txt")
+        );
+        assert!(
+            expanded
+                .0
+                .iter()
+                .all(|(path, _)| !path.as_str().contains("other"))
+        );
+        assert_eq!(hashes.hashes.len(), 1);
+
+        let other_tmp = tempdir().unwrap();
+        let other_root =
+            AbsoluteSystemPathBuf::new(other_tmp.path().to_string_lossy().to_string()).unwrap();
+        let error = PackageInputsHashes::calculate_file_hashes(
+            &SCM::new(&other_root),
+            tasks.iter(),
+            &graph,
+            &definitions,
+            &other_root,
+            None,
+            false,
+        )
+        .unwrap_err();
+        assert!(matches!(error, Error::ContextRepositoryRootMismatch { .. }));
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn file_hashing_supports_pure_cargo_root_turbo_namespace() {
+        let tmp = tempdir().unwrap();
+        // dunce: `cargo metadata` reports plain (non-verbatim) paths on
+        // Windows, so the fixture root must be plain too.
+        let repo_root = AbsoluteSystemPathBuf::new(
+            dunce::canonicalize(tmp.path())
+                .unwrap()
+                .to_string_lossy()
+                .to_string(),
+        )
+        .unwrap();
+        let graph = cargo_graph(&repo_root).await;
+        let baseline = context_hash(&graph, PackageName::Root, false);
+        assert!(
+            !graph
+                .package_task_context(&PackageName::Root)
+                .unwrap()
+                .is_package_json_scope()
+        );
+        let task_id = TaskId::new("//", "build");
+        let tasks = [TaskNode::Task(task_id.clone())];
+        let definitions = HashMap::from([(task_id.clone(), TaskDefinition::default())]);
+
+        let hashes = PackageInputsHashes::calculate_file_hashes(
+            &SCM::new(&repo_root),
+            tasks.iter(),
+            &graph,
+            &definitions,
+            &repo_root,
+            None,
+            false,
+        )
+        .unwrap();
+
+        assert!(hashes.hashes.contains_key(&task_id));
+        let opts = TestRunOpts {
+            single_package: false,
+        };
+        let env = EnvironmentVariableMap::default();
+        task_hasher(&task_id, &opts, &env, &repo_root)
+            .insert_deferred_hash(
+                &task_id,
+                definitions.get(&task_id).unwrap(),
+                EnvMode::Strict,
+                &graph.package_task_context(&PackageName::Root).unwrap(),
+            )
+            .unwrap();
+        assert_eq!(context_hash(&graph, PackageName::Root, false), baseline);
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn task_context_hash_compatibility_literals() {
+        let js_tmp = tempdir().unwrap();
+        let js_root =
+            AbsoluteSystemPathBuf::new(js_tmp.path().to_string_lossy().to_string()).unwrap();
+        let js_graph = javascript_graph(&js_root).await;
+
+        let cargo_tmp = tempdir().unwrap();
+        // dunce: `cargo metadata` reports plain (non-verbatim) paths on
+        // Windows, so the fixture root must be plain too.
+        let cargo_root = AbsoluteSystemPathBuf::new(
+            dunce::canonicalize(cargo_tmp.path())
+                .unwrap()
+                .to_string_lossy()
+                .to_string(),
+        )
+        .unwrap();
+        let cargo_graph = cargo_graph(&cargo_root).await;
+        let cargo_package = cargo_graph
+            .package_scope_directories()
+            .find_map(|(name, directory)| {
+                (directory.to_unix().as_str() == "crates/app").then_some(name)
+            })
+            .expect("Cargo package context is discovered");
+        let cargo_aggregate = cargo_graph
+            .package_scope_directories()
+            .find_map(|(name, _)| cargo_graph.is_aggregate_scope(&name).then_some(name))
+            .expect("Cargo aggregate context is discovered");
+
+        assert_eq!(
+            context_hash(&js_graph, PackageName::Root, true),
+            "f296efc7e9b4061a",
+            "root JavaScript hash bytes changed"
+        );
+        assert_eq!(
+            context_hash(&cargo_graph, PackageName::Root, true),
+            "cfa6b9fc4e5d67b7",
+            "pure Cargo root Turbo hash bytes changed"
+        );
+        assert_eq!(
+            context_hash(&cargo_graph, cargo_package, true),
+            "d4636fbf97ab13d4",
+            "Cargo package hash bytes changed"
+        );
+        assert_eq!(
+            context_hash(&cargo_graph, cargo_aggregate, true,),
+            "2fdfb72d5f32ff50",
+            "Cargo aggregate hash bytes changed"
+        );
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn external_hash_precompute_preserves_compatibility_bytes() {
+        let js_tmp = tempdir().unwrap();
+        let js_root =
+            AbsoluteSystemPathBuf::new(js_tmp.path().to_string_lossy().to_string()).unwrap();
+        let js_graph = javascript_graph(&js_root).await;
+        let js_cache = compute_external_deps_hashes(&js_graph).unwrap();
+        assert_eq!(
+            js_cache,
+            HashMap::from([
+                ("//".to_string(), String::new()),
+                ("app".to_string(), String::new()),
+                ("other".to_string(), String::new()),
+            ])
+        );
+
+        let cargo_tmp = tempdir().unwrap();
+        // dunce: `cargo metadata` reports plain (non-verbatim) paths on
+        // Windows, so the fixture root must be plain too.
+        let cargo_root = AbsoluteSystemPathBuf::new(
+            dunce::canonicalize(cargo_tmp.path())
+                .unwrap()
+                .to_string_lossy()
+                .to_string(),
+        )
+        .unwrap();
+        let cargo_graph = cargo_graph(&cargo_root).await;
+        let cargo_cache = compute_external_deps_hashes(&cargo_graph).unwrap();
+        let external_hash = "bef1fc07e0fccabe";
+        let app_task_hash = "24cf5aae0bca8de3";
+        // The root and aggregate share a directory, so their log inclusions
+        // intentionally invalidate the old shared-path task hashes.
+        let workspace_task_hash = "97ed96a33f7e0058";
+        assert_eq!(
+            cargo_cache,
+            HashMap::from([
+                ("//".to_string(), String::new()),
+                ("cargo-app".to_string(), external_hash.to_string()),
+                ("cargo-workspace".to_string(), external_hash.to_string()),
+            ])
+        );
+
+        for (graph, package, expected) in [
+            (&js_graph, PackageName::Root, "f952e84c0fa1b4b7"),
+            (&js_graph, PackageName::from("app"), "ba33476f1a197a76"),
+            (&cargo_graph, PackageName::Root, "399d7918d1a47930"),
+        ] {
+            assert_eq!(monorepo_context_hash(graph, package), expected);
+        }
+
+        for (package, expected) in [
+            ("cargo-app", app_task_hash),
+            ("cargo-workspace", workspace_task_hash),
+        ] {
+            assert_eq!(
+                monorepo_context_hash(&cargo_graph, PackageName::from(package)),
+                expected
+            );
+        }
+    }
 
     #[test]
     fn test_hash_tracker_is_send_and_sync() {
@@ -998,6 +2418,27 @@ mod test {
                 });
             }
         });
+    }
+
+    #[test]
+    fn versioned_package_filter_and_explicit_task_id_share_a_hash() {
+        let package = PackageName::from("api/v10");
+        let task_name = turborepo_task_id::TaskName::from("build");
+        let filtered_task = TaskId::from_graph(&package, &task_name);
+        let explicit_task = TaskId::try_from("api/v10#build").unwrap().into_owned();
+        assert_eq!(filtered_task, explicit_task);
+
+        let tracker = TaskHashTracker::default();
+        tracker.insert_hash(
+            filtered_task,
+            DetailedMap::default(),
+            Arc::from("versioned-task-hash"),
+            None,
+        );
+        assert_eq!(
+            tracker.hash(&explicit_task).as_deref(),
+            Some("versioned-task-hash")
+        );
     }
 
     #[test]
@@ -1147,82 +2588,9 @@ mod test {
         assert_eq!(result[3].1, "dddddddddddddddddddddddddddddddddddddddd");
     }
 
-    #[test]
-    fn test_external_deps_hash_deterministic() {
-        use turborepo_lockfiles::Package;
-
-        let deps: HashSet<Package> = vec![
-            Package {
-                key: "react".to_string(),
-                version: "18.0.0".to_string(),
-            },
-            Package {
-                key: "lodash".to_string(),
-                version: "4.17.21".to_string(),
-            },
-            Package {
-                key: "typescript".to_string(),
-                version: "5.0.0".to_string(),
-            },
-        ]
-        .into_iter()
-        .collect();
-
-        let hash1 = get_external_deps_hash(&Some(deps.clone()));
-        let hash2 = get_external_deps_hash(&Some(deps));
-        assert_eq!(hash1, hash2, "same deps should produce same hash");
-        assert!(!hash1.is_empty(), "hash should be non-empty");
-    }
-
-    #[test]
-    fn test_external_deps_hash_empty() {
-        let hash_none = get_external_deps_hash(&None);
-        assert_eq!(hash_none, "", "None deps should produce empty hash");
-
-        let hash_empty = get_external_deps_hash(&Some(HashSet::new()));
-        assert!(
-            !hash_empty.is_empty(),
-            "empty set should produce non-empty hash"
-        );
-    }
-
-    #[test]
-    fn test_external_deps_hash_order_independent() {
-        use turborepo_lockfiles::Package;
-
-        let deps1: HashSet<Package> = vec![
-            Package {
-                key: "a".to_string(),
-                version: "1.0".to_string(),
-            },
-            Package {
-                key: "b".to_string(),
-                version: "2.0".to_string(),
-            },
-        ]
-        .into_iter()
-        .collect();
-
-        let deps2: HashSet<Package> = vec![
-            Package {
-                key: "b".to_string(),
-                version: "2.0".to_string(),
-            },
-            Package {
-                key: "a".to_string(),
-                version: "1.0".to_string(),
-            },
-        ]
-        .into_iter()
-        .collect();
-
-        let hash1 = get_external_deps_hash(&Some(deps1));
-        let hash2 = get_external_deps_hash(&Some(deps2));
-        assert_eq!(
-            hash1, hash2,
-            "hash should be order-independent since we sort"
-        );
-    }
+    /// The linear hash of a pre-sorted closure must be byte-identical to the
+    /// legacy path, which collected a `HashSet` and sorted by
+    /// `(key, version)` before hashing.
 
     #[test]
     fn test_tracker_pre_sized_hashmaps() {

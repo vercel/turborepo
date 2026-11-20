@@ -1,5 +1,6 @@
 import path from "node:path";
 import { createRequire } from "node:module";
+import { randomUUID } from "node:crypto";
 import fs from "fs-extra";
 import type { Project } from "@turbo/workspaces";
 import type { NodePlopAPI, PlopGenerator } from "node-plop";
@@ -39,14 +40,23 @@ async function createPlopFromConfig(
   configPath: string,
   destBasePath: string
 ): Promise<NodePlopAPI | undefined> {
+  const bundledConfigPath = await bundleConfigForLoading(configPath);
   try {
-    return await nodePlop(await bundleConfigForLoading(configPath), {
+    return await nodePlop(bundledConfigPath, {
       destBasePath,
       force: false
     });
   } catch (e) {
     logger.error(e);
     return undefined;
+  } finally {
+    if (bundledConfigPath !== configPath) {
+      try {
+        fs.removeSync(bundledConfigPath);
+      } catch {
+        // Ignore cleanup failures.
+      }
+    }
   }
 }
 
@@ -101,25 +111,21 @@ export async function getCustomGenerators({
 
   const gensByWorkspace: Record<string, Array<Generator>> = {};
 
-  try {
-    for (const conf of configs) {
-      const plop = await createPlopFromConfig(conf.config, conf.root);
-      if (!plop) {
-        continue;
-      }
-
-      for (const g of plop.getGeneratorList()) {
-        const gen = plop.getGenerator(g.name) as Generator;
-        gen.workspace = conf.workspace;
-        gen.configPath = conf.config;
-        gen.destBasePath = conf.root;
-
-        gensByWorkspace[conf.workspace] ??= [];
-        gensByWorkspace[conf.workspace].push(gen);
-      }
+  for (const conf of configs) {
+    const plop = await createPlopFromConfig(conf.config, conf.root);
+    if (!plop) {
+      continue;
     }
-  } finally {
-    cleanupBundledConfigs();
+
+    for (const g of plop.getGeneratorList()) {
+      const gen = plop.getGenerator(g.name) as Generator;
+      gen.workspace = conf.workspace;
+      gen.configPath = conf.config;
+      gen.destBasePath = conf.root;
+
+      gensByWorkspace[conf.workspace] ??= [];
+      gensByWorkspace[conf.workspace].push(gen);
+    }
   }
 
   const result: Array<Generator | InstanceType<typeof Separator>> = [];
@@ -181,8 +187,6 @@ function injectTurborepoData({
 // or ESM syntax. We use esbuild at runtime to bundle the user's config into a
 // single CJS file before node-plop loads it. esbuild handles TS transpilation
 // and ESM-to-CJS conversion transparently.
-const bundled = new Set<string>();
-
 // Modules provided by @turbo/gen that user configs may import without
 // installing themselves (backward compat). When esbuild can't resolve these
 // from the user's project, we resolve them from @turbo/gen's own node_modules.
@@ -214,7 +218,10 @@ function getOwnNodeModulesDirs(): Array<string> {
 async function bundleConfigForLoading(configPath: string): Promise<string> {
   const outName = path
     .basename(configPath)
-    .replace(/\.(ts|js|cjs|mts|mjs)$/, ".turbo-gen-bundled.cjs");
+    .replace(
+      /\.(ts|js|cjs|mts|mjs)$/,
+      `.${randomUUID()}.turbo-gen-bundled.cjs`
+    );
   const outDir = path.dirname(configPath);
   const outPath = path.join(outDir, outName);
 
@@ -248,7 +255,6 @@ async function bundleConfigForLoading(configPath: string): Promise<string> {
       return configPath;
     }
 
-    bundled.add(outPath);
     return outPath;
   } catch {
     return configPath;
@@ -313,17 +319,6 @@ function cliProvidedModulesPlugin(configPath: string) {
   };
 }
 
-function cleanupBundledConfigs() {
-  for (const p of bundled) {
-    try {
-      fs.removeSync(p);
-    } catch {
-      // ignore cleanup failures
-    }
-  }
-  bundled.clear();
-}
-
 function getWorkspaceGeneratorConfigs({ project }: { project: Project }) {
   const workspaceGeneratorConfigs: Array<{
     config: string;
@@ -356,12 +351,7 @@ export async function runCustomGenerator({
   const resolvedConfigPath = configPath ?? generator.configPath;
   const destBasePath = configPath ?? generator.destBasePath;
 
-  let plop: NodePlopAPI | undefined;
-  try {
-    plop = await createPlopFromConfig(resolvedConfigPath, destBasePath);
-  } finally {
-    cleanupBundledConfigs();
-  }
+  const plop = await createPlopFromConfig(resolvedConfigPath, destBasePath);
 
   if (!plop) {
     throw new GeneratorError("Unable to load generators", {
@@ -408,11 +398,13 @@ export async function runCustomGenerator({
   }
 
   if (results.changes.length > 0) {
-    logger.info("Changes made:");
+    logger.info("Actions completed:");
     for (const c of results.changes) {
       if (c.path) {
         logger.item(`${c.path} (${c.type})`);
       }
     }
+  } else {
+    logger.info("No actions were taken.");
   }
 }

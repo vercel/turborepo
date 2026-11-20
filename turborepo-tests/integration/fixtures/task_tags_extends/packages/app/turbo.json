@@ -1,0 +1,10 @@
+{
+  "extends": ["//", "shared"],
+  "tasks": {
+    "build": { "tags": ["$TURBO_EXTENDS$", "local", "repeat"] },
+    "test": { "tags": [] },
+    "untagged": { "tags": ["$TURBO_EXTENDS$", "orphan"] },
+    "fresh": { "extends": false, "tags": ["$TURBO_EXTENDS$", "fresh"] },
+    "markerOnly": { "tags": ["$TURBO_EXTENDS$"] }
+  }
+}

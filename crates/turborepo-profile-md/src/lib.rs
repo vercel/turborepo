@@ -44,16 +44,16 @@ mod tests {
     fn end_to_end() {
         let json = r#"[
             {"ph":"M","pid":1,"name":"thread_name","tid":0,"args":{"name":"main"}},
-            {"ph":"b","pid":1,"ts":0.0,"name":"build","cat":"turborepo_lib::run","tid":0,"id":1,".file":"crates/turborepo-lib/src/run/builder.rs",".line":194},
-            {"ph":"b","pid":1,"ts":50.0,"name":"resolve_packages","cat":"turborepo_lib::run","tid":0,"id":2,".file":"crates/turborepo-lib/src/run/mod.rs",".line":189},
-            {"ph":"e","pid":1,"ts":150.0,"name":"resolve_packages","cat":"turborepo_lib::run","tid":0,"id":2},
+            {"ph":"b","pid":1,"ts":0.0,"name":"build","cat":"turborepo_run","tid":0,"id":1,".file":"crates/turborepo-run/src/builder.rs",".line":194},
+            {"ph":"b","pid":1,"ts":50.0,"name":"resolve_packages","cat":"turborepo_run","tid":0,"id":2,".file":"crates/turborepo-run/src/lib.rs",".line":189},
+            {"ph":"e","pid":1,"ts":150.0,"name":"resolve_packages","cat":"turborepo_run","tid":0,"id":2},
             {"ph":"b","pid":1,"ts":200.0,"name":"calculate_hashes","cat":"turborepo_task_hash","tid":0,"id":3,".file":"crates/turborepo-task-hash/src/lib.rs",".line":104},
             {"ph":"b","pid":1,"ts":220.0,"name":"calculate_file_hash","cat":"turborepo_task_hash","tid":0,"id":4,".file":"crates/turborepo-task-hash/src/lib.rs",".line":320},
             {"ph":"e","pid":1,"ts":350.0,"name":"calculate_file_hash","cat":"turborepo_task_hash","tid":0,"id":4},
             {"ph":"e","pid":1,"ts":400.0,"name":"calculate_hashes","cat":"turborepo_task_hash","tid":0,"id":3},
             {"ph":"b","pid":1,"ts":410.0,"name":"execute_task","cat":"turborepo_task_executor::exec","tid":0,"id":5,".file":"crates/turborepo-task-executor/src/exec.rs",".line":272,"args":{"task":"web#build"}},
             {"ph":"e","pid":1,"ts":900.0,"name":"execute_task","cat":"turborepo_task_executor::exec","tid":0,"id":5},
-            {"ph":"e","pid":1,"ts":1000.0,"name":"build","cat":"turborepo_lib::run","tid":0,"id":1}
+            {"ph":"e","pid":1,"ts":1000.0,"name":"build","cat":"turborepo_run","tid":0,"id":1}
         ]"#;
 
         let md = trace_contents_to_markdown(json).unwrap();

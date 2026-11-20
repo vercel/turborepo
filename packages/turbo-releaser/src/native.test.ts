@@ -124,6 +124,35 @@ describe("generateNativePackage", () => {
     assert.equal(actualPackageJson.os[0], "win32");
   });
 
+  it("should mark the linux package as installable on android", async (t) => {
+    const mockRm = mock.fn((_path: string) => Promise.resolve());
+    const mockMkdir = mock.fn((_path: string) => Promise.resolve());
+    const mockCopyFile = mock.fn((_src: string, _dst: string) =>
+      Promise.resolve()
+    );
+    const mockWriteFile = mock.fn((_path: string, _data: string) =>
+      Promise.resolve()
+    );
+
+    t.mock.method(fs, "rm", mockRm);
+    t.mock.method(fs, "mkdir", mockMkdir);
+    t.mock.method(fs, "copyFile", mockCopyFile);
+    t.mock.method(fs, "writeFile", mockWriteFile);
+
+    await native.generateNativePackage({
+      platform: { os: "linux", arch: "arm64" },
+      version: "1.0.0",
+      outputDir,
+      outputBaseDir,
+      packagePrefix: "@turbo"
+    });
+
+    const actualPackageJson = JSON.parse(
+      mockWriteFile.mock.calls[0].arguments[1]
+    ) as { os: Array<string> };
+    assert.deepEqual(actualPackageJson.os, ["android", "linux"]);
+  });
+
   it("should propagate errors", async (t) => {
     const mockRm = mock.fn(() => {
       throw new Error("Failed to remove directory");

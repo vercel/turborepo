@@ -9,13 +9,15 @@ related:
   - /docs/reference/system-environment-variables
 ---
 
+import { ExperimentalBadge } from "@/components/geistdocs/experimental-badge";
+
 Run GraphQL queries against your monorepo.
 
 ```bash title="Terminal"
 turbo query [query] [flags]
 ```
 
-To quickly get the GraphQL schema, use the `--schema`flag.
+To quickly get the GraphQL schema, use the `--schema` flag.
 
 ```bash title="Terminal"
 turbo query --schema
@@ -38,6 +40,145 @@ When passed a file path, the command will read the file and run the query.
 ```bash title="Terminal"
 turbo query query.gql
 ```
+
+## Affected packages
+
+By default, `affectedPackages` follows the Package Graph. An explicit `package#task` dependency does not create a package dependency.
+
+With [`futureFlags.affectedUsingTaskInputs`](/docs/reference/configuration#affectedusingtaskinputs) enabled, `affectedPackages` instead returns the unique packages that own affected tasks. It matches changed files against task `inputs` and follows the Task Graph to dependent tasks, including across enabled toolchains. Packages with no affected tasks are omitted. Unchanged prerequisites are not included merely because an affected task needs them.
+
+This also applies to `turbo query affected --packages`. Use `affectedTasks` when you need the individual tasks rather than their package names, and `withDependencies` when you need their execution prerequisites.
+
+## Task planning
+
+Select task metadata without collecting a full `turbo run --dry=json` summary:
+
+```bash title="Terminal"
+turbo query '
+query {
+  globalEnvironment { env passThroughEnv }
+  affectedTasks(base: "origin/main", head: "HEAD", tasks: ["lint", "test"]) {
+    items { fullName }
+    withDependencies {
+      length
+      items {
+        fullName
+        name
+        command
+        package { name path }
+        directDependencies { items { fullName } }
+        environment { env passThroughEnv }
+      }
+    }
+  }
+}
+'
+```
+
+You can also save the query as `ci-plan.gql` and run `turbo query ci-plan.gql`.
+
+### `withDependencies`
+
+`affectedTasks.withDependencies` returns the tasks in the collection and their
+transitive dependencies, deduplicated by task ID and sorted by package name, then
+task name. `length` counts the unique tasks. An empty selection returns an empty
+collection.
+
+Each task appears once, even when several tasks share the same dependency. Select
+only `fullName` beneath `directDependencies` to represent edges without repeating
+each task's dependency tree. Unlike nesting `allDependencies` beneath every task,
+this keeps the graph output proportional to its nodes and direct edges.
+
+The collection includes non-executable transit and leaf dependencies, as well as
+implicit native tasks and command overrides. `command` is `null` for tasks without
+a command. The internal graph root is excluded; configured root tasks such as
+`//#lint` are included when required.
+
+This does not change `affectedTasks.items`: that collection retains its existing
+affected-task selection and runnable dependency behavior. `withDependencies`
+provides the complete dependency graph, including non-executable leaf nodes.
+
+### Environment patterns
+
+`globalEnvironment` exposes `globalEnv` and `globalPassThroughEnv` as `env` and
+`passThroughEnv`. Each task's `environment` exposes its configured `env` and
+`passThroughEnv` after resolving Package Configurations, inheritance, and
+`$TURBO_EXTENDS$`. These fields are also available on tasks outside an affected
+query, such as `package(name: "web") { tasks { items { environment { env } } } }`.
+
+Both fields return arrays, using `[]` when no patterns are configured. Global
+patterns remain separate from task patterns. Wildcards and exclusions are
+preserved: these are configuration patterns, not environment variable values,
+expanded names, framework-inferred variables, or a complete process environment.
+
+The query does not execute tasks or report cache hits. Unlike dry-run summaries,
+this selection does not include file-hash inventories.
+
+### Log files
+
+Each task's `logFile` is the path to the log the task writes, relative to the
+repository root, and matches the `logFile` that `turbo run --dry=json` reports
+for that task. It is `null` when the task sets `cache: false`, because a task
+that does not cache writes no log file.
+
+### Task hashes
+
+Each task's `hash` is the hash the task contributes to cache lookups, and it
+matches the `hash` that `turbo run --dry=json` reports for that task. Both read
+the same inputs Turbo hashes before a run, so they agree for the same repository
+state, environment, and configuration.
+
+The hash is `null` when it cannot be known before the task runs, such as when a
+task's inputs include files that its dependencies produce. `hashReason` then
+explains why, matching the dry run's `hashReason`; it is `null` when the hash is
+known up front.
+
+## Package task catalogue
+
+`package.tasks` lists the package's native scripts and resolved Task Graph entries,
+including configured tasks without a script and tasks with an explicit command.
+Scriptless tasks can be entrypoints that depend on runnable tasks. Their `script`
+is `null`, and their `command` is `null` unless a command is configured. Inherited
+and shared configurations are resolved before listing tasks; scriptless tasks
+excluded by `extends: false` are not included. Task names are deduplicated and sorted.
+Task filters apply to this full catalogue, not only tasks with native scripts.
+
+## Tags
+
+Packages and tasks expose a `tags` array, returning `[]` when no labels are configured. Package tags come from the package's loaded `turbo.json` and do not include task labels or inherit root package labels.
+
+A task's `tags` contains its resolved task labels only, after configuration inheritance and `$TURBO_EXTENDS$` composition. Order and duplicate labels are preserved, and the inheritance marker is not exposed. Select `package { tags }` to read its package labels separately.
+
+Use `has: { field: TAG, value: "label" }` to filter by exact, case-sensitive membership. Package predicates match package labels only. Task predicates match either resolved task labels or package labels.
+
+```bash title="Terminal"
+turbo query '
+query {
+  packages(filter: {has: {field: TAG, value: "frontend"}}) {
+    items { name tags }
+  }
+  package(name: "web") {
+    tasks(filter: {has: {field: TAG, value: "ci"}}) {
+      items { fullName tags package { tags } }
+    }
+  }
+}
+'
+```
+
+Task predicates support `and`, `or`, and `not`, as well as `equal` and `notEqual` on `NAME`, `FULL_NAME`, and `EXPERIMENTAL_CI`. `EXPERIMENTAL_CI` compares the resolved `experimentalCI` metadata as JSON: a boolean, an object, or `null` when unset. Objects use structural equality, not partial matching. An omitted predicate `value` is equivalent to explicit `null`. `NAME` and `FULL_NAME` equality still only matches strings, and `TAG` membership still only matches string labels. To select configured values other than `false`, combine `notEqual: {field: EXPERIMENTAL_CI, value: null}` and `notEqual: {field: EXPERIMENTAL_CI, value: false}` with `and`. This comparison does not interpret metadata contents or assign meaning to tags. The optional task `filter` is available on package task lists, task dependency/dependent lists, and `withDependencies`.
+
+For affected tasks, pass `taskFilter` alongside the existing package `filter` or task-name `tasks` arguments:
+
+```graphql title="ci-plan.gql"
+query {
+  affectedTasks(base: "origin/main", head: "HEAD", taskFilter: {has: {field: TAG, value: "ci"}}) {
+    items { fullName tags package { tags } }
+  }
+}
+```
+
+Affected-task filters intersect before required prerequisites are added, so prerequisites may not carry the selected tag. Filters on dependency/dependent lists and `withDependencies` apply after traversal; they narrow the returned list without pruning traversal through non-matching tasks.
 
 ## Shorthands
 
@@ -79,7 +220,7 @@ turbo query ls web
 
 #### `--filter` (`-F`)
 
-Use pnpm-style package selectors to narrow the package list. Same syntax as [`turbo run --filter`](/docs/reference/command-line-reference/run#--filter).
+Use pnpm-style package selectors to narrow the package list. Same syntax as [`turbo run --filter`](/docs/reference/run#--filter-string).
 
 ```bash title="Terminal"
 turbo query ls --filter=web...
@@ -97,7 +238,7 @@ turbo query ls --affected
 turbo query ls --affected --filter=web
 ```
 
-#### `--output`
+#### `--output` <ExperimentalBadge />
 
 Control the output format. Defaults to `pretty` (human-readable).
 
@@ -119,7 +260,7 @@ turbo query affected [flags]
   checkout. If the checkout is too shallow, then all packages will be considered
   changed.
 
-For example, setting up Git to check out with `--filter=blob:none --depth=0` will ensure `turbo query affected` has the right history to work correctly.
+For example, a blobless clone with full history (`git clone --filter=blob:none`, without `--depth`) gives `turbo query affected` the history it needs. With `actions/checkout`, set `filter: blob:none` and `fetch-depth: 0`.
 
 </Callout>
 
@@ -191,6 +332,59 @@ turbo query affected --packages web docs
   }
 }
 ```
+
+#### Understanding affected-package reasons
+
+The `reason` object explains why a package is included. Its `__typename` is
+diagnostic output, not a `turbo.json` configuration value.
+
+Most results are package-specific: a source file or a package's resolved
+dependencies changed. Some changes must be handled repository-wide because
+they change a shared input or Turborepo cannot safely determine a narrower
+scope. A repository-wide reason includes every package in the result.
+
+This is related to, but distinct from, cache behavior. For example,
+`RootInternalDepChanged` means that a workspace package used by the root
+package changed. It selects every package when comparing Git revisions and
+also changes the global hash, so every cacheable task misses cache. For the
+complete cache model, see [Caching](/docs/crafting-your-repository/caching#root-workspace-dependencies).
+
+Use the reason to diagnose why a package was selected:
+
+```bash title="Terminal"
+turbo query affected --packages --base main --head HEAD
+```
+
+##### Change-detection reason types
+
+| `reason.__typename` | Meaning |
+| ------------------- | ------- |
+| `FileChanged` | A file in this package changed. |
+| `LockfileChanged` | The lockfile comparison found added or removed external dependencies for this package. |
+| `ConservativeRootLockfileChanged` | The root package is included after a lockfile change because it may depend on a workspace package. |
+| `RootInternalDepChanged` | A direct or transitive internal workspace dependency of the root package changed. All packages are selected and the global hash changes. |
+| `GlobalDepsChanged` | A file configured in `globalDependencies` changed. All packages are selected. |
+| `DefaultGlobalFileChanged` | `turbo.json`, `turbo.jsonc`, or the root `.gitattributes` changed. All packages are selected. |
+| `LockfileChangeDetectionFailed` | Turborepo could not safely compare the lockfile versions, so all packages are selected. |
+| `LockfileChangedWithoutDetails` | The lockfile changed but its previous content was unavailable, so all packages are selected. |
+| `GitRefNotFound` | The requested Git range could not be resolved, so all packages are selected. |
+| `ScmError` | Source-control change detection failed, so all packages are selected. |
+
+##### Package-selection reason types
+
+These types describe graph or filter expansion rather than a direct cache
+invalidation:
+
+| `reason.__typename` | Meaning |
+| ------------------- | ------- |
+| `DependencyChanged` | This package was included because one of its dependencies changed. |
+| `DependentChanged` | This package was included because an included package depends on it. |
+| `InFilteredDirectory` | The package was selected by a directory filter. |
+| `IncludedByFilter` | The package was selected explicitly by a filter or package-qualified task. |
+| `RootTask` | A root task was included in the run. |
+
+Run `turbo query --schema` to inspect the exact GraphQL schema supported by
+your installed Turborepo version.
 
 #### `--base`
 

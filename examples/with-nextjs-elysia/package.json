@@ -1,30 +1,27 @@
 {
-  "name": "my-turborepo",
+  "name": "with-nextjs-elysia",
   "version": "0.0.0",
-  "packageManager": "bun@1.3.10",
   "private": true,
-  "description": "",
-  "author": "",
-  "license": "UNLICENSED",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
   "scripts": {
-    "dev": "turbo run dev --ui=tui",
     "build": "turbo run build",
-    "check": "bunx ultracite check",
-    "fix": "bun x ultracite fix",
-    "check-types": "turbo run check-types"
-  },
-  "workspaces": {
-    "packages": [
-      "apps/*",
-      "packages/*"
-    ]
+    "check": "ultracite check",
+    "check-types": "turbo run check-types",
+    "dev": "turbo run dev",
+    "fix": "ultracite fix",
+    "lint": "turbo run lint"
   },
   "devDependencies": {
+    "@biomejs/biome": "2.6.8",
     "@repo/typescript-config": "workspace:*",
-    "ultracite": "7.2.5",
-    "turbo": "^2.9.6"
+    "turbo": "2.11.13",
+    "ultracite": "8.3.1"
   },
+  "packageManager": "bun@1.4.5",
   "engines": {
-    "node": ">=18"
+    "node": ">=26"
   }
 }

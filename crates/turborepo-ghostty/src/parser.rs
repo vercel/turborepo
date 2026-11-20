@@ -1,10 +1,13 @@
-use crate::{
-    Error, RenderState, Result,
+use libghostty_vt::{
+    RenderState, Terminal,
     error::Error as GhosttyInnerError,
     fmt::{Format, Formatter, FormatterOptions},
+    screen::TrackedGridRef,
     selection::{FormatOptions, Selection},
-    terminal::{Point, PointCoordinate, ScrollViewport, Terminal},
+    terminal::{Point, PointCoordinate, ScrollViewport},
 };
+
+use crate::{Error, Result};
 
 const DEFAULT_CELL_WIDTH_PX: u32 = 8;
 const DEFAULT_CELL_HEIGHT_PX: u32 = 16;
@@ -14,23 +17,25 @@ pub struct Parser {
     pub terminal: Terminal<'static, 'static>,
     pub render_state: RenderState<'static>,
     selection_start: Option<(u16, u16)>,
-    /// Last viewport selection endpoints, used to refresh grid refs before
-    /// copy.
+    /// Last viewport selection endpoints, retained for introspection.
     selection_range: Option<(u16, u16, u16, u16)>,
+    selection_start_ref: Option<TrackedGridRef>,
+    selection_end_ref: Option<TrackedGridRef>,
     max_scrollback: usize,
 }
 
 impl Parser {
-    pub fn new(rows: u16, cols: u16, scrollback_len: usize) -> Self {
-        Self::try_new(rows, cols, scrollback_len).expect("failed to initialize ghostty terminal")
-    }
-
     pub fn try_new(rows: u16, cols: u16, scrollback_len: usize) -> Result<Self> {
-        let terminal = Terminal::new(crate::terminal::Options {
-            cols,
-            rows,
-            max_scrollback: scrollback_len,
-        })?;
+        let mut terminal = Terminal::new(cols, rows)?;
+        if scrollback_len == 0 {
+            // A zero byte cap disables history; a zero line cap still retains
+            // history at page granularity, so it is not equivalent.
+            terminal.set_scrollback_max_bytes(Some(0))?;
+        } else {
+            // Preserve the caller's line limit without replacing Ghostty's
+            // default byte cap or interpreting the line count as bytes.
+            terminal.set_scrollback_max_lines(Some(scrollback_len))?;
+        }
         let render_state = RenderState::new()?;
 
         Ok(Self {
@@ -38,6 +43,8 @@ impl Parser {
             render_state,
             selection_start: None,
             selection_range: None,
+            selection_start_ref: None,
+            selection_end_ref: None,
             max_scrollback: scrollback_len,
         })
     }
@@ -96,8 +103,25 @@ impl Parser {
     pub fn clear_selection(&mut self) -> Result<()> {
         self.selection_start = None;
         self.selection_range = None;
+        self.selection_start_ref = None;
+        self.selection_end_ref = None;
         self.terminal.set_selection(None)?;
         Ok(())
+    }
+
+    pub fn begin_selection(&mut self, row: u16, col: u16) -> Result<()> {
+        self.clear_selection()?;
+        self.selection_start = Some((row, col));
+        self.selection_start_ref = Some(self.terminal.track_grid_ref(viewport_point(row, col))?);
+        Ok(())
+    }
+
+    pub fn cancel_incomplete_selection(&mut self) {
+        if self.selection_range.is_none() {
+            self.selection_start = None;
+            self.selection_start_ref = None;
+            self.selection_end_ref = None;
+        }
     }
 
     pub fn update_selection(
@@ -107,20 +131,41 @@ impl Parser {
         end_row: u16,
         end_col: u16,
     ) -> Result<()> {
+        if self.selection_start_ref.is_none() {
+            self.begin_selection(start_row, start_col)?;
+        }
+        self.update_selection_end(end_row, end_col)
+    }
+
+    pub fn update_selection_end(&mut self, end_row: u16, end_col: u16) -> Result<()> {
+        let Some((start_row, start_col)) = self.selection_start else {
+            return Ok(());
+        };
         self.selection_range = Some((start_row, start_col, end_row, end_col));
+        self.selection_end_ref = Some(
+            self.terminal
+                .track_grid_ref(viewport_point(end_row, end_col))?,
+        );
         self.refresh_selection()
     }
 
     fn refresh_selection(&mut self) -> Result<()> {
-        let Some((start_row, start_col, end_row, end_col)) = self.selection_range else {
+        let (Some(start), Some(end)) = (&self.selection_start_ref, &self.selection_end_ref) else {
             self.terminal.set_selection(None)?;
             return Ok(());
         };
-
-        let start = self
-            .terminal
-            .grid_ref(viewport_point(start_row, start_col))?;
-        let end = self.terminal.grid_ref(viewport_point(end_row, end_col))?;
+        let snapshots = (
+            start.snapshot(&self.terminal)?,
+            end.snapshot(&self.terminal)?,
+        );
+        let (Some(start), Some(end)) = snapshots else {
+            self.selection_start = None;
+            self.selection_range = None;
+            self.selection_start_ref = None;
+            self.selection_end_ref = None;
+            self.terminal.set_selection(None)?;
+            return Ok(());
+        };
         let selection = Selection::new(start, end, false);
         self.terminal.set_selection(Some(&selection))?;
         Ok(())
@@ -140,6 +185,14 @@ impl Parser {
 
     pub fn has_selection(&self) -> bool {
         self.selection_range.is_some()
+            && self
+                .selection_start_ref
+                .as_ref()
+                .is_some_and(TrackedGridRef::has_value)
+            && self
+                .selection_end_ref
+                .as_ref()
+                .is_some_and(TrackedGridRef::has_value)
     }
 
     pub fn selection_range(&self) -> Option<(u16, u16, u16, u16)> {
@@ -170,6 +223,8 @@ impl Parser {
         self.terminal.reset();
         self.selection_start = None;
         self.selection_range = None;
+        self.selection_start_ref = None;
+        self.selection_end_ref = None;
     }
 
     pub fn max_scrollback(&self) -> usize {
@@ -190,7 +245,7 @@ mod tests {
 
     #[test]
     fn bare_lf_is_normalized_by_caller_and_renders_on_new_line() {
-        let mut parser = Parser::new(5, 20, 0);
+        let mut parser = Parser::try_new(5, 20, 0).expect("parser");
         parser.process(b"hello\r\nworld");
         let formatted = parser.format_screen_vt().expect("format screen");
         let output = String::from_utf8_lossy(&formatted);
@@ -199,8 +254,50 @@ mod tests {
     }
 
     #[test]
+    fn zero_scrollback_disables_history() {
+        let mut parser = Parser::try_new(2, 20, 0).expect("parser");
+        assert_eq!(parser.size().expect("size"), (2, 20));
+        assert_eq!(parser.max_scrollback(), 0);
+        assert_eq!(
+            parser.terminal.scrollback_max_bytes().expect("byte cap"),
+            Some(0)
+        );
+
+        parser.process(b"discarded\r\nvisible\r\nlast");
+        parser.scroll_to_top().expect("scroll to top");
+        let formatted = parser.format_screen_vt().expect("format screen");
+        let output = String::from_utf8_lossy(&formatted);
+        assert!(!output.contains("discarded"));
+        assert!(output.contains("visible"));
+        assert!(output.contains("last"));
+    }
+
+    #[test]
+    fn positive_scrollback_sets_line_limit_and_preserves_default_byte_cap() {
+        let default_terminal = Terminal::new(40, 2).expect("default terminal");
+        let default_byte_cap = default_terminal
+            .scrollback_max_bytes()
+            .expect("default byte cap");
+        let mut parser = Parser::try_new(2, 40, 100).expect("parser");
+        assert_eq!(parser.max_scrollback(), 100);
+        assert_eq!(
+            parser.terminal.scrollback_max_lines().expect("line cap"),
+            Some(100)
+        );
+        assert_eq!(
+            parser.terminal.scrollback_max_bytes().expect("byte cap"),
+            default_byte_cap
+        );
+
+        parser.process(b"retained\r\nnext\r\nlast");
+        parser.scroll_to_top().expect("scroll to top");
+        let formatted = parser.format_screen_vt().expect("format screen");
+        assert!(String::from_utf8_lossy(&formatted).contains("retained"));
+    }
+
+    #[test]
     fn resize_reflows_existing_output() {
-        let mut parser = Parser::new(5, 10, 0);
+        let mut parser = Parser::try_new(5, 10, 0).expect("parser");
         parser.process(b"hello world");
         parser.resize(5, 20).expect("resize");
         assert_eq!(parser.size().expect("size"), (5, 20));
@@ -213,7 +310,7 @@ mod selection_tests {
 
     #[test]
     fn drag_selection_returns_text() {
-        let mut parser = Parser::new(10, 40, 100);
+        let mut parser = Parser::try_new(10, 40, 100).expect("parser");
         parser.process(b"hello world\r\n");
         parser
             .update_selection(0, 0, 0, 4)
@@ -224,8 +321,56 @@ mod selection_tests {
     }
 
     #[test]
+    fn pinned_anchor_survives_output_before_drag() {
+        let mut parser = Parser::try_new(2, 40, 100).expect("parser");
+        parser.process(b"anchor\r\nnext");
+        parser.begin_selection(0, 0).expect("begin selection");
+        assert!(!parser.has_selection());
+        assert_eq!(parser.selected_text().expect("selected text"), None);
+
+        parser.process(b"\r\nnew");
+        parser
+            .update_selection_end(1, 2)
+            .expect("update selection end");
+        let text = parser
+            .selected_text()
+            .expect("selected text")
+            .expect("selection");
+        assert!(text.starts_with("anchor"));
+    }
+
+    #[test]
+    fn cancelling_incomplete_selection_releases_anchor() {
+        let mut parser = Parser::try_new(2, 40, 100).expect("parser");
+        parser.process(b"anchor");
+        parser.begin_selection(0, 0).expect("begin selection");
+
+        parser.cancel_incomplete_selection();
+
+        assert_eq!(parser.selection_start, None);
+        assert!(parser.selection_start_ref.is_none());
+        assert!(!parser.has_selection());
+    }
+
+    #[test]
+    fn invalid_selection_refs_clear_logical_state() {
+        let mut parser = Parser::try_new(2, 40, 1).expect("parser");
+        parser.process(b"anchor\r\nnext");
+        parser.begin_selection(0, 0).expect("begin selection");
+        parser
+            .update_selection_end(1, 3)
+            .expect("update selection end");
+        assert!(parser.has_selection());
+
+        parser.terminal.reset();
+        parser.prepare_render().expect("prepare render");
+        assert!(!parser.has_selection());
+        assert_eq!(parser.selection_range(), None);
+    }
+
+    #[test]
     fn selection_survives_additional_output() {
-        let mut parser = Parser::new(10, 40, 100);
+        let mut parser = Parser::try_new(10, 40, 100).expect("parser");
         parser.process(b"hello world\r\n");
         parser
             .update_selection(0, 0, 0, 4)

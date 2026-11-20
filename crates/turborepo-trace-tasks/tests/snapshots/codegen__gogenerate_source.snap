@@ -1,0 +1,412 @@
+---
+source: crates/turborepo-trace-tasks/tests/codegen.rs
+expression: out
+---
+## gogenerate:api/api.go:3
+{
+  "name": "api.go:3",
+  "lines": [
+    "oapi-codegen -config oapi.yaml spec.yaml"
+  ],
+  "commands": [
+    "oapi-codegen -config oapi.yaml spec.yaml [oapi-codegen] Full"
+  ],
+  "spec": {
+    "inputs": [
+      "api/shared.yaml",
+      "api/spec.yaml",
+      "api/templates/client.tmpl"
+    ],
+    "outputs": [
+      {
+        "path": "api/api.gen.go",
+        "kind": "generated"
+      }
+    ],
+    "configs": [
+      "api/api.go",
+      "api/oapi.yaml",
+      "go.mod",
+      "go.sum"
+    ],
+    "toolchain": [
+      {
+        "ecosystem": "go",
+        "name": "github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen"
+      }
+    ]
+  }
+}
+
+## gogenerate:color/color.go:3
+{
+  "name": "color.go:3",
+  "lines": [
+    "stringer -type=Color"
+  ],
+  "commands": [
+    "stringer -type=Color [stringer] Full"
+  ],
+  "spec": {
+    "outputs": [
+      {
+        "path": "color/color_string.go",
+        "kind": "generated"
+      }
+    ],
+    "configs": [
+      "color/color.go",
+      "go.mod",
+      "go.sum"
+    ],
+    "entries": [
+      {
+        "path": "color",
+        "lang": "go"
+      }
+    ],
+    "memberships": [
+      {
+        "dir": "color",
+        "pattern": "*.go",
+        "exclude": [
+          "color_string.go"
+        ],
+        "reason": "go package"
+      }
+    ],
+    "toolchain": [
+      {
+        "ecosystem": "go",
+        "name": "golang.org/x/tools/cmd/stringer"
+      }
+    ]
+  }
+}
+
+## gogenerate:di/wire.go:5
+{
+  "name": "wire.go:5",
+  "lines": [
+    "wire"
+  ],
+  "commands": [
+    "wire [wire] Full"
+  ],
+  "spec": {
+    "outputs": [
+      {
+        "path": "di/wire_gen.go",
+        "kind": "generated"
+      }
+    ],
+    "configs": [
+      "di/wire.go",
+      "go.mod",
+      "go.sum"
+    ],
+    "entries": [
+      {
+        "path": "di",
+        "lang": "go"
+      }
+    ],
+    "memberships": [
+      {
+        "dir": "di",
+        "pattern": "*.go",
+        "exclude": [
+          "wire_gen.go"
+        ],
+        "reason": "go package"
+      }
+    ],
+    "toolchain": [
+      {
+        "ecosystem": "go",
+        "name": "github.com/google/wire/cmd/wire"
+      }
+    ]
+  }
+}
+
+## gogenerate:ej/model.go:3
+{
+  "name": "model.go:3",
+  "lines": [
+    "easyjson -all model.go"
+  ],
+  "commands": [
+    "easyjson -all model.go [easyjson] Full"
+  ],
+  "spec": {
+    "outputs": [
+      {
+        "path": "ej/model_easyjson.go",
+        "kind": "generated"
+      }
+    ],
+    "configs": [
+      "ej/model.go",
+      "go.mod",
+      "go.sum"
+    ],
+    "entries": [
+      {
+        "path": "ej",
+        "lang": "go"
+      }
+    ],
+    "memberships": [
+      {
+        "dir": "ej",
+        "pattern": "*.go",
+        "exclude": [
+          "model_easyjson.go"
+        ],
+        "reason": "go package"
+      }
+    ],
+    "toolchain": [
+      {
+        "ecosystem": "go",
+        "name": "github.com/mailru/easyjson/easyjson"
+      }
+    ]
+  }
+}
+
+## gogenerate:ent/generate.go:3
+{
+  "name": "generate.go:3",
+  "lines": [
+    "go run -mod=mod entgo.io/ent/cmd/ent generate ./schema"
+  ],
+  "commands": [
+    "go run -mod=mod entgo.io/ent/cmd/ent generate ./schema [go-run-tool] Full"
+  ],
+  "spec": {
+    "outputs": [
+      {
+        "path": "ent",
+        "pattern": "**",
+        "exclude": [
+          "generate.go",
+          "entc.go",
+          "schema/**"
+        ],
+        "kind": "generated"
+      }
+    ],
+    "configs": [
+      "ent/generate.go",
+      "go.mod",
+      "go.sum"
+    ],
+    "entries": [
+      {
+        "path": "ent/schema",
+        "lang": "go"
+      }
+    ],
+    "memberships": [
+      {
+        "dir": "ent/schema",
+        "pattern": "*.go",
+        "reason": "go package"
+      }
+    ],
+    "toolchain": [
+      {
+        "ecosystem": "go",
+        "name": "entgo.io/ent/cmd/ent"
+      },
+      {
+        "ecosystem": "system",
+        "name": "go"
+      }
+    ]
+  }
+}
+
+## gogenerate:graph/resolver.go:3
+{
+  "name": "resolver.go:3",
+  "lines": [
+    "go run github.com/99designs/gqlgen generate"
+  ],
+  "commands": [
+    "go run github.com/99designs/gqlgen generate [go-run-tool] Full"
+  ],
+  "spec": {
+    "outputs": [
+      {
+        "path": "graph/generated/generated.go",
+        "kind": "generated"
+      },
+      {
+        "path": "graph/model/models_gen.go",
+        "kind": "generated"
+      },
+      {
+        "path": "graph/resolvers",
+        "pattern": "*.resolvers.go",
+        "kind": "generated"
+      }
+    ],
+    "configs": [
+      "go.mod",
+      "go.sum",
+      "graph/gqlgen.yml",
+      "graph/resolver.go"
+    ],
+    "entries": [
+      {
+        "path": "store",
+        "lang": "go"
+      }
+    ],
+    "memberships": [
+      {
+        "dir": "graph/schema",
+        "pattern": "*.graphqls",
+        "reason": "gqlgen schema"
+      },
+      {
+        "dir": "store",
+        "pattern": "*.go",
+        "reason": "go package"
+      }
+    ],
+    "toolchain": [
+      {
+        "ecosystem": "go",
+        "name": "github.com/99designs/gqlgen"
+      },
+      {
+        "ecosystem": "go",
+        "name": "github.com/acme/types"
+      },
+      {
+        "ecosystem": "system",
+        "name": "go"
+      }
+    ]
+  }
+}
+
+## gogenerate:store/store.go:4
+{
+  "name": "store.go:4",
+  "lines": [
+    "mockgen -source=$GOFILE -destination=../mocks/mock_$GOFILE -package=mocks"
+  ],
+  "commands": [
+    "mockgen -source=$GOFILE -destination=../mocks/mock_$GOFILE -package=mocks [mockgen] Full"
+  ],
+  "spec": {
+    "inputs": [
+      "store/store.go"
+    ],
+    "outputs": [
+      {
+        "path": "mocks/mock_store.go",
+        "kind": "generated"
+      }
+    ],
+    "configs": [
+      "go.mod",
+      "go.sum",
+      "store/store.go"
+    ],
+    "entries": [
+      {
+        "path": "store/store.go",
+        "lang": "go"
+      }
+    ],
+    "toolchain": [
+      {
+        "ecosystem": "go",
+        "name": "go.uber.org/mock/mockgen"
+      }
+    ]
+  }
+}
+
+## gogenerate:tools/tools.go:6
+{
+  "name": "tools.go:6",
+  "lines": [
+    "go run ./gen -out ../data/table.go"
+  ],
+  "commands": [
+    "go run ./gen -out ../data/table.go [go-run-generator] Full"
+  ],
+  "spec": {
+    "outputs": [
+      {
+        "path": "data/table.go",
+        "kind": "generated"
+      }
+    ],
+    "configs": [
+      "go.mod",
+      "go.sum",
+      "tools/tools.go"
+    ],
+    "entries": [
+      {
+        "path": "tools/gen",
+        "lang": "go"
+      }
+    ],
+    "memberships": [
+      {
+        "dir": "tools/gen",
+        "pattern": "*.go",
+        "reason": "go package"
+      }
+    ],
+    "toolchain": [
+      {
+        "ecosystem": "system",
+        "name": "go"
+      }
+    ]
+  }
+}
+
+## gogenerate:tools/tools.go:7
+{
+  "name": "tools.go:7",
+  "lines": [
+    "unknown-generator -pkg $GOPACKAGE"
+  ],
+  "commands": [
+    "unknown-generator -pkg $GOPACKAGE [-] Unknown"
+  ],
+  "spec": {
+    "configs": [
+      "tools/tools.go"
+    ],
+    "memberships": [
+      {
+        "dir": ".",
+        "pattern": "**",
+        "reason": "uncertain task"
+      },
+      {
+        "dir": ".",
+        "pattern": "**",
+        "reason": "unknown command `unknown-generator`"
+      }
+    ],
+    "uncertainties": [
+      {
+        "kind": "unknown_command",
+        "detail": "unknown-generator"
+      }
+    ]
+  }
+}

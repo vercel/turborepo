@@ -3,69 +3,27 @@
 //! This module provides the trait and factory for creating commands to execute
 //! tasks.
 
-use std::{
-    collections::HashSet,
-    ffi::OsString,
-    path::{Path, PathBuf},
-};
+use std::collections::{HashMap, HashSet};
 
 use tracing::debug;
-use turbopath::{AbsoluteSystemPath, PathError, RelativeUnixPath};
+use turbopath::{PathError, RelativeUnixPath};
 use turborepo_env::EnvironmentVariableMap;
 use turborepo_process::Command;
 use turborepo_repository::{
-    package_graph::{PackageGraph, PackageInfo, PackageName},
-    package_manager::PackageManager,
+    native_tasks::NativeCommandProgram,
+    package_graph::{PackageGraph, PackageName, PackageTaskContext},
 };
 use turborepo_task_id::TaskId;
-use turborepo_types::TaskArgs;
+use turborepo_types::{TaskArgs, TaskCommandOverride};
 
 use crate::MfeConfigProvider;
+
+/// Dependency that brings a package its own `microfrontends` proxy binary.
+const MICROFRONTENDS_PACKAGE: &str = "@vercel/microfrontends";
 
 fn apply_environment(cmd: &mut Command, environment: &EnvironmentVariableMap) {
     cmd.env_clear();
     cmd.envs(environment.iter());
-}
-
-#[cfg(windows)]
-// Avoid npm.cmd so Windows Ctrl+C reaches npm/node without cmd.exe emitting
-// "Terminate batch job (Y/N)?" during graceful shutdown.
-fn npm_direct_command(package_manager_binary: &Path) -> Option<(PathBuf, OsString)> {
-    if package_manager_binary.file_name()?.to_str()? != "npm.cmd" {
-        return None;
-    }
-
-    let node_dir = package_manager_binary.parent()?;
-    let node = node_dir.join("node.exe");
-    let npm_cli = node_dir
-        .join("node_modules")
-        .join("npm")
-        .join("bin")
-        .join("npm-cli.js");
-
-    (node.is_file() && npm_cli.is_file()).then(|| (node, npm_cli.into_os_string()))
-}
-
-#[cfg(windows)]
-fn package_manager_command(
-    package_manager: &PackageManager,
-    package_manager_binary: &Path,
-) -> (OsString, Vec<OsString>) {
-    if package_manager == &PackageManager::Npm
-        && let Some((node, npm_cli)) = npm_direct_command(package_manager_binary)
-    {
-        return (node.into_os_string(), vec![npm_cli]);
-    }
-
-    (package_manager_binary.as_os_str().to_owned(), Vec::new())
-}
-
-#[cfg(not(windows))]
-fn package_manager_command(
-    _package_manager: &PackageManager,
-    package_manager_binary: &Path,
-) -> (OsString, Vec<OsString>) {
-    (package_manager_binary.as_os_str().to_owned(), Vec::new())
 }
 
 /// Trait for providing commands to execute tasks.
@@ -80,9 +38,10 @@ fn package_manager_command(
 /// - `E`: The error type returned when command creation fails
 ///
 /// # Implementors
-/// - `PackageGraphCommandProvider` in turborepo-lib (executes package.json
-///   scripts)
-/// - `MicroFrontendProxyProvider` in turborepo-lib (starts MFE proxy)
+/// - `ToolchainCommandProvider` (resolves commands from the package's immutable
+///   native-task catalog: package.json scripts for JavaScript, Cargo verbs for
+///   Rust)
+/// - `MicroFrontendProxyProvider` in this crate (starts MFE proxy)
 pub trait CommandProvider<E> {
     /// Create a command for the given task.
     ///
@@ -94,6 +53,13 @@ pub trait CommandProvider<E> {
         task_id: &TaskId,
         environment: &EnvironmentVariableMap,
     ) -> Result<Option<Command>, E>;
+
+    /// Whether [`CommandProvider::command`] would produce a command for this
+    /// task, decided from the repository alone. Which provider handles a task
+    /// never depends on the environment, so asking this resolves no binary.
+    fn has_command(&self, _task_id: &TaskId) -> bool {
+        false
+    }
 }
 
 /// A collection of command providers.
@@ -142,6 +108,14 @@ impl<'a, E> CommandFactory<'a, E> {
         }
         Ok(None)
     }
+
+    /// Whether [`CommandFactory::command`] could produce a command for this
+    /// task, without resolving one.
+    pub fn has_command(&self, task_id: &TaskId) -> bool {
+        self.providers
+            .iter()
+            .any(|provider| provider.has_command(task_id))
+    }
 }
 
 impl<'a, E> Default for CommandFactory<'a, E> {
@@ -158,6 +132,13 @@ pub enum CommandProviderError {
         package_name: PackageName,
         task_id: TaskId<'static>,
     },
+    #[error("Package {package_name} is not a package.json-backed package execution scope.")]
+    InvalidMfePackageContext { package_name: PackageName },
+    #[error("Package directory {directory} is outside repository root {repository_root}.")]
+    PackageDirectoryOutsideRepository {
+        repository_root: String,
+        directory: String,
+    },
     #[error("Missing microfrontends config path for package {package_name}.")]
     MissingMfeConfigPath { package_name: PackageName },
     #[error("Invalid microfrontends config path {path} for package {package_name}.")]
@@ -167,60 +148,134 @@ pub enum CommandProviderError {
         #[source]
         source: PathError,
     },
+    #[error("Unsafe microfrontends config path {path} for package {package_name}.")]
+    UnsafeMfeConfigPath {
+        package_name: PackageName,
+        path: String,
+    },
+    #[error("Microfrontends config path {path} is outside repository root {repository_root}.")]
+    MfeConfigOutsideRepository {
+        repository_root: String,
+        path: String,
+    },
+    #[error("Microfrontends require a package manager")]
+    MissingPackageManager,
     #[error("Unable to find package manager binary: {0}")]
     Which(#[from] which::Error),
+    #[error(transparent)]
+    NativeTask(#[from] turborepo_repository::toolchain::Error),
 }
 
-/// A trait for fetching package information required to execute commands
-pub trait PackageInfoProvider {
-    fn package_manager(&self) -> &PackageManager;
-
-    fn package_info(&self, name: &PackageName) -> Option<&PackageInfo>;
-}
-
-impl PackageInfoProvider for PackageGraph {
-    fn package_manager(&self) -> &PackageManager {
-        PackageGraph::package_manager(self)
-    }
-
-    fn package_info(&self, name: &PackageName) -> Option<&PackageInfo> {
-        PackageGraph::package_info(self, name)
-    }
-}
-
-/// Command provider that creates commands from package.json scripts.
+/// Command provider that resolves commands through the native-task catalog.
 ///
-/// This provider looks up the task's script in the package's package.json
-/// and creates a command to execute it via the package manager.
+/// The catalog owns native command templates (JavaScript: package-manager
+/// `run <script>`; Cargo: `cargo <verb>` scoped to crate/workspace; uv:
+/// `uv <verb>` scoped to package/workspace). This provider adapts the
+/// resolved [`TaskCommand`] data into a process command and applies concerns
+/// that are not native-task-specific: the task environment, stdin policy,
+/// and microfrontends proxy decorations.
 #[derive(Debug)]
-pub struct PackageGraphCommandProvider<'a, M = crate::NoMfeConfig> {
-    repo_root: &'a AbsoluteSystemPath,
+pub struct ToolchainCommandProvider<'a, M = crate::NoMfeConfig> {
     package_graph: &'a PackageGraph,
-    package_manager_binary: Result<PathBuf, which::Error>,
     task_args: TaskArgs<'a>,
     mfe_configs: Option<&'a M>,
+    /// Resolved `command` overrides by task, from the engine's task
+    /// definitions. An argv replaces the native catalog resolution; an
+    /// opt-out makes the task an explicit no-op.
+    command_overrides: HashMap<TaskId<'static>, TaskCommandOverride>,
+    /// Lazily resolved package-manager binary path for JS framing.
+    package_manager_binary: std::sync::OnceLock<Result<std::path::PathBuf, which::Error>>,
+    managed_path: bool,
+    /// Lazily resolved cargo binary path for Cargo framing.
+    cargo_binary: std::sync::OnceLock<Result<std::path::PathBuf, which::Error>>,
+    /// Lazily resolved uv binary path for Python framing.
+    uv_binary: std::sync::OnceLock<Result<std::path::PathBuf, which::Error>>,
+    /// Lazily resolved go binary path for Go framing.
+    go_binary: std::sync::OnceLock<Result<std::path::PathBuf, which::Error>>,
 }
 
-impl<'a, M: MfeConfigProvider> PackageGraphCommandProvider<'a, M> {
+impl<'a, M: MfeConfigProvider> ToolchainCommandProvider<'a, M> {
     pub fn new(
-        repo_root: &'a AbsoluteSystemPath,
         package_graph: &'a PackageGraph,
         task_args: TaskArgs<'a>,
         mfe_configs: Option<&'a M>,
+        command_overrides: HashMap<TaskId<'static>, TaskCommandOverride>,
     ) -> Self {
-        let package_manager_binary = which::which(package_graph.package_manager().command());
         Self {
-            repo_root,
             package_graph,
-            package_manager_binary,
             task_args,
             mfe_configs,
+            command_overrides,
+            package_manager_binary: std::sync::OnceLock::new(),
+            managed_path: false,
+            cargo_binary: std::sync::OnceLock::new(),
+            uv_binary: std::sync::OnceLock::new(),
+            go_binary: std::sync::OnceLock::new(),
         }
     }
 
-    fn package_info(&self, task_id: &TaskId) -> Result<&PackageInfo, CommandProviderError> {
+    /// Use the caller's freshly authorized task PATH for managed dispatch only.
+    /// Ordinary repositories retain their original process-PATH lookup.
+    pub fn with_managed_path(mut self) -> Self {
+        self.managed_path = true;
+        self
+    }
+
+    /// Managed dispatch resolves only through the freshly authorized task
+    /// PATH, whose managed bin comes first, and never falls back to the host
+    /// PATH. On Windows the managed exports are `.exe` hard links and `.cmd`
+    /// forwarders, found through PATHEXT like any other PATH lookup.
+    fn lookup(
+        &self,
+        name: &str,
+        environment: &EnvironmentVariableMap,
+    ) -> Result<std::path::PathBuf, which::Error> {
+        if self.managed_path {
+            which::which_in(
+                name,
+                environment.get("PATH"),
+                self.package_graph.repo_root().as_std_path(),
+            )
+        } else {
+            which::which(name)
+        }
+    }
+
+    fn package_manager_binary(
+        &self,
+        environment: &EnvironmentVariableMap,
+    ) -> Result<Option<&std::path::Path>, CommandProviderError> {
+        let Some(package_manager) = self.package_graph.package_manager() else {
+            return Ok(None);
+        };
+        match self
+            .package_manager_binary
+            .get_or_init(|| self.lookup(package_manager.command(), environment))
+        {
+            Ok(path) => Ok(Some(path.as_path())),
+            Err(error) => Err(CommandProviderError::Which(*error)),
+        }
+    }
+
+    /// Cargo, uv and Go stay optional here: a missing tool is reported by the
+    /// native command resolver with its own guidance.
+    fn tool_binary<'b>(
+        &self,
+        cell: &'b std::sync::OnceLock<Result<std::path::PathBuf, which::Error>>,
+        name: &str,
+        environment: &EnvironmentVariableMap,
+    ) -> Option<&'b std::path::Path> {
+        cell.get_or_init(|| self.lookup(name, environment))
+            .as_deref()
+            .ok()
+    }
+
+    fn package_context(
+        &self,
+        task_id: &TaskId,
+    ) -> Result<PackageTaskContext<'_>, CommandProviderError> {
         self.package_graph
-            .package_info(&PackageName::from(task_id.package()))
+            .package_task_context(&PackageName::from(task_id.package()))
             .ok_or_else(|| CommandProviderError::MissingPackage {
                 package_name: task_id.package().into(),
                 task_id: task_id.clone().into_owned(),
@@ -229,45 +284,96 @@ impl<'a, M: MfeConfigProvider> PackageGraphCommandProvider<'a, M> {
 }
 
 impl<'a, M: MfeConfigProvider, E: From<CommandProviderError>> CommandProvider<E>
-    for PackageGraphCommandProvider<'a, M>
+    for ToolchainCommandProvider<'a, M>
 {
+    fn has_command(&self, task_id: &TaskId) -> bool {
+        match self.command_overrides.get(task_id) {
+            Some(TaskCommandOverride::OptOut) => false,
+            Some(TaskCommandOverride::Argv(argv)) => !argv.is_empty(),
+            None => self
+                .package_graph
+                .package_task_context(&PackageName::from(task_id.package()))
+                .and_then(|context| context.native_tasks().get(task_id.task()))
+                .is_some_and(|task| task.command().is_some()),
+        }
+    }
+
     fn command(
         &self,
         task_id: &TaskId,
         environment: &EnvironmentVariableMap,
     ) -> Result<Option<Command>, E> {
-        let workspace_info = self.package_info(task_id)?;
+        let package_context = self.package_context(task_id)?;
 
-        // bail if the script doesn't exist or is empty
-        if workspace_info
-            .package_json
-            .scripts
-            .get(task_id.task())
-            .is_none_or(|script| script.is_empty())
-        {
+        // A resolved `command` override is authoritative in both
+        // directions: an opt-out is an explicit no-op (same outcome as a
+        // missing script), and an argv replaces native-catalog resolution
+        // while retaining ecosystem framing.
+        let command_override = self.command_overrides.get(task_id);
+        let override_command = match command_override {
+            Some(TaskCommandOverride::OptOut) => return Ok(None),
+            Some(TaskCommandOverride::Argv(argv)) => Some(argv.as_slice()),
+            None => None,
+        };
+
+        let spec = if let Some(native_task) = package_context.native_tasks().get(task_id.task()) {
+            let (package_manager_binary, tool_binary) = if override_command.is_some() {
+                (None, None)
+            } else {
+                match native_task.command().map(|command| &command.program) {
+                    Some(NativeCommandProgram::PackageManager) => {
+                        (self.package_manager_binary(environment)?, None)
+                    }
+                    Some(NativeCommandProgram::Tool(tool)) if tool == "cargo" => (
+                        None,
+                        self.tool_binary(&self.cargo_binary, tool, environment),
+                    ),
+                    Some(NativeCommandProgram::Tool(tool)) if tool == "uv" => {
+                        (None, self.tool_binary(&self.uv_binary, tool, environment))
+                    }
+                    Some(NativeCommandProgram::Tool(tool)) if tool == "go" => {
+                        (None, self.tool_binary(&self.go_binary, tool, environment))
+                    }
+                    Some(NativeCommandProgram::Tool(_)) | None => (None, None),
+                }
+            };
+            turborepo_repository::native_tasks::resolve_task_command(
+                &package_context,
+                native_task,
+                self.package_graph.package_manager(),
+                package_manager_binary,
+                tool_binary,
+                self.task_args.args_for_task(task_id),
+                override_command,
+            )
+            .map_err(|error| {
+                CommandProviderError::NativeTask(turborepo_repository::toolchain::Error::Failed(
+                    Box::new(error),
+                ))
+            })?
+        } else if let Some(override_command) = override_command {
+            let serial_group = package_context
+                .native_tasks()
+                .override_serial_group(override_command);
+            turborepo_repository::toolchain::override_task_command(
+                &package_context,
+                override_command,
+                self.task_args.args_for_task(task_id),
+                serial_group,
+            )
+        } else {
+            None
+        };
+        let Some(spec) = spec else {
             return Ok(None);
-        }
-        let package_manager_binary = self
-            .package_manager_binary
-            .as_deref()
-            .map_err(|e| CommandProviderError::from(*e))?;
-        let (program, mut args) =
-            package_manager_command(self.package_graph.package_manager(), package_manager_binary);
-        args.extend([OsString::from("run"), OsString::from(task_id.task())]);
-        if let Some(pass_through_args) = self.task_args.args_for_task(task_id) {
-            args.extend(
-                self.package_graph
-                    .package_manager()
-                    .arg_separator(pass_through_args)
-                    .map(OsString::from),
-            );
-            args.extend(pass_through_args.iter().map(OsString::from));
-        }
-        let mut cmd = Command::new(program);
-        cmd.args(args);
+        };
 
-        let package_dir = self.repo_root.resolve(workspace_info.package_path());
-        cmd.current_dir(package_dir);
+        let mut cmd = Command::new(spec.program);
+        cmd.args(spec.args);
+        cmd.current_dir(spec.cwd);
+        if let Some(group) = spec.serial_group {
+            cmd.serial_group(group);
+        }
 
         apply_environment(&mut cmd, environment);
 
@@ -309,58 +415,100 @@ impl<'a, M: MfeConfigProvider, E: From<CommandProviderError>> CommandProvider<E>
 /// This provider handles the `proxy` task for microfrontends configurations,
 /// creating commands to start the proxy server.
 #[derive(Debug)]
-pub struct MicroFrontendProxyProvider<'a, T, M> {
-    repo_root: &'a AbsoluteSystemPath,
-    package_graph: &'a T,
+pub struct MicroFrontendProxyProvider<'a, M> {
+    package_graph: &'a PackageGraph,
     tasks_in_graph: HashSet<TaskId<'a>>,
     mfe_configs: &'a M,
+    managed_path: bool,
 }
 
-impl<'a, T: PackageInfoProvider, M: MfeConfigProvider> MicroFrontendProxyProvider<'a, T, M> {
+impl<'a, M: MfeConfigProvider> MicroFrontendProxyProvider<'a, M> {
     /// Creates a new `MicroFrontendProxyProvider`.
     ///
     /// # Arguments
-    /// * `repo_root` - The root of the repository
     /// * `package_graph` - The package graph provider
     /// * `tasks_in_graph` - Iterator of tasks that are part of the current
     ///   execution graph
     /// * `micro_frontends_configs` - The microfrontends configuration
     pub fn new<'b>(
-        repo_root: &'a AbsoluteSystemPath,
-        package_graph: &'a T,
+        package_graph: &'a PackageGraph,
         tasks_in_graph: impl Iterator<Item = &'b TaskId<'static>>,
         micro_frontends_configs: &'a M,
     ) -> Self {
         Self {
-            repo_root,
             package_graph,
             tasks_in_graph: tasks_in_graph.cloned().collect(),
             mfe_configs: micro_frontends_configs,
+            managed_path: false,
         }
+    }
+
+    /// Resolve custom proxy launchers from the freshly authorized task PATH.
+    /// Ordinary repositories retain their existing process-global lookup.
+    pub fn with_managed_path(mut self) -> Self {
+        self.managed_path = true;
+        self
     }
 
     fn dev_tasks(&self, task_id: &TaskId) -> Option<Vec<(TaskId<'static>, String)>> {
         (task_id.task() == "proxy").then(|| self.mfe_configs.dev_tasks(task_id.package()))?
     }
 
-    fn package_info(&self, task_id: &TaskId) -> Result<&PackageInfo, CommandProviderError> {
+    fn package_context(
+        &self,
+        task_id: &TaskId,
+    ) -> Result<PackageTaskContext<'_>, CommandProviderError> {
         self.package_graph
-            .package_info(&PackageName::from(task_id.package()))
+            .package_task_context(&PackageName::from(task_id.package()))
             .ok_or_else(|| CommandProviderError::MissingPackage {
                 package_name: task_id.package().into(),
                 task_id: task_id.clone().into_owned(),
             })
     }
 
-    fn has_custom_proxy(&self, task_id: &TaskId) -> Result<bool, CommandProviderError> {
-        let package_info = self.package_info(task_id)?;
-        Ok(package_info.package_json.scripts.contains_key("proxy"))
+    fn validated_package_context(
+        &self,
+        task_id: &TaskId,
+    ) -> Result<PackageTaskContext<'_>, CommandProviderError> {
+        let context = self.package_context(task_id)?;
+        Self::validate_package_context(context)
+    }
+
+    fn validate_package_context<'b>(
+        context: PackageTaskContext<'b>,
+    ) -> Result<PackageTaskContext<'b>, CommandProviderError> {
+        let package_directory = context.repository_root().resolve(context.directory());
+        if !context.repository_root().contains(&package_directory) {
+            return Err(CommandProviderError::PackageDirectoryOutsideRepository {
+                repository_root: context.repository_root().to_string(),
+                directory: package_directory.to_string(),
+            });
+        }
+        if !context.is_package_json_scope() {
+            return Err(CommandProviderError::InvalidMfePackageContext {
+                package_name: context.package().clone(),
+            });
+        }
+        Ok(context)
     }
 }
 
-impl<'a, T: PackageInfoProvider + Send + Sync, M: MfeConfigProvider, E: From<CommandProviderError>>
-    CommandProvider<E> for MicroFrontendProxyProvider<'a, T, M>
+impl<'a, M: MfeConfigProvider, E: From<CommandProviderError>> CommandProvider<E>
+    for MicroFrontendProxyProvider<'a, M>
 {
+    fn has_command(&self, task_id: &TaskId) -> bool {
+        if self.dev_tasks(task_id).is_none() {
+            return false;
+        }
+        let Ok(package_context) = self.validated_package_context(task_id) else {
+            return false;
+        };
+        package_context.native_tasks().defines("proxy")
+            || self
+                .package_graph
+                .has_dependency_declaration(package_context.package(), MICROFRONTENDS_PACKAGE)
+    }
+
     fn command(
         &self,
         task_id: &TaskId,
@@ -385,15 +533,13 @@ impl<'a, T: PackageInfoProvider + Send + Sync, M: MfeConfigProvider, E: From<Com
             task_id
         );
 
-        let has_custom_proxy = self.has_custom_proxy(task_id)?;
-        let package_info = self.package_info(task_id)?;
+        let package_context = self.validated_package_context(task_id)?;
+        let has_custom_proxy = package_context.native_tasks().defines("proxy");
 
-        // Check if package depends on @vercel/microfrontends
-        const MICROFRONTENDS_PACKAGE: &str = "@vercel/microfrontends";
-        let has_mfe_dependency = package_info
-            .package_json
-            .all_dependencies()
-            .any(|(package, _version)| package.as_str() == MICROFRONTENDS_PACKAGE);
+        // Check if package depends on @vercel/microfrontends via declarations.
+        let has_mfe_dependency = self
+            .package_graph
+            .has_dependency_declaration(package_context.package(), MICROFRONTENDS_PACKAGE);
 
         debug!(
             "MicroFrontendProxyProvider::command - has_custom_proxy: {}, has_mfe_dependency: {}",
@@ -408,25 +554,55 @@ impl<'a, T: PackageInfoProvider + Send + Sync, M: MfeConfigProvider, E: From<Com
                     .then_some(app_name.as_str())
             })
             .collect();
-        let package_dir = self.repo_root.resolve(package_info.package_path());
+        let package_dir = package_context
+            .repository_root()
+            .resolve(package_context.directory());
         let mfe_config_filename = self
             .mfe_configs
-            .config_filename(task_id.package())
+            .config_filename(package_context.package().as_ref())
             .ok_or_else(|| CommandProviderError::MissingMfeConfigPath {
-                package_name: task_id.to_workspace_name(),
+                package_name: package_context.package().clone(),
             })?;
+        let unsafe_path = mfe_config_filename.starts_with('/')
+            || mfe_config_filename.contains('\\')
+            || mfe_config_filename
+                .split('/')
+                .any(|component| component == "..")
+            || mfe_config_filename
+                .split('/')
+                .next()
+                .is_some_and(|component| component.contains(':'));
+        if unsafe_path {
+            return Err(CommandProviderError::UnsafeMfeConfigPath {
+                package_name: package_context.package().clone(),
+                path: mfe_config_filename,
+            }
+            .into());
+        }
         let mfe_config_path = RelativeUnixPath::new(&mfe_config_filename).map_err(|source| {
             CommandProviderError::InvalidMfeConfigPath {
-                package_name: task_id.to_workspace_name(),
+                package_name: package_context.package().clone(),
                 path: mfe_config_filename.clone(),
                 source,
             }
         })?;
-        let mfe_path = self.repo_root.join_unix_path(mfe_config_path);
+        let mfe_path = package_context
+            .repository_root()
+            .join_unix_path(mfe_config_path);
+        if !package_context.repository_root().contains(&mfe_path) {
+            return Err(CommandProviderError::MfeConfigOutsideRepository {
+                repository_root: package_context.repository_root().to_string(),
+                path: mfe_path.to_string(),
+            }
+            .into());
+        }
 
         let cmd = if has_custom_proxy {
             debug!("MicroFrontendProxyProvider::command - using custom proxy script");
-            let package_manager = self.package_graph.package_manager();
+            let package_manager = self
+                .package_graph
+                .package_manager()
+                .ok_or(CommandProviderError::MissingPackageManager)?;
             let mut proxy_args: Vec<&str> = vec![mfe_path.as_str(), "--names"];
             proxy_args.extend(local_apps);
             let mut args = vec!["run", "proxy"];
@@ -435,8 +611,20 @@ impl<'a, T: PackageInfoProvider + Send + Sync, M: MfeConfigProvider, E: From<Com
             }
             args.extend(proxy_args);
 
-            let program =
-                which::which(package_manager.command()).map_err(CommandProviderError::from)?;
+            let program = if self.managed_path {
+                let path = environment
+                    .get("PATH")
+                    .ok_or(which::Error::CannotFindBinaryPath)
+                    .map_err(CommandProviderError::from)?;
+                which::which_in(
+                    package_manager.command(),
+                    Some(path),
+                    package_context.repository_root(),
+                )
+            } else {
+                which::which(package_manager.command())
+            }
+            .map_err(CommandProviderError::from)?;
             let mut cmd = Command::new(&program);
             cmd.current_dir(package_dir).args(args).open_stdin();
             apply_environment(&mut cmd, environment);
@@ -486,29 +674,14 @@ mod tests {
     };
 
     use tempfile::TempDir;
-    use turbopath::{AbsoluteSystemPathBuf, AnchoredSystemPathBuf};
+    use turbopath::AbsoluteSystemPathBuf;
     use turborepo_errors::Spanned;
-    use turborepo_repository::package_json::PackageJson;
+    use turborepo_repository::{package_json::PackageJson, package_manager::PackageManager};
+    use turborepo_task_id::TaskName;
 
     use super::*;
 
-    struct MockPackageInfoProvider {
-        package_info: PackageInfo,
-        package_manager: PackageManager,
-    }
-
-    impl PackageInfoProvider for MockPackageInfoProvider {
-        fn package_manager(&self) -> &PackageManager {
-            &self.package_manager
-        }
-
-        fn package_info(&self, name: &PackageName) -> Option<&PackageInfo> {
-            matches!(name, PackageName::Other(package) if package == "web")
-                .then_some(&self.package_info)
-        }
-    }
-
-    struct MockMfeConfig;
+    struct MockMfeConfig(&'static str);
 
     impl MfeConfigProvider for MockMfeConfig {
         fn task_has_mfe_proxy(&self, _task_id: &TaskId) -> bool {
@@ -532,20 +705,95 @@ mod tests {
         }
 
         fn dev_tasks(&self, package_name: &str) -> Option<Vec<(TaskId<'static>, String)>> {
-            (package_name == "web")
+            matches!(package_name, "web" | "//")
                 .then(|| vec![(TaskId::new("docs", "dev"), "docs-app".to_owned())])
         }
 
         fn config_filename(&self, package_name: &str) -> Option<String> {
-            (package_name == "web").then(|| "web/microfrontends.json".to_owned())
+            matches!(package_name, "web" | "//").then(|| self.0.to_owned())
         }
+    }
+
+    #[tokio::test]
+    async fn command_override_does_not_resolve_package_manager_binary() {
+        let (_tempdir, repo_root, package_dir) = create_test_repo();
+        let package_graph = package_graph(
+            &repo_root,
+            &package_dir,
+            PackageJson {
+                scripts: BTreeMap::from([(
+                    "build".to_owned(),
+                    Spanned::new("next build".to_owned()),
+                )]),
+                ..Default::default()
+            },
+        )
+        .await;
+        let task_id = TaskId::new("web", "build").into_owned();
+        let provider = ToolchainCommandProvider::<crate::NoMfeConfig>::new(
+            &package_graph,
+            TaskArgs::new(&[], &[]),
+            None,
+            HashMap::from([(
+                task_id.clone(),
+                TaskCommandOverride::Argv(vec!["custom-build".to_string()]),
+            )]),
+        );
+        provider
+            .package_manager_binary
+            .set(Err(which::Error::CannotFindBinaryPath))
+            .unwrap();
+
+        let command = CommandProvider::<CommandProviderError>::command(
+            &provider,
+            &task_id,
+            &EnvironmentVariableMap::default(),
+        )
+        .unwrap();
+        assert!(command.is_some(), "override should bypass binary lookup");
+    }
+
+    #[tokio::test]
+    async fn pure_root_override_uses_generic_command_path() {
+        let (_tempdir, repo_root, _package_dir) = create_test_repo();
+        let graph = PackageGraph::builder_optional(&repo_root, None)
+            .build()
+            .await
+            .unwrap();
+        let task_id = TaskId::from_graph(&PackageName::Root, &TaskName::from("build"));
+        let provider = ToolchainCommandProvider::<crate::NoMfeConfig>::new(
+            &graph,
+            TaskArgs::new(&[], &[]),
+            None,
+            HashMap::from([(
+                task_id.clone(),
+                TaskCommandOverride::Argv(vec!["custom-build".to_string()]),
+            )]),
+        );
+
+        let command = CommandProvider::<CommandProviderError>::command(
+            &provider,
+            &task_id,
+            &EnvironmentVariableMap::default(),
+        )
+        .unwrap()
+        .expect("root override should execute");
+
+        assert_eq!(command.program(), OsStr::new("custom-build"));
+        let label = command.label();
+        assert!(
+            label.contains(repo_root.as_str()),
+            "unexpected label: {label}"
+        );
+        assert_eq!(command.serial_group_name(), None);
+        assert!(command.will_open_stdin());
     }
 
     fn create_test_repo() -> (TempDir, AbsoluteSystemPathBuf, PathBuf) {
         let tempdir = tempfile::tempdir().unwrap();
         let repo_root =
             AbsoluteSystemPathBuf::new(tempdir.path().to_string_lossy().to_string()).unwrap();
-        let package_dir = tempdir.path().join("web");
+        let package_dir = tempdir.path().join("apps").join("site").join("web");
         fs::create_dir_all(&package_dir).unwrap();
 
         (tempdir, repo_root, package_dir)
@@ -561,42 +809,320 @@ mod tests {
     }
 
     fn filtered_environment() -> EnvironmentVariableMap {
-        EnvironmentVariableMap::from(HashMap::from([
-            ("ALLOWED_VAR".to_owned(), "allowed".to_owned()),
-            ("PATH".to_owned(), std::env::var("PATH").unwrap()),
-        ]))
+        let mut environment = path_only(&std::env::var("PATH").unwrap());
+        environment.insert("ALLOWED_VAR".to_owned(), "allowed".to_owned());
+        environment
     }
 
-    fn package_info(package_json: PackageJson) -> PackageInfo {
-        PackageInfo {
-            package_json,
-            package_json_path: AnchoredSystemPathBuf::from_raw("web/package.json").unwrap(),
-            unresolved_external_dependencies: None,
-            transitive_dependencies: None,
-        }
+    async fn package_graph(
+        repo_root: &AbsoluteSystemPathBuf,
+        package_dir: &Path,
+        package_json: PackageJson,
+    ) -> PackageGraph {
+        let mut package_json = package_json;
+        package_json.name = Some(Spanned::new("web".to_owned()));
+        let package_path = AbsoluteSystemPathBuf::try_from(package_dir)
+            .unwrap()
+            .join_component("package.json");
+        PackageGraph::builder(repo_root, PackageJson::default())
+            .with_package_manager(PackageManager::Npm)
+            .with_package_jsons(Some(HashMap::from([(package_path, package_json)])))
+            .with_allow_no_package_manager(true)
+            .build()
+            .await
+            .unwrap()
+    }
+
+    async fn root_package_graph(
+        repo_root: &AbsoluteSystemPathBuf,
+        root_json: PackageJson,
+    ) -> PackageGraph {
+        PackageGraph::builder(repo_root, root_json)
+            .with_package_manager(PackageManager::Npm)
+            .with_package_jsons(Some(HashMap::new()))
+            .with_allow_no_package_manager(true)
+            .build()
+            .await
+            .unwrap()
+    }
+
+    async fn cargo_package_graph(repo_root: &AbsoluteSystemPathBuf) -> PackageGraph {
+        repo_root
+            .join_component("Cargo.toml")
+            .create_with_contents(
+                "[workspace]\nmembers = [\"member\"]\n\n[workspace.metadata]\nname = \
+                 \"workspace\"\n",
+            )
+            .unwrap();
+        repo_root
+            .join_components(&["member", "src"])
+            .create_dir_all()
+            .unwrap();
+        repo_root
+            .join_components(&["member", "Cargo.toml"])
+            .create_with_contents(
+                "[package]\nname = \"member\"\nversion = \"0.1.0\"\nedition = \"2021\"\n",
+            )
+            .unwrap();
+        repo_root
+            .join_components(&["member", "src", "lib.rs"])
+            .create_with_contents("")
+            .unwrap();
+        repo_root
+            .join_component("Cargo.lock")
+            .create_with_contents(
+                "version = 4\n\n[[package]]\nname = \"member\"\nversion = \"0.1.0\"\n",
+            )
+            .unwrap();
+
+        PackageGraph::builder_optional(repo_root, None)
+            .with_cargo()
+            .build()
+            .await
+            .unwrap()
     }
 
     fn proxy_command(
-        repo_root: &AbsoluteSystemPathBuf,
-        package_info_provider: &MockPackageInfoProvider,
+        package_graph: &PackageGraph,
         environment: &EnvironmentVariableMap,
     ) -> Command {
-        let mfe_config = MockMfeConfig;
-        let tasks = [TaskId::new("docs", "dev"), TaskId::new("web", "proxy")];
-        let provider = MicroFrontendProxyProvider::new(
-            repo_root,
-            package_info_provider,
-            tasks.iter(),
-            &mfe_config,
-        );
+        let mfe_config = MockMfeConfig("configs/microfrontends.json");
+        proxy_command_result(package_graph, environment, &mfe_config, "web")
+            .unwrap()
+            .unwrap()
+    }
 
-        CommandProvider::<CommandProviderError>::command(
-            &provider,
-            &TaskId::new("web", "proxy"),
-            environment,
+    fn proxy_command_result(
+        package_graph: &PackageGraph,
+        environment: &EnvironmentVariableMap,
+        mfe_config: &MockMfeConfig,
+        package: &str,
+    ) -> Result<Option<Command>, CommandProviderError> {
+        let tasks = [TaskId::new("docs", "dev"), TaskId::new("web", "proxy")];
+        let provider = MicroFrontendProxyProvider::new(package_graph, tasks.iter(), mfe_config);
+
+        let task_id = if package == "//" {
+            TaskId::from_graph(&PackageName::Root, &TaskName::from("proxy"))
+        } else {
+            TaskId::new(package, "proxy").into_owned()
+        };
+        assert_eq!(task_id.package(), package);
+        CommandProvider::<CommandProviderError>::command(&provider, &task_id, environment)
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn custom_proxy_uses_authorized_lookup_path_and_never_host_fallback() {
+        use std::os::unix::fs::PermissionsExt;
+        let (_directory, root, package_dir) = create_test_repo();
+        let graph = package_graph(
+            &root,
+            &package_dir,
+            PackageJson {
+                scripts: BTreeMap::from([("proxy".into(), Spanned::new("node proxy.js".into()))]),
+                ..Default::default()
+            },
         )
-        .unwrap()
-        .unwrap()
+        .await;
+        let bin = root.join_components(&["managed", "bin"]);
+        bin.create_dir_all().unwrap();
+        let launcher = bin.join_component("npm");
+        fs::write(
+            &launcher,
+            "#!/bin/sh\nprintf 'authorized-manager\\nALLOWED_VAR=%s\\n' \"$ALLOWED_VAR\"\n",
+        )
+        .unwrap();
+        fs::set_permissions(&launcher, fs::Permissions::from_mode(0o755)).unwrap();
+        let config = MockMfeConfig("configs/microfrontends.json");
+        let tasks = [TaskId::new("docs", "dev"), TaskId::new("web", "proxy")];
+        let provider =
+            MicroFrontendProxyProvider::new(&graph, tasks.iter(), &config).with_managed_path();
+        let environment = EnvironmentVariableMap::from(HashMap::from([
+            ("PATH".into(), bin.to_string()),
+            ("ALLOWED_VAR".into(), "kept".into()),
+        ]));
+        let task = TaskId::new("web", "proxy");
+        let command =
+            CommandProvider::<CommandProviderError>::command(&provider, &task, &environment)
+                .unwrap()
+                .unwrap();
+        assert_eq!(command.program(), launcher.as_std_path().as_os_str());
+        assert_eq!(
+            command_stdout(command).await,
+            "authorized-manager\nALLOWED_VAR=kept\n"
+        );
+        assert!(
+            CommandProvider::<CommandProviderError>::command(
+                &provider,
+                &task,
+                &EnvironmentVariableMap::default()
+            )
+            .is_err()
+        );
+        fs::remove_file(launcher).unwrap();
+        assert!(
+            CommandProvider::<CommandProviderError>::command(&provider, &task, &environment)
+                .is_err()
+        );
+        // The authorized task PATH is not a new override for ordinary repos.
+        let ordinary = MicroFrontendProxyProvider::new(&graph, tasks.iter(), &config);
+        let result =
+            CommandProvider::<CommandProviderError>::command(&ordinary, &task, &environment);
+        match which::which("npm") {
+            Ok(host) => assert_eq!(result.unwrap().unwrap().program(), host.as_os_str()),
+            Err(_) => assert!(result.is_err()),
+        }
+    }
+
+    fn path_only(path: &str) -> EnvironmentVariableMap {
+        let mut environment = HashMap::from([("PATH".to_owned(), path.to_owned())]);
+        // cmd.exe runs `.cmd` exports; it needs these, and strict mode keeps them.
+        for name in ["SYSTEMROOT", "COMSPEC", "PATHEXT"] {
+            if let Ok(value) = std::env::var(name) {
+                environment.insert(name.to_owned(), value);
+            }
+        }
+        EnvironmentVariableMap::from(environment)
+    }
+
+    fn native_command(
+        provider: &ToolchainCommandProvider<'_, crate::NoMfeConfig>,
+        package: &str,
+        environment: &EnvironmentVariableMap,
+    ) -> Result<Option<Command>, CommandProviderError> {
+        let task = TaskId::new(package, "build");
+        CommandProvider::<CommandProviderError>::command(provider, &task, environment)
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn managed_native_tools_resolve_only_through_the_authorized_task_path() {
+        use std::os::unix::fs::PermissionsExt;
+        let (_directory, root, _package_dir) = create_test_repo();
+        let graph = cargo_package_graph(&root).await;
+        let bin = root.join_components(&["managed", "bin"]);
+        bin.create_dir_all().unwrap();
+        let cargo = bin.join_component("cargo");
+        fs::write(&cargo, "#!/bin/sh\necho managed-cargo \"$@\"\n").unwrap();
+        fs::set_permissions(&cargo, fs::Permissions::from_mode(0o755)).unwrap();
+        let provider =
+            || ToolchainCommandProvider::new(&graph, TaskArgs::new(&[], &[]), None, HashMap::new());
+        let managed = path_only(bin.as_str());
+        let command = native_command(&provider().with_managed_path(), "member", &managed)
+            .unwrap()
+            .unwrap();
+        assert_eq!(command.program(), cargo.as_std_path().as_os_str());
+        assert!(command_stdout(command).await.starts_with("managed-cargo "));
+        // A managed task PATH without cargo never falls back to the host's.
+        let empty = path_only(root.as_str());
+        assert!(native_command(&provider().with_managed_path(), "member", &empty).is_err());
+        // Ordinary repositories keep the process-PATH lookup.
+        let ordinary = native_command(&provider(), "member", &managed);
+        match which::which("cargo") {
+            Ok(host) => assert_eq!(ordinary.unwrap().unwrap().program(), host.as_os_str()),
+            Err(_) => assert!(ordinary.is_err()),
+        }
+    }
+
+    /// The prefetch probe only asks whether a task has a command, so it must
+    /// not resolve anything: in a managed run it is asked with no task PATH,
+    /// where any resolution would fail.
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn a_command_probe_resolves_no_binary() {
+        use std::os::unix::fs::PermissionsExt;
+        let (_directory, root, package_dir) = create_test_repo();
+        let graph = package_graph(
+            &root,
+            &package_dir,
+            PackageJson {
+                scripts: BTreeMap::from([("build".into(), Spanned::new("next build".into()))]),
+                ..Default::default()
+            },
+        )
+        .await;
+        let bin = root.join_components(&["managed", "bin"]);
+        bin.create_dir_all().unwrap();
+        let npm = bin.join_component("npm");
+        fs::write(&npm, "#!/bin/sh\necho managed-npm \"$@\"\n").unwrap();
+        fs::set_permissions(&npm, fs::Permissions::from_mode(0o755)).unwrap();
+        let no_bin = root.join_component("no-bin");
+        no_bin.create_dir_all().unwrap();
+        let build = TaskId::new("web", "build").into_owned();
+        let provider = |overrides| {
+            ToolchainCommandProvider::<crate::NoMfeConfig>::new(
+                &graph,
+                TaskArgs::new(&[], &[]),
+                None,
+                overrides,
+            )
+            .with_managed_path()
+        };
+
+        let mut factory: CommandFactory<'_, CommandProviderError> = CommandFactory::new();
+        factory.add_provider(provider(HashMap::new()));
+        // Answered from the task definition, without a task PATH.
+        assert!(factory.has_command(&build));
+        assert!(!factory.has_command(&TaskId::new("web", "test")));
+        // The dispatch that follows still resolves the package manager.
+        let command = factory
+            .command(&build, &path_only(bin.as_str()))
+            .unwrap()
+            .unwrap();
+        assert_eq!(command.program(), npm.as_std_path().as_os_str());
+        assert!(command_stdout(command).await.starts_with("managed-npm "));
+
+        // A task PATH without the binary still fails closed.
+        let mut unset: CommandFactory<'_, CommandProviderError> = CommandFactory::new();
+        unset.add_provider(provider(HashMap::new()));
+        assert!(unset.command(&build, &path_only(no_bin.as_str())).is_err());
+
+        // An override decides the answer without the catalog.
+        let mut opt_out: CommandFactory<'_, CommandProviderError> = CommandFactory::new();
+        opt_out.add_provider(provider(HashMap::from([(
+            build.clone(),
+            TaskCommandOverride::OptOut,
+        )])));
+        assert!(!opt_out.has_command(&build));
+        let mut argv: CommandFactory<'_, CommandProviderError> = CommandFactory::new();
+        argv.add_provider(provider(HashMap::from([(
+            build.clone(),
+            TaskCommandOverride::Argv(vec!["custom-build".to_owned()]),
+        )])));
+        assert!(argv.has_command(&build));
+    }
+
+    #[cfg(windows)]
+    #[tokio::test]
+    async fn managed_cmd_exports_resolve_through_pathext_on_the_task_path() {
+        let (_directory, root, package_dir) = create_test_repo();
+        let scripts = BTreeMap::from([("build".to_owned(), Spanned::new("build".to_owned()))]);
+        let package = PackageJson {
+            scripts,
+            ..Default::default()
+        };
+        let graph = package_graph(&root, &package_dir, package).await;
+        // Setup's Windows exports are `.exe` hard links and `.cmd` forwarders.
+        let bin = root.join_components(&["managed", "bin"]);
+        bin.create_dir_all().unwrap();
+        let npm = bin.join_component("npm.cmd");
+        fs::write(&npm, "@echo managed-npm %*\r\n").unwrap();
+        let provider =
+            ToolchainCommandProvider::new(&graph, TaskArgs::new(&[], &[]), None, HashMap::new())
+                .with_managed_path();
+        let command = native_command(&provider, "web", &path_only(bin.as_str()))
+            .unwrap()
+            .unwrap();
+        assert_eq!(command.program(), npm.as_std_path().as_os_str());
+        assert!(
+            command_stdout(command)
+                .await
+                .starts_with("managed-npm run build")
+        );
+        let unmanaged =
+            ToolchainCommandProvider::new(&graph, TaskArgs::new(&[], &[]), None, HashMap::new())
+                .with_managed_path();
+        assert!(native_command(&unmanaged, "web", &path_only(root.as_str())).is_err());
     }
 
     async fn command_stdout(cmd: Command) -> String {
@@ -755,59 +1281,35 @@ mod tests {
         assert!(cmd.is_none(), "expected no cmd, got {cmd:?}");
     }
 
-    #[cfg(windows)]
-    #[test]
-    fn npm_cmd_unwraps_to_node_and_npm_cli() {
-        let tempdir = tempfile::tempdir().unwrap();
-        let npm_cmd = tempdir.path().join("npm.cmd");
-        let node = tempdir.path().join("node.exe");
-        let npm_cli = tempdir
-            .path()
-            .join("node_modules")
-            .join("npm")
-            .join("bin")
-            .join("npm-cli.js");
-
-        fs::write(&npm_cmd, "").unwrap();
-        fs::write(&node, "").unwrap();
-        fs::create_dir_all(npm_cli.parent().unwrap()).unwrap();
-        fs::write(&npm_cli, "").unwrap();
-
-        let (program, args) = package_manager_command(&PackageManager::Npm, &npm_cmd);
-
-        assert_eq!(program, node.into_os_string());
-        assert_eq!(args, vec![npm_cli.into_os_string()]);
-    }
-
-    #[cfg(windows)]
-    #[test]
-    fn npm_cmd_falls_back_when_npm_cli_missing() {
-        let tempdir = tempfile::tempdir().unwrap();
-        let npm_cmd = tempdir.path().join("npm.cmd");
-        fs::write(&npm_cmd, "").unwrap();
-
-        let (program, args) = package_manager_command(&PackageManager::Npm, &npm_cmd);
-
-        assert_eq!(program, npm_cmd.into_os_string());
-        assert!(args.is_empty());
-    }
-
     #[tokio::test]
     async fn test_custom_microfrontend_proxy_command_applies_filtered_environment() {
         let (_tempdir, repo_root, package_dir) = create_test_repo();
         let inherited_env = inherited_env_name();
         write_custom_proxy_package(&package_dir, inherited_env);
-        let package_info_provider = MockPackageInfoProvider {
-            package_info: package_info(PackageJson {
+        let package_graph = package_graph(
+            &repo_root,
+            &package_dir,
+            PackageJson {
                 scripts: BTreeMap::from([(
                     "proxy".to_owned(),
                     Spanned::new("node print-env.js".to_owned()),
                 )]),
                 ..Default::default()
-            }),
-            package_manager: PackageManager::Npm,
-        };
-        let cmd = proxy_command(&repo_root, &package_info_provider, &filtered_environment());
+            },
+        )
+        .await;
+        let cmd = proxy_command(&package_graph, &filtered_environment());
+        assert!(
+            cmd.label()
+                .starts_with(&format!("({})", package_dir.display()))
+                && (cmd.program().to_string_lossy().contains("npm")
+                    || cmd.program().to_string_lossy().contains("node"))
+        );
+        let config_path = repo_root.join_components(&["configs", "microfrontends.json"]);
+        assert!(cmd.label().ends_with(&format!(
+            " run proxy -- {} --names docs-app",
+            config_path.as_str()
+        )));
         let stdout = command_stdout(cmd).await;
 
         assert_filtered_environment(&stdout, inherited_env);
@@ -818,19 +1320,190 @@ mod tests {
         let (_tempdir, repo_root, package_dir) = create_test_repo();
         let inherited_env = inherited_env_name();
         write_microfrontends_binary(&package_dir, inherited_env);
-        let package_info_provider = MockPackageInfoProvider {
-            package_info: package_info(PackageJson {
+        let package_graph = package_graph(
+            &repo_root,
+            &package_dir,
+            PackageJson {
                 dependencies: Some(BTreeMap::from([(
                     "@vercel/microfrontends".to_owned(),
                     "1.0.0".to_owned(),
                 )])),
                 ..Default::default()
-            }),
-            package_manager: PackageManager::Npm,
-        };
-        let cmd = proxy_command(&repo_root, &package_info_provider, &filtered_environment());
+            },
+        )
+        .await;
+        let cmd = proxy_command(&package_graph, &filtered_environment());
+        assert_eq!(
+            cmd.program(),
+            package_dir
+                .join("node_modules")
+                .join(".bin")
+                .join(if cfg!(windows) {
+                    "microfrontends.cmd"
+                } else {
+                    "microfrontends"
+                })
+                .as_os_str()
+        );
+        assert!(
+            cmd.label()
+                .starts_with(&format!("({})", package_dir.display()))
+        );
+        let config_path = repo_root.join_components(&["configs", "microfrontends.json"]);
+        assert!(
+            cmd.label()
+                .ends_with(&format!(" proxy {} --names docs-app", config_path.as_str()))
+        );
         let stdout = command_stdout(cmd).await;
 
         assert_filtered_environment(&stdout, inherited_env);
+    }
+
+    #[tokio::test]
+    async fn test_microfrontend_proxy_uses_declaration_knowledge() {
+        let (_tempdir, repo_root, package_dir) = create_test_repo();
+        write_microfrontends_binary(&package_dir, inherited_env_name());
+        let graph = package_graph(
+            &repo_root,
+            &package_dir,
+            PackageJson {
+                dependencies: Some(BTreeMap::from([(
+                    "@vercel/microfrontends".to_owned(),
+                    "1.0.0".to_owned(),
+                )])),
+                ..Default::default()
+            },
+        )
+        .await;
+        let mfe_config = MockMfeConfig("configs/microfrontends.json");
+        let tasks = [TaskId::new("docs", "dev"), TaskId::new("web", "proxy")];
+        let command_provider = MicroFrontendProxyProvider::new(&graph, tasks.iter(), &mfe_config);
+
+        let command = CommandProvider::<CommandProviderError>::command(
+            &command_provider,
+            &TaskId::new("web", "proxy"),
+            &EnvironmentVariableMap::default(),
+        )
+        .unwrap()
+        .expect("declaration knowledge should select the package binary");
+        assert!(
+            command
+                .program()
+                .to_string_lossy()
+                .contains("microfrontends")
+        );
+    }
+
+    #[tokio::test]
+    async fn test_microfrontend_proxy_rejects_invalid_contexts_and_config_paths() {
+        let (_tempdir, repo_root, package_dir) = create_test_repo();
+        let environment = EnvironmentVariableMap::default();
+        let graph = package_graph(&repo_root, &package_dir, PackageJson::default()).await;
+        for path in [
+            "../config.json",
+            "C:/config.json",
+            r"configs\microfrontends.json",
+        ] {
+            let config = MockMfeConfig(path);
+            assert!(matches!(
+                proxy_command_result(&graph, &environment, &config, "web"),
+                Err(CommandProviderError::UnsafeMfeConfigPath { .. })
+            ));
+        }
+    }
+
+    #[tokio::test]
+    async fn test_root_javascript_proxy_uses_repository_root() {
+        let (_tempdir, repo_root, _package_dir) = create_test_repo();
+        let environment = EnvironmentVariableMap::default();
+        let config = MockMfeConfig("configs/microfrontends.json");
+        let pure_root = PackageGraph::builder_optional(&repo_root, None)
+            .build()
+            .await
+            .unwrap();
+        let error = MicroFrontendProxyProvider::<MockMfeConfig>::validate_package_context(
+            pure_root.package_task_context(&PackageName::Root).unwrap(),
+        )
+        .unwrap_err();
+        assert!(matches!(
+            error,
+            CommandProviderError::InvalidMfePackageContext { .. }
+        ));
+        let custom_graph = root_package_graph(
+            &repo_root,
+            PackageJson {
+                name: Some(Spanned::new("root-name".to_owned())),
+                scripts: BTreeMap::from([("proxy".to_owned(), Spanned::new("proxy".to_owned()))]),
+                ..Default::default()
+            },
+        )
+        .await;
+        assert!(
+            custom_graph
+                .package_task_context(&PackageName::Root)
+                .unwrap()
+                .native_tasks()
+                .get("proxy")
+                .is_some()
+        );
+        let custom = proxy_command_result(&custom_graph, &environment, &config, "//")
+            .unwrap()
+            .unwrap();
+        assert!(
+            custom
+                .label()
+                .starts_with(&format!("({}", custom_graph.repo_root().as_str())),
+            "unexpected root command: {}",
+            custom.label()
+        );
+        assert!(custom.label().contains(" run proxy "));
+
+        let binary_graph = root_package_graph(
+            &repo_root,
+            PackageJson {
+                dependencies: Some(BTreeMap::from([(
+                    "@vercel/microfrontends".to_owned(),
+                    "1.0.0".to_owned(),
+                )])),
+                ..Default::default()
+            },
+        )
+        .await;
+        let binary = proxy_command_result(&binary_graph, &environment, &config, "//")
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            binary.program(),
+            binary_graph
+                .repo_root()
+                .join_components(&[
+                    "node_modules",
+                    ".bin",
+                    if cfg!(windows) {
+                        "microfrontends.cmd"
+                    } else {
+                        "microfrontends"
+                    },
+                ])
+                .as_std_path()
+                .as_os_str()
+        );
+    }
+
+    #[tokio::test]
+    async fn test_microfrontend_proxy_rejects_cargo_package_context() {
+        let (_tempdir, repo_root, _package_dir) = create_test_repo();
+        let graph = cargo_package_graph(&repo_root).await;
+        let error = MicroFrontendProxyProvider::<MockMfeConfig>::validate_package_context(
+            graph
+                .package_task_context(&PackageName::from("member"))
+                .expect("Cargo member context"),
+        )
+        .unwrap_err();
+
+        assert!(matches!(
+            error,
+            CommandProviderError::InvalidMfePackageContext { .. }
+        ));
     }
 }

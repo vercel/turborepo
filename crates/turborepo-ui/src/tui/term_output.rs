@@ -1,4 +1,7 @@
-use std::io::Write;
+use std::{
+    borrow::Cow,
+    io::{BufWriter, Seek, SeekFrom, Write},
+};
 
 use turborepo_ghostty as ghostty;
 
@@ -6,9 +9,32 @@ use super::{
     Error,
     event::{CacheResult, Direction, OutputLogs, TaskResult},
 };
+use crate::terminal_sink::has_bare_lf;
+
+/// Per-task raw output is kept in memory up to this size, then rolls over to
+/// an anonymous temporary file. The terminal parser already bounds visible
+/// scrollback; this bounds the retained raw stream independently so a verbose
+/// task cannot grow memory without limit.
+const OUTPUT_SPOOL_THRESHOLD: usize = 1024 * 1024;
+
+/// Spool writes are coalesced up to this size. Once the spool has rolled over
+/// to its temp file, every unbuffered chunk would otherwise be one `write(2)`.
+const OUTPUT_SPOOL_WRITE_BUFFER: usize = 32 * 1024;
+
+fn new_spool() -> BufWriter<tempfile::SpooledTempFile> {
+    BufWriter::with_capacity(
+        OUTPUT_SPOOL_WRITE_BUFFER,
+        tempfile::spooled_tempfile(OUTPUT_SPOOL_THRESHOLD),
+    )
+}
 
 pub struct TerminalOutput<W> {
-    output: Vec<u8>,
+    /// The complete raw (newline-normalized) byte stream, spooled through a
+    /// bounded in-memory buffer that rolls over to disk.
+    output: BufWriter<tempfile::SpooledTempFile>,
+    /// Total bytes written to `output` (its write position is disturbed by
+    /// replay reads, so length is tracked explicitly).
+    output_len: usize,
     pub parser: ghostty::Parser,
     pub stdin: Option<W>,
     pub status: Option<String>,
@@ -29,10 +55,11 @@ enum LogBehavior {
 }
 
 impl<W> TerminalOutput<W> {
-    pub fn new(rows: u16, cols: u16, stdin: Option<W>, scrollback_len: u64) -> Self {
-        Self {
-            output: Vec::new(),
-            parser: ghostty::Parser::new(rows, cols, scrollback_len as usize),
+    pub fn new(rows: u16, cols: u16, stdin: Option<W>, scrollback_len: u64) -> Result<Self, Error> {
+        Ok(Self {
+            output: new_spool(),
+            output_len: 0,
+            parser: ghostty::Parser::try_new(rows, cols, scrollback_len as usize)?,
             stdin,
             status: None,
             output_logs: None,
@@ -40,7 +67,37 @@ impl<W> TerminalOutput<W> {
             cache_result: None,
             scrollback_len,
             selection_start: None,
+        })
+    }
+
+    /// Total number of raw output bytes produced so far.
+    pub fn output_len(&self) -> usize {
+        self.output_len
+    }
+
+    /// Reads the raw (newline-normalized) output bytes from `offset` to the
+    /// end. Used to backfill streamed logs when the user switches from the
+    /// TUI to streaming mid-run. Reads come from the in-memory buffer or the
+    /// backing temp file, so replay never requires retaining the whole
+    /// stream in memory.
+    pub fn read_output_from(&mut self, offset: usize) -> Vec<u8> {
+        let mut buf = Vec::with_capacity(self.output_len.saturating_sub(offset));
+        // Push buffered writes into the spool before reading it back.
+        let result = self.output.flush().and_then(|_| {
+            let spool = self.output.get_mut();
+            spool.seek(SeekFrom::Start(offset as u64)).and_then(|_| {
+                // Restore the write position so later writes keep appending.
+                let result = std::io::Read::read_to_end(spool, &mut buf);
+                let _ = spool.seek(SeekFrom::Start(self.output_len as u64));
+                result
+            })
+        });
+        if let Err(err) = result {
+            // Replay is best-effort; a failed spool read must not break the
+            // TUI.
+            tracing::debug!("failed to read spooled task output: {err}");
         }
+        buf
     }
 
     pub fn title(&self, task_name: &str) -> String {
@@ -57,7 +114,12 @@ impl<W> TerminalOutput<W> {
     pub fn process(&mut self, bytes: &[u8]) {
         let normalized = normalize_newlines(bytes);
         self.parser.process(&normalized);
-        self.output.extend_from_slice(&normalized);
+        if let Err(err) = self.output.write_all(&normalized) {
+            // Spool writes are in-memory or to an anonymous temp file; a
+            // failure means replay data is lost, never that the TUI breaks.
+            tracing::debug!("failed to spool task output: {err}");
+        }
+        self.output_len += normalized.len();
     }
 
     pub fn resize(&mut self, rows: u16, cols: u16) {
@@ -142,30 +204,94 @@ impl<W> TerminalOutput<W> {
         self.parser.has_selection()
     }
 
+    /// Whether a mouse-driven selection is in progress (the button is still
+    /// held down).
+    pub fn is_selecting(&self) -> bool {
+        self.selection_start.is_some()
+    }
+
+    /// Clears the selection highlight and any pending selection anchor.
+    pub fn clear_selection(&mut self) -> Result<(), Error> {
+        self.parser.clear_selection()?;
+        self.selection_start = None;
+        Ok(())
+    }
+
     pub fn handle_mouse(&mut self, event: crossterm::event::MouseEvent) -> Result<(), Error> {
+        self.handle_mouse_with_scroll(event, None)
+    }
+
+    pub fn handle_mouse_with_scroll(
+        &mut self,
+        event: crossterm::event::MouseEvent,
+        selection_scroll: Option<Direction>,
+    ) -> Result<(), Error> {
         match event.kind {
             crossterm::event::MouseEventKind::Down(crossterm::event::MouseButton::Left) => {
-                self.parser.clear_selection()?;
-                self.selection_start = Some((event.row, event.column));
+                // Shift held at click time means the user is preventing the
+                // copy before it starts, so don't anchor a selection. Most
+                // terminals never deliver shifted mouse events (shift
+                // bypasses mouse capture for native selection), but honor
+                // them when they do arrive.
+                let selection_start = (!event
+                    .modifiers
+                    .contains(crossterm::event::KeyModifiers::SHIFT))
+                .then_some((event.row, event.column));
+                if let Some((row, column)) = selection_start {
+                    self.parser.begin_selection(row, column)?;
+                } else {
+                    self.parser.clear_selection()?;
+                }
+                self.selection_start = selection_start;
             }
             crossterm::event::MouseEventKind::Drag(crossterm::event::MouseButton::Left) => {
-                if let Some((start_row, start_col)) = self.selection_start {
-                    self.parser
-                        .update_selection(start_row, start_col, event.row, event.column)?;
+                if self.selection_start.is_some() {
+                    if let Some(direction) = selection_scroll {
+                        self.scroll(direction)?;
+                    }
+                    self.parser.update_selection_end(event.row, event.column)?;
                 }
             }
             crossterm::event::MouseEventKind::ScrollDown => (),
             crossterm::event::MouseEventKind::ScrollUp => (),
-            crossterm::event::MouseEventKind::Moved => (),
+            // Hover means the button is up; drop any stale drag anchor from
+            // a release that the terminal never delivered to us.
+            crossterm::event::MouseEventKind::Moved => {
+                self.cancel_selection_drag();
+            }
             crossterm::event::MouseEventKind::Down(_) => (),
             crossterm::event::MouseEventKind::Drag(_) => (),
             crossterm::event::MouseEventKind::ScrollLeft
             | crossterm::event::MouseEventKind::ScrollRight => (),
             crossterm::event::MouseEventKind::Up(_) => {
-                self.selection_start = None;
+                self.cancel_selection_drag();
             }
         }
         Ok(())
+    }
+
+    pub fn continue_selection_drag(
+        &mut self,
+        direction: Direction,
+        row: u16,
+        column: u16,
+    ) -> Result<(), Error> {
+        if self.selection_start.is_none() {
+            return Ok(());
+        }
+        self.scroll(direction)?;
+        self.parser.update_selection_end(row, column)?;
+        Ok(())
+    }
+
+    pub fn cancel_selection_drag(&mut self) {
+        self.selection_start = None;
+        self.parser.cancel_incomplete_selection();
+    }
+
+    #[cfg(test)]
+    pub(crate) fn has_pending_selection_anchor(&self) -> bool {
+        self.selection_start.is_some()
     }
 
     pub fn copy_selection(&mut self) -> Option<String> {
@@ -173,7 +299,9 @@ impl<W> TerminalOutput<W> {
     }
 
     pub fn clear_logs(&mut self) {
-        self.output.clear();
+        // A fresh spool releases any rolled-over temp file.
+        self.output = new_spool();
+        self.output_len = 0;
         self.parser.reset();
     }
 }
@@ -184,12 +312,12 @@ impl<W> TerminalOutput<W> {
 /// (e.g. Node.js calling `setRawMode(true)`), which means their output
 /// contains bare `\n` without `\r`. Without `\r`, subsequent lines start at
 /// whatever column the cursor was at, producing garbled overlapping text.
-fn normalize_newlines(bytes: &[u8]) -> Vec<u8> {
-    let has_bare_lf =
-        bytes.windows(2).any(|w| w[0] != b'\r' && w[1] == b'\n') || bytes.first() == Some(&b'\n');
-
-    if !has_bare_lf {
-        return bytes.to_vec();
+///
+/// Output that already has no bare `\n` (task output is normalized before it
+/// reaches the TUI) is returned as-is, without a copy.
+fn normalize_newlines(bytes: &[u8]) -> Cow<'_, [u8]> {
+    if !has_bare_lf(bytes) {
+        return Cow::Borrowed(bytes);
     }
 
     let mut result = Vec::with_capacity(bytes.len() + bytes.len() / 10);
@@ -199,7 +327,62 @@ fn normalize_newlines(bytes: &[u8]) -> Vec<u8> {
         }
         result.push(byte);
     }
-    result
+    Cow::Owned(result)
+}
+
+#[cfg(test)]
+mod spool_tests {
+    use super::*;
+
+    /// Output far beyond the spool threshold must roll to disk and stay
+    /// byte-complete on replay, including partial replays from a watermark.
+    #[test]
+    fn rolled_output_replays_completely() -> Result<(), Error> {
+        let mut output = TerminalOutput::<std::io::Empty>::new(24, 80, None, 1000)?;
+
+        let mut expected = Vec::new();
+        // 2 MiB of line output, past the 1 MiB spool threshold.
+        for i in 0..32768u32 {
+            expected.extend_from_slice(format!("line number {i} of the build log\r\n").as_bytes());
+        }
+        output.process(&expected);
+
+        assert!(
+            output.output.get_ref().is_rolled(),
+            "output beyond the threshold must be spooled to disk"
+        );
+        assert_eq!(output.output_len(), expected.len());
+        assert_eq!(output.read_output_from(0), expected);
+
+        let watermark = 500_000;
+        assert_eq!(output.read_output_from(watermark), expected[watermark..]);
+
+        Ok(())
+    }
+
+    /// Output under the threshold stays in memory (no temp file).
+    #[test]
+    fn small_output_stays_in_memory() -> Result<(), Error> {
+        let mut output = TerminalOutput::<std::io::Empty>::new(24, 80, None, 1000)?;
+        output.process(b"hello\r\n");
+        assert!(!output.output.get_ref().is_rolled());
+        assert_eq!(output.read_output_from(0), b"hello\r\n");
+        Ok(())
+    }
+
+    /// Writing more output after a replay must append, not clobber.
+    #[test]
+    fn replay_does_not_disturb_appends() -> Result<(), Error> {
+        let mut output = TerminalOutput::<std::io::Empty>::new(24, 80, None, 1000)?;
+        output.process(b"first\r\n");
+        assert_eq!(output.read_output_from(0), b"first\r\n");
+        output.process(b"second\r\n");
+        assert_eq!(output.read_output_from(0), b"first\r\nsecond\r\n");
+        // Offset 6 is the trailing newline of \"first\"; the second write
+        // begins at offset 7.
+        assert_eq!(output.read_output_from(7), b"second\r\n");
+        Ok(())
+    }
 }
 
 #[cfg(test)]
@@ -207,29 +390,38 @@ mod newline_tests {
     use super::*;
 
     #[test]
+    fn normalized_input_is_borrowed() {
+        assert!(matches!(
+            normalize_newlines(b"a\r\nb\r\n"),
+            Cow::Borrowed(_)
+        ));
+        assert!(matches!(normalize_newlines(b"a\nb"), Cow::Owned(_)));
+    }
+
+    #[test]
     fn no_newlines_passthrough() {
-        assert_eq!(normalize_newlines(b"hello"), b"hello");
+        assert_eq!(&*normalize_newlines(b"hello"), b"hello");
     }
 
     #[test]
     fn crlf_unchanged() {
-        assert_eq!(normalize_newlines(b"hello\r\nworld"), b"hello\r\nworld");
+        assert_eq!(&*normalize_newlines(b"hello\r\nworld"), b"hello\r\nworld");
     }
 
     #[test]
     fn bare_lf_gets_cr() {
-        assert_eq!(normalize_newlines(b"hello\nworld"), b"hello\r\nworld");
+        assert_eq!(&*normalize_newlines(b"hello\nworld"), b"hello\r\nworld");
     }
 
     #[test]
     fn leading_lf_gets_cr() {
-        assert_eq!(normalize_newlines(b"\nhello"), b"\r\nhello");
+        assert_eq!(&*normalize_newlines(b"\nhello"), b"\r\nhello");
     }
 
     #[test]
     fn mixed_lf_and_crlf() {
         assert_eq!(
-            normalize_newlines(b"a\r\nb\nc\r\nd\n"),
+            &*normalize_newlines(b"a\r\nb\nc\r\nd\n"),
             b"a\r\nb\r\nc\r\nd\r\n"
         );
     }
@@ -238,7 +430,8 @@ mod newline_tests {
     fn mouse_drag_selection_can_be_copied() -> Result<(), Error> {
         use crossterm::event::{MouseButton, MouseEvent, MouseEventKind};
 
-        let mut output: TerminalOutput<()> = TerminalOutput::new(10, 40, None, 100);
+        let mut output: TerminalOutput<()> =
+            TerminalOutput::new(10, 40, None, 100).expect("terminal output");
         output.process(b"hello world\r\n");
 
         output.handle_mouse(MouseEvent {
@@ -255,7 +448,156 @@ mod newline_tests {
         })?;
 
         assert!(output.has_selection());
+        assert!(output.is_selecting());
         assert_eq!(output.copy_selection().as_deref(), Some("hello"));
+
+        output.handle_mouse(MouseEvent {
+            kind: MouseEventKind::Up(MouseButton::Left),
+            column: 4,
+            row: 0,
+            modifiers: crossterm::event::KeyModifiers::empty(),
+        })?;
+        // Release ends the drag. The selection itself survives at this
+        // layer so `App` can copy it before clearing the highlight.
+        assert!(!output.is_selecting());
+        assert!(output.has_selection());
+        Ok(())
+    }
+
+    #[test]
+    fn click_without_drag_has_no_selection() -> Result<(), Error> {
+        use crossterm::event::{MouseButton, MouseEvent, MouseEventKind};
+
+        let mut output: TerminalOutput<()> = TerminalOutput::new(10, 40, None, 100)?;
+        output.process(b"hello world\r\n");
+        output.handle_mouse(MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column: 0,
+            row: 0,
+            modifiers: crossterm::event::KeyModifiers::empty(),
+        })?;
+
+        assert!(!output.has_selection());
+        assert_eq!(output.copy_selection(), None);
+        output.handle_mouse(MouseEvent {
+            kind: MouseEventKind::Up(MouseButton::Left),
+            column: 0,
+            row: 0,
+            modifiers: crossterm::event::KeyModifiers::empty(),
+        })?;
+        assert_eq!(output.parser.selection_start(), None);
+        Ok(())
+    }
+
+    #[test]
+    fn mouse_down_pins_anchor_before_output_arrives() -> Result<(), Error> {
+        use crossterm::event::{MouseButton, MouseEvent, MouseEventKind};
+
+        let mut output: TerminalOutput<()> = TerminalOutput::new(2, 40, None, 100)?;
+        output.process(b"anchor\r\nnext");
+        output.handle_mouse(MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column: 0,
+            row: 0,
+            modifiers: crossterm::event::KeyModifiers::empty(),
+        })?;
+        output.process(b"\r\nnew");
+        output.handle_mouse(MouseEvent {
+            kind: MouseEventKind::Drag(MouseButton::Left),
+            column: 2,
+            row: 1,
+            modifiers: crossterm::event::KeyModifiers::empty(),
+        })?;
+
+        assert!(
+            output
+                .copy_selection()
+                .is_some_and(|text| text.starts_with("anchor"))
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn selection_tick_without_anchor_does_not_scroll() -> Result<(), Error> {
+        let mut output: TerminalOutput<()> = TerminalOutput::new(2, 40, None, 100)?;
+        output.process(b"zero\r\none\r\ntwo\r\nthree");
+        output.scroll_to_top()?;
+        let before = output
+            .parser
+            .terminal
+            .scrollbar()
+            .expect("scrollbar")
+            .offset;
+
+        output.continue_selection_drag(Direction::Down, 1, 0)?;
+
+        assert_eq!(
+            output
+                .parser
+                .terminal
+                .scrollbar()
+                .expect("scrollbar")
+                .offset,
+            before
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn shift_on_click_does_not_start_selection() -> Result<(), Error> {
+        use crossterm::event::{KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
+
+        let mut output: TerminalOutput<()> = TerminalOutput::new(10, 40, None, 100)?;
+        output.process(b"hello world\r\n");
+
+        output.handle_mouse(MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column: 0,
+            row: 0,
+            modifiers: KeyModifiers::SHIFT,
+        })?;
+        assert!(!output.is_selecting());
+
+        output.handle_mouse(MouseEvent {
+            kind: MouseEventKind::Drag(MouseButton::Left),
+            column: 4,
+            row: 0,
+            modifiers: KeyModifiers::empty(),
+        })?;
+        assert!(!output.has_selection());
+        Ok(())
+    }
+
+    #[test]
+    fn release_with_shift_keeps_selection() -> Result<(), Error> {
+        use crossterm::event::{KeyModifiers, MouseButton, MouseEvent, MouseEventKind};
+
+        let mut output: TerminalOutput<()> = TerminalOutput::new(10, 40, None, 100)?;
+        output.process(b"hello world\r\n");
+
+        output.handle_mouse(MouseEvent {
+            kind: MouseEventKind::Down(MouseButton::Left),
+            column: 0,
+            row: 0,
+            modifiers: KeyModifiers::empty(),
+        })?;
+        output.handle_mouse(MouseEvent {
+            kind: MouseEventKind::Drag(MouseButton::Left),
+            column: 4,
+            row: 0,
+            modifiers: KeyModifiers::empty(),
+        })?;
+        assert!(output.has_selection());
+
+        // The drag ends but the selection stays for a later `c` copy.
+        output.handle_mouse(MouseEvent {
+            kind: MouseEventKind::Up(MouseButton::Left),
+            column: 4,
+            row: 0,
+            modifiers: KeyModifiers::SHIFT,
+        })?;
+        assert!(output.has_selection());
+        assert!(!output.is_selecting());
         Ok(())
     }
 }

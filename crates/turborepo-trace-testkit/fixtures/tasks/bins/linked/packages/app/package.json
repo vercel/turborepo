@@ -1,0 +1,25 @@
+{
+  "name": "@bins/app",
+  "version": "1.0.0",
+  "scripts": {
+    "codegen": "gen-client schema.json > src/generated/client.js",
+    "codegen:pnpm": "pnpm exec gen-client schema.json",
+    "codegen:npx": "npx gen-client schema.json",
+    "codegen:yarn": "yarn gen-client schema.json",
+    "codegen:explicit": "node_modules/.bin/gen-client schema.json",
+    "cwd": "gen-cwd",
+    "test": "jest-ci -c jest.unit.config.js",
+    "test:vitest": "vitest-ci run --config vitest.config.ts",
+    "build": "tsc-emit --pretty",
+    "py": "gen-py schema.json",
+    "sh": "gen-sh",
+    "tp": "tp-tool schema.json",
+    "od": "od-cli",
+    "unknown": "no-such-tool --x",
+    "typecheck": "tsc6 -p tsconfig.build.json"
+  },
+  "devDependencies": {
+    "@bins/gen": "workspace:*",
+    "@bins/ci-runners": "workspace:*"
+  }
+}

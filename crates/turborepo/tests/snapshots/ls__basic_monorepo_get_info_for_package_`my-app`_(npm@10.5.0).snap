@@ -8,7 +8,7 @@ expression: query_output
       "name": "my-app",
       "path": "apps/my-app",
       "tasks": {
-        "count": 2,
+        "count": 3,
         "items": [
           {
             "name": "build",
@@ -17,6 +17,10 @@ expression: query_output
           {
             "name": "maybefails",
             "command": "exit 4"
+          },
+          {
+            "name": "something",
+            "command": ""
           }
         ]
       },

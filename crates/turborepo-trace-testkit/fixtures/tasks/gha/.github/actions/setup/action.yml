@@ -1,0 +1,11 @@
+name: setup
+inputs:
+  install-dir:
+    default: '.'
+runs:
+  using: composite
+  steps:
+    - run: node install.js
+      shell: bash
+      working-directory: ${{ inputs.install-dir }}
+    - uses: ./.github/actions/js-action

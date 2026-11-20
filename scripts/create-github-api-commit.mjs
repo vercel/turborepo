@@ -111,6 +111,17 @@ function git(args, { trim = true } = {}) {
   return trim ? output.trim() : output;
 }
 
+function hasLocalCommit(sha) {
+  try {
+    execFileSync("git", ["cat-file", "-e", `${sha}^{commit}`], {
+      stdio: "ignore",
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 function splitNull(output) {
   return output.split("\0").filter(Boolean);
 }
@@ -464,6 +475,11 @@ export async function run(options = parseArgs()) {
     throw error;
   }
 
+  // createCommitOnBranch mints the commit on GitHub's side, so the object
+  // does not exist locally until we fetch it.
+  if (!hasLocalCommit(commitSha)) {
+    git(["fetch", "--quiet", "origin", `refs/heads/${options.branch}`]);
+  }
   git(["update-ref", `refs/heads/${options.branch}`, commitSha]);
   if (currentBranch === options.branch) {
     git(["reset", "--mixed", commitSha]);

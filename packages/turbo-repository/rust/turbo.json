@@ -1,0 +1,11 @@
+{
+  "extends": ["//"],
+  "tasks": {
+    "build": {
+      // The parent package's N-API build consumes this task's Cargo-derived
+      // transitive input hash, but performs the specialized build itself.
+      "command": null,
+      "dependsOn": []
+    }
+  }
+}

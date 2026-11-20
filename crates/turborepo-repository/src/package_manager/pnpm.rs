@@ -1,4 +1,7 @@
-use std::collections::{HashMap, HashSet};
+use std::{
+    collections::{HashMap, HashSet},
+    sync::{Arc, Mutex},
+};
 
 use node_semver::{Range, Version};
 use serde::Deserialize;
@@ -39,6 +42,7 @@ impl<'a> PnpmDetector<'a> {
         }
     }
 
+    #[expect(clippy::expect_used, reason = "static semver ranges are valid")]
     pub fn detect_pnpm6_or_pnpm(version: &Version) -> Result<PackageManager, Error> {
         let pnpm6_constraint: Range = "<7.0.0".parse().expect("valid version");
         let pnpm9_constraint: Range = ">=9.0.0-alpha.0".parse().expect("valid version");
@@ -49,6 +53,41 @@ impl<'a> PnpmDetector<'a> {
         } else {
             Ok(PackageManager::Pnpm)
         }
+    }
+}
+
+/// Detect the pnpm variant from a `pnpm-lock.yaml` on disk.
+pub fn detect_from_lockfile(repo_root: &AbsoluteSystemPath) -> Result<PackageManager, Error> {
+    let lockfile_path = repo_root.join_component(LOCKFILE);
+    let contents = lockfile_path.read()?;
+    Ok(detect_from_lockfile_contents(&contents))
+}
+
+pub(crate) fn detect_from_lockfile_contents(contents: &[u8]) -> PackageManager {
+    #[derive(Deserialize)]
+    struct PnpmLockfileHeader {
+        #[serde(rename = "lockfileVersion")]
+        lockfile_version: String,
+    }
+
+    let header: PnpmLockfileHeader =
+        serde_yaml_ng::from_slice(contents).unwrap_or(PnpmLockfileHeader {
+            lockfile_version: String::new(),
+        });
+    detect_pnpm_from_lockfile_version(&header.lockfile_version)
+}
+
+fn detect_pnpm_from_lockfile_version(version: &str) -> PackageManager {
+    let major = version
+        .trim_matches('\'')
+        .trim_matches('"')
+        .split('.')
+        .next()
+        .unwrap_or_default();
+    match major {
+        "9" => PackageManager::Pnpm9,
+        "6" => PackageManager::Pnpm6,
+        _ => PackageManager::Pnpm,
     }
 }
 
@@ -96,7 +135,16 @@ pub fn prune_workspace_patches<R: AsRef<RelativeUnixPath>>(
         return Ok(());
     }
     let contents = workspace_yaml_path.read_to_string()?;
-    let mut doc: serde_yaml_ng::Value = serde_yaml_ng::from_str(&contents)
+    let output = prune_workspace_patches_contents(&contents, patches)?;
+    workspace_yaml_path.create_with_contents(output)?;
+    Ok(())
+}
+
+pub fn prune_workspace_patches_contents<R: AsRef<RelativeUnixPath>>(
+    contents: &str,
+    patches: &[R],
+) -> Result<String, std::io::Error> {
+    let mut doc: serde_yaml_ng::Value = serde_yaml_ng::from_str(contents)
         .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
 
     let patches_set: HashSet<&RelativeUnixPath> = patches.iter().map(|r| r.as_ref()).collect();
@@ -111,10 +159,8 @@ pub fn prune_workspace_patches<R: AsRef<RelativeUnixPath>>(
         });
     }
 
-    let output = serde_yaml_ng::to_string(&doc)
-        .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
-    workspace_yaml_path.create_with_contents(output)?;
-    Ok(())
+    serde_yaml_ng::to_string(&doc)
+        .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))
 }
 
 pub fn patch_paths_for_keys(
@@ -139,13 +185,21 @@ pub fn patch_paths_for_keys(
 }
 
 pub fn link_workspace_packages(pnpm_version: PnpmVersion, repo_root: &AbsoluteSystemPath) -> bool {
+    link_workspace_packages_from_path(pnpm_version, repo_root, WORKSPACE_CONFIGURATION_PATH)
+}
+
+pub fn link_workspace_packages_from_path(
+    pnpm_version: PnpmVersion,
+    repo_root: &AbsoluteSystemPath,
+    workspace_configuration_path: &str,
+) -> bool {
     let npmrc_config = npmrc::NpmRc::from_file(repo_root)
         .inspect_err(|e| debug!("unable to read npmrc: {e}"))
         .unwrap_or_default();
     let workspace_config = matches!(pnpm_version, PnpmVersion::Pnpm9)
         .then(|| {
-            PnpmWorkspace::from_file(repo_root)
-                .inspect_err(|e| debug!("unable to read {WORKSPACE_CONFIGURATION_PATH}: {e}"))
+            PnpmWorkspace::from_file(repo_root, workspace_configuration_path)
+                .inspect_err(|e| debug!("unable to read {workspace_configuration_path}: {e}"))
                 .ok()
         })
         .flatten()
@@ -161,11 +215,18 @@ pub fn link_workspace_packages(pnpm_version: PnpmVersion, repo_root: &AbsoluteSy
 }
 
 pub fn get_configured_workspace_globs(repo_root: &AbsoluteSystemPath) -> Option<Vec<String>> {
-    let pnpm_workspace = PnpmWorkspace::from_file(repo_root).ok()?;
+    get_configured_workspace_globs_from_path(repo_root, WORKSPACE_CONFIGURATION_PATH)
+}
+
+pub fn get_configured_workspace_globs_from_path(
+    repo_root: &AbsoluteSystemPath,
+    workspace_configuration_path: &str,
+) -> Option<Vec<String>> {
+    let pnpm_workspace = PnpmWorkspace::from_file(repo_root, workspace_configuration_path).ok()?;
     if pnpm_workspace.packages.is_empty() {
         None
     } else {
-        Some(pnpm_workspace.packages)
+        Some(pnpm_workspace.packages.clone())
     }
 }
 
@@ -196,11 +257,33 @@ enum LinkWorkspacePackages {
     Str(String),
 }
 
+/// The most recently parsed `pnpm-workspace.yaml`, keyed by its contents.
+///
+/// A single command reads the workspace file several times: repository
+/// inference, workspace discovery, and the catalog and `linkWorkspacePackages`
+/// lookups. The file is still read every time, so a change on disk is always
+/// picked up, but identical contents are parsed only once. Parse errors are
+/// not cached.
+static LAST_PARSED_WORKSPACE: Mutex<Option<(String, Arc<PnpmWorkspace>)>> = Mutex::new(None);
+
 impl PnpmWorkspace {
-    pub fn from_file(repo_root: &AbsoluteSystemPath) -> Result<Self, Error> {
-        let workspace_yaml_path = repo_root.join_component(WORKSPACE_CONFIGURATION_PATH);
+    pub fn from_file(
+        repo_root: &AbsoluteSystemPath,
+        workspace_configuration_path: &str,
+    ) -> Result<Arc<Self>, Error> {
+        let workspace_yaml_path = repo_root.join_component(workspace_configuration_path);
         let workspace_yaml = workspace_yaml_path.read_to_string()?;
-        Ok(serde_yaml_ng::from_str(&workspace_yaml)?)
+        if let Ok(last) = LAST_PARSED_WORKSPACE.lock()
+            && let Some((contents, workspace)) = last.as_ref()
+            && *contents == workspace_yaml
+        {
+            return Ok(Arc::clone(workspace));
+        }
+        let workspace: Arc<Self> = Arc::new(serde_yaml_ng::from_str(&workspace_yaml)?);
+        if let Ok(mut last) = LAST_PARSED_WORKSPACE.lock() {
+            *last = Some((workspace_yaml, Arc::clone(&workspace)));
+        }
+        Ok(workspace)
     }
 
     fn link_workspace_packages(&self) -> Option<bool> {
@@ -215,15 +298,22 @@ impl PnpmWorkspace {
 /// Read catalog definitions from pnpm-workspace.yaml. Returns `None` if the
 /// file doesn't exist or can't be parsed (non-fatal).
 pub fn read_catalogs(repo_root: &AbsoluteSystemPath) -> Option<PnpmCatalogs> {
-    let workspace = PnpmWorkspace::from_file(repo_root)
-        .inspect_err(|e| debug!("unable to read {WORKSPACE_CONFIGURATION_PATH}: {e}"))
+    read_catalogs_from_path(repo_root, WORKSPACE_CONFIGURATION_PATH)
+}
+
+pub fn read_catalogs_from_path(
+    repo_root: &AbsoluteSystemPath,
+    workspace_configuration_path: &str,
+) -> Option<PnpmCatalogs> {
+    let workspace = PnpmWorkspace::from_file(repo_root, workspace_configuration_path)
+        .inspect_err(|e| debug!("unable to read {workspace_configuration_path}: {e}"))
         .ok()?;
     if workspace.catalog.is_empty() && workspace.catalogs.is_empty() {
         return None;
     }
     Some(PnpmCatalogs {
-        default: workspace.catalog,
-        named: workspace.catalogs,
+        default: workspace.catalog.clone(),
+        named: workspace.catalogs.clone(),
     })
 }
 
@@ -274,7 +364,9 @@ impl TryFrom<&'_ PackageManager> for PnpmVersion {
             PackageManager::Berry
             | PackageManager::Yarn
             | PackageManager::Npm
-            | PackageManager::Bun => Err(NotPnpmError {
+            | PackageManager::Bun
+            | PackageManager::Nub { .. }
+            | PackageManager::Aube { .. } => Err(NotPnpmError {
                 package_manager: value.clone(),
             }),
         }

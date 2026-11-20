@@ -1,0 +1,12 @@
+syntax = "proto3";
+
+package acme.v1;
+
+import "acme/v1/common.proto";
+import "google/protobuf/timestamp.proto";
+// import "acme/v1/commented.proto";
+
+message User {
+  Id id = 1;
+  google.protobuf.Timestamp created = 2;
+}

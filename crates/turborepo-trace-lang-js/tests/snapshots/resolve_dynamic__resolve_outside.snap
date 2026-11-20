@@ -1,0 +1,162 @@
+---
+source: crates/turborepo-trace-lang-js/tests/resolve_dynamic.rs
+expression: run.json(&root)
+---
+{
+  "version": 1,
+  "base": "<fixture>/app",
+  "entries": [
+    {
+      "path": "main.js",
+      "files": [
+        "main.js",
+        "package.json",
+        "<fixture>/node_modules/shared/index.js",
+        "<fixture>/node_modules/shared/package.json"
+      ]
+    }
+  ],
+  "files": [
+    {
+      "path": "main.js",
+      "reasons": [
+        "initial"
+      ],
+      "parents": [],
+      "parsed": true,
+      "lang": "js"
+    },
+    {
+      "path": "package.json",
+      "reasons": [
+        "manifest"
+      ],
+      "parents": [
+        "main.js"
+      ],
+      "parsed": false
+    },
+    {
+      "path": "<fixture>/node_modules/shared/index.js",
+      "reasons": [
+        "dependency"
+      ],
+      "parents": [
+        "main.js"
+      ],
+      "parsed": true,
+      "lang": "js",
+      "outside_base": true
+    },
+    {
+      "path": "<fixture>/node_modules/shared/package.json",
+      "reasons": [
+        "manifest"
+      ],
+      "parents": [
+        "main.js",
+        "<fixture>/node_modules/shared/index.js"
+      ],
+      "parsed": false,
+      "outside_base": true
+    }
+  ],
+  "edges": [
+    {
+      "from": "main.js",
+      "kind": "require",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "shared",
+      "span": [
+        15,
+        32
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "<fixture>/node_modules/shared/index.js"
+      }
+    },
+    {
+      "from": "main.js",
+      "kind": "manifest",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "shared",
+      "span": [
+        15,
+        32
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "package.json"
+      }
+    },
+    {
+      "from": "main.js",
+      "kind": "manifest",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "shared",
+      "span": [
+        15,
+        32
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "<fixture>/node_modules/shared/package.json"
+      }
+    },
+    {
+      "from": "<fixture>/node_modules/shared/index.js",
+      "kind": "manifest",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "package.json scope",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "<fixture>/node_modules/shared/package.json"
+      }
+    }
+  ],
+  "uncertainties": [
+    {
+      "file": "main.js",
+      "kind": "outside_base",
+      "detail": "<fixture>/node_modules/shared/index.js is outside the base <fixture>/app (via 'shared')",
+      "span": [
+        15,
+        32
+      ],
+      "line": 1,
+      "col": 16
+    },
+    {
+      "file": "main.js",
+      "kind": "outside_base",
+      "detail": "<fixture>/node_modules/shared/package.json is outside the base <fixture>/app (via 'shared')",
+      "span": [
+        15,
+        32
+      ],
+      "line": 1,
+      "col": 16
+    }
+  ],
+  "symlinks": {},
+  "stats": {
+    "entries": 1,
+    "files": 4,
+    "parsed_files": 2,
+    "edges": 4,
+    "uncertainties": 2
+  }
+}

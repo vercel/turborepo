@@ -72,6 +72,29 @@ fn test_dry_run_env_var_not_in_output() {
 }
 
 #[test]
+fn test_dry_json_plan_serializes_without_execution_output() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@10.5.0", false).unwrap();
+
+    let output = run_turbo(
+        tempdir.path(),
+        &["run", "build", "--filter=my-app", "--dry=json"],
+    );
+    assert!(output.status.success(), "dry run failed: {output:?}");
+    let json: serde_json::Value =
+        serde_json::from_slice(&output.stdout).expect("stdout contains one dry-run JSON document");
+    assert!(json.get("execution").is_none());
+    let tasks = json["tasks"].as_array().expect("planned tasks");
+    let app = tasks
+        .iter()
+        .find(|task| task["taskId"] == "my-app#build")
+        .unwrap();
+    assert_eq!(app["command"], "echo building");
+    assert!(app["dependencies"].is_array());
+    assert_eq!(app["cache"]["status"], "MISS");
+}
+
+#[test]
 fn test_dry_run_cache_hit_after_real_run() {
     // Regression test for https://github.com/vercel/turborepo/issues/9044
     // After a real run populates the cache, --dry=json should report HIT.

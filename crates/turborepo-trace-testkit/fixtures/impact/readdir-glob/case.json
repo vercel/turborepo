@@ -1,0 +1,70 @@
+{
+  "description": "Directory membership: a plugin registry built from readdir + computed require, and a test reading every fixture in a directory.",
+  "mutations": [
+    {
+      "name": "add-plugin",
+      "description": "add src/plugins/gamma.ts",
+      "ops": [
+        {
+          "op": "write",
+          "path": "src/plugins/gamma.ts",
+          "content": "export const name = 'gamma';\n"
+        }
+      ]
+    },
+    {
+      "name": "edit-plugin",
+      "description": "modify a plugin loaded by computed require",
+      "ops": [
+        {
+          "op": "append",
+          "path": "src/plugins/alpha.ts",
+          "text": "\n// edited\n"
+        }
+      ]
+    },
+    {
+      "name": "delete-plugin",
+      "description": "delete a plugin",
+      "ops": [
+        {
+          "op": "delete",
+          "path": "src/plugins/beta.ts"
+        }
+      ]
+    },
+    {
+      "name": "add-fixture",
+      "description": "add data/fixtures/three.json",
+      "ops": [
+        {
+          "op": "write",
+          "path": "data/fixtures/three.json",
+          "content": "{\"n\": 3}\n"
+        }
+      ]
+    },
+    {
+      "name": "edit-fixture",
+      "description": "modify a fixture read through fs",
+      "ops": [
+        {
+          "op": "write",
+          "path": "data/fixtures/one.json",
+          "content": "{\"n\": 10}\n"
+        }
+      ]
+    },
+    {
+      "name": "add-elsewhere",
+      "description": "add a file in an unlisted directory",
+      "ops": [
+        {
+          "op": "write",
+          "path": "data/other.txt",
+          "content": "x\n"
+        }
+      ]
+    }
+  ]
+}

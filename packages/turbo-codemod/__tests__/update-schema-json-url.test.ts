@@ -20,7 +20,7 @@ describe("update-schema-url", () => {
       options: { force: false, dryRun: false, print: false }
     });
 
-    expect(JSON.parse(read("turbo.json") || "{}")).toStrictEqual({
+    expect(JSON.parse(read("turbo.json"))).toStrictEqual({
       $schema: "https://turborepo.dev/schema.v2.json",
       tasks: {
         build: {
@@ -53,7 +53,7 @@ describe("update-schema-url", () => {
       options: { force: false, dryRun: false, print: false }
     });
 
-    expect(JSON.parse(read("turbo.json") || "{}")).toStrictEqual({
+    expect(JSON.parse(read("turbo.json"))).toStrictEqual({
       $schema: "https://turborepo.dev/schema.json",
       tasks: {
         build: {

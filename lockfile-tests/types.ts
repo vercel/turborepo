@@ -19,6 +19,7 @@ export interface TestCase {
   };
   label: string;
   docker?: boolean;
+  production?: boolean;
   expectedFailure?: boolean;
 }
 

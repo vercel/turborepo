@@ -1,13 +1,50 @@
-use std::{backtrace::Backtrace, collections::HashSet, ffi::OsString, io};
+use std::{backtrace::Backtrace, io};
+#[cfg(unix)]
+use std::{
+    cell::RefCell,
+    ffi::CString,
+    os::unix::io::{AsRawFd, FromRawFd},
+    rc::Rc,
+};
+#[cfg(not(any(unix, windows)))]
+use std::{collections::HashSet, ffi::OsString};
+#[cfg(any(unix, windows))]
+use std::{
+    collections::{HashMap, VecDeque},
+    fs::File,
+};
+#[cfg(windows)]
+use std::{
+    fs::OpenOptions,
+    os::windows::fs::{MetadataExt, OpenOptionsExt},
+};
 
 use camino::Utf8Component;
+#[cfg(any(unix, windows))]
+use camino::Utf8Path;
 use tar::Entry;
+#[cfg(not(any(unix, windows)))]
 use tracing::debug;
 use turbopath::{
     AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPath, AnchoredSystemPathBuf,
 };
 
 use crate::CacheError;
+
+/// Cache artifacts must never modify Git metadata, including nested
+/// repositories and case variants on case-insensitive filesystems.
+pub(super) fn validate_restore_path(path: &AnchoredSystemPath) -> Result<(), CacheError> {
+    if path
+        .components()
+        .any(|component| turbopath::is_git_metadata_component(component.as_str()))
+    {
+        return Err(CacheError::GitMetadataWrite(
+            path.to_string(),
+            Backtrace::capture(),
+        ));
+    }
+    Ok(())
+}
 
 pub fn restore_directory(
     dir_cache: &mut CachedDirTree,
@@ -22,27 +59,298 @@ pub fn restore_directory(
 }
 
 pub struct CachedDirTree {
+    // Every supported platform derives restoration from a locked root directory.
+    #[cfg(unix)]
+    root: Rc<File>,
+    #[cfg(windows)]
+    root: File,
+    #[cfg(windows)]
+    root_path: AbsoluteSystemPathBuf,
+    // Directories opened for the most recent restore path, outermost first.
+    // Archives list entries in walk order, so consecutive entries share most
+    // of their parents. Reusing the already-opened descriptors avoids
+    // re-walking every component from the root per entry. Each descriptor was
+    // opened beneath its parent without following symlinks, exactly as a
+    // fresh walk would; the chain is cleared whenever this restore changes
+    // which symlinks it has created, since that can retarget a cached path.
+    #[cfg(unix)]
+    open_chain: RefCell<Vec<(String, Rc<File>)>>,
+    // Keys and targets are physical, root-relative locations. This preserves
+    // archive-created internal symlinks without following their mutable paths.
+    #[cfg(any(unix, windows))]
+    restored_symlinks: HashMap<AnchoredSystemPathBuf, AnchoredSystemPathBuf>,
+    #[cfg(not(any(unix, windows)))]
     anchor_at_depth: Vec<AbsoluteSystemPathBuf>,
+    #[cfg(not(any(unix, windows)))]
     prefix: Vec<OsString>,
+    #[cfg(not(any(unix, windows)))]
     restored_symlinks: HashSet<AnchoredSystemPathBuf>,
 }
 
 impl CachedDirTree {
-    pub fn new(initial_anchor: AbsoluteSystemPathBuf) -> Self {
-        CachedDirTree {
-            anchor_at_depth: vec![initial_anchor],
-            prefix: vec![],
-            restored_symlinks: HashSet::new(),
+    pub fn new(initial_anchor: AbsoluteSystemPathBuf) -> Result<Self, CacheError> {
+        #[cfg(unix)]
+        {
+            let root = open_restore_root(&initial_anchor)?;
+            Ok(Self {
+                root: Rc::new(root),
+                open_chain: RefCell::new(Vec::new()),
+                restored_symlinks: HashMap::new(),
+            })
+        }
+
+        #[cfg(windows)]
+        {
+            let root = open_windows_restore_root(&initial_anchor)?;
+            Ok(Self {
+                root,
+                root_path: initial_anchor,
+                restored_symlinks: HashMap::new(),
+            })
+        }
+
+        #[cfg(not(any(unix, windows)))]
+        {
+            Ok(Self {
+                anchor_at_depth: vec![initial_anchor],
+                prefix: vec![],
+                restored_symlinks: HashSet::new(),
+            })
         }
     }
 
-    pub fn record_symlink(&mut self, path: AnchoredSystemPathBuf) {
-        self.restored_symlinks.insert(path);
+    #[cfg(any(unix, windows))]
+    pub fn record_symlink(
+        &mut self,
+        path: AnchoredSystemPathBuf,
+        logical_target: AnchoredSystemPathBuf,
+        raw_target: &str,
+    ) -> Result<AnchoredSystemPathBuf, CacheError> {
+        let physical_path = self.physical_entry_path(&path)?;
+        let physical_target = if Utf8Path::new(raw_target).is_absolute() {
+            logical_target
+        } else {
+            let raw_target = AnchoredSystemPath::new(raw_target)?;
+            match physical_path.parent() {
+                Some(parent) => parent.to_owned().join(raw_target).clean(),
+                None => raw_target.clean(),
+            }
+        };
+
+        if physical_target.components().any(|component| {
+            matches!(
+                component,
+                Utf8Component::ParentDir | Utf8Component::RootDir | Utf8Component::Prefix(_)
+            )
+        }) {
+            return Err(CacheError::LinkOutsideOfDirectory(
+                raw_target.to_owned(),
+                Backtrace::capture(),
+            ));
+        }
+
+        let physical_target = self.expand_restored_symlinks(&physical_target)?;
+        self.restored_symlinks
+            .insert(physical_path, physical_target.clone());
+        // The symlink about to be written may replace a directory held open
+        // in the chain.
+        #[cfg(unix)]
+        self.open_chain.get_mut().clear();
+        Ok(physical_target)
     }
 
-    // On Windows, directory symlinks require remove_dir rather than
-    // remove_file. Try remove_file first; fall back to remove_dir.
+    #[cfg(not(any(unix, windows)))]
+    pub fn record_symlink(
+        &mut self,
+        path: AnchoredSystemPathBuf,
+        logical_target: AnchoredSystemPathBuf,
+        _raw_target: &str,
+    ) -> Result<AnchoredSystemPathBuf, CacheError> {
+        self.restored_symlinks.insert(path);
+        Ok(logical_target)
+    }
+
+    #[cfg(any(unix, windows))]
+    pub fn forget_symlink(&mut self, path: &AnchoredSystemPath) -> Result<(), CacheError> {
+        let physical_path = self.physical_entry_path(path)?;
+        #[cfg_attr(windows, allow(unused_variables))]
+        let removed = self.restored_symlinks.remove(&physical_path).is_some();
+        // Paths beneath the forgotten symlink no longer expand through it.
+        #[cfg(unix)]
+        if removed {
+            self.open_chain.get_mut().clear();
+        }
+        Ok(())
+    }
+
+    #[cfg(unix)]
+    pub fn symlink_target_is_dir(&self, _target: &AnchoredSystemPath) -> bool {
+        false
+    }
+
+    #[cfg(windows)]
+    pub fn symlink_target_is_dir(&self, target: &AnchoredSystemPath) -> bool {
+        self.root_path.resolve(target).as_path().is_dir()
+    }
+
+    #[cfg(any(unix, windows))]
+    pub fn safe_mkdir_all(
+        &mut self,
+        _anchor: &AbsoluteSystemPath,
+        processed_name: &AnchoredSystemPath,
+        mode: u32,
+    ) -> Result<(), CacheError> {
+        validate_restore_path(processed_name)?;
+        let expanded = self.expand_restored_symlinks(processed_name)?;
+        validate_restore_path(&expanded)?;
+        self.open_or_create_directory(&expanded, mode)?;
+        Ok(())
+    }
+
+    /// Opens and retains the destination's parent directory so a later path
+    /// swap cannot redirect the final filesystem operation.
+    #[cfg(any(unix, windows))]
+    pub(crate) fn destination(
+        &self,
+        processed_name: &AnchoredSystemPath,
+    ) -> Result<RestoreDestination, CacheError> {
+        validate_restore_path(processed_name)?;
+        let file_name = processed_name
+            .as_path()
+            .file_name()
+            .and_then(|name| name.to_str())
+            .ok_or_else(|| {
+                CacheError::InvalidFilePath(processed_name.to_string(), Backtrace::capture())
+            })?;
+        let expanded_parent = match processed_name.parent() {
+            Some(parent) => self.expand_restored_symlinks(parent)?,
+            None => AnchoredSystemPathBuf::default(),
+        };
+        validate_restore_path(&expanded_parent)?;
+        #[cfg(unix)]
+        {
+            let directory = self.open_or_create_directory(&expanded_parent, 0o755)?;
+            Ok(RestoreDestination {
+                directory,
+                file_name: path_component_cstring(file_name)?,
+            })
+        }
+
+        #[cfg(windows)]
+        {
+            let parent = self.open_or_create_directory(&expanded_parent, 0o755)?;
+            Ok(RestoreDestination {
+                _locks: parent.handles,
+                parent_path: parent.path,
+                file_name: file_name.to_owned(),
+            })
+        }
+    }
+
+    #[cfg(any(unix, windows))]
+    fn physical_entry_path(
+        &self,
+        path: &AnchoredSystemPath,
+    ) -> Result<AnchoredSystemPathBuf, CacheError> {
+        let file_name = path
+            .as_path()
+            .file_name()
+            .and_then(|name| name.to_str())
+            .ok_or_else(|| CacheError::InvalidFilePath(path.to_string(), Backtrace::capture()))?;
+        let mut physical_path = match path.parent() {
+            Some(parent) => self.expand_restored_symlinks(parent)?,
+            None => AnchoredSystemPathBuf::default(),
+        };
+        physical_path.push(file_name);
+        validate_restore_path(&physical_path)?;
+        Ok(physical_path)
+    }
+
+    #[cfg(any(unix, windows))]
+    fn expand_restored_symlinks(
+        &self,
+        path: &AnchoredSystemPath,
+    ) -> Result<AnchoredSystemPathBuf, CacheError> {
+        let mut pending: VecDeque<String> = path
+            .components()
+            .map(|component| component.as_str().to_owned())
+            .collect();
+        let mut expanded = AnchoredSystemPathBuf::default();
+        let mut expansions = 0;
+
+        while let Some(component) = pending.pop_front() {
+            expanded.push(component);
+            let Some(target) = self.restored_symlinks.get(&expanded) else {
+                continue;
+            };
+
+            expansions += 1;
+            if expansions > 64 {
+                return Err(CacheError::CycleDetected(Backtrace::capture()));
+            }
+
+            let suffix = std::mem::take(&mut pending);
+            pending.extend(
+                target
+                    .components()
+                    .map(|component| component.as_str().to_owned()),
+            );
+            pending.extend(suffix);
+            expanded = AnchoredSystemPathBuf::default();
+        }
+
+        Ok(expanded)
+    }
+
+    #[cfg(unix)]
+    fn open_or_create_directory(
+        &self,
+        path: &AnchoredSystemPath,
+        mode: u32,
+    ) -> Result<Rc<File>, CacheError> {
+        let mut chain = self.open_chain.borrow_mut();
+        let mut directory = self.root.clone();
+        for (depth, component) in path.components().enumerate() {
+            let component = component.as_str();
+            if let Some((name, cached)) = chain.get(depth)
+                && name == component
+            {
+                directory = cached.clone();
+                continue;
+            }
+            chain.truncate(depth);
+            directory = Rc::new(open_or_create_directory_at(
+                directory.as_raw_fd(),
+                component,
+                mode & 0o777,
+            )?);
+            chain.push((component.to_owned(), directory.clone()));
+        }
+        Ok(directory)
+    }
+
+    #[cfg(windows)]
+    fn open_or_create_directory(
+        &self,
+        path: &AnchoredSystemPath,
+        _mode: u32,
+    ) -> Result<WindowsDirectory, CacheError> {
+        let mut current_path = self.root_path.clone();
+        let mut handles = vec![self.root.try_clone()?];
+        for component in path.components() {
+            current_path = current_path.join_component(component.as_str());
+            handles.push(open_or_create_windows_directory(&current_path)?);
+        }
+        Ok(WindowsDirectory {
+            handles,
+            path: current_path,
+        })
+    }
+
+    #[cfg(not(any(unix, windows)))]
     fn remove_symlink(path: &AbsoluteSystemPath) -> Result<(), CacheError> {
+        // On Windows, directory symlinks require remove_dir rather than
+        // remove_file. Try remove_file first; fall back to remove_dir.
         #[cfg(not(windows))]
         {
             path.remove_file()?;
@@ -54,11 +362,7 @@ impl CachedDirTree {
         Ok(())
     }
 
-    // Given a path, checks the dir cache to determine where we actually need
-    // to start restoring, i.e. which directories we can skip over because
-    // we've already created them.
-    // Returns the anchor at the depth where we need to start restoring, and
-    // the index into the path components where we need to start restoring.
+    #[cfg(not(any(unix, windows)))]
     fn get_starting_point(&mut self, path: &AnchoredSystemPath) -> (AbsoluteSystemPathBuf, usize) {
         let mut i = 0;
         for (idx, (path_component, prefix_component)) in
@@ -77,26 +381,21 @@ impl CachedDirTree {
         (anchor, i)
     }
 
+    #[cfg(not(any(unix, windows)))]
     fn update(&mut self, anchor: AbsoluteSystemPathBuf, new_component: OsString) {
         self.anchor_at_depth.push(anchor);
         self.prefix.push(new_component);
     }
 
-    // Windows doesn't have file modes, so mode is unused
-    #[allow(unused_variables)]
+    #[cfg(not(any(unix, windows)))]
     pub fn safe_mkdir_all(
         &mut self,
         anchor: &AbsoluteSystemPath,
         processed_name: &AnchoredSystemPath,
         mode: u32,
     ) -> Result<(), CacheError> {
-        // Iterate through path segments by os.Separator, appending them onto
-        // current_path. Check to see if that path segment is a symlink
-        // with a target outside of anchor.
+        validate_restore_path(processed_name)?;
         let (mut calculated_anchor, start_idx) = self.get_starting_point(processed_name);
-
-        // Build the anchored path incrementally so we can check each component
-        // against restored_symlinks.
         let components: Vec<_> = processed_name.components().collect();
         let mut current_anchored: Option<AnchoredSystemPathBuf> = None;
 
@@ -110,10 +409,6 @@ impl CachedDirTree {
                 continue;
             }
 
-            // Check if this component is a pre-existing symlink that should be
-            // replaced with a real directory. Symlinks restored during the
-            // current operation are preserved (they were intentionally placed
-            // by the same tar archive).
             let Some(current) = current_anchored.as_ref() else {
                 continue;
             };
@@ -127,8 +422,6 @@ impl CachedDirTree {
                     literal_path
                 );
                 Self::remove_symlink(&literal_path)?;
-                // Fall through to check_path: the symlink is gone, so
-                // check_path will see a non-existent path and accept it.
             }
 
             calculated_anchor = check_path(
@@ -143,8 +436,6 @@ impl CachedDirTree {
             );
         }
 
-        // Directory modes are only applied when creating directories. A later
-        // path-based chmod could be redirected if a checked component is swapped.
         let resolved_name = anchor.resolve(processed_name);
         let directory_exists = resolved_name.try_exists();
         if matches!(directory_exists, Ok(false)) {
@@ -156,20 +447,400 @@ impl CachedDirTree {
 }
 
 #[cfg(unix)]
-fn create_dir_all_with_mode(path: &AbsoluteSystemPath, mode: u32) -> io::Result<()> {
-    use std::os::unix::fs::DirBuilderExt;
+fn open_restore_root(anchor: &AbsoluteSystemPath) -> io::Result<File> {
+    let anchor = CString::new(anchor.as_str()).map_err(|_| {
+        io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "cache restore root contains NUL byte",
+        )
+    })?;
+    let flags = libc::O_RDONLY | libc::O_DIRECTORY | libc::O_NOFOLLOW | libc::O_CLOEXEC;
+    let fd = unsafe { libc::open(anchor.as_ptr(), flags) };
+    if fd == -1 {
+        return Err(io::Error::last_os_error());
+    }
 
-    std::fs::DirBuilder::new()
-        .recursive(true)
-        .mode(mode & 0o777)
-        .create(path.as_path())
+    // SAFETY: open returned a new owned file descriptor.
+    Ok(unsafe { File::from_raw_fd(fd) })
 }
 
 #[cfg(windows)]
-fn create_dir_all_with_mode(path: &AbsoluteSystemPath, _mode: u32) -> io::Result<()> {
-    // Windows restore does not apply tar modes, so there is no chmod equivalent
-    // to move to creation time.
-    path.create_dir_all()
+struct WindowsDirectory {
+    handles: Vec<File>,
+    path: AbsoluteSystemPathBuf,
+}
+
+#[cfg(windows)]
+fn open_windows_restore_root(anchor: &AbsoluteSystemPath) -> io::Result<File> {
+    open_windows_directory(anchor)?.ok_or_else(|| {
+        io::Error::other(format!(
+            "refusing to restore cache through reparse-point root: {anchor}"
+        ))
+    })
+}
+
+#[cfg(windows)]
+fn open_or_create_windows_directory(path: &AbsoluteSystemPath) -> io::Result<File> {
+    for _ in 0..16 {
+        match open_windows_directory(path) {
+            Ok(Some(directory)) => return Ok(directory),
+            Ok(None) => {
+                remove_windows_entry(path)?;
+            }
+            Err(error) if error.kind() == io::ErrorKind::NotFound => {
+                match std::fs::create_dir(path.as_path()) {
+                    Ok(()) => {}
+                    Err(error) if error.kind() == io::ErrorKind::AlreadyExists => {}
+                    Err(error) => return Err(error),
+                }
+            }
+            Err(error) => return Err(error),
+        }
+    }
+
+    Err(io::Error::other(format!(
+        "path component changed repeatedly during cache restore: {path}"
+    )))
+}
+
+#[cfg(windows)]
+fn open_windows_directory(path: &AbsoluteSystemPath) -> io::Result<Option<File>> {
+    use windows_sys::Win32::Storage::FileSystem::{
+        FILE_ATTRIBUTE_DIRECTORY, FILE_ATTRIBUTE_REPARSE_POINT, FILE_FLAG_BACKUP_SEMANTICS,
+        FILE_FLAG_OPEN_REPARSE_POINT, FILE_SHARE_READ, FILE_SHARE_WRITE,
+    };
+
+    let mut options = OpenOptions::new();
+    options
+        .read(true)
+        .share_mode(FILE_SHARE_READ | FILE_SHARE_WRITE)
+        .custom_flags(FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT);
+    let file = path.open_with_options(options)?;
+    let attributes = file.metadata()?.file_attributes();
+    if attributes & FILE_ATTRIBUTE_REPARSE_POINT != 0 {
+        return Ok(None);
+    }
+    if attributes & FILE_ATTRIBUTE_DIRECTORY == 0 {
+        return Err(io::Error::new(
+            io::ErrorKind::NotADirectory,
+            format!("cache restore path component is not a directory: {path}"),
+        ));
+    }
+
+    Ok(Some(file))
+}
+
+#[cfg(windows)]
+fn remove_windows_entry(path: &AbsoluteSystemPath) -> io::Result<()> {
+    path.remove_file().or_else(|_| path.remove_dir())
+}
+
+#[cfg(unix)]
+pub(crate) struct RestoreDestination {
+    directory: Rc<File>,
+    file_name: CString,
+}
+
+#[cfg(unix)]
+impl RestoreDestination {
+    /// Writes the file and returns its metadata as of the final write, when
+    /// available, so callers need not stat the path again.
+    pub fn write_regular(
+        &self,
+        reader: &mut impl io::Read,
+        mode: u32,
+    ) -> Result<Option<std::fs::Metadata>, CacheError> {
+        // Always write a new inode. Opening an existing leaf directly could
+        // modify an out-of-tree hardlink or follow a symlink. Staging under a
+        // temporary name is avoided because a killed restore would leave that
+        // name behind for the next cache save to archive.
+        let mut file = create_new_file_at(self.directory.as_raw_fd(), &self.file_name, mode)?;
+        if let Err(error) = io::copy(reader, &mut file) {
+            drop(file);
+            unlink_at(self.directory.as_raw_fd(), &self.file_name, 0).ok();
+            return Err(error.into());
+        }
+
+        Ok(file.metadata().ok())
+    }
+
+    pub fn write_symlink(&self, target: &str, _target_is_dir: bool) -> Result<(), CacheError> {
+        let target = CString::new(target).map_err(|_| {
+            io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "symlink target contains NUL byte",
+            )
+        })?;
+        let parent_fd = self.directory.as_raw_fd();
+        for _ in 0..16 {
+            let result =
+                unsafe { libc::symlinkat(target.as_ptr(), parent_fd, self.file_name.as_ptr()) };
+            if result == 0 {
+                return Ok(());
+            }
+            let error = io::Error::last_os_error();
+            if error.kind() != io::ErrorKind::AlreadyExists {
+                return Err(error.into());
+            }
+            // An empty directory may be replaced by a symlink, as before.
+            remove_entry_at(parent_fd, &self.file_name, true)?;
+        }
+
+        Err(io::Error::other(format!(
+            "cache restore destination changed repeatedly: {:?}",
+            self.file_name
+        ))
+        .into())
+    }
+}
+
+#[cfg(windows)]
+pub(crate) struct RestoreDestination {
+    // Keeping every component open without delete sharing prevents the
+    // validated Windows path from being replaced before the final operation.
+    _locks: Vec<File>,
+    parent_path: AbsoluteSystemPathBuf,
+    file_name: String,
+}
+
+#[cfg(windows)]
+impl RestoreDestination {
+    /// Returns `None` for the metadata: callers stat the final path instead.
+    pub fn write_regular(
+        &self,
+        reader: &mut impl io::Read,
+        _mode: u32,
+    ) -> Result<Option<std::fs::Metadata>, CacheError> {
+        let destination = self.parent_path.join_component(&self.file_name);
+        let mut file = create_new_windows_file(&destination)?;
+        if let Err(error) = io::copy(reader, &mut file) {
+            drop(file);
+            remove_windows_entry(&destination).ok();
+            return Err(error.into());
+        }
+
+        Ok(None)
+    }
+
+    pub fn write_symlink(&self, target: &str, target_is_dir: bool) -> Result<(), CacheError> {
+        let destination = self.parent_path.join_component(&self.file_name);
+        for _ in 0..16 {
+            let result = if target_is_dir {
+                destination.symlink_to_dir(target)
+            } else {
+                destination.symlink_to_file(target)
+            };
+            match result {
+                Ok(()) => return Ok(()),
+                Err(error) if error.is_io_error(io::ErrorKind::AlreadyExists) => {
+                    remove_existing_windows_entry(&destination)?;
+                }
+                Err(error) => return Err(io::Error::other(error).into()),
+            }
+        }
+
+        Err(io::Error::other(format!(
+            "cache restore destination changed repeatedly: {destination}"
+        ))
+        .into())
+    }
+}
+
+/// Creates `path` as a new file, removing any existing entry first. Creating
+/// with `CREATE_NEW` guarantees the handle refers to a file this call created,
+/// so restored bytes can never reach an existing hardlink or reparse point.
+#[cfg(windows)]
+fn create_new_windows_file(path: &AbsoluteSystemPath) -> io::Result<File> {
+    use windows_sys::Win32::Storage::FileSystem::{
+        FILE_FLAG_OPEN_REPARSE_POINT, FILE_SHARE_DELETE, FILE_SHARE_READ, FILE_SHARE_WRITE,
+    };
+
+    for _ in 0..16 {
+        let mut options = OpenOptions::new();
+        options
+            .write(true)
+            .create_new(true)
+            .share_mode(FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE)
+            .custom_flags(FILE_FLAG_OPEN_REPARSE_POINT);
+        let error = match path.open_with_options(options) {
+            Ok(file) => return Ok(file),
+            Err(error) => error,
+        };
+        // CreateFile reports ACCESS_DENIED instead of FILE_EXISTS when a
+        // directory or a directory symlink holds the name. Only a real
+        // directory is kept.
+        match path.symlink_metadata() {
+            Ok(metadata) if metadata.is_dir() => return Err(error),
+            Ok(_) if error.kind() == io::ErrorKind::PermissionDenied => {
+                remove_existing_windows_entry(path)?;
+            }
+            _ if error.kind() == io::ErrorKind::AlreadyExists => {
+                remove_existing_windows_entry(path)?;
+            }
+            _ => return Err(error),
+        }
+    }
+
+    Err(io::Error::other(format!(
+        "cache restore destination changed repeatedly: {path}"
+    )))
+}
+
+/// Removes an entry without following it. An entry that is already gone
+/// counts as removed.
+#[cfg(windows)]
+fn remove_existing_windows_entry(path: &AbsoluteSystemPath) -> io::Result<()> {
+    match remove_windows_entry(path) {
+        Err(error) if path.symlink_metadata().is_ok() => Err(error),
+        _ => Ok(()),
+    }
+}
+
+#[cfg(unix)]
+fn open_or_create_directory_at(parent_fd: i32, component: &str, mode: u32) -> io::Result<File> {
+    let component = path_component_cstring(component)?;
+
+    for _ in 0..16 {
+        match open_directory_at(parent_fd, &component) {
+            Ok(directory) => return Ok(directory),
+            Err(error) if error.kind() == io::ErrorKind::NotFound => {
+                match mkdir_at(parent_fd, &component, mode) {
+                    Ok(()) => continue,
+                    Err(error) if error.kind() == io::ErrorKind::AlreadyExists => continue,
+                    Err(error) => return Err(error),
+                }
+            }
+            Err(open_error) => match fstat_at_no_follow(parent_fd, &component) {
+                Ok(stat) if stat.st_mode & libc::S_IFMT == libc::S_IFLNK => {
+                    match unlink_at(parent_fd, &component, 0) {
+                        Ok(()) => continue,
+                        Err(error) if error.kind() == io::ErrorKind::NotFound => continue,
+                        Err(error) => return Err(error),
+                    }
+                }
+                Err(error) if error.kind() == io::ErrorKind::NotFound => continue,
+                _ => return Err(open_error),
+            },
+        }
+    }
+
+    Err(io::Error::other(format!(
+        "path component changed repeatedly during cache restore: {component:?}"
+    )))
+}
+
+#[cfg(unix)]
+fn open_directory_at(parent_fd: i32, component: &CString) -> io::Result<File> {
+    let flags = libc::O_RDONLY | libc::O_DIRECTORY | libc::O_NOFOLLOW | libc::O_CLOEXEC;
+    let fd = unsafe { libc::openat(parent_fd, component.as_ptr(), flags) };
+    if fd == -1 {
+        return Err(io::Error::last_os_error());
+    }
+
+    // SAFETY: openat returned a new owned file descriptor.
+    Ok(unsafe { File::from_raw_fd(fd) })
+}
+
+#[cfg(unix)]
+fn mkdir_at(parent_fd: i32, component: &CString, mode: u32) -> io::Result<()> {
+    let result = unsafe { libc::mkdirat(parent_fd, component.as_ptr(), mode as libc::mode_t) };
+    if result == -1 {
+        return Err(io::Error::last_os_error());
+    }
+    Ok(())
+}
+
+#[cfg(unix)]
+fn fstat_at_no_follow(parent_fd: i32, component: &CString) -> io::Result<libc::stat> {
+    use std::mem::MaybeUninit;
+
+    let mut stat = MaybeUninit::<libc::stat>::uninit();
+    let result = unsafe {
+        libc::fstatat(
+            parent_fd,
+            component.as_ptr(),
+            stat.as_mut_ptr(),
+            libc::AT_SYMLINK_NOFOLLOW,
+        )
+    };
+    if result == -1 {
+        return Err(io::Error::last_os_error());
+    }
+
+    // SAFETY: fstatat initialized stat when it returned success.
+    Ok(unsafe { stat.assume_init() })
+}
+
+#[cfg(unix)]
+fn unlink_at(parent_fd: i32, component: &CString, flags: i32) -> io::Result<()> {
+    let result = unsafe { libc::unlinkat(parent_fd, component.as_ptr(), flags) };
+    if result == -1 {
+        return Err(io::Error::last_os_error());
+    }
+    Ok(())
+}
+
+/// Creates `name` as a new regular file beneath `parent_fd`, removing any
+/// existing non-directory entry first. `O_EXCL` guarantees the returned
+/// descriptor refers to an inode this call created, so restored bytes can
+/// never reach an existing hardlink or follow a symlink, even if the entry is
+/// swapped between the removal and the create.
+#[cfg(unix)]
+fn create_new_file_at(parent_fd: i32, name: &CString, mode: u32) -> io::Result<File> {
+    let flags = libc::O_WRONLY | libc::O_CREAT | libc::O_EXCL | libc::O_NOFOLLOW | libc::O_CLOEXEC;
+    for _ in 0..16 {
+        let fd = unsafe { libc::openat(parent_fd, name.as_ptr(), flags, mode as libc::c_uint) };
+        if fd != -1 {
+            // SAFETY: openat returned a new owned file descriptor.
+            return Ok(unsafe { File::from_raw_fd(fd) });
+        }
+
+        let error = io::Error::last_os_error();
+        if error.kind() != io::ErrorKind::AlreadyExists {
+            return Err(error);
+        }
+        remove_entry_at(parent_fd, name, false)?;
+    }
+
+    Err(io::Error::other(format!(
+        "cache restore destination changed repeatedly: {name:?}"
+    )))
+}
+
+/// Removes the entry `name` beneath `parent_fd` without following it. A
+/// directory is removed only when `allow_empty_directory` is set and it is
+/// empty. An entry that is already gone counts as removed.
+#[cfg(unix)]
+fn remove_entry_at(parent_fd: i32, name: &CString, allow_empty_directory: bool) -> io::Result<()> {
+    let error = match unlink_at(parent_fd, name, 0) {
+        Ok(()) => return Ok(()),
+        Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(()),
+        Err(error) => error,
+    };
+
+    // Unlinking a directory fails with EISDIR on Linux and EPERM on macOS.
+    let is_directory = fstat_at_no_follow(parent_fd, name)
+        .is_ok_and(|stat| stat.st_mode & libc::S_IFMT == libc::S_IFDIR);
+    if !is_directory {
+        return Err(error);
+    }
+    if !allow_empty_directory {
+        return Err(io::Error::from_raw_os_error(libc::EISDIR));
+    }
+    match unlink_at(parent_fd, name, libc::AT_REMOVEDIR) {
+        Err(error) if error.kind() != io::ErrorKind::NotFound => Err(error),
+        _ => Ok(()),
+    }
+}
+
+#[cfg(unix)]
+fn path_component_cstring(component: &str) -> io::Result<CString> {
+    CString::new(component).map_err(|_| {
+        io::Error::new(
+            io::ErrorKind::InvalidInput,
+            format!("path component contains NUL byte: {component:?}"),
+        )
+    })
 }
 
 #[cfg(not(any(unix, windows)))]
@@ -177,6 +848,7 @@ fn create_dir_all_with_mode(path: &AbsoluteSystemPath, _mode: u32) -> io::Result
     path.create_dir_all()
 }
 
+#[cfg(not(any(unix, windows)))]
 fn check_path(
     original_anchor: &AbsoluteSystemPath,
     accumulated_anchor: &AbsoluteSystemPath,

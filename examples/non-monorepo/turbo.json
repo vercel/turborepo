@@ -3,11 +3,15 @@
   "ui": "tui",
   "tasks": {
     "build": {
+      "dependsOn": ["check-types"],
       "inputs": ["$TURBO_DEFAULT$", ".env*"],
       "outputs": [".next/**", "!.next/cache/**", "!.next/dev/**"]
     },
     "lint": {},
-    "check-types": {},
+    "check-types": {
+      "inputs": ["$TURBO_DEFAULT$", ".env*"],
+      "outputs": [".next/types/**", "next-env.d.ts", "tsconfig.tsbuildinfo"]
+    },
     "dev": {
       "cache": false,
       "persistent": true

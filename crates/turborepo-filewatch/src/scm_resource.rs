@@ -59,7 +59,8 @@ mod test {
 
     #[tokio::test]
     async fn test_limits_access() {
-        let scm = SCMResource::new_with_permits(SCM::Manual, 1);
+        let scm =
+            SCMResource::new_with_permits(SCM::Manual(turborepo_scm::FileHashMode::ContentOnly), 1);
         let scm_copy = scm.clone();
         let permit_1 = scm.acquire_scm().await;
         let (other_tx, mut other_rx) = oneshot::channel();

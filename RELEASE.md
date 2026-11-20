@@ -6,10 +6,10 @@
 
 Canary releases run on an hourly schedule via the [Release workflow][1]:
 
-1. Runs every hour via cron, skipping if no relevant files (`crates/`, `packages/`, `cli/`) changed since the last canary tag
+1. Runs every hour via cron, skipping if no relevant files in `crates/` or `packages/` changed since the last canary tag
 2. Skips if the latest commit is a release PR merge (to avoid releasing the version bump itself)
 3. Publishes to npm with the `canary` tag
-4. Opens a PR with auto-merge enabled to merge the version bump back to `main`
+4. Opens and merges a PR to return the version bump to `main` after required checks pass
 
 No manual intervention required for canary releases.
 
@@ -20,8 +20,7 @@ No manual intervention required for canary releases.
    - For custom pre-releases, use `prepatch`, `preminor`, or `premajor`
    - Check the "Dry Run" box to test the workflow without publishing
 
-2. A PR is automatically opened to merge the release branch back into `main`
-   - Merge this promptly to avoid conflicts
+2. A PR is automatically opened and merged into `main` after its required workflows are approved and pass.
 
 ### Release `@turbo/repository`
 
@@ -29,6 +28,7 @@ No manual intervention required for canary releases.
 
 2. Create a release by triggering the [Turborepo Library Release][5] workflow.
    - Check the "Dry Run" box to run the full release workflow without publishing any packages.
+   - The release PR is automatically merged after its required workflows are approved and pass.
 
 ### Notes
 
@@ -96,13 +96,13 @@ The canary release system runs on an hourly cron schedule, publishing a new cana
 │ - Builds binaries                                            │
 │ - Publishes to npm                                           │
 │ - Aliases versioned docs                                     │
-│ - Creates PR with auto-merge                                 │
+│ - Creates and merges the release PR after required checks    │
 └─────────────────────────────────────────────────────────────┘
 ```
 
 #### Skip Detection
 
-The `check-skip` job finds the commit that last modified `version.txt` (which is always the release PR merge) and diffs from there to HEAD. If no files in `crates/`, `packages/`, or `cli/` changed since that commit, there's nothing new to release and the run is skipped.
+The `check-skip` job finds the commit that last modified `version.txt` (which is always the release PR merge) and diffs from there to HEAD. If no files in `crates/` or `packages/` changed since that commit, there's nothing new to release and the run is skipped.
 
 #### Concurrency
 
@@ -131,7 +131,7 @@ See: `version.txt`
 
 #### Version Calculation
 
-When a release is triggered, the `scripts/version.js` script:
+When a release is triggered, the `@turbo/releaser` `version` command:
 
 1. Reads the current version from `version.txt`
 2. Applies the specified SemVer increment (using the `semver` npm package)
@@ -150,15 +150,15 @@ When a release is triggered, the `scripts/version.js` script:
 | `minor`        | Stable minor release              | `2.6.1` → `2.7.0`                   | `latest` |
 | `major`        | Stable major release              | `2.6.1` → `3.0.0`                   | `latest` |
 
-**Note**: Pre-release versions always use `canary` as the identifier unless overridden with the `tag-override` input.
+**Note**: Pre-release versions always use `canary` as the SemVer identifier. The `tag-override` input changes only the npm dist-tag.
 
 #### Version Synchronization
 
-Once the version is calculated, the `cli/Makefile` (target: `prepare-stage-release`) updates all package.json files by running `pnpm version` for each package to match `TURBO_VERSION`.
+Once the version is calculated, the `@turbo/releaser` `prepare-stage` command updates every published package by running `pnpm version`. It also updates the Turborepo skill version and versioned schema URLs.
 
 Additionally, the `packages/turbo/bump-version.js` postversion hook updates the `optionalDependencies` in `packages/turbo/package.json` to reference the correct versions of platform-specific packages.
 
-See: `cli/Makefile` (`prepare-stage-release` and `commit-stage-release` targets) and `packages/turbo/bump-version.js`
+See: `packages/turbo-releaser/src/stage.ts` and `packages/turbo/bump-version.js`
 
 ---
 
@@ -223,22 +223,22 @@ The release workflow consists of 7 sequential and parallel stages:
 
 1. Checkout repository at the specified SHA (defaults to latest commit on `main`)
 2. Setup Node.js environment
-3. Run `node scripts/version.js <increment>` to calculate the new version
-4. Execute `make -C cli prepare-stage-release` which:
-   - Verifies no unpushed commits exist
+3. Run `turboreleaser version` to calculate the new version
+4. Execute `turboreleaser prepare-stage`, which:
    - Verifies `version.txt` was updated
    - Verifies the release tag and staging branch do not already exist
-   - Updates all `package.json` files with the new version
+   - Updates all published packages with the new version
+   - Updates the Turborepo skill version and schema URLs
    - Creates staging branch: `staging-$(VERSION)` (e.g., `staging-2.6.2`)
-5. Execute `make -C cli commit-stage-release` which creates the staging commit through `scripts/create-github-api-commit.mjs`
+5. Create the staging commit through `scripts/create-github-api-commit.mjs`
 
 **Output**: `stage-branch` (e.g., `staging-2.6.2`)
 
-**Safety Checks**: The Makefile includes safety checks to verify no unpushed commits exist, `version.txt` was properly updated, and the target staging branch is not already present before proceeding. The commit helper creates the remote branch from local `HEAD`, uploads selected file changes through GitHub's `createCommitOnBranch` API, waits for GitHub commit verification, and then updates the local branch ref.
+**Safety Checks**: The workflow verifies that the selected SHA belongs to protected `main`. The releaser verifies that `version.txt` was updated and the target release tag and staging branch are not already present before proceeding. The commit helper creates the remote branch from local `HEAD`, uploads selected file changes through GitHub's `createCommitOnBranch` API, waits for GitHub commit verification, and then updates the local branch ref.
 
 If the API commit is created but verification does not complete, the helper leaves the remote branch in place and exits with the commit SHA in the logs. Use the logged SHA and branch name to inspect recovery state before retrying or clearing the staging branch.
 
-See: `cli/Makefile` (`prepare-stage-release` and `commit-stage-release` targets)
+See: `packages/turbo-releaser/src/stage.ts` and `scripts/create-github-api-commit.mjs`
 
 #### Stage 2: Rust Smoke Test
 
@@ -308,22 +308,22 @@ This is the most complex stage with multiple sub-steps:
 1. Download all platform-specific binary artifacts from Stage 4
 2. Move binaries to platform-specific directories:
    ```
-   rust-artifacts/turbo-aarch64-apple-darwin    → cli/dist-darwin-arm64/turbo
-   rust-artifacts/turbo-x86_64-apple-darwin     → cli/dist-darwin-x64/turbo
-   rust-artifacts/turbo-aarch64-unknown-linux-musl → cli/dist-linux-arm64/turbo
-   rust-artifacts/turbo-x86_64-unknown-linux-musl  → cli/dist-linux-x64/turbo
-   rust-artifacts/turbo-x86_64-pc-windows-msvc  → cli/dist-windows-x64/turbo.exe
+   rust-artifacts/turbo-aarch64-apple-darwin    → release-artifacts/dist-darwin-arm64/turbo
+   rust-artifacts/turbo-x86_64-apple-darwin     → release-artifacts/dist-darwin-x64/turbo
+   rust-artifacts/turbo-aarch64-unknown-linux-musl → release-artifacts/dist-linux-arm64/turbo
+   rust-artifacts/turbo-x86_64-unknown-linux-musl  → release-artifacts/dist-linux-x64/turbo
+   rust-artifacts/turbo-x86_64-pc-windows-msvc  → release-artifacts/dist-windows-x64/turbo.exe
    ```
 
 ##### 5b. Build JavaScript Packages
 
-Execute `make -C cli build` which runs `turbo build copy-schema` with filters for all JavaScript/TypeScript packages. This builds all TypeScript packages and copies the JSON schema to the appropriate locations.
+The `@turbo/releaser` tool runs `turbo run build copy-schema` with filters for all released JavaScript/TypeScript packages. This builds all TypeScript packages and copies the JSON schema to the appropriate locations.
 
-See: `cli/Makefile` (build target)
+See: `packages/turbo-releaser/src/publish.ts`
 
 ##### 5c. Pack and Publish Native Packages
 
-Execute `turbo release-native` which invokes the `@turbo/releaser` tool.
+The workflow invokes the `@turbo/releaser` tool directly.
 
 **The `@turbo/releaser` tool** (`packages/turbo-releaser/`):
 
@@ -332,7 +332,7 @@ Execute `turbo release-native` which invokes the `@turbo/releaser` tool.
    - Generates a native package structure with platform-specific metadata (name, os, cpu, etc.)
    - Copies `LICENSE` and `README.md` from template
    - For Windows: includes a `bin/turbo` Node.js wrapper script (to work around npm `.exe` stripping)
-   - Copies the prebuilt binary from `cli/dist-<os>-<arch>/`
+   - Copies the prebuilt binary from `release-artifacts/dist-<os>-<arch>/`
    - Makes the binary executable (`chmod +x` on Unix)
    - Creates a `.tar.gz` archive
    - Publishes to npm: `npm publish @turbo/<os>-<arch>.tar.gz --tag <npm-tag> --access public`
@@ -350,19 +350,19 @@ See: `packages/turbo-releaser/` for native package generation logic
 
 ##### 5d. Pack and Publish JavaScript Packages
 
-Execute `make -C cli publish-turbo` which:
+The `@turbo/releaser` tool:
 
 1. **Packs all packages** to tarballs using `pnpm pack`
 2. **Publishes in fixed order** to npm with the appropriate dist-tag (if not `--skip-publish`)
 
-See: `cli/Makefile` (publish-turbo target)
+See: `packages/turbo-releaser/src/publish.ts`
 
 **Why fixed order?**
 
 - Prevents race conditions where dependent packages are published before their dependencies
-- Ensures `turbo` is published last so the platform specific binaries that it depends on are available.
+- Ensures packages are published consistently in the configured order.
 
-**Dry Run**: If the workflow was triggered with `dry_run: true` or the Makefile is called with `--skip-publish`, the publish commands are skipped, allowing you to test the entire pipeline without publishing.
+**Dry Run**: If the workflow was triggered with `dry_run: true` or the releaser is called with `--skip-publish`, the publish commands are skipped, allowing you to test the entire pipeline without publishing.
 
 #### Stage 6: Alias Versioned Docs
 
@@ -406,9 +406,9 @@ This stage creates a versioned subdomain alias for the documentation site, makin
 
 #### Stage 7: Release PR
 
-**For manual releases**: A PR is automatically created using the `thomaseizinger/create-pull-request` action. Merge it as soon as possible after publishing.
+For stable, custom, and canary releases, the release workflow uses its ephemeral `GITHUB_TOKEN` to create a PR as `github-actions[bot]` with the title `chore: Release Turborepo <version>`. After validating the exact generated manifest, skill, and version changes, it approves only the held release review, Turborepo test, and JavaScript package test workflows for the pinned staging head. Those workflows validate the generated file set but skip their test matrices for release PRs. The release workflow waits for their required summary checks, revalidates the PR metadata and immutable SHAs, and squash-merges the pinned head.
 
-**For canary releases**: The canary workflow creates a PR with auto-merge enabled. The PR includes:
+The PR includes:
 
 - A list of commits/PRs included since the last canary
 - A link to versioned docs (if aliasing succeeded)
@@ -503,26 +503,33 @@ See: `packages/turbo-releaser/` for the Windows wrapper generation
 
 | Script/Command                                     | Location                   | Purpose                                           |
 | -------------------------------------------------- | -------------------------- | ------------------------------------------------- |
-| `node scripts/version.js <increment>`              | `scripts/version.js`       | Calculate new version and update `version.txt`    |
-| `make -C cli prepare-stage-release`                | `cli/Makefile`             | Update package versions and create staging branch |
-| `make -C cli commit-stage-release`                 | `cli/Makefile`             | Commit staging changes through GitHub API         |
+| `turboreleaser version`                            | `packages/turbo-releaser/` | Calculate new version and update `version.txt`    |
+| `turboreleaser prepare-stage`                      | `packages/turbo-releaser/` | Update package versions and create staging branch |
 | `node scripts/create-github-api-commit.mjs`        | `scripts/`                 | Create a GitHub-verified API commit on a branch   |
 | `cargo build --profile release-turborepo -p turbo` | `Cargo.toml`               | Build Rust binary for release                     |
-| `turbo release-native`                             | `cli/turbo.json`           | Pack and publish native packages                  |
-| `make -C cli build`                                | `cli/Makefile`             | Build all JavaScript packages                     |
-| `make -C cli publish-turbo`                        | `cli/Makefile`             | Pack and publish all packages                     |
+| `turboreleaser publish`                            | `packages/turbo-releaser/` | Build, pack, and publish all npm packages         |
+| `turboreleaser tag`                                | `packages/turbo-releaser/` | Create and push the release tag                   |
 | `pnpm version <version> --allow-same-version`      | package.json               | Update package version                            |
-| `turboreleaser --version-path ../version.txt`      | `packages/turbo-releaser/` | Pack native packages                              |
+
+The workflow builds and invokes the private release tool directly:
+
+```bash
+pnpm --filter @turbo/releaser build
+packages/turbo-releaser/dist/index.js version --version-path version.txt --increment prerelease
+packages/turbo-releaser/dist/index.js prepare-stage --repo-root . --version-path version.txt
+packages/turbo-releaser/dist/index.js publish --repo-root . --artifacts-dir release-artifacts --version-path version.txt
+packages/turbo-releaser/dist/index.js tag --repo-root . --version-path version.txt
+```
 
 #### Environment Variables
 
-| Variable                    | Purpose                                    | Example                       |
-| --------------------------- | ------------------------------------------ | ----------------------------- |
-| `TURBO_VERSION`             | Version to release (read from version.txt) | `2.6.2`                       |
-| `TURBO_TAG`                 | npm dist-tag (read from version.txt)       | `latest` or `canary`          |
-| `CARGO_PROFILE_RELEASE_LTO` | Enable link-time optimization for Rust     | `true`                        |
-| `TURBO_BINARY_PATH`         | Override binary path (development only)    | `/path/to/turbo`              |
-| `GH_TOKEN`                  | GitHub API token for commit/PR steps only  | `${{ secrets.GITHUB_TOKEN }}` |
+| Variable                    | Purpose                                                      | Example                       |
+| --------------------------- | ------------------------------------------------------------ | ----------------------------- |
+| `CARGO_PROFILE_RELEASE_LTO` | Enable link-time optimization for Rust                       | `true`                        |
+| `TURBO_BINARY_PATH`         | Override binary path (development only)                      | `/path/to/turbo`              |
+| `GH_TOKEN`                  | GitHub API token for commit and workflow-owned PR operations | `${{ secrets.GITHUB_TOKEN }}` |
+
+The main branch ruleset exempts exact generated release paths from the native team-review requirement and requires the `Release Semantic Validation` check. Non-release changes to those paths still require a write-authorized human approval through the review gate. Validation reads files through the GitHub API using immutable base and head SHAs.
 
 #### API Commit Helper
 
@@ -586,7 +593,7 @@ This is because the Rust binary is never published to crates.io; it's only publi
 
 3. **Use dry run for testing**: When in doubt, use `dry_run: true` to test the entire pipeline without publishing.
 
-4. **Monitor canary PRs**: Canary release PRs have auto-merge enabled, but check that they're merging successfully. If a canary PR fails to merge, investigate promptly.
+4. **Monitor canary PRs**: Canary release PRs merge automatically after required checks pass. If a canary PR fails to merge, investigate promptly.
 
 5. **Check npm after publishing**: Verify that all packages were published correctly:
 
@@ -607,11 +614,21 @@ This is because the Rust binary is never published to crates.io; it's only publi
 
 This section covers common failure scenarios and how to recover from them.
 
+#### Release Failed During or After npm Publish
+
+The workflow preserves the staging branch and any release tag once npm publishing starts. If publishing or a downstream job fails, re-run the failed jobs. The releaser checks each package version against the public npm registry: missing packages are published, while existing packages are skipped only when tarball integrity and the requested dist-tag match and a provenance attestation is present. Packages with different contents stop the release because npm versions are immutable. The primary `turbo` package is published last so it does not expose an incomplete release through the main package entry point.
+
+After `npm publish` reports an error, the releaser polls npm before retrying. If the registry accepted the package despite the CLI error, matching integrity confirms the publish and the release continues.
+
+The GitHub release step waits for the pushed tag to become visible through the GitHub API before creating the release. If that wait times out, verify that the tag points to the staging commit before re-running the failed jobs.
+
 #### Canary Release Failed Mid-Publish
 
 If a canary release fails after some packages were published but before others:
 
-1. **Identify what was published**:
+1. **Re-run the failed jobs**: The preserved staging branch and registry integrity checks allow the publisher to skip packages that completed and resume with missing packages.
+
+2. **If recovery reports different contents, identify what was published**:
 
    ```bash
    VERSION="2.6.1-canary.5"  # The failed version
@@ -620,7 +637,7 @@ If a canary release fails after some packages were published but before others:
    done
    ```
 
-2. **Option A - Deprecate and re-release**: If few packages were published, deprecate them and trigger a new canary:
+3. **Deprecate and re-release**: If a published package has different integrity, that version cannot be resumed safely. Deprecate the partial release and trigger a new canary:
 
    ```bash
    # Deprecate the partial release
@@ -631,24 +648,26 @@ If a canary release fails after some packages were published but before others:
    # Merge any PR to main to trigger a new canary release
    ```
 
-3. **Option B - Manual completion**: If most packages were published, manually publish the rest:
+4. **Manual completion**: If automated recovery is unavailable, publish the missing packages from the preserved staging branch:
 
    ```bash
-   cd cli
    # Ensure you're on the staging branch
    git checkout staging-2.6.1-canary.5
    # Publish missing packages manually
    npm publish ./path/to/package --tag canary
    ```
 
-#### Canary PR Won't Auto-Merge
+#### Canary PR Won't Merge Automatically
 
-If a canary release PR is created but fails to auto-merge:
+If a canary release PR is created but fails to merge automatically:
 
-1. **Check branch protection**: Ensure required status checks are passing
-2. **Check for conflicts**: The staging branch may have diverged from main
-3. **Manual merge**: If checks pass, manually merge the PR via GitHub UI
-4. **Cleanup if abandoned**: If you need to abandon the release:
+1. **Check semantic validation**: Inspect the `Release review gate` workflow for unexpected files or manifest fields.
+2. **Check branch protection**: Ensure `Release Semantic Validation`, `Test Summary`, and `JS Test Summary` are passing.
+3. **Check workflow approval**: Ensure the release job found and approved the three allowlisted workflow runs for the release head SHA.
+4. **Check the PR head**: A new commit invalidates the validated head SHA and requires validation to restart.
+5. **Check for conflicts**: The staging branch may have diverged from `main`.
+6. **Manual merge**: If checks pass, manually merge the PR via GitHub UI.
+7. **Cleanup if abandoned**: If you need to abandon the release:
 
    ```bash
    # Delete the staging branch
@@ -665,7 +684,7 @@ If canary releases keep firing when they shouldn't:
 
 2. **Investigate the cause**:
    - Check if the skip detection is working: the `check-skip` job should skip when the latest commit is a release PR merge or when no relevant files changed since the last canary tag
-   - Verify that release PR commit messages match the expected format: `release(turborepo): <version>`
+   - Verify that the release PR was opened by `github-actions[bot]` with the title `chore: Release Turborepo <version>`
 
 3. **Fix and re-enable**:
    - Ensure the release PR title follows the expected format

@@ -4,6 +4,7 @@ Thank you for your interest in contributing to Turborepo!
 - [Optional dependencies](#optional-dependencies)
 - [Structure of the repository](#structure-of-the-repository)
 - [Building Turborepo](#building-turborepo)
+  - [Managed tools](#managed-tools)
   - [TLS Implementation](#tls-implementation)
 - [Running tests](#running-tests)
 - [Running Rust checks](#running-rust-checks)
@@ -26,15 +27,16 @@ Thank you for your interest in contributing to Turborepo!
 You will need to have these dependencies installed on your machine to work on this repository:
 
 - [Rust](https://www.rust-lang.org/tools/install) (via [rustup](https://rustup.rs/), which will automatically use the [repository toolchain](https://github.com/vercel/turborepo/blob/main/rust-toolchain.toml))
-- [Node.js](https://nodejs.org/en) v22
-- [pnpm](https://pnpm.io/) v10
+- [Node.js](https://nodejs.org/en) v24
+- [pnpm](https://pnpm.io/) v12
 - [protoc](https://grpc.io/docs/protoc-installation/)
 - [capnp](https://capnproto.org)
-- [Zig](https://ziglang.org/download/) 0.15.2 or newer — required to build `libghostty-vt` for the TUI (`turborepo-ghostty-sys`). The `zig` binary must be on your `PATH` when running `cargo build`.
+- [Zig](https://ziglang.org/download/) 0.17.x — required to build `libghostty-vt` for the TUI (`libghostty-vt-sys`). The `zig` binary must be on your `PATH` when running `cargo build`.
 
 ### Optional dependencies
 
 - [Bun](https://bun.sh) is required to build `@turbo/gen` (the `turbo gen` code generator). The `@turbo/gen` package is compiled into a standalone binary using `bun build --compile`.
+- [uv](https://docs.astral.sh/uv/getting-started/installation/) is required to run the Python workspace integration tests (`crates/turborepo/tests/uv_workspace_test.rs`); tests that execute uv skip when it is not installed.
 - For running tests locally, `jq` and `zstd` are also required.
   - macOS: `brew install jq zstd`
   - Linux: `sudo apt update && sudo apt install jq zstd`
@@ -53,7 +55,19 @@ In general, there are two major areas in the repository:
 ## Building Turborepo
 
 1. Run `pnpm install` at the root of the repository
-2. Run `cargo build`
+2. Run `cargo build -p turbo`
+
+The focused `cargo build -p turbo` builds just the `turbo` CLI and its
+dependencies, skipping the workspace's other top-level targets (such as the
+LSP, schema generator, and N-API addon) that you don't need for CLI
+development. Use a plain `cargo build` when you want to build and verify every
+workspace member.
+
+### Managed tools
+
+This repository commits `turbo.lock`, so `turbo run` uses the Node.js, pnpm, and Rust versions that `turbo.lock` records. Install `turbo` globally, then run `turbo setup` at the root of the repository after you clone it. Run `turbo setup` again when `turbo.lock` changes.
+
+Until you run `turbo setup`, `turbo run` exits with `managed setup validation failed`. The pre-push hook runs `turbo run format check:toml`, so `git push` fails the same way.
 
 ### TLS Implementation
 
@@ -228,6 +242,14 @@ devturbo run build --ui=tui --skip-infer 2> ~/tmp/logs.txt
 
 > [!IMPORTANT]
 > The `--skip-infer` flag is required so that `turbo` doesn't try to use a locally installed binary of `turbo`. Forgetting to use this flag will cause `devturbo` to defer to the binary installed into the repository rather than the one you're developing.
+
+On Linux, the black-box Terminal UI tests run as part of the standard Rust suite. Run them directly with:
+
+```bash
+cargo nextest run --package turbo --test tui_test
+```
+
+Known TUI regressions are marked ignored. Reproduce them with `--run-ignored ignored-only`.
 
 ## Publishing `turbo` to the npm registry
 

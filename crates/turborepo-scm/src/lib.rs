@@ -1,6 +1,5 @@
 #![feature(error_generic_member_access)]
 #![deny(clippy::all)]
-#![allow(clippy::result_large_err)]
 
 //! Turborepo's library for interacting with source control management (SCM).
 //! Currently we only support git. We use SCM for finding changed files,
@@ -18,15 +17,23 @@ use std::{
 use bstr::io::BufReadExt;
 use thiserror::Error;
 use tracing::debug;
-use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, PathError, RelativeUnixPathBuf};
+use turbopath::{
+    AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPathBuf, PathError,
+    RelativeUnixPathBuf,
+};
 
 pub(crate) mod crlf;
+mod env_local;
+mod file_hash_mode;
+#[cfg(test)]
+mod file_hash_mode_tests;
 pub mod git;
 mod hash_object;
 mod ls_tree;
 pub mod manual;
 pub mod package_deps;
 mod repo_index;
+pub mod slowest_files;
 mod status;
 pub mod worktree;
 
@@ -34,9 +41,13 @@ pub mod worktree;
 mod git_index_regression_tests;
 mod git_path;
 #[cfg(test)]
+mod symlink_inputs_tests;
+#[cfg(test)]
 mod test_utils;
 
+pub use file_hash_mode::FileHashMode;
 pub use repo_index::{RepoGitIndex, walk_candidate_files};
+pub use slowest_files::{SlowestFile, SlowestFiles};
 pub use turborepo_hash::OidHash;
 pub use worktree::WorktreeInfo;
 
@@ -53,6 +64,14 @@ pub enum Error {
     GitVersion(String),
     #[error("I/O error: {0}")]
     Io(#[from] std::io::Error, #[backtrace] backtrace::Backtrace),
+    #[error("I/O error while hashing {path}: {source}")]
+    HashFile {
+        path: AbsoluteSystemPathBuf,
+        #[source]
+        source: std::io::Error,
+        #[backtrace]
+        backtrace: backtrace::Backtrace,
+    },
     #[error("Path error: {0}")]
     Path(#[from] PathError, #[backtrace] backtrace::Backtrace),
     #[error("Could not find git binary")]
@@ -121,11 +140,21 @@ impl Error {
         Error::Git(s.into(), Backtrace::capture())
     }
 
+    pub(crate) fn hash_file(path: AbsoluteSystemPathBuf, source: std::io::Error) -> Self {
+        tracing::info!(%path, error = %source, "file hashing failed");
+        Error::HashFile {
+            path,
+            source,
+            backtrace: Backtrace::capture(),
+        }
+    }
+
     /// Returns true if this error indicates OS resource exhaustion (e.g. too
     /// many open files) where a fallback to manual hashing would also fail.
     pub fn is_resource_exhaustion(&self) -> bool {
         match self {
             Error::Io(e, _) => is_os_resource_error(e),
+            Error::HashFile { source, .. } => is_os_resource_error(source),
             Error::Walk(e) => walk_error_is_resource_exhaustion(e),
             _ => false,
         }
@@ -229,6 +258,15 @@ pub struct GitRepo {
     root: AbsoluteSystemPathBuf,
     bin: AbsoluteSystemPathBuf,
     attrs: OnceLock<Option<crlf::GitAttrs>>,
+    github_actions_remote_base_ref_fallback: bool,
+    file_hash_mode: FileHashMode,
+    /// Optional recorder for the slowest-to-hash files. Set by long-running
+    /// consumers (the file watcher) so they can diagnose a stalled startup.
+    slowest_files: Option<std::sync::Arc<SlowestFiles>>,
+    /// Change-detection results started early by [`SCM::prefetch_changes`].
+    /// Shared by clones so the handle that consumes a result need not be the
+    /// one that started it.
+    change_prefetch: std::sync::Arc<git::ChangePrefetch>,
 }
 
 impl GitRepo {
@@ -245,6 +283,10 @@ impl Clone for GitRepo {
             root: self.root.clone(),
             bin: self.bin.clone(),
             attrs: OnceLock::new(),
+            github_actions_remote_base_ref_fallback: self.github_actions_remote_base_ref_fallback,
+            file_hash_mode: self.file_hash_mode,
+            slowest_files: self.slowest_files.clone(),
+            change_prefetch: self.change_prefetch.clone(),
         }
     }
 }
@@ -267,6 +309,10 @@ enum GitError {
 }
 
 impl GitRepo {
+    #[expect(
+        clippy::result_large_err,
+        reason = "preserve the structured git-root error without boxing on this error path"
+    )]
     fn find(path_in_repo: &AbsoluteSystemPath) -> Result<Self, GitError> {
         // If which produces an invalid absolute path, it's not an execution error, it's
         // a programming error. We expect it to always give us an absolute path
@@ -278,6 +324,10 @@ impl GitRepo {
             root,
             bin,
             attrs: OnceLock::new(),
+            github_actions_remote_base_ref_fallback: false,
+            file_hash_mode: FileHashMode::ContentOnly,
+            slowest_files: None,
+            change_prefetch: Default::default(),
         })
     }
 
@@ -321,7 +371,7 @@ fn find_git_root(turbo_root: &AbsoluteSystemPath) -> Result<AbsoluteSystemPathBu
 #[derive(Debug, Clone)]
 pub enum SCM {
     Git(GitRepo),
-    Manual,
+    Manual(FileHashMode),
 }
 
 impl SCM {
@@ -331,7 +381,7 @@ impl SCM {
             .map(SCM::Git)
             .unwrap_or_else(|e| {
                 debug!("{}, continuing with manual hashing", e);
-                SCM::Manual
+                SCM::Manual(FileHashMode::ContentOnly)
             })
     }
 
@@ -348,25 +398,103 @@ impl SCM {
                 root: git_root,
                 bin,
                 attrs: OnceLock::new(),
+                github_actions_remote_base_ref_fallback: false,
+                file_hash_mode: FileHashMode::ContentOnly,
+                slowest_files: None,
+                change_prefetch: Default::default(),
             }),
             Err(e) => {
                 debug!(
                     "git binary not found: {}, continuing with manual hashing",
                     e
                 );
-                SCM::Manual
+                SCM::Manual(FileHashMode::ContentOnly)
             }
         }
     }
 
+    pub fn with_file_hash_mode(mut self, mode: FileHashMode) -> Self {
+        match &mut self {
+            SCM::Git(git) => git.file_hash_mode = mode,
+            SCM::Manual(file_hash_mode) => *file_hash_mode = mode,
+        }
+        self
+    }
+
+    pub fn file_hash_mode(&self) -> FileHashMode {
+        match self {
+            SCM::Git(git) => git.file_hash_mode,
+            SCM::Manual(mode) => *mode,
+        }
+    }
+
+    pub fn with_github_actions_remote_base_ref_fallback(mut self, enabled: bool) -> Self {
+        if let SCM::Git(git) = &mut self {
+            git.github_actions_remote_base_ref_fallback = enabled;
+        }
+        self
+    }
+
+    /// Attach a recorder that tracks the slowest-to-hash files. Long-running
+    /// consumers (the file watcher) use this to diagnose a stalled startup
+    /// caused by hashing a very large file. No-op for `SCM::Manual`.
+    pub fn with_slowest_files_recorder(mut self, recorder: std::sync::Arc<SlowestFiles>) -> Self {
+        if let SCM::Git(git) = &mut self {
+            git.slowest_files = Some(recorder);
+        }
+        self
+    }
+
     pub fn is_manual(&self) -> bool {
-        matches!(self, SCM::Manual)
+        matches!(self, SCM::Manual(_))
     }
 
     pub fn git_root(&self) -> Option<&AbsoluteSystemPath> {
         match self {
             SCM::Git(git) => Some(&git.root),
-            SCM::Manual => None,
+            SCM::Manual(_) => None,
+        }
+    }
+
+    /// Builds a repo index scoped to the given packages for one logical
+    /// transaction (e.g. one watch-mode debounce window): tracked state plus
+    /// untracked-file discovery limited to those package prefixes. Untracked
+    /// entries are required so that newly added files still change the
+    /// package hash. Returns `None` for manual SCM mode or on failure;
+    /// callers should fall back to per-package git subprocesses.
+    pub fn build_repo_index_for_packages(
+        &self,
+        repo_root: &AbsoluteSystemPath,
+        package_paths: &[AnchoredSystemPathBuf],
+    ) -> Option<RepoGitIndex> {
+        match self {
+            SCM::Git(git) => {
+                let mut index = match RepoGitIndex::new_tracked(git) {
+                    Ok(index) => index,
+                    Err(e) => {
+                        debug!("failed to build repo index: {e}. Hashing per-package.");
+                        return None;
+                    }
+                };
+                let prefixes: Vec<RelativeUnixPathBuf> = package_paths
+                    .iter()
+                    .filter_map(|package_path| {
+                        git.root
+                            .anchor(repo_root.resolve(package_path))
+                            .ok()
+                            .map(|anchored| anchored.to_unix())
+                    })
+                    .collect();
+                if let Err(e) = index.populate_untracked_for_prefixes(git, &prefixes) {
+                    debug!(
+                        "failed to populate untracked files in repo index: {e}. Hashing \
+                         per-package."
+                    );
+                    return None;
+                }
+                Some(index)
+            }
+            SCM::Manual(_) => None,
         }
     }
 
@@ -400,7 +528,7 @@ impl SCM {
                     None
                 }
             },
-            SCM::Manual => None,
+            SCM::Manual(_) => None,
         }
     }
 
@@ -425,7 +553,7 @@ impl SCM {
                     None
                 }
             },
-            SCM::Manual => None,
+            SCM::Manual(_) => None,
         }
     }
 
@@ -450,7 +578,7 @@ impl SCM {
                     None
                 }
             },
-            SCM::Manual => None,
+            SCM::Manual(_) => None,
         }
     }
 
@@ -478,7 +606,7 @@ impl SCM {
                     None
                 }
             },
-            SCM::Manual => None,
+            SCM::Manual(_) => None,
         }
     }
 
@@ -489,7 +617,7 @@ impl SCM {
     ) -> Result<(), Error> {
         match self {
             SCM::Git(git) => repo_index.populate_untracked_for_prefixes(git, prefixes),
-            SCM::Manual => Ok(()),
+            SCM::Manual(_) => Ok(()),
         }
     }
 }

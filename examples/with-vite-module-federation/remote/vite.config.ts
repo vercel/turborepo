@@ -2,7 +2,9 @@ import { federation } from "@module-federation/vite";
 import react from "@vitejs/plugin-react";
 import { writeFileSync } from "fs";
 import { defineConfig, loadEnv } from "vite";
-import { dependencies } from "./package.json";
+import packageJson from "./package.json" with { type: "json" };
+
+const { dependencies } = packageJson;
 
 export default defineConfig(({ mode }) => {
   const selfEnv = loadEnv(mode, process.cwd());

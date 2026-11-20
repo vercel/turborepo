@@ -1,0 +1,39 @@
+{
+  "headers": {
+    "x-nextjs-stale-time": "300",
+    "x-nextjs-prerender": "1",
+    "x-next-cache-tags": "_N_T_/layout,_N_T_/blog/layout,_N_T_/blog/[slug]/layout,_N_T_/blog/[slug]/page,_N_T_/blog/second"
+  },
+  "segmentPaths": [
+    "/_tree",
+    "/_full",
+    "/blog/$d$slug/__PAGE__"
+  ],
+  "prefetchHints": {
+    "hints": 64,
+    "slots": {
+      "children": {
+        "hints": 96,
+        "slots": {
+          "children": {
+            "hints": 96,
+            "slots": {
+              "children": {
+                "hints": 160,
+                "slots": null
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "routeCache": {
+    "key": "/route-cache/APP_PAGE/598124ea42a7fa20b1ca4e05fb72834de73e98d2ec5bfb5863d326020e1250db/$/blog/second",
+    "owner": {
+      "kind": "APP_PAGE",
+      "sourceRoute": "/blog/[slug]/page"
+    },
+    "isFallback": false
+  }
+}

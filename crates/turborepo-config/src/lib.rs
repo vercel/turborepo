@@ -17,8 +17,8 @@
 //! to `endpoint`: once an endpoint is set by a source, credentials from
 //! lower-priority sources are discarded. See `ExperimentalOtelOptions::merge`.
 
-// Match the lint settings from turborepo-lib
-#![allow(clippy::needless_lifetimes)]
+// Structured config errors are returned throughout configuration resolution;
+// Clippy reports 29 sites. Keep the shared diagnostic error type unchanged.
 #![allow(clippy::result_large_err)]
 
 mod env;
@@ -34,42 +34,77 @@ use std::{
 };
 
 use camino::{Utf8Path, Utf8PathBuf};
-use derive_setters::Setters;
 use env::EnvVars;
+pub use experimental_otel::{
+    ExperimentalOtelMetricsOptions, ExperimentalOtelOptions, ExperimentalOtelProtocol,
+    ExperimentalOtelRunAttributesOptions, ExperimentalOtelTaskAttributesOptions,
+};
+pub use file::ConfigurationFileInputs;
 use file::{AuthFile, ConfigFile};
-use merge::Merge;
 use miette::Diagnostic;
 use override_env::OverrideEnvVars;
 use serde::{Deserialize, Serialize};
-use struct_iterable::Iterable;
 use thiserror::Error;
 use tracing::debug;
 use turbo_json::TurboJsonReader;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 use turborepo_cache::CacheConfig;
-use turborepo_repository::package_graph::PackageName;
+use turborepo_repository::{
+    discovery::{MultipleTurboConfigsError, select_turbo_config_path},
+    package_graph::PackageName,
+};
 use turborepo_scm::WorktreeInfo;
 use turborepo_turbo_json::FutureFlags;
-use turborepo_types::{ConfigurationSource, EnvMode, LogOrder, UIMode};
+/// Configuration file names, shared with the loader.
+pub use turborepo_types::{CONFIG_FILE, CONFIG_FILE_JSONC};
+use turborepo_types::{ConfigurationSource, Credential, EnvMode, LogOrder, UIMode};
 
-pub const CONFIG_FILE: &str = "turbo.json";
-pub const CONFIG_FILE_JSONC: &str = "turbo.jsonc";
+// The first Some value wins as config sources are merged highest-priority
+// first.
+fn merge_option<T>(left: &mut Option<T>, right: Option<T>) {
+    if left.is_none() {
+        *left = right;
+    }
+}
 
-pub use experimental_otel::{
-    ExperimentalOtelMetricsOptions, ExperimentalOtelOptions, ExperimentalOtelProtocol,
-    ExperimentalOtelRunAttributesOptions, ExperimentalOtelTaskAttributesOptions,
-};
+trait Merge {
+    fn merge(&mut self, other: Self);
+}
 
-/// Wrapper for observability-related config. Uses `recurse` on `otel` so that
+fn merge_nested<T: Merge>(left: &mut Option<T>, right: Option<T>) {
+    if let Some(right) = right {
+        if let Some(left) = left {
+            left.merge(right);
+        } else {
+            *left = Some(right);
+        }
+    }
+}
+
+// Destructure every field so adding a new configuration field requires an
+// explicit merge strategy rather than silently dropping it.
+macro_rules! merge_fields {
+    ($left:ident, $right:ident; $($field:ident),+; nested = $nested:ident) => {
+        let Self { $($field,)+ $nested } = $right;
+        $(merge_option(&mut $left.$field, $field);)+
+        merge_nested(&mut $left.$nested, $nested);
+    };
+}
+
+/// Wrapper for observability-related config. Deep-merges `otel` so that
 /// a partial `ExperimentalOtelOptions` from one source (e.g. a single env var)
 /// does not shadow the entire block from a lower-priority source.
-#[derive(Deserialize, Serialize, Default, Debug, Clone, PartialEq, Eq, Merge)]
-#[merge(strategy = merge::option::overwrite_none)]
+#[derive(Deserialize, Serialize, Default, Debug, Clone, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct ExperimentalObservabilityOptions {
     #[serde(skip_serializing_if = "Option::is_none")]
-    #[merge(strategy = merge::option::recurse)]
     pub otel: Option<ExperimentalOtelOptions>,
+}
+
+impl Merge for ExperimentalObservabilityOptions {
+    fn merge(&mut self, other: Self) {
+        merge_nested(&mut self.otel, other.otel);
+    }
 }
 
 /// Configuration for structured log file output.
@@ -96,12 +131,6 @@ impl<'de> Deserialize<'de> for LogFileConfig {
                 "expected true or a file path string",
             )),
         }
-    }
-}
-
-impl Merge for LogFileConfig {
-    fn merge(&mut self, _other: Self) {
-        // CLI/env takes precedence, no merging needed
     }
 }
 
@@ -157,8 +186,6 @@ pub enum Error {
     Io(#[from] io::Error),
     #[error(transparent)]
     Camino(#[from] camino::FromPathBufError),
-    #[error(transparent)]
-    Reqwest(#[from] reqwest::Error),
     #[error("Encountered an I/O error while attempting to read {config_path}: {error}")]
     FailedToReadConfig {
         config_path: AbsoluteSystemPathBuf,
@@ -187,8 +214,6 @@ pub enum Error {
     Encoding(String),
     #[error("TURBO_SIGNATURE should be either 1 or 0.")]
     InvalidSignature,
-    #[error("TURBO_REMOTE_CACHE_ENABLED should be either 1 or 0.")]
-    InvalidRemoteCacheEnabled,
     #[error("TURBO_REMOTE_CACHE_TIMEOUT: Error parsing timeout.")]
     InvalidRemoteCacheTimeout(#[source] std::num::ParseIntError),
     #[error("TURBO_REMOTE_CACHE_UPLOAD_TIMEOUT: Error parsing timeout.")]
@@ -229,15 +254,6 @@ impl Error {
             Error::TurboJsonError(turborepo_turbo_json::Error::NoTurboJSON)
         )
     }
-
-    /// Returns true if this error indicates that multiple turbo config files
-    /// were found.
-    pub fn is_multiple_turbo_configs(&self) -> bool {
-        matches!(
-            self,
-            Error::TurboJsonError(turborepo_turbo_json::Error::MultipleTurboConfigs { .. })
-        )
-    }
 }
 
 // Conversion from LoaderError to config::Error
@@ -256,14 +272,8 @@ impl From<turborepo_turbo_json::LoaderError> for Error {
 // We intentionally don't derive Serialize so that different parts
 // of the code that want to display the config can tune how they
 // want to display and what fields they want to include.
-#[derive(Deserialize, Default, Debug, PartialEq, Eq, Clone, Iterable, Merge, Setters)]
-#[merge(strategy = merge::option::overwrite_none)]
+#[derive(Deserialize, Default, Debug, PartialEq, Eq, Clone)]
 #[serde(rename_all = "camelCase")]
-// Generate setters for the builder type that set these values on its override_config field
-#[setters(
-    prefix = "with_",
-    generate_delegates(ty = "TurborepoConfigBuilder", field = "override_config")
-)]
 pub struct ConfigurationOptions {
     #[serde(alias = "apiurl")]
     #[serde(alias = "ApiUrl")]
@@ -288,7 +298,7 @@ pub struct ConfigurationOptions {
     /// corresponds to env var TURBO_TEAMID
     pub team_id: Option<String>,
     /// corresponds to env var TURBO_TOKEN
-    pub token: Option<String>,
+    pub token: Option<Credential>,
     pub signature: Option<bool>,
     pub preflight: Option<bool>,
     pub timeout: Option<u64>,
@@ -323,6 +333,9 @@ pub struct ConfigurationOptions {
     pub tui_scrollback_length: Option<u64>,
     pub concurrency: Option<String>,
     pub no_update_notifier: Option<bool>,
+    /// Whether turbo should maintain its managed guidance block in `AGENTS.md`.
+    #[serde(skip)]
+    pub agent_guidance: Option<bool>,
     pub sso_login_callback_port: Option<u16>,
     #[serde(skip)]
     pub future_flags: Option<FutureFlags>,
@@ -330,12 +343,27 @@ pub struct ConfigurationOptions {
     /// entire observability block from turbo.json. See
     /// `ExperimentalOtelOptions::merge` for credential-locking semantics.
     #[serde(rename = "experimentalObservability")]
-    #[merge(strategy = merge::option::recurse)]
     pub experimental_observability: Option<ExperimentalObservabilityOptions>,
     /// Structured log file destination, configured via `logFile` in
     /// turbo.json or `TURBO_LOG_FILE` env var.
     #[serde(rename = "logFile")]
     pub log_file: Option<LogFileConfig>,
+}
+
+impl Merge for ConfigurationOptions {
+    fn merge(&mut self, other: Self) {
+        merge_fields!(self, other;
+            api_url, api_url_source, login_url, login_url_source,
+            team_slug, team_id, token, signature, preflight, timeout,
+            upload_timeout, enabled, ui, allow_no_package_manager, daemon,
+            env_mode, scm_base, scm_head, cache_dir, cache_max_age,
+            cache_max_size, root_turbo_json_path, force, log_order, cache,
+            remote_only, remote_cache_read_only, run_summary,
+            allow_no_turbo_json, tui_scrollback_length, concurrency,
+            no_update_notifier, agent_guidance, sso_login_callback_port, future_flags,
+            log_file; nested = experimental_observability
+        );
+    }
 }
 
 #[derive(Default)]
@@ -344,6 +372,68 @@ pub struct TurborepoConfigBuilder {
     override_config: ConfigurationOptions,
     global_config_path: Option<AbsoluteSystemPathBuf>,
     environment: Option<HashMap<OsString, OsString>>,
+}
+
+// Keep the fluent setters on both types in sync. Each setter accepts the full
+// Option<T>, including None, and the builder writes to its override layer.
+macro_rules! configuration_setters {
+    ($($method:ident: $field:ident: $ty:ty),* $(,)?) => {
+        impl ConfigurationOptions {
+            $(
+                pub fn $method(mut self, value: $ty) -> Self {
+                    self.$field = value;
+                    self
+                }
+            )*
+        }
+
+        impl TurborepoConfigBuilder {
+            $(
+                pub fn $method(mut self, value: $ty) -> Self {
+                    self.override_config.$field = value;
+                    self
+                }
+            )*
+        }
+    };
+}
+
+configuration_setters! {
+    with_api_url: api_url: Option<String>,
+    with_api_url_source: api_url_source: Option<ConfigurationSource>,
+    with_login_url: login_url: Option<String>,
+    with_login_url_source: login_url_source: Option<ConfigurationSource>,
+    with_team_slug: team_slug: Option<String>,
+    with_team_id: team_id: Option<String>,
+    with_signature: signature: Option<bool>,
+    with_preflight: preflight: Option<bool>,
+    with_timeout: timeout: Option<u64>,
+    with_upload_timeout: upload_timeout: Option<u64>,
+    with_enabled: enabled: Option<bool>,
+    with_ui: ui: Option<UIMode>,
+    with_allow_no_package_manager: allow_no_package_manager: Option<bool>,
+    with_daemon: daemon: Option<bool>,
+    with_env_mode: env_mode: Option<EnvMode>,
+    with_scm_base: scm_base: Option<String>,
+    with_scm_head: scm_head: Option<String>,
+    with_cache_dir: cache_dir: Option<Utf8PathBuf>,
+    with_cache_max_age: cache_max_age: Option<String>,
+    with_cache_max_size: cache_max_size: Option<String>,
+    with_root_turbo_json_path: root_turbo_json_path: Option<AbsoluteSystemPathBuf>,
+    with_force: force: Option<bool>,
+    with_log_order: log_order: Option<LogOrder>,
+    with_cache: cache: Option<CacheConfig>,
+    with_remote_only: remote_only: Option<bool>,
+    with_remote_cache_read_only: remote_cache_read_only: Option<bool>,
+    with_run_summary: run_summary: Option<bool>,
+    with_allow_no_turbo_json: allow_no_turbo_json: Option<bool>,
+    with_tui_scrollback_length: tui_scrollback_length: Option<u64>,
+    with_concurrency: concurrency: Option<String>,
+    with_no_update_notifier: no_update_notifier: Option<bool>,
+    with_sso_login_callback_port: sso_login_callback_port: Option<u16>,
+    with_future_flags: future_flags: Option<FutureFlags>,
+    with_experimental_observability: experimental_observability: Option<ExperimentalObservabilityOptions>,
+    with_log_file: log_file: Option<LogFileConfig>,
 }
 
 // Getters
@@ -385,8 +475,19 @@ impl ConfigurationOptions {
         non_empty_str(self.team_id.as_deref())
     }
 
+    pub fn credential(&self) -> Option<&Credential> {
+        self.token
+            .as_ref()
+            .filter(|token| !token.expose().is_empty())
+    }
+
+    pub fn with_token(mut self, token: Option<String>) -> Self {
+        self.token = token.map(Credential::from);
+        self
+    }
+
     pub fn token(&self) -> Option<&str> {
-        non_empty_str(self.token.as_deref())
+        self.credential().map(Credential::expose)
     }
 
     pub fn signature(&self) -> bool {
@@ -614,6 +715,10 @@ impl ConfigurationOptions {
         self.no_update_notifier.unwrap_or_default()
     }
 
+    pub fn agent_guidance(&self) -> bool {
+        self.agent_guidance.unwrap_or(false)
+    }
+
     pub fn sso_login_callback_port(&self) -> Option<u16> {
         self.sso_login_callback_port
     }
@@ -644,7 +749,7 @@ pub(crate) trait ResolvedConfigurationOptions {
 }
 
 // Used for global config and local config.
-impl<'a> ResolvedConfigurationOptions for &'a ConfigurationOptions {
+impl ResolvedConfigurationOptions for &ConfigurationOptions {
     fn get_configuration_options(
         &self,
         _existing_config: &ConfigurationOptions,
@@ -669,6 +774,11 @@ impl TurborepoConfigBuilder {
         }
     }
 
+    pub fn with_token(mut self, token: Option<String>) -> Self {
+        self.override_config.token = token.map(Credential::from);
+        self
+    }
+
     pub fn with_global_config_path(mut self, path: AbsoluteSystemPathBuf) -> Self {
         self.global_config_path = Some(path);
         self
@@ -687,6 +797,28 @@ impl TurborepoConfigBuilder {
     }
 
     pub fn build(&self) -> Result<ConfigurationOptions, Error> {
+        self.build_with_optional_inputs(self.get_environment(), None)
+    }
+
+    /// Resolves configuration against an explicit environment snapshot and
+    /// explicit global config/auth file paths.
+    pub fn build_with_inputs(
+        &self,
+        environment: HashMap<OsString, OsString>,
+        file_inputs: ConfigurationFileInputs,
+    ) -> Result<ConfigurationOptions, Error> {
+        self.build_with_optional_inputs(environment, Some(file_inputs))
+    }
+
+    fn build_with_optional_inputs(
+        &self,
+        environment: HashMap<OsString, OsString>,
+        file_inputs: Option<ConfigurationFileInputs>,
+    ) -> Result<ConfigurationOptions, Error> {
+        let environment = environment
+            .into_iter()
+            .map(|(key, value)| (key.to_ascii_lowercase(), value))
+            .collect::<HashMap<_, _>>();
         // Sources are listed highest-to-lowest priority. The fold merges each
         // source into the accumulator; `overwrite_none` keeps the first `Some`
         // it sees, so processing highest-priority first gives it precedence.
@@ -696,21 +828,37 @@ impl TurborepoConfigBuilder {
         //   2. environment variables (TURBO_*)
         //   3. override env vars (VERCEL_ARTIFACTS_*)
         //   4. local configuration (<REPO_ROOT>/.turbo/config.json)
-        //   5. global auth (~/.turbo/auth.json)
+        //   5. global credentials (dedicated auth, global token, legacy auth)
         //   6. global configuration (~/.turbo/config.json)
         //   7. shared configuration (turbo.json)
         //
         // See `test_experimental_observability_otel_precedence` for coverage.
 
         let turbo_json = TurboJsonReader::new(&self.repo_root);
-        let global_config = ConfigFile::global_config(self.global_config_path.clone())?;
-        let global_auth = AuthFile::global_auth(self.global_config_path.clone())?;
+        let global_config_file = match &file_inputs {
+            Some(inputs) => ConfigFile::from_path(inputs.global_config_path.clone()),
+            None => ConfigFile::global_config(self.global_config_path.clone())?,
+        };
+        let mut global_config =
+            global_config_file.get_configuration_options(&ConfigurationOptions::default())?;
+        let global_token = global_config
+            .token
+            .take()
+            .filter(|token| !token.expose().is_empty());
+        let global_auth = match &file_inputs {
+            Some(inputs) => AuthFile::from_paths(
+                inputs.global_auth_path.clone(),
+                global_token,
+                inputs.legacy_auth_path.clone(),
+            ),
+            None => AuthFile::global_auth(self.global_config_path.clone(), global_token)?,
+        };
         let local_config = ConfigFile::local_config(&self.repo_root);
-        let env_vars = self.get_environment();
+        let env_vars = environment;
         let env_var_config = EnvVars::new(&env_vars)?;
         let override_env_var_config = OverrideEnvVars::new(&env_vars)?;
 
-        let sources: [(ConfigurationSource, Box<dyn ResolvedConfigurationOptions>); 7] = [
+        let sources: [(ConfigurationSource, Box<dyn ResolvedConfigurationOptions>); 6] = [
             (ConfigurationSource::Cli, Box::new(&self.override_config)),
             (ConfigurationSource::Environment, Box::new(env_var_config)),
             (
@@ -718,25 +866,21 @@ impl TurborepoConfigBuilder {
                 Box::new(override_env_var_config),
             ),
             (ConfigurationSource::LocalConfig, Box::new(local_config)),
-            (ConfigurationSource::GlobalAuth, Box::new(global_auth)),
-            (ConfigurationSource::GlobalConfig, Box::new(global_config)),
+            (ConfigurationSource::GlobalConfig, Box::new(&global_config)),
             (ConfigurationSource::TurboJson, Box::new(turbo_json)),
         ];
 
-        let config = sources.into_iter().try_fold(
+        let mut config = sources.into_iter().try_fold(
             ConfigurationOptions::default(),
-            |mut acc, (source, current_source)| {
+            |mut acc, (source, current_source)| -> Result<_, Error> {
                 let current_source_config = current_source.get_configuration_options(&acc)?;
                 let current_source_config = current_source_config.with_url_sources(source);
                 acc.merge(current_source_config);
                 Ok(acc)
             },
-        );
-
-        // We explicitly do a let and return to help the Rust compiler see that there
-        // are no references still held by the folding.
-        #[allow(clippy::let_and_return)]
-        config
+        )?;
+        config.merge(global_auth.get_configuration_options(&config)?);
+        Ok(config)
     }
 }
 
@@ -750,20 +894,15 @@ pub fn resolve_turbo_config_path(
     let turbo_json_path = dir_path.join_component(CONFIG_FILE);
     let turbo_jsonc_path = dir_path.join_component(CONFIG_FILE_JSONC);
 
-    let turbo_json_exists = turbo_json_path.try_exists()?;
-    let turbo_jsonc_exists = turbo_jsonc_path.try_exists()?;
-
-    match (turbo_json_exists, turbo_jsonc_exists) {
-        (true, true) => Err(Error::TurboJsonError(
-            turborepo_turbo_json::Error::MultipleTurboConfigs {
-                directory: dir_path.to_string(),
-            },
-        )),
-        (true, false) => Ok(turbo_json_path),
-        (false, true) => Ok(turbo_jsonc_path),
-        // Default to turbo.json if neither exists
-        (false, false) => Ok(turbo_json_path),
-    }
+    select_turbo_config_path(
+        dir_path,
+        turbo_json_path.try_exists()?,
+        turbo_jsonc_path.try_exists()?,
+    )
+    .map(|path| path.unwrap_or(turbo_json_path))
+    .map_err(|MultipleTurboConfigsError { directory }| {
+        Error::TurboJsonError(turborepo_turbo_json::Error::MultipleTurboConfigs { directory })
+    })
 }
 
 #[cfg(test)]
@@ -777,8 +916,53 @@ mod test {
     use crate::{
         CONFIG_FILE, CONFIG_FILE_JSONC, ConfigurationOptions, DEFAULT_API_URL, DEFAULT_LOGIN_URL,
         DEFAULT_TIMEOUT, ExperimentalObservabilityOptions, ExperimentalOtelMetricsOptions,
-        ExperimentalOtelOptions, ExperimentalOtelProtocol, TurborepoConfigBuilder,
+        ExperimentalOtelOptions, ExperimentalOtelProtocol, Merge, TurborepoConfigBuilder,
     };
+
+    #[test]
+    fn test_generated_setters() {
+        let repo_root = AbsoluteSystemPath::new(if cfg!(windows) {
+            "C:\\fake\\repo"
+        } else {
+            "/fake/repo"
+        })
+        .unwrap();
+        let config = ConfigurationOptions::default()
+            .with_api_url(Some("https://api.example".into()))
+            .with_timeout(Some(42))
+            .with_daemon(Some(false))
+            .with_api_url(None)
+            .with_log_file(Some(crate::LogFileConfig::Enabled));
+
+        assert_eq!(config.api_url, None);
+        assert_eq!(config.timeout, Some(42));
+        assert_eq!(config.daemon, Some(false));
+        assert_eq!(config.log_file, Some(crate::LogFileConfig::Enabled));
+
+        let builder = TurborepoConfigBuilder::new(repo_root)
+            .with_api_url(Some("https://api.example".into()))
+            .with_timeout(Some(42))
+            .with_daemon(Some(false))
+            .with_api_url(None)
+            .with_log_file(Some(crate::LogFileConfig::Enabled));
+        assert_eq!(builder.override_config, config);
+    }
+
+    #[test]
+    fn test_agent_guidance_merge() {
+        let mut config = ConfigurationOptions::default();
+        config.merge(ConfigurationOptions {
+            agent_guidance: Some(false),
+            ..Default::default()
+        });
+        assert!(!config.agent_guidance());
+
+        config.merge(ConfigurationOptions {
+            agent_guidance: Some(true),
+            ..Default::default()
+        });
+        assert!(!config.agent_guidance());
+    }
 
     #[test]
     fn test_defaults() {
@@ -1352,6 +1536,318 @@ mod test {
             config.login_url_source(),
             Some(ConfigurationSource::TurboJson)
         );
+    }
+
+    // Use explicit auth paths and environment snapshots so these tests never
+    // read developer credentials or depend on process-wide environment changes.
+    #[test_case::test_case("turbo.json")]
+    #[test_case::test_case("turbo.jsonc")]
+    #[test_case::test_case(".turbo/config.json")]
+    fn test_saved_vercel_classification_survives_api_url_overrides(config_file: &str) {
+        const CUSTOM_API: &str = "http://127.0.0.1:9099";
+        for token_source in ["auth", "global", "legacy", "env", "vercel_env", "cli"] {
+            for authorization in ["none", "cli", "env", "global"] {
+                let tmp = TempDir::new().unwrap();
+                let root = AbsoluteSystemPathBuf::try_from(tmp.path()).unwrap();
+                let repo = root.join_component("repo");
+                repo.create_dir_all().unwrap();
+                let config_path = repo.join_components(&config_file.split('/').collect::<Vec<_>>());
+                config_path.ensure_dir().unwrap();
+                let remote = serde_json::json!({
+                    "apiUrl": CUSTOM_API,
+                    "teamId": "team_test"
+                });
+                let contents = if config_file.starts_with(".turbo/") {
+                    remote
+                } else {
+                    serde_json::json!({"remoteCache": remote})
+                };
+                config_path
+                    .create_with_contents(contents.to_string())
+                    .unwrap();
+
+                let inputs = crate::ConfigurationFileInputs {
+                    global_config_path: root.join_component("config.json"),
+                    global_auth_path: root.join_component("auth.json"),
+                    legacy_auth_path: Some(root.join_component("legacy-auth.json")),
+                };
+                let mut global = serde_json::json!({});
+                let mut environment = HashMap::new();
+                let mut builder = TurborepoConfigBuilder::new(&repo);
+                match token_source {
+                    "auth" => inputs
+                        .global_auth_path
+                        .create_with_contents(r#"{"token":"sentinel"}"#)
+                        .unwrap(),
+                    "global" => global["token"] = "sentinel".into(),
+                    "legacy" => inputs
+                        .legacy_auth_path
+                        .as_ref()
+                        .unwrap()
+                        .create_with_contents(r#"{"token":"sentinel"}"#)
+                        .unwrap(),
+                    "env" => {
+                        environment.insert("TURBO_TOKEN".into(), "sentinel".into());
+                    }
+                    "vercel_env" => {
+                        environment.insert("VERCEL_ARTIFACTS_TOKEN".into(), "sentinel".into());
+                        environment.insert("VERCEL_ARTIFACTS_OWNER".into(), "team_test".into());
+                    }
+                    "cli" => builder = builder.with_token(Some("sentinel".into())),
+                    _ => unreachable!(),
+                }
+                match authorization {
+                    "cli" => builder = builder.with_api_url(Some(CUSTOM_API.into())),
+                    "env" => {
+                        environment.insert("TURBO_API".into(), CUSTOM_API.into());
+                    }
+                    "global" => global["apiUrl"] = CUSTOM_API.into(),
+                    "none" => {}
+                    _ => unreachable!(),
+                }
+                inputs
+                    .global_config_path
+                    .create_with_contents(global.to_string())
+                    .unwrap();
+                let config = builder.build_with_inputs(environment, inputs).unwrap();
+                assert_eq!(config.api_url(), CUSTOM_API);
+                assert_eq!(config.token(), Some("sentinel"));
+                assert_eq!(
+                    config.credential().unwrap().is_saved_vercel(),
+                    matches!(token_source, "auth" | "legacy"),
+                    "{config_file}, {token_source}, {authorization}"
+                );
+            }
+        }
+    }
+
+    #[test_case::test_case("repo_custom")]
+    #[test_case::test_case("cli_custom")]
+    #[test_case::test_case("env_custom")]
+    #[test_case::test_case("global_custom")]
+    #[test_case::test_case("local_custom")]
+    #[test_case::test_case("selected_root_custom")]
+    #[test_case::test_case("repo_vercel")]
+    #[test_case::test_case("cli_vercel")]
+    #[test_case::test_case("env_vercel")]
+    #[test_case::test_case("default_vercel")]
+    fn coexisting_credentials_follow_source_precedence(url_source: &str) {
+        use turborepo_types::Credential;
+
+        const CUSTOM: &str = "http://127.0.0.1:9099";
+        for stores in [
+            "both",
+            "auth_only",
+            "legacy_only",
+            "generic_legacy",
+            "generic_only",
+        ] {
+            for explicit_token in ["none", "local", "vercel_env", "env", "cli"] {
+                let tmp = TempDir::new().unwrap();
+                let root = AbsoluteSystemPathBuf::try_from(tmp.path()).unwrap();
+                let repo = root.join_component("repo");
+                repo.create_dir_all().unwrap();
+                let inputs = crate::ConfigurationFileInputs {
+                    global_config_path: root.join_component("config.json"),
+                    global_auth_path: root.join_component("auth.json"),
+                    legacy_auth_path: Some(root.join_component("legacy.json")),
+                };
+                let custom = url_source.ends_with("custom");
+                let api = if custom { CUSTOM } else { DEFAULT_API_URL };
+                let repo_api = match url_source {
+                    "repo_custom" | "cli_vercel" | "env_vercel" => CUSTOM,
+                    _ => DEFAULT_API_URL,
+                };
+                repo.join_component("turbo.json")
+                    .create_with_contents(
+                        serde_json::json!({"remoteCache":{"apiUrl":repo_api}}).to_string(),
+                    )
+                    .unwrap();
+                let mut global =
+                    serde_json::json!({"teamId":"team_existing", "teamSlug":"existing-scope"});
+                if matches!(stores, "both" | "generic_legacy" | "generic_only") {
+                    global["token"] = "generic-global".into();
+                }
+                if matches!(stores, "both" | "auth_only") {
+                    inputs
+                        .global_auth_path
+                        .create_with_contents(r#"{"token":"dedicated-vercel"}"#)
+                        .unwrap();
+                }
+                if matches!(stores, "both" | "legacy_only" | "generic_legacy") {
+                    inputs
+                        .legacy_auth_path
+                        .as_ref()
+                        .unwrap()
+                        .create_with_contents(r#"{"token":"legacy-vercel"}"#)
+                        .unwrap();
+                }
+                let mut environment = HashMap::new();
+                let mut builder = TurborepoConfigBuilder::new(&repo);
+                match url_source {
+                    "cli_custom" | "cli_vercel" => builder = builder.with_api_url(Some(api.into())),
+                    "env_custom" | "env_vercel" => {
+                        environment.insert("TURBO_API".into(), api.into());
+                    }
+                    "global_custom" => global["apiUrl"] = api.into(),
+                    "local_custom" => {
+                        let path = repo.join_components(&[".turbo", "config.json"]);
+                        path.ensure_dir().unwrap();
+                        path.create_with_contents(serde_json::json!({"apiUrl":api}).to_string())
+                            .unwrap();
+                    }
+                    "selected_root_custom" => {
+                        let path = repo.join_component("selected.json");
+                        path.create_with_contents(
+                            serde_json::json!({"remoteCache":{"apiUrl":api}}).to_string(),
+                        )
+                        .unwrap();
+                        builder = builder.with_root_turbo_json_path(Some(path));
+                    }
+                    "default_vercel" => repo
+                        .join_component("turbo.json")
+                        .create_with_contents("{}")
+                        .unwrap(),
+                    _ => {}
+                }
+                match explicit_token {
+                    "cli" => {
+                        builder = builder.with_token(Some("explicit-cli".into()));
+                        environment.insert("TURBO_TOKEN".into(), "explicit-env".into());
+                    }
+                    "env" => {
+                        environment.insert("TURBO_TOKEN".into(), "explicit-env".into());
+                    }
+                    "vercel_env" => {
+                        environment.insert(
+                            "VERCEL_ARTIFACTS_TOKEN".into(),
+                            "explicit-vercel_env".into(),
+                        );
+                        environment.insert("VERCEL_ARTIFACTS_OWNER".into(), "team_existing".into());
+                    }
+                    "local" => {
+                        let path = repo.join_components(&[".turbo", "config.json"]);
+                        path.ensure_dir().unwrap();
+                        let mut local = if url_source == "local_custom" {
+                            serde_json::json!({"apiUrl":api})
+                        } else {
+                            serde_json::json!({})
+                        };
+                        local["token"] = "explicit-local".into();
+                        path.create_with_contents(local.to_string()).unwrap();
+                    }
+                    _ => {}
+                }
+                inputs
+                    .global_config_path
+                    .create_with_contents(global.to_string())
+                    .unwrap();
+                let config = builder.build_with_inputs(environment, inputs).unwrap();
+                assert_eq!(config.api_url(), api, "{url_source}");
+                let expected = if explicit_token != "none" {
+                    Credential::from(format!("explicit-{explicit_token}"))
+                } else if matches!(stores, "generic_only" | "generic_legacy") {
+                    Credential::from("generic-global")
+                } else if matches!(stores, "both" | "auth_only") {
+                    Credential::saved_vercel("dedicated-vercel".into())
+                } else {
+                    Credential::saved_vercel("legacy-vercel".into())
+                };
+                assert_eq!(
+                    config.credential(),
+                    Some(&expected),
+                    "{url_source}, {stores}, {explicit_token}"
+                );
+                assert_eq!(config.team_id(), Some("team_existing"));
+                assert_eq!(config.team_slug(), Some("existing-scope"));
+                assert_eq!(
+                    turborepo_api_client::validate_credential_destination(
+                        config.credential().unwrap(),
+                        &api.parse().unwrap()
+                    )
+                    .is_ok(),
+                    !custom || !expected.is_saved_vercel(),
+                    "{url_source}, {stores}, {explicit_token}"
+                );
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn source_classification_controls_actual_cache_egress() {
+        use turborepo_api_client::{APIClient, CacheClient};
+        let server = httpmock::MockServer::start_async().await;
+        for source in ["auth", "global", "legacy", "env", "cli"] {
+            for override_token in [false, true] {
+                let tmp = TempDir::new().unwrap();
+                let root = AbsoluteSystemPathBuf::try_from(tmp.path()).unwrap();
+                root.join_component("turbo.json")
+                    .create_with_contents(
+                        serde_json::json!({"remoteCache": {"apiUrl": server.base_url()}})
+                            .to_string(),
+                    )
+                    .unwrap();
+                let inputs = crate::ConfigurationFileInputs {
+                    global_auth_path: root.join_component("auth.json"),
+                    global_config_path: root.join_component("config.json"),
+                    legacy_auth_path: Some(root.join_component("legacy.json")),
+                };
+                let mut environment = HashMap::new();
+                let mut builder = TurborepoConfigBuilder::new(&root);
+                let document = r#"{"token":"synthetic-source-sentinel","tokenPolicy":"Generic","credentialOrigin":"Generic"}"#;
+                match source {
+                    "auth" => inputs
+                        .global_auth_path
+                        .create_with_contents(document)
+                        .unwrap(),
+                    "global" => inputs
+                        .global_config_path
+                        .create_with_contents(document)
+                        .unwrap(),
+                    "legacy" => inputs
+                        .legacy_auth_path
+                        .as_ref()
+                        .unwrap()
+                        .create_with_contents(document)
+                        .unwrap(),
+                    "env" => {
+                        environment
+                            .insert("TURBO_TOKEN".into(), "synthetic-source-sentinel".into());
+                    }
+                    "cli" => builder = builder.with_token(Some("synthetic-source-sentinel".into())),
+                    _ => unreachable!(),
+                }
+                builder = builder.with_api_url(Some(server.base_url()));
+                if override_token {
+                    builder = builder.with_token(Some("synthetic-source-sentinel".into()));
+                }
+                let config = builder.build_with_inputs(environment, inputs).unwrap();
+                let client = APIClient::new(config.api_url(), None, None, "test", true).unwrap();
+                let protected = matches!(source, "auth" | "legacy") && !override_token;
+                let received = server
+                    .mock_async(|when, then| {
+                        when.header("authorization", "Bearer synthetic-source-sentinel");
+                        then.status(200)
+                            .header("Access-Control-Allow-Headers", "Authorization")
+                            .body("artifact");
+                    })
+                    .await;
+                let result = client
+                    .fetch_artifact("sentinel", config.credential().unwrap(), None, None)
+                    .await;
+                if protected {
+                    assert!(matches!(
+                        result,
+                        Err(turborepo_api_client::Error::SavedVercelCredentialDestination)
+                    ));
+                    received.assert_calls_async(0).await;
+                } else {
+                    assert!(result.unwrap().is_some());
+                    received.assert_calls_async(2).await;
+                }
+                received.delete_async().await;
+            }
+        }
     }
 
     #[test]

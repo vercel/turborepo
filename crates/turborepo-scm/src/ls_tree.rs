@@ -85,13 +85,6 @@ impl GitRepo {
         Ok(hashes)
     }
 
-    /// Run `git ls-tree` once at the git repo root, returning all committed
-    /// file hashes keyed by git-root-relative paths.
-    #[tracing::instrument(skip(self))]
-    pub fn git_ls_tree_repo_root(&self) -> Result<GitHashes, Error> {
-        self.git_ls_tree(&self.root)
-    }
-
     /// Run `git ls-tree -r HEAD -z` at the repo root, returning a sorted Vec
     /// suitable for binary-search range queries in `RepoGitIndex`.
     #[cfg(test)]
@@ -187,9 +180,18 @@ impl GitRepo {
         Ok(state.paths)
     }
 
+    pub(crate) fn git_ls_files_cached_with_unsupported(&self) -> Result<GitPathList, Error> {
+        self.git_ls_files(&["--cached"])
+    }
+
     pub(crate) fn git_ls_files_untracked_with_unsupported(&self) -> Result<GitPathList, Error> {
+        self.git_ls_files(&["--others", "--exclude-standard"])
+    }
+
+    fn git_ls_files(&self, args: &[&str]) -> Result<GitPathList, Error> {
         let mut git = Command::new(self.bin.as_std_path())
-            .args(["ls-files", "--others", "--exclude-standard", "-z"])
+            .args(["ls-files", "-z"])
+            .args(args)
             .env("GIT_OPTIONAL_LOCKS", "0")
             .current_dir(&self.root)
             .stdout(Stdio::piped())
@@ -295,9 +297,11 @@ fn read_diff_index_with_unsupported<R: Read>(
         let is_delete = status_byte == b'D';
 
         match path {
-            Ok(path) => state
-                .entries
-                .push(crate::status::RepoStatusEntry { path, is_delete }),
+            Ok(path) => state.entries.push(crate::status::RepoStatusEntry {
+                path,
+                is_delete,
+                is_untracked: false,
+            }),
             Err(path) => state.unsupported_paths.push(path),
         }
     }

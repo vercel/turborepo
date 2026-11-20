@@ -1,16 +1,13 @@
+#!/usr/bin/env node
+
 import { Command } from "commander";
 import { packAndPublish } from "./packager";
-import type { Platform } from "./types";
+import { supportedPlatforms } from "./config";
 import { getVersionInfo } from "./version";
-
-const supportedPlatforms: Array<Platform> = [
-  { os: "darwin", arch: "x64" },
-  { os: "darwin", arch: "arm64" },
-  { os: "linux", arch: "x64" },
-  { os: "linux", arch: "arm64" },
-  { os: "windows", arch: "x64" },
-  { os: "windows", arch: "arm64" }
-];
+import { publishRelease } from "./publish";
+import { updateVersion } from "./version-command";
+import { prepareStage } from "./stage";
+import { createReleaseTag } from "./tag";
 
 const turboReleaser = new Command();
 
@@ -19,6 +16,40 @@ turboReleaser
   .requiredOption("--version-path <path>", "Path to the version.txt file")
   .option("--skip-publish", "Skip publishing to NPM")
   .action(releaseTurbo);
+
+turboReleaser
+  .command("publish")
+  .requiredOption("--repo-root <path>", "Path to the repository root")
+  .requiredOption(
+    "--artifacts-dir <path>",
+    "Directory containing dist-<os>-<arch> directories"
+  )
+  .requiredOption("--version-path <path>", "Path to the version.txt file")
+  .option("--skip-publish", "Pack without publishing to npm")
+  .action(publishRelease);
+
+turboReleaser
+  .command("version")
+  .requiredOption("--version-path <path>", "Path to the version.txt file")
+  .requiredOption("--increment <type>", "SemVer release type")
+  .option("--tag-override <tag>", "Override the npm dist-tag")
+  .action(async (options) => {
+    await updateVersion(options);
+  });
+
+turboReleaser
+  .command("prepare-stage")
+  .requiredOption("--repo-root <path>", "Path to the repository root")
+  .requiredOption("--version-path <path>", "Path to the version.txt file")
+  .action(async (options) => {
+    await prepareStage(options);
+  });
+
+turboReleaser
+  .command("tag")
+  .requiredOption("--repo-root <path>", "Path to the repository root")
+  .requiredOption("--version-path <path>", "Path to the version.txt file")
+  .action(createReleaseTag);
 
 async function releaseTurbo(options: {
   skipPublish: boolean;

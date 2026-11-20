@@ -38,6 +38,8 @@ interface FixtureMeta {
   pruneTargets?: string[];
   /** Run `turbo prune --docker` and validate `out/json`. */
   docker?: boolean;
+  /** Run `turbo prune --production`. */
+  production?: boolean;
   /**
    * Additionally assert that every package in the pruned lockfile can resolve
    * its declared dependencies (via `npm ls`). Catches stranded transitive deps
@@ -223,6 +225,7 @@ function buildTestCases(
         targetWorkspace: { name: target },
         label,
         docker: fixture.meta.docker,
+        production: fixture.meta.production,
         expectedFailure: isExpected
       });
     }

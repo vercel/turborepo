@@ -608,6 +608,18 @@ impl FilterAny {
         let candidate = CandidatePath::from(entry.root_relative_paths().1);
         self.program.residue(candidate)
     }
+
+    /// Gets the appropriate [`EntryResidue`] for a path, exactly as
+    /// [`FilterAny::residue`] does for an [`Entry`] whose root-relative path
+    /// is `path`. This lets callers that read directory trees themselves
+    /// apply the same filtering as [`FileIterator::not_any`].
+    ///
+    /// [`Entry`]: crate::walk::Entry
+    /// [`EntryResidue`]: crate::walk::EntryResidue
+    /// [`FileIterator::not_any`]: crate::walk::FileIterator::not_any
+    pub fn residue_for_path(&self, path: &Path) -> Option<EntryResidue> {
+        self.program.residue(CandidatePath::from(path))
+    }
 }
 
 /// Describes a file with a path matching a [`Glob`] in a directory tree.
@@ -665,8 +677,8 @@ impl Entry for GlobEntry {
         self.entry.metadata().map_err(WalkError::from)
     }
 
-    // TODO: This needs some work and requires some explanation when applied to
-    // globs.
+    // The underlying depth is relative to the root selected by `Glob::walker`,
+    // which includes any invariant prefix; see `Glob::walk_with_behavior`.
     fn depth(&self) -> usize {
         self.entry.depth()
     }

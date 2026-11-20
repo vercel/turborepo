@@ -22,12 +22,16 @@ pub const TOPOLOGICAL_PIPELINE_DELIMITER: &str = "^";
 /// and returns a vector of errors found during validation.
 pub type TurboJSONValidation = fn(&Validator, &TurboJson) -> Vec<Error>;
 
-const ROOT_VALIDATIONS: &[TurboJSONValidation] =
-    &[validate_with_has_no_topo, validate_no_task_extends_in_root];
+const ROOT_VALIDATIONS: &[TurboJSONValidation] = &[
+    validate_with_has_no_topo,
+    validate_no_task_extends_in_root,
+    validate_root_command_positions,
+];
 const PACKAGE_VALIDATIONS: &[TurboJSONValidation] = &[
     validate_with_has_no_topo,
     validate_no_package_task_syntax,
     validate_extends,
+    validate_package_command_positions,
 ];
 
 /// Validator for TurboJson structures with context-aware validation
@@ -223,6 +227,72 @@ pub fn validate_no_task_extends_in_root(
         .collect()
 }
 
+/// Validates `command` positions in the root turbo.json.
+///
+/// The per-toolchain map form is a *default* — it only makes sense on
+/// unscoped tasks, where the toolchain is not yet determined. An opt-out
+/// (`null`/`[]`) is the opposite: it cancels a broader default for one
+/// package, so it only makes sense in package-scoped positions.
+pub fn validate_root_command_positions(
+    _validator: &Validator,
+    turbo_json: &TurboJson,
+) -> Vec<Error> {
+    turbo_json
+        .tasks
+        .iter()
+        .filter_map(|(task_name, definition)| {
+            let command = definition.command.as_ref()?;
+            let scoped = task_name.package().is_some();
+            match command.as_inner() {
+                crate::raw::RawCommand::PerToolchain(_) if scoped => {
+                    let (span, text) = command.span_and_text("turbo.json");
+                    Some(Error::TaskCommandMapInScopedPosition {
+                        task_name: task_name.to_string(),
+                        span,
+                        text,
+                    })
+                }
+                crate::raw::RawCommand::OptOut if !scoped => {
+                    let (span, text) = command.span_and_text("turbo.json");
+                    Some(Error::TaskCommandOptOutUnscoped {
+                        task_name: task_name.to_string(),
+                        span,
+                        text,
+                    })
+                }
+                _ => None,
+            }
+        })
+        .collect()
+}
+
+/// Validates `command` shapes in Package Configurations: the file already
+/// scopes every task to one package (and one toolchain), so the
+/// per-toolchain map form is never valid. Opt-outs are — that is their
+/// natural home.
+pub fn validate_package_command_positions(
+    _validator: &Validator,
+    turbo_json: &TurboJson,
+) -> Vec<Error> {
+    turbo_json
+        .tasks
+        .iter()
+        .filter_map(|(task_name, definition)| {
+            let command = definition.command.as_ref()?;
+            if matches!(command.as_inner(), crate::raw::RawCommand::PerToolchain(_)) {
+                let (span, text) = command.span_and_text("turbo.json");
+                Some(Error::TaskCommandMapInScopedPosition {
+                    task_name: task_name.to_string(),
+                    span,
+                    text,
+                })
+            } else {
+                None
+            }
+        })
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -249,6 +319,83 @@ mod tests {
     #[test]
     fn test_topological_delimiter_constant() {
         assert_eq!(TOPOLOGICAL_PIPELINE_DELIMITER, "^");
+    }
+
+    #[test]
+    fn test_command_map_rejected_in_scoped_positions() {
+        // Root turbo.json: a package-scoped key already determines the
+        // toolchain, so the map form is noise.
+        let raw = crate::RawRootTurboJson::parse(
+            r#"{"tasks":{"web#test":{"command":{"javascript":["vitest"]}}}}"#,
+            "turbo.json",
+        )
+        .unwrap();
+        let turbo_json = TurboJson::try_from(RawTurboJson::try_from(raw).unwrap()).unwrap();
+        let errors = Validator::new().validate_turbo_json(&PackageName::Root, &turbo_json);
+        assert!(
+            matches!(
+                errors.as_slice(),
+                [Error::TaskCommandMapInScopedPosition { .. }]
+            ),
+            "got: {errors:?}"
+        );
+
+        // Package Configurations scope every task to one package.
+        let raw = RawPackageTurboJson::parse(
+            r#"{"extends":["//"],"tasks":{"test":{"command":{"javascript":["vitest"]}}}}"#,
+            "apps/web/turbo.json",
+        )
+        .unwrap();
+        let turbo_json = TurboJson::try_from(RawTurboJson::from(raw)).unwrap();
+        let errors = Validator::new().validate_turbo_json(&PackageName::from("web"), &turbo_json);
+        assert!(
+            matches!(
+                errors.as_slice(),
+                [Error::TaskCommandMapInScopedPosition { .. }]
+            ),
+            "got: {errors:?}"
+        );
+    }
+
+    #[test]
+    fn test_command_opt_out_rejected_on_unscoped_root_task() {
+        let raw =
+            crate::RawRootTurboJson::parse(r#"{"tasks":{"test":{"command":null}}}"#, "turbo.json")
+                .unwrap();
+        let turbo_json = TurboJson::try_from(RawTurboJson::try_from(raw).unwrap()).unwrap();
+        let errors = Validator::new().validate_turbo_json(&PackageName::Root, &turbo_json);
+        assert!(
+            matches!(errors.as_slice(), [Error::TaskCommandOptOutUnscoped { .. }]),
+            "got: {errors:?}"
+        );
+    }
+
+    #[test]
+    fn test_command_valid_positions_pass() {
+        // Unscoped root map + scoped root opt-out + unscoped root argv: all
+        // legal.
+        let raw = crate::RawRootTurboJson::parse(
+            r#"{"tasks":{
+                "test":{"command":{"javascript":["vitest"]}},
+                "web#test":{"command":null},
+                "clean":{"command":["rm","-rf","dist"]}
+            }}"#,
+            "turbo.json",
+        )
+        .unwrap();
+        let turbo_json = TurboJson::try_from(RawTurboJson::try_from(raw).unwrap()).unwrap();
+        let errors = Validator::new().validate_turbo_json(&PackageName::Root, &turbo_json);
+        assert!(errors.is_empty(), "got: {errors:?}");
+
+        // Package Configuration opt-out: the natural home.
+        let raw = RawPackageTurboJson::parse(
+            r#"{"extends":["//"],"tasks":{"test":{"command":null}}}"#,
+            "apps/web/turbo.json",
+        )
+        .unwrap();
+        let turbo_json = TurboJson::try_from(RawTurboJson::from(raw)).unwrap();
+        let errors = Validator::new().validate_turbo_json(&PackageName::from("web"), &turbo_json);
+        assert!(errors.is_empty(), "got: {errors:?}");
     }
 
     #[test]

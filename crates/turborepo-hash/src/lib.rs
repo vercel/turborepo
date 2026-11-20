@@ -4,7 +4,7 @@
 //! deterministic serialization across languages and platforms, then applies
 //! xxHash64 for fast hashing.
 
-#![allow(clippy::expect_used, clippy::unwrap_used)]
+#![cfg_attr(test, allow(clippy::expect_used, clippy::unwrap_used))]
 
 mod oid_hash;
 mod traits;
@@ -19,7 +19,8 @@ pub use oid_hash::OidHash;
 pub use traits::TurboHash;
 use turborepo_types::{EnvMode, TaskOutputs};
 
-#[allow(dead_code)]
+// Generated Cap'n Proto setters use infallible unwraps.
+#[allow(dead_code, clippy::unwrap_used)]
 mod proto_capnp {
     use turborepo_types::EnvMode;
 
@@ -70,6 +71,16 @@ pub struct TaskHashable<'a> {
     pub resolved_env_vars: EnvVarPairs,
     pub pass_through_env: &'a [String],
     pub env_mode: EnvMode,
+
+    // The task's resolved `command` override: the argv when one applies
+    // (empty otherwise), plus whether the task is an explicit opt-out.
+    // Changing what a task runs must invalidate its cached results.
+    pub command_override: &'a [String],
+    pub command_opt_out: bool,
+
+    // The resolved `experimentalCI` configuration. Changing CI execution
+    // requirements must invalidate cached task results.
+    pub experimental_ci: Option<&'a turborepo_types::ExperimentalCIConfig>,
 }
 
 impl TaskHashable<'_> {
@@ -87,7 +98,7 @@ impl TaskHashable<'_> {
 
 #[derive(Debug, Clone)]
 pub struct GlobalHashable<'a> {
-    pub global_cache_key: &'static str,
+    pub global_cache_key: &'a str,
     pub global_file_hash_map: &'a HashMap<turbopath::RelativeUnixPathBuf, String>,
     // These are None in single package mode
     pub root_external_dependencies_hash: Option<&'a str>,
@@ -119,6 +130,8 @@ pub enum Error {
     Canonicalize(capnp::Error),
     ReadTaskOutputs(capnp::Error),
     SetTaskOutputs(capnp::Error),
+    SerializeExperimentalCi(serde_json::Error),
+    Lockfile(turborepo_lockfile_hash::Error),
 }
 
 impl fmt::Display for Error {
@@ -134,6 +147,10 @@ impl fmt::Display for Error {
                 write!(f, "unable to read Cap'n Proto task outputs: {err}")
             }
             Self::SetTaskOutputs(err) => write!(f, "unable to set Cap'n Proto task outputs: {err}"),
+            Self::SerializeExperimentalCi(err) => {
+                write!(f, "unable to serialize experimentalCI configuration: {err}")
+            }
+            Self::Lockfile(err) => write!(f, "unable to hash lockfile packages: {err}"),
         }
     }
 }
@@ -145,6 +162,8 @@ impl std::error::Error for Error {
             | Self::Canonicalize(err)
             | Self::ReadTaskOutputs(err)
             | Self::SetTaskOutputs(err) => Some(err),
+            Self::SerializeExperimentalCi(err) => Some(err),
+            Self::Lockfile(err) => Some(err),
         }
     }
 }
@@ -206,54 +225,24 @@ impl From<HashableTaskOutputs> for Builder<HeapAllocator> {
 impl HashableMessage for LockFilePackages {
     fn into_builder(self) -> Result<Builder<HeapAllocator>, Error> {
         let LockFilePackages(packages) = self;
-        let mut message = ::capnp::message::TypedBuilder::<
-            proto_capnp::lock_file_packages::Owned,
-            HeapAllocator,
-        >::new_default();
-        let mut builder = message.init_root();
-
-        {
-            let mut packages_builder = builder.reborrow().init_packages(packages.len() as u32);
-            for (i, turborepo_lockfiles::Package { key, version }) in packages.iter().enumerate() {
-                let mut package = packages_builder.reborrow().get(i as u32);
-                package.set_key(key);
-                package.set_version(version);
-                // we don't track this in rust, set it to true
-                package.set_found(true);
-            }
-        }
-
-        canonical_builder::<proto_capnp::lock_file_packages::Owned>(
-            builder.total_size(),
-            builder.reborrow_as_reader(),
+        turborepo_lockfile_hash::canonical_builder(
+            packages
+                .iter()
+                .map(|package| (package.key.as_str(), package.version.as_str())),
         )
+        .map_err(Error::Lockfile)
     }
 }
 
 impl HashableMessage for LockFilePackagesRef<'_> {
     fn into_builder(self) -> Result<Builder<HeapAllocator>, Error> {
         let LockFilePackagesRef(packages) = self;
-        let mut message = ::capnp::message::TypedBuilder::<
-            proto_capnp::lock_file_packages::Owned,
-            HeapAllocator,
-        >::new_default();
-        let mut builder = message.init_root();
-
-        {
-            let mut packages_builder = builder.reborrow().init_packages(packages.len() as u32);
-            for (i, pkg) in packages.iter().enumerate() {
-                let mut package = packages_builder.reborrow().get(i as u32);
-                package.set_key(&pkg.key);
-                package.set_version(&pkg.version);
-                // we don't track this in rust, set it to true
-                package.set_found(true);
-            }
-        }
-
-        canonical_builder::<proto_capnp::lock_file_packages::Owned>(
-            builder.total_size(),
-            builder.reborrow_as_reader(),
+        turborepo_lockfile_hash::canonical_builder(
+            packages
+                .into_iter()
+                .map(|package| (package.key.as_str(), package.version.as_str())),
         )
+        .map_err(Error::Lockfile)
     }
 }
 
@@ -396,6 +385,29 @@ impl HashableMessage for TaskHashable<'_> {
             }
         }
 
+        // Only written when set: an explicitly initialized empty list is a
+        // non-null pointer in capnp, encoded differently from the default
+        // null pointer. Canonical form truncates trailing default-valued
+        // fields, so guarding here keeps every existing task hash stable —
+        // only tasks that actually use a `command` override hash
+        // differently.
+        if !task_hashable.command_override.is_empty() {
+            let mut command_override_builder = builder
+                .reborrow()
+                .init_command_override(task_hashable.command_override.len() as u32);
+            for (i, arg) in task_hashable.command_override.iter().enumerate() {
+                command_override_builder.set(i as u32, arg);
+            }
+        }
+        if task_hashable.command_opt_out {
+            builder.set_command_opt_out(true);
+        }
+        if let Some(experimental_ci) = task_hashable.experimental_ci {
+            let experimental_ci =
+                serde_json::to_string(experimental_ci).map_err(Error::SerializeExperimentalCi)?;
+            builder.set_experimental_ci(experimental_ci);
+        }
+
         canonical_builder::<proto_capnp::task_hashable::Owned>(
             builder.total_size(),
             builder.reborrow_as_reader(),
@@ -503,7 +515,7 @@ mod test {
 
     use test_case::test_case;
     use turborepo_lockfiles::Package;
-    use turborepo_types::{EnvMode, TaskOutputs};
+    use turborepo_types::{EnvMode, ExperimentalCIConfig, TaskOutputs};
 
     use super::{
         FileHashes, GlobalHashable, LockFilePackages, LockFilePackagesRef, OidHash, TaskHashable,
@@ -528,9 +540,43 @@ mod test {
             resolved_env_vars: vec![],
             pass_through_env: &["pass_thru_env".to_string()],
             env_mode: EnvMode::Loose,
+            command_override: &[],
+            command_opt_out: false,
+            experimental_ci: None,
         };
 
         assert_eq!(task_hashable.hash(), "1f8b13161f57fca1");
+    }
+
+    #[test]
+    fn experimental_ci_contributes_to_task_hash() {
+        let calculate = |experimental_ci: Option<&ExperimentalCIConfig>| {
+            TaskHashable {
+                global_hash: "global_hash",
+                task_dependency_hashes: vec![],
+                package_dir: None,
+                hash_of_files: "hash_of_files",
+                external_deps_hash: None,
+                task: "task",
+                outputs: TaskOutputs::default(),
+                pass_through_args: &[],
+                env: &[],
+                resolved_env_vars: vec![],
+                pass_through_env: &[],
+                env_mode: EnvMode::Strict,
+                command_override: &[],
+                command_opt_out: false,
+                experimental_ci,
+            }
+            .calculate_task_hash()
+            .unwrap()
+        };
+
+        let enabled = ExperimentalCIConfig::Enabled(true);
+        let disabled = ExperimentalCIConfig::Enabled(false);
+
+        assert_ne!(calculate(None), calculate(Some(&enabled)));
+        assert_ne!(calculate(Some(&enabled)), calculate(Some(&disabled)));
     }
 
     #[test]
@@ -555,12 +601,45 @@ mod test {
             resolved_env_vars: vec![],
             pass_through_env: &["pass_thru_env".to_string()],
             env_mode: EnvMode::Strict,
+            command_override: &[],
+            command_opt_out: false,
+            experimental_ci: None,
         };
 
         let hash = task_hashable.hash();
         assert!(!hash.is_empty());
         // Pin the hash so any serialization change is caught
         assert_eq!(hash, "7676d7bb7c86d257");
+    }
+
+    #[test]
+    fn loose_mode_ignores_pass_through_env() {
+        let calculate = |pass_through_env: &[String]| {
+            TaskHashable {
+                global_hash: "global_hash",
+                task_dependency_hashes: vec![],
+                package_dir: None,
+                hash_of_files: "hash_of_files",
+                external_deps_hash: None,
+                task: "task",
+                outputs: TaskOutputs::default(),
+                pass_through_args: &[],
+                env: &[],
+                resolved_env_vars: vec![],
+                pass_through_env,
+                env_mode: EnvMode::Loose,
+                command_override: &[],
+                command_opt_out: false,
+                experimental_ci: None,
+            }
+            .calculate_task_hash()
+            .unwrap()
+        };
+
+        assert_eq!(
+            calculate(&[]),
+            calculate(&["SHOULD_NOT_AFFECT_HASH".to_string()])
+        );
     }
 
     #[test]

@@ -2,7 +2,7 @@ use tracing::error;
 use turbopath::AbsoluteSystemPath;
 use turborepo_api_client::TokenClient;
 use turborepo_dirs::{config_dir, vercel_config_dir};
-use turborepo_types::SecretString;
+use turborepo_types::Credential;
 use turborepo_ui::{GREY, cprintln};
 
 use crate::{
@@ -21,7 +21,7 @@ pub async fn logout<T: TokenClient>(options: &LogoutOptions<T>) -> Result<(), Er
 }
 
 impl<T: TokenClient> LogoutOptions<T> {
-    fn token_at_path(path: &AbsoluteSystemPath) -> Result<Option<SecretString>, Error> {
+    fn token_at_path(path: &AbsoluteSystemPath) -> Result<Option<Credential>, Error> {
         match Token::from_file(path) {
             Ok(token) => Ok(Some(token.into_inner().clone())),
             Err(Error::TokenNotFound) => Ok(None),
@@ -33,6 +33,8 @@ impl<T: TokenClient> LogoutOptions<T> {
         &self,
         path: &AbsoluteSystemPath,
         invalidate: bool,
+        saved_vercel: bool,
+        revoker: &impl TokenClient,
     ) -> Result<(), Error> {
         // Read the existing content from the global configuration path
         if path.read_to_string().is_err() {
@@ -41,7 +43,16 @@ impl<T: TokenClient> LogoutOptions<T> {
 
         if invalidate {
             match Token::from_file(path) {
-                Ok(token) => token.invalidate(&self.api_client).await?,
+                Ok(token) => {
+                    let token = if saved_vercel {
+                        Token::existing_secret(Credential::saved_vercel(
+                            token.into_inner().expose().into(),
+                        ))
+                    } else {
+                        token
+                    };
+                    token.invalidate(revoker).await?
+                }
                 // If token doesn't exist, don't do anything.
                 Err(Error::TokenNotFound | Error::InvalidTokenFileFormat { .. }) => {}
                 Err(err) => return Err(err),
@@ -60,66 +71,77 @@ impl<T: TokenClient> LogoutOptions<T> {
     async fn remove_tokens(&self) -> Result<(), Error> {
         #[cfg(test)]
         if let Some(path) = &self.path {
-            return self.try_remove_token(path, self.invalidate).await;
+            return self
+                .try_remove_token(path, self.invalidate, false, &self.api_client)
+                .await;
         }
 
+        if !self.invalidate {
+            return self.remove_tokens_with_vercel(&self.api_client).await;
+        }
+        let vercel_client = turborepo_api_client::APIClient::new(
+            "https://vercel.com/api",
+            Some(std::time::Duration::from_secs(30)),
+            None,
+            env!("CARGO_PKG_VERSION"),
+            false,
+        )?;
+        self.remove_tokens_with_vercel(&vercel_client).await
+    }
+
+    async fn remove_tokens_with_vercel(
+        &self,
+        vercel_client: &impl TokenClient,
+    ) -> Result<(), Error> {
         let turbo_auth_path =
             config_dir()?.map(|dir| dir.join_components(&[TURBO_TOKEN_DIR, TURBO_AUTH_FILE]));
         let turbo_config_path =
             config_dir()?.map(|dir| dir.join_components(&[TURBO_TOKEN_DIR, TURBO_TOKEN_FILE]));
         let legacy_path = vercel_config_dir()?
             .map(|dir| dir.join_components(&[VERCEL_TOKEN_DIR, VERCEL_TOKEN_FILE]));
-        let (skip_config_invalidate, skip_legacy_invalidate) = if self.invalidate {
-            let turbo_auth_token = turbo_auth_path
+        let mut revoked = std::collections::HashMap::<String, bool>::new();
+        let mut first_error = None;
+        for (path, saved_vercel) in [
+            (turbo_auth_path, true),
+            (legacy_path, true),
+            (turbo_config_path, false),
+        ] {
+            let Some(path) = path else { continue };
+            let token = if self.invalidate {
+                match Self::token_at_path(&path) {
+                    Ok(token) => token,
+                    Err(Error::InvalidTokenFileFormat { .. }) => None,
+                    Err(err) => {
+                        first_error.get_or_insert(err);
+                        continue;
+                    }
+                }
+            } else {
+                None
+            };
+            let previous = token
                 .as_ref()
-                .map(|path| Self::token_at_path(path))
-                .transpose()?
-                .flatten();
-            let turbo_config_token = turbo_config_path
-                .as_ref()
-                .map(|path| Self::token_at_path(path))
-                .transpose()?
-                .flatten();
-            let legacy_token = legacy_path
-                .as_ref()
-                .map(|path| Self::token_at_path(path))
-                .transpose()?
-                .flatten();
-
-            let skip_config_invalidate = matches!(
-                (turbo_auth_token.as_ref(), turbo_config_token.as_ref()),
-                (Some(auth_token), Some(config_token)) if auth_token.expose() == config_token.expose()
-            );
-            let skip_legacy_invalidate = matches!(
-                (
-                    turbo_auth_token.as_ref().or(turbo_config_token.as_ref()),
-                    legacy_token.as_ref(),
-                ),
-                (Some(turbo_token), Some(legacy_token)) if turbo_token.expose() == legacy_token.expose()
-            );
-
-            (skip_config_invalidate, skip_legacy_invalidate)
-        } else {
-            (false, false)
-        };
-
-        if let Some(turbo_auth_path) = turbo_auth_path.as_ref() {
-            self.try_remove_token(turbo_auth_path, self.invalidate)
-                .await?;
+                .and_then(|token| revoked.get(token.expose()))
+                .copied();
+            if previous == Some(false) {
+                continue;
+            }
+            let invalidate = self.invalidate && previous.is_none();
+            let result = if saved_vercel {
+                self.try_remove_token(&path, invalidate, true, vercel_client)
+                    .await
+            } else {
+                self.try_remove_token(&path, invalidate, false, &self.api_client)
+                    .await
+            };
+            if let Some(token) = token {
+                revoked.insert(token.expose().to_owned(), result.is_ok());
+            }
+            if let Err(err) = result {
+                first_error.get_or_insert(err);
+            }
         }
-        if let Some(turbo_config_path) = turbo_config_path.as_ref() {
-            self.try_remove_token(
-                turbo_config_path,
-                self.invalidate && !skip_config_invalidate,
-            )
-            .await?;
-        }
-        if let Some(legacy_path) = legacy_path.as_ref() {
-            self.try_remove_token(legacy_path, self.invalidate && !skip_legacy_invalidate)
-                .await?;
-        }
-
-        Ok(())
+        first_error.map_or(Ok(()), Err)
     }
 }
 #[cfg(test)]
@@ -145,19 +167,19 @@ mod tests {
     impl Client for MockApiClient {
         async fn get_user(
             &self,
-            _token: &SecretString,
+            _token: &Credential,
         ) -> turborepo_api_client::Result<UserResponse> {
             unimplemented!("get_user")
         }
         async fn get_teams(
             &self,
-            _token: &SecretString,
+            _token: &Credential,
         ) -> turborepo_api_client::Result<TeamsResponse> {
             unimplemented!("get_teams")
         }
         async fn get_team(
             &self,
-            _token: &SecretString,
+            _token: &Credential,
             _team_id: &str,
         ) -> turborepo_api_client::Result<Option<Team>> {
             unimplemented!("get_team")
@@ -167,11 +189,11 @@ mod tests {
         }
         async fn verify_sso_token(
             &self,
-            token: &SecretString,
+            token: &Credential,
             _: &str,
         ) -> turborepo_api_client::Result<VerifiedSsoUser> {
             Ok(VerifiedSsoUser {
-                token: token.clone(),
+                token: token.expose().into(),
                 team_id: Some("team_id".to_string()),
             })
         }
@@ -184,7 +206,7 @@ mod tests {
     }
 
     impl TokenClient for MockApiClient {
-        async fn delete_token(&self, _token: &SecretString) -> turborepo_api_client::Result<()> {
+        async fn delete_token(&self, _token: &Credential) -> turborepo_api_client::Result<()> {
             if self.succeed_delete_request {
                 Ok(())
             } else {
@@ -197,9 +219,129 @@ mod tests {
         }
         async fn get_metadata(
             &self,
-            _token: &SecretString,
+            _token: &Credential,
         ) -> turborepo_api_client::Result<ResponseTokenMetadata> {
             unimplemented!("get_metadata")
+        }
+    }
+
+    struct VercelRevoker {
+        calls: std::sync::Mutex<Vec<Credential>>,
+        fail: bool,
+    }
+
+    impl TokenClient for VercelRevoker {
+        async fn delete_token(&self, token: &Credential) -> turborepo_api_client::Result<()> {
+            let url = Url::parse("https://vercel.com/v3/user/tokens/current").unwrap();
+            turborepo_api_client::validate_credential_destination(token, &url)?;
+            assert!(token.is_saved_vercel());
+            self.calls.lock().unwrap().push(token.clone());
+            if self.fail {
+                Err(turborepo_api_client::Error::SavedVercelCredentialDestination)
+            } else {
+                Ok(())
+            }
+        }
+
+        async fn get_metadata(
+            &self,
+            _: &Credential,
+        ) -> turborepo_api_client::Result<ResponseTokenMetadata> {
+            unreachable!()
+        }
+    }
+
+    #[tokio::test]
+    async fn mixed_store_logout_routes_revocations_and_continues_after_failure() {
+        for (fail, duplicate_generic) in
+            [(false, false), (true, false), (false, true), (true, true)]
+        {
+            let turbo_dir = tempdir().unwrap();
+            let vercel_dir = tempdir().unwrap();
+            let auth_path =
+                AbsoluteSystemPathBuf::try_from(turbo_dir.path().join("turborepo/auth.json"))
+                    .unwrap();
+            let config_path =
+                AbsoluteSystemPathBuf::try_from(turbo_dir.path().join("turborepo/config.json"))
+                    .unwrap();
+            let legacy_path =
+                AbsoluteSystemPathBuf::try_from(vercel_dir.path().join("com.vercel.cli/auth.json"))
+                    .unwrap();
+            fs::create_dir_all(auth_path.parent().unwrap()).unwrap();
+            fs::create_dir_all(legacy_path.parent().unwrap()).unwrap();
+            auth_path
+                .create_with_contents(r#"{"token":"synthetic-saved"}"#)
+                .unwrap();
+            config_path
+                .create_with_contents(if duplicate_generic {
+                    r#"{"token":"synthetic-saved","other":true}"#
+                } else {
+                    r#"{"token":"synthetic-generic","other":true}"#
+                })
+                .unwrap();
+            legacy_path
+                .create_with_contents(r#"{"token":"synthetic-saved"}"#)
+                .unwrap();
+            unsafe {
+                env::set_var("TURBO_CONFIG_DIR_PATH", turbo_dir.path());
+                env::set_var("VERCEL_CONFIG_DIR_PATH", vercel_dir.path());
+            }
+            let server = httpmock::MockServer::start_async().await;
+            let generic = server
+                .mock_async(|when, then| {
+                    when.method(httpmock::Method::DELETE)
+                        .path("/v3/user/tokens/current")
+                        .header("authorization", "Bearer synthetic-generic");
+                    then.status(200);
+                })
+                .await;
+            let vercel = VercelRevoker {
+                calls: Default::default(),
+                fail,
+            };
+            let options = LogoutOptions {
+                color_config: ColorConfig::new(false),
+                api_client: turborepo_api_client::APIClient::new(
+                    server.base_url(),
+                    None,
+                    None,
+                    "test",
+                    false,
+                )
+                .unwrap(),
+                invalidate: true,
+                path: None,
+            };
+            let result = options.remove_tokens_with_vercel(&vercel).await;
+            unsafe {
+                env::remove_var("TURBO_CONFIG_DIR_PATH");
+                env::remove_var("VERCEL_CONFIG_DIR_PATH");
+            }
+            assert_eq!(
+                result.is_err(),
+                fail,
+                "real revocation failures must propagate"
+            );
+            generic
+                .assert_calls_async(usize::from(!duplicate_generic))
+                .await;
+            let config: serde_json::Value =
+                serde_json::from_str(&config_path.read_to_string().unwrap()).unwrap();
+            assert_eq!(config.get("other"), Some(&serde_json::json!(true)));
+            assert_eq!(config.get("token").is_some(), duplicate_generic && fail);
+            assert_eq!(
+                vercel.calls.lock().unwrap().len(),
+                1,
+                "duplicate saved tokens must be revoked once"
+            );
+            for path in [&auth_path, &legacy_path] {
+                assert_eq!(
+                    path.read_to_string().unwrap().contains("synthetic-saved"),
+                    fail,
+                    "failed revocations remain retryable; successful revocations clear all \
+                     duplicate stores"
+                );
+            }
         }
     }
 
@@ -251,6 +393,25 @@ mod tests {
 
         let new_content = path.read_to_string().unwrap();
         assert_eq!(new_content, "{}");
+    }
+
+    #[tokio::test]
+    async fn failed_revocation_preserves_local_token() {
+        let tmp_dir = tempdir().unwrap();
+        let path = AbsoluteSystemPathBuf::try_from(tmp_dir.path().join("config.json")).unwrap();
+        let content = r#"{"token":"vca_synthetic-sentinel"}"#;
+        path.create_with_contents(content).unwrap();
+        let options = LogoutOptions {
+            color_config: ColorConfig::new(false),
+            api_client: MockApiClient {
+                succeed_delete_request: false,
+            },
+            path: Some(path.clone()),
+            invalidate: true,
+        };
+
+        assert!(logout(&options).await.is_err());
+        assert_eq!(path.read_to_string().unwrap(), content);
     }
 
     #[tokio::test]

@@ -1,0 +1,540 @@
+---
+source: crates/turborepo-trace-tasks/tests/p2.rs
+expression: "render(&set, &root, &[\"just\"])"
+---
+## just:.:b
+{
+  "sources": [
+    "just"
+  ],
+  "files": [
+    "justfile",
+    "tasks/common.just"
+  ],
+  "deps": [
+    "just:.:build"
+  ],
+  "commands": [],
+  "spec": {
+    "configs": [
+      "justfile",
+      "tasks/common.just"
+    ],
+    "task_deps": [
+      {
+        "target": {
+          "kind": "id",
+          "id": "just:.:build"
+        },
+        "reason": "just alias"
+      }
+    ]
+  }
+}
+
+## just:.:build
+{
+  "sources": [
+    "just"
+  ],
+  "files": [
+    "justfile",
+    "tasks/common.just"
+  ],
+  "deps": [
+    "just:.:gen"
+  ],
+  "commands": [
+    "tsc -p tsconfig.json --outDir dist [tsc] Full",
+    "cp assets/logo.png dist/logo.png [cp] Full"
+  ],
+  "spec": {
+    "inputs": [
+      ".env",
+      "assets/logo.png"
+    ],
+    "outputs": [
+      {
+        "path": "dist",
+        "kind": "artifact"
+      },
+      {
+        "path": "dist/logo.png",
+        "kind": "artifact"
+      }
+    ],
+    "configs": [
+      "justfile",
+      "tasks/common.just",
+      "tsconfig.json"
+    ],
+    "memberships": [
+      {
+        "dir": "src",
+        "pattern": "**/*.ts",
+        "reason": "tsconfig include"
+      }
+    ],
+    "task_deps": [
+      {
+        "target": {
+          "kind": "id",
+          "id": "just:.:gen"
+        },
+        "reason": "just dependency"
+      }
+    ],
+    "toolchain": [
+      {
+        "ecosystem": "npm",
+        "name": "typescript"
+      }
+    ]
+  }
+}
+
+## just:.:default
+{
+  "sources": [
+    "just"
+  ],
+  "files": [
+    "justfile",
+    "tasks/common.just"
+  ],
+  "deps": [
+    "just:.:build"
+  ],
+  "commands": [],
+  "spec": {
+    "inputs": [
+      ".env"
+    ],
+    "configs": [
+      "justfile",
+      "tasks/common.just"
+    ],
+    "task_deps": [
+      {
+        "target": {
+          "kind": "id",
+          "id": "just:.:build"
+        },
+        "reason": "just dependency"
+      }
+    ]
+  }
+}
+
+## just:.:docs::build
+{
+  "sources": [
+    "just"
+  ],
+  "files": [
+    "docs/justfile",
+    "justfile",
+    "tasks/common.just"
+  ],
+  "deps": [],
+  "commands": [
+    "mkdocs build --site-dir site [-] Unknown"
+  ],
+  "spec": {
+    "configs": [
+      "docs/justfile",
+      "justfile",
+      "tasks/common.just"
+    ],
+    "memberships": [
+      {
+        "dir": ".",
+        "pattern": "**",
+        "reason": "uncertain task"
+      },
+      {
+        "dir": ".",
+        "pattern": "**",
+        "reason": "unknown command `mkdocs`"
+      }
+    ],
+    "uncertainties": [
+      {
+        "kind": "unknown_command",
+        "detail": "mkdocs"
+      }
+    ]
+  }
+}
+
+## just:.:gen
+{
+  "sources": [
+    "just"
+  ],
+  "files": [
+    "justfile",
+    "tasks/common.just"
+  ],
+  "deps": [],
+  "commands": [
+    "node scripts/gen.js > src/generated.ts [node] Full"
+  ],
+  "spec": {
+    "inputs": [
+      ".env"
+    ],
+    "outputs": [
+      {
+        "path": "src/generated.ts",
+        "kind": "artifact"
+      }
+    ],
+    "configs": [
+      "justfile",
+      "tasks/common.just"
+    ],
+    "entries": [
+      {
+        "path": "scripts/gen.js",
+        "lang": "js"
+      }
+    ],
+    "definition": [
+      "scripts/gen.js"
+    ]
+  }
+}
+
+## just:.:here
+{
+  "sources": [
+    "just"
+  ],
+  "files": [
+    "justfile",
+    "tasks/common.just"
+  ],
+  "deps": [],
+  "commands": [
+    "cat README.md [cat] Full"
+  ],
+  "spec": {
+    "inputs": [
+      ".env",
+      "README.md"
+    ],
+    "configs": [
+      "justfile",
+      "tasks/common.just"
+    ],
+    "memberships": [
+      {
+        "dir": ".",
+        "pattern": "**",
+        "reason": "uncertain task"
+      }
+    ],
+    "uncertainties": [
+      {
+        "kind": "cwd_dependent",
+        "detail": "recipe `here` runs in the invocation directory (`[no-cd]`)"
+      }
+    ]
+  }
+}
+
+## just:.:lint
+{
+  "sources": [
+    "just"
+  ],
+  "files": [
+    "justfile",
+    "tasks/common.just"
+  ],
+  "deps": [],
+  "commands": [
+    "eslint src [lint] Full"
+  ],
+  "spec": {
+    "inputs": [
+      ".env",
+      "package.json"
+    ],
+    "configs": [
+      "justfile",
+      "tasks/common.just"
+    ],
+    "memberships": [
+      {
+        "dir": "src",
+        "pattern": "**",
+        "reason": "eslint files",
+        "data": true
+      }
+    ],
+    "toolchain": [
+      {
+        "ecosystem": "npm",
+        "name": "eslint"
+      }
+    ]
+  }
+}
+
+## just:.:perl-thing
+{
+  "sources": [
+    "just"
+  ],
+  "files": [
+    "justfile",
+    "tasks/common.just"
+  ],
+  "deps": [],
+  "commands": [],
+  "spec": {
+    "inputs": [
+      ".env"
+    ],
+    "configs": [
+      "justfile",
+      "tasks/common.just"
+    ],
+    "memberships": [
+      {
+        "dir": ".",
+        "pattern": "**",
+        "reason": "uncertain task"
+      }
+    ],
+    "uncertainties": [
+      {
+        "kind": "unknown_command",
+        "detail": "recipe `perl-thing` run by `perl`"
+      }
+    ]
+  }
+}
+
+## just:.:py-report
+{
+  "sources": [
+    "just"
+  ],
+  "files": [
+    "justfile",
+    "tasks/common.just"
+  ],
+  "deps": [],
+  "commands": [],
+  "spec": {
+    "inputs": [
+      ".env",
+      "data/report.json"
+    ],
+    "configs": [
+      "justfile",
+      "tasks/common.just"
+    ],
+    "memberships": [
+      {
+        "dir": ".",
+        "pattern": "**/*.py",
+        "reason": "inline recipe code"
+      }
+    ],
+    "toolchain": [
+      {
+        "ecosystem": "pypi",
+        "name": "python"
+      }
+    ]
+  }
+}
+
+## just:.:release
+{
+  "sources": [
+    "just"
+  ],
+  "files": [
+    "justfile",
+    "tasks/common.just"
+  ],
+  "deps": [
+    "just:.:build"
+  ],
+  "commands": [
+    "echo releasing ${just_param_tag} ${__JUST_UNKNOWN} [noop] Ignored",
+    "./scripts/publish.sh ${just_param_tag} [shell-script] Partial"
+  ],
+  "spec": {
+    "inputs": [
+      ".env"
+    ],
+    "configs": [
+      "justfile",
+      "tasks/common.just"
+    ],
+    "entries": [
+      {
+        "path": "scripts/gen.js",
+        "lang": "js"
+      },
+      {
+        "path": "scripts/lib.sh",
+        "lang": "auto"
+      },
+      {
+        "path": "scripts/publish.sh",
+        "lang": "auto"
+      }
+    ],
+    "memberships": [
+      {
+        "dir": ".",
+        "pattern": "**",
+        "reason": "`publish.sh` not fully recognized"
+      },
+      {
+        "dir": ".",
+        "pattern": "**",
+        "reason": "computed arguments to `node`"
+      },
+      {
+        "dir": ".",
+        "pattern": "**",
+        "reason": "computed arguments to `publish.sh`"
+      },
+      {
+        "dir": ".",
+        "pattern": "**",
+        "reason": "uncertain task"
+      },
+      {
+        "dir": ".",
+        "pattern": "**",
+        "reason": "unsupported shell syntax"
+      }
+    ],
+    "task_deps": [
+      {
+        "target": {
+          "kind": "id",
+          "id": "just:.:build"
+        },
+        "reason": "just dependency"
+      }
+    ],
+    "uncertainties": [
+      {
+        "kind": "shell_unsupported",
+        "detail": "special parameter `$1`"
+      },
+      {
+        "kind": "shell_unsupported",
+        "detail": "unknown variable `${__JUST_UNKNOWN}`"
+      },
+      {
+        "kind": "shell_unsupported",
+        "detail": "unknown variable `${just_param_tag}`"
+      }
+    ],
+    "definition": [
+      "scripts/gen.js",
+      "scripts/lib.sh",
+      "scripts/publish.sh"
+    ]
+  }
+}
+
+## just:.:shell-script
+{
+  "sources": [
+    "just"
+  ],
+  "files": [
+    "justfile",
+    "tasks/common.just"
+  ],
+  "deps": [],
+  "commands": [
+    "node gen.js [node] Full"
+  ],
+  "spec": {
+    "inputs": [
+      ".env"
+    ],
+    "configs": [
+      "justfile",
+      "tasks/common.just"
+    ],
+    "entries": [
+      {
+        "path": "scripts/gen.js",
+        "lang": "js"
+      }
+    ],
+    "definition": [
+      "scripts/gen.js"
+    ]
+  }
+}
+
+## just:.:web
+{
+  "sources": [
+    "just"
+  ],
+  "files": [
+    "justfile",
+    "tasks/common.just"
+  ],
+  "deps": [],
+  "commands": [
+    "npx vite build [vite] Full"
+  ],
+  "spec": {
+    "inputs": [
+      ".env",
+      "web/index.html"
+    ],
+    "outputs": [
+      {
+        "path": "web/dist",
+        "kind": "artifact"
+      }
+    ],
+    "configs": [
+      "justfile",
+      "tasks/common.just",
+      "web/vite.config.ts"
+    ],
+    "entries": [
+      {
+        "path": "web/vite.config.ts",
+        "lang": "js"
+      }
+    ],
+    "memberships": [
+      {
+        "dir": "web",
+        "pattern": ".env*",
+        "reason": "vite env files"
+      },
+      {
+        "dir": "web/public",
+        "pattern": "**",
+        "reason": "vite publicDir"
+      }
+    ],
+    "toolchain": [
+      {
+        "ecosystem": "npm",
+        "name": "vite"
+      }
+    ]
+  }
+}

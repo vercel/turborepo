@@ -1,0 +1,301 @@
+---
+source: crates/turborepo-trace-tasks/tests/fixtures.rs
+expression: family(stringify! (ts))
+---
+$ tsc -p tsconfig.build.json
+# tsc [tsc] Full
+{
+  "outputs": [
+    {
+      "path": "dist",
+      "kind": "artifact"
+    },
+    {
+      "path": "types",
+      "pattern": "**/*.d.*ts",
+      "kind": "artifact"
+    },
+    {
+      "path": "types",
+      "pattern": "**/*.d.*ts.map",
+      "kind": "artifact"
+    }
+  ],
+  "configs": [
+    "node_modules/@tsconfig/node20/tsconfig.json",
+    "tsconfig.base.json",
+    "tsconfig.build.json",
+    "tsconfig.json"
+  ],
+  "memberships": [
+    {
+      "dir": "src",
+      "pattern": "**/*.ts",
+      "exclude": [
+        "**/*.fixture.ts"
+      ],
+      "reason": "tsconfig include"
+    }
+  ],
+  "toolchain": [
+    {
+      "ecosystem": "npm",
+      "name": "@tsconfig/node20"
+    },
+    {
+      "ecosystem": "npm",
+      "name": "typescript"
+    }
+  ]
+}
+
+$ tsc --noEmit
+# tsc [tsc] Full
+{
+  "configs": [
+    "node_modules/@tsconfig/node20/tsconfig.json",
+    "packages/lib/tsconfig.json",
+    "tsconfig.base.json",
+    "tsconfig.json"
+  ],
+  "memberships": [
+    {
+      "dir": "src",
+      "pattern": "**/*",
+      "exclude": [
+        "**/*.fixture.ts"
+      ],
+      "reason": "tsconfig include",
+      "data": true
+    },
+    {
+      "dir": "test",
+      "pattern": "**/*.ts",
+      "reason": "tsconfig include",
+      "data": true
+    }
+  ],
+  "toolchain": [
+    {
+      "ecosystem": "npm",
+      "name": "@tsconfig/node20"
+    },
+    {
+      "ecosystem": "npm",
+      "name": "typescript"
+    }
+  ]
+}
+
+$ npx tsc --build
+# tsc [tsc] Full
+{
+  "outputs": [
+    {
+      "path": "dist",
+      "kind": "artifact",
+      "part": "tsconfig.json"
+    },
+    {
+      "path": "packages/lib/out",
+      "kind": "artifact",
+      "part": "packages/lib/tsconfig.json"
+    }
+  ],
+  "configs": [
+    "node_modules/@tsconfig/node20/tsconfig.json",
+    "packages/lib/tsconfig.json",
+    "tsconfig.base.json",
+    "tsconfig.json"
+  ],
+  "memberships": [
+    {
+      "dir": "packages/lib/src",
+      "pattern": "**/*",
+      "reason": "tsconfig include"
+    },
+    {
+      "dir": "src",
+      "pattern": "**/*",
+      "exclude": [
+        "**/*.fixture.ts"
+      ],
+      "reason": "tsconfig include"
+    },
+    {
+      "dir": "test",
+      "pattern": "**/*.ts",
+      "reason": "tsconfig include"
+    }
+  ],
+  "toolchain": [
+    {
+      "ecosystem": "npm",
+      "name": "@tsconfig/node20"
+    },
+    {
+      "ecosystem": "npm",
+      "name": "typescript"
+    }
+  ],
+  "parts": [
+    {
+      "kind": "tsproject",
+      "path": "packages/lib/tsconfig.json",
+      "configs": [
+        "packages/lib/tsconfig.json"
+      ],
+      "memberships": [
+        {
+          "dir": "packages/lib/src",
+          "pattern": "**/*",
+          "reason": "tsconfig include"
+        }
+      ],
+      "toolchain": [
+        {
+          "ecosystem": "npm",
+          "name": "typescript"
+        }
+      ]
+    },
+    {
+      "kind": "tsproject",
+      "path": "tsconfig.json",
+      "configs": [
+        "tsconfig.json",
+        "tsconfig.base.json",
+        "node_modules/@tsconfig/node20/tsconfig.json"
+      ],
+      "memberships": [
+        {
+          "dir": "src",
+          "pattern": "**/*",
+          "exclude": [
+            "**/*.fixture.ts"
+          ],
+          "reason": "tsconfig include"
+        },
+        {
+          "dir": "test",
+          "pattern": "**/*.ts",
+          "reason": "tsconfig include"
+        }
+      ],
+      "toolchain": [
+        {
+          "ecosystem": "npm",
+          "name": "typescript"
+        },
+        {
+          "ecosystem": "npm",
+          "name": "@tsconfig/node20"
+        }
+      ],
+      "deps": [
+        "packages/lib/tsconfig.json"
+      ]
+    }
+  ]
+}
+
+$ pnpm exec tsc -p . --outDir build
+# tsc [tsc] Full
+{
+  "outputs": [
+    {
+      "path": "build",
+      "kind": "artifact"
+    },
+    {
+      "path": "dist",
+      "kind": "artifact"
+    }
+  ],
+  "configs": [
+    "node_modules/@tsconfig/node20/tsconfig.json",
+    "packages/lib/tsconfig.json",
+    "tsconfig.base.json",
+    "tsconfig.json"
+  ],
+  "memberships": [
+    {
+      "dir": "src",
+      "pattern": "**/*",
+      "exclude": [
+        "**/*.fixture.ts"
+      ],
+      "reason": "tsconfig include"
+    },
+    {
+      "dir": "test",
+      "pattern": "**/*.ts",
+      "reason": "tsconfig include"
+    }
+  ],
+  "toolchain": [
+    {
+      "ecosystem": "npm",
+      "name": "@tsconfig/node20"
+    },
+    {
+      "ecosystem": "npm",
+      "name": "typescript"
+    }
+  ]
+}
+
+$ tsc src/index.ts
+# tsc [tsc] Full
+{
+  "entries": [
+    {
+      "path": "src/index.ts",
+      "lang": "js"
+    }
+  ],
+  "toolchain": [
+    {
+      "ecosystem": "npm",
+      "name": "typescript"
+    }
+  ]
+}
+
+$ NODE_OPTIONS='--max-old-space-size=8192' tsc --noEmit
+# tsc [tsc] Full
+{
+  "configs": [
+    "node_modules/@tsconfig/node20/tsconfig.json",
+    "packages/lib/tsconfig.json",
+    "tsconfig.base.json",
+    "tsconfig.json"
+  ],
+  "memberships": [
+    {
+      "dir": "src",
+      "pattern": "**/*",
+      "exclude": [
+        "**/*.fixture.ts"
+      ],
+      "reason": "tsconfig include",
+      "data": true
+    },
+    {
+      "dir": "test",
+      "pattern": "**/*.ts",
+      "reason": "tsconfig include",
+      "data": true
+    }
+  ],
+  "toolchain": [
+    {
+      "ecosystem": "npm",
+      "name": "@tsconfig/node20"
+    },
+    {
+      "ecosystem": "npm",
+      "name": "typescript"
+    }
+  ]
+}

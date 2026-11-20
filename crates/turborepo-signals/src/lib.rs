@@ -18,7 +18,7 @@ use futures::{Stream, StreamExt, stream::FuturesUnordered};
 use signals::Signal;
 use tokio::{
     pin,
-    sync::{Notify, broadcast, mpsc, oneshot},
+    sync::{Notify, mpsc, oneshot, watch},
 };
 
 /// Why the signal handler started shutdown.
@@ -38,8 +38,8 @@ pub enum ShutdownReason {
 pub struct SignalHandler {
     state: Arc<Mutex<HandlerState>>,
     close: mpsc::Sender<()>,
-    in_process_signal: mpsc::Sender<()>,
-    in_process_signals: broadcast::Sender<()>,
+    in_process_signal: mpsc::UnboundedSender<()>,
+    signals: watch::Receiver<u64>,
     shutdown_reason: Arc<AtomicU8>,
     started: Arc<Notify>,
 }
@@ -69,7 +69,6 @@ impl SignalHandler {
     /// `signal_source` yields a signal, when `close()` is called, or when the
     /// signal source ends without yielding a signal.
     pub fn new(signal_source: impl Stream<Item = Option<Signal>> + Send + 'static) -> Self {
-        // think about channel size
         let state = Arc::new(Mutex::new(HandlerState::default()));
         let worker_state = state.clone();
         let shutdown_reason = Arc::new(AtomicU8::new(0));
@@ -77,16 +76,25 @@ impl SignalHandler {
         let started = Arc::new(Notify::new());
         let worker_started = started.clone();
         let (close, mut rx) = mpsc::channel::<()>(1);
-        let (in_process_signal, mut in_process_signal_rx) = mpsc::channel::<()>(1);
-        let (in_process_signals, _) = broadcast::channel::<()>(16);
+        let (in_process_signal, mut in_process_signal_rx) = mpsc::unbounded_channel::<()>();
+        let (signal_tx, signals) = watch::channel(0u64);
         tokio::spawn(async move {
             pin!(signal_source);
             let shutdown_reason = tokio::select! {
                 signal = signal_source.next() => match signal {
-                    Some(Some(_signal)) => ShutdownReason::Signal,
+                    Some(Some(_signal)) => {
+                        signal_tx.send_modify(|count| *count = count.saturating_add(1));
+                        ShutdownReason::Signal
+                    }
                     Some(None) | None => ShutdownReason::Close,
                 },
-                _ = in_process_signal_rx.recv() => ShutdownReason::Signal,
+                signal = in_process_signal_rx.recv() => match signal {
+                    Some(()) => {
+                        signal_tx.send_modify(|count| *count = count.saturating_add(1));
+                        ShutdownReason::Signal
+                    }
+                    None => ShutdownReason::Close,
+                },
                 // We don't care if a close message was sent or if all handlers are dropped.
                 // Either way start the shutdown process.
                 _ = rx.recv() => ShutdownReason::Close,
@@ -113,15 +121,32 @@ impl SignalHandler {
                     .collect::<FuturesUnordered<_>>()
             };
 
-            // We don't care if callback gets dropped or if the done signal is sent.
-            while let Some(_fut) = callbacks.next().await {}
+            let mut signal_source_open = shutdown_reason == ShutdownReason::Signal;
+            let mut in_process_signal_open = signal_source_open;
+            while !callbacks.is_empty() {
+                tokio::select! {
+                    _ = callbacks.next() => {}
+                    signal = signal_source.next(), if signal_source_open => match signal {
+                        Some(Some(_signal)) => {
+                            signal_tx.send_modify(|count| *count = count.saturating_add(1));
+                        }
+                        Some(None) | None => signal_source_open = false,
+                    },
+                    signal = in_process_signal_rx.recv(), if in_process_signal_open => match signal {
+                        Some(()) => {
+                            signal_tx.send_modify(|count| *count = count.saturating_add(1));
+                        }
+                        None => in_process_signal_open = false,
+                    }
+                }
+            }
         });
 
         Self {
             state,
             close,
             in_process_signal,
-            in_process_signals,
+            signals,
             shutdown_reason,
             started,
         }
@@ -152,15 +177,12 @@ impl SignalHandler {
     /// signal source, such as the TUI consuming Ctrl-C while raw mode is
     /// active.
     pub fn notify_signal(&self) {
-        self.in_process_signal.try_send(()).ok();
-        self.in_process_signals.send(()).ok();
+        self.in_process_signal.send(()).ok();
     }
 
-    /// Subscribe to in-process signals after the initial shutdown has started.
-    /// This is used by UIs that consume Ctrl-C while the terminal is in raw
-    /// mode.
-    pub fn subscribe_in_process_signals(&self) -> broadcast::Receiver<()> {
-        self.in_process_signals.subscribe()
+    /// Subscribe to the retained count of OS and in-process signals.
+    pub fn subscribe_signals(&self) -> watch::Receiver<u64> {
+        self.signals.clone()
     }
 
     /// Wait until handler is finished and all subscribers finish their cleanup
@@ -168,16 +190,6 @@ impl SignalHandler {
     pub async fn done(&self) {
         // Receiver is dropped once the worker task completes
         self.close.closed().await;
-    }
-
-    /// Wait until shutdown starts for any reason.
-    pub async fn started(&self) {
-        let started = self.started.notified();
-        if self.shutdown_reason().is_some() {
-            return;
-        }
-
-        started.await;
     }
 
     /// Wait until shutdown starts because of a real OS signal.
@@ -267,6 +279,96 @@ mod test {
         );
         drop(_guard);
         tokio::time::sleep(Duration::from_millis(5)).await;
+        handler.done().await;
+    }
+
+    #[tokio::test]
+    async fn test_followup_signal_is_retained_during_shutdown() {
+        let handler =
+            SignalHandler::new(stream::iter([Some(DEFAULT_SIGNAL), Some(DEFAULT_SIGNAL)]));
+        let subscriber = handler.subscribe().unwrap();
+        let guard = subscriber.listen().await.unwrap();
+        let mut signals = handler.subscribe_signals();
+
+        tokio::time::timeout(Duration::from_secs(1), async {
+            loop {
+                if *signals.borrow_and_update() > 1 {
+                    return;
+                }
+                signals.changed().await.unwrap();
+            }
+        })
+        .await
+        .expect("followup signal should remain observable");
+
+        drop(guard);
+        handler.done().await;
+    }
+
+    /// COUNTER-CHARACTERIZATION, not a correctness proof: pins how the worker
+    /// currently folds an ordered SIGINT-then-SIGTERM sequence into the
+    /// retained signal count while a shutdown guard is held. The count drops
+    /// signal type and source, so SIGINT+SIGTERM reaching the same threshold as
+    /// two SIGINTs is the observed behavior. This documents the input the
+    /// worker sees today; it does not assert that collapsing the two signals is
+    /// the desired OS signal policy.
+    #[cfg(not(windows))]
+    #[tokio::test]
+    async fn test_followup_ordered_interrupt_then_terminate_is_retained() {
+        // Gate the second signal on the test observing the first so delivery
+        // order is explicit rather than scheduler-dependent.
+        let gate = Arc::new(Notify::new());
+        let stream_gate = gate.clone();
+        let handler = SignalHandler::new(stream::unfold(0u8, move |state| {
+            let gate = stream_gate.clone();
+            async move {
+                match state {
+                    0 => Some((Some(Signal::Interrupt), 1)),
+                    1 => {
+                        gate.notified().await;
+                        Some((Some(Signal::Terminate), 2))
+                    }
+                    _ => None,
+                }
+            }
+        }));
+        let subscriber = handler.subscribe().unwrap();
+        let guard = subscriber.listen().await.unwrap();
+        let mut signals = handler.subscribe_signals();
+
+        // Retain the first signal before allowing the second to be delivered.
+        tokio::time::timeout(Duration::from_secs(1), async {
+            loop {
+                if *signals.borrow_and_update() >= 1 {
+                    return;
+                }
+                signals.changed().await.unwrap();
+            }
+        })
+        .await
+        .expect("the first SIGINT should be retained while a guard is held");
+
+        gate.notify_one();
+
+        tokio::time::timeout(Duration::from_secs(1), async {
+            loop {
+                if *signals.borrow_and_update() >= 2 {
+                    return;
+                }
+                signals.changed().await.unwrap();
+            }
+        })
+        .await
+        .expect("ordered SIGINT then SIGTERM should both be retained while a guard is held");
+
+        assert_eq!(
+            *signals.borrow_and_update(),
+            2,
+            "the retained count should be exactly the two delivered signals"
+        );
+        assert_eq!(handler.shutdown_reason(), Some(ShutdownReason::Signal));
+
+        drop(guard);
         handler.done().await;
     }
 

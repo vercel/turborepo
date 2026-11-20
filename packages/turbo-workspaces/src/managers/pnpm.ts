@@ -287,6 +287,14 @@ async function convertLock(args: ConvertArgs): Promise<void> {
       await importLockfile();
       break;
     }
+    case "nub": {
+      removeLockFile({ project, options });
+      break;
+    }
+    case "aube": {
+      removeLockFile({ project, options });
+      break;
+    }
   }
 }
 

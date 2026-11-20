@@ -56,6 +56,14 @@ fn test_detect_npm_from_dev_engines_package_manager() {
 }
 
 #[test]
+fn test_detect_aube_from_dev_engines_package_manager() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@8.19.4", false).unwrap();
+    set_dev_engines_package_manager(tempdir.path(), "aube", "0.1.0");
+    assert_eq!(get_package_manager(tempdir.path()), "aube");
+}
+
+#[test]
 fn test_errors_without_package_manager_declaration() {
     let tempdir = tempfile::tempdir().unwrap();
     setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@8.19.4", false).unwrap();

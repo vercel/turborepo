@@ -1,0 +1,28 @@
+{
+  "$schema": "../../docs/public/schema.json",
+  "extends": ["//"],
+  "tasks": {
+    "build": {
+      "command": ["pnpm", "exec", "tsdown"],
+      "tags": ["ci"]
+    },
+    "test": {
+      "command": ["pnpm", "exec", "jest"],
+      "tags": ["ci"]
+    },
+    "lint:prettier": {
+      "command": [
+        "pnpm",
+        "exec",
+        "prettier",
+        "-c",
+        ".",
+        "--cache",
+        "--ignore-path=../../.prettierignore"
+      ]
+    },
+    "check-types": {
+      "tags": ["ci"]
+    }
+  }
+}

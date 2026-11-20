@@ -1,27 +1,54 @@
+import { getPublicPath } from "@vercel/geistdocs/config";
+import { isPageVisibleForSurface } from "@vercel/geistdocs/page-visibility";
 import type { MetadataRoute } from "next";
-import { loadState, getAllPageUrls, SITEMAP_CONFIG } from "../lib/sitemap";
+import { cacheLife } from "next/cache";
+import { config } from "@/lib/geistdocs/config";
+import { absoluteUrl } from "@/lib/geistdocs/site-url";
+import {
+  blog,
+  extraPages,
+  openapiGeistdocsSource,
+  source
+} from "@/lib/geistdocs/source";
 
-export const revalidate = 3600; // Revalidate every hour
+interface SitemapPage {
+  data: unknown;
+  url: string;
+}
+
+const url = (path: string) => absoluteUrl(getPublicPath(path, config.basePath));
+
+const toEntry = (page: SitemapPage): MetadataRoute.Sitemap[number] => {
+  const { lastModified } = page.data as { lastModified?: Date };
+
+  return {
+    changeFrequency: "weekly",
+    lastModified: lastModified ? new Date(lastModified) : undefined,
+    priority: 0.5,
+    url: url(page.url)
+  };
+};
 
 // eslint-disable-next-line import/no-default-export -- Required by Next.js sitemap convention
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-  // Load state from Redis
-  const state = await loadState();
+  "use cache";
+  cacheLife("max");
 
-  // Get all page URLs
-  const pageUrls = getAllPageUrls();
+  // Translated locales fall back to English content, so only the default
+  // language is listed to keep duplicate pages out of the sitemap.
+  const pages: Array<SitemapPage> = [
+    ...source.getPages(config.defaultLanguage),
+    ...openapiGeistdocsSource.source.getPages(config.defaultLanguage),
+    ...blog.getPages(),
+    ...extraPages.getPages()
+  ];
 
-  // Build sitemap entries
-  const entries: MetadataRoute.Sitemap = pageUrls.map((url) => {
-    const pageState = state?.pages[url];
-
-    return {
-      url: `${SITEMAP_CONFIG.baseUrl}${url}`,
-      lastModified: pageState?.lastmod
-        ? new Date(pageState.lastmod)
-        : new Date()
-    };
-  });
-
-  return entries;
+  return [
+    { changeFrequency: "monthly", priority: 1, url: url("/") },
+    { changeFrequency: "weekly", priority: 0.5, url: url("/blog") },
+    { changeFrequency: "monthly", priority: 0.5, url: url("/showcase") },
+    ...pages
+      .filter((page) => isPageVisibleForSurface(page, "sitemap"))
+      .map(toEntry)
+  ];
 }

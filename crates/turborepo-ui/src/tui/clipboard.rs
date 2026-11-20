@@ -27,10 +27,35 @@ fn detect_copy_provider() -> Provider {
 
 #[cfg(target_os = "macos")]
 fn detect_copy_provider() -> Provider {
-    if let Some(provider) = check_prog("pbcopy", &[]) {
-        return provider;
+    detect_macos_copy_provider(
+        has_value(std::env::var_os("SSH_TTY").as_deref())
+            || has_value(std::env::var_os("SSH_CONNECTION").as_deref()),
+        has_value(std::env::var_os("TMUX").as_deref()),
+        check_prog,
+    )
+}
+
+#[cfg(any(target_os = "macos", test))]
+fn has_value(value: Option<&std::ffi::OsStr>) -> bool {
+    value.is_some_and(|value| !value.is_empty())
+}
+
+#[cfg(any(target_os = "macos", test))]
+fn detect_macos_copy_provider(
+    is_ssh_session: bool,
+    is_tmux_session: bool,
+    mut find_provider: impl FnMut(&'static str, &[&'static str]) -> Option<Provider>,
+) -> Provider {
+    if is_ssh_session {
+        if is_tmux_session
+            && let Some(provider) = find_provider("tmux", &["load-buffer", "-w", "-"])
+        {
+            return provider;
+        }
+        return Provider::OSC52;
     }
-    Provider::OSC52
+
+    find_provider("pbcopy", &[]).unwrap_or(Provider::OSC52)
 }
 
 #[cfg(not(any(target_os = "macos", target_os = "windows")))]
@@ -120,6 +145,75 @@ static PROVIDER: std::sync::LazyLock<Provider> = std::sync::LazyLock::new(detect
 #[cfg(test)]
 mod tests {
     use super::{Provider, copy_impl};
+
+    #[test]
+    fn macos_ssh_session_uses_tmux_clipboard_when_available() {
+        let mut probes = Vec::new();
+        let provider = super::detect_macos_copy_provider(true, true, |cmd, args| {
+            probes.push((cmd, args.to_vec()));
+            Some(Provider::Exec(cmd, args.to_vec()))
+        });
+
+        assert_eq!(probes, [("tmux", vec!["load-buffer", "-w", "-"])]);
+        assert!(matches!(
+            provider,
+            Provider::Exec("tmux", args) if args == ["load-buffer", "-w", "-"]
+        ));
+    }
+
+    #[test]
+    fn macos_ssh_session_never_uses_pbcopy() {
+        let mut probes = Vec::new();
+        let provider = super::detect_macos_copy_provider(true, false, |cmd, args| {
+            probes.push((cmd, args.to_vec()));
+            Some(Provider::Exec(cmd, args.to_vec()))
+        });
+
+        assert!(probes.is_empty());
+        assert!(matches!(provider, Provider::OSC52));
+    }
+
+    #[test]
+    fn macos_ssh_session_without_tmux_executable_falls_back_to_osc52() {
+        let mut probes = Vec::new();
+        let provider = super::detect_macos_copy_provider(true, true, |cmd, args| {
+            probes.push((cmd, args.to_vec()));
+            None
+        });
+
+        assert_eq!(probes, [("tmux", vec!["load-buffer", "-w", "-"])]);
+        assert!(matches!(provider, Provider::OSC52));
+    }
+
+    #[test]
+    fn local_macos_session_uses_pbcopy() {
+        let mut probes = Vec::new();
+        let provider = super::detect_macos_copy_provider(false, true, |cmd, args| {
+            probes.push((cmd, args.to_vec()));
+            Some(Provider::Exec(cmd, args.to_vec()))
+        });
+
+        assert_eq!(probes, [("pbcopy", Vec::new())]);
+        assert!(matches!(
+            provider,
+            Provider::Exec("pbcopy", args) if args.is_empty()
+        ));
+    }
+
+    #[test]
+    fn local_macos_session_without_pbcopy_falls_back_to_osc52() {
+        assert!(matches!(
+            super::detect_macos_copy_provider(false, false, |_, _| None),
+            Provider::OSC52
+        ));
+    }
+
+    #[test]
+    fn empty_environment_values_are_not_present() {
+        assert!(!super::has_value(None));
+        assert!(!super::has_value(Some(std::ffi::OsStr::new(""))));
+        assert!(super::has_value(Some(std::ffi::OsStr::new("value"))));
+    }
 
     #[cfg(windows)]
     const MISSING_PROVIDER: &str = r"C:\definitely\not\turbo-missing-clipboard-provider.exe";

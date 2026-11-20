@@ -1,0 +1,13 @@
+---
+source: crates/turborepo-trace-lang-js/tests/extract_snapshots.rs
+expression: "render(\"malformed.js\")"
+---
+1:1 import "./before-error"
+    span: import a from './before-error'
+4:1 require "./after-errors"
+    span: require('./after-errors')
+6:1 import "./still-found"
+    span: import b from './still-found'
+7:37 require "./inside"
+    span: require('./inside')
+diagnostic 2:11 parse_incomplete: unterminated string literal at bytes 42..62; lexer recovered

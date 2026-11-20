@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import type { Platform } from "./types";
+import type { NpmPackageArtifact, Platform } from "./types";
 import operations from "./operations";
 
 interface PackAndPublishOptions {
@@ -10,6 +10,7 @@ interface PackAndPublishOptions {
   packagePrefix?: string;
   binaryName?: string;
   srcDirPrefix?: string;
+  srcDir?: string;
   description?: string;
 }
 
@@ -21,10 +22,11 @@ export async function packAndPublish({
   packagePrefix,
   binaryName,
   srcDirPrefix,
+  srcDir,
   description
 }: PackAndPublishOptions) {
   console.log("Starting packAndPublish process...");
-  const artifacts: Array<string> = [];
+  const artifacts: Array<NpmPackageArtifact> = [];
 
   for (const platform of platforms) {
     console.log(`Processing platform: ${platform.os}-${platform.arch}`);
@@ -35,6 +37,7 @@ export async function packAndPublish({
       packagePrefix,
       binaryName,
       srcDirPrefix,
+      srcDir,
       description
     });
     artifacts.push(artifact);
@@ -48,7 +51,7 @@ export async function packAndPublish({
       encoding: "utf8"
     }).trim();
     console.log(`npm version: ${npmVersion}`);
-    operations.publishArtifacts(artifacts, npmTag);
+    await operations.publishArtifacts(artifacts, npmTag);
   } else {
     console.log("Skipping publish step.");
   }

@@ -10,11 +10,6 @@ use wax::{
     walk::{Entry, FileIterator, WalkBehavior},
 };
 
-// TODO: Rust's testing framework does not provide a mechanism for maintaining
-//       shared state. This means that tests that write to the file system must
-//       do so individually rather than writing before and after all tests have
-//       run. This should probably be avoided.
-
 /// Writes a testing directory tree to a temporary location on the file system.
 fn temptree() -> (TempDir, PathBuf) {
     let root = tempfile::tempdir().unwrap();

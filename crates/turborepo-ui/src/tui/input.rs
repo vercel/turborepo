@@ -6,13 +6,15 @@ use tokio::{sync::mpsc, task::JoinHandle};
 
 use super::{
     app::LayoutSections,
-    event::{Direction, Event},
+    event::{Direction, Event, StreamScope},
 };
 
 #[derive(Debug, Clone, Copy)]
 pub struct InputOptions<'a> {
     pub focus: &'a LayoutSections,
     pub has_selection: bool,
+    /// Whether a mouse selection drag is (as far as we know) in progress.
+    pub is_selecting: bool,
     pub is_help_popup_open: bool,
     pub is_log_panel_open: bool,
 }
@@ -39,14 +41,19 @@ impl InputOptions<'_> {
         match event {
             crossterm::event::Event::Key(k) => translate_key_event(self, k),
             crossterm::event::Event::Mouse(m) => match m.kind {
-                crossterm::event::MouseEventKind::ScrollDown => {
-                    Some(Event::ScrollWithMomentum(Direction::Down))
-                }
-                crossterm::event::MouseEventKind::ScrollUp => {
-                    Some(Event::ScrollWithMomentum(Direction::Up))
-                }
+                crossterm::event::MouseEventKind::ScrollDown
+                | crossterm::event::MouseEventKind::ScrollUp => Some(Event::Mouse(m)),
                 crossterm::event::MouseEventKind::Down(crossterm::event::MouseButton::Left)
-                | crossterm::event::MouseEventKind::Drag(crossterm::event::MouseButton::Left) => {
+                | crossterm::event::MouseEventKind::Drag(crossterm::event::MouseButton::Left)
+                | crossterm::event::MouseEventKind::Up(crossterm::event::MouseButton::Left) => {
+                    Some(Event::Mouse(m))
+                }
+                // A hover event while we believe a drag is in progress means
+                // we missed the release: terminals swallow shifted mouse
+                // events (shift is the native-selection escape hatch), so a
+                // shift-release is never delivered. Forward the hover so the
+                // app can end the drag.
+                crossterm::event::MouseEventKind::Moved if self.is_selecting => {
                     Some(Event::Mouse(m))
                 }
                 _ => None,
@@ -125,7 +132,17 @@ fn translate_key_event(options: InputOptions, key_event: KeyEvent) -> Option<Eve
         }
         // Fall through if we aren't in interactive mode
         KeyCode::Char('l') => Some(Event::ToggleLogPanel),
-        KeyCode::Char('h') => Some(Event::ToggleSidebar),
+        // `h` leaves the alt screen and shows only the selected task's logs,
+        // verbatim (no prefixes); `s` streams all tasks with prefixes.
+        // Pressing the same key again returns to the TUI.
+        KeyCode::Char('h') => Some(Event::ToggleStream {
+            scope: StreamScope::SelectedTask,
+        }),
+        KeyCode::Char('s') => Some(Event::ToggleStream {
+            scope: StreamScope::All,
+        }),
+        // Sidebar toggle moved to Shift+H to free up `h` for streaming.
+        KeyCode::Char('H') => Some(Event::ToggleSidebar),
         KeyCode::Char('u') => Some(Event::ScrollUp),
         KeyCode::Char('d') => Some(Event::ScrollDown),
         KeyCode::PageUp | KeyCode::Char('U') => Some(Event::PageUp),
@@ -454,14 +471,61 @@ mod test {
         InputOptions {
             focus: search(),
             has_selection: false,
+            is_selecting: false,
+            is_help_popup_open: false,
+            is_log_panel_open: false,
+        }
+    }
+
+    fn in_list() -> InputOptions<'static> {
+        static LIST: OnceLock<LayoutSections> = OnceLock::new();
+        InputOptions {
+            focus: LIST.get_or_init(|| LayoutSections::TaskList),
+            has_selection: false,
+            is_selecting: false,
             is_help_popup_open: false,
             is_log_panel_open: false,
         }
     }
 
     const H: KeyEvent = KeyEvent::new(KeyCode::Char('h'), KeyModifiers::empty());
+    const SHIFT_H: KeyEvent = KeyEvent::new(KeyCode::Char('H'), KeyModifiers::SHIFT);
+    const S: KeyEvent = KeyEvent::new(KeyCode::Char('s'), KeyModifiers::empty());
+
+    #[test]
+    fn forwards_left_mouse_release() {
+        let event = crossterm::event::MouseEvent {
+            kind: crossterm::event::MouseEventKind::Up(crossterm::event::MouseButton::Left),
+            column: 0,
+            row: 0,
+            modifiers: KeyModifiers::empty(),
+        };
+
+        assert!(matches!(
+            in_find().handle_crossterm_event(crossterm::event::Event::Mouse(event)),
+            Some(Event::Mouse(_))
+        ));
+    }
+
+    #[test]
+    fn forwards_mouse_scroll_with_coordinates() {
+        let event = crossterm::event::MouseEvent {
+            kind: crossterm::event::MouseEventKind::ScrollDown,
+            column: 7,
+            row: 3,
+            modifiers: KeyModifiers::empty(),
+        };
+
+        assert!(matches!(
+            in_list().handle_crossterm_event(crossterm::event::Event::Mouse(event)),
+            Some(Event::Mouse(actual)) if actual == event
+        ));
+    }
 
     #[test_case(in_find(), H, Some(Event::SearchEnterChar('h')) ; "h while searching")]
+    #[test_case(in_list(), H, Some(Event::ToggleStream { scope: StreamScope::SelectedTask }) ; "h streams selected task")]
+    #[test_case(in_list(), S, Some(Event::ToggleStream { scope: StreamScope::All }) ; "s streams all tasks")]
+    #[test_case(in_list(), SHIFT_H, Some(Event::ToggleSidebar) ; "shift+h toggles sidebar")]
     // Note: This only checks event variants not any data contained in the variant
     fn test_translate_key_event_variant(
         opts: InputOptions,

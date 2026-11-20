@@ -4,7 +4,11 @@
 //! displaying it. We have this split because the tracker representation is not
 //! exactly what we want to display to the user.
 
-use std::{collections::HashSet, io, io::Write};
+use std::{
+    collections::{HashMap, HashSet},
+    io,
+    io::Write,
+};
 
 use chrono::{DateTime, Local};
 use itertools::Itertools;
@@ -18,7 +22,7 @@ use turborepo_repository::package_graph::{PackageGraph, PackageName};
 use turborepo_scm::SCM;
 use turborepo_task_id::TaskId;
 use turborepo_types::{DryRunMode, EngineInfo, EnvMode, HashTrackerInfo, RunOptsInfo};
-use turborepo_ui::{BOLD, BOLD_CYAN, ColorConfig, GREY, color, cprintln, cwriteln};
+use turborepo_ui::{BOLD, BOLD_CYAN, ColorConfig, GREY, color, cwriteln};
 
 use crate::{
     GlobalHashSummary, SCMState, TaskTracker,
@@ -94,6 +98,27 @@ pub struct RunTracker {
     user: Option<String>,
     synthesized_command: String,
     observability_handle: Option<ObservabilityHandle>,
+    scm_state: Option<ScmStatePrefetch>,
+}
+
+/// The run summary's SCM state, resolved in the background. See
+/// [`RunTracker::with_scm_state_prefetch`].
+#[derive(Debug)]
+pub struct ScmStatePrefetch(tokio::task::JoinHandle<SCMState>);
+
+impl ScmStatePrefetch {
+    /// Starts resolving [`SCMState`] (a git subprocess outside CI) on a
+    /// blocking thread. Only use this when nothing can move `HEAD` before the
+    /// summary is built, i.e. dry runs: a real run's summary reflects the
+    /// repository state after its tasks finished.
+    pub fn spawn(env_vars: &EnvironmentVariableMap, scm: &SCM, dir: &AbsoluteSystemPath) -> Self {
+        let env_vars = env_vars.clone();
+        let scm = scm.clone();
+        let dir = dir.to_owned();
+        Self(tokio::task::spawn_blocking(move || {
+            SCMState::get(&env_vars, &scm, &dir)
+        }))
+    }
 }
 
 impl RunTracker {
@@ -111,10 +136,18 @@ impl RunTracker {
             user,
             synthesized_command,
             observability_handle,
+            scm_state: None,
         }
     }
 
-    #[allow(clippy::too_many_arguments)]
+    /// Use an SCM state resolved ahead of time instead of resolving it when
+    /// the summary is built.
+    pub fn with_scm_state_prefetch(mut self, prefetch: Option<ScmStatePrefetch>) -> Self {
+        self.scm_state = prefetch;
+        self
+    }
+
+    #[expect(clippy::too_many_arguments)]
     #[tracing::instrument(skip(
         repo_root,
         package_inference_root,
@@ -153,7 +186,13 @@ impl RunTracker {
 
         // Deferred to summary time so we don't pay the cost of git subprocess
         // calls (branch + sha) during the critical path of task execution.
-        let scm_state = SCMState::get(env_at_execution_start, scm, repo_root);
+        let scm_state = match self.scm_state {
+            Some(ScmStatePrefetch(handle)) => match handle.await {
+                Ok(state) => state,
+                Err(_) => SCMState::get(env_at_execution_start, scm, repo_root),
+            },
+            None => SCMState::get(env_at_execution_start, scm, repo_root),
+        };
 
         let summary_state = self.execution_tracker.finish().await?;
 
@@ -213,7 +252,7 @@ impl RunTracker {
         env_at_execution_start,
         scm,
     ))]
-    #[allow(clippy::too_many_arguments)]
+    #[expect(clippy::too_many_arguments)]
     pub async fn finish<'a, E, H, R>(
         self,
         exit_code: i32,
@@ -230,6 +269,7 @@ impl RunTracker {
         env_at_execution_start: &'a EnvironmentVariableMap,
         scm: &SCM,
         is_watch: bool,
+        external_deps_hashes: Option<&HashMap<String, String>>,
     ) -> Result<(), Error>
     where
         E: EngineInfo + Sync,
@@ -239,8 +279,8 @@ impl RunTracker {
         let end_time = Local::now();
 
         // For the common case (no --dry, no --summarize, no observability),
-        // skip the expensive TaskSummary construction, SCMState::get (2 git
-        // subprocesses), and full RunSummary assembly. We only need execution
+        // skip the expensive TaskSummary construction, SCMState::get (a git
+        // subprocess), and full RunSummary assembly. We only need execution
         // stats and failed task identification for terminal output.
         if run_opts.dry_run().is_none()
             && run_opts.summarize().is_none()
@@ -282,6 +322,7 @@ impl RunTracker {
             env_at_execution_start,
             run_opts,
             global_env_mode,
+            external_deps_hashes,
         );
 
         let run_summary: RunSummary = self
@@ -450,9 +491,17 @@ impl<'a> RunSummary<'a> {
         ui: ColorConfig,
     ) -> Result<(), Error> {
         if matches!(self.run_type, RunType::DryJson) {
-            let rendered = self.format_json()?;
+            self.normalize();
 
-            println!("{rendered}");
+            let stdout = io::stdout();
+            let mut writer = io::BufWriter::new(stdout.lock());
+            if self.monorepo {
+                write_pretty_json(&mut writer, &*self)?;
+            } else {
+                let summary = SinglePackageRunSummary::from(&*self);
+                write_pretty_json(&mut writer, &summary)?;
+            }
+            writer.flush()?;
             return Ok(());
         }
 
@@ -467,18 +516,23 @@ impl<'a> RunSummary<'a> {
     ) -> Result<(), Error> {
         self.normalize();
 
+        // Render everything into one buffered handle on stdout. Writing
+        // through `io::stdout()` directly made every line its own write.
+        let stdout = io::stdout();
+        let mut out = io::BufWriter::with_capacity(TEXT_OUTPUT_BUFFER_BYTES, stdout.lock());
+
         if self.monorepo {
-            println!("\n{}", color!(ui, BOLD_CYAN, "Packages in Scope"));
-            let mut tab_writer = TabWriter::new(io::stdout()).minwidth(0).padding(1);
+            writeln!(out, "\n{}", color!(ui, BOLD_CYAN, "Packages in Scope"))?;
+            let mut tab_writer = TabWriter::new(&mut out).minwidth(0).padding(1);
             writeln!(tab_writer, "Name\tPath\t")?;
             for pkg in &self.packages {
                 if matches!(pkg, PackageName::Root) {
                     continue;
                 }
                 let dir = pkg_dep_graph
-                    .package_info(pkg)
+                    .package_task_context(pkg)
                     .ok_or_else(|| Error::MissingWorkspace((*pkg).to_owned()))?
-                    .package_path();
+                    .directory();
 
                 writeln!(tab_writer, "{pkg}\t{dir}")?;
             }
@@ -487,8 +541,8 @@ impl<'a> RunSummary<'a> {
 
         let file_count = self.global_hash_summary.files.len();
 
-        let mut tab_writer = TabWriter::new(io::stdout()).minwidth(0).padding(1);
-        cprintln!(ui, BOLD_CYAN, "\nGlobal Hash Inputs");
+        cwriteln!(out, ui, BOLD_CYAN, "\nGlobal Hash Inputs")?;
+        let mut tab_writer = TabWriter::new(&mut out).minwidth(0).padding(1);
         cwriteln!(tab_writer, ui, GREY, "  Global Files\t=\t{}", file_count)?;
         cwriteln!(
             tab_writer,
@@ -579,17 +633,17 @@ impl<'a> RunSummary<'a> {
         )?;
 
         tab_writer.flush()?;
-        println!();
-        cprintln!(ui, BOLD_CYAN, "Tasks to Run");
+        writeln!(out)?;
+        cwriteln!(out, ui, BOLD_CYAN, "Tasks to Run")?;
 
         for task in &self.tasks {
             if self.monorepo {
-                cprintln!(ui, BOLD, "{}", task.task_id);
+                cwriteln!(out, ui, BOLD, "{}", task.task_id)?;
             } else {
-                cprintln!(ui, BOLD, "{}", task.task_id.task());
+                cwriteln!(out, ui, BOLD, "{}", task.task_id.task())?;
             };
 
-            let mut tab_writer = TabWriter::new(io::stdout()).padding(1).minwidth(0);
+            let mut tab_writer = TabWriter::new(&mut out).padding(1).minwidth(0);
             cwriteln!(tab_writer, ui, GREY, "  Task\t=\t{}", task.task)?;
             if self.monorepo {
                 cwriteln!(tab_writer, ui, GREY, "  Package\t=\t{}", &task.package)?;
@@ -752,6 +806,7 @@ impl<'a> RunSummary<'a> {
             tab_writer.flush()?;
         }
 
+        out.flush()?;
         Ok(())
     }
 
@@ -828,5 +883,47 @@ impl<'a> RunSummary<'a> {
         .map_err(Error::StateThread)??;
 
         Ok(())
+    }
+}
+
+/// Buffer size for the `--dry` text rendering. Its output is a few lines per
+/// task, so a large monorepo's dry run prints megabytes.
+const TEXT_OUTPUT_BUFFER_BYTES: usize = 64 * 1024;
+
+fn write_pretty_json(writer: &mut impl Write, value: &impl Serialize) -> Result<(), Error> {
+    serde_json::to_writer_pretty(&mut *writer, value)?;
+    // Match the two trailing newlines produced by `println!` and `format_json`.
+    writer.write_all(b"\n\n")?;
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn pretty_json_preserves_terminator_bytes() {
+        let mut output = Vec::new();
+        write_pretty_json(&mut output, &serde_json::json!({ "key": "value" })).unwrap();
+
+        assert_eq!(output, b"{\n  \"key\": \"value\"\n}\n\n");
+    }
+
+    #[test]
+    fn pretty_json_propagates_write_errors() {
+        struct BrokenWriter;
+
+        impl Write for BrokenWriter {
+            fn write(&mut self, _buf: &[u8]) -> io::Result<usize> {
+                Err(io::Error::new(io::ErrorKind::BrokenPipe, "closed stdout"))
+            }
+
+            fn flush(&mut self) -> io::Result<()> {
+                Ok(())
+            }
+        }
+
+        let error = write_pretty_json(&mut BrokenWriter, &serde_json::json!({})).unwrap_err();
+        assert!(matches!(error, Error::Serde(_)));
     }
 }

@@ -265,16 +265,93 @@ pub enum Error {
         text: NamedSource<String>,
     },
 
-    // ============================================================
-    // Incremental configuration errors
-    // ============================================================
     #[error(
-        "`{value}` is not supported in incremental partition inputs. Incremental inputs are \
-         independent of the task's regular input configuration."
+        "The `command` field requires `futureFlags.experimentalTaskCommand` in the root \
+         turbo.json."
     )]
-    InvalidIncrementalInput {
-        value: String,
-        #[label("unsupported token in incremental inputs")]
+    TaskCommandRequiresFlag {
+        #[label("`command` used here")]
+        span: Option<SourceSpan>,
+        #[source_code]
+        text: NamedSource<String>,
+    },
+
+    #[error("Unknown toolchain {key:?} in `command`. {hint}")]
+    TaskCommandUnknownToolchain {
+        key: String,
+        hint: String,
+        #[label("unknown toolchain")]
+        span: Option<SourceSpan>,
+        #[source_code]
+        text: NamedSource<String>,
+    },
+
+    #[error(
+        "`command` defines both {alias:?} and {canonical:?} — these are the same toolchain. Use \
+         one key."
+    )]
+    TaskCommandAliasConflict {
+        alias: String,
+        canonical: String,
+        #[label("same toolchain as {canonical}")]
+        span: Option<SourceSpan>,
+        #[source_code]
+        text: NamedSource<String>,
+    },
+
+    #[error("The {key:?} toolchain in `command` requires `futureFlags.{flag}`.")]
+    TaskCommandToolchainRequiresFlag {
+        key: String,
+        flag: &'static str,
+        #[label("toolchain is not enabled")]
+        span: Option<SourceSpan>,
+        #[source_code]
+        text: NamedSource<String>,
+    },
+
+    #[error(
+        "`command` arguments cannot be empty strings. Remove the empty element or replace it with \
+         a real argument."
+    )]
+    TaskCommandEmptyArgument {
+        #[label("empty argument")]
+        span: Option<SourceSpan>,
+        #[source_code]
+        text: NamedSource<String>,
+    },
+
+    #[error(
+        "`{token}` is not supported in `command`. A command is atomic: define the whole argv in \
+         one place."
+    )]
+    TaskCommandNoExtends {
+        token: String,
+        #[label("unsupported token")]
+        span: Option<SourceSpan>,
+        #[source_code]
+        text: NamedSource<String>,
+    },
+
+    #[error(
+        "The per-toolchain map form of `command` is only valid on unscoped root tasks. \
+         \"{task_name}\" already determines its package's toolchain — use an argv array."
+    )]
+    TaskCommandMapInScopedPosition {
+        task_name: String,
+        #[label("use an array here")]
+        span: Option<SourceSpan>,
+        #[source_code]
+        text: NamedSource<String>,
+    },
+
+    #[error(
+        "A `command` opt-out (`null` or `[]`) is only valid in package-scoped positions. An \
+         unscoped default of nothing is meaningless — omit `command` instead, or opt out \
+         per-package (e.g. \"my-package#{task_name}\")."
+    )]
+    TaskCommandOptOutUnscoped {
+        task_name: String,
+        #[label("opt-out on an unscoped task")]
         span: Option<SourceSpan>,
         #[source_code]
         text: NamedSource<String>,
@@ -303,6 +380,17 @@ pub enum Error {
         text: NamedSource<String>,
     },
 
+    #[error(
+        "The \"setup\" key can only be used in the root turbo.json. Please remove it from Package \
+         Configurations."
+    )]
+    SetupInPackage {
+        #[label("setup key found here")]
+        span: Option<SourceSpan>,
+        #[source_code]
+        text: NamedSource<String>,
+    },
+
     #[error("The \"global\" key requires \"futureFlags.globalConfiguration\" to be enabled.")]
     #[diagnostic(help(
         "Add `\"futureFlags\": {{ \"globalConfiguration\": true }}` to your root turbo.json."
@@ -323,6 +411,74 @@ pub enum Error {
         key: &'static str,
         rename_hint: String,
         #[label("move this inside \"global\"")]
+        span: Option<SourceSpan>,
+        #[source_code]
+        text: NamedSource<String>,
+    },
+
+    // ============================================================
+    // Setup policy errors
+    // ============================================================
+    #[error("The \"setup\" key requires \"futureFlags.experimentalSetup\" to be enabled.")]
+    #[diagnostic(help(
+        "Add `\"futureFlags\": {{ \"experimentalSetup\": true }}` to your root turbo.json."
+    ))]
+    SetupRequiresFlag {
+        #[label("\"setup\" key found here")]
+        span: Option<SourceSpan>,
+        #[source_code]
+        text: NamedSource<String>,
+    },
+
+    #[error("The {key:?} setup policy requires `futureFlags.{flag}`.")]
+    SetupToolchainRequiresFlag {
+        key: String,
+        flag: &'static str,
+        #[label("toolchain is not enabled")]
+        span: Option<SourceSpan>,
+        #[source_code]
+        text: NamedSource<String>,
+    },
+
+    #[error("Setup dependencies cannot be \"locked\" when tools are \"skip\".")]
+    #[diagnostic(help(
+        "Dependency setup needs a managed tool. Set `tools` to \"managed\", or set `dependencies` \
+         to \"skip\"."
+    ))]
+    SetupLockedDependenciesWithSkippedTools {
+        #[label("locked dependencies with skipped tools")]
+        span: Option<SourceSpan>,
+        #[source_code]
+        text: NamedSource<String>,
+    },
+
+    #[error("Invalid additional tool {tool:?}: {reason}.")]
+    #[diagnostic(help(
+        "Declare an exact version and, for each supported platform, an HTTPS `url`, a lowercase \
+         `sha256`, a `format`, and relative `executables` paths. Tool IDs and executable names \
+         belong to one tool."
+    ))]
+    SetupInvalidAdditionalTool {
+        tool: String,
+        reason: String,
+        #[label("invalid declaration")]
+        span: Option<SourceSpan>,
+        #[source_code]
+        text: NamedSource<String>,
+    },
+
+    #[error(
+        "setup.mirrors.{key} must be an absolute HTTPS URL without credentials, a query, or a \
+         fragment."
+    )]
+    #[diagnostic(help(
+        "Commit a credential-free base URL that serves the official paths, such as \
+         https://mirror.example.com/nodejs/dist. Mirror values are masked here because they may \
+         contain a secret."
+    ))]
+    SetupInvalidMirror {
+        key: &'static str,
+        #[label("invalid mirror")]
         span: Option<SourceSpan>,
         #[source_code]
         text: NamedSource<String>,

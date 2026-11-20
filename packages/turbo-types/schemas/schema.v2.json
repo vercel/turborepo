@@ -15,6 +15,17 @@
         }
       ]
     },
+    "agentGuidance": {
+      "description": "Controls whether turbo maintains a root `AGENTS.md` block for AI agents.\n\nDefaults to `false`. Set to `true` to opt in to future automatic updates.",
+      "anyOf": [
+        {
+          "$ref": "#/definitions/Boolean"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
     "boundaries": {
       "description": "Configuration for `turbo boundaries`.\n\nAllows users to restrict a package's dependencies and dependents.",
       "anyOf": [
@@ -142,7 +153,7 @@
       }
     },
     "globalPassThroughEnv": {
-      "description": "An allowlist of environment variables that should be made to all tasks, but should not contribute to the task's cache key, e.g. `AWS_SECRET_KEY`.\n\nDocumentation: https://turborepo.dev/docs/reference/configuration#globalpassthroughenv",
+      "description": "An allowlist of environment variables that should be made available to all tasks, but should not contribute to the task's cache key, e.g. `AWS_SECRET_KEY`.\n\nDocumentation: https://turborepo.dev/docs/reference/configuration#globalpassthroughenv",
       "type": ["array", "null"],
       "items": {
         "$ref": "#/definitions/String"
@@ -171,7 +182,7 @@
       ]
     },
     "tags": {
-      "description": "Used to tag a package for boundaries rules.\n\nBoundaries rules can restrict which packages a tag group can import or be imported by.",
+      "description": "Arbitrary string labels for this package. In the root configuration, these labels apply to the root package.",
       "anyOf": [
         {
           "$ref": "#/definitions/Array_of_String"
@@ -281,13 +292,28 @@
       "description": "Opt into breaking changes prior to major releases, experimental features, and beta features.\n\nNote: Currently all previous future flags (turboExtendsKeyword, nonRootExtends) have been graduated and are now enabled by default.",
       "type": "object",
       "properties": {
+        "hashFilePermissions": {
+          "description": "Include file executable permissions in task hashes. Disabled by default. Enabling this flag changes all task hashes. On Unix, any executable bit marks a regular file as executable. On Windows, files are non-executable. Symlink permissions and other permission bits do not affect hashes.",
+          "default": false,
+          "type": "boolean"
+        },
         "affectedUsingTaskInputs": {
-          "description": "Use task-level `inputs` globs to determine which tasks are affected by changed files when running with `--affected`. When enabled, only tasks whose declared inputs match the changed files are selected, rather than selecting all tasks in changed packages.",
+          "description": "Use task-level `inputs` globs to determine which tasks are affected by changed files when running with `--affected`. When enabled, only tasks whose declared inputs match the changed files are selected, rather than selecting all tasks in changed packages. `turbo query`'s `affectedPackages` reports the owners of affected tasks, including dependents connected only by explicit task dependencies. `turbo prune` retains task dependency owners and their package dependencies, including across enabled toolchains, in addition to its package-based closure.",
+          "default": false,
+          "type": "boolean"
+        },
+        "githubActionsRemoteBaseRefFallback": {
+          "description": "When GitHub Actions reports a base branch that is not available as a local ref, fall back to `origin/<branch>`. This supports detached checkouts where only remote-tracking refs are present.",
           "default": false,
           "type": "boolean"
         },
         "errorsOnlyShowHash": {
           "description": "When using `outputLogs: \"errors-only\"`, show task hashes when tasks complete successfully. This provides visibility into which tasks are running without showing full output logs.",
+          "default": false,
+          "type": "boolean"
+        },
+        "experimentalSetup": {
+          "description": "Opt into experimental setup features that are still in progress.\n\nSetup invocation requires this flag; help is available without it. The `turbo.lock` format is unstable. Only parsing and help are implemented; provisioning, planning, and checking return a diagnostic. Setup does not interpret `turbo.lock` or change run or hash behavior.",
           "default": false,
           "type": "boolean"
         },
@@ -308,6 +334,11 @@
         },
         "filterUsingTasks": {
           "description": "Resolve `--filter` at the task level instead of the package level. Git-range filters (e.g. `--filter=[main]`) will match against task `inputs` globs, and the `...` dependency/dependent syntax will traverse the task graph in addition to the package graph.",
+          "default": false,
+          "type": "boolean"
+        },
+        "strictTaskEntrypointSelection": {
+          "description": "Select requested task entrypoints according to whether the task resolves a command in the repository. When any package can run a requested task, packages without a command are skipped as entrypoints. Tasks with no command anywhere remain available for graph-only orchestration.",
           "default": false,
           "type": "boolean"
         }
@@ -485,6 +516,13 @@
               "type": "null"
             }
           ]
+        },
+        "tags": {
+          "description": "Arbitrary string labels for this task. Package configurations replace inherited tags by default; an empty array clears them. Include `$TURBO_EXTENDS$` to append labels to inherited tags.",
+          "type": ["array", "null"],
+          "items": {
+            "$ref": "#/definitions/String"
+          }
         },
         "with": {
           "description": "A list of tasks that will run alongside this task.\n\nTasks in this list will not be run until completion before this task starts execution.\n\nDocumentation: https://turborepo.dev/docs/reference/configuration#with",

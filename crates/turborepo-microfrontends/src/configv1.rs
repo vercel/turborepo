@@ -127,23 +127,21 @@ impl ConfigV1 {
             .with_allow_trailing_commas();
 
         // attempt to parse a child, ignoring any errors
-        let (config, errs) = biome_deserialize::json::deserialize_from_json_str::<ChildConfig>(
+        let (config, errs) = turborepo_errors::json::deserialize_from_json_str::<ChildConfig>(
             input,
             jsonc_options,
             source,
-        )
-        .consume();
+        );
 
         if let Some(ChildConfig { part_of }) = errs.is_empty().then_some(config).flatten() {
             return Ok(ParseResult::Reference(part_of));
         }
         // attempt to parse a real one
-        let (config, errs) = biome_deserialize::json::deserialize_from_json_str::<ConfigV1>(
+        let (config, errs) = turborepo_errors::json::deserialize_from_json_str::<ConfigV1>(
             input,
             jsonc_options,
             source,
-        )
-        .consume();
+        );
 
         if let Some(config) = config {
             // Only accept the config if there were no errors during parsing
@@ -264,16 +262,6 @@ impl ConfigV1 {
         let (_, app) = self.find_application(name)?;
         app.fallback()
     }
-
-    /// Returns the name and package of the application that serves the root
-    /// route. The root route app is the first one without explicit routing
-    /// configuration.
-    pub fn root_route_app(&self) -> Option<(&str, &str)> {
-        self.applications
-            .iter()
-            .find(|(_, app)| app.routing.is_none())
-            .map(|(app_name, app)| (app_name.as_str(), app.package_name(app_name)))
-    }
 }
 
 impl Application {
@@ -314,6 +302,15 @@ mod test {
                 assert_eq!(default_app, "web");
             }
         }
+    }
+
+    // Regression test for https://github.com/vercel/turborepo/issues/13197
+    // Unterminated string literals used to panic inside biome during
+    // deserialization instead of producing a parse error.
+    #[test]
+    fn test_unterminated_string_reports_parse_error() {
+        let input = "{\"version\": \"\n}";
+        assert!(ConfigV1::from_str(input, "somewhere").is_err());
     }
 
     #[test]

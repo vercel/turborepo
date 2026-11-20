@@ -1,7 +1,7 @@
 // miette's Diagnostic derive macro generates code that triggers these warnings
 #![allow(unused_assignments)]
 
-use std::env;
+use std::{env, ffi::OsString};
 
 use itertools::Itertools;
 use miette::{Diagnostic, SourceSpan};
@@ -48,6 +48,12 @@ pub enum Error {
     },
     #[error("The {flag} flag is not supported. {suggestion}")]
     UnsupportedFlag { flag: String, suggestion: String },
+    #[error("turbo arguments before `--` must be valid UTF-8, found {arg}")]
+    #[diagnostic(
+        code(turbo::shim::non_utf8_argument),
+        help("Arguments after `--` are passed through unchanged.")
+    )]
+    NonUtf8 { arg: String },
     #[error(transparent)]
     Path(#[from] turbopath::PathError),
 }
@@ -77,7 +83,8 @@ pub struct ShimArgs {
     pub verbosity: usize,
     pub force_update_check: bool,
     pub remaining_turbo_args: Vec<String>,
-    pub forwarded_args: Vec<String>,
+    /// Kept byte-for-byte; only turbo's own arguments must be UTF-8.
+    pub forwarded_args: Vec<OsString>,
     pub color: bool,
     pub no_color: bool,
     pub root_turbo_json: Option<AbsoluteSystemPathBuf>,
@@ -93,10 +100,33 @@ pub struct ShimArgs {
 impl ShimArgs {
     pub fn parse() -> Result<Self, Error> {
         let invocation_dir = AbsoluteSystemPathBuf::cwd()?;
-        Self::parse_from_iter(invocation_dir, std::env::args())
+        Self::parse_from_os_iter(invocation_dir, env::args_os())
     }
 
-    fn parse_from_iter(
+    fn parse_from_os_iter(
+        invocation_dir: AbsoluteSystemPathBuf,
+        mut args: impl Iterator<Item = OsString>,
+    ) -> Result<Self, Error> {
+        let program = args.next().unwrap_or_default();
+        let mut words: Vec<OsString> = args.collect();
+        let separator = words.iter().position(|word| word == "--");
+        let forwarded = separator.map_or_else(Vec::new, |index| words.split_off(index + 1));
+        let words = words
+            .into_iter()
+            .map(|word| {
+                word.into_string().map_err(|word| Error::NonUtf8 {
+                    arg: word.to_string_lossy().into_owned(),
+                })
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        let program = program.to_string_lossy().into_owned();
+        let mut parsed =
+            Self::parse_from_iter(invocation_dir, std::iter::once(program).chain(words))?;
+        parsed.forwarded_args = forwarded;
+        Ok(parsed)
+    }
+
+    pub(crate) fn parse_from_iter(
         invocation_dir: AbsoluteSystemPathBuf,
         args: impl Iterator<Item = String>,
     ) -> Result<Self, Error> {
@@ -107,7 +137,7 @@ impl ShimArgs {
         let mut verbosity = 0;
         let mut force_update_check = false;
         let mut remaining_turbo_args = Vec::new();
-        let mut forwarded_args = Vec::new();
+        let mut forwarded_args: Vec<OsString> = Vec::new();
         let mut is_forwarded_args = false;
         let mut color = false;
         let mut no_color = false;
@@ -124,7 +154,7 @@ impl ShimArgs {
         for (idx, arg) in args.enumerate() {
             // We've seen a `--` and therefore we do no parsing
             if is_forwarded_args {
-                forwarded_args.push(arg);
+                forwarded_args.push(arg.into());
             } else if arg == "--skip-infer" {
                 skip_infer = true;
             } else if arg == "--check-for-update" {
@@ -190,7 +220,7 @@ impl ShimArgs {
                 found_profile_flag = false;
                 if arg.starts_with('-') {
                     profile = Some(String::new());
-                    // Re-process this arg: push it to remaining for clap
+                    // Re-process this arg: push it to the remaining CLI arguments
                     remaining_turbo_args.push(arg);
                 } else {
                     profile = Some(arg.clone());
@@ -239,13 +269,6 @@ impl ShimArgs {
                                  `--debug` as a value, use `-- --debug`."
                         .to_string(),
                 });
-            } else if arg == "--verbose" {
-                return Err(Error::UnsupportedFlag {
-                    flag: "--verbose".to_string(),
-                    suggestion: "Please use --verbosity instead.\n if you are trying to pass \
-                                 `--verbose` as a value, use `-- --verbose`."
-                        .to_string(),
-                });
             } else {
                 remaining_turbo_args.push(arg);
             }
@@ -264,7 +287,7 @@ impl ShimArgs {
 
         if let Some(idx) = cwd_flag_idx {
             let (spans, args_string) =
-                Self::get_spans_in_args_string(vec![idx], env::args().skip(1));
+                Self::get_spans_in_args_string(vec![idx], Self::lossy_args());
 
             return Err(Error::EmptyCwd {
                 args_string,
@@ -274,7 +297,7 @@ impl ShimArgs {
 
         if let Some(idx) = root_turbo_json_flag_idx {
             let (spans, args_string) =
-                Self::get_spans_in_args_string(vec![idx], env::args().skip(1));
+                Self::get_spans_in_args_string(vec![idx], Self::lossy_args());
 
             return Err(Error::EmptyRootTurboJson {
                 args_string,
@@ -285,7 +308,7 @@ impl ShimArgs {
         if cwds.len() > 1 {
             let (indices, args_string) = Self::get_spans_in_args_string(
                 cwds.iter().map(|(_, idx)| *idx).collect(),
-                env::args().skip(1),
+                Self::lossy_args(),
             );
 
             let mut flags = indices.into_iter();
@@ -338,7 +361,7 @@ impl ShimArgs {
         match (self.profile.as_deref(), self.anon_profile.as_deref()) {
             (Some(file), None) => Some((resolve(file), true)),
             (None, Some(file)) => Some((resolve(file), false)),
-            // Both set should be caught by clap later; just ignore here.
+            // Both set should be caught by the CLI parser later; just ignore here.
             _ => None,
         }
     }
@@ -355,6 +378,13 @@ impl ShimArgs {
                 file.to_string()
             }
         })
+    }
+
+    /// Process arguments for diagnostics. Never panics on non-UTF-8 input.
+    fn lossy_args() -> impl Iterator<Item = String> {
+        env::args_os()
+            .skip(1)
+            .map(|arg| arg.to_string_lossy().into_owned())
     }
 
     /// Takes a list of indices into a Vec of arguments, i.e. ["--graph", "foo",
@@ -386,7 +416,7 @@ impl ShimArgs {
             current_args_string_idx += arg.len() + 1;
         }
 
-        let args_string = env::args().skip(1).join(" ");
+        let args_string = Self::lossy_args().join(" ");
 
         (indices_in_args_string, args_string)
     }
@@ -419,18 +449,14 @@ impl ShimArgs {
 
     pub fn color_config(&self) -> ColorConfig {
         if self.no_color {
-            ColorConfig::new(true)
+            ColorConfig::disabled_by_user()
         } else if self.color {
             // Do our best to enable ansi colors, but even if the terminal doesn't support
             // still emit ansi escape sequences.
             Self::supports_ansi();
             ColorConfig::new(false)
-        } else if Self::supports_ansi() {
-            // If the terminal supports ansi colors, then we can infer if we should emit
-            // colors
-            ColorConfig::infer()
         } else {
-            ColorConfig::new(true)
+            ColorConfig::infer(Self::supports_ansi())
         }
     }
 
@@ -449,6 +475,8 @@ impl ShimArgs {
 
 #[cfg(test)]
 mod test {
+    use std::ffi::OsString;
+
     use miette::SourceSpan;
     use pretty_assertions::assert_eq;
     use test_case::test_case;
@@ -468,6 +496,34 @@ mod test {
         let (indices_in_args_string, _) =
             ShimArgs::get_spans_in_args_string(arg_indices, args.into_iter());
         assert_eq!(indices_in_args_string, expected_indices_in_arg_string);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn non_utf8_arguments_are_forwarded_exactly_or_rejected_before_the_separator() {
+        use std::os::unix::ffi::OsStringExt;
+
+        let dir = AbsoluteSystemPathBuf::cwd().unwrap();
+        let bad = OsString::from_vec(vec![b'a', 0xff, b'z']);
+        let words = |tail: Vec<OsString>| {
+            ["turbo", "run", "build"]
+                .into_iter()
+                .map(OsString::from)
+                .chain(tail)
+        };
+        let tail = vec!["--".into(), bad.clone(), "--".into(), "--cwd".into()];
+        let args = ShimArgs::parse_from_os_iter(dir.clone(), words(tail)).unwrap();
+        assert_eq!(args.remaining_turbo_args, ["run", "build"]);
+        assert_eq!(
+            args.forwarded_args,
+            [bad.clone(), "--".into(), "--cwd".into()]
+        );
+        assert!(matches!(
+            ShimArgs::parse_from_os_iter(dir.clone(), words(vec![bad.clone()])),
+            Err(super::Error::NonUtf8 { arg }) if arg == "a\u{FFFD}z"
+        ));
+        let program = [bad, "run".into()].into_iter();
+        assert!(ShimArgs::parse_from_os_iter(dir, program).is_ok());
     }
 
     #[derive(Default)]
@@ -508,7 +564,7 @@ mod test {
                     .iter()
                     .map(|arg| arg.to_string())
                     .collect(),
-                forwarded_args: forwarded_args.iter().map(|arg| arg.to_string()).collect(),
+                forwarded_args: forwarded_args.iter().map(OsString::from).collect(),
                 skip_infer,
                 verbosity,
                 force_update_check,

@@ -1,0 +1,912 @@
+//! Shared exact registry verification and locked preparation for npm, pnpm and
+//! Yarn. No hooks, probes, Corepack, dependency installation or activation.
+
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    fs, io,
+    path::Path,
+    time::Duration,
+};
+
+use semver::Version;
+use serde::Serialize;
+use sha2::{Digest, Sha224, Sha256, Sha512};
+use turborepo_archive::{ExtractedArtifact, Layout};
+use turborepo_download::{
+    ApprovedOrigin, DownloadClient, ExpectedSha256, ExpectedSha512, Limits, VerifiedArtifact,
+};
+use turborepo_tool_install::{Export, Launch, LaunchArg, SetupSession, Staging, Tool, TreeRef};
+
+use crate::{
+    lock::{self, ArtifactDigest, Format, Installation, Lock, Platform},
+    mirror::Mirror,
+    node_discovery::UniqueJson,
+    node_provision::{NodePlan, move_tree},
+    package_manager::{CorepackIntegrity, Manager},
+    registry_metadata::{self, MAX_METADATA_BYTES, PUBLIC_NPM_REGISTRY as REGISTRY, tarball_path},
+};
+
+#[derive(Debug, thiserror::Error)]
+pub enum Error {
+    #[error("invalid locked registry artifact or executable mapping; regenerate turbo.lock")]
+    InvalidLock,
+    #[error("package manager requires the selected managed Node in the complete desired inventory")]
+    NodeBinding,
+    #[error(
+        "registry package promotion is unqualified for this host, Windows arm64 or musl; use \
+         macOS, GNU Linux or Windows x64"
+    )]
+    UnsupportedTarget,
+    #[error("package identity or bin entries do not match the selected lock")]
+    InvalidPackage,
+    #[error(transparent)]
+    Authored(#[from] crate::package_manager::Error),
+    #[error(transparent)]
+    Metadata(#[from] registry_metadata::RegistryMetadataError),
+    #[error(transparent)]
+    Download(#[from] turborepo_download::Error),
+    #[error(transparent)]
+    Archive(#[from] turborepo_archive::Error),
+    #[error(transparent)]
+    Install(#[from] turborepo_tool_install::Error),
+    #[error("registry package staging I/O failed")]
+    Io(#[from] io::Error),
+}
+
+const PACKAGE_LIMIT: usize = 64 * 1024 * 1024;
+/// Bump when this adapter stages different bytes for the same staging inputs.
+const STAGING_REVISION: u32 = 1;
+/// Every registry package keeps its files under `package/`.
+const PACKAGE_ROOT: &str = "package";
+
+/// The package's `package/` entries, and for native pnpm the platform
+/// package's binary at `binary` copied beside them as `placed`.
+#[derive(Serialize)]
+struct Staged<'a> {
+    #[serde(flatten)]
+    archive: crate::staging::Archive<'a>,
+    native: Option<NativeStaged<'a>>,
+}
+
+#[derive(Serialize)]
+struct NativeStaged<'a> {
+    binary: &'a str,
+    placed: &'static str,
+}
+
+pub struct RegistryTransport {
+    client: DownloadClient,
+    origin: String,
+    // Mirrors may serve metadata whose tarball points at the mirror itself.
+    mirrored: bool,
+}
+impl RegistryTransport {
+    // A configured mirror uses `mirrored` instead; neither falls back to
+    // public npm or forwards credentials across origins.
+    pub fn official(policy: &crate::source_policy::ToolDownloadPolicy) -> Result<Self, Error> {
+        Ok(Self {
+            client: DownloadClient::new([ApprovedOrigin::https(policy.registry())?])?,
+            origin: policy.registry().into(),
+            mirrored: false,
+        })
+    }
+
+    /// Send the same registry requests to a validated mirror base only.
+    pub fn mirrored(
+        _policy: &crate::source_policy::ToolDownloadPolicy,
+        mirror: &Mirror,
+    ) -> Result<Self, Error> {
+        Ok(Self {
+            client: mirror.client()?,
+            origin: mirror.base().into(),
+            mirrored: true,
+        })
+    }
+
+    /// Resolve only a canonical exact npm/pnpm release, verifying registry
+    /// SHA-512 and optional authored integrity against bytes before
+    /// deriving lock SHA-256. Native pnpm platform packages lock their
+    /// registry SHA-512 from metadata alone; provisioning verifies their
+    /// bytes. Private bounded scratch is dropped before return; no
+    /// repository path or I/O.
+    pub async fn resolve_exact(
+        &self,
+        manager: Manager,
+        exact_version: &str,
+        authored: Option<&CorepackIntegrity>,
+    ) -> Result<crate::registry_resolution::ResolvedRegistry, Error> {
+        // A selected version must also fit the portable lock's identity bound.
+        if exact_version.len() > 128 {
+            return Err(registry_metadata::RegistryMetadataError::InvalidVersion.into());
+        }
+        // Select the published layout before any traffic.
+        let (_, version) = registry_metadata::validate_selection(manager, exact_version)?;
+        let bundled = registry_metadata::is_modern_yarn(manager, &version);
+        let (release, bytes) = self
+            .verified_release(manager, exact_version, authored.filter(|_| !bundled), None)
+            .await?;
+        let mut bundle = None;
+        let mut natives = BTreeMap::new();
+        let sha256 = bytes.sha256_hex();
+        let package = if native_release(manager, &version) {
+            drop(extract_wrapper(&bytes, exact_version)?);
+            // Every platform Node locks, so a new host never mutates the lock.
+            // Only metadata: each platform package is ~25 MB, and the host
+            // that provisions it verifies and extracts its binary.
+            let version = &version;
+            let platforms = crate::node_resolution::PLATFORMS.map(|platform| async move {
+                let (name, _) = native_package(platform).ok_or(Error::UnsupportedTarget)?;
+                let native = self
+                    .package_metadata(manager, name, exact_version, None)
+                    .await?;
+                let mappings = standard_mappings(manager, version, platform)?;
+                let sha512 = Some(native.integrity.digest);
+                let artifact = registry_artifact(native.tarball, None, sha512, mappings);
+                Ok::<_, Error>((platform, artifact))
+            });
+            natives.extend(futures::future::try_join_all(platforms).await?);
+            registry_artifact(release.tarball.clone(), Some(sha256.clone()), None, &[])
+        } else {
+            let artifact = registry_artifact(
+                release.tarball.clone(),
+                Some(sha256.clone()),
+                None,
+                standard_mappings(manager, &version, Platform::Any)?,
+            );
+            let tree =
+                extract_registry(&bytes, manager, exact_version, &artifact.executables, true)?;
+            bundle = bundled.then(|| bundle_digests(&tree)).transpose()?;
+            if let (Some((sha256, sha512)), Some(pin)) = (&bundle, authored) {
+                crate::registry_resolution::check_pin(pin, None, sha256, sha512)?;
+            }
+            drop(tree);
+            artifact
+        };
+        Ok(crate::registry_resolution::ResolvedRegistry::new(
+            release,
+            package,
+            natives,
+            (sha224_hex(&bytes), sha256),
+            bundle,
+        ))
+    }
+
+    async fn verified_release(
+        &self,
+        manager: Manager,
+        version: &str,
+        authored: Option<&CorepackIntegrity>,
+        locked_sha256: Option<&str>,
+    ) -> Result<(registry_metadata::RegistryArtifact, VerifiedArtifact), Error> {
+        let (name, _) = registry_metadata::validate_selection(manager, version)?;
+        self.verified_package(manager, name, version, authored, locked_sha256)
+            .await
+    }
+
+    /// Exact release metadata, never artifact bytes. `name` is
+    /// adapter-owned, never authored.
+    async fn package_metadata(
+        &self,
+        manager: Manager,
+        name: &str,
+        version: &str,
+        authored: Option<&CorepackIntegrity>,
+    ) -> Result<registry_metadata::RegistryArtifact, Error> {
+        // Validate before interpolating any request path or making traffic.
+        registry_metadata::validate_selection(manager, version)?;
+        let metadata = self
+            .client
+            .read_metadata(
+                &format!("{}/{name}/{version}", self.origin),
+                Limits::new(MAX_METADATA_BYTES, Duration::from_secs(30))?,
+            )
+            .await?;
+        Ok(registry_metadata::parse_package_from(
+            &metadata,
+            manager,
+            name,
+            version,
+            authored,
+            self.mirrored.then_some(self.origin.as_str()),
+        )?)
+    }
+
+    /// `name` is adapter-owned, never authored.
+    async fn verified_package(
+        &self,
+        manager: Manager,
+        name: &str,
+        version: &str,
+        authored: Option<&CorepackIntegrity>,
+        locked_sha256: Option<&str>,
+    ) -> Result<(registry_metadata::RegistryArtifact, VerifiedArtifact), Error> {
+        let release = self
+            .package_metadata(manager, name, version, authored)
+            .await?;
+        let additional = release
+            .byte_pin
+            .as_ref()
+            .filter(|pin| pin.algorithm == "sha256")
+            .map(|pin| pin.digest.as_str());
+        if locked_sha256
+            .zip(additional)
+            .is_some_and(|(locked, pin)| locked != pin)
+        {
+            return Err(Error::InvalidLock);
+        }
+        let sha256 = locked_sha256
+            .or(additional)
+            .map(ExpectedSha256::from_hex)
+            .transpose()?;
+        let bytes = self
+            .client
+            .download_verified_sha512(
+                &format!("{}/{}", self.origin, tarball_path(name, version)),
+                ExpectedSha512::from_hex(&release.integrity.digest)?,
+                sha256,
+                Limits::new(PACKAGE_LIMIT, Duration::from_secs(120))?,
+            )
+            .await?;
+        // Older Corepack pins: checked in addition to the registry SHA-512.
+        if let Some(pin) = release.byte_pin.as_ref()
+            && pin.algorithm == "sha224"
+            && sha224_hex(&bytes) != pin.digest
+        {
+            return Err(turborepo_download::Error::DigestMismatch.into());
+        }
+        Ok((release, bytes))
+    }
+
+    /// A native pnpm platform package pinned by its locked registry SHA-512.
+    /// The lock is the pin, so no metadata request precedes the download.
+    async fn locked_native(
+        &self,
+        name: &str,
+        version: &str,
+        sha512: &str,
+    ) -> Result<VerifiedArtifact, Error> {
+        Ok(self
+            .client
+            .download_verified_sha512(
+                &format!("{}/{}", self.origin, tarball_path(name, version)),
+                ExpectedSha512::from_hex(sha512)?,
+                None,
+                Limits::new(PACKAGE_LIMIT, Duration::from_secs(120))?,
+            )
+            .await?)
+    }
+
+    /// Loopback fixtures only; canonical provenance, no env override.
+    #[cfg(any(test, feature = "test-support"))]
+    pub fn loopback_http_for_tests(origin: &str) -> Result<Self, Error> {
+        Ok(Self {
+            client: DownloadClient::loopback_http_for_tests(origin)?,
+            origin: origin.trim_end_matches('/').into(),
+            mirrored: false,
+        })
+    }
+}
+
+fn sha224_hex(bytes: &VerifiedArtifact) -> String {
+    format!("{:x}", Sha224::digest(bytes.as_bytes()))
+}
+
+fn package_name(manager: Manager) -> Result<&'static str, Error> {
+    match manager {
+        Manager::Npm => Ok("npm"),
+        Manager::Pnpm => Ok("pnpm"),
+        Manager::Yarn => Ok("yarn"),
+        _ => Err(Error::InvalidLock),
+    }
+}
+
+/// pnpm 12 and later run a native binary published as the `@pnpm/exe.<target>`
+/// optional dependency of a wrapper whose own bins are placeholders that its
+/// install script replaces. Setup runs no scripts: it installs the verified
+/// binary where the wrapper keeps one provisioned without them, beside `dist/`
+/// (pnpm finds its bundled node-gyp relative to its own executable).
+fn native_release(manager: Manager, version: &Version) -> bool {
+    manager == Manager::Pnpm && version.major >= 12
+}
+/// The wrapper's own Corepack download location for this host
+/// (`bin/pnpm.mjs`), never a published file of any platform.
+const NATIVE_BINARY: &str = if cfg!(windows) {
+    "pnpm-native.exe"
+} else {
+    "pnpm-native"
+};
+const NATIVE_LOCATIONS: [&str; 2] = ["pnpm-native", "pnpm-native.exe"];
+const NATIVE_NAMES: [&str; 4] = ["pn", "pnpm", "pnpx", "pnx"];
+fn native_package(platform: Platform) -> Option<(&'static str, &'static str)> {
+    Some(match platform {
+        Platform::MacosX64 => ("@pnpm/exe.darwin-x64", "pnpm"),
+        Platform::MacosArm64 => ("@pnpm/exe.darwin-arm64", "pnpm"),
+        Platform::LinuxX64Gnu => ("@pnpm/exe.linux-x64", "pnpm"),
+        Platform::LinuxArm64Gnu => ("@pnpm/exe.linux-arm64", "pnpm"),
+        Platform::WindowsX64 => ("@pnpm/exe.win32-x64", "pnpm.exe"),
+        Platform::WindowsArm64 => ("@pnpm/exe.win32-arm64", "pnpm.exe"),
+        _ => return None,
+    })
+}
+
+type Mappings = &'static [(&'static str, &'static str)];
+/// Published `bin` entries, primary first. pnpm 11 moved its entry points to
+/// ES modules and added the `pn`/`pnx` aliases (its `.cjs` files remain only
+/// as Corepack shims); every pnpm 12 entry point is the platform binary.
+fn standard_mappings(
+    manager: Manager,
+    version: &Version,
+    platform: Platform,
+) -> Result<Mappings, Error> {
+    match (manager, version.major) {
+        (Manager::Npm, _) => Ok(&[("npm", "bin/npm-cli.js"), ("npx", "bin/npx-cli.js")]),
+        (Manager::Pnpm, ..=10) => Ok(&[("pnpm", "bin/pnpm.cjs"), ("pnpx", "bin/pnpx.cjs")]),
+        (Manager::Pnpm, 11) => Ok(&[
+            ("pnpm", "bin/pnpm.mjs"),
+            ("pnpx", "bin/pnpx.mjs"),
+            ("pn", "bin/pnpm.mjs"),
+            ("pnx", "bin/pnpx.mjs"),
+        ]),
+        (Manager::Pnpm, _) => match native_package(platform) {
+            Some((_, "pnpm.exe")) => Ok(&[
+                ("pnpm", "pnpm.exe"),
+                ("pnpx", "pnpm.exe"),
+                ("pn", "pnpm.exe"),
+                ("pnx", "pnpm.exe"),
+            ]),
+            Some(_) => Ok(&[
+                ("pnpm", "pnpm"),
+                ("pnpx", "pnpm"),
+                ("pn", "pnpm"),
+                ("pnx", "pnpm"),
+            ]),
+            None => Err(Error::UnsupportedTarget),
+        },
+        (Manager::Yarn, _) => Ok(&[("yarn", "bin/yarn.js"), ("yarnpkg", "bin/yarn.js")]),
+        _ => Err(Error::InvalidLock),
+    }
+}
+
+fn registry_artifact(
+    url: String,
+    sha256: Option<String>,
+    sha512: Option<String>,
+    mappings: Mappings,
+) -> lock::Artifact {
+    lock::Artifact {
+        url,
+        sha256,
+        sha512,
+        format: Format::TarGz,
+        alternates: BTreeMap::new(),
+        root_prefix: Some(PACKAGE_ROOT.into()),
+        destination: None,
+        executables: mappings
+            .iter()
+            .map(|(name, path)| (name.to_string(), path.to_string()))
+            .collect(),
+    }
+}
+
+/// Pure shape check of one platform's locked parts, shared by lock validation
+/// (every variant) and provisioning. Returns the registry package and, for
+/// native pnpm, the platform package that provides every executable: the
+/// primary entry point plus only published mappings (npm locks all of them).
+pub(crate) fn locked_parts<'a>(
+    manager: Manager,
+    version: &str,
+    platform: Platform,
+    parts: &'a BTreeMap<String, lock::Artifact>,
+) -> Result<(&'a lock::Artifact, Option<&'a lock::Artifact>), Error> {
+    let name = package_name(manager)?;
+    let parsed = Version::parse(version).map_err(|_| Error::InvalidLock)?;
+    let mappings = standard_mappings(manager, &parsed, platform)?;
+    let canonical = |artifact: &lock::Artifact, package: &str| {
+        artifact.url == format!("{REGISTRY}/{}", tarball_path(package, version))
+            && artifact.format == Format::TarGz
+            && artifact.root_prefix.as_deref() == Some(PACKAGE_ROOT)
+            && artifact.destination.is_none()
+            && artifact.alternates.is_empty()
+    };
+    let (package, native) = if native_release(manager, &parsed) {
+        let (binary_package, _) = native_package(platform).ok_or(Error::UnsupportedTarget)?;
+        match (parts.get("package"), parts.get("native")) {
+            (Some(package), Some(native))
+                if parts.len() == 2
+                    && package.executables.is_empty()
+                    && canonical(native, binary_package) =>
+            {
+                (package, Some(native))
+            }
+            _ => return Err(Error::InvalidLock),
+        }
+    } else {
+        match parts.values().next() {
+            Some(package) if parts.len() == 1 => (package, None),
+            _ => return Err(Error::InvalidLock),
+        }
+    };
+    let executables = &native.unwrap_or(package).executables;
+    if !canonical(
+        package,
+        registry_metadata::validate_selection(manager, version)?.0,
+    ) || executables.get(name).map(String::as_str) != Some(mappings[0].1)
+        || (manager == Manager::Npm && executables.len() != mappings.len())
+        || executables
+            .iter()
+            .any(|(name, path)| !mappings.iter().any(|&(n, p)| n == name && p == path))
+    {
+        return Err(Error::InvalidLock);
+    }
+    Ok((package, native))
+}
+
+/// SHA-256/SHA-512 of modern Yarn's verified single-file bundle.
+fn bundle_digests(tree: &ExtractedArtifact) -> Result<(String, String), Error> {
+    let bundle = fs::read(tree.root_path().join("bin/yarn.js"))?;
+    Ok((
+        hex::encode(Sha256::digest(&bundle)),
+        hex::encode(Sha512::digest(&bundle)),
+    ))
+}
+
+fn extract_registry(
+    bytes: &VerifiedArtifact,
+    manager: Manager,
+    version: &str,
+    executables: &BTreeMap<String, String>,
+    exact_bins: bool,
+) -> Result<ExtractedArtifact, Error> {
+    let required: Vec<_> = executables.values().map(String::as_str).collect();
+    let (name, _) = registry_metadata::validate_selection(manager, version)?;
+    let (tree, package) = extract_package(bytes, name, version, &required)?;
+    let bin = package.get("bin").and_then(|v| v.as_object());
+    if (exact_bins && bin.is_none_or(|bin| bin.len() != executables.len()))
+        || executables.iter().any(|(name, path)| {
+            bin.and_then(|bin| bin.get(name))
+                .and_then(|v| v.as_str())
+                .map(|bin| bin.strip_prefix("./").unwrap_or(bin))
+                != Some(path)
+        })
+    {
+        return Err(Error::InvalidPackage);
+    }
+    Ok(tree)
+}
+
+/// The wrapper's placeholder bins are never run, but they name what the
+/// native binary serves.
+fn extract_wrapper(bytes: &VerifiedArtifact, version: &str) -> Result<ExtractedArtifact, Error> {
+    let (tree, package) = extract_package(bytes, "pnpm", version, &[])?;
+    let names = package
+        .get("bin")
+        .and_then(|v| v.as_object())
+        .map(|bin| bin.keys().map(String::as_str).collect::<BTreeSet<_>>());
+    if names != Some(BTreeSet::from(NATIVE_NAMES)) {
+        return Err(Error::InvalidPackage);
+    }
+    for location in NATIVE_LOCATIONS {
+        if tree.root_path().join(location).try_exists()? {
+            return Err(Error::InvalidPackage);
+        }
+    }
+    Ok(tree)
+}
+
+fn extract_native(
+    bytes: &VerifiedArtifact,
+    name: &str,
+    version: &str,
+    binary: &str,
+) -> Result<ExtractedArtifact, Error> {
+    extract_package(bytes, name, version, &[binary]).map(|(tree, _)| tree)
+}
+
+/// Extract `package/` with these regular files and check the manifest
+/// identity.
+fn extract_package(
+    bytes: &VerifiedArtifact,
+    name: &str,
+    version: &str,
+    files: &[&str],
+) -> Result<(ExtractedArtifact, serde_json::Value), Error> {
+    let mut required = vec!["package.json"];
+    required.extend(files);
+    let tree = turborepo_archive::extract(
+        bytes,
+        turborepo_archive::Format::TarGz,
+        turborepo_archive::Limits::new(256 * 1024 * 1024, 100_000, 4096, 64)?,
+        Layout {
+            root: PACKAGE_ROOT,
+            required_files: &required,
+        },
+    )?;
+    let package_path = tree.root_path().join("package.json");
+    if fs::metadata(&package_path)?.len() > MAX_METADATA_BYTES as u64 {
+        return Err(Error::InvalidPackage);
+    }
+    let UniqueJson(package) =
+        serde_json::from_slice(&fs::read(package_path)?).map_err(|_| Error::InvalidPackage)?;
+    if package.get("name").and_then(|v| v.as_str()) != Some(name)
+        || package.get("version").and_then(|v| v.as_str()) != Some(version)
+    {
+        return Err(Error::InvalidPackage);
+    }
+    Ok((tree, package))
+}
+
+pub(crate) struct RegistryPlan {
+    tool: Tool,
+    node: Tool,
+    artifact: lock::Artifact,
+    /// Native pnpm's platform package name, binary path and locked artifact.
+    native: Option<(&'static str, lock::Artifact)>,
+    authored: Option<CorepackIntegrity>,
+    manager: Manager,
+    /// Authored pins cover modern Yarn's `bin/yarn.js`, not the archive.
+    bundled: bool,
+}
+impl RegistryPlan {
+    /// Validate every applicable authored pin before storage or transport, and
+    /// bind the effective strong pin into the inventory's reuse identity.
+    /// The lock cannot prove bundle pins, so preparation checks verified bytes.
+    pub(crate) fn from_declaration(
+        lock: &Lock,
+        platform: Platform,
+        node: &NodePlan,
+        declaration: &crate::package_manager::Declaration,
+        manager: Manager,
+    ) -> Result<Self, Error> {
+        if declaration.manager != manager {
+            return Err(Error::InvalidLock);
+        }
+        let plan = Self::from_lock(lock, platform, node, None, manager)?;
+        let version = semver::Version::parse(&plan.tool.version).map_err(|_| Error::InvalidLock)?;
+        let authored = if plan.bundled {
+            declaration.preflight_integrity(&version)?
+        } else {
+            declaration.locked_integrity(&version, &plan.tool.artifact_sha256)?
+        };
+        Self::from_lock(lock, platform, node, authored.as_ref(), manager)
+    }
+
+    /// Bind Node and authored integrity; retain locked archive SHA-256.
+    pub(crate) fn from_lock(
+        lock: &Lock,
+        platform: Platform,
+        node: &NodePlan,
+        authored: Option<&CorepackIntegrity>,
+        manager: Manager,
+    ) -> Result<Self, Error> {
+        let id = package_name(manager)?;
+        let qualified = match platform {
+            Platform::MacosX64
+            | Platform::MacosArm64
+            | Platform::LinuxX64Gnu
+            | Platform::LinuxArm64Gnu => cfg!(unix),
+            Platform::WindowsX64 => cfg!(windows),
+            _ => false,
+        };
+        if !qualified {
+            return Err(Error::UnsupportedTarget);
+        }
+        let selected_node = NodePlan::from_lock(lock, platform).map_err(|_| Error::NodeBinding)?;
+        if node.inventory_tool() != selected_node.inventory_tool() {
+            return Err(Error::NodeBinding);
+        }
+        let package = lock.tools().get(id).ok_or(Error::InvalidLock)?;
+        if package.adapter != id || !package.options.is_empty() {
+            return Err(Error::InvalidLock);
+        }
+        let (_name, version) = registry_metadata::validate_selection(manager, &package.version)?;
+        let Installation::Managed { artifacts } = &package.installation else {
+            return Err(Error::InvalidLock);
+        };
+        let (_, parts) = artifacts
+            .get_key_value(&platform)
+            .or_else(|| artifacts.get_key_value(&Platform::Any))
+            .ok_or(Error::InvalidLock)?;
+        let (artifact, native) = locked_parts(manager, &package.version, platform, parts)?;
+        let (artifact, native) = (artifact.clone(), native.cloned());
+        let package_sha256 = artifact.sha256_or(Error::InvalidLock)?;
+        ExpectedSha256::from_hex(package_sha256)?;
+        let node = node.inventory_tool().clone();
+        let Some(Export::File(node_binary)) = node.executables.get("node") else {
+            return Err(Error::NodeBinding);
+        };
+        // JavaScript entry points run on the selected Node by path. Native pnpm
+        // runs from its own tree, never a bin link, so it still finds `dist/`
+        // beside its image (`pnpx`/`pnx` as `pnpm dlx`, like pnpm's own Unix
+        // alias scripts).
+        let executables = match &native {
+            None => artifact
+                .executables
+                .iter()
+                .map(|(name, entry)| {
+                    let launch = Launch {
+                        program: TreeRef::new("node", node_binary.clone()),
+                        args: vec![LaunchArg::Tree(TreeRef::new(id, entry.clone()))],
+                        dyld_fallback: None,
+                    };
+                    (name.clone(), Export::Launch(launch))
+                })
+                .collect(),
+            Some(native) => native
+                .executables
+                .keys()
+                .map(|name| {
+                    let args = match name.as_str() {
+                        "pnpx" | "pnx" => vec![LaunchArg::Word("dlx".into())],
+                        _ => Vec::new(),
+                    };
+                    let program = TreeRef::new(id, NATIVE_BINARY);
+                    let launch = Launch {
+                        program,
+                        args,
+                        dyld_fallback: None,
+                    };
+                    (name.clone(), Export::Launch(launch))
+                })
+                .collect(),
+        };
+        // Reuse identity binds every verified part, and a changed authored
+        // constraint must re-verify even when archive SHA-256 is unchanged.
+        // Each native digest form has its own prefix, so they never collide.
+        let mut artifact_sha256 = match &native {
+            None => package_sha256.to_owned(),
+            Some(native) => {
+                let parts = match native.digest().ok_or(Error::InvalidLock)? {
+                    ArtifactDigest::Sha256(native) => {
+                        ExpectedSha256::from_hex(native)?;
+                        format!("pnpm-native\0{package_sha256}\0{native}")
+                    }
+                    ArtifactDigest::Sha512(native) => {
+                        ExpectedSha512::from_hex(native)?;
+                        format!("pnpm-native-sha512\0{package_sha256}\0{native}")
+                    }
+                };
+                format!("{:x}", Sha256::digest(parts))
+            }
+        };
+        if let Some(pin) = authored {
+            let pin = serde_json::to_vec(&(&artifact_sha256, pin.algorithm, &pin.digest))
+                .map_err(|_| Error::InvalidLock)?;
+            artifact_sha256 = format!("{:x}", Sha256::digest(pin));
+        }
+        let staging = Staged {
+            archive: crate::staging::Archive {
+                format: artifact.format,
+                root: PACKAGE_ROOT,
+            },
+            native: (native.as_ref())
+                .map(|native| {
+                    let binary = native.executables.get("pnpm").ok_or(Error::InvalidLock)?;
+                    Ok::<_, Error>(NativeStaged {
+                        binary,
+                        placed: NATIVE_BINARY,
+                    })
+                })
+                .transpose()?,
+        };
+        let staging = Staging::new(id, STAGING_REVISION, &staging)?;
+        let native = native
+            .map(|native| native_package(platform).map(|(name, _)| (name, native)))
+            .map(|native| native.ok_or(Error::UnsupportedTarget))
+            .transpose()?;
+        Ok(Self {
+            tool: Tool {
+                id: id.into(),
+                version: package.version.clone(),
+                platform: node.platform.clone(),
+                artifact_sha256,
+                executables,
+                vars: BTreeMap::new(),
+                staging,
+            },
+            node,
+            artifact,
+            native,
+            authored: authored.cloned(),
+            manager,
+            bundled: registry_metadata::is_modern_yarn(manager, &version),
+        })
+    }
+
+    pub fn inventory_tool(&self) -> &Tool {
+        &self.tool
+    }
+
+    /// Prepare without executing Node, then ensure the SAME complete desired
+    /// set with all adapter callbacks. Only sealed trees allow reuse.
+    pub async fn prepare_if_needed(
+        &self,
+        store: &SetupSession<'_>,
+        desired: &[Tool],
+        transport: &RegistryTransport,
+    ) -> Result<Option<PreparedRegistry>, Error> {
+        self.prepare(store, desired, transport, crate::Preparation::IfNeeded)
+            .await
+    }
+
+    pub async fn prepare(
+        &self,
+        store: &SetupSession<'_>,
+        desired: &[Tool],
+        transport: &RegistryTransport,
+        preparation: crate::Preparation,
+    ) -> Result<Option<PreparedRegistry>, Error> {
+        if !desired.contains(&self.tool) || !desired.contains(&self.node) {
+            return Err(Error::NodeBinding);
+        }
+        if store.reusable_tree(&self.tool, desired)?.is_some()
+            && preparation == crate::Preparation::IfNeeded
+        {
+            return Ok(None);
+        }
+        let (_, bytes) = transport
+            .verified_release(
+                self.manager,
+                &self.tool.version,
+                self.authored.as_ref().filter(|_| !self.bundled),
+                Some(self.artifact.sha256_or(Error::InvalidLock)?),
+            )
+            .await?;
+        let mut downloaded_bytes = bytes.as_bytes().len() as u64;
+        let (tree, native) = match &self.native {
+            None => {
+                let executables = &self.artifact.executables;
+                let exact = self.manager == Manager::Npm;
+                let tree =
+                    extract_registry(&bytes, self.manager, &self.tool.version, executables, exact)?;
+                (tree, None)
+            }
+            Some((name, native)) => {
+                let tree = extract_wrapper(&bytes, &self.tool.version)?;
+                let binary = native.executables.get("pnpm").ok_or(Error::InvalidLock)?;
+                // Locks written before SHA-512 native parts keep their SHA-256.
+                let bytes = match native.digest().ok_or(Error::InvalidLock)? {
+                    ArtifactDigest::Sha256(sha256) => {
+                        let version = &self.tool.version;
+                        transport
+                            .verified_package(self.manager, name, version, None, Some(sha256))
+                            .await?
+                            .1
+                    }
+                    ArtifactDigest::Sha512(sha512) => {
+                        transport
+                            .locked_native(name, &self.tool.version, sha512)
+                            .await?
+                    }
+                };
+                downloaded_bytes += bytes.as_bytes().len() as u64;
+                let native = extract_native(&bytes, name, &self.tool.version, binary)?;
+                (tree, Some((native, binary.clone())))
+            }
+        };
+        if let Some(pin) = self.authored.as_ref().filter(|_| self.bundled) {
+            let (sha256, sha512) = bundle_digests(&tree)?;
+            crate::registry_resolution::check_pin(pin, None, &sha256, &sha512)?;
+        }
+        Ok(Some(PreparedRegistry {
+            tree,
+            native,
+            downloaded_bytes,
+            tool: self.tool.clone(),
+        }))
+    }
+}
+
+pub struct PreparedRegistry {
+    tree: ExtractedArtifact,
+    /// The verified platform package and its binary path, for native pnpm.
+    native: Option<(ExtractedArtifact, String)>,
+    downloaded_bytes: u64,
+    tool: Tool,
+}
+impl PreparedRegistry {
+    /// Verified package bytes transferred for this preparation.
+    pub fn downloaded_bytes(&self) -> u64 {
+        self.downloaded_bytes
+    }
+
+    /// Move the verified package, and copy the native pnpm binary beside it.
+    /// The Store generates the launchers into `bin`.
+    pub fn stage(
+        &self,
+        tool: &Tool,
+        destination: &Path,
+    ) -> Result<(), turborepo_tool_install::Error> {
+        if !cfg!(any(unix, windows)) {
+            return Err(turborepo_tool_install::Error::UnsupportedPlatform);
+        }
+        if tool != &self.tool
+            || fs::symlink_metadata(destination)?.file_type().is_symlink()
+            || fs::read_dir(destination)?.next().is_some()
+        {
+            return Err(turborepo_tool_install::Error::InvalidInventory);
+        }
+        move_tree(&self.tree.root_path(), destination)?;
+        if let Some((native, binary)) = &self.native {
+            let target = destination.join(NATIVE_BINARY);
+            fs::copy(native.root_path().join(binary), &target)?;
+            executable(&target)?;
+        }
+        Ok(())
+    }
+}
+
+fn executable(path: &Path) -> io::Result<()> {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        fs::set_permissions(path, fs::Permissions::from_mode(0o755))?;
+    }
+    #[cfg(not(unix))]
+    let _ = path;
+    Ok(())
+}
+
+/// Locked pnpm facade retaining the existing preparation/staging API.
+pub struct PnpmPlan(RegistryPlan);
+impl PnpmPlan {
+    /// Validate every applicable authored pin before storage or transport, and
+    /// bind the effective strong pin into the inventory's reuse identity.
+    pub fn from_declaration(
+        lock: &Lock,
+        platform: Platform,
+        node: &NodePlan,
+        declaration: &crate::package_manager::Declaration,
+    ) -> Result<Self, Error> {
+        if declaration.manager != Manager::Pnpm {
+            return Err(Error::InvalidLock);
+        }
+        let plan = Self::from_lock(lock, platform, node, None)?;
+        let version = semver::Version::parse(&plan.inventory_tool().version)
+            .map_err(|_| Error::InvalidLock)?;
+        // Authored pins describe the `pnpm` package Corepack would download.
+        let package_sha256 = plan.0.artifact.sha256_or(Error::InvalidLock)?;
+        let authored = declaration.locked_integrity(&version, package_sha256)?;
+        Self::from_lock(lock, platform, node, authored.as_ref())
+    }
+
+    pub fn from_lock(
+        lock: &Lock,
+        platform: Platform,
+        node: &NodePlan,
+        authored: Option<&CorepackIntegrity>,
+    ) -> Result<Self, Error> {
+        RegistryPlan::from_lock(lock, platform, node, authored, Manager::Pnpm).map(Self)
+    }
+
+    pub fn inventory_tool(&self) -> &Tool {
+        self.0.inventory_tool()
+    }
+
+    /// Prepare only; reconcile the same complete desired inventory afterward.
+    pub async fn prepare_if_needed(
+        &self,
+        store: &SetupSession<'_>,
+        desired: &[Tool],
+        transport: &RegistryTransport,
+    ) -> Result<Option<PreparedRegistry>, Error> {
+        self.0.prepare_if_needed(store, desired, transport).await
+    }
+
+    /// Select fresh verification without changing the locked identity.
+    pub async fn prepare(
+        &self,
+        store: &SetupSession<'_>,
+        desired: &[Tool],
+        transport: &RegistryTransport,
+        preparation: crate::Preparation,
+    ) -> Result<Option<PreparedRegistry>, Error> {
+        self.0.prepare(store, desired, transport, preparation).await
+    }
+}
+
+#[cfg(all(test, unix))]
+#[path = "pnpm_provision/native_fixture.rs"]
+pub(crate) mod native_fixture;
+#[cfg(all(test, unix))]
+#[path = "pnpm_provision/tests.rs"]
+mod pnpm_tests;

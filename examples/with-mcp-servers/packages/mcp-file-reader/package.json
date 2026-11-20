@@ -1,0 +1,28 @@
+{
+  "name": "@repo/mcp-file-reader",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./dist/server.js",
+    "./cli": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "lint": "oxlint src/",
+    "check-types": "tsc --noEmit",
+    "test": "node --test dist/server.test.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "1.32.2",
+    "zod": "4.6.7"
+  },
+  "devDependencies": {
+    "@repo/oxlint-config": "workspace:*",
+    "@repo/typescript-config": "workspace:*",
+    "@types/node": "26.6.6",
+    "oxlint": "1.94.0",
+    "typescript": "7.0.2"
+  }
+}

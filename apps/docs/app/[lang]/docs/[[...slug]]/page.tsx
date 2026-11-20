@@ -1,97 +1,38 @@
-import { createRelativeLink } from "fumadocs-ui/mdx";
-import type { Metadata } from "next";
-import { notFound } from "next/navigation";
-import { AskAI } from "@/components/geistdocs/ask-ai";
-import { CopyPage } from "@/components/geistdocs/copy-page";
+import { MobileDocsBar } from "@vercel/geistdocs/mobile-docs-bar";
 import {
-  DocsBody,
-  DocsDescription,
-  DocsPage,
-  DocsTitle
-} from "@/components/geistdocs/docs-page";
-import { EditSource } from "@/components/geistdocs/edit-source";
-import { Feedback } from "@/components/geistdocs/feedback";
+  createDocsPage,
+  createPageActions
+} from "@vercel/geistdocs/pages/docs";
+import type { MDXComponents } from "mdx/types";
 import { getMDXComponents } from "@/components/geistdocs/mdx-components";
-import { OpenInChat } from "@/components/geistdocs/open-in-chat";
 import { RemoteCacheCounter } from "@/components/remote-cache-counter";
-import { ScrollTop } from "@/components/geistdocs/scroll-top";
+import { config } from "@/lib/geistdocs/config";
+import { geistdocsSource, getPageImage } from "@/lib/geistdocs/source";
 
-import { Separator } from "@/components/ui/separator";
-import { getLLMText, getPageImage, source } from "@/lib/geistdocs/source";
-
-const Page = async ({ params }: PageProps<"/[lang]/docs/[[...slug]]">) => {
-  const { slug, lang } = await params;
-  const page = source.getPage(slug, lang);
-
-  if (!page) {
-    notFound();
-  }
-
-  const markdown = await getLLMText(page);
-  const MDX = page.data.body;
-
-  return (
-    <DocsPage
-      full={page.data.full}
-      tableOfContent={{
-        style: "clerk",
-        header: <RemoteCacheCounter />,
-        footer: (
-          <div className="my-3 space-y-3">
-            <Separator />
-            <EditSource path={page.path} />
-            <ScrollTop />
-            <Feedback />
-            <CopyPage text={markdown} />
-            <AskAI href={page.url} />
-            <OpenInChat href={page.url} />
-          </div>
-        )
-      }}
-      toc={page.data.toc}
-    >
-      <DocsTitle>{page.data.title}</DocsTitle>
-      <DocsDescription>{page.data.description}</DocsDescription>
-      <DocsBody>
-        <MDX
-          components={getMDXComponents({
-            components: {
-              a: createRelativeLink(source, page)
-              // Add your custom components here
-            }
-          })}
-        />
-      </DocsBody>
-    </DocsPage>
-  );
-};
-
-export const generateStaticParams = () => source.generateParams();
-
-export const generateMetadata = async ({
-  params
-}: PageProps<"/[lang]/docs/[[...slug]]">) => {
-  const { slug, lang } = await params;
-  const page = source.getPage(slug, lang);
-
-  if (!page) {
-    notFound();
-  }
-
-  const metadata: Metadata = {
-    title: page.data.title,
-    description: page.data.description,
+const docsPage = createDocsPage({
+  config,
+  mdx: ({ link }: { link: MDXComponents["a"] }) =>
+    getMDXComponents({ components: { a: link } }),
+  metadata: ({ metadata, page }) => ({
+    ...metadata,
     openGraph: {
+      ...metadata.openGraph,
+      // Keep the site's HMAC-signed OG image URLs instead of the package's
+      // unsigned /og/... URLs (the OG route verifies signatures).
       images: getPageImage(page).url
-    },
-    alternates: {
-      types: {
-        "text/markdown": slug ? `/docs/${slug.join("/")}.md` : "/docs.md"
-      }
     }
-  };
+  }),
+  pageActions: createPageActions({
+    config,
+    getExtraActions: () => [<RemoteCacheCounter key="remote-cache-counter" />]
+  }),
+  renderTop: ({ data }) => <MobileDocsBar toc={data.toc} />,
+  source: geistdocsSource,
+  tableOfContentPopover: {
+    enabled: false
+  }
+});
 
-  return metadata;
-};
-
-export default Page;
+export default docsPage.Page;
+export const generateStaticParams = docsPage.generateStaticParams;
+export const generateMetadata = docsPage.generateMetadata;

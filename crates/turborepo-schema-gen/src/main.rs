@@ -17,51 +17,74 @@
 //! turbo-schema-gen typescript -o types.ts
 //! ```
 
-use std::{fs, io::Write, path::PathBuf};
+use std::{fs, io::Write, path::PathBuf, str::FromStr};
 
-use clap::{Parser, Subcommand};
 use schemars::{schema::RootSchema, schema_for};
 use ts_rs::TS;
-use turborepo_turbo_json::RawTurboJson;
+use turborepo_turbo_json::{
+    ArtifactFormat, ArtifactPlatform, DependencyPolicy, RawTurboJson, ToolPolicy,
+};
 use turborepo_types::{EnvMode, OutputLogsMode, UIMode};
+use usage::{Cli as UsageCli, Subcommands};
 
 /// Generate JSON Schema and TypeScript types for turbo.json
-#[derive(Parser)]
-#[command(name = "turbo-schema-gen")]
-#[command(about = "Generate JSON Schema and TypeScript types from Rust types")]
+#[derive(UsageCli, Debug)]
+#[usage(name = "turbo-schema-gen")]
+#[usage(about = "Generate JSON Schema and TypeScript types from Rust types")]
 struct Cli {
-    #[command(subcommand)]
+    #[usage(subcommand)]
     command: Commands,
 }
 
-#[derive(Subcommand)]
+// A value-taking boolean, rather than usage-rs's default boolean switch.
+#[derive(Debug)]
+struct Pretty(bool);
+
+impl std::fmt::Display for Pretty {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.0.fmt(f)
+    }
+}
+
+impl FromStr for Pretty {
+    type Err = String;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        value
+            .parse::<bool>()
+            .map(Self)
+            .map_err(|_| format!("invalid boolean value: {value}"))
+    }
+}
+
+#[derive(Subcommands, Debug)]
 enum Commands {
     /// Generate JSON Schema for turbo.json
     Schema {
         /// Output file path (defaults to stdout)
-        #[arg(short, long)]
+        #[usage(short = 'o', long)]
         output: Option<PathBuf>,
 
         /// Pretty print the JSON (default: true)
-        #[arg(long, default_value = "true")]
-        pretty: bool,
+        #[usage(long, default_value_t = Pretty(true), default = "true")]
+        pretty: Pretty,
     },
 
     /// Generate TypeScript type definitions
     Typescript {
         /// Output file path (defaults to stdout)
-        #[arg(short, long)]
+        #[usage(short = 'o', long)]
         output: Option<PathBuf>,
     },
 
     /// Verify generated files match current Rust types
     Verify {
         /// Path to existing schema.json
-        #[arg(long)]
+        #[usage(long)]
         schema: Option<PathBuf>,
 
         /// Path to existing TypeScript types
-        #[arg(long)]
+        #[usage(long)]
         typescript: Option<PathBuf>,
     },
 }
@@ -72,7 +95,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     match cli.command {
         Commands::Schema { output, pretty } => {
             let schema = generate_schema();
-            let json = if pretty {
+            let json = if pretty.0 {
                 serde_json::to_string_pretty(&schema)?
             } else {
                 serde_json::to_string(&schema)?
@@ -138,6 +161,10 @@ fn generate_typescript() -> String {
     add_type_decl::<OutputLogsMode>(&mut output, "");
     add_type_decl::<EnvMode>(&mut output, "");
     add_type_decl::<UIMode>(&mut output, "");
+    add_type_decl::<ToolPolicy>(&mut output, "");
+    add_type_decl::<DependencyPolicy>(&mut output, "");
+    add_type_decl::<ArtifactPlatform>(&mut output, "");
+    add_type_decl::<ArtifactFormat>(&mut output, "");
 
     // Simple type aliases for compatibility
     output.push_str("/**\n");
@@ -154,6 +181,7 @@ fn generate_typescript() -> String {
     output.push_str(&generate_workspace_schema_interface());
     output.push_str(&generate_root_schema_interface());
     output.push_str(&generate_global_config_interface());
+    output.push_str(&generate_setup_policy_interfaces());
     output.push_str(&generate_pipeline_interface());
     output.push_str(&generate_remote_cache_interface());
     output.push_str(&generate_permissions_interface());
@@ -345,6 +373,15 @@ export interface Pipeline {
    * task execution or caching behavior.
    */
   description?: string;
+
+  /**
+   * Arbitrary string labels for this task. Package configurations replace
+   * inherited tags by default; an empty array clears them. Include
+   * `$TURBO_EXTENDS$` to append labels to inherited tags.
+   *
+   * @defaultValue `[]`
+   */
+  tags?: Array<string>;
 
   /**
    * The list of tasks that this task depends on.
@@ -548,8 +585,8 @@ export interface WorkspaceSchema extends BaseSchema {
    */
   extends: Array<string>;
   /**
-   * Used to tag a package for boundaries rules. Boundaries rules can restrict
-   * which packages a tag group can import or be imported by.
+   * Arbitrary string labels for this package. In the root configuration,
+   * these labels apply to the root package.
    */
   tags?: Array<string>;
   /**
@@ -565,6 +602,20 @@ export interface WorkspaceSchema extends BaseSchema {
 /// Generate the RootSchema interface
 fn generate_root_schema_interface() -> String {
     r#"export interface RootSchema extends BaseSchema {
+  /**
+   * Arbitrary string labels for this package. In the root configuration,
+   * these labels apply to the root package.
+   */
+  tags?: Array<string>;
+
+  /**
+   * Controls whether turbo maintains a root AGENTS.md block for AI agents.
+   * Set to true to opt in to future automatic updates.
+   *
+   * @defaultValue `false`
+   */
+  agentGuidance?: boolean;
+
   /**
    * A list of globs to include in the set of implicit global hash dependencies.
    *
@@ -597,8 +648,8 @@ fn generate_root_schema_interface() -> String {
   globalEnv?: Array<EnvWildcard>;
 
   /**
-   * An allowlist of environment variables that should be made to all tasks, but
-   * should not contribute to the task's cache key, e.g. `AWS_SECRET_KEY`.
+   * An allowlist of environment variables that should be made available to all tasks,
+   * but should not contribute to the task's cache key, e.g. `AWS_SECRET_KEY`.
    *
    * Documentation: https://turborepo.dev/docs/reference/configuration#globalpassthroughenv
    *
@@ -729,9 +780,24 @@ fn generate_root_schema_interface() -> String {
    * @defaultValue `{}`
    */
   futureFlags?: FutureFlags;
+
+  /**
+   * Repository policy for `turbo setup`. Only allowed in the root turbo.json
+   * and requires `futureFlags.experimentalSetup`.
+   */
+  setup?: SetupPolicy;
 }
 
 export interface FutureFlags {
+  /**
+   * Include file executable permissions in task hashes. Disabled by default.
+   * Enabling this flag changes all task hashes. On Unix, any executable bit
+   * marks a regular file as executable. On Windows, files are non-executable.
+   * Symlink permissions and other permission bits do not affect hashes.
+   *
+   * @defaultValue `false`
+   */
+  hashFilePermissions?: boolean;
   /**
    * When using `outputLogs: "errors-only"`, show task hashes when tasks
    * complete successfully. This provides visibility into which tasks are
@@ -769,6 +835,14 @@ export interface FutureFlags {
    */
   affectedUsingTaskInputs?: boolean;
   /**
+   * When GitHub Actions reports a base branch that is not available as a
+   * local ref, fall back to `origin/<branch>`. This supports detached
+   * checkouts where only remote-tracking refs are present.
+   *
+   * @defaultValue `false`
+   */
+  githubActionsRemoteBaseRefFallback?: boolean;
+  /**
    * Use task-level `inputs` globs to determine which tasks to re-run when
    * files change in `turbo watch`. When enabled, only tasks whose declared
    * inputs match the changed files are re-executed, rather than re-running
@@ -795,6 +869,15 @@ export interface FutureFlags {
    */
   filterUsingTasks?: boolean;
   /**
+   * Select requested task entrypoints according to whether the task resolves
+   * a command in the repository. When any package can run a requested task,
+   * packages without a command are skipped as entrypoints. Tasks with no
+   * command anywhere remain available for graph-only orchestration.
+   *
+   * @defaultValue `false`
+   */
+  strictTaskEntrypointSelection?: boolean;
+  /**
    * Move global configuration keys under a top-level `global` key.
    *
    * When enabled, keys like `globalDependencies`, `globalEnv`, `ui`,
@@ -805,6 +888,75 @@ export interface FutureFlags {
    * @defaultValue `false`
    */
   globalConfiguration?: boolean;
+  /**
+   * Treat the crates of a Cargo workspace as Turborepo packages.
+   *
+   * When enabled, Rust crates are discovered via `cargo metadata` and
+   * participate in the package graph: they resolve in `--filter`
+   * expressions, propagate `--affected`, and appear in `turbo query`.
+   * Filtered builds execute each selected crate. Unfiltered builds prefer
+   * entrypoints, falling back to libraries when no entrypoints exist.
+   * Entrypoints also expose `run` and `dev`. The `test`, `check`, `lint`, and
+   * `format` tasks are selectable per crate with `--filter`. An
+   * unfiltered run executes one workspace-wide Cargo verification command;
+   * filtered runs use the selected crates, or the workspace command when the
+   * workspace package is selected directly.
+   *
+   * All crates implicitly register `build` and the verification tasks;
+   * entrypoints with one binary also register `run` and `dev`. The workspace
+   * package registers the verification tasks. Normal task definitions
+   * configure or override these defaults, and package configuration can
+   * exclude them with `extends: false`.
+   *
+   * Task caching uses Cargo-derived inputs and caches entrypoint build
+   * deliverables. Library builds and formatting default to uncached. This
+   * feature is experimental.
+   *
+   * @defaultValue `false`
+   */
+  experimentalCargoWorkspaces?: boolean;
+
+  /**
+   * Treat the members of a uv workspace as Turborepo packages.
+   *
+   * When enabled, Python packages are discovered from the root
+   * `pyproject.toml`'s `[tool.uv.workspace]` members and participate in the
+   * package graph: they resolve in `--filter` expressions, propagate
+   * `--affected`, and appear in `turbo query`. Buildable packages register `build`
+   * (`uv build --package`), and all packages register `format` and `check`.
+   * Direct pytest declarations register ownership-scoped `test` tasks; the
+   * user-named workspace package registers workspace-wide quality tasks.
+   * External dependencies hash from `uv.lock` per
+   * package, and `turbo prune` produces a reachability-pruned `uv.lock`
+   * and root `pyproject.toml`. uv is the only supported Python package
+   * manager. This feature is experimental.
+   *
+   * @defaultValue `false`
+   */
+  experimentalPythonWorkspaces?: boolean;
+
+  /**
+   * Treat the modules listed in a `go.work` file as Turborepo packages.
+   *
+   * When enabled, Go modules are discovered from the repository-root
+   * `go.work` via the Go toolchain and participate in the package graph:
+   * they resolve in `--filter` expressions, propagate `--affected`, and
+   * appear in `turbo query`. This feature is experimental.
+   *
+   * @defaultValue `false`
+   */
+  experimentalGoWorkspaces?: boolean;
+
+  /**
+   * Opt into experimental setup features that are still in progress.
+   *
+   * All future setup surfaces must require this flag. The `turbo.lock`
+   * format is unstable. This parser-only foundation ships no setup commands
+   * and does not interpret `turbo.lock` or change run or hash behavior.
+   *
+   * @defaultValue `false`
+   */
+  experimentalSetup?: boolean;
 }
 
 "#
@@ -837,8 +989,8 @@ fn generate_global_config_interface() -> String {
   env?: Array<EnvWildcard>;
 
   /**
-   * An allowlist of environment variables that should be made to all tasks, but
-   * should not contribute to the task's cache key.
+   * An allowlist of environment variables that should be made available to all tasks,
+   * but should not contribute to the task's cache key.
    *
    * Replaces `globalPassThroughEnv` when `futureFlags.globalConfiguration` is enabled.
    *
@@ -939,6 +1091,122 @@ fn generate_global_config_interface() -> String {
     .to_string()
 }
 
+/// Generate the SetupPolicy and ToolchainSetupPolicy interfaces
+fn generate_setup_policy_interfaces() -> String {
+    r#"export interface SetupPolicy {
+  /**
+   * How `turbo setup` prepares tools for every toolchain.
+   *
+   * - `"managed"`: Provision the locked version for this repository.
+   * - `"skip"`: Neither provision nor verify the tool, which also skips the toolchain's dependencies.
+   *
+   * Without `setup`, `turbo setup` infers what to prepare from native
+   * declaration files, and detected tools are managed. Toolchain keys
+   * override root values.
+   */
+  tools?: ToolPolicy;
+
+  /**
+   * How `turbo setup` prepares dependencies for every toolchain.
+   *
+   * - `"locked"`: Install from the committed ecosystem lockfile without changing it.
+   * - `"skip"`: Do not install dependencies.
+   */
+  dependencies?: DependencyPolicy;
+
+  /** Setup policy for the JavaScript toolchain. */
+  javascript?: ToolchainSetupPolicy;
+
+  /** Setup policy for the Rust toolchain. Requires `futureFlags.experimentalCargoWorkspaces`. */
+  rust?: ToolchainSetupPolicy;
+
+  /** Setup policy for the Python toolchain. Requires `futureFlags.experimentalPythonWorkspaces`. */
+  python?: ToolchainSetupPolicy;
+
+  /** Setup policy for the Go toolchain. Requires `futureFlags.experimentalGoWorkspaces`. */
+  go?: ToolchainSetupPolicy;
+
+  /** Tools that no built-in adapter manages, keyed by tool ID. */
+  additionalTools?: Record<string, AdditionalTool>;
+
+  /**
+   * Credential-free HTTPS mirrors for setup downloads. `turbo.lock` keeps the
+   * official URLs, and environment variables override these values.
+   */
+  mirrors?: SetupMirrors;
+
+  /**
+   * Toolchain IDs in the order `turbo setup` installs their dependencies,
+   * one at a time. Without it, every toolchain's installer runs at the same
+   * time. Set it when one ecosystem's install needs another's dependencies,
+   * such as a Python build hook that runs npm.
+   *
+   * It must list each of the repository's toolchains exactly once; a
+   * missing, unknown, or repeated toolchain is an error.
+   */
+  dependencyInstallOrder?: string[];
+}
+
+export interface SetupMirrors {
+  /** Replaces `https://nodejs.org/dist` for Node.js release metadata and archives. */
+  node?: string;
+
+  /** Replaces `https://registry.npmjs.org` for npm, pnpm, and Yarn packages. */
+  npmRegistry?: string;
+
+  /** Replaces the `https://github.com` origin for Bun releases, keeping official paths. */
+  bun?: string;
+
+  /** Replaces the `https://releases.astral.sh` origin for uv, keeping official paths. */
+  uv?: string;
+
+  /** Replaces the `https://releases.astral.sh` origin for CPython, keeping official paths. */
+  python?: string;
+
+  /** Replaces `https://go.dev` and `https://dl.google.com` for Go, keeping official paths. */
+  go?: string;
+
+  /** Replaces the `https://static.rust-lang.org` origin for rustup and Rust, keeping official paths. */
+  rust?: string;
+}
+
+export interface AdditionalTool {
+  /** The exact version of the tool. Ranges and channels are not allowed. */
+  version: string;
+
+  /** Artifacts keyed by platform. Platforms without an artifact are unsupported. */
+  artifacts: Partial<Record<ArtifactPlatform, AdditionalToolArtifact>>;
+}
+
+export interface AdditionalToolArtifact {
+  /** HTTPS download URL without credentials, a query, or a fragment. */
+  url: string;
+
+  /** Lowercase hex SHA-256 digest of the downloaded bytes. */
+  sha256: string;
+
+  /** `binary` for a single executable file, or the archive format. */
+  format: ArtifactFormat;
+
+  /** The single top-level archive directory. Omit it for archives without one. */
+  rootPrefix?: string;
+
+  /** Executable names mapped to paths relative to `rootPrefix` or the archive top level. */
+  executables: Record<string, string>;
+}
+
+export interface ToolchainSetupPolicy {
+  /** How `turbo setup` prepares this toolchain's tools. */
+  tools?: ToolPolicy;
+
+  /** How `turbo setup` prepares this toolchain's dependencies. */
+  dependencies?: DependencyPolicy;
+}
+
+"#
+    .to_string()
+}
+
 /// Add a type declaration with an optional doc comment
 fn add_type_decl<T: TS>(output: &mut String, description: &str) {
     let decl = T::decl();
@@ -1031,5 +1299,202 @@ fn verify_typescript(path: &PathBuf) -> Result<bool, Box<dyn std::error::Error>>
             path.display()
         );
         Ok(false)
+    }
+}
+
+#[cfg(test)]
+mod cli_tests {
+    use std::{ffi::OsStr, path::PathBuf};
+
+    use super::{Cli, Commands};
+
+    #[test]
+    fn experimental_setup_is_an_optional_boolean_future_flag() {
+        let schema = serde_json::to_value(super::generate_schema()).unwrap();
+        let flags = &schema["definitions"]["FutureFlags"];
+        let setup = &flags["properties"]["experimentalSetup"];
+        assert_eq!(setup["type"], "boolean");
+        assert_eq!(setup["default"], false);
+        assert!(
+            flags["required"]
+                .as_array()
+                .is_none_or(|fields| !fields.contains(&serde_json::json!("experimentalSetup")))
+        );
+        assert!(super::generate_root_schema_interface().contains("experimentalSetup?: boolean;"));
+        assert!(!super::generate_workspace_schema_interface().contains("futureFlags"));
+    }
+
+    #[test]
+    fn hash_file_permissions_is_an_optional_boolean_future_flag() {
+        let schema = serde_json::to_value(super::generate_schema()).unwrap();
+        let flags = &schema["definitions"]["FutureFlags"];
+        let permissions = &flags["properties"]["hashFilePermissions"];
+        assert_eq!(permissions["type"], "boolean");
+        assert_eq!(permissions["default"], false);
+        assert!(
+            flags["required"]
+                .as_array()
+                .is_none_or(|fields| !fields.contains(&serde_json::json!("hashFilePermissions")))
+        );
+        assert!(super::generate_typescript().contains("hashFilePermissions?: boolean;"));
+    }
+
+    #[test]
+    fn setup_policy_is_an_optional_root_object() {
+        let schema = serde_json::to_value(super::generate_schema()).unwrap();
+        let setup = &schema["properties"]["setup"]["anyOf"][0]["$ref"];
+        assert_eq!(setup, "#/definitions/SetupPolicy");
+        let tools = &schema["definitions"]["ToolPolicy"]["enum"];
+        assert_eq!(tools, &serde_json::json!(["managed", "skip"]));
+        assert!(super::generate_typescript().contains("export interface ToolchainSetupPolicy {"));
+        let tool = &schema["definitions"]["AdditionalTool"];
+        assert_eq!(
+            tool["required"],
+            serde_json::json!(["artifacts", "version"])
+        );
+        assert_eq!(
+            schema["definitions"]["AdditionalToolArtifact"]["required"],
+            serde_json::json!(["executables", "format", "sha256", "url"])
+        );
+        assert!(
+            super::generate_typescript()
+                .contains("additionalTools?: Record<string, AdditionalTool>;")
+        );
+        assert!(super::generate_root_schema_interface().contains("setup?: SetupPolicy;"));
+        assert!(!super::generate_workspace_schema_interface().contains("setup?"));
+    }
+
+    #[test]
+    fn task_tags_are_optional_string_arrays() {
+        let schema = serde_json::to_value(super::generate_schema()).unwrap();
+        let pipeline = &schema["definitions"]["Pipeline"];
+        let tags = &pipeline["properties"]["tags"];
+        assert_eq!(tags["type"], serde_json::json!(["array", "null"]));
+        assert_eq!(tags["items"]["$ref"], "#/definitions/String");
+        assert!(
+            pipeline["required"]
+                .as_array()
+                .is_none_or(|fields| { !fields.contains(&serde_json::json!("tags")) })
+        );
+        assert!(super::generate_pipeline_interface().contains("tags?: Array<string>;"));
+        assert!(super::generate_pipeline_interface().contains("`$TURBO_EXTENDS$`"));
+        assert!(
+            tags["description"]
+                .as_str()
+                .unwrap()
+                .contains("`$TURBO_EXTENDS$`")
+        );
+    }
+
+    #[test]
+    fn package_tags_are_supported_in_root_and_workspace_types() {
+        let schema = serde_json::to_value(super::generate_schema()).unwrap();
+        let tags = &schema["properties"]["tags"];
+        assert_eq!(tags["anyOf"][0]["$ref"], "#/definitions/Array_of_String");
+        let description = tags["description"].as_str().unwrap();
+        assert!(description.contains("Arbitrary string labels"));
+        assert!(description.contains("root package"));
+        for interface in [
+            super::generate_root_schema_interface(),
+            super::generate_workspace_schema_interface(),
+        ] {
+            assert!(interface.contains("tags?: Array<string>;"));
+            assert!(interface.contains("Arbitrary string labels"));
+            assert!(interface.contains("root package"));
+        }
+    }
+
+    #[test]
+    fn schema_defaults_and_explicit_values() {
+        let Cli {
+            command: Commands::Schema { output, pretty },
+        } = Cli::parse_from(&[OsStr::new("schema")]).unwrap()
+        else {
+            panic!("expected schema command");
+        };
+        assert!(output.is_none());
+        assert!(pretty.0);
+
+        let Cli {
+            command: Commands::Schema { output, pretty },
+        } = Cli::parse_from(&[
+            OsStr::new("schema"),
+            OsStr::new("-o"),
+            OsStr::new("schema.json"),
+            OsStr::new("--pretty"),
+            OsStr::new("false"),
+        ])
+        .unwrap()
+        else {
+            panic!("expected schema command");
+        };
+        assert_eq!(output, Some(PathBuf::from("schema.json")));
+        assert!(!pretty.0);
+    }
+
+    #[test]
+    fn typescript_and_verify_flags() {
+        let Cli {
+            command: Commands::Typescript { output },
+        } = Cli::parse_from(&[
+            OsStr::new("typescript"),
+            OsStr::new("--output"),
+            OsStr::new("types.ts"),
+        ])
+        .unwrap()
+        else {
+            panic!("expected typescript command");
+        };
+        assert_eq!(output, Some(PathBuf::from("types.ts")));
+
+        let Cli {
+            command: Commands::Verify { schema, typescript },
+        } = Cli::parse_from(&[
+            OsStr::new("verify"),
+            OsStr::new("--schema"),
+            OsStr::new("schema.json"),
+            OsStr::new("--typescript"),
+            OsStr::new("types.ts"),
+        ])
+        .unwrap()
+        else {
+            panic!("expected verify command");
+        };
+        assert_eq!(schema, Some(PathBuf::from("schema.json")));
+        assert_eq!(typescript, Some(PathBuf::from("types.ts")));
+    }
+
+    #[test]
+    fn help_and_invalid_arguments() {
+        use usage::embedded::Outcome;
+
+        for args in [
+            vec![OsStr::new("--help")],
+            vec![OsStr::new("schema"), OsStr::new("--help")],
+        ] {
+            let argv: Vec<_> = args.iter().map(|arg| arg.to_os_string()).collect();
+            let Outcome::Exit(exit) = Cli::embedded_outcome(&argv) else {
+                panic!("expected help");
+            };
+            assert_eq!(exit.code, 0);
+            assert!(exit.text.contains("--output") || exit.text.contains("schema"));
+        }
+
+        for args in [
+            vec![OsStr::new("unknown")],
+            vec![
+                OsStr::new("schema"),
+                OsStr::new("--pretty"),
+                OsStr::new("no"),
+            ],
+            vec![OsStr::new("verify"), OsStr::new("--unknown")],
+        ] {
+            let argv: Vec<_> = args.iter().map(|arg| arg.to_os_string()).collect();
+            let Outcome::Exit(exit) = Cli::embedded_outcome(&argv) else {
+                panic!("expected parse error");
+            };
+            assert_ne!(exit.code, 0);
+            assert!(exit.stderr);
+        }
     }
 }

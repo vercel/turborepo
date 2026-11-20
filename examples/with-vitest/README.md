@@ -1,10 +1,10 @@
 # Turborepo starter
 
-This Turborepo starter is maintained by the Turborepo core team.
+This is a community-maintained example. If you experience a problem, please submit a pull request with a fix. GitHub Issues will be closed.
 
 ## Using this example
 
-This example is based on the `basic` example (`npx create-turbo@latest`) to demonstrate how to use Vitest and get the most out of Turborepo's caching.
+This example is based on the `basic` example (`pnpm dlx create-turbo@latest`) to demonstrate how to use Vitest and get the most out of Turborepo's caching.
 
 This example demonstrates two approaches to Vitest configuration:
 
@@ -14,11 +14,16 @@ This example demonstrates two approaches to Vitest configuration:
 
 ## Getting Started
 
-First, install dependencies and build the shared configuration package:
+### Prerequisites
+
+- Node.js >=26.13.0
+- pnpm 12.16.1
+
+From this example's root directory, install dependencies and build the shared configuration package:
 
 ```bash
 pnpm install
-pnpm build --filter=@repo/vitest-config
+pnpm --filter=@repo/vitest-config build
 ```
 
 ## Available Commands
@@ -26,7 +31,8 @@ pnpm build --filter=@repo/vitest-config
 - `pnpm test`: Runs tests in each package using Turborepo (leverages caching)
 - `pnpm test:projects`: Runs tests using Vitest's projects feature
 - `pnpm test:projects:watch`: Runs tests using Vitest's projects feature in watch mode
-- `pnpm view-report`: Collects coverage from each package and shows it in a merged report
+- `pnpm report`: Merges package coverage with Vitest's native `--merge-reports` command
+- `pnpm view-report`: Creates the merged coverage report and opens it in your browser
 
 ## Configuration Structure
 
@@ -36,6 +42,17 @@ The example uses a shared `@repo/vitest-config` package that exports:
 - `baseConfig`: For Node.js packages (like `math`)
 - `uiConfig`: For packages requiring jsdom environment (like `web`, `docs`)
 
+## Merged Coverage Reports
+
+Package-level test tasks write Vitest blob reports to each package's `coverage/blob` directory, so Turborepo can cache each package's coverage blob independently. After running tests, use Vitest's native merge command to create a combined HTML and text coverage report:
+
+```bash
+pnpm test
+pnpm report
+```
+
+The `merge-blob-reports` task stages the package blobs into `packages/vitest-config/coverage/merged-blob`, then the `report` task runs `vitest --merge-reports` to write the merged HTML report to `packages/vitest-config/coverage/report`.
+
 ### Remote Caching
 
 > [!TIP]
@@ -43,19 +60,18 @@ The example uses a shared `@repo/vitest-config` package that exports:
 
 Turborepo can use a technique known as [Remote Caching](https://turborepo.dev/docs/core-concepts/remote-caching) to share cache artifacts across machines, enabling you to share build caches with your team and CI/CD pipelines.
 
-By default, Turborepo will cache locally. To enable Remote Caching you will need an account with Vercel. If you don't have an account you can [create one](https://vercel.com/signup?utm_source=turborepo-examples), then enter the following commands:
+By default, Turborepo will cache locally. To enable Remote Caching you will need an account with Vercel. If you don't have an account you can [create one](https://vercel.com/signup?utm_source=turborepo-examples), then run the following command from this example's root directory:
 
-```
-cd my-turborepo
-npx turbo login
+```bash
+pnpm exec turbo login
 ```
 
 This will authenticate the Turborepo CLI with your [Vercel account](https://vercel.com/docs/concepts/personal-accounts/overview).
 
 Next, you can link your Turborepo to your Remote Cache by running the following command from the root of your Turborepo:
 
-```
-npx turbo link
+```bash
+pnpm exec turbo link
 ```
 
 ## Useful Links

@@ -1,0 +1,11 @@
+{
+  "name": "app",
+  "type": "commonjs",
+  "exports": {
+    ".": "./main.js",
+    "./feature": "./src/feature.js"
+  },
+  "imports": {
+    "#internal/*": "./src/internal/*.js"
+  }
+}

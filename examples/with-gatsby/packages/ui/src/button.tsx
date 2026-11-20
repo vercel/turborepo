@@ -1,7 +1,6 @@
-// The Gatsby build needs this import.
-// eslint-disable-next-line no-redeclare
+// Gatsby compiles this shared source with the classic JSX transform.
 import * as React from "react";
 
-export function Button(): JSX.Element {
+export function Button() {
   return <button type="button">Boop</button>;
 }

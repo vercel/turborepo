@@ -1,0 +1,443 @@
+use serde_json::{Value, json};
+
+use super::*;
+
+fn artifact(name: &str) -> Value {
+    json!({"url":"https://downloads.example.test/tool.tar.gz", "sha256":"a".repeat(64),
+        "format":"tar-gz", "rootPrefix":"tool-1.0.0", "executables":{name:format!("bin/{name}")}})
+}
+fn tool(name: &str, platform: &str) -> Value {
+    json!({"adapter":"generic-download", "version":"release@2026-10-06", "declarations":[
+        {"file":"turbo.json", "field":"/setup/additionalTools", "request":"1.0.0"}],
+        "installation":{"kind":"managed", "artifacts":{platform:{"distribution":artifact(name)}}}})
+}
+fn fixture() -> Value {
+    json!({"schemaVersion":0,"tools":{"fixture":tool("fixture", "any")}})
+}
+fn parse(value: &Value) -> Result<Lock, Error> {
+    Lock::parse(&serde_json::to_vec(value).unwrap())
+}
+fn reject(mutator: impl FnOnce(&mut Value)) {
+    let mut value = fixture();
+    mutator(&mut value);
+    assert!(
+        parse(&value).is_err(),
+        "accepted malformed fixture: {value}"
+    );
+    if let Ok(document) = serde_json::from_value(value) {
+        assert!(Lock::new(document).is_err());
+    }
+}
+
+#[test]
+fn portable_artifact_sets_round_trip() {
+    let mut value = fixture();
+    value["tools"]["node"] = tool("node", "macos-arm64");
+    value["tools"]["node"]["adapter"] = json!("node");
+    value["tools"]["node"]["version"] = json!("24.0.0");
+    value["tools"]["node"]["installation"]["artifacts"]["windows-x64"] =
+        json!({"distribution":artifact("node")});
+    value["tools"]["rust"] = tool("cargo", "linux-x64-gnu");
+    value["tools"]["rust"]["adapter"] = json!("rust");
+    value["tools"]["rust"]["version"] = json!("1.99.0-nightly@2026-10-06");
+    value["tools"]["rust"]["options"] =
+        json!({"components":["clippy", "rustfmt"],"targets":["aarch64-unknown-linux-gnu"]});
+    let mut component = artifact("rustfmt");
+    component["destination"] = json!("components/rustfmt");
+    value["tools"]["rust"]["installation"]["artifacts"]["linux-x64-gnu"]["rustfmt"] = component;
+    value["tools"]["go"] = tool("go", "any");
+    let lock = parse(&value).unwrap();
+    assert_eq!(lock.tools().len(), 4);
+    assert_eq!(
+        parse(&serde_json::to_value(lock.document()).unwrap()).unwrap(),
+        lock
+    );
+}
+
+#[test]
+fn removed_installations_fail_with_fixed_migration_guidance() {
+    for mixed in [false, true] {
+        let mut value = fixture();
+        let mut obsolete = tool("node", "any");
+        obsolete["installation"] = json!({"kind":"verify-system", "executables":["secret-probe"]});
+        if !mixed {
+            value["tools"] = json!({});
+        }
+        value["tools"]["node"] = obsolete;
+        let error = parse(&value).unwrap_err();
+        assert_eq!(error, Error::RemovedInstallation);
+        let message = error.to_string();
+        assert!(message.contains("Back up and remove turbo.lock"));
+        assert!(message.contains("--update-lock cannot read this legacy lock"));
+        assert!(!message.contains("secret-probe"));
+        assert!(serde_json::from_value::<Document>(value.clone()).is_err());
+        let bytes = value
+            .to_string()
+            .replace("\"kind\":", "\"kind\":\"managed\",\"kind\":");
+        assert_eq!(Lock::parse(bytes.as_bytes()), Err(Error::Json));
+    }
+    let mut value = fixture();
+    value["tools"]["fixture"]["installation"]["kind"] = json!("future-kind");
+    assert_eq!(parse(&value), Err(Error::Json));
+    let mut value = fixture();
+    value["tools"]["fixture"]["declarations"][0]["request"] = json!("verify-system");
+    assert!(parse(&value).is_ok());
+}
+
+#[test]
+fn strict_json_schema_and_duplicate_keys_at_every_depth() {
+    for invalid in [
+        b"{\"schemaVersion\":0,\"schemaVersion\":0,\"tools\":{}}".as_slice(),
+        b"{\"schemaVersion\":0,\"tools\":{\"x\":{},\"x\":{}}}",
+        b"{\"schemaVersion\":0,\"tools\":{},\"tools\":{}}",
+        b"{\"schemaVersion\":0,\"tools\":{},\"dependencyGraph\":{}}",
+    ] {
+        assert!(Lock::parse(invalid).is_err());
+    }
+    let bytes = serde_json::to_string(&fixture()).unwrap();
+    for (field, replacement) in [
+        ("\"version\":", "\"version\":\"evil\",\"version\":"),
+        ("\"sha256\":", "\"sha256\":\"evil\",\"sha256\":"),
+        ("\"executables\":", "\"executables\":{},\"executables\":"),
+        ("\"file\":", "\"file\":\"evil\",\"file\":"),
+    ] {
+        assert_eq!(
+            Lock::parse(bytes.replace(field, replacement).as_bytes()),
+            Err(Error::Json)
+        );
+    }
+    for path in [
+        "",
+        "/tools/fixture",
+        "/tools/fixture/declarations/0",
+        "/tools/fixture/installation",
+        "/tools/fixture/installation/artifacts/any/distribution",
+    ] {
+        reject(|v| {
+            v.pointer_mut(path).unwrap()["unknown"] = json!(true);
+        });
+    }
+    reject(|v| v["schemaVersion"] = json!(1));
+    reject(|v| v["schemaVersion"] = json!(-1));
+    reject(|v| v["tools"]["fixture"]["installation"]["artifacts"]["linux-x64"] = json!({}));
+    for unknown in ["executablesExtra", "unknown"] {
+        reject(
+            |v| v["tools"]["fixture"]["installation"] = json!({"kind":"managed", "artifacts":{"any":{"distribution":artifact("fixture")}}, unknown:{}}),
+        );
+    }
+}
+
+#[test]
+fn bounds_and_recursion_remain_enforced() {
+    assert_eq!(
+        Lock::parse(&vec![b' '; MAX_LOCK_BYTES + 1]),
+        Err(Error::TooLarge)
+    );
+    let recursive = format!("{}0{}", "[".repeat(150), "]".repeat(150));
+    assert_eq!(Lock::parse(recursive.as_bytes()), Err(Error::Json));
+    let error = serde_json::from_str::<UniqueJson>(&recursive)
+        .err()
+        .unwrap();
+    assert!(error.to_string().contains("recursion limit exceeded"));
+    assert!(
+        serde_json::from_str::<UniqueJson>(&format!("{}0{}", "[".repeat(10), "]".repeat(10)))
+            .is_ok()
+    );
+    reject(|v| v["tools"] = json!(null));
+    reject(|v| v["tools"]["fixture"]["version"] = json!("x".repeat(129)));
+    reject(|v| v["tools"]["fixture"]["declarations"] = json!([]));
+    reject(|v| v["tools"]["fixture"]["declarations"][0]["request"] = json!("x".repeat(4097)));
+    reject(|v| v["tools"]["fixture"]["installation"]["artifacts"] = json!({}));
+    reject(|v| v["tools"]["fixture"]["options"] = json!({"components":["rustfmt", "clippy"]}));
+    reject(|v| v["tools"]["fixture"]["options"] = json!({"components":["clippy", "clippy"]}));
+    reject(|v| {
+        v["tools"]["fixture"]["installation"]["artifacts"]["any"]["distribution"]["executables"] =
+            json!({})
+    });
+}
+
+#[test]
+fn transport_digest_and_layout_are_strict_without_secret_diagnostics() {
+    let pointer = "/tools/fixture/installation/artifacts/any/distribution";
+    for url in [
+        "http://downloads.example.test/tool",
+        "https://user:secret@example.test/tool",
+        "https://example.test/tool?token=secret",
+        "https://example.test/tool#secret",
+        "https://example.test\\tool",
+        "https://@example.test/tool",
+        "https:///@example.test/tool",
+        "https:////@example.test/tool",
+    ] {
+        let mut value = fixture();
+        value.pointer_mut(pointer).unwrap()["url"] = json!(url);
+        let error = parse(&value).unwrap_err();
+        assert!(!format!("{error:?} {error}").contains("secret"));
+    }
+    for digest in ["", "aa", &"A".repeat(64), &"g".repeat(64)] {
+        reject(|v| v.pointer_mut(pointer).unwrap()["sha256"] = json!(digest));
+    }
+    for path in [
+        "/bin/tool",
+        "../tool",
+        "a/../tool",
+        "a//b",
+        "C:/tool",
+        "a\\b",
+        "CON",
+        "nul.txt",
+        "com1.exe",
+        "LPT9",
+        "tool.",
+        "tool ",
+        "",
+        "./bin",
+    ] {
+        reject(|v| v.pointer_mut(pointer).unwrap()["rootPrefix"] = json!(path));
+        reject(|v| v.pointer_mut(pointer).unwrap()["executables"] = json!({"fixture":path}));
+        reject(|v| v["tools"]["fixture"]["declarations"][0]["file"] = json!(path));
+    }
+    reject(|v| v.pointer_mut(pointer).unwrap()["format"] = json!("binary"));
+    let mut binary = fixture();
+    let part = binary.pointer_mut(pointer).unwrap();
+    part["format"] = json!("binary");
+    part.as_object_mut().unwrap().remove("rootPrefix");
+    assert!(parse(&binary).is_ok());
+
+    // Alternate formats of the same payload obey the primary's source rules.
+    let xz = "https://downloads.example.test/tool.tar.xz";
+    let mut value = fixture();
+    value.pointer_mut(pointer).unwrap()["alternates"] =
+        json!({"tar-xz":{"url":xz, "sha256":"b".repeat(64)}});
+    let lock = parse(&value).unwrap();
+    let bytes = serde_json::to_vec(lock.document()).unwrap();
+    assert_eq!(Lock::parse(&bytes).unwrap(), lock);
+    for (format, url, digest) in [
+        ("tar-gz", xz, "b".repeat(64)),
+        ("binary", xz, "b".repeat(64)),
+        ("tar-zst", xz, "b".repeat(64)),
+        (
+            "tar-xz",
+            "https://user:secret@example.test/tool.tar.xz",
+            "b".repeat(64),
+        ),
+        (
+            "tar-xz",
+            "https://example.test/tool.tar.xz?token=secret",
+            "b".repeat(64),
+        ),
+        ("tar-xz", xz, "B".repeat(64)),
+    ] {
+        let mut value = fixture();
+        value.pointer_mut(pointer).unwrap()["alternates"] =
+            json!({format:{"url":url, "sha256":digest}});
+        let error = parse(&value).unwrap_err();
+        assert!(!format!("{error:?} {error}").contains("secret"));
+    }
+    reject(|v| {
+        v.pointer_mut(pointer).unwrap()["alternates"] =
+            json!({"tar-xz":{"url":xz, "sha256":"b".repeat(64), "unknown":true}})
+    });
+    binary.pointer_mut(pointer).unwrap()["alternates"] =
+        json!({"tar-xz":{"url":xz, "sha256":"b".repeat(64)}});
+    assert!(parse(&binary).is_err());
+}
+
+#[test]
+fn collision_scope_includes_any_and_windows_aliases_not_inactive_platforms() {
+    let mut value = fixture();
+    value["tools"]["other"] = tool("fixture", "macos-x64");
+    assert!(parse(&value).is_err());
+    value["tools"]["fixture"] = tool("fixture", "linux-x64-gnu");
+    assert!(parse(&value).is_ok()); // Mutually exclusive platforms.
+    value["tools"]["other"] = tool("FIXTURE.exe", "windows-x64");
+    value["tools"]["fixture"] = tool("fixture", "windows-x64");
+    assert!(parse(&value).is_err());
+    value["tools"]["other"] = tool("fixture.cmd", "windows-x64");
+    assert!(parse(&value).is_err());
+    reject(|v| {
+        v["tools"]["fixture"]["installation"]["artifacts"]["macos-x64"] =
+            json!({"part":artifact("other")})
+    });
+}
+
+#[test]
+fn collection_and_path_boundaries_and_resource_only_components() {
+    let mut document: Document = serde_json::from_value(fixture()).unwrap();
+    let template = document.tools.remove("fixture").unwrap();
+    for i in 0..MAX_TOOLS {
+        let mut tool = template.clone();
+        tool.installation = serde_json::from_value(serde_json::json!({"kind":"managed","artifacts":{"any":{"distribution":{"url":"https://example.test/tool.tgz","sha256":"a".repeat(64),"format":"tar-gz","executables":{format!("tool-{i}"):"bin/tool"}}}}})).unwrap();
+        document.tools.insert(format!("tool-{i}"), tool);
+    }
+    assert!(Lock::new(document.clone()).is_ok());
+    document.tools.insert("extra".into(), template.clone());
+    assert!(Lock::new(document).is_err());
+    let mut tool = template;
+    tool.declarations = (0..MAX_DECLARATIONS)
+        .map(|i| Declaration {
+            file: format!("manifest-{i}"),
+            field: None,
+            request: None,
+        })
+        .collect();
+    let mut doc = Document {
+        schema_version: 0,
+        tools: BTreeMap::from([("fixture".into(), tool)]),
+    };
+    assert!(Lock::new(doc.clone()).is_ok());
+    doc.tools
+        .get_mut("fixture")
+        .unwrap()
+        .declarations
+        .push(Declaration {
+            file: "extra".into(),
+            field: None,
+            request: None,
+        });
+    assert!(Lock::new(doc).is_err());
+    assert!(portable_path(&"x".repeat(255)));
+    assert!(!portable_path(&"x".repeat(256)));
+    assert!(portable_path(&vec!["x"; 32].join("/")));
+    assert!(!portable_path(&vec!["x"; 33].join("/")));
+    let mut value = fixture();
+    let parts = &mut value["tools"]["fixture"]["installation"]["artifacts"]["any"];
+    let mut resource = artifact("unused");
+    resource["executables"] = json!({});
+    for i in 1..MAX_PARTS {
+        parts[format!("part-{i}")] = resource.clone();
+    }
+    assert!(parse(&value).is_ok());
+    value["tools"]["fixture"]["installation"]["artifacts"]["any"]["extra"] = resource;
+    assert!(parse(&value).is_err());
+    reject(|v| {
+        v["tools"]["fixture"]["installation"]["artifacts"]["any"]["distribution"]["executables"] =
+            json!({"fixture":"bin/fixture","fixture.cmd":"bin/fixture.cmd"})
+    });
+    reject(|v| {
+        v["tools"]["fixture"]["installation"]["artifacts"]["any"]["second"] = artifact("fixture")
+    });
+}
+
+#[test]
+fn current_builtin_versions_are_exact_and_constructor_is_not_a_bypass() {
+    for version in ["24", "24.x", "v24.0.0", "^24.0.0", "lts/*", "24.0.0 "] {
+        reject(|v| {
+            v["tools"]["fixture"]["adapter"] = json!("node");
+            v["tools"]["fixture"]["version"] = json!(version);
+        });
+    }
+    for adapter in ["uv", "python"] {
+        for version in ["0.13", ">=0.5", "0.13.0-rc.1", "0.13.0+1", "v0.13.0"] {
+            reject(|v| {
+                v["tools"]["fixture"]["adapter"] = json!(adapter);
+                v["tools"]["fixture"]["version"] = json!(version);
+            });
+        }
+    }
+    let mut document: Document = serde_json::from_value(fixture()).unwrap();
+    document.tools.values_mut().next().unwrap().declarations[0].file = "../outside".into();
+    assert!(Lock::new(document).is_err());
+}
+
+#[test]
+fn only_native_pnpm_parts_pin_sha512_instead_of_sha256() {
+    let pnpm = |native: Value, package: Value| {
+        let mut value = fixture();
+        value["tools"]["pnpm"] = json!({"adapter":"pnpm", "version":"12.0.0", "declarations":[
+            {"file":"package.json", "field":"/packageManager", "request":"pnpm@12.0.0"}],
+            "installation":{"kind":"managed", "artifacts":{"macos-arm64":{
+                "native":native, "package":package}}}});
+        value
+    };
+    let sha512 = |mut artifact: Value| {
+        artifact.as_object_mut().unwrap().remove("sha256");
+        artifact["sha512"] = json!("b".repeat(128));
+        artifact
+    };
+    let mut package = artifact("pnpm");
+    package["executables"] = json!({});
+    let native = sha512(artifact("pnpm"));
+    let lock = parse(&pnpm(native.clone(), package.clone())).unwrap();
+    let Installation::Managed { artifacts } = &lock.tools()["pnpm"].installation else {
+        panic!()
+    };
+    let parts = &artifacts[&Platform::MacosArm64];
+    assert_eq!(
+        parts["native"].digest(),
+        Some(ArtifactDigest::Sha512(&"b".repeat(128)))
+    );
+    assert_eq!(parts["native"].sha256_or(()), Err(()));
+    // The wire form keeps the field name and omits the absent digest.
+    let wire = serde_json::to_value(lock.document()).unwrap();
+    assert_eq!(
+        wire["tools"]["pnpm"],
+        pnpm(native.clone(), package.clone())["tools"]["pnpm"]
+    );
+    // Old SHA-256 native parts stay valid.
+    parse(&pnpm(artifact("pnpm"), package.clone())).unwrap();
+
+    let mut both = native.clone();
+    both["sha256"] = json!("a".repeat(64));
+    let mut neither = native.clone();
+    neither.as_object_mut().unwrap().remove("sha512");
+    let mut upper = native.clone();
+    upper["sha512"] = json!("B".repeat(128));
+    let mut short = native.clone();
+    short["sha512"] = json!("b".repeat(64));
+    for (native, package, error) in [
+        (
+            both,
+            package.clone(),
+            "artifact requires exactly one SHA-256 or SHA-512 digest",
+        ),
+        (
+            neither,
+            package.clone(),
+            "artifact requires exactly one SHA-256 or SHA-512 digest",
+        ),
+        (
+            upper,
+            package.clone(),
+            "artifact requires a lowercase SHA-512 digest",
+        ),
+        (
+            short,
+            package.clone(),
+            "artifact requires a lowercase SHA-512 digest",
+        ),
+        // pnpm's wrapper package keeps its SHA-256.
+        (
+            native.clone(),
+            sha512(package.clone()),
+            "only native pnpm parts may pin SHA-512",
+        ),
+    ] {
+        assert_eq!(parse(&pnpm(native, package)), Err(Error::Invalid(error)));
+    }
+    // No other adapter can drop its SHA-256, even for a part named `native`.
+    for (adapter, version) in [
+        ("node", "12.0.0"),
+        ("npm", "12.0.0"),
+        ("yarn", "12.0.0"),
+        ("bun", "12.0.0"),
+        ("uv", "12.0.0"),
+        ("python", "12.0.0"),
+        ("go", "1.22.3"),
+        ("rust", "1.99.0"),
+        ("artifact", "12.0.0"),
+    ] {
+        let mut value = pnpm(native.clone(), package.clone());
+        value["tools"]["pnpm"]["adapter"] = json!(adapter);
+        value["tools"]["pnpm"]["version"] = json!(version);
+        assert_eq!(
+            parse(&value),
+            Err(Error::Invalid("only native pnpm parts may pin SHA-512")),
+            "{adapter}"
+        );
+    }
+    reject(|value| {
+        let distribution = &mut value["tools"]["fixture"]["installation"]["artifacts"]["any"];
+        distribution["distribution"] = sha512(distribution["distribution"].clone());
+    });
+}

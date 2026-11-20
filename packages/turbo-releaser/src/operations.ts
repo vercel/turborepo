@@ -3,7 +3,8 @@ import fs from "node:fs/promises";
 import { execFileSync } from "node:child_process";
 import * as tar from "tar";
 import native from "./native";
-import type { Platform } from "./types";
+import type { NpmPackageArtifact, Platform } from "./types";
+import { publishWithRetries } from "./npm";
 
 export interface PackOptions {
   platform: Platform;
@@ -57,7 +58,7 @@ async function packPlatform({
   binaryName: binaryBaseName = "turbo",
   srcDirPrefix = "dist",
   description
-}: PackOptions): Promise<string> {
+}: PackOptions): Promise<NpmPackageArtifact> {
   validateVersion(version);
   validatePackagePrefix(packagePrefix);
   validatePathSegment("binary name", binaryBaseName);
@@ -106,16 +107,25 @@ async function packPlatform({
     {
       gzip: true,
       file: tarPath,
-      cwd: tarballDir
+      cwd: tarballDir,
+      portable: true,
+      mtime: new Date(0)
     },
     [npmDirName]
   );
 
   console.log(`Artifact created: ${tarPath}`);
-  return path.resolve(tarPath);
+  return {
+    packageName: native.getNativePackageName(packagePrefix, platform),
+    version,
+    tarball: path.resolve(tarPath)
+  };
 }
 
-function publishArtifacts(artifacts: Array<string>, npmTag: string) {
+async function publishArtifacts(
+  artifacts: Array<NpmPackageArtifact>,
+  npmTag: string
+) {
   validateNpmTag(npmTag);
 
   for (const artifact of artifacts) {
@@ -123,16 +133,11 @@ function publishArtifacts(artifacts: Array<string>, npmTag: string) {
       encoding: "utf8"
     }).trim();
     console.log(`npm version: ${npmVersion}`);
-    console.log(
-      `Executing: npm publish ${artifact} --tag ${npmTag} --access public`
-    );
-    execFileSync(
-      "npm",
-      ["publish", artifact, "--tag", npmTag, "--access", "public"],
-      {
-        stdio: "inherit"
-      }
-    );
+    await publishWithRetries({
+      ...artifact,
+      npmTag,
+      accessPublic: true
+    });
   }
 }
 

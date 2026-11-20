@@ -1,0 +1,230 @@
+//! Read-only strict authorization of turbo.lock or `turbo setup --no-lock`
+//! installations, not managed-run wiring. The caller owns exact root
+//! discovery, choosing the lock or clone-local mode, feature gating,
+//! pre-handoff compatibility, execution-context qualification, hashing, and
+//! task environment propagation. Do not extract this interface independently of
+//! the producer's private schema.
+
+use std::path::{Path, PathBuf};
+
+use turborepo_setup::{
+    activation::ActivationPlan,
+    execution_identity::ExecutionContext,
+    lock::{Ecosystems, Snapshot},
+};
+use turborepo_tool_install::Activation;
+
+use super::trust::TrustStore;
+
+#[derive(Debug, thiserror::Error)]
+pub(crate) enum Error {
+    #[error("managed installation has no matching trusted setup record; run turbo setup")]
+    Untrusted,
+    #[error("managed installation changed after selection; run turbo setup")]
+    Changed,
+    #[error(transparent)]
+    Plan(#[from] turborepo_setup::activation::Error),
+    #[error(
+        "cannot validate managed setup sources; run turbo setup locally and commit the changed \
+         turbo.lock: {0}"
+    )]
+    Sources(#[from] turborepo_setup::lock::StorageError),
+    #[error("cannot validate private setup user state; run turbo setup: {0}")]
+    State(#[from] std::io::Error),
+    #[error(transparent)]
+    Store(#[from] turborepo_tool_install::Error),
+}
+
+impl Error {
+    /// `turbo run` guidance. Says whether turbo setup repairs the
+    /// installation or updates turbo.lock, and in CI, where setup is frozen,
+    /// sends lock updates back to a local setup. Never recommends a setup
+    /// that would fail the same way, such as for an unreadable lock.
+    pub(crate) fn guidance(&self, ci: bool) -> String {
+        use turborepo_setup::{activation::Error as Plan, lock::StorageError as Storage};
+        let repair = |cause: &dyn std::fmt::Display| {
+            format!("{cause}; run turbo setup to repair the installation (turbo.lock is unchanged)")
+        };
+        let invalid = |cause: &dyn std::fmt::Display| {
+            format!(
+                "turbo.lock is invalid for this repository ({cause}); restore the committed \
+                 turbo.lock, or delete it and run turbo setup locally to create a new one, then \
+                 commit it"
+            )
+        };
+        match self {
+            Self::Plan(Plan::DeclarationDrift) => {
+                let fix = if ci {
+                    "run turbo setup locally and commit the updated turbo.lock"
+                } else {
+                    "run turbo setup to update turbo.lock, then commit it"
+                };
+                format!("tool declarations no longer match turbo.lock; {fix}")
+            }
+            Self::Store(error) => repair(&format!("managed tools are not ready ({error})")),
+            Self::Untrusted => repair(&"managed tools have no matching trusted setup record"),
+            Self::Changed => repair(&"managed tools changed after this run selected them"),
+            Self::Plan(Plan::InvalidLock) => invalid(&"its tool metadata does not apply here"),
+            Self::Plan(Plan::Selection(error)) => invalid(error),
+            Self::Plan(Plan::Sources(Storage::Lock(
+                error @ turborepo_setup::lock::Error::RemovedInstallation,
+            )))
+            | Self::Sources(Storage::Lock(
+                error @ turborepo_setup::lock::Error::RemovedInstallation,
+            )) => error.to_string(),
+            Self::Plan(Plan::Sources(Storage::Lock(error)))
+            | Self::Sources(Storage::Lock(error)) => invalid(error),
+            Self::Plan(Plan::Sources(Storage::Declarations))
+            | Self::Sources(Storage::Declarations) => {
+                "tool declarations are invalid; fix them, then run turbo setup".into()
+            }
+            Self::Plan(Plan::Sources(Storage::Conflict)) | Self::Sources(Storage::Conflict) => {
+                "turbo.lock or tool declarations changed during this run; rerun it, after turbo \
+                 setup if declarations changed"
+                    .into()
+            }
+            other => other.to_string(),
+        }
+    }
+
+    /// `turbo run` guidance for a `turbo setup --no-lock` clone, local or CI:
+    /// there is no turbo.lock to update or commit, so every repair is the
+    /// same clone-local setup.
+    pub(crate) fn no_lock_guidance(&self) -> String {
+        use turborepo_setup::{activation::Error as Plan, lock::StorageError as Storage};
+        let cause = match self {
+            Self::Plan(Plan::DeclarationDrift) => "tool declarations no longer match this clone's \
+                                                   `turbo setup --no-lock` selection"
+                .into(),
+            Self::Store(error) => format!("managed tools are not ready ({error})"),
+            Self::Plan(Plan::InvalidSelection) => "the clone-local selection is invalid".into(),
+            Self::Untrusted => "managed tools have no matching trusted setup record".into(),
+            Self::Changed => "managed tools changed after this run selected them".into(),
+            Self::Plan(Plan::Sources(Storage::Conflict)) | Self::Sources(Storage::Conflict) => {
+                return "turbo.lock or tool declarations changed during this run; rerun it, after \
+                        turbo setup if a turbo.lock was added"
+                    .into();
+            }
+            Self::Plan(Plan::Sources(Storage::Declarations))
+            | Self::Sources(Storage::Declarations) => {
+                return "tool declarations are invalid; fix them, then run turbo setup --no-lock"
+                    .into();
+            }
+            other => return other.to_string(),
+        };
+        format!("{cause}; run turbo setup --no-lock to update this clone's managed tools")
+    }
+}
+
+/// Unlike ActivationPlan, this selection requires external setup evidence:
+/// the repository's record names exactly the planned environment. The
+/// callback can copy plan data out; the type does NOT enforce that those
+/// copies are used immediately or revalidated later. Consumers must call
+/// with_current at each actual probe/dispatch boundary. This is not a
+/// filesystem lease against same-user hostile mutation after validation.
+pub(crate) struct Authorization {
+    root: PathBuf,
+    sources: Snapshot,
+    context: ExecutionContext,
+    ecosystems: Ecosystems,
+    plan: ActivationPlan,
+    trust: TrustStore,
+    clone_local: bool,
+}
+
+impl Authorization {
+    /// `store` names a fixture's tool store; otherwise the user's is located
+    /// from their environment, never from config the repository authors. A
+    /// missing record fails closed without creating it. `ecosystems` must be
+    /// the ones setup captured with (root workspace flags and tools
+    /// policy), or Rust, Python and Go selections drift.
+    pub(crate) fn inspect(
+        root: &Path,
+        store: Option<&Path>,
+        context: ExecutionContext,
+        ecosystems: Ecosystems,
+    ) -> Result<Self, Error> {
+        Self::authorize(root, store, context, ecosystems, false)
+    }
+
+    /// `inspect` for a `turbo setup --no-lock` clone: the clone-local
+    /// selection its record holds in place of turbo.lock. Node/npm/pnpm
+    /// ecosystems only, like `--no-lock` setup.
+    pub(crate) fn inspect_clone_local(
+        root: &Path,
+        store: Option<&Path>,
+        context: ExecutionContext,
+    ) -> Result<Self, Error> {
+        Self::authorize(root, store, context, Ecosystems::default(), true)
+    }
+
+    fn authorize(
+        root: &Path,
+        store: Option<&Path>,
+        context: ExecutionContext,
+        ecosystems: Ecosystems,
+        clone_local: bool,
+    ) -> Result<Self, Error> {
+        let root = root.canonicalize()?;
+        let sources = Snapshot::capture_with(&root, ecosystems)?;
+        if context.musl() {
+            return Err(turborepo_setup::activation::Error::MuslHost.into());
+        }
+        let store = super::trust::existing_user_store(store, &root)?.ok_or(Error::Untrusted)?;
+        let trust = TrustStore::new(&store, &root)?;
+        trust.preflight()?;
+        let plan = Self::plan(&sources, context.clone(), &trust, clone_local)?;
+        trust.authorize(&plan)?.ok_or(Error::Untrusted)?;
+        sources.ensure_current()?;
+        Ok(Self {
+            root,
+            sources,
+            context,
+            ecosystems,
+            plan,
+            trust,
+            clone_local,
+        })
+    }
+
+    fn plan(
+        sources: &Snapshot,
+        context: ExecutionContext,
+        trust: &TrustStore,
+        clone_local: bool,
+    ) -> Result<ActivationPlan, Error> {
+        Ok(if clone_local {
+            let recorded = trust.clone_local_selection()?.ok_or(Error::Untrusted)?;
+            ActivationPlan::clone_local(sources, context, &recorded)?
+        } else {
+            ActivationPlan::captured(sources, context)?
+        })
+    }
+
+    /// Invoke only at the actual use boundary, not to cache PATH for later use.
+    /// Revalidate original root/source bytes, the planned selection and the
+    /// repository's record before invoking the callback with the plan and the
+    /// environment to activate. No resolution, network, writes, locks, probes,
+    /// tree reads or task execution.
+    pub(crate) fn with_current<T>(
+        &self,
+        use_plan: impl FnOnce(&ActivationPlan, &Activation) -> T,
+    ) -> Result<T, Error> {
+        self.sources.ensure_current()?;
+        let sources = Snapshot::capture_with(&self.root, self.ecosystems)?;
+        let current = Self::plan(
+            &sources,
+            self.context.clone(),
+            &self.trust,
+            self.clone_local,
+        )?;
+        if current.selection() != self.plan.selection()
+            || current.snapshot().canonical_identity() != self.plan.snapshot().canonical_identity()
+        {
+            return Err(Error::Changed);
+        }
+        let activation = self.trust.authorize(&current)?.ok_or(Error::Untrusted)?;
+        self.sources.ensure_current()?;
+        Ok(use_plan(&current, &activation))
+    }
+}

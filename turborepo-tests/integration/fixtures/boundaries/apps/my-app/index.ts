@@ -35,3 +35,7 @@ import { data } from "utils/data";
 // Bun runtime imports should not be flagged even with @types/bun in devDependencies
 import { $, which } from "bun";
 import { test } from "bun:test";
+
+// Relative imports resolving into node_modules (e.g. SvelteKit generated code)
+// should not be flagged as leaving the package
+import { error } from "../../node_modules/some-pkg/dist/error.js";

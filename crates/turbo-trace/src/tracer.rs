@@ -1,10 +1,15 @@
-use std::{collections::HashMap, fmt, sync::Arc};
+use std::{
+    collections::HashMap,
+    fmt,
+    path::PathBuf,
+    sync::{Arc, OnceLock},
+};
 
 use camino::{Utf8Path, Utf8PathBuf};
 use globwalk::{ValidatedGlob, WalkType};
 use miette::{Diagnostic, Report, SourceSpan};
 use oxc_allocator::Allocator;
-use oxc_estree::{CompactTSSerializer, ESTree};
+use oxc_estree::{CompactSerializer, ESTree};
 use oxc_parser::Parser;
 use oxc_span::SourceType;
 use thiserror::Error;
@@ -12,7 +17,8 @@ use tokio::task::JoinSet;
 use tracing::debug;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, PathError};
 use unrs_resolver::{
-    EnforceExtension, ResolveError, ResolveOptions, Resolver, TsconfigOptions, TsconfigReferences,
+    EnforceExtension, Resolution, ResolveError, ResolveOptions, Resolver, TsconfigOptions,
+    TsconfigReferences,
 };
 
 use crate::import_finder::{self, ImportResult};
@@ -33,6 +39,7 @@ pub struct Tracer {
     cwd: AbsoluteSystemPathBuf,
     errors: Vec<TraceError>,
     import_type: ImportTraceType,
+    include_ast: bool,
 }
 
 #[derive(Clone, Debug, Error, Diagnostic)]
@@ -52,7 +59,7 @@ pub enum TraceError {
         #[label("import here")]
         span: SourceSpan,
         #[source_code]
-        text: String,
+        text: Arc<str>,
         #[help]
         reason: String,
     },
@@ -67,10 +74,50 @@ pub enum TraceError {
 impl TraceResult {
     #[allow(dead_code)]
     pub fn emit_errors(&self) {
-        for error in &self.errors {
-            eprintln!("{:?}", Report::new(error.clone()));
+        // Stderr is unbuffered and miette renders a report as many small
+        // fragments (often single characters), so formatting directly into
+        // stderr costs one write syscall per fragment. Render reports first
+        // and write each rendered chunk with a single call instead.
+        let threads = std::thread::available_parallelism().map_or(1, |n| n.get());
+        for chunk in render_errors(&self.errors, threads) {
+            eprint!("{chunk}");
         }
     }
+}
+
+/// Small error lists are rendered on the calling thread; spawning render
+/// threads isn't worth it for them.
+const PARALLEL_RENDER_THRESHOLD: usize = 256;
+
+/// Renders `errors` as miette reports, in order.
+///
+/// Rendering is independent per report, so large error lists (a reverse trace
+/// can report tens of thousands) are split into contiguous chunks rendered on
+/// up to `threads` threads. Concatenating the returned chunks gives the same
+/// output as rendering the reports one by one.
+fn render_errors(errors: &[TraceError], threads: usize) -> Vec<String> {
+    if threads <= 1 || errors.len() < PARALLEL_RENDER_THRESHOLD {
+        return errors.iter().map(render_error).collect();
+    }
+
+    let chunk_size = errors.len().div_ceil(threads);
+    std::thread::scope(|scope| {
+        let handles: Vec<_> = errors
+            .chunks(chunk_size)
+            .map(|chunk| scope.spawn(move || chunk.iter().map(render_error).collect::<String>()))
+            .collect();
+        handles
+            .into_iter()
+            .map(|handle| match handle.join() {
+                Ok(rendered) => rendered,
+                Err(panic) => std::panic::resume_unwind(panic),
+            })
+            .collect()
+    })
+}
+
+fn render_error(error: &TraceError) -> String {
+    format!("{:?}\n", Report::new(error.clone()))
 }
 
 pub struct TraceResult {
@@ -110,20 +157,24 @@ pub fn parse_file(
     import_type: ImportTraceType,
     include_ast: bool,
 ) -> Result<(Vec<ImportResult>, Option<serde_json::Value>), String> {
-    let source_type = SourceType::from_path(file_path.as_std_path()).unwrap_or_default();
+    let mut source_type = SourceType::from_path(file_path.as_std_path()).unwrap_or_default();
+    // JSX is also valid in JavaScript files without a .jsx extension.
+    if source_type.is_javascript() {
+        source_type = source_type.with_jsx(true);
+    }
 
     let allocator = Allocator::default();
     let ret = Parser::new(&allocator, file_content, source_type).parse();
 
-    if ret.panicked {
-        let messages: Vec<String> = ret.errors.iter().map(|e| e.to_string()).collect();
+    if ret.fatal_error {
+        let messages: Vec<String> = ret.diagnostics.iter().map(|e| e.to_string()).collect();
         return Err(messages.join(", "));
     }
 
     let imports = import_finder::find_imports(&ret.module_record, &ret.program.body, import_type);
 
     let ast_json = if include_ast {
-        let mut serializer = CompactTSSerializer::new(false);
+        let mut serializer = CompactSerializer::new(true, false);
         ret.program.serialize(&mut serializer);
         let json_string = serializer.into_string();
         serde_json::from_str(&json_string).ok()
@@ -132,6 +183,135 @@ pub fn parse_file(
     };
 
     Ok((imports, ast_json))
+}
+
+/// Memoizes resolver inference per source directory for the duration of a
+/// single trace.
+///
+/// [`Tracer::infer_resolver_with_ts_config`] walks a file's ancestor
+/// directories looking for the closest `tsconfig.json` and `node_modules`,
+/// and its result depends only on the file's directory. Sibling files
+/// therefore perform identical filesystem probes and resolver construction,
+/// so a trace reuses the first inference for each directory instead of
+/// repeating it for every file.
+#[derive(Default)]
+struct ResolverInferenceCache {
+    resolvers: HashMap<AbsoluteSystemPathBuf, Option<Arc<TraceResolver>>>,
+    /// The load result of each tsconfig a resolver was created with, shared by
+    /// every resolver that uses it.
+    tsconfig_loads: HashMap<PathBuf, Arc<TsconfigLoad>>,
+}
+
+impl ResolverInferenceCache {
+    /// Wraps `resolver`, loading its tsconfig at most once per trace.
+    fn wrap(&mut self, resolver: Resolver) -> TraceResolver {
+        TraceResolver::new(resolver, &mut self.tsconfig_loads)
+    }
+
+    /// Returns the memoized inference for `file_path`'s directory, computing
+    /// it on first sight.
+    fn infer_entry(
+        &mut self,
+        file_path: &AbsoluteSystemPath,
+        resolver: &TraceResolver,
+    ) -> Option<&Option<Arc<TraceResolver>>> {
+        // A file without a parent directory has no ancestors to walk, so
+        // inference would find neither a tsconfig nor a node_modules
+        // directory and fall back to the trace's resolver.
+        let directory = file_path.parent()?;
+
+        if !self.resolvers.contains_key(directory) {
+            let inferred = Tracer::infer_resolver_with_ts_config(file_path, &resolver.resolver)
+                .map(|inferred| Arc::new(TraceResolver::new(inferred, &mut self.tsconfig_loads)));
+            self.resolvers.insert(directory.to_owned(), inferred);
+        }
+        self.resolvers.get(directory)
+    }
+
+    /// Borrows the resolver inferred for `file_path`'s directory, if any.
+    fn infer(
+        &mut self,
+        file_path: &AbsoluteSystemPath,
+        resolver: &TraceResolver,
+    ) -> Option<&TraceResolver> {
+        self.infer_entry(file_path, resolver)?.as_deref()
+    }
+
+    /// Returns a shared handle to the resolver inferred for `file_path`'s
+    /// directory, for spawned tasks that cannot borrow from the cache.
+    fn infer_shared(
+        &mut self,
+        file_path: &AbsoluteSystemPath,
+        resolver: &TraceResolver,
+    ) -> Option<Arc<TraceResolver>> {
+        self.infer_entry(file_path, resolver)?.clone()
+    }
+}
+
+/// The result of loading one tsconfig: the load error, or `None` if it loads.
+/// Computed on first use.
+type TsconfigLoad = OnceLock<Option<ResolveError>>;
+
+/// A resolver together with the load result of its tsconfig.
+///
+/// The resolver caches a tsconfig only after it loads successfully. When it
+/// can't be loaded (for example, because it `extends` a package that isn't
+/// installed), every `resolve` call would read and parse it again, retry the
+/// `extends` resolution, and fail with the same error. The tsconfig is loaded
+/// once instead, the first time a resolution needs it, and a load error is
+/// reused for every resolution it would decide.
+#[derive(Debug)]
+struct TraceResolver {
+    resolver: Resolver,
+    tsconfig_load: Option<Arc<TsconfigLoad>>,
+}
+
+impl TraceResolver {
+    /// Wraps `resolver`, sharing the load result of its tsconfig through
+    /// `tsconfig_loads` (keyed by tsconfig path), so each tsconfig is loaded at
+    /// most once per trace. The result only depends on the tsconfig file: its
+    /// `extends` are resolved with default options.
+    fn new(resolver: Resolver, tsconfig_loads: &mut HashMap<PathBuf, Arc<TsconfigLoad>>) -> Self {
+        let tsconfig_load = resolver.options().tsconfig.as_ref().map(|tsconfig| {
+            tsconfig_loads
+                .entry(tsconfig.config_file.clone())
+                .or_default()
+                .clone()
+        });
+        Self {
+            resolver,
+            tsconfig_load,
+        }
+    }
+
+    /// The error the resolver's tsconfig fails to load with, if any.
+    fn tsconfig_error(&self) -> Option<&ResolveError> {
+        let load = self.tsconfig_load.as_ref()?;
+        let tsconfig = self.resolver.options().tsconfig.as_ref()?;
+        // This is the same load `resolve` performs. On success the resolver
+        // caches the tsconfig, so later resolutions reuse it as before.
+        load.get_or_init(|| self.resolver.resolve_tsconfig(&tsconfig.config_file).err())
+            .as_ref()
+    }
+
+    fn resolve(
+        &self,
+        directory: &AbsoluteSystemPath,
+        specifier: &str,
+    ) -> Result<Resolution, ResolveError> {
+        // `resolve` loads the tsconfig right after canonicalizing `directory`
+        // (always the directory of a file that was just read) and parsing the
+        // specifier, before any other resolution step. A non-empty specifier
+        // without a query or fragment always parses, so its resolution is the
+        // tsconfig load error.
+        if !specifier.is_empty()
+            && !specifier.contains(['?', '#'])
+            && let Some(error) = self.tsconfig_error()
+        {
+            return Err(error.clone());
+        }
+        self.resolver.resolve(directory, specifier)
+    }
 }
 
 impl Tracer {
@@ -151,6 +331,7 @@ impl Tracer {
             cwd,
             import_type: ImportTraceType::All,
             errors: Vec::new(),
+            include_ast: true,
         }
     }
 
@@ -159,26 +340,43 @@ impl Tracer {
         self.import_type = import_type;
     }
 
+    /// Controls whether every traced file's AST is serialized to JSON.
+    ///
+    /// Defaults to true. Callers that only need dependency *paths* should set
+    /// this to false: serializing the parsed program and decoding it into
+    /// `serde_json::Value` is by far the most expensive part of tracing a
+    /// file, and path-only consumers discard the result.
+    #[allow(dead_code)]
+    pub fn set_include_ast(&mut self, include_ast: bool) {
+        self.include_ast = include_ast;
+    }
+
     #[tracing::instrument(skip(errors))]
-    pub async fn get_imports_from_file(
+    async fn get_imports_from_file(
         errors: &mut Vec<TraceError>,
-        resolver: &Resolver,
+        resolver: &TraceResolver,
         file_path: &AbsoluteSystemPath,
         import_type: ImportTraceType,
+        include_ast: bool,
     ) -> Option<(Vec<AbsoluteSystemPathBuf>, SeenFile)> {
         let Ok(file_content) = tokio::fs::read_to_string(&file_path).await else {
             errors.push(TraceError::FileNotFound(file_path.to_owned()));
             return None;
         };
 
-        let (imports, ast_json) = match parse_file(file_path, &file_content, import_type, true) {
-            Ok(result) => result,
-            Err(msg) => {
-                errors.push(TraceError::ParseError(file_path.to_owned(), msg));
-                return None;
-            }
-        };
+        let (imports, ast_json) =
+            match parse_file(file_path, &file_content, import_type, include_ast) {
+                Ok(result) => result,
+                Err(msg) => {
+                    errors.push(TraceError::ParseError(file_path.to_owned(), msg));
+                    return None;
+                }
+            };
 
+        // Every unresolved import in this file reports the file's source. Share
+        // one copy across those errors instead of copying the whole file into
+        // each of them.
+        let mut shared_text: Option<Arc<str>> = None;
         let mut files = Vec::new();
         for ImportResult {
             specifier: import,
@@ -245,7 +443,9 @@ impl Tracer {
                         import: import.to_string(),
                         file_path: file_path.to_string(),
                         span: SourceSpan::new(start.into(), end - start),
-                        text: file_content.clone(),
+                        text: shared_text
+                            .get_or_insert_with(|| file_content.as_str().into())
+                            .clone(),
                         reason: err.to_string(),
                     });
                 }
@@ -255,19 +455,24 @@ impl Tracer {
         Some((files, SeenFile { ast: ast_json }))
     }
 
-    pub async fn trace_file(
+    async fn trace_file(
         &mut self,
-        resolver: &Resolver,
+        resolver: &TraceResolver,
         file_path: AbsoluteSystemPathBuf,
         depth: usize,
         seen: &mut HashMap<AbsoluteSystemPathBuf, SeenFile>,
+        resolver_cache: &mut ResolverInferenceCache,
     ) {
-        let file_resolver = Self::infer_resolver_with_ts_config(&file_path, resolver);
-        let resolver = file_resolver.as_ref().unwrap_or(resolver);
-
+        // Files are queued once per importer, so the same file is often
+        // popped more than once. Check `seen` first: inference walks the
+        // filesystem and constructs a new resolver, which is wasted work
+        // when the file itself is skipped.
         if seen.contains_key(&file_path) {
             return;
         }
+
+        let file_resolver = resolver_cache.infer(&file_path, resolver);
+        let resolver = file_resolver.unwrap_or(resolver);
 
         let entry = seen.entry(file_path.clone()).or_default();
 
@@ -275,9 +480,14 @@ impl Tracer {
             return;
         }
 
-        let Some((imports, seen_file)) =
-            Self::get_imports_from_file(&mut self.errors, resolver, &file_path, self.import_type)
-                .await
+        let Some((imports, seen_file)) = Self::get_imports_from_file(
+            &mut self.errors,
+            resolver,
+            &file_path,
+            self.import_type,
+            self.include_ast,
+        )
+        .await
         else {
             return;
         };
@@ -378,7 +588,8 @@ impl Tracer {
 
     pub async fn trace(mut self, max_depth: Option<usize>) -> TraceResult {
         let mut seen: HashMap<AbsoluteSystemPathBuf, SeenFile> = HashMap::new();
-        let resolver = Self::create_resolver(self.ts_config.as_deref());
+        let mut resolver_cache = ResolverInferenceCache::default();
+        let resolver = resolver_cache.wrap(Self::create_resolver(self.ts_config.as_deref()));
 
         while let Some((file_path, file_depth)) = self.files.pop() {
             if let Some(max_depth) = max_depth
@@ -386,8 +597,14 @@ impl Tracer {
             {
                 continue;
             }
-            self.trace_file(&resolver, file_path, file_depth, &mut seen)
-                .await;
+            self.trace_file(
+                &resolver,
+                file_path,
+                file_depth,
+                &mut seen,
+                &mut resolver_cache,
+            )
+            .await;
         }
 
         TraceResult {
@@ -442,15 +659,20 @@ impl Tracer {
 
         let mut futures = JoinSet::new();
 
-        let resolver = Arc::new(Self::create_resolver(self.ts_config.as_deref()));
         let shared_self = Arc::new(self);
+        // Inference only depends on each file's directory, so sibling files
+        // discovered by the reverse trace reuse the memoized resolver rather
+        // than re-walking the same ancestors in every task.
+        let mut resolver_cache = ResolverInferenceCache::default();
+        let resolver =
+            Arc::new(resolver_cache.wrap(Self::create_resolver(shared_self.ts_config.as_deref())));
 
         for file in files {
+            let file_resolver = resolver_cache.infer_shared(&file, &resolver);
             let shared_self = shared_self.clone();
             let resolver = resolver.clone();
             futures.spawn(async move {
-                let file_resolver = Self::infer_resolver_with_ts_config(&file, &resolver);
-                let resolver = file_resolver.as_ref().unwrap_or(&resolver);
+                let resolver = file_resolver.as_deref().unwrap_or(&resolver);
                 let mut errors = Vec::new();
 
                 let Some((imported_files, seen_file)) = Self::get_imports_from_file(
@@ -458,6 +680,7 @@ impl Tracer {
                     resolver,
                     &file,
                     shared_self.import_type,
+                    shared_self.include_ast,
                 )
                 .await
                 else {
@@ -530,6 +753,63 @@ mod test {
 
     use super::*;
 
+    #[test_case("js" ; "javascript")]
+    #[test_case("jsx" ; "jsx")]
+    #[test_case("mjs" ; "javascript module")]
+    #[test_case("cjs" ; "commonjs")]
+    #[test_case("tsx" ; "typescript jsx")]
+    #[tokio::test]
+    async fn trace_jsx_imports(extension: &str) {
+        let (_tmp, root) = canonical_tempdir();
+        let source = if extension == "cjs" {
+            "const { helper } = require('./helper.js');\nexports.Greeting = () => \
+             <div>{helper()}</div>;"
+        } else {
+            "import { helper } from './helper.js';\nexport const Greeting = () => \
+             <div>{helper()}</div>;"
+        };
+        let entry = write_source(&root, &format!("greeting.{extension}"), source);
+        let helper = write_source(&root, "helper.js", "export const helper = () => 'hi';");
+
+        let result = trace_root(&root, vec![entry]).trace(None).await;
+
+        assert!(result.errors.is_empty(), "{:?}", result.errors);
+        assert_eq!(result.files.len(), 2);
+        assert!(result.files.contains_key(absolute_path(&helper)));
+    }
+
+    #[test_case("ts" ; "typescript")]
+    #[test_case("mts" ; "typescript module")]
+    #[test_case("cts" ; "typescript commonjs")]
+    fn parse_typescript_angle_bracket_assertion(extension: &str) {
+        let (_tmp, root) = canonical_tempdir();
+        let file = root.join(format!("index.{extension}"));
+        let source = "import { value } from './helper.js'; export const result = <number>value;";
+        let (imports, ast) = parse_file(absolute_path(&file), source, ImportTraceType::All, true)
+            .unwrap_or_else(|error| panic!("failed to parse TypeScript: {error}"));
+
+        assert_eq!(imports.len(), 1);
+        assert_eq!(imports[0].specifier, "./helper.js");
+        assert_eq!(
+            ast.unwrap()["body"][1]["declaration"]["declarations"][0]["init"]["type"],
+            "TSTypeAssertion"
+        );
+    }
+
+    #[test]
+    fn parallel_error_rendering_matches_serial_rendering() {
+        let errors: Vec<TraceError> = (0..PARALLEL_RENDER_THRESHOLD * 2 + 3)
+            .map(|i| TraceError::InvalidTraceGlob(format!("pattern {i}")))
+            .collect();
+
+        let serial = render_errors(&errors, 1);
+        let parallel = render_errors(&errors, 8);
+
+        assert_eq!(serial.len(), errors.len());
+        assert_eq!(parallel.len(), 8);
+        assert_eq!(parallel.concat(), serial.concat());
+    }
+
     fn canonical_tempdir() -> (tempfile::TempDir, PathBuf) {
         let tmp = tempfile::tempdir().expect("create temp project");
         let root = dunce::canonicalize(tmp.path()).expect("canonicalize temp project");
@@ -552,11 +832,31 @@ mod test {
     }
 
     fn write_fixture(root: &Path, relative: &str) -> PathBuf {
+        write_source(root, relative, "export const value = 1;")
+    }
+
+    fn write_source(root: &Path, relative: &str, contents: &str) -> PathBuf {
         let path = root.join(relative);
         let parent = path.parent().expect("fixture path has parent");
         std::fs::create_dir_all(parent).expect("create fixture directory");
-        std::fs::write(&path, "export const value = 1;").expect("write fixture file");
+        std::fs::write(&path, contents).expect("write fixture file");
         path
+    }
+
+    fn absolute_system_path_buf(path: &Path) -> AbsoluteSystemPathBuf {
+        AbsoluteSystemPathBuf::new(path.to_str().expect("test path is utf-8"))
+            .expect("test path is absolute")
+    }
+
+    fn trace_root(root: &Path, files: Vec<PathBuf>) -> Tracer {
+        Tracer::new(
+            absolute_system_path_buf(root),
+            files
+                .iter()
+                .map(|file| absolute_system_path_buf(file))
+                .collect(),
+            None,
+        )
     }
 
     fn resolved_path(resolver: &Resolver, root: &Path, import: &str) -> PathBuf {
@@ -610,6 +910,84 @@ mod test {
         );
     }
 
+    fn write_alias_fixture(root: &Path, tsconfig: &str) -> PathBuf {
+        let tsconfig_path = root.join("tsconfig.json");
+        std::fs::write(&tsconfig_path, tsconfig).expect("write tsconfig");
+        write_fixture(root, "utils/helper.ts");
+        tsconfig_path
+    }
+
+    #[test_case("react" ; "bare package")]
+    #[test_case("@types/react" ; "types package")]
+    #[test_case("@scope/pkg/sub" ; "scoped subpath")]
+    #[test_case("fs" ; "node builtin")]
+    #[test_case("node:path" ; "prefixed node builtin")]
+    #[test_case("@/utils/helper" ; "path alias")]
+    #[test_case("./utils/helper" ; "relative")]
+    #[test_case("/utils/helper" ; "absolute")]
+    #[test_case("#internal" ; "subpath import")]
+    #[test_case("pkg?query" ; "query")]
+    #[test_case("pkg#fragment" ; "fragment")]
+    #[test_case("?query" ; "query only")]
+    #[test_case("" ; "empty")]
+    fn trace_resolver_matches_resolver_when_tsconfig_fails_to_load(specifier: &str) {
+        let (_tmp, root) = canonical_tempdir();
+        // `extends` names a package that isn't installed, so the tsconfig
+        // never loads.
+        let tsconfig = write_alias_fixture(
+            &root,
+            r#"{ "extends": "@repo/tsconfig/base.json", "compilerOptions": { "paths": { "@/*": ["./*"] } } }"#,
+        );
+        let tsconfig = absolute_path(&tsconfig);
+
+        let mut tsconfig_errors = HashMap::new();
+        let trace_resolver = TraceResolver::new(
+            Tracer::create_resolver(Some(tsconfig)),
+            &mut tsconfig_errors,
+        );
+        assert!(trace_resolver.tsconfig_error().is_some());
+
+        let expected = Tracer::create_resolver(Some(tsconfig))
+            .resolve(&root, specifier)
+            .map(Resolution::into_path_buf);
+        let actual = trace_resolver
+            .resolve(absolute_path(&root), specifier)
+            .map(Resolution::into_path_buf);
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn trace_resolver_loads_each_tsconfig_once() {
+        let (_tmp, root) = canonical_tempdir();
+        let tsconfig = write_alias_fixture(
+            &root,
+            r#"{ "compilerOptions": { "paths": { "@/*": ["./*"] } } }"#,
+        );
+        let tsconfig = absolute_path(&tsconfig);
+
+        let mut tsconfig_errors = HashMap::new();
+        let first = TraceResolver::new(
+            Tracer::create_resolver(Some(tsconfig)),
+            &mut tsconfig_errors,
+        );
+        let second = TraceResolver::new(
+            Tracer::create_resolver(Some(tsconfig)),
+            &mut tsconfig_errors,
+        );
+        assert!(first.tsconfig_error().is_none());
+        assert!(second.tsconfig_error().is_none());
+        assert_eq!(tsconfig_errors.len(), 1);
+        assert!(matches!(
+            (&first.tsconfig_load, &second.tsconfig_load),
+            (Some(a), Some(b)) if Arc::ptr_eq(a, b)
+        ));
+
+        let resolved = second
+            .resolve(absolute_path(&root), "@/utils/helper")
+            .map(Resolution::into_path_buf);
+        assert_eq!(resolved, Ok(root.join("utils").join("helper.ts")));
+    }
+
     #[test]
     fn create_resolver_without_tsconfig_does_not_apply_typescript_aliases() {
         let (_tmp, root) = canonical_tempdir();
@@ -646,6 +1024,153 @@ mod test {
         assert_eq!(
             resolved_path(&inferred_resolver, &root, "./foo.js"),
             root.join("foo.ts")
+        );
+    }
+
+    #[tokio::test]
+    async fn trace_resolves_each_directory_through_its_closest_tsconfig() {
+        let (_tmp, root) = canonical_tempdir();
+        write_source(
+            &root,
+            "tsconfig.json",
+            r#"{ "compilerOptions": { "baseUrl": ".", "paths": { "@/*": ["root-map/*"] } } }"#,
+        );
+        write_source(
+            &root,
+            "nested/tsconfig.json",
+            r#"{ "compilerOptions": { "baseUrl": ".", "paths": { "@/*": ["../nested-map/*"] } } }"#,
+        );
+        write_source(&root, "root-map/x.ts", "export const x = 1;");
+        write_source(&root, "nested-map/x.ts", "export const x = 1;");
+        // Siblings in the same directory share one inferred resolver.
+        write_source(&root, "nested/a.ts", "import \"@/x.ts\";");
+        write_source(&root, "nested/b.ts", "import \"@/x.ts\";");
+        write_source(&root, "c.ts", "import \"@/x.ts\";");
+
+        let result = trace_root(
+            &root,
+            vec![
+                root.join("nested/a.ts"),
+                root.join("nested/b.ts"),
+                root.join("c.ts"),
+            ],
+        )
+        .trace(None)
+        .await;
+
+        assert!(result.errors.is_empty(), "{:?}", result.errors);
+        // Files under `nested/` resolve through the nested tsconfig...
+        assert!(
+            result
+                .files
+                .contains_key(absolute_path(&root.join("nested-map/x.ts")))
+        );
+        // ...while the file at the root resolves through the root tsconfig.
+        assert!(
+            result
+                .files
+                .contains_key(absolute_path(&root.join("root-map/x.ts")))
+        );
+        assert_eq!(result.files.len(), 5);
+    }
+
+    #[tokio::test]
+    async fn trace_traces_shared_imports_once() {
+        let (_tmp, root) = canonical_tempdir();
+        write_tsconfig(&root);
+        write_source(&root, "entry.ts", "import \"./a.ts\";\nimport \"./b.ts\";");
+        write_source(&root, "a.ts", "import \"./shared.ts\";");
+        write_source(&root, "b.ts", "import \"./shared.ts\";\nimport \"./a.ts\";");
+        write_source(&root, "shared.ts", "export const shared = 1;");
+
+        let result = trace_root(&root, vec![root.join("entry.ts")])
+            .trace(None)
+            .await;
+
+        // `shared.ts` is imported by both `a.ts` and `b.ts`, and `a.ts` is
+        // queued by both `entry.ts` and `b.ts`; each file is traced once.
+        assert!(result.errors.is_empty(), "{:?}", result.errors);
+        assert_eq!(result.files.len(), 4);
+        assert!(
+            result
+                .files
+                .contains_key(absolute_path(&root.join("shared.ts")))
+        );
+    }
+
+    #[tokio::test]
+    async fn trace_without_tsconfig_reports_unresolved_imports() {
+        let (_tmp, root) = canonical_tempdir();
+        // No tsconfig or node_modules anywhere above the traced file.
+        write_source(&root, "a.ts", "import \"./missing.ts\";");
+
+        let result = trace_root(&root, vec![root.join("a.ts")]).trace(None).await;
+
+        assert_eq!(result.errors.len(), 1);
+        assert!(
+            result.errors[0]
+                .to_string()
+                .contains("failed to resolve import to `./missing.ts`")
+        );
+        assert_eq!(result.files.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn trace_with_custom_ts_config_resolves_imports() {
+        let (_tmp, root) = canonical_tempdir();
+        write_tsconfig(&root);
+        write_source(&root, "src/a.ts", "import \"./b.js\";");
+        write_source(&root, "src/b.ts", "export const b = 1;");
+
+        let tracer = Tracer::new(
+            absolute_system_path_buf(&root),
+            vec![absolute_system_path_buf(&root.join("src/a.ts"))],
+            Some(Utf8PathBuf::from("tsconfig.json")),
+        );
+        let result = tracer.trace(None).await;
+
+        assert!(result.errors.is_empty(), "{:?}", result.errors);
+        // The custom tsconfig enables TypeScript extension aliases, so the
+        // `.js` import resolves to the `.ts` file.
+        assert!(
+            result
+                .files
+                .contains_key(absolute_path(&root.join("src/b.ts")))
+        );
+        assert_eq!(result.files.len(), 2);
+    }
+
+    #[tokio::test]
+    async fn reverse_trace_finds_dependents_sharing_directories() {
+        let (_tmp, root) = canonical_tempdir();
+        write_tsconfig(&root);
+        write_source(&root, "target.ts", "export const target = 1;");
+        write_source(&root, "dirA/x.ts", "import \"../target.ts\";");
+        write_source(&root, "dirA/y.ts", "import \"../target.ts\";");
+        write_source(&root, "dirB/z.ts", "import \"../target.ts\";");
+
+        let result = trace_root(&root, vec![root.join("target.ts")])
+            .reverse_trace()
+            .await;
+
+        assert!(result.errors.is_empty(), "{:?}", result.errors);
+        // The `dirA` siblings share a directory and therefore an inferred
+        // resolver.
+        assert_eq!(result.files.len(), 3);
+        assert!(
+            result
+                .files
+                .contains_key(absolute_path(&root.join("dirA/x.ts")))
+        );
+        assert!(
+            result
+                .files
+                .contains_key(absolute_path(&root.join("dirA/y.ts")))
+        );
+        assert!(
+            result
+                .files
+                .contains_key(absolute_path(&root.join("dirB/z.ts")))
         );
     }
 }

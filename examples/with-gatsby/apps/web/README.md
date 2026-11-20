@@ -1,15 +1,22 @@
-## 🚀 Quick start
+## Quick start
 
-1.  **Start developing.**
+Install dependencies from the workspace root, then start Gatsby:
 
-    Navigate into your new site’s directory and start it up.
+```sh
+pnpm --filter web dev
+```
 
-    ```bash
-    turbo dev
-    ```
+Open [http://localhost:8000](http://localhost:8000) and edit `src/pages/index.tsx` to see updates.
 
-2.  **Open the code and start customizing!**
+The app consumes the shared `@repo/ui` TypeScript source through `gatsby-plugin-compile-es6-packages`.
 
-    Your site is now running at http://localhost:8000!
+## Production
 
-    Edit `src/pages/index.tsx` to see your site update in real-time!
+From the workspace root:
+
+```sh
+pnpm --filter web build
+pnpm --filter web start
+```
+
+The Gatsby production preview is available at [http://localhost:9000](http://localhost:9000).

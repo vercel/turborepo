@@ -1,34 +1,30 @@
-const { resolve } = require("node:path");
+const babelParser = require("@babel/eslint-parser");
+const prettierConfig = require("eslint-config-prettier");
+const turboConfigModule = require("eslint-config-turbo/flat");
 
-const project = resolve(process.cwd(), "tsconfig.json");
+const turboConfig = turboConfigModule.default ?? turboConfigModule;
 
-/** @type {import("eslint").Linter.Config} */
-module.exports = {
-  extends: ["eslint:recommended", "prettier", "turbo"],
-  plugins: ["only-warn"],
-  globals: {
-    React: true,
-    JSX: true,
+/** @type {import("eslint").Linter.Config[]} */
+module.exports = [
+  {
+    ignores: ["dist/**", "generated/**", ".next/**", "next-env.d.ts"],
   },
-  env: {
-    node: true,
-  },
-  settings: {
-    "import/resolver": {
-      typescript: {
-        project,
+  {
+    files: ["**/*.{ts,tsx}"],
+    languageOptions: {
+      parser: babelParser,
+      parserOptions: {
+        requireConfigFile: false,
+        babelOptions: {
+          babelrc: false,
+          configFile: false,
+          parserOpts: {
+            plugins: ["typescript", "jsx"],
+          },
+        },
       },
     },
   },
-  ignorePatterns: [
-    // Ignore dotfiles
-    ".*.js",
-    "node_modules/",
-    "dist/",
-  ],
-  overrides: [
-    {
-      files: ["*.js?(x)", "*.ts?(x)"],
-    },
-  ],
-};
+  ...turboConfig,
+  prettierConfig,
+];

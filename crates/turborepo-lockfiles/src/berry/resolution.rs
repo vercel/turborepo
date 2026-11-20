@@ -1,18 +1,12 @@
-use std::{fmt, sync::OnceLock};
+use std::fmt;
 
 use pest::{Parser, iterators::Pair};
 use pest_derive::Parser;
-use regex::Regex;
+use regex::regex;
 use semver::Version;
 use thiserror::Error;
 
 use super::identifiers::{Descriptor, Ident, Locator};
-
-fn tag_regex() -> Option<&'static Regex> {
-    static RE: OnceLock<Option<Regex>> = OnceLock::new();
-    RE.get_or_init(|| Regex::new(r"^[^v][a-z0-9._-]*$").ok())
-        .as_ref()
-}
 
 #[derive(Debug, Error)]
 pub enum Error {
@@ -95,6 +89,22 @@ fn parse_specifier(specifier: Pair<'_, Rule>) -> Result<Option<Specifier>, Error
 }
 
 impl Resolution {
+    /// The unscoped name of the dependency this resolution overrides.
+    /// [`Resolution::reduce_dependency`] can only match a dependency with
+    /// this exact ident, so callers may bucket resolutions by name instead
+    /// of scanning every resolution for every dependency edge.
+    pub fn target_name(&self) -> &str {
+        self.descriptor.ident.name()
+    }
+
+    /// The ident of the depending package this resolution is scoped to
+    /// (`parent/dependency`), if any. Only scoped resolutions consult the
+    /// depending package's locator in [`Resolution::reduce_dependency`], and
+    /// they can only match a locator with this exact ident.
+    pub fn parent_ident(&self) -> Option<&Ident<'static>> {
+        self.from.as_ref().map(Specifier::ident)
+    }
+
     /// Returns a new descriptor if an override is applicable
     // reference: version that this resolution resolves to
     // locator: package that depends on the dependency
@@ -135,6 +145,9 @@ impl Resolution {
                 // Yarn4 encodes the default npm protocol in yarn.lock, but not in resolutions field of package.json
                 // We check if the ranges match when we add `npm:` to range coming from resolutions.
                 && !Self::eq_with_protocol(&dependency.range, resolution_range, "npm:")
+                // Resolutions may also encode `npm:` while the manifest range omits it,
+                // e.g. `"debug@npm:^4.0.0"` targeting `"debug": "^4.0.0"`.
+                && !Self::eq_with_protocol(resolution_range, &dependency.range, "npm:")
         {
             return None;
         }
@@ -142,8 +155,7 @@ impl Resolution {
         // We have a match an we now override the dependency
         let mut dependency_override = dependency.clone();
         dependency_override.range = reference.to_string().into();
-        if Version::parse(reference).is_ok() || tag_regex().is_some_and(|re| re.is_match(reference))
-        {
+        if Version::parse(reference).is_ok() || regex!(r"^[^v][a-z0-9._-]*$").is_match(reference) {
             dependency_override.range.to_mut().insert_str(0, "npm:")
         }
 
@@ -173,7 +185,7 @@ impl Resolution {
         default_protocol: &str,
     ) -> bool {
         match Version::parse(incomplete_reference).is_ok()
-            || tag_regex().is_some_and(|re| re.is_match(incomplete_reference))
+            || regex!(r"^[^v][a-z0-9._-]*$").is_match(incomplete_reference)
         {
             // We need to inject a protocol
             true => {
@@ -328,6 +340,22 @@ mod test {
         assert_eq!(
             dependency,
             Some(Descriptor::try_from("lodash@npm:4.17.21").unwrap())
+        );
+    }
+
+    #[test]
+    fn test_patch_resolution_with_npm_protocol_selector() {
+        // Resolution selectors may include `npm:` while the manifest range doesn't.
+        // See https://github.com/vercel/turborepo/issues/14336
+        let resolution = parse_resolution("debug@npm:^4.0.0").unwrap();
+        let dependency = resolution.reduce_dependency(
+            "patch:debug@npm%3A4.4.3#~/.yarn/patches/debug-npm-4.4.3.patch",
+            &Descriptor::try_from("debug@^4.0.0").unwrap(),
+            &Locator::try_from("app@workspace:packages/app").unwrap(),
+        );
+        assert_eq!(
+            dependency,
+            Some(Descriptor::try_from("debug@npm:4.4.3").unwrap())
         );
     }
 

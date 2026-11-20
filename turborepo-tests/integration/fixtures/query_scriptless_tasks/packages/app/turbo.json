@@ -1,0 +1,21 @@
+{
+  "extends": [
+    "//",
+    "shared"
+  ],
+  "tags": [
+    "application"
+  ],
+  "tasks": {
+    "local-command": {
+      "command": [
+        "echo",
+        "local"
+      ],
+      "tags": [
+        "ci",
+        "local"
+      ]
+    }
+  }
+}

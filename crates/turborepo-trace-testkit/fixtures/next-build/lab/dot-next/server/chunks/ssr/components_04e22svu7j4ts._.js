@@ -1,0 +1,3 @@
+module.exports=[34136,a=>{"use strict";var b=a.i(87924);a.s(["Button",0,function({label:a,type:c}){return(0,b.jsx)("button",{type:c??"button",className:"rounded bg-blue-500 px-2 text-white",children:a})}])},36106,a=>{"use strict";var b=a.i(87924),c=a.i(72131),d=a.i(34136);a.s(["Counter",0,function(){let[a,e]=(0,c.useState)(0);return(0,b.jsxs)("div",{onClick:()=>e(a+1),children:[(0,b.jsx)("span",{"data-testid":"count",children:a}),(0,b.jsx)(d.Button,{label:"inc"})]})}])}];
+
+//# sourceMappingURL=components_04e22svu7j4ts._.js.map

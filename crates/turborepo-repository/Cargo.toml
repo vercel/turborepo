@@ -10,16 +10,15 @@ workspace = true
 [dependencies]
 anyhow = { workspace = true }
 async-once-cell = "0.5.3"
-
-biome_deserialize = { workspace = true }
-biome_deserialize_macros = { workspace = true }
-biome_diagnostics = { workspace = true }
 biome_json_parser = { workspace = true }
 
+
+dunce = { workspace = true }
 either = { workspace = true }
+futures = { workspace = true }
+glob = "0.3.3"
 globwalk = { version = "0.1.0", path = "../turborepo-globwalk" }
 itertools = { workspace = true }
-lazy-regex = "2.5.0"
 miette = { workspace = true }
 node-semver = "2.2.0"
 petgraph = { workspace = true }
@@ -30,19 +29,26 @@ serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 serde_yaml_ng = { workspace = true }
 thiserror = { workspace = true }
-tokio-stream = "0.1.14"
 tokio.workspace = true
+toml = { workspace = true }
+toml_edit = { workspace = true }
 tracing.workspace = true
-turbopath = { workspace = true, features = ["biome"] }
+turbopath = { workspace = true }
 turborepo-errors = { workspace = true }
 turborepo-graph-utils = { path = "../turborepo-graph-utils" }
+turborepo-lockfile-hash = { workspace = true }
 turborepo-lockfiles = { workspace = true }
+turborepo-package-manager = { workspace = true }
 turborepo-rayon-compat = { workspace = true }
-turborepo-unescape = { workspace = true }
 wax = { workspace = true }
+which = { workspace = true }
+xxhash-rust = { version = "0.8", features = ["xxh64"] }
 
 [dev-dependencies]
 insta = { workspace = true }
 pretty_assertions = { workspace = true }
 tempfile = { workspace = true }
 test-case = { workspace = true }
+
+[features]
+test-util = []

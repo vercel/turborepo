@@ -1,6 +1,5 @@
 import path from "node:path";
 import fs from "node:fs";
-import crypto from "node:crypto";
 import type { Rule } from "eslint";
 import type { Node, MemberExpression } from "estree";
 import {
@@ -20,15 +19,28 @@ const debug = process.env.RUNNER_DEBUG
     };
 
 // Module-level caches to share state across all files in a single ESLint run
+interface TurboConfigStat {
+  mtimeMs: number;
+  size: number;
+}
+
 interface CachedProject {
   project: Project;
-  turboConfigHashes: Map<string, string>;
-  configPaths: Array<string>;
+  turboConfigStats: Map<string, TurboConfigStat>;
+  lastValidatedAt: number;
 }
 
 const projectCache = new Map<string, CachedProject>();
 const frameworkEnvCache = new Map<string, Set<RegExp>>();
 const packageJsonDepCache = new Map<string, Set<string>>();
+
+// ESLint creates this rule once per source file. Without coalescing, every
+// creation re-scans all workspaces for turbo.json/turbo.jsonc, which turns
+// config validation into O(source files x workspace configs) filesystem work
+// even when nothing changed. Rate-limiting validation to one sweep per
+// interval amortizes it across a batch of files (a CLI lint run or an editor
+// lint pass), while subsequent lint runs still pick up config changes.
+const CONFIG_VALIDATION_INTERVAL_MS = 1_000;
 
 export interface RuleContextWithOptions extends Rule.RuleContext {
   options: Array<{
@@ -152,33 +164,6 @@ function findTurboConfigInDir(dirPath: string): string | null {
 }
 
 /**
- * Get all turbo config file paths that are currently loaded in the project
- */
-function getTurboConfigPaths(project: Project): Array<string> {
-  const paths: Array<string> = [];
-
-  // Add root turbo config if it exists and is loaded
-  if (project.projectRoot?.turboConfig) {
-    const configPath = findTurboConfigInDir(project.projectRoot.workspacePath);
-    if (configPath) {
-      paths.push(configPath);
-    }
-  }
-
-  // Add workspace turbo configs that are loaded
-  for (const workspace of project.projectWorkspaces) {
-    if (workspace.turboConfig) {
-      const configPath = findTurboConfigInDir(workspace.workspacePath);
-      if (configPath) {
-        paths.push(configPath);
-      }
-    }
-  }
-
-  return paths;
-}
-
-/**
  * Scan filesystem for all turbo.json/turbo.jsonc files across all workspaces.
  * This scans ALL workspaces regardless of whether they currently have turboConfig loaded,
  * allowing detection of newly created turbo.json files.
@@ -206,33 +191,74 @@ function scanForTurboConfigs(project: Project): Array<string> {
 }
 
 /**
- * Compute hashes for all turbo.config(c) files
+ * Get a cheap signature (mtime + size) for a turbo config file, or `null` if
+ * the file is missing or unreadable. Unlike content hashing, this never reads
+ * the file's contents.
  */
-function computeTurboConfigHashes(
-  configPaths: Array<string>
-): Map<string, string> {
-  const hashes = new Map<string, string>();
-
-  for (const configPath of configPaths) {
-    const content = fs.readFileSync(configPath, "utf-8");
-    const hash = crypto.createHash("md5").update(content).digest("hex");
-    hashes.set(configPath, hash);
+function getTurboConfigStat(filePath: string): TurboConfigStat | null {
+  try {
+    const stats = fs.statSync(filePath);
+    return { mtimeMs: stats.mtimeMs, size: stats.size };
+  } catch {
+    // File no longer exists or is unreadable
+    return null;
   }
-
-  return hashes;
 }
 
 /**
- * Check if a single config file has changed by comparing its hash
+ * Compute stat signatures for all turbo.config(c) files, skipping any that
+ * cannot be stat'ed
  */
-function hasConfigChanged(filePath: string, expectedHash: string): boolean {
-  try {
-    const content = fs.readFileSync(filePath, "utf-8");
-    const currentHash = crypto.createHash("md5").update(content).digest("hex");
-    return currentHash !== expectedHash;
-  } catch {
-    // File no longer exists or is unreadable
-    return true;
+function computeTurboConfigStats(
+  configPaths: Array<string>
+): Map<string, TurboConfigStat> {
+  const stats = new Map<string, TurboConfigStat>();
+
+  for (const configPath of configPaths) {
+    const stat = getTurboConfigStat(configPath);
+    if (stat) {
+      stats.set(configPath, stat);
+    }
+  }
+
+  return stats;
+}
+
+/**
+ * Reload the cached project and refresh the tracked turbo config stats
+ */
+function reloadCachedProject(cachedProject: CachedProject): void {
+  cachedProject.project.reload();
+  cachedProject.turboConfigStats = computeTurboConfigStats(
+    scanForTurboConfigs(cachedProject.project)
+  );
+}
+
+/**
+ * Check whether the cached project still matches the turbo configs on disk,
+ * reloading the project if any config was added, removed, or modified.
+ * Configs are compared by stat metadata (mtime + size) rather than content
+ * hashes so unchanged configs are never re-read.
+ */
+function validateCachedProject(cachedProject: CachedProject): void {
+  const currentStats = computeTurboConfigStats(
+    scanForTurboConfigs(cachedProject.project)
+  );
+  const previousStats = cachedProject.turboConfigStats;
+
+  const statsUnchanged =
+    currentStats.size === previousStats.size &&
+    [...currentStats].every(([configPath, stat]) => {
+      const previousStat = previousStats.get(configPath);
+      return (
+        previousStat !== undefined &&
+        previousStat.mtimeMs === stat.mtimeMs &&
+        previousStat.size === stat.size
+      );
+    });
+
+  if (!statsUnchanged) {
+    reloadCachedProject(cachedProject);
   }
 }
 
@@ -325,62 +351,31 @@ function create(context: RuleContextWithOptions): Rule.RuleListener {
   if (!cachedProject) {
     project = new Project(cwd);
     if (project.valid()) {
-      const configPaths = getTurboConfigPaths(project);
-      const hashes = computeTurboConfigHashes(configPaths);
       projectCache.set(projectKey, {
         project,
-        turboConfigHashes: hashes,
-        configPaths
+        turboConfigStats: computeTurboConfigStats(scanForTurboConfigs(project)),
+        lastValidatedAt: Date.now()
       });
       debug(`Cached new project for ${projectKey}`);
     }
   } else {
     project = cachedProject.project;
 
-    // Check if any turbo.json(c) configs have changed
-    try {
-      const currentConfigPaths = scanForTurboConfigs(project);
-
-      // Quick path comparison - cheapest check first
-      const pathsUnchanged =
-        currentConfigPaths.length === cachedProject.configPaths.length &&
-        currentConfigPaths.every((p, i) => p === cachedProject.configPaths[i]);
-
-      if (!pathsUnchanged) {
-        // Paths changed (added/removed configs), must reload
-        debug(`Turbo config paths changed for ${projectKey}, reloading...`);
-        const newHashes = computeTurboConfigHashes(currentConfigPaths);
-        project.reload();
-        cachedProject.turboConfigHashes = newHashes;
-        cachedProject.configPaths = currentConfigPaths;
-      } else {
-        // Paths unchanged - check if any file content changed (early exit on first change)
-        let contentChanged = false;
-        for (const [
-          filePath,
-          expectedHash
-        ] of cachedProject.turboConfigHashes) {
-          if (hasConfigChanged(filePath, expectedHash)) {
-            contentChanged = true;
-            break;
-          }
-        }
-
-        if (contentChanged) {
-          debug(`Turbo config content changed for ${projectKey}, reloading...`);
-          const newHashes = computeTurboConfigHashes(currentConfigPaths);
-          project.reload();
-          cachedProject.turboConfigHashes = newHashes;
-          cachedProject.configPaths = currentConfigPaths;
-        }
+    // ESLint invokes this rule once per source file, so only validate the
+    // cached project's turbo configs at most once per interval. Batches of
+    // unchanged files skip the filesystem entirely, while edits, added or
+    // removed configs, and subsequent lint runs (e.g. from a persistent
+    // editor) still trigger a reload.
+    const now = Date.now();
+    if (now - cachedProject.lastValidatedAt >= CONFIG_VALIDATION_INTERVAL_MS) {
+      cachedProject.lastValidatedAt = now;
+      try {
+        validateCachedProject(cachedProject);
+      } catch (error) {
+        // Config file was deleted or is unreadable, reload project
+        debug(`Error validating configs for ${projectKey}, reloading...`);
+        reloadCachedProject(cachedProject);
       }
-    } catch (error) {
-      // Config file was deleted or is unreadable, reload project
-      debug(`Error computing hashes for ${projectKey}, reloading...`);
-      project.reload();
-      const configPaths = scanForTurboConfigs(project);
-      cachedProject.turboConfigHashes = computeTurboConfigHashes(configPaths);
-      cachedProject.configPaths = configPaths;
     }
   }
 

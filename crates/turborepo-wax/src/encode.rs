@@ -114,20 +114,30 @@ enum Grouping {
 }
 
 impl Grouping {
-    pub fn push_str(&self, pattern: &mut String, encoding: &str) {
-        self.push_with(pattern, || encoding.into());
-    }
-
-    pub fn push_with<'p, F>(&self, pattern: &mut String, f: F)
-    where
-        F: Fn() -> Cow<'p, str>,
-    {
+    fn push_open(&self, pattern: &mut String) {
         match self {
             Grouping::Capture => pattern.push('('),
             Grouping::NonCapture => pattern.push_str("(?:"),
         }
-        pattern.push_str(f().as_ref());
+    }
+
+    fn push_close(pattern: &mut String) {
         pattern.push(')');
+    }
+
+    fn push_str(&self, pattern: &mut String, encoding: &str) {
+        self.push_open(pattern);
+        pattern.push_str(encoding);
+        Grouping::push_close(pattern);
+    }
+
+    fn push_with<'p, F>(&self, pattern: &mut String, f: F)
+    where
+        F: Fn() -> Cow<'p, str>,
+    {
+        self.push_open(pattern);
+        pattern.push_str(f().as_ref());
+        Grouping::push_close(pattern);
     }
 }
 
@@ -140,6 +150,16 @@ pub fn case_folded_eq(left: &str, right: &str) -> bool {
     } else {
         false
     }
+}
+
+fn class_matches_anything(pattern: &str) -> bool {
+    let Ok(hir) = regex_syntax::Parser::new().parse(pattern) else {
+        return false;
+    };
+    !matches!(
+        hir.kind(),
+        regex_syntax::hir::HirKind::Class(class) if class.is_empty()
+    )
 }
 
 pub fn compile<'t, A, T>(tokens: impl IntoIterator<Item = T>) -> Result<Regex, CompileError>
@@ -158,9 +178,6 @@ where
     })
 }
 
-// TODO: Some versions of `const_format` in `^0.2.0` fail this lint in
-// `formatcp`. See       https://github.com/rodrimati1992/const_format_crates/issues/38
-#[allow(clippy::double_parens)]
 fn encode<'t, A, T>(
     grouping: Grouping,
     superposition: Option<Position>,
@@ -179,22 +196,21 @@ fn encode<'t, A, T>(
     };
 
     fn encode_intermediate_tree(grouping: Grouping, pattern: &mut String) {
-        pattern.push_str(sepexpr!("(?:{0}|{0}"));
+        let invariant_grouping = Grouping::NonCapture;
+        invariant_grouping.push_open(pattern);
+        pattern.push_str(sepexpr!("{0}|{0}"));
         grouping.push_str(pattern, sepexpr!(".*{0}"));
-        pattern.push(')');
+        Grouping::push_close(pattern);
     }
-
-    // TODO: Use `Grouping` everywhere a group is encoded. For invariant groups that
-    // ignore       `grouping`, construct a local `Grouping` instead.
+    let mut is_case_insensitive = None;
     for (position, token) in tokens.into_iter().with_position() {
         match (position, token.borrow().kind()) {
             (_, Literal(literal)) => {
-                // TODO: Only encode changes to casing flags.
                 // TODO: Should Unicode support also be toggled by casing flags?
-                if literal.is_case_insensitive() {
-                    pattern.push_str("(?i)");
-                } else {
-                    pattern.push_str("(?-i)");
+                let case_insensitive = literal.is_case_insensitive();
+                if is_case_insensitive != Some(case_insensitive) {
+                    pattern.push_str(if case_insensitive { "(?i)" } else { "(?-i)" });
+                    is_case_insensitive = Some(case_insensitive);
                 }
                 pattern.push_str(&literal.text().escaped());
             }
@@ -205,14 +221,15 @@ fn encode<'t, A, T>(
                     .iter()
                     .map(|tokens| {
                         let mut pattern = String::new();
-                        pattern.push_str("(?:");
+                        let invariant_grouping = Grouping::NonCapture;
+                        invariant_grouping.push_open(&mut pattern);
                         encode(
-                            Grouping::NonCapture,
+                            invariant_grouping,
                             superposition.or(Some(position)),
                             &mut pattern,
                             tokens.iter(),
                         );
-                        pattern.push(')');
+                        Grouping::push_close(&mut pattern);
                         pattern
                     })
                     .collect();
@@ -222,17 +239,19 @@ fn encode<'t, A, T>(
                 let encoding = {
                     let (lower, upper) = repetition.bounds();
                     let mut pattern = String::new();
-                    pattern.push_str("(?:");
+                    let invariant_grouping = Grouping::NonCapture;
+                    invariant_grouping.push_open(&mut pattern);
                     encode(
-                        Grouping::NonCapture,
+                        invariant_grouping,
                         superposition.or(Some(position)),
                         &mut pattern,
                         repetition.tokens().iter(),
                     );
+                    Grouping::push_close(&mut pattern);
                     pattern.push_str(&if let Some(upper) = upper {
-                        format!("){{{},{}}}", lower, upper)
+                        format!("{{{},{}}}", lower, upper)
                     } else {
-                        format!("){{{},}}", lower)
+                        format!("{{{},}}", lower)
                     });
                     pattern
                 };
@@ -266,17 +285,13 @@ fn encode<'t, A, T>(
                         pattern.push_str(nsepexpr!("&&{0}"));
                     }
                     pattern.push(']');
-                    // TODO: The compiled `Regex` is discarded. Is there a way to check the
-                    //       correctness of the expression but do less work (i.e., don't build a
-                    //       complete `Regex`)?
-                    // Compile the character class sub-expression. This may fail if the subtraction
-                    // of the separator pattern yields an empty character class (meaning that the
-                    // glob expression matches only separator characters on the target platform).
-                    if Regex::new(&pattern).is_ok() {
+                    // Parse the class without compiling a complete `Regex`. The result may be
+                    // empty if separator subtraction removes every character in the class.
+                    if class_matches_anything(&pattern) {
                         pattern.into()
                     } else {
-                        // If compilation fails, then use `NEVER_EXPRESSION`, which matches
-                        // nothing.
+                        // If parsing fails or the class is empty, use `NEVER_EXPRESSION`, which
+                        // matches nothing.
                         NEVER_EXPRESSION.into()
                     }
                 });
@@ -290,9 +305,11 @@ fn encode<'t, A, T>(
                 } else if *has_root {
                     grouping.push_str(pattern, sepexpr!("{0}.*{0}?"));
                 } else {
-                    pattern.push_str(sepexpr!("(?:{0}?|"));
+                    let invariant_grouping = Grouping::NonCapture;
+                    invariant_grouping.push_open(pattern);
+                    pattern.push_str(sepexpr!("{0}?|"));
                     grouping.push_str(pattern, sepexpr!(".*{0}"));
-                    pattern.push(')');
+                    Grouping::push_close(pattern);
                 }
             }
             (Middle, Wildcard(Tree { .. })) => {
@@ -302,9 +319,11 @@ fn encode<'t, A, T>(
                 if let Some(First | Middle) = superposition {
                     encode_intermediate_tree(grouping, pattern);
                 } else {
-                    pattern.push_str(sepexpr!("(?:{0}?|{0}"));
+                    let invariant_grouping = Grouping::NonCapture;
+                    invariant_grouping.push_open(pattern);
+                    pattern.push_str(sepexpr!("{0}?|{0}"));
                     grouping.push_str(pattern, ".*");
-                    pattern.push(')');
+                    Grouping::push_close(pattern);
                 }
             }
             (Only, Wildcard(Tree { .. })) => grouping.push_str(pattern, ".*"),
@@ -314,7 +333,21 @@ fn encode<'t, A, T>(
 
 #[cfg(test)]
 mod tests {
-    use crate::encode;
+    use crate::{encode, token::TokenTree};
+    #[test]
+    fn class_matches_anything_checks_syntax_and_empty_intersections() {
+        assert!(encode::class_matches_anything("[ab&&[^a]]"));
+        assert!(!encode::class_matches_anything("[a&&[^a]]"));
+        assert!(!encode::class_matches_anything("[z-a]"));
+    }
+
+    #[test]
+    fn class_restricted_to_separators_matches_nothing() {
+        let tokens = crate::token::parse("[/]").unwrap();
+        let regex = encode::compile(tokens.tokens().iter()).unwrap();
+
+        assert!(!regex.is_match("/"));
+    }
 
     #[test]
     fn case_folded_eq() {
@@ -324,5 +357,23 @@ mod tests {
         assert!(!encode::case_folded_eq("a", "b"));
         assert!(!encode::case_folded_eq("aa", "a"));
         assert!(!encode::case_folded_eq("a", "aa"));
+    }
+
+    #[test]
+    fn only_encodes_changes_to_casing_flags() {
+        let tokens = crate::token::parse("(?i)a(?i)b(?-i)c(?-i)d").unwrap();
+        let regex = encode::compile(tokens.tokens().iter()).unwrap();
+
+        assert_eq!(regex.as_str(), "^(?i)ab(?-i)cd$");
+    }
+
+    #[test]
+    fn casing_flags_in_groups_do_not_change_outer_state() {
+        let tokens = crate::token::parse("(?-i)a{(?i)b,(?-i)c}(?-i)d").unwrap();
+        let regex = encode::compile(tokens.tokens().iter()).unwrap();
+
+        assert!(regex.is_match("aBd"));
+        assert!(!regex.is_match("aBD"));
+        assert!(!regex.is_match("Abd"));
     }
 }

@@ -112,8 +112,12 @@ export async function transformer({
     });
   }
 
-  // Add names only to packages that are missing one.
+  // Add names only to packages that are missing one. A generated name can
+  // collide with an existing one (or another generated one), so check them all
+  // before writing anything.
   const existingNames = new Set(nameToPackages.keys());
+  const newNames: Array<[string, PartialPackageJson, string]> = [];
+  const collisions: Array<string> = [];
   for (const [pkgJsonPath, pkgJsonContent] of Object.entries(
     packageToContent
   )) {
@@ -122,15 +126,30 @@ export async function transformer({
         pkgPath: pkgJsonPath,
         pkgName: undefined
       });
-      runner.modifyFile({
-        filePath: pkgJsonPath,
-        after: {
-          ...pkgJsonContent,
-          name: newName
-        }
-      });
+      if (existingNames.has(newName)) {
+        collisions.push(
+          `  - "${newName}" for ${path.relative(root, pkgJsonPath)}`
+        );
+      }
       existingNames.add(newName);
+      newNames.push([pkgJsonPath, pkgJsonContent, newName]);
     }
+  }
+
+  if (collisions.length > 0) {
+    return runner.abortTransform({
+      reason: `Generated names would duplicate existing "name" fields:\n${collisions.join("\n")}\nPlease add a "name" to these packages manually and re-run the codemod.`
+    });
+  }
+
+  for (const [pkgJsonPath, pkgJsonContent, newName] of newNames) {
+    runner.modifyFile({
+      filePath: pkgJsonPath,
+      after: {
+        ...pkgJsonContent,
+        name: newName
+      }
+    });
   }
 
   return runner.finish();

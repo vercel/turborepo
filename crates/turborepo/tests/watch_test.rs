@@ -113,6 +113,9 @@ fn spawn_turbo_watch_with_tasks_and_stdio(
     for task in tasks {
         cmd.arg(task);
     }
+    for key in common::ambient_turbo_env_keys() {
+        cmd.env_remove(&key);
+    }
     cmd.env("TURBO_TELEMETRY_MESSAGE_DISABLED", "1")
         .env("TURBO_GLOBAL_WARNING_DISABLED", "1")
         .env("TURBO_PRINT_VERSION_DISABLED", "1")
@@ -233,6 +236,45 @@ fn retry_file_change(test_dir: &Path, pkg: &str, before: usize, max_attempts: us
         }
     }
     marker_count(test_dir, pkg)
+}
+
+/// Modify a package README and retry until its observer acknowledges the
+/// change. Filesystem watchers may coalesce notifications under load, so each
+/// attempt writes and commits distinct content.
+fn retry_observed_change(
+    test_dir: &Path,
+    pkg: &str,
+    description: &str,
+    before: usize,
+    max_attempts: usize,
+) -> usize {
+    let readme = test_dir.join(format!("packages/{pkg}/README.md"));
+    for attempt in 0..max_attempts {
+        fs::write(&readme, format!("# {description} (attempt {attempt})\n")).unwrap();
+        common::git(test_dir, &["add", "."]);
+        common::git(
+            test_dir,
+            &[
+                "commit",
+                "-m",
+                &format!("{description} (attempt {attempt})"),
+                "--quiet",
+            ],
+        );
+
+        let count = wait_for_prefixed_markers(
+            test_dir,
+            pkg,
+            "observe-",
+            before + 1,
+            Duration::from_secs(10),
+        );
+        if count > before {
+            return count;
+        }
+    }
+
+    prefixed_marker_count(test_dir, pkg, "observe-")
 }
 
 fn setup_watch_test() -> (tempfile::TempDir, PathBuf) {
@@ -373,6 +415,189 @@ fn watch_task_inputs_reruns_deferred_dependency_output_consumers() {
         "package b should have rebuilt because its hash includes package a's deferred dependency \
          outputs. before: {b_before}, after: {b_after}"
     );
+}
+
+fn setup_watch_turbo_root_input_test() -> (tempfile::TempDir, PathBuf) {
+    let (tempdir, test_dir) = setup_watch_test();
+
+    fs::write(test_dir.join("schema.json"), "{\"v\":1}\n").unwrap();
+    fs::write(
+        test_dir.join("turbo.json"),
+        r#"{
+  "$schema": "https://turborepo.dev/schema.json",
+  "futureFlags": {
+    "watchUsingTaskInputs": true
+  },
+  "tasks": {
+    "build": {
+      "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/schema.json"],
+      "outputs": []
+    }
+  }
+}
+"#,
+    )
+    .unwrap();
+
+    common::git(&test_dir, &["add", "."]);
+    common::git(
+        &test_dir,
+        &[
+            "commit",
+            "-m",
+            "configure turbo root input watch test",
+            "--quiet",
+        ],
+    );
+
+    (tempdir, test_dir)
+}
+
+#[test]
+fn watch_task_inputs_reruns_on_turbo_root_input_without_root_tasks() {
+    let (_tempdir, test_dir) = setup_watch_turbo_root_input_test();
+    let guard = WatchGuard::new(spawn_turbo_watch(&test_dir));
+
+    wait_for_markers(&test_dir, "a", 1, Duration::from_secs(30));
+    std::thread::sleep(Duration::from_secs(2));
+
+    let before = marker_count(&test_dir, "a");
+    let mut after = before;
+    for attempt in 0..3 {
+        fs::write(
+            test_dir.join("schema.json"),
+            format!("{{\"v\":{}}}\n", 2 + attempt),
+        )
+        .unwrap();
+        common::git(&test_dir, &["add", "."]);
+        common::git(&test_dir, &["commit", "-m", "change schema", "--quiet"]);
+        after = wait_for_markers(&test_dir, "a", before + 1, Duration::from_secs(15));
+        if after > before {
+            break;
+        }
+    }
+
+    drop(guard);
+
+    assert!(
+        after > before,
+        "package a declares $TURBO_ROOT$/schema.json as an input and turbo.json has no root \
+         tasks, so a root file change must still rerun it. before: {before}, after: {after}"
+    );
+}
+
+#[test]
+fn watch_new_package_builds_and_rebuilds_on_source_and_dependency_changes() {
+    let (_tempdir, test_dir) = setup_watch_test();
+    let config = r#"{
+  "$schema": "https://turborepo.dev/schema.json",
+  "tasks": {
+    "build": {
+      "dependsOn": ["^build"],
+      "inputs": ["src/**"],
+      "outputs": []
+    }
+  }
+}
+"#;
+    fs::write(test_dir.join("turbo.json"), config).unwrap();
+    for pkg in ["a", "b"] {
+        let package_dir = test_dir.join("packages").join(pkg);
+        fs::create_dir(package_dir.join("src")).unwrap();
+        fs::rename(package_dir.join("src.js"), package_dir.join("src/src.js")).unwrap();
+    }
+    common::git(&test_dir, &["add", "."]);
+    common::git(
+        &test_dir,
+        &["commit", "-m", "configure source inputs", "--quiet"],
+    );
+
+    let guard = WatchGuard::new(spawn_turbo_watch(&test_dir));
+    for pkg in ["a", "b"] {
+        assert!(
+            wait_for_markers(&test_dir, pkg, 1, Duration::from_secs(30)) >= 1,
+            "package {pkg} should build before adding package c"
+        );
+    }
+
+    let package_dir = test_dir.join("packages/c");
+    fs::create_dir_all(package_dir.join("src")).unwrap();
+    let build_script = fs::read_to_string(test_dir.join("packages/a/build.js")).unwrap();
+    fs::write(
+        package_dir.join("build.js"),
+        build_script.replace("pkg-a", "pkg-c"),
+    )
+    .unwrap();
+    fs::copy(
+        test_dir.join("packages/a/src/src.js"),
+        package_dir.join("src/src.js"),
+    )
+    .unwrap();
+    fs::write(
+        package_dir.join("package.json"),
+        r#"{
+  "name": "pkg-c",
+  "scripts": {
+    "build": "node build.js"
+  },
+  "dependencies": {
+    "pkg-a": "*"
+  }
+}
+"#,
+    )
+    .unwrap();
+    common::git(&test_dir, &["add", "."]);
+    common::git(&test_dir, &["commit", "-m", "add package c", "--quiet"]);
+
+    let c_initial = wait_for_markers(&test_dir, "c", 1, Duration::from_secs(30));
+    assert!(
+        c_initial >= 1,
+        "new package c should build without editing root configuration (#14842)"
+    );
+
+    fs::write(
+        package_dir.join("src/src.js"),
+        "module.exports = { c: 2 };\n",
+    )
+    .unwrap();
+    common::git(&test_dir, &["add", "."]);
+    common::git(
+        &test_dir,
+        &["commit", "-m", "change package c source", "--quiet"],
+    );
+    let c_after_source = wait_for_markers(&test_dir, "c", c_initial + 1, Duration::from_secs(30));
+    assert!(
+        c_after_source > c_initial,
+        "new package c should rebuild after its source changes"
+    );
+
+    let a_before = marker_count(&test_dir, "a");
+    fs::write(
+        test_dir.join("packages/a/src/src.js"),
+        "module.exports = { a: 2 };\n",
+    )
+    .unwrap();
+    common::git(&test_dir, &["add", "."]);
+    common::git(
+        &test_dir,
+        &["commit", "-m", "change package a source", "--quiet"],
+    );
+    assert!(
+        wait_for_markers(&test_dir, "a", a_before + 1, Duration::from_secs(30)) > a_before,
+        "dependency package a should rebuild after its source changes"
+    );
+    assert!(
+        wait_for_markers(&test_dir, "c", c_after_source + 1, Duration::from_secs(30))
+            > c_after_source,
+        "new package c should rebuild after dependency package a changes"
+    );
+    assert_eq!(
+        fs::read_to_string(test_dir.join("turbo.json")).unwrap(),
+        config
+    );
+
+    drop(guard);
 }
 
 #[test]
@@ -830,25 +1055,60 @@ fn watch_edit_during_build_triggers_rebuild() {
     );
 }
 
-/// Rapid successive edits to the same file should be coalesced by the
-/// debouncer, producing fewer rebuilds than edits.
 #[test]
 fn watch_rapid_edits_produce_single_rebuild() {
-    let (_tempdir, test_dir) = setup_watch_test();
-    let guard = WatchGuard::new(spawn_turbo_watch(&test_dir));
+    let (_tempdir, test_dir) = setup_slow_build_test();
+    let build_file = test_dir.join("packages/a/build.js");
+    let build_script = fs::read_to_string(&build_file).unwrap();
+    fs::write(
+        &build_file,
+        format!(
+            "const source = require('fs').readFileSync(require('path').join(__dirname, 'src.js'), \
+             'utf8');\n{build_script}\nfs.writeFileSync(path.join(markerDir, 'complete'), \
+             source);\n"
+        ),
+    )
+    .unwrap();
+    common::git(&test_dir, &["add", "."]);
+    common::git(
+        &test_dir,
+        &["commit", "-m", "add build completion markers", "--quiet"],
+    );
 
-    // Wait for initial build and settle
-    wait_for_markers(&test_dir, "a", 1, Duration::from_secs(30));
-    wait_for_markers(&test_dir, "b", 1, Duration::from_secs(30));
-    std::thread::sleep(Duration::from_secs(3));
-
-    let a_before = marker_count(&test_dir, "a");
-
-    // Fire 10 rapid edits without staging or committing each one. The watcher
-    // only needs file-system events here, and per-edit git commits can take
-    // longer than the debounce window under parallel CI load.
-    let num_edits = 10;
+    let output = tempfile::NamedTempFile::new().unwrap();
+    let completed_file = test_dir.join("packages/a/.markers/complete");
+    let wait_for_source = |source: &str| {
+        let started = Instant::now();
+        while fs::read_to_string(&completed_file).ok().as_deref() != Some(source) {
+            assert!(
+                started.elapsed() < Duration::from_secs(30),
+                "a build must complete having consumed {source:?}. CLI output:\n{}",
+                fs::read_to_string(output.path()).unwrap_or_default()
+            );
+            std::thread::sleep(Duration::from_millis(200));
+        }
+    };
     let src_file = test_dir.join("packages/a/src.js");
+    let initial_source = fs::read_to_string(&src_file).unwrap();
+    let guard = WatchGuard::new(spawn_turbo_watch_with_tasks_and_stdio(
+        &test_dir,
+        &["build"],
+        output.as_file().try_clone().unwrap().into(),
+        output.as_file().try_clone().unwrap().into(),
+    ));
+    wait_for_source(&initial_source);
+    assert_eq!(
+        wait_for_markers(&test_dir, "b", 1, Duration::from_secs(30)),
+        1,
+        "package b's initial build must start"
+    );
+
+    let a_before = prefixed_marker_count(&test_dir, "a", "run-");
+
+    // Wall-clock write spacing does not bound package-event spacing after
+    // filesystem delivery and async hashing. The paused-time
+    // pending_changes_coalesce_five_edits_until_quiet test covers 100ms events.
+    let num_edits = 5;
     for i in 0..num_edits {
         fs::write(
             &src_file,
@@ -857,18 +1117,20 @@ fn watch_rapid_edits_produce_single_rebuild() {
         .unwrap();
     }
 
-    // Wait for at least one rebuild, then let the system fully settle.
-    wait_for_markers(&test_dir, "a", a_before + 1, Duration::from_secs(30));
+    wait_for_source(&format!(
+        "module.exports = {{ a: 'rapid-{}' }};\n",
+        num_edits - 1
+    ));
     std::thread::sleep(Duration::from_secs(5));
 
-    let a_after = marker_count(&test_dir, "a");
+    let a_after = prefixed_marker_count(&test_dir, "a", "run-");
 
     drop(guard);
 
     let rebuilds = a_after - a_before;
-    assert!(
-        rebuilds < num_edits,
-        "debouncer should coalesce {num_edits} rapid edits into fewer rebuilds, but got {rebuilds}"
+    assert_eq!(
+        rebuilds, 1,
+        "{num_edits} rapid edits should produce exactly one rebuild, but got {rebuilds}"
     );
 }
 
@@ -1078,75 +1340,118 @@ fn watch_interruptible_persistent_task_restarts_on_file_change() {
 }
 
 // ---------------------------------------------------------------------------
-// Regression test for #13115: watchUsingTaskInputs + interruptible persistent
+// Regression test for #13347: watch task inputs must use watch graph semantics
 // ---------------------------------------------------------------------------
 
-fn setup_watch_task_inputs_persistent_test() -> (tempfile::TempDir, PathBuf) {
-    let tempdir = tempfile::tempdir().expect("failed to create tempdir");
-    let test_dir = tempdir.path().to_path_buf();
-
-    setup::copy_fixture("watch_task_inputs_persistent_test", &test_dir).unwrap();
-    setup::setup_git(&test_dir).unwrap();
-
-    let gitignore = test_dir.join(".gitignore");
-    let mut gi = fs::read_to_string(&gitignore).unwrap_or_default();
-    gi.push_str(".markers/\n");
-    fs::write(&gitignore, gi).unwrap();
-
-    common::git(&test_dir, &["add", "."]);
-    common::git(
-        &test_dir,
-        &["commit", "-m", "add markers ignore", "--quiet"],
-    );
-
-    (tempdir, test_dir)
-}
-
-/// Regression test for https://github.com/vercel/turborepo/issues/13115
-///
-/// With `watchUsingTaskInputs: true`, changing a file outside a persistent
-/// task's `inputs` must not stop the dev server. Turbo should only interrupt
-/// interruptible persistent tasks when their own inputs (or upstream deps)
-/// change.
 #[test]
 #[cfg_attr(windows, ignore)]
-fn watch_task_inputs_persistent_task_not_stopped_for_out_of_input_change() {
-    let (_tempdir, test_dir) = setup_watch_task_inputs_persistent_test();
-    let guard = WatchGuard::new(spawn_turbo_watch_with_tasks(&test_dir, &["dev"]));
+fn watch_task_inputs_do_not_rerun_non_cacheable_dependencies_or_persistent_dependents() {
+    let tempdir = tempfile::tempdir().expect("failed to create tempdir");
+    let test_dir = tempdir.path().to_path_buf();
+    setup::copy_fixture("watch_task_inputs_dependency_test", &test_dir).unwrap();
+    setup::setup_git(&test_dir).unwrap();
 
-    wait_for_prefixed_markers(&test_dir, "app", "dev-", 1, Duration::from_secs(60));
+    let guard = WatchGuard::new(spawn_turbo_watch_with_tasks(&test_dir, &["dev", "observe"]));
+    let initial_pkg =
+        wait_for_prefixed_markers(&test_dir, "pkg", "dev-", 1, Duration::from_secs(60));
+    let initial_app =
+        wait_for_prefixed_markers(&test_dir, "app", "dev-", 1, Duration::from_secs(60));
+    let initial_pkg_observe =
+        wait_for_prefixed_markers(&test_dir, "pkg", "observe-", 1, Duration::from_secs(60));
+    let initial_app_observe =
+        wait_for_prefixed_markers(&test_dir, "app", "observe-", 1, Duration::from_secs(60));
+    let initial_observer = wait_for_prefixed_markers(
+        &test_dir,
+        "observer",
+        "observe-",
+        1,
+        Duration::from_secs(60),
+    );
+    assert!(initial_pkg > 0, "package dev task should start");
+    assert!(initial_app > 0, "app dev task should start");
+    assert!(initial_pkg_observe > 0, "package observer should start");
+    assert!(initial_app_observe > 0, "app observer should start");
+    assert!(initial_observer > 0, "completion observer should start");
 
-    // Let the watcher fully settle after the initial run.
-    std::thread::sleep(Duration::from_secs(2));
+    let pkg_before = prefixed_marker_count(&test_dir, "pkg", "dev-");
+    let app_before = prefixed_marker_count(&test_dir, "app", "dev-");
+    let pkg_observe_before = prefixed_marker_count(&test_dir, "pkg", "observe-");
+    let app_observe_before = prefixed_marker_count(&test_dir, "app", "observe-");
+    let observer_before = prefixed_marker_count(&test_dir, "observer", "observe-");
 
-    let dev_before = prefixed_marker_count(&test_dir, "app", "dev-");
+    // A package change reruns its non-persistent task but must not restart the
+    // persistent app that depends on it.
+    let pkg_observe_after_change =
+        retry_observed_change(&test_dir, "pkg", "change package", pkg_observe_before, 3);
+    assert!(
+        pkg_observe_after_change > pkg_observe_before,
+        "package observer should acknowledge the package change"
+    );
+    let pkg_after_change = wait_for_prefixed_markers(
+        &test_dir,
+        "pkg",
+        "dev-",
+        pkg_before + 1,
+        Duration::from_secs(30),
+    );
+    assert!(
+        pkg_after_change > pkg_before,
+        "package change should rerun its dev task"
+    );
 
-    // Modify app-source.txt, which is intentionally NOT in dev.inputs.
-    let src_file = test_dir.join("packages/app/src/app-source.txt");
-    for attempt in 0..3 {
-        fs::write(&src_file, format!("updated app source {attempt}\n")).unwrap();
+    // This independent event cannot affect either dev task. Its observer can
+    // only run after the package-change run has completed.
+    let observer_after_package_change = retry_observed_change(
+        &test_dir,
+        "observer",
+        "observe package change",
+        observer_before,
+        3,
+    );
+    assert!(
+        observer_after_package_change > observer_before,
+        "observer should acknowledge package-change completion"
+    );
+    let pkg_after_change = prefixed_marker_count(&test_dir, "pkg", "dev-");
+    assert_eq!(
+        prefixed_marker_count(&test_dir, "app", "dev-"),
+        app_before,
+        "package change should not restart the persistent app"
+    );
 
-        common::git(&test_dir, &["add", "."]);
-        common::git(
-            &test_dir,
-            &[
-                "commit",
-                "-m",
-                &format!("modify app source (attempt {attempt})"),
-                "--quiet",
-            ],
-        );
+    // An app change is handled by its persistent server and must not rerun the
+    // app's non-cacheable upstream dependency.
+    let app_observe_after_change =
+        retry_observed_change(&test_dir, "app", "change app", app_observe_before, 3);
+    assert!(
+        app_observe_after_change > app_observe_before,
+        "app observer should acknowledge the app change"
+    );
 
-        std::thread::sleep(Duration::from_secs(10));
-    }
-
-    let dev_after = prefixed_marker_count(&test_dir, "app", "dev-");
+    // A second independent observer event is a completion barrier for the app
+    // event, preventing negative assertions from racing its tasks.
+    let observer_after_app_change = retry_observed_change(
+        &test_dir,
+        "observer",
+        "observe app change",
+        observer_after_package_change,
+        3,
+    );
+    assert!(
+        observer_after_app_change > observer_after_package_change,
+        "observer should acknowledge app-change completion"
+    );
 
     drop(guard);
 
     assert_eq!(
-        dev_before, dev_after,
-        "app dev should not restart when a file outside dev.inputs changes. before: {dev_before}, \
-         after: {dev_after}"
+        prefixed_marker_count(&test_dir, "pkg", "dev-"),
+        pkg_after_change,
+        "app change should not rerun its non-cacheable dependency"
+    );
+    assert_eq!(
+        prefixed_marker_count(&test_dir, "app", "dev-"),
+        app_before,
+        "package or app changes should not restart the persistent app"
     );
 }

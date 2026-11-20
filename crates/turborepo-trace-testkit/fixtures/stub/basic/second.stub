@@ -1,0 +1,5 @@
+# A second entry sharing lib/util.stub with main.stub.
+dep "./lib/util"
+asset "./only-second.txt"
+asset "./data/link.txt"         # symlink to config.txt
+dep "./bin/tool"                # extensionless, detected by its #!stub shebang

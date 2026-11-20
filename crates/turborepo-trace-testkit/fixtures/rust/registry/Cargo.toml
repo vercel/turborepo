@@ -1,0 +1,23 @@
+[package]
+name = "regapp"
+version = "0.3.0"
+edition = "2021"
+autobenches = true
+
+[lib]
+path = "src/lib.rs"
+
+[[bin]]
+name = "regapp-cli"
+path = "src/cli.rs"
+
+[dependencies]
+dep-a = "0.2"
+renamed = { package = "dep-b", version = "3" }
+gitdep = { git = "https://github.com/example/gitws", branch = "main" }
+
+[target.'cfg(windows)'.dependencies]
+winonly = "1"
+
+[dev-dependencies]
+serde_like = "1"

@@ -10,7 +10,6 @@ workspace = true
 [dependencies]
 rayon = "1"
 tokio = { workspace = true, features = ["rt", "rt-multi-thread"] }
-tracing = { workspace = true }
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["rt", "rt-multi-thread", "macros"] }

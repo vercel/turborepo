@@ -30,6 +30,15 @@ turbo ls web @repo/ui [package(s)]
 
 ## Flags
 
+### `--filter` (`-F`)
+
+Use pnpm-style package selectors to narrow the package list. Same syntax as [`turbo run --filter`](/docs/reference/run#--filter-string).
+
+```bash title="Terminal"
+turbo ls --filter=web...
+turbo ls -F my-app...
+```
+
 ### `--affected`
 
 Automatically filter to only packages that are affected by changes on the current branch.

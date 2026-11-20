@@ -1,6 +1,6 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { type ReactNode, useCallback } from "react";
 
 interface ButtonProps {
   appName: string;
@@ -9,12 +9,12 @@ interface ButtonProps {
 }
 
 export const Button = ({ children, className, appName }: ButtonProps) => {
+  const handleClick = useCallback(() => {
+    console.log(`Hello from your ${appName} app!`);
+  }, [appName]);
+
   return (
-    <button
-      className={className}
-      onClick={() => console.log(`Hello from your ${appName} app!`)}
-      type="button"
-    >
+    <button className={className} onClick={handleClick} type="button">
       {children}
     </button>
   );

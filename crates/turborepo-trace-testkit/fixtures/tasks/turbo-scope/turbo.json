@@ -1,0 +1,17 @@
+{
+  "tasks": {
+    "build": {
+      "outputs": ["dist/**"]
+    },
+    "watch:types": {
+      "persistent": true,
+      "cache": false
+    },
+    "//#stamp": {
+      "outputs": ["stamp.txt"]
+    },
+    "//#keep-buildinfo": {
+      "outputs": ["$TURBO_ROOT$/packages/*/dist/.tsbuildinfo"]
+    }
+  }
+}

@@ -1,0 +1,9 @@
+{
+  "name": "docker-build",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "build:artifacts": "docker build --target artifacts -o build/artifacts .",
+    "test": "jest"
+  }
+}

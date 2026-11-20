@@ -1,7 +1,7 @@
 [package]
 name = "turborepo-query"
 version = "0.1.0"
-edition = "2021"
+edition = { workspace = true }
 license = "MIT"
 
 [dependencies]
@@ -11,36 +11,29 @@ axum = { workspace = true }
 camino = "1.1.4"
 itertools = { workspace = true }
 miette = { workspace = true }
-oxc_allocator = { workspace = true }
-oxc_ast = { workspace = true }
-oxc_estree = { workspace = true }
-oxc_parser = { workspace = true }
-oxc_span = { workspace = true }
-petgraph = { workspace = true }
-serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["full"] }
 tracing = { workspace = true }
 turbo-trace = { workspace = true }
 turbopath = { workspace = true }
-turborepo-boundaries = { workspace = true }
-turborepo-engine = { path = "../turborepo-engine" }
 turborepo-errors = { workspace = true }
 turborepo-lockfiles = { workspace = true }
 turborepo-query-api = { workspace = true }
 turborepo-repository = { path = "../turborepo-repository" }
-turborepo-scm = { workspace = true }
-turborepo-scope = { path = "../turborepo-scope" }
 turborepo-signals = { workspace = true }
-turborepo-task-id = { workspace = true }
-turborepo-turbo-json = { path = "../turborepo-turbo-json" }
 turborepo-types = { workspace = true }
-wax = { workspace = true }
 webbrowser = { workspace = true }
 
 [dev-dependencies]
 tempfile = { workspace = true }
+turborepo-engine = { workspace = true }
+turborepo-microfrontends-config = { workspace = true }
+turborepo-run-context = { workspace = true }
+turborepo-scm = { workspace = true }
+turborepo-task-id = { workspace = true }
+turborepo-turbo-json = { workspace = true }
+turborepo-ui = { workspace = true }
 
 [lints]
 workspace = true

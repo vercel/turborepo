@@ -11,17 +11,15 @@ use tracing::debug;
 use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, RelativeUnixPathBuf};
 use turborepo_env::{DetailedMap, EnvironmentVariableMap, get_global_hashable_env_vars};
 use turborepo_hash::{GlobalHashable, TurboHash};
-use turborepo_lockfiles::Lockfile;
 use turborepo_repository::{
-    package_graph::PackageInfo,
+    change_mapper::ROOT_GITATTRIBUTES,
+    package_graph::PackageTaskContext,
     package_manager::{self, PackageManager},
+    toolchain::RootDependencyInputs,
 };
 use turborepo_run_summary::{GlobalEnvVarSummary, GlobalHashSummary};
 use turborepo_scm::SCM;
 use turborepo_types::{EnvMode, GlobalHashInputs as GlobalHashInputsTrait};
-
-#[allow(dead_code)]
-static DEFAULT_ENV_VARS: [&str; 1] = ["VERCEL_ANALYTICS_ID"];
 
 pub const GLOBAL_CACHE_KEY: &str = "I can’t see ya, but I know you’re here";
 
@@ -43,7 +41,7 @@ pub enum Error {
 
 #[derive(Debug)]
 pub struct GlobalHashableInputs<'a> {
-    pub global_cache_key: &'static str,
+    pub global_cache_key: &'a str,
     pub global_file_hash_map: HashMap<RelativeUnixPathBuf, String>,
     // This is `None` in single package mode
     pub root_external_dependencies_hash: Option<&'a str>,
@@ -61,59 +59,6 @@ pub struct GlobalHashableInputs<'a> {
     pub global_configuration: bool,
 }
 
-#[allow(clippy::too_many_arguments, clippy::result_large_err)]
-pub fn get_global_hash_inputs<'a, L: ?Sized + Lockfile>(
-    root_external_dependencies_hash: Option<&'a str>,
-    root_internal_dependencies_hash: Option<&'a str>,
-    root_package: &'a PackageInfo,
-    root_path: &AbsoluteSystemPath,
-    package_manager: &PackageManager,
-    lockfile: Option<&L>,
-    global_file_dependencies: &'a [String],
-    env_at_execution_start: &'a EnvironmentVariableMap,
-    global_env: &'a [String],
-    global_pass_through_env: Option<&'a [String]>,
-    env_mode: EnvMode,
-    framework_inference: bool,
-    hasher: &SCM,
-    global_configuration: bool,
-) -> Result<GlobalHashableInputs<'a>, Error> {
-    let GlobalFileHashInputs {
-        global_file_hash_map,
-        global_hashable_env_vars,
-        engines,
-    } = collect_global_file_hash_inputs(
-        root_package,
-        root_path,
-        package_manager,
-        lockfile,
-        global_file_dependencies,
-        env_at_execution_start,
-        global_env,
-        hasher,
-    )?;
-
-    debug!(
-        "external deps hash: {}",
-        root_external_dependencies_hash.unwrap_or("no hash (single package)")
-    );
-
-    Ok(GlobalHashableInputs {
-        global_cache_key: GLOBAL_CACHE_KEY,
-        global_file_hash_map,
-        root_external_dependencies_hash,
-        root_internal_dependencies_hash,
-        engines,
-        env: global_env,
-        resolved_env_vars: Some(global_hashable_env_vars),
-        pass_through_env: global_pass_through_env,
-        env_mode,
-        framework_inference,
-        env_at_execution_start,
-        global_configuration,
-    })
-}
-
 /// Intermediate result from `collect_global_file_hash_inputs`. Contains the
 /// expensive-to-compute parts of the global hash that are independent of the
 /// root external/internal dependency hashes. This allows callers to run this
@@ -128,18 +73,33 @@ pub struct GlobalFileHashInputs<'a> {
 /// This is the expensive I/O-bound portion of global hash computation and
 /// can be run concurrently with package file hashing and internal deps
 /// hashing since it has no dependencies on those results.
-#[allow(clippy::too_many_arguments, clippy::result_large_err)]
-pub fn collect_global_file_hash_inputs<'a, L: ?Sized + Lockfile>(
-    root_package: &'a PackageInfo,
+#[expect(clippy::too_many_arguments)]
+#[expect(
+    clippy::result_large_err,
+    reason = "retain structured global-hash errors"
+)]
+pub fn collect_global_file_hash_inputs<'a>(
+    // Root `engines` from task-contract knowledge (not a live PackageJson read).
+    root_engines: Option<&'a std::collections::BTreeMap<String, String>>,
     root_path: &AbsoluteSystemPath,
-    package_manager: &PackageManager,
-    lockfile: Option<&L>,
+    // Absent for a pure Cargo workspace: there is no JavaScript package
+    // manager to enumerate workspace exclusions for `globalDependencies`.
+    package_manager: Option<&PackageManager>,
+    // When JavaScript resolution is unavailable, hash the resolution
+    // definition sources (typically the lockfile path) and root package.json
+    // instead of folding lockfile contents into the external fingerprint.
+    resolution_file_fallback: &[AbsoluteSystemPathBuf],
     global_file_dependencies: &'a [String],
     env_at_execution_start: &'a EnvironmentVariableMap,
     global_env: &'a [String],
     hasher: &SCM,
 ) -> Result<GlobalFileHashInputs<'a>, Error> {
-    let engines = root_package.package_json.engines();
+    let engines = root_engines.map(|engines| {
+        engines
+            .iter()
+            .map(|(key, value)| (key.as_str(), value.as_str()))
+            .collect()
+    });
 
     let global_hashable_env_vars =
         get_global_hashable_env_vars(env_at_execution_start, global_env)?;
@@ -149,35 +109,34 @@ pub fn collect_global_file_hash_inputs<'a, L: ?Sized + Lockfile>(
         global_hashable_env_vars.all.names()
     );
 
-    let mut global_deps =
+    let mut discovered_global_deps =
         collect_global_deps(package_manager, root_path, global_file_dependencies)?;
 
-    if lockfile.is_none() {
-        global_deps.insert(root_path.join_component("package.json"));
-        let lockfile_path = package_manager.lockfile_path(root_path);
-        if lockfile_path.exists() {
-            global_deps.insert(lockfile_path);
-        }
-    }
-
-    // .gitattributes drives CRLF→LF normalization which affects file hashes.
-    // Including it in the global hash ensures cache invalidation when
-    // normalization rules change.
-    let gitattributes_path = root_path.join_component(".gitattributes");
+    let gitattributes_path = root_path.join_component(ROOT_GITATTRIBUTES);
     if gitattributes_path.exists() {
-        global_deps.insert(gitattributes_path);
+        discovered_global_deps.insert(gitattributes_path);
     }
 
-    let global_deps_paths = global_deps
+    let discovered_global_deps_paths = discovered_global_deps
+        .iter()
+        .map(|p| root_path.anchor(p).map_err(Error::from))
+        .collect::<Result<Vec<_>, _>>()?;
+    let resolution_file_fallback_paths = resolution_file_fallback
         .iter()
         .map(|p| root_path.anchor(p).map_err(Error::from))
         .collect::<Result<Vec<_>, _>>()?;
 
-    let global_file_hash_map = hasher
-        .get_hashes_for_files(root_path, &global_deps_paths, false)?
+    let mut global_file_hash_map = hasher
+        .hash_discovered_files(root_path, discovered_global_deps_paths.iter())?
         .into_iter()
         .map(|(k, v)| (k, String::from(v)))
-        .collect();
+        .collect::<HashMap<_, _>>();
+    global_file_hash_map.extend(
+        hasher
+            .hash_files(root_path, resolution_file_fallback_paths.iter())?
+            .into_iter()
+            .map(|(k, v)| (k, String::from(v))),
+    );
 
     Ok(GlobalFileHashInputs {
         global_file_hash_map,
@@ -186,26 +145,36 @@ pub fn collect_global_file_hash_inputs<'a, L: ?Sized + Lockfile>(
     })
 }
 
-#[allow(clippy::result_large_err)]
+#[expect(
+    clippy::result_large_err,
+    reason = "retain structured global-hash errors"
+)]
 fn collect_global_deps(
-    package_manager: &PackageManager,
+    package_manager: Option<&PackageManager>,
     root_path: &AbsoluteSystemPath,
     global_file_dependencies: &[String],
 ) -> Result<HashSet<AbsoluteSystemPathBuf>, Error> {
     if global_file_dependencies.is_empty() {
         return Ok(HashSet::new());
     }
-    let workspace_exclusions = match package_manager.get_workspace_globs(root_path) {
-        Ok(globs) => globs.raw_exclusions,
-        // If we hit a missing workspaces error, we could be in single package mode
-        // so we should just use the default globs
-        Err(package_manager::Error::Workspace(_)) => {
-            package_manager.get_default_exclusions().collect()
-        }
-        Err(err) => {
-            debug!("no workspace globs found");
-            return Err(err.into());
-        }
+    // Workspace globs exclude nested packages' files from root-level global
+    // dependency globs. A pure Cargo workspace has no JavaScript package
+    // manager to enumerate them, so the user's globalDependencies globs apply
+    // as written.
+    let workspace_exclusions = match package_manager {
+        Some(package_manager) => match package_manager.get_workspace_globs(root_path) {
+            Ok(globs) => globs.raw_exclusions,
+            // If we hit a missing workspaces error, we could be in single package mode
+            // so we should just use the default globs
+            Err(package_manager::Error::Workspace(_)) => {
+                package_manager.get_default_exclusions().collect()
+            }
+            Err(err) => {
+                debug!("no workspace globs found");
+                return Err(err.into());
+            }
+        },
+        None => Vec::new(),
     };
     let (raw_inclusions, raw_exclusions): (Vec<_>, Vec<_>) = global_file_dependencies
         .iter()
@@ -247,14 +216,50 @@ fn collect_global_deps(
     )?)
 }
 
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct GlobalHashes {
+    inherited: String,
+    not_inherited: String,
+}
+
+impl GlobalHashes {
+    pub fn for_task(&self, context: &PackageTaskContext<'_>) -> &str {
+        match context.root_dependency_inputs() {
+            RootDependencyInputs::Inherited => &self.inherited,
+            RootDependencyInputs::NotInherited => &self.not_inherited,
+        }
+    }
+}
+
+#[cfg(test)]
+pub(crate) static TEST_GLOBAL_HASHES: std::sync::LazyLock<GlobalHashes> =
+    std::sync::LazyLock::new(|| GlobalHashes {
+        inherited: "global-hash".to_string(),
+        not_inherited: "global-hash".to_string(),
+    });
+
 impl<'a> GlobalHashableInputs<'a> {
     #[tracing::instrument(skip_all)]
-    pub fn calculate_global_hash(&self) -> String {
+    pub fn calculate_global_hashes(&self) -> GlobalHashes {
+        GlobalHashes {
+            inherited: self.hash_with_root_dependencies(
+                self.root_internal_dependencies_hash,
+                self.root_external_dependencies_hash,
+            ),
+            not_inherited: self.hash_with_root_dependencies(None, None),
+        }
+    }
+
+    fn hash_with_root_dependencies(
+        &self,
+        root_internal_dependencies_hash: Option<&str>,
+        root_external_dependencies_hash: Option<&str>,
+    ) -> String {
         let global_hashable = GlobalHashable {
             global_cache_key: self.global_cache_key,
             global_file_hash_map: &self.global_file_hash_map,
-            root_external_dependencies_hash: self.root_external_dependencies_hash,
-            root_internal_dependencies_hash: self.root_internal_dependencies_hash,
+            root_external_dependencies_hash,
+            root_internal_dependencies_hash,
             engines: self.engines.clone().unwrap_or_default(),
             env: self.env,
             resolved_env_vars: self
@@ -379,12 +384,10 @@ impl<'a> GlobalHashInputsTrait for GlobalHashableInputs<'a> {
 mod tests {
     use turbopath::AbsoluteSystemPathBuf;
     use turborepo_env::EnvironmentVariableMap;
-    use turborepo_lockfiles::Lockfile;
-    use turborepo_repository::{package_graph::PackageInfo, package_manager::PackageManager};
+    use turborepo_repository::package_manager::PackageManager;
     use turborepo_scm::SCM;
-    use turborepo_types::EnvMode;
 
-    use super::{collect_global_deps, get_global_hash_inputs};
+    use super::{collect_global_deps, collect_global_file_hash_inputs};
 
     #[test]
     fn test_absolute_path() {
@@ -402,34 +405,27 @@ mod tests {
             .unwrap();
 
         let env_var_map = EnvironmentVariableMap::default();
-        let package_info = PackageInfo::default();
-        let lockfile: Option<&dyn Lockfile> = None;
+        let fallback = [root.join_component("package.json")];
         #[cfg(windows)]
         let file_deps = ["C:\\some\\path".to_string()];
         #[cfg(not(windows))]
         let file_deps = ["/some/path".to_string()];
-        let result = get_global_hash_inputs(
+        let result = collect_global_file_hash_inputs(
             None,
-            None,
-            &package_info,
             &root,
-            &PackageManager::Pnpm,
-            lockfile,
+            Some(&PackageManager::Pnpm),
+            &fallback,
             &file_deps,
             &env_var_map,
             &[],
-            None,
-            EnvMode::Strict,
-            false,
             &SCM::new(&root),
-            false,
         );
         assert!(result.is_ok());
     }
 
-    /// get_global_hash_inputs should not yield any folders when walking since
-    /// turbo does not consider changes to folders when evaluating hashes,
-    /// only to files
+    /// Global dependency collection should not yield any folders when walking
+    /// since turbo does not consider changes to folders when evaluating
+    /// hashes, only to files
     #[test]
     fn test_collect_only_yields_files() {
         let tmp = tempfile::tempdir().unwrap();
@@ -459,8 +455,12 @@ mod tests {
             .unwrap();
 
         let global_file_dependencies = vec!["**".to_string()];
-        let results =
-            collect_global_deps(&PackageManager::Berry, &root, &global_file_dependencies).unwrap();
+        let results = collect_global_deps(
+            Some(&PackageManager::Berry),
+            &root,
+            &global_file_dependencies,
+        )
+        .unwrap();
 
         // should not yield the root folder itself, src, or empty-folder
         assert_eq!(results.len(), 3, "{:?}", results);

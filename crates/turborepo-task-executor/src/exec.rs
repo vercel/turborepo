@@ -8,7 +8,10 @@
 //! - Result types (`ExecOutcome`, `SuccessOutcome`, `InternalError`)
 
 use std::{
+    collections::HashMap,
+    future::Future,
     io::Write,
+    sync::{Arc, Mutex, OnceLock},
     time::{Duration, Instant},
 };
 
@@ -27,6 +30,51 @@ use turborepo_types::{ContinueMode, StopExecution, UIMode};
 use turborepo_ui::ColorConfig;
 
 use crate::{TaskAccessProvider, TaskOutput};
+
+/// Per-group mutexes for commands marked with a serial group (see
+/// [`Command::serial_group`]). At most one command per group runs at a time,
+/// process-wide.
+fn serial_group_lock(group: &str) -> Arc<tokio::sync::Mutex<()>> {
+    static GROUPS: OnceLock<Mutex<HashMap<String, Arc<tokio::sync::Mutex<()>>>>> = OnceLock::new();
+    let mut groups = GROUPS
+        .get_or_init(Default::default)
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    groups.entry(group.to_string()).or_default().clone()
+}
+
+// Allow normal output draining to finish quietly before emitting one
+// diagnostic. This delay never stops draining or changes when a task is allowed
+// to finish.
+const OUTPUT_WAIT_STATUS_DELAY: Duration = Duration::from_secs(5);
+
+async fn wait_for_output<T>(
+    process_exit: impl Future<Output = Option<ChildExit>>,
+    output: impl Future<Output = T>,
+    report_wait: impl FnOnce(),
+) -> T {
+    tokio::pin!(process_exit, output);
+    tokio::select! {
+        biased;
+        result = &mut output => return result,
+        _ = &mut process_exit => {}
+    }
+
+    tokio::select! {
+        biased;
+        result = &mut output => return result,
+        _ = tokio::time::sleep(OUTPUT_WAIT_STATUS_DELAY) => report_wait(),
+    }
+    output.await
+}
+
+fn emit_output_wait_status(log: &turborepo_log::LogHandle, task_id: &str) {
+    log.info(format!(
+        "Waiting for output from {task_id} after its process exited. A descendant process may be \
+         keeping stdout or stderr open."
+    ))
+    .emit();
+}
 
 /// Windows NT status codes that indicate out-of-memory conditions.
 /// These are the signed i32 representations of the unsigned NT status codes.
@@ -116,6 +164,8 @@ pub enum SuccessOutcome {
 /// Internal errors that can occur during task execution.
 #[derive(Debug, thiserror::Error)]
 pub enum InternalError {
+    #[error("managed setup validation failed: {0}")]
+    ManagedTools(String),
     #[error(transparent)]
     Io(#[from] std::io::Error),
     #[error("unable to determine why task exited")]
@@ -183,6 +233,7 @@ pub struct TaskExecutor<H, E, W, A> {
     pub cmd: Command,
     pub execution_env: EnvironmentVariableMap,
     pub manager: ProcessManager,
+    pub managed_environment: Option<Arc<dyn crate::ManagedEnvironment>>,
     pub takes_input: bool,
 
     // Configuration
@@ -212,15 +263,6 @@ where
     W: TaskWarningCollector,
     A: TaskAccessProvider,
 {
-    /// Execute a dry run (only check cache status).
-    pub async fn execute_dry_run(&mut self, tracker: TaskTracker<()>) {
-        if let Ok(Some(status)) = self.task_cache.exists().await {
-            self.hash_tracker
-                .insert_cache_status(self.task_id.clone(), status);
-        }
-        tracker.dry_run().await;
-    }
-
     /// Execute the task.
     ///
     /// This is the main entry point for task execution. It:
@@ -297,15 +339,6 @@ where
                     self.task_cache.expanded_outputs().to_vec(),
                 );
             }
-
-            let incremental_upload_failures = self
-                .task_cache
-                .upload_incremental()
-                .instrument(tracing::info_span!("incremental_upload", task = %self.task_id))
-                .await;
-            if incremental_upload_failures > 0 {
-                telemetry.track_error(TrackedErrors::IncrementalUploadFailed);
-            }
         }
 
         // Tracker bookkeeping happens after the callback so dependents
@@ -349,8 +382,9 @@ where
         task_handle: &mut turborepo_log::grouping::TaskHandle,
         telemetry: &PackageTaskEventBuilder,
     ) -> Result<ExecOutcome, InternalError> {
-        task_output.start(self.task_cache.output_logs().into());
-
+        if let Some(tools) = &self.managed_environment {
+            tools.revalidate().map_err(InternalError::ManagedTools)?;
+        }
         if !self.task_cache.is_caching_disabled() {
             let missing_platform_env = self.platform_env.validate(&self.execution_env);
             if !missing_platform_env.is_empty() {
@@ -360,11 +394,13 @@ where
         }
 
         let tui_sender = task_output.sender();
-        let cache_result = self
-            .task_cache
-            .restore_outputs(task_handle, tui_sender, telemetry)
-            .instrument(tracing::info_span!("cache_restore", task = %self.task_id))
-            .await;
+        let cache_result = validated_restore(
+            self.task_cache
+                .restore_outputs(task_handle, tui_sender, telemetry)
+                .instrument(tracing::info_span!("cache_restore", task = %self.task_id)),
+            self.managed_environment.as_deref(),
+        )
+        .await?;
         match cache_result {
             Ok(Some(status)) => {
                 self.hash_tracker.insert_expanded_outputs(
@@ -386,27 +422,26 @@ where
             }
         }
 
-        // Fetch incremental artifacts before execution. This MUST complete
-        // before the task starts — we never start a task while an incremental
-        // fetch is in-flight.
-        if self.task_cache.has_incremental() {
-            let status = self
-                .task_cache
-                .fetch_incremental()
-                .instrument(tracing::info_span!("incremental_fetch", task = %self.task_id))
-                .await;
-            if status.skipped_partitions > 0 {
-                telemetry.track_error(TrackedErrors::IncrementalFetchFailed);
-            }
-            if status.any_restored() {
-                task_handle.emit(turborepo_log::LogEvent::new(
-                    turborepo_log::Level::Info,
-                    turborepo_log::Source::task(&self.task_id_for_display),
-                    "incremental state restored",
-                ));
-            }
-        }
+        // Commands in a serial group run one at a time: their tools hold
+        // global locks (e.g. Cargo's build directory), so concurrent
+        // processes cannot make progress and just emit "waiting for file
+        // lock" noise. The guard is held until the process exits.
+        let _serial_group_guard = match self.cmd.serial_group_name() {
+            Some(group) => Some(serial_group_lock(group).lock_owned().await),
+            None => None,
+        };
 
+        // The task is only presented as running once its process is about
+        // to exist. Everything before this point — cache restore, waiting
+        // on the serial group — happens while the task is still pending,
+        // and cache hits finish without ever starting.
+        task_output.start(self.task_cache.output_logs().into());
+
+        // Recheck at the actual spawn boundary, after cache waits and serial
+        // group acquisition. Selection-time validation is not a lease.
+        if let Some(tools) = &self.managed_environment {
+            tools.revalidate().map_err(InternalError::ManagedTools)?;
+        }
         // Spawn the process
         let cmd = self.cmd.clone();
         let mut process =
@@ -484,7 +519,18 @@ where
                 telemetry.track_error(TrackedErrors::FailedToCaptureOutputs);
             })?;
 
-            let status = match process.wait_with_piped_outputs(&mut stdout_writer).await {
+            let mut exit_observer = process.clone();
+            // Report through the run logger, not the task's grouped/cached output:
+            // otherwise a held-open task could hide its own waiting diagnostic.
+            let log =
+                turborepo_log::log(turborepo_log::Source::turbo(turborepo_log::Subsystem::Run));
+            let result = wait_for_output(
+                exit_observer.wait(),
+                process.wait_with_piped_outputs(&mut stdout_writer),
+                || emit_output_wait_status(&log, &self.task_id_for_display),
+            )
+            .await;
+            let status = match result {
                 Ok(Some(exit_status)) => exit_status,
                 Err(e) => {
                     telemetry.track_error(TrackedErrors::FailedToPipeOutputs);
@@ -613,6 +659,19 @@ where
     }
 }
 
+/// Cache I/O can await a remote fetch or another setup transaction. A hit is
+/// not success until the original managed selection is current after that wait.
+async fn validated_restore<F: std::future::Future>(
+    restore: F,
+    tools: Option<&dyn crate::ManagedEnvironment>,
+) -> Result<F::Output, InternalError> {
+    let result = restore.await;
+    if let Some(tools) = tools {
+        tools.revalidate().map_err(InternalError::ManagedTools)?;
+    }
+    Ok(result)
+}
+
 fn stop_execution_for_task_error(continue_on_error: ContinueMode) -> Result<(), StopExecution> {
     match continue_on_error {
         ContinueMode::Always => Ok(()),
@@ -649,6 +708,146 @@ impl<H: HashTrackerProvider> DryRunExecutor<H> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::ManagedEnvironment;
+
+    struct FileGeneration(std::path::PathBuf);
+    impl crate::ManagedEnvironment for FileGeneration {
+        fn revalidate(&self) -> Result<EnvironmentVariableMap, String> {
+            match std::fs::read(&self.0) {
+                Ok(bytes) if bytes == b"selected generation" => {
+                    Ok(EnvironmentVariableMap::default())
+                }
+                _ => Err("setup generation changed; run turbo setup".into()),
+            }
+        }
+        fn cache_identity(&self) -> &str {
+            "selected-snapshot"
+        }
+    }
+
+    #[tokio::test]
+    async fn delayed_cache_hit_rejects_ordinary_source_or_setup_generation_changes() {
+        for remove in [false, true] {
+            let directory = tempfile::tempdir().unwrap();
+            let path = directory.path().join("generation");
+            std::fs::write(&path, b"selected generation").unwrap();
+            let tools = FileGeneration(path.clone());
+            tools.revalidate().unwrap(); // Selection before the restore wait.
+            let (started, waiting) = oneshot::channel();
+            let (resume, resumed) = oneshot::channel();
+            let restore = async {
+                started.send(()).unwrap();
+                resumed.await.unwrap();
+                Some("cache hit")
+            };
+            let edit = async {
+                waiting.await.unwrap();
+                if remove {
+                    std::fs::remove_file(path).unwrap();
+                } else {
+                    std::fs::write(path, b"new setup generation").unwrap();
+                }
+                resume.send(()).unwrap();
+            };
+            let (result, ()) = tokio::join!(validated_restore(restore, Some(&tools)), edit);
+            assert!(result.unwrap_err().to_string().contains("turbo setup"));
+        }
+    }
+
+    #[tokio::test]
+    async fn unchanged_and_unconfigured_cache_hits_preserve_results() {
+        let directory = tempfile::tempdir().unwrap();
+        let path = directory.path().join("generation");
+        std::fs::write(&path, b"selected generation").unwrap();
+        let tools = FileGeneration(path);
+        assert_eq!(
+            validated_restore(async { Some("hit") }, Some(&tools))
+                .await
+                .unwrap(),
+            Some("hit")
+        );
+        assert_eq!(
+            validated_restore(async { Some("hit") }, None)
+                .await
+                .unwrap(),
+            Some("hit")
+        );
+        assert_eq!(
+            validated_restore(async { None::<()> }, None).await.unwrap(),
+            None
+        );
+    }
+
+    async fn assert_pending<F: Future>(mut future: std::pin::Pin<&mut F>) {
+        std::future::poll_fn(|cx| {
+            assert!(future.as_mut().poll(cx).is_pending());
+            std::task::Poll::Ready(())
+        })
+        .await;
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn held_open_output_reports_once_without_ending_the_wait() {
+        let (collector, logger) = turborepo_log::sinks::collector::CollectorSink::with_logger();
+        let log = logger.handle(turborepo_log::Source::turbo(turborepo_log::Subsystem::Run));
+        let (exit_tx, exit_rx) = oneshot::channel();
+        let (output_tx, output_rx) = oneshot::channel();
+        let wait = wait_for_output(
+            async { exit_rx.await.unwrap() },
+            async { output_rx.await.unwrap() },
+            || emit_output_wait_status(&log, "docs#typecheck"),
+        );
+        tokio::pin!(wait);
+        assert_pending(wait.as_mut()).await;
+        // A running task must not produce post-exit waiting diagnostics.
+        tokio::time::advance(Duration::from_secs(10)).await;
+        assert_pending(wait.as_mut()).await;
+        assert!(collector.events().is_empty());
+
+        let expected = Some(ChildExit::Finished(Some(42)));
+        exit_tx.send(expected).unwrap();
+        assert_pending(wait.as_mut()).await;
+        assert!(collector.events().is_empty());
+        tokio::time::advance(Duration::from_millis(4999)).await;
+        assert_pending(wait.as_mut()).await;
+        assert!(collector.events().is_empty());
+        tokio::time::advance(Duration::from_millis(1)).await;
+        assert_pending(wait.as_mut()).await;
+        let events = collector.events();
+        assert_eq!(events.len(), 1);
+        let event = &events[0];
+        assert_eq!(event.level(), turborepo_log::Level::Info);
+        assert_eq!(
+            event.source(),
+            &turborepo_log::Source::turbo(turborepo_log::Subsystem::Run)
+        );
+        assert!(event.message().contains("docs#typecheck"));
+        assert!(event.message().contains("stdout or stderr open"));
+        // Keeping output open longer must neither repeat the message nor end
+        // the wait. Completion still comes only from the output future.
+        for _ in 0..3 {
+            tokio::time::advance(Duration::from_secs(10)).await;
+            assert_pending(wait.as_mut()).await;
+            assert_eq!(collector.events().len(), 1);
+        }
+        output_tx.send(expected).unwrap();
+        assert_eq!(wait.await, expected);
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn output_completion_wins_over_a_ready_status_delay() {
+        let (output_tx, output_rx) = oneshot::channel();
+        let wait = wait_for_output(
+            std::future::ready(Some(ChildExit::Finished(Some(0)))),
+            output_rx,
+            || panic!("completed output should not produce a waiting diagnostic"),
+        );
+        tokio::pin!(wait);
+        assert_pending(wait.as_mut()).await;
+        output_tx.send(()).unwrap();
+        tokio::time::advance(OUTPUT_WAIT_STATUS_DELAY).await;
+        assert_eq!(wait.await, Ok(()));
+    }
 
     #[test]
     fn task_error_stop_signal_matches_continue_mode() {

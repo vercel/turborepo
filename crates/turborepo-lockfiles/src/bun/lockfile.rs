@@ -1,6 +1,6 @@
 use std::{
     any::Any,
-    collections::{BTreeMap, HashMap},
+    collections::{BTreeMap, HashMap, HashSet},
 };
 
 use semver::Version;
@@ -275,6 +275,19 @@ impl Lockfile for BunLockfile {
         Ok(patches)
     }
 
+    fn external_file_inputs(
+        &self,
+        package: &crate::Package,
+    ) -> Result<Vec<RelativeUnixPathBuf>, crate::Error> {
+        self.data
+            .patched_dependencies
+            .get(&package.key)
+            .map(|path| RelativeUnixPathBuf::new(path.clone()))
+            .transpose()
+            .map(|path| path.into_iter().collect())
+            .map_err(Into::into)
+    }
+
     fn global_change(&self, other: &dyn Lockfile) -> bool {
         let any_other = other as &dyn Any;
         let Some(other_bun) = any_other.downcast_ref::<Self>() else {
@@ -294,5 +307,114 @@ impl Lockfile for BunLockfile {
     fn human_name(&self, package: &crate::Package) -> Option<String> {
         let entry = self.data.packages.get(&package.key)?;
         Some(entry.ident.clone())
+    }
+
+    fn package_source(&self, package: &crate::Package) -> crate::PackageSource {
+        self.data
+            .packages
+            .get(&package.key)
+            .map(|entry| crate::package_source_from_identifier(&entry.ident))
+            .unwrap_or(crate::PackageSource::Registry)
+    }
+
+    fn format_version(&self) -> Option<String> {
+        Some(self.data.lockfile_version.to_string())
+    }
+
+    fn transitive_edge_resolver(&self) -> Option<Box<dyn crate::TransitiveEdgeResolver + '_>> {
+        let workspace_path = self.data.workspaces.keys().next()?;
+        let workspace_names: HashSet<&str> = self
+            .data
+            .workspaces
+            .values()
+            .map(|workspace| workspace.name.as_str())
+            .collect();
+        Some(Box::new(BunEdgeResolver {
+            lockfile: self,
+            workspace_path,
+            sensitive_names: self.index.names_scoped_under(&workspace_names),
+        }))
+    }
+}
+
+/// Resolves transitive dependency edges for the shared closure DP.
+///
+/// [`Lockfile::resolve_package`] consults the workspace only through the
+/// workspace-scoped index (`<workspace name>/<dependency>` entries, checked by
+/// `find_matching_version` and `find_package`); catalog, override, workspace
+/// protocol, hoisted, and nested lookups ignore it. A dependency name with no
+/// entry nested under any workspace name therefore resolves identically for
+/// every workspace. Names that do have one are reported as sensitive so the
+/// DP falls back to the per-workspace walk.
+struct BunEdgeResolver<'a> {
+    lockfile: &'a BunLockfile,
+    // Any workspace: non-sensitive edges resolve identically for all of them.
+    workspace_path: &'a str,
+    sensitive_names: HashSet<&'a str>,
+}
+
+impl crate::TransitiveEdgeResolver for BunEdgeResolver<'_> {
+    fn resolve_edge(
+        &self,
+        name: &str,
+        version: &str,
+    ) -> Result<crate::TransitiveEdgeResolution, crate::Error> {
+        if self.sensitive_names.contains(name) {
+            return Ok(crate::TransitiveEdgeResolution::WorkspaceSensitive);
+        }
+        Ok(crate::TransitiveEdgeResolution::Global(
+            self.lockfile
+                .resolve_package(self.workspace_path, name, version)?,
+        ))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn external_file_inputs_follow_resolved_keys_without_changing_identities() {
+        let lockfile: BunLockfile = serde_json::json!({
+            "lockfileVersion": 1,
+            "workspaces": { "": { "name": "root" } },
+            "packages": {
+                "foo": ["foo@1.0.0", "", {}, "sha512-one"],
+                "other/foo": ["foo@2.0.0", "", {}, "sha512-two"],
+                "renamed": ["foo@2.0.0", "", {}, "sha512-two"]
+            },
+            "overrides": { "foo": "2.0.0" },
+            "patchedDependencies": {
+                "foo@1.0.0": "patches/one.patch",
+                "foo@2.0.0": "patches/two.patch"
+            }
+        })
+        .to_string()
+        .parse()
+        .unwrap();
+        for (name, specifier) in [("foo", "^1.0.0"), ("renamed", "npm:foo@2.0.0")] {
+            let package = lockfile
+                .resolve_package("", name, specifier)
+                .unwrap()
+                .unwrap();
+            assert_eq!(package.key, "foo@2.0.0");
+            assert_eq!(package.version, "2.0.0+patches/two.patch");
+            assert_eq!(
+                lockfile.external_file_inputs(&package).unwrap(),
+                vec![RelativeUnixPathBuf::new("patches/two.patch").unwrap()]
+            );
+        }
+        assert_eq!(
+            lockfile
+                .external_file_inputs(&crate::Package::new("foo@1.0.0", "opaque+version"))
+                .unwrap(),
+            vec![RelativeUnixPathBuf::new("patches/one.patch").unwrap()]
+        );
+        assert!(
+            lockfile
+                .external_file_inputs(&crate::Package::new("foo@3.0.0", "3.0.0"))
+                .unwrap()
+                .is_empty()
+        );
     }
 }

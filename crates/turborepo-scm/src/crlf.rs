@@ -11,6 +11,9 @@
 //!   `.gitattributes` files are not supported.
 //! - The `eol=` attribute is not handled; only `text`, `text=auto`, `-text`,
 //!   and `binary` are recognized.
+//! - git skips `text=auto` conversion for a path whose indexed blob already
+//!   contains CRLF (`has_crlf_in_index()` in convert.c). That rule needs the
+//!   index blob and is not replicated here.
 
 use std::io::{Read, Seek, SeekFrom};
 
@@ -43,10 +46,6 @@ pub(crate) struct GitAttrs {
     collection: MetadataCollection,
 }
 
-/// Matches git's `FIRST_FEW_BYTES` (8KB) used by `buffer_is_binary()` to
-/// detect binary content. A file is considered binary if a NUL byte appears
-/// in the first 8KB. Do not change without verifying against git's behavior.
-const GIT_BINARY_DETECT_LEN: usize = 8 * 1024;
 const BUF_SIZE: usize = 64 * 1024;
 
 impl GitAttrs {
@@ -192,13 +191,78 @@ struct ScanResult {
     byte_count: u64,
     /// Number of \r\n pairs found.
     crlf_count: u64,
-    /// Whether a NUL byte was found in the first 8KB (only meaningful when
-    /// `detect_binary` was true).
+    /// Whether git's `text=auto` heuristic classifies the content as binary
+    /// (only meaningful when `detect_binary` was true). See [`BinaryStats`].
     is_binary: bool,
 }
 
-/// Scan a file to count CRLF pairs, total byte length, and optionally detect
-/// binary content (NUL in first 8KB).
+/// Mirrors git's `gather_stats()` + `convert_is_binary()` (convert.c), which
+/// decide whether `text=auto` content is eol-converted on checkin. Content is
+/// binary if it has a lone CR (one not followed by LF), any NUL byte, or
+/// more than one non-printable byte per 128 printable ones. All of these are
+/// counted over the whole file: the 8KB `buffer_is_binary()` probe is what
+/// git uses for diffs, not for checkin conversion.
+#[derive(Default)]
+struct BinaryStats {
+    /// Byte counts indexed by [`BYTE_CLASS`]. Printable bytes are not counted
+    /// directly (bumping one counter for nearly every byte serializes the
+    /// scan loop); [`BinaryStats::is_binary`] derives them from the total.
+    class_counts: [u64; 5],
+    last_byte: Option<u8>,
+}
+
+const CLASS_PRINTABLE: u8 = 0;
+const CLASS_NONPRINTABLE: u8 = 1;
+const CLASS_NUL: u8 = 2;
+const CLASS_CR: u8 = 3;
+const CLASS_LF: u8 = 4;
+
+/// git's per-byte classification: BS, HT, ESC and FF are printable; other
+/// control bytes and DEL are not; bytes >= 0x80 are printable. CR and LF are
+/// tracked separately (git never counts them as (non)printable).
+const BYTE_CLASS: [u8; 256] = {
+    let mut table = [CLASS_PRINTABLE; 256];
+    let mut b = 0;
+    while b < 0x20 {
+        table[b] = CLASS_NONPRINTABLE;
+        b += 1;
+    }
+    table[0x7f] = CLASS_NONPRINTABLE;
+    table[0x08] = CLASS_PRINTABLE;
+    table[b'\t' as usize] = CLASS_PRINTABLE;
+    table[0x1b] = CLASS_PRINTABLE;
+    table[0x0c] = CLASS_PRINTABLE;
+    table[0] = CLASS_NUL;
+    table[b'\r' as usize] = CLASS_CR;
+    table[b'\n' as usize] = CLASS_LF;
+    table
+};
+
+impl BinaryStats {
+    fn has_nul(&self) -> bool {
+        self.class_counts[CLASS_NUL as usize] > 0
+    }
+
+    /// `crlf_count` is the number of CR bytes immediately followed by LF;
+    /// every other CR is a lone CR. Once a NUL is seen the scan stops
+    /// classifying, so the other counts are only complete without one.
+    fn is_binary(&self, byte_count: u64, crlf_count: u64) -> bool {
+        if self.has_nul() {
+            return true;
+        }
+        let cr = self.class_counts[CLASS_CR as usize];
+        let mut nonprintable = self.class_counts[CLASS_NONPRINTABLE as usize];
+        let printable = byte_count - cr - nonprintable - self.class_counts[CLASS_LF as usize];
+        // git doesn't count a trailing ^Z (DOS end-of-file marker).
+        if self.last_byte == Some(0x1a) {
+            nonprintable -= 1;
+        }
+        cr > crlf_count || (printable >> 7) < nonprintable
+    }
+}
+
+/// Scan a file to count CRLF pairs, total byte length, and optionally
+/// classify it as binary the way git's `text=auto` does.
 #[cfg(test)]
 fn scan_file(reader: &mut impl Read, detect_binary: bool) -> std::io::Result<ScanResult> {
     scan_file_and_feed(reader, detect_binary, |_| {})
@@ -214,7 +278,7 @@ fn scan_file_and_feed(
 ) -> std::io::Result<ScanResult> {
     let mut byte_count: u64 = 0;
     let mut crlf_count: u64 = 0;
-    let mut is_binary = false;
+    let mut binary_stats = BinaryStats::default();
     let mut prev_was_cr = false;
     let mut buf = [0u8; BUF_SIZE];
 
@@ -224,18 +288,27 @@ fn scan_file_and_feed(
             break;
         }
 
-        if detect_binary && !is_binary && byte_count < GIT_BINARY_DETECT_LEN as u64 {
-            let check_end = n.min(GIT_BINARY_DETECT_LEN.saturating_sub(byte_count as usize));
-            if buf[..check_end].contains(&0) {
-                is_binary = true;
+        // A NUL settles the classification, so skip it for the rest of the
+        // file (binary files usually have one early).
+        if detect_binary && !binary_stats.has_nul() {
+            for &b in &buf[..n] {
+                if b == b'\n' && prev_was_cr {
+                    crlf_count += 1;
+                }
+                prev_was_cr = b == b'\r';
+                let class = BYTE_CLASS[b as usize];
+                if class != CLASS_PRINTABLE {
+                    binary_stats.class_counts[class as usize] += 1;
+                }
             }
-        }
-
-        for &b in &buf[..n] {
-            if b == b'\n' && prev_was_cr {
-                crlf_count += 1;
+            binary_stats.last_byte = Some(buf[n - 1]);
+        } else {
+            for &b in &buf[..n] {
+                if b == b'\n' && prev_was_cr {
+                    crlf_count += 1;
+                }
+                prev_was_cr = b == b'\r';
             }
-            prev_was_cr = b == b'\r';
         }
 
         on_data(&buf[..n]);
@@ -245,7 +318,7 @@ fn scan_file_and_feed(
     Ok(ScanResult {
         byte_count,
         crlf_count,
-        is_binary,
+        is_binary: detect_binary && binary_stats.is_binary(byte_count, crlf_count),
     })
 }
 
@@ -284,49 +357,14 @@ fn stream_normalized(reader: &mut impl Read, mut update: impl FnMut(&[u8])) -> s
     Ok(())
 }
 
-/// Abstraction over SHA1 hasher implementations (gix and sha1 crate) so the
-/// normalization algorithm is written exactly once. Both
-/// [`hash_file_maybe_normalized`] and [`manual_hash_file_maybe_normalized`]
-/// delegate to [`hash_file_normalized`].
-trait BlobHasher: Sized {
-    type Output;
+/// Incrementally computes a git blob oid using the `sha1` crate, which
+/// dispatches to hardware SHA extensions at runtime (SHA-NI on x86, the
+/// crypto extensions on aarch64). Both [`hash_file_as_git_blob`] and
+/// [`manual_hash_file_maybe_normalized`] delegate to
+/// [`hash_file_normalized`], which drives this hasher.
+struct BlobHasher(Sha1);
 
-    fn new() -> Self;
-    fn write_blob_header(&mut self, blob_len: u64);
-    fn update(&mut self, data: &[u8]);
-    fn finalize(self) -> Result<Self::Output, std::io::Error>;
-}
-
-struct GixBlobHasher(gix_index::hash::Hasher);
-
-impl BlobHasher for GixBlobHasher {
-    type Output = gix_index::hash::ObjectId;
-
-    fn new() -> Self {
-        Self(gix_index::hash::hasher(gix_index::hash::Kind::Sha1))
-    }
-
-    fn write_blob_header(&mut self, blob_len: u64) {
-        self.0.update(&gix_object::encode::loose_header(
-            gix_object::Kind::Blob,
-            blob_len,
-        ));
-    }
-
-    fn update(&mut self, data: &[u8]) {
-        self.0.update(data);
-    }
-
-    fn finalize(self) -> Result<gix_index::hash::ObjectId, std::io::Error> {
-        self.0.try_finalize().map_err(std::io::Error::other)
-    }
-}
-
-struct ManualBlobHasher(Sha1);
-
-impl BlobHasher for ManualBlobHasher {
-    type Output = OidHash;
-
+impl BlobHasher {
     fn new() -> Self {
         Self(Sha1::new())
     }
@@ -334,7 +372,7 @@ impl BlobHasher for ManualBlobHasher {
     fn write_blob_header(&mut self, blob_len: u64) {
         self.0.update(b"blob ");
         self.0.update(blob_len.to_string().as_bytes());
-        self.0.update([b'\0']);
+        self.0.update(*b"\0");
     }
 
     fn update(&mut self, data: &[u8]) {
@@ -347,6 +385,15 @@ impl BlobHasher for ManualBlobHasher {
         hex::encode_to_slice(result, &mut hex_buf).map_err(std::io::Error::other)?;
         Ok(OidHash::from_hex_buf(hex_buf))
     }
+}
+
+/// Hash a byte slice as a git blob. Used to verify symlink entries, whose
+/// blob content is the link target path (no filters ever apply).
+pub(crate) fn hash_bytes_as_blob(bytes: &[u8]) -> Result<OidHash, std::io::Error> {
+    let mut hasher = BlobHasher::new();
+    hasher.write_blob_header(bytes.len() as u64);
+    hasher.update(bytes);
+    hasher.finalize()
 }
 
 fn validate_file_type(
@@ -367,8 +414,8 @@ fn validate_file_type(
 /// Hash a file as a git blob, applying CRLF→LF normalization when the
 /// `text` attribute requires it.
 ///
-/// For `TextAttr::Auto`, binary detection (NUL in first 8KB) is performed
-/// during the fused scan+hash pass — no separate file open.
+/// For `TextAttr::Auto`, binary classification (see [`BinaryStats`]) is
+/// performed during the fused scan+hash pass — no separate file open.
 ///
 /// Single-pass for the common case (no normalization needed):
 /// 1. Get file length from metadata
@@ -380,23 +427,41 @@ fn validate_file_type(
 /// 1. Fused scan + speculative raw hash (result discarded)
 /// 2. Seek to start, write normalized blob header, stream with CRLF→LF
 ///
+/// Facts about how a blob hash was produced, used by the repo-index
+/// verification pass to decide whether a stat-stale entry is provably
+/// identical to what `git diff HEAD` would see.
+#[derive(Debug, Clone, Copy)]
+pub(crate) struct HashOutcome {
+    /// Whether CRLF→LF normalization was applied (the returned oid is over
+    /// normalized content, not raw bytes).
+    pub(crate) normalized: bool,
+    /// Number of `\r\n` pairs in the raw content.
+    pub(crate) crlf_count: u64,
+}
+
 /// Memory bounded at ~128KB per call.
-fn hash_file_normalized<H: BlobHasher>(
+fn hash_file_normalized(
     file: &mut std::fs::File,
     file_len: u64,
     attr: TextAttr,
-) -> Result<H::Output, std::io::Error> {
+) -> Result<(OidHash, HashOutcome), std::io::Error> {
     // Fused scan + speculative raw hash in a single pass. The blob header
     // uses the raw file length; if normalization turns out to be needed we
     // discard this hash and do a second pass with the normalized length.
-    let mut raw_hasher = H::new();
+    let mut raw_hasher = BlobHasher::new();
     raw_hasher.write_blob_header(file_len);
+    // Binary classification only matters for `text=auto` (`should_normalize`)
+    // and walks every byte, so skip it for other attributes.
     let scan = scan_file_and_feed(file, attr == TextAttr::Auto, |data| {
         raw_hasher.update(data);
     })?;
 
     if !should_normalize(attr, &scan) {
-        return raw_hasher.finalize();
+        let outcome = HashOutcome {
+            normalized: false,
+            crlf_count: scan.crlf_count,
+        };
+        return Ok((raw_hasher.finalize()?, outcome));
     }
 
     // CRLF normalization required — second pass with the normalized length.
@@ -405,7 +470,7 @@ fn hash_file_normalized<H: BlobHasher>(
     file.seek(SeekFrom::Start(0))?;
     let normalized_len = scan.byte_count.saturating_sub(scan.crlf_count);
 
-    let mut hasher = H::new();
+    let mut hasher = BlobHasher::new();
     hasher.write_blob_header(normalized_len);
     let mut bytes_hashed: u64 = 0;
     stream_normalized(file, |data| {
@@ -421,18 +486,140 @@ fn hash_file_normalized<H: BlobHasher>(
             ),
         ));
     }
-    hasher.finalize()
+    let outcome = HashOutcome {
+        normalized: true,
+        crlf_count: scan.crlf_count,
+    };
+    Ok((hasher.finalize()?, outcome))
 }
 
-/// Hash via the gix code path (used when `.git/` is present).
-pub(crate) fn hash_file_maybe_normalized(
+pub(crate) fn is_env_local(path: &str) -> bool {
+    path.rsplit('/').next() == Some(".env.local")
+}
+
+// Keep cache-specific normalization separate from Git verification:
+// verification must compare the actual working-tree content with Git's blob
+// IDs.
+fn hash_file_for_cache(
+    path: &AbsoluteSystemPath,
+    file: &mut std::fs::File,
+    file_len: u64,
+    attr: TextAttr,
+) -> Result<OidHash, std::io::Error> {
+    // Bound allocation for unusually large files. Unsupported files retain their
+    // ordinary hash, preferring a cache miss over ambiguous normalization.
+    if path.as_std_path().file_name() == Some(std::ffi::OsStr::new(".env.local"))
+        && file_len <= 1024 * 1024
+    {
+        let mut bytes = Vec::new();
+        file.take(1024 * 1024 + 1).read_to_end(&mut bytes)?;
+        if bytes.len() <= 1024 * 1024
+            && let Some(normalized) = crate::env_local::normalize_oidc_token(&bytes)
+        {
+            let mut reader = std::io::Cursor::new(&normalized);
+            let scan = scan_file_and_feed(&mut reader, attr == TextAttr::Auto, |_| {})?;
+            let normalize_crlf = should_normalize(attr, &scan);
+            // Domain separation prevents transformed hashes from reusing an
+            // older cache entry that happened to contain the placeholder.
+            const DOMAIN: &[u8] = b"turborepo:env-local-oidc:v1\0";
+            let len = normalized.len() as u64 - if normalize_crlf { scan.crlf_count } else { 0 };
+            let mut hasher = BlobHasher::new();
+            hasher.write_blob_header(DOMAIN.len() as u64 + len);
+            hasher.update(DOMAIN);
+            if normalize_crlf {
+                reader.set_position(0);
+                stream_normalized(&mut reader, |data| hasher.update(data))?;
+            } else {
+                hasher.update(&normalized);
+            }
+            return hasher.finalize();
+        }
+        file.seek(SeekFrom::Start(0))?;
+    }
+    Ok(hash_file_normalized(file, file_len, attr)?.0)
+}
+
+/// Hash a working-tree file as a git blob (used when `.git/` is present).
+///
+/// Uses the `sha1` crate rather than gix's collision-detected SHA-1
+/// (`sha1_checked`, a Rust port of sha1dc). The `sha1` crate dispatches to
+/// hardware SHA extensions at runtime (SHA-NI on x86, the crypto extensions
+/// on aarch64), which is 5-8x faster than sha1dc's software compression.
+/// Collision detection buys nothing here: these oids are derived from local
+/// working-tree contents to serve as cache-key inputs, and an actor who can
+/// place a crafted collision pair in the repo can already modify the build
+/// itself. Outputs are bit-identical to git for all non-colliding inputs,
+/// enforced by differential tests against `git hash-object` below.
+pub(crate) fn hash_file_as_git_blob(
+    root: &AbsoluteSystemPath,
     path: &AbsoluteSystemPath,
     attr: TextAttr,
-) -> Result<gix_index::hash::ObjectId, std::io::Error> {
+) -> Result<Option<OidHash>, std::io::Error> {
+    let is_link = std::fs::symlink_metadata(path)?.is_symlink();
+    let link_blob = || {
+        let target = std::fs::read_link(path)?;
+        hash_bytes_as_blob(target.as_os_str().as_encoded_bytes()).map(Some)
+    };
+    // Avoid opening sockets, FIFOs, devices, and directories. Metadata from the
+    // opened handle below remains authoritative if the path changes afterward.
+    let metadata = std::fs::metadata(path)?;
+    if is_link && metadata.is_dir() {
+        return link_blob();
+    }
+    if !metadata.is_file() {
+        return Ok(None);
+    }
+
+    let target = path.to_realpath().map_err(|error| match error {
+        turbopath::PathError::IO(error) => error,
+        error => std::io::Error::other(error),
+    })?;
+    let real_root = root.to_realpath().map_err(std::io::Error::other)?;
+    let authored = real_root
+        .resolve(&turbopath::AnchoredSystemPathBuf::relative_path_between(
+            root, path,
+        ))
+        .clean()
+        .map_err(std::io::Error::other)?;
+    if target != authored {
+        let inside = real_root.anchor(&target).is_ok_and(|relative| {
+            !relative
+                .components()
+                .any(|part| turbopath::is_git_metadata_component(part.as_str()))
+        });
+        if !inside {
+            return if is_link { link_blob() } else { Ok(None) };
+        }
+    }
+    let mut file = std::fs::File::open(path)?;
+    let metadata = file.metadata()?;
+    if !metadata.is_file() {
+        return Ok(None);
+    }
+    if turbopath::file_realpath(&file)? != target.as_std_path() {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::PermissionDenied,
+            "input changed while opening",
+        ));
+    }
+    Ok(Some(hash_file_for_cache(
+        path,
+        &mut file,
+        metadata.len(),
+        attr,
+    )?))
+}
+
+/// Hash a working-tree file and report how the hash was produced. Used by the
+/// repo-index verification pass.
+pub(crate) fn hash_file_for_verification(
+    path: &AbsoluteSystemPath,
+    attr: TextAttr,
+) -> Result<(OidHash, HashOutcome), std::io::Error> {
     let mut file = std::fs::File::open(path)?;
     let metadata = file.metadata()?;
     validate_file_type(path, &metadata)?;
-    hash_file_normalized::<GixBlobHasher>(&mut file, metadata.len(), attr)
+    hash_file_normalized(&mut file, metadata.len(), attr)
 }
 
 /// Hash via the manual code path (used after `turbo prune` removes `.git/`).
@@ -443,11 +630,7 @@ pub(crate) fn manual_hash_file_maybe_normalized(
     let mut file = path.open()?;
     let metadata = file.metadata()?;
     validate_file_type(path, &metadata)?;
-    Ok(hash_file_normalized::<ManualBlobHasher>(
-        &mut file,
-        metadata.len(),
-        attr,
-    )?)
+    Ok(hash_file_for_cache(path, &mut file, metadata.len(), attr)?)
 }
 
 #[cfg(test)]
@@ -456,6 +639,13 @@ mod tests {
 
     use super::*;
 
+    fn hash_file_as_git_blob(
+        path: &AbsoluteSystemPath,
+        attr: TextAttr,
+    ) -> Result<Option<OidHash>, std::io::Error> {
+        super::hash_file_as_git_blob(path.parent().unwrap(), path, attr)
+    }
+
     fn tmp_dir() -> (tempfile::TempDir, AbsoluteSystemPathBuf) {
         let tmp = tempfile::tempdir().unwrap();
         let dir = AbsoluteSystemPathBuf::try_from(tmp.path())
@@ -463,6 +653,96 @@ mod tests {
             .to_realpath()
             .unwrap();
         (tmp, dir)
+    }
+
+    #[test]
+    fn test_oidc_cache_normalization_preserves_git_verification_and_file() {
+        let (_tmp, root) = tmp_dir();
+        let path = root.join_component(".env.local");
+        for attr in [
+            TextAttr::Unspecified,
+            TextAttr::Set,
+            TextAttr::Auto,
+            TextAttr::Unset,
+        ] {
+            let initial = b"VERCEL_OIDC_TOKEN=first\r\nOTHER=keep\r\n";
+            std::fs::write(&path, initial).unwrap();
+            let cache_hash = hash_file_as_git_blob(&path, attr).unwrap().unwrap();
+            assert_eq!(
+                cache_hash,
+                manual_hash_file_maybe_normalized(&path, attr).unwrap()
+            );
+            let raw_hash = hash_file_for_verification(&path, attr).unwrap().0;
+            assert_ne!(cache_hash, raw_hash);
+            assert_eq!(std::fs::read(&path).unwrap(), initial);
+
+            std::fs::write(&path, b"VERCEL_OIDC_TOKEN=a-longer-token\r\nOTHER=keep\r\n").unwrap();
+            assert_eq!(
+                cache_hash,
+                hash_file_as_git_blob(&path, attr).unwrap().unwrap()
+            );
+            assert_ne!(raw_hash, hash_file_for_verification(&path, attr).unwrap().0);
+            std::fs::write(&path, b"OTHER=keep\r\n").unwrap();
+            assert_ne!(
+                cache_hash,
+                hash_file_as_git_blob(&path, attr).unwrap().unwrap()
+            );
+        }
+    }
+
+    #[test]
+    fn test_oidc_cache_normalization_obeys_crlf_attributes() {
+        let (_tmp, root) = tmp_dir();
+        let path = root.join_component(".env.local");
+        for attr in [
+            TextAttr::Unspecified,
+            TextAttr::Set,
+            TextAttr::Auto,
+            TextAttr::Unset,
+        ] {
+            std::fs::write(&path, b"VERCEL_OIDC_TOKEN=first\r\nOTHER=keep\r\n").unwrap();
+            let crlf = hash_file_as_git_blob(&path, attr).unwrap().unwrap();
+            std::fs::write(&path, b"VERCEL_OIDC_TOKEN=second\nOTHER=keep\n").unwrap();
+            let lf = hash_file_as_git_blob(&path, attr).unwrap().unwrap();
+            assert_eq!(crlf == lf, matches!(attr, TextAttr::Set | TextAttr::Auto));
+        }
+    }
+
+    #[test]
+    fn test_oidc_cache_normalization_fallback_and_domain_separation() {
+        let (_tmp, root) = tmp_dir();
+        let path = root.join_component(".env.local");
+        for bytes in [
+            b"OTHER=keep\n".as_slice(),
+            b"VERCEL_OIDC_TOKEN=one\nVERCEL_OIDC_TOKEN=two\n",
+            b"OTHER=\"unterminated\nVERCEL_OIDC_TOKEN=one\n",
+        ] {
+            std::fs::write(&path, bytes).unwrap();
+            assert_eq!(
+                hash_file_as_git_blob(&path, TextAttr::Unspecified)
+                    .unwrap()
+                    .unwrap(),
+                hash_bytes_as_blob(bytes).unwrap()
+            );
+        }
+        let bytes = b"VERCEL_OIDC_TOKEN=__TURBOREPO_VERCEL_OIDC_TOKEN__\n";
+        std::fs::write(&path, bytes).unwrap();
+        assert_ne!(
+            hash_file_as_git_blob(&path, TextAttr::Unspecified)
+                .unwrap()
+                .unwrap(),
+            hash_bytes_as_blob(bytes).unwrap()
+        );
+
+        let mut oversized = b"VERCEL_OIDC_TOKEN=one\n#".to_vec();
+        oversized.resize(1024 * 1024 + 1, b'x');
+        std::fs::write(&path, &oversized).unwrap();
+        assert_eq!(
+            hash_file_as_git_blob(&path, TextAttr::Unspecified)
+                .unwrap()
+                .unwrap(),
+            hash_bytes_as_blob(&oversized).unwrap()
+        );
     }
 
     // -- scan_file tests --
@@ -524,18 +804,19 @@ mod tests {
     }
 
     #[test]
-    fn test_scan_binary_detect_nul_after_8kb_is_text() {
+    fn test_scan_binary_detect_nul_after_first_chunk() {
         let (_tmp, root) = tmp_dir();
         let path = root.join_component("late-nul.bin");
-        // 8KB of text followed by NUL — should be classified as text
-        let mut content = vec![b'x'; GIT_BINARY_DETECT_LEN];
+        // git classifies the whole file for checkin conversion (the 8KB probe
+        // is only used for diffs), so a NUL in a later read chunk counts.
+        let mut content = vec![b'x'; BUF_SIZE + 10];
         content.push(0x00);
         std::fs::write(path.as_std_path(), &content).unwrap();
         let mut f = std::fs::File::open(path.as_std_path()).unwrap();
         let scan = scan_file(&mut f, true).unwrap();
         assert!(
-            !scan.is_binary,
-            "NUL after the first 8KB should not trigger binary detection"
+            scan.is_binary,
+            "NUL anywhere in the file must classify it as binary"
         );
     }
 
@@ -706,25 +987,42 @@ mod tests {
             let expected = expected.trim();
 
             let path = root.join_component(name);
-            let actual = hash_file_maybe_normalized(&path, TextAttr::Auto).unwrap();
-            let mut hex_buf = [0u8; 40];
-            hex::encode_to_slice(actual.as_bytes(), &mut hex_buf).unwrap();
-            let actual_str = std::str::from_utf8(&hex_buf).unwrap();
+            let actual = hash_file_as_git_blob(&path, TextAttr::Auto)
+                .unwrap()
+                .unwrap();
 
             assert_eq!(
-                actual_str, expected,
+                &*actual, expected,
                 "normalized hash for {name} must match git hash-object --path (with filters)"
             );
         }
     }
 
-    /// Verify that the gix-based and sha1-based normalized hashers produce
-    /// identical OIDs for a comprehensive set of inputs. This is critical
-    /// because the git path uses gix and the manual path uses sha1 — they
-    /// must always agree.
+    /// Edge-case content shapes (trailing/standalone CR, chunk-boundary
+    /// CRLF under `text`, binary auto-detection) verified against
+    /// `git hash-object --path`, the ground truth for blob oids.
     #[test]
-    fn test_gix_and_manual_normalized_hashes_agree() {
+    fn test_edge_case_hashes_match_git_hash_object() {
         let (_tmp, root) = tmp_dir();
+
+        std::process::Command::new("git")
+            .args(["init"])
+            .current_dir(root.as_std_path())
+            .output()
+            .unwrap();
+        std::process::Command::new("git")
+            .args(["config", "--local", "core.autocrlf", "false"])
+            .current_dir(root.as_std_path())
+            .output()
+            .unwrap();
+        // Extension-based attrs let one repo cover both `text` and
+        // `text=auto` while `git hash-object --path` derives the same
+        // attribute we pass to our hasher.
+        std::fs::write(
+            root.as_std_path().join(".gitattributes"),
+            "*.set text\n*.auto text=auto\n",
+        )
+        .unwrap();
 
         let mut boundary_content = vec![b'x'; BUF_SIZE - 1];
         boundary_content.push(b'\r');
@@ -732,52 +1030,149 @@ mod tests {
         boundary_content.extend_from_slice(b"after-boundary");
 
         let cases: Vec<(&str, Vec<u8>, TextAttr)> = vec![
-            ("empty.txt", vec![], TextAttr::Set),
-            ("lf-only.txt", b"line1\nline2\n".to_vec(), TextAttr::Set),
-            ("pure-crlf.txt", b"a\r\nb\r\nc\r\n".to_vec(), TextAttr::Set),
+            ("empty.set", vec![], TextAttr::Set),
+            ("lf-only.set", b"line1\nline2\n".to_vec(), TextAttr::Set),
+            ("trailing-cr.set", b"data\r".to_vec(), TextAttr::Set),
             (
-                "mixed.txt",
-                b"line1\nline2\r\nline3\n".to_vec(),
-                TextAttr::Set,
-            ),
-            ("trailing-cr.txt", b"data\r".to_vec(), TextAttr::Set),
-            (
-                "standalone-cr.txt",
+                "standalone-cr.set",
                 b"hello\rworld\n".to_vec(),
                 TextAttr::Set,
             ),
-            ("boundary-crlf.txt", boundary_content, TextAttr::Set),
-            // Auto with text content
+            ("boundary-crlf.set", boundary_content, TextAttr::Set),
             (
-                "auto-text.txt",
+                "auto-text.auto",
                 b"hello\r\nworld\r\n".to_vec(),
                 TextAttr::Auto,
             ),
-            // Auto with binary content (NUL byte)
+            // Auto with binary content (NUL byte) — hashed raw
             (
-                "auto-binary.bin",
+                "auto-binary.auto",
                 vec![0x00, b'\r', b'\n', 0xFF],
                 TextAttr::Auto,
             ),
-            // Unspecified — should hash raw
-            ("unspec.txt", b"a\r\nb\r\n".to_vec(), TextAttr::Unspecified),
         ];
 
         for (name, content, attr) in &cases {
             let path = root.join_component(name);
             std::fs::write(path.as_std_path(), content).unwrap();
 
-            let gix_result = hash_file_maybe_normalized(&path, *attr).unwrap();
+            let output = std::process::Command::new("git")
+                .args(["hash-object", "--path", name, "--stdin"])
+                .stdin(std::process::Stdio::from(
+                    std::fs::File::open(path.as_std_path()).unwrap(),
+                ))
+                .current_dir(root.as_std_path())
+                .output()
+                .unwrap();
+            assert!(
+                output.status.success(),
+                "git hash-object --path failed for {name}: {}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+            let expected = String::from_utf8(output.stdout).unwrap();
+            let expected = expected.trim();
+
+            let fast_result = hash_file_as_git_blob(&path, *attr).unwrap().unwrap();
             let manual_result = manual_hash_file_maybe_normalized(&path, *attr).unwrap();
 
-            let mut hex_buf = [0u8; 40];
-            hex::encode_to_slice(gix_result.as_bytes(), &mut hex_buf).unwrap();
-            let gix_hex = std::str::from_utf8(&hex_buf).unwrap();
-
             assert_eq!(
-                gix_hex, &*manual_result,
-                "gix and manual hashes must agree for {name} (attr={attr:?})"
+                &*fast_result, expected,
+                "hash must match git hash-object --path for {name} (attr={attr:?})"
             );
+            assert_eq!(
+                fast_result, manual_result,
+                "git-path and manual-path hashing must agree for {name} (attr={attr:?})"
+            );
+        }
+    }
+
+    /// `text=auto` only converts content git's `convert_is_binary()` treats
+    /// as text: no lone CR, no NUL anywhere, and at most one non-printable
+    /// byte per 128 printable ones (a trailing ^Z excepted). Verified against
+    /// `git hash-object --path`, including read-chunk boundaries.
+    #[test]
+    fn test_text_auto_binary_classification_matches_git() {
+        let (_tmp, root) = tmp_dir();
+
+        std::process::Command::new("git")
+            .args(["init"])
+            .current_dir(root.as_std_path())
+            .output()
+            .unwrap();
+        std::process::Command::new("git")
+            .args(["config", "--local", "core.autocrlf", "false"])
+            .current_dir(root.as_std_path())
+            .output()
+            .unwrap();
+        std::fs::write(root.as_std_path().join(".gitattributes"), "* text=auto\n").unwrap();
+
+        let with_ratio = |printable: usize| {
+            let mut v = vec![b'p'; printable];
+            v.push(0x01);
+            v.extend_from_slice(b"\r\n");
+            v
+        };
+        let around_boundary = |cr_follower: &[u8]| {
+            let mut v = vec![b'x'; BUF_SIZE - 1];
+            v.push(b'\r');
+            v.extend_from_slice(cr_follower);
+            v.extend_from_slice(b"tail\r\n");
+            v
+        };
+        let mut nul_after_chunk = b"a\r\n".to_vec();
+        nul_after_chunk.extend(vec![b'x'; BUF_SIZE + 100]);
+        nul_after_chunk.extend_from_slice(b"\x00\r\n");
+        let mut nul_after_8kb = b"a\r\n".to_vec();
+        nul_after_8kb.extend(vec![b'x'; 9000]);
+        nul_after_8kb.extend_from_slice(b"\x00\r\n");
+
+        let cases: Vec<(&str, Vec<u8>)> = vec![
+            ("crlf", b"a\r\nb\r\n".to_vec()),
+            ("lone-cr", b"a\r\nb\rc\r\n".to_vec()),
+            ("trailing-cr", b"a\r\nb\r".to_vec()),
+            ("cr-cr-lf", b"a\r\r\nb\r\n".to_vec()),
+            ("nul-after-8kb", nul_after_8kb),
+            ("nul-after-chunk", nul_after_chunk),
+            ("control", b"a\x01\r\nb\r\n".to_vec()),
+            ("del", b"\x7f\x7f\r\nb\r\n".to_vec()),
+            ("printable-controls", b"\x08\t\x1b\x0c\r\n".to_vec()),
+            ("ratio-text", with_ratio(128)),
+            ("ratio-binary", with_ratio(127)),
+            ("trailing-ctrl-z", b"a\r\nb\r\n\x1a".to_vec()),
+            ("inner-ctrl-z", b"a\x1a\r\nb\r\n".to_vec()),
+            ("high-bytes", b"\xef\xbb\xbfa\r\nb\r\n".to_vec()),
+            ("boundary-crlf", around_boundary(b"\n")),
+            ("boundary-lone-cr", around_boundary(b"y")),
+        ];
+
+        for (name, content) in &cases {
+            let path = root.join_component(name);
+            std::fs::write(path.as_std_path(), content).unwrap();
+
+            let output = std::process::Command::new("git")
+                .args(["hash-object", "--path", name, "--stdin"])
+                .stdin(std::process::Stdio::from(
+                    std::fs::File::open(path.as_std_path()).unwrap(),
+                ))
+                .current_dir(root.as_std_path())
+                .output()
+                .unwrap();
+            assert!(
+                output.status.success(),
+                "git hash-object --path failed for {name}: {}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+            let expected = String::from_utf8(output.stdout).unwrap();
+            let expected = expected.trim();
+
+            let cache_hash = hash_file_as_git_blob(&path, TextAttr::Auto)
+                .unwrap()
+                .unwrap();
+            let manual_hash = manual_hash_file_maybe_normalized(&path, TextAttr::Auto).unwrap();
+            let (verify_hash, _) = hash_file_for_verification(&path, TextAttr::Auto).unwrap();
+            assert_eq!(&*cache_hash, expected, "cache hash for {name}");
+            assert_eq!(&*manual_hash, expected, "manual hash for {name}");
+            assert_eq!(&*verify_hash, expected, "verification hash for {name}");
         }
     }
 
@@ -806,7 +1201,7 @@ mod tests {
         assert!(GitAttrs::load(&root).is_none());
     }
 
-    // -- hash_file_maybe_normalized edge-case tests --
+    // -- hash_file_as_git_blob edge-case tests --
 
     #[test]
     fn test_hash_binary_file_with_auto_is_raw() {
@@ -816,10 +1211,14 @@ mod tests {
         std::fs::write(path.as_std_path(), &content).unwrap();
 
         // With Auto, binary should be hashed raw (no normalization)
-        let auto_result = hash_file_maybe_normalized(&path, TextAttr::Auto).unwrap();
+        let auto_result = hash_file_as_git_blob(&path, TextAttr::Auto)
+            .unwrap()
+            .unwrap();
 
         // With Unspecified, should also be raw
-        let raw_result = hash_file_maybe_normalized(&path, TextAttr::Unspecified).unwrap();
+        let raw_result = hash_file_as_git_blob(&path, TextAttr::Unspecified)
+            .unwrap()
+            .unwrap();
 
         // Both should produce the same hash (raw bytes)
         assert_eq!(
@@ -834,14 +1233,20 @@ mod tests {
         let path = root.join_component("text.txt");
         std::fs::write(path.as_std_path(), b"a\r\nb\r\n").unwrap();
 
-        let auto_hash = hash_file_maybe_normalized(&path, TextAttr::Auto).unwrap();
-        let set_hash = hash_file_maybe_normalized(&path, TextAttr::Set).unwrap();
+        let auto_hash = hash_file_as_git_blob(&path, TextAttr::Auto)
+            .unwrap()
+            .unwrap();
+        let set_hash = hash_file_as_git_blob(&path, TextAttr::Set)
+            .unwrap()
+            .unwrap();
 
         // Both Auto and Set should normalize CRLF for a text file
         assert_eq!(auto_hash, set_hash);
 
         // Unspecified should hash raw (different from normalized)
-        let raw_hash = hash_file_maybe_normalized(&path, TextAttr::Unspecified).unwrap();
+        let raw_hash = hash_file_as_git_blob(&path, TextAttr::Unspecified)
+            .unwrap()
+            .unwrap();
         assert_ne!(
             auto_hash, raw_hash,
             "normalized hash should differ from raw for CRLF content"
@@ -887,13 +1292,12 @@ mod tests {
         let expected = expected.trim();
 
         let path = root.join_component(name);
-        let actual = hash_file_maybe_normalized(&path, TextAttr::Auto).unwrap();
-        let mut hex_buf = [0u8; 40];
-        hex::encode_to_slice(actual.as_bytes(), &mut hex_buf).unwrap();
-        let actual_str = std::str::from_utf8(&hex_buf).unwrap();
+        let actual = hash_file_as_git_blob(&path, TextAttr::Auto)
+            .unwrap()
+            .unwrap();
 
         assert_eq!(
-            actual_str, expected,
+            &*actual, expected,
             "chunk-boundary CRLF normalization must match git hash-object"
         );
     }

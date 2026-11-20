@@ -4,29 +4,27 @@
   "type": "module",
   "private": true,
   "scripts": {
-    "dev": "next dev --turbopack --port 3000",
+    "dev": "next dev --port 3000",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint --max-warnings 0",
+    "lint": "biome lint .",
     "check-types": "tsc --noEmit",
     "test": "vitest run"
   },
   "dependencies": {
     "@repo/ui": "workspace:*",
-    "next": "16.2.0",
-    "react": "^19.0.0",
-    "react-dom": "^19.0.0"
+    "next": "16.4.5",
+    "react": "19.3.1",
+    "react-dom": "19.3.1"
   },
   "devDependencies": {
-    "@repo/eslint-config": "workspace:*",
     "@repo/typescript-config": "workspace:*",
     "@repo/vitest-config": "workspace:*",
-    "@types/node": "^22",
-    "@types/react": "19.0.8",
-    "@types/react-dom": "19.0.3",
-    "@vitest/coverage-istanbul": "^3.2.4",
-    "eslint": "^9.21.0",
-    "typescript": "5.7.3",
-    "vitest": "^3.2.4"
+    "@types/node": "26.6.6",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "@vitest/coverage-istanbul": "5.1.0",
+    "typescript": "7.0.2",
+    "vitest": "5.1.0"
   }
 }

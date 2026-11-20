@@ -1,6 +1,8 @@
 {
-	"extends": ["@repo/typescript-config/svelte.json", "./.svelte-kit/tsconfig.json"],
+	"extends": ["$app/tsconfig", "@repo/typescript-config/svelte.json"],
 	"compilerOptions": {
 		"strictNullChecks": true
-	}
+	},
+	"include": ["src", "tests", "*"],
+	"exclude": ["src/service-worker"]
 }

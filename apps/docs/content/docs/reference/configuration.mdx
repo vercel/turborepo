@@ -43,7 +43,7 @@ Extend from the root `turbo.json` to create specific configuration for a package
 
 A list of globs that you want to include in all task hashes. **If any file matching these globs changes, all tasks will miss cache.** Globs are relative to the location of `turbo.json`.
 
-By default, only the root package.json and lockfile are included in [the global hash](/docs/crafting-your-repository/caching) and can't be ignored. Any added `globalDependencies` will also be included in the global hash.
+By default, the root `package.json`, lockfile, and source files in internal packages that the root package depends on are included in [the global hash](/docs/crafting-your-repository/caching#root-workspace-dependencies) and can't be ignored. Tasks in Rust, Python, and Go packages don't include the root package's internal or external dependencies. Any added `globalDependencies` will also be included in the global hash.
 
 <Callout type="error">
   Globs must be in the repository's source control root. Globs outside of the
@@ -115,6 +115,22 @@ When set to `true`, disables the update notification that appears when a new ver
 }
 ```
 
+### `agentGuidance`
+
+Default: `false`
+
+When an AI coding agent is detected, `turbo` can maintain a managed block in the repository-root `AGENTS.md` that points to the documentation bundled with the installed `turbo` package. The guidance is refreshed before repository-scoped commands, and only Turborepo's own block is updated. Existing instructions and other tools' blocks are preserved.
+
+This is a root-only option; it cannot be set in package-level `turbo.json` files. Use it in either `turbo.json` or `turbo.jsonc` to opt in to automatic updates:
+
+```json title="./turbo.json"
+{
+  "agentGuidance": true
+}
+```
+
+Opting out does not delete an existing `AGENTS.md` file or Turborepo block. Existing repositories receive or refresh the guidance only after opting in. New projects created from the default starter include it immediately.
+
 ### `concurrency`
 
 Default: `"10"`
@@ -169,8 +185,12 @@ Specify the filesystem cache directory.
   When no `cacheDir` is specified and you're working in a [Git
   worktree](https://git-scm.com/docs/git-worktree), Turborepo automatically
   shares the cache with the main worktree. This allows cache hits across
-  different branches checked out in separate worktrees. Setting an explicit
-  `cacheDir` disables this behavior.
+  different branches checked out in separate worktrees. Cache artifacts are
+  restored without rewriting their contents, so outputs containing absolute
+  worktree paths can point to another checkout after a cache hit. Setting an
+  explicit relative `cacheDir`, such as `.turbo/cache`, resolves from the root
+  of the current worktree and disables sharing, giving each worktree its own
+  local cache.
 </Callout>
 
 ### `cacheMaxAge`
@@ -284,10 +304,27 @@ Enable experimental features that will become the default behavior in future ver
 </Callout>
 
 <Callout type="warn">
-  Changing any future flag will affect the [global
-  hash](/docs/crafting-your-repository/caching#global-hash-inputs), causing all
-  tasks to miss cache on the next run.
+  Future flags that change behavior can invalidate the [task
+  cache](/docs/crafting-your-repository/caching).
 </Callout>
+
+#### `hashFilePermissions`
+
+Default: `false`
+
+Include executable permissions in file hashes for task inputs and global dependencies. With this flag enabled, changing an input file from non-executable to executable, or back, changes the task hash even when its contents stay the same.
+
+On Unix, a regular file is executable if any owner, group, or other executable bit is set. On Windows, regular files are treated as non-executable. Symlink permissions and read or write permission bits do not affect hashes.
+
+Enabling this flag changes all task hashes. Existing cache entries are not reused. With the flag disabled, Turborepo preserves content-only file hashing.
+
+```jsonc title="./turbo.json"
+{
+  "futureFlags": {
+    "hashFilePermissions": true,
+  },
+}
+```
 
 #### `errorsOnlyShowHash`
 
@@ -355,12 +392,35 @@ Without this flag, `--affected` operates at the **package level**: if any file i
 
 In this example, if only `README.md` changed in a package, `build` would not run because it excludes `README.md` from its inputs.
 
+This flag also makes package-oriented queries and pruning follow the Task Graph:
+
+- [`turbo query`](/docs/reference/query)'s `affectedPackages` returns the packages that own affected tasks, including dependents connected only through explicit `package#task` dependencies. Packages with no affected tasks are omitted, and unchanged task prerequisites are not reported as affected.
+- [`turbo prune`](/docs/reference/prune) retains packages needed by the tasks of retained packages, along with their package dependencies and inherited Package Configurations. The arguments remain package names, so pruning considers all configured tasks rather than a single task such as `build`.
+
+Both behaviors follow task dependencies within and across enabled toolchains. For example, a JavaScript task depending on `mycrate#build:types` can make its package affected when the Rust task changes, and pruning the JavaScript package retains the crate even without a package-manifest dependency. With the flag disabled, both operations retain their package-based behavior.
+
 <Callout type="info">
   Changes to root configuration files (`package.json`, `turbo.json`,
   `turbo.jsonc`), the package manager lockfile, or
   [`globalDependencies`](#globaldependencies) will always cause all tasks to be
   selected, regardless of individual task `inputs`.
 </Callout>
+
+#### `githubActionsRemoteBaseRefFallback`
+
+Default: `false`
+
+When GitHub Actions reports a pull request's base branch but that branch is not available as a local ref, fall back to `origin/<branch>`. This supports detached checkouts created by `actions/checkout`, where the base branch may only exist as a remote-tracking ref.
+
+Local refs continue to take precedence. This flag only affects base refs inferred from GitHub Actions. Explicit refs provided through `TURBO_SCM_BASE` and default `main` or `master` resolution are unchanged.
+
+```jsonc title="./turbo.json"
+{
+  "futureFlags": {
+    "githubActionsRemoteBaseRefFallback": true,
+  },
+}
+```
 
 #### `watchUsingTaskInputs`
 
@@ -415,9 +475,9 @@ With this configuration, running `turbo prune frontend` will include `tsconfig.j
 
 Default: `false`
 
-Resolve [`--filter`](/docs/reference/run#--filter-string) at the **task level** instead of the **package level**. Git-range filters (e.g. `--filter=[main]`) match changed files against each task's [`inputs`](#inputs) globs, and the `...` dependency/dependent syntax traverses the Task Graph in addition to the Package Graph.
+Resolve [`--filter`](/docs/reference/run#--filter-string) at the **task level** instead of the **package level**. Git-range filters (e.g. `--filter=[main]`) match changed files against each task's [`inputs`](#inputs) globs, and the `...` dependency/dependent syntax traverses the Task Graph instead of the Package Graph.
 
-Without this flag, `--filter` operates on the Package Graph: a git-range selector marks entire packages as matched if any file in the package changed, and `...` follows package-level dependencies. With this flag, resolution moves to the Task Graph: only tasks whose `inputs` actually match the changed files are selected, and `...` follows task-level dependencies (e.g. `web#build -> schema#gen` is traversed even if `web` has no package-level dependency on `schema`).
+Without this flag, `--filter` operates on the Package Graph: a git-range selector marks entire packages as matched if any file in the package changed, and `...` follows package-level dependencies. With this flag, resolution moves to the Task Graph: only tasks whose `inputs` actually match the changed files are selected, and `...` follows task-level dependencies (e.g. `web#build -> schema#gen` is traversed even if `web` has no package-level dependency on `schema`). Package dependencies alone do not cause tasks in dependency packages to be selected.
 
 ```jsonc title="./turbo.json"
 {
@@ -440,6 +500,44 @@ In this example, `--filter=[main]` would not select `build` for a package if onl
   [`globalDependencies`](#globaldependencies) will always cause all tasks to be
   selected, regardless of individual task `inputs`.
 </Callout>
+
+#### `strictTaskEntrypointSelection`
+
+Default: `false`
+
+Select requested tasks according to whether they resolve a command in the
+repository. When at least one package can run a requested task, packages
+without a command do not become entrypoints and their dependencies are not
+included merely because the task was requested.
+
+```jsonc title="./turbo.json"
+{
+  "futureFlags": {
+    "strictTaskEntrypointSelection": true,
+  },
+  "tasks": {
+    "test": {
+      "dependsOn": ["build"],
+    },
+  },
+}
+```
+
+If `web` has a `test` command and `docs` does not, `turbo run test` starts from
+`web#test` but not `docs#test`. Missing tasks reached from retained tasks remain
+in the Task Graph, preserving Transit Nodes and cache invalidation.
+
+When no package resolves a command for a configured or implicitly registered
+task, it remains available for graph-only orchestration. For example, a
+scriptless `ci:checks` task can continue to run its configured dependencies.
+When any of those dependency branches reaches a runnable command, branches that
+never reach runnable work are removed. A fully scriptless graph is preserved
+when none of its branches contains a runnable command.
+
+This flag is independent of [`filterUsingTasks`](#filterusingtasks). When both
+are enabled, a plain task-level filter drops a matching task without a command,
+while `...` can explicitly select executable dependencies or dependents through
+that missing task node.
 
 #### `globalConfiguration`
 
@@ -501,9 +599,9 @@ When enabled, Turborepo will honor the `experimentalObservability.otel` configur
 }
 ```
 
-Adds a tag to a package for use with [Boundaries](/docs/reference/boundaries).
+Adds arbitrary string labels to a package. Labels do not need to be registered in `boundaries.tags`. Package tags can still be used with [Boundaries](/docs/reference/boundaries); existing boundary rules are unchanged.
 
-This key only works in [Package Configurations](/docs/reference/package-configurations). Using this key in a root `turbo.json` will result in an error.
+Top-level tags label the package containing the configuration. Root `turbo.json` tags label the root package, not every package in the repository. Package tags are separate from task tags and are not inherited through task configuration.
 
 ### `global`
 
@@ -583,6 +681,40 @@ In the example below, we've defined three tasks under the `tasks` key: `build`, 
 ## Task options
 
 Using the options available in the tasks you define in `tasks`, you can describe how `turbo` will run your tasks.
+
+### Task tags
+
+Add `tags` to a task definition in the root `turbo.json` or a [Package Configuration](/docs/reference/package-configurations):
+
+```jsonc title="./turbo.json"
+{
+  "tasks": {
+    "test": {
+      "tags": ["ci", "slow"],
+    },
+  },
+}
+```
+
+Task tags are arbitrary string labels. Their configured order and duplicates are preserved. They do not change task dependencies, commands, or boundary rules.
+
+If a Package Configuration omits task `tags`, it inherits them. An explicit array replaces inherited task tags, and `"tags": []` clears them. To append labels instead of replacing them, use [`$TURBO_EXTENDS$`](#turbo_extends), just like other task array fields:
+
+```jsonc title="./apps/web/turbo.json"
+{
+  "extends": ["//"],
+  "tasks": {
+    "test": {
+      // Inherits "ci" and "slow", then adds "frontend"
+      "tags": ["$TURBO_EXTENDS$", "frontend"],
+    },
+  },
+}
+```
+
+The marker is removed from resolved task tags, yielding `["ci", "slow", "frontend"]`. The same inheritance and composition rules apply when extending task configuration from other packages. A task with `"extends": false` starts with fresh configuration rather than inherited tags. Clearing task tags does not remove package tags.
+
+Tags are not included in the resolved task hash data. However, changing tags in a package's `turbo.json` can still invalidate its cache when that file is included in the task's file inputs.
 
 ### `extends` (task-level)
 
@@ -941,6 +1073,7 @@ This microsyntax can be used in the following array fields:
 - `inputs`
 - `outputs`
 - `passThroughEnv`
+- Task `tags`
 - `with`
 
 For example, if your root `turbo.json` defines:

@@ -2,9 +2,31 @@
   "$schema": "../../docs/public/schema.json",
   "extends": ["//"],
   "tasks": {
+    "build": {
+      "dependsOn": ["^build"],
+      "outputs": ["dist/**"],
+      "command": ["pnpm", "run", "build"],
+      "tags": ["ci"]
+    },
     "test": {
       "dependsOn": ["build"],
-      "passThroughEnv": ["!CI"]
+      "passThroughEnv": ["!CI"],
+      "command": ["pnpm", "exec", "jest"],
+      "tags": ["ci"]
+    },
+    "lint:prettier": {
+      "command": [
+        "pnpm",
+        "exec",
+        "prettier",
+        "-c",
+        ".",
+        "--cache",
+        "--ignore-path=../../.prettierignore"
+      ]
+    },
+    "check-types": {
+      "tags": ["ci"]
     }
   }
 }

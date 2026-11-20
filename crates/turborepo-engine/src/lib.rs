@@ -4,8 +4,9 @@
 //! monorepo. It handles task graph construction, dependency resolution, and
 //! parallel execution.
 
-// Allow large error types - boxing would be a significant refactor and these
-// errors are already established patterns in the codebase
+// Engine builder errors retain rich diagnostics across 29 production functions.
+// Keep the shared error shape rather than adding a separate allocation at each
+// failure or scattering per-function lint attributes across the builder.
 #![allow(clippy::result_large_err)]
 
 pub mod affected;
@@ -19,13 +20,14 @@ mod loader;
 mod mermaid;
 mod task_definition;
 mod validate;
+mod validate_engine;
 
 use std::{
     collections::{HashMap, HashSet},
     fmt,
 };
 
-pub use affected::match_tasks_against_changed_files;
+pub use affected::{AffectednessError, match_tasks_against_changed_files};
 pub use builder::{EngineBuilder, TaskInheritanceResolver, ValidationMode};
 pub use builder_error::Error as BuilderError;
 pub use builder_errors::{
@@ -40,7 +42,8 @@ pub use graph_visualizer::{
 pub use loader::TurboJsonLoader;
 use petgraph::{
     Graph,
-    visit::{DfsEvent, Reversed, depth_first_search},
+    graph::NodeIndex,
+    visit::{DfsEvent, NodeIndexable, Reversed, depth_first_search},
 };
 pub use task_definition::TaskDefinitionFromProcessed;
 use thiserror::Error;
@@ -49,6 +52,7 @@ use turborepo_repository::package_graph::PackageName;
 use turborepo_task_id::TaskId;
 use turborepo_types::{EngineInfo, TaskDefinition};
 pub use validate::{TaskDefinitionResult, validate_task_name};
+pub use validate_engine::{ValidateError, task_has_command, task_participates};
 
 /// Trait for types that provide task definition information needed by the
 /// engine.
@@ -93,6 +97,54 @@ pub enum TaskNode {
 impl From<TaskId<'static>> for TaskNode {
     fn from(value: TaskId<'static>) -> Self {
         Self::Task(value)
+    }
+}
+
+/// Dense membership for graph node indices.
+///
+/// A graph can have sparse node indices after removals, so this is sized with
+/// `Graph::node_bound()` rather than its live node count.
+#[derive(Debug)]
+struct NodeMembership {
+    members: Vec<bool>,
+    len: usize,
+}
+
+impl NodeMembership {
+    fn for_graph(graph: &Graph<TaskNode, ()>) -> Self {
+        Self {
+            members: vec![false; graph.node_bound()],
+            len: 0,
+        }
+    }
+
+    fn insert(&mut self, node: NodeIndex) -> bool {
+        let Some(member) = self.members.get_mut(node.index()) else {
+            return false;
+        };
+        if *member {
+            return false;
+        }
+
+        *member = true;
+        self.len += 1;
+        true
+    }
+
+    fn contains(&self, node: NodeIndex) -> bool {
+        self.members.get(node.index()).copied().unwrap_or(false)
+    }
+
+    fn len(&self) -> usize {
+        self.len
+    }
+
+    fn iter(&self) -> impl Iterator<Item = NodeIndex> + '_ {
+        self.members
+            .iter()
+            .enumerate()
+            .filter(|&(_, &member)| member)
+            .map(|(index, _)| NodeIndex::new(index))
     }
 }
 
@@ -184,6 +236,17 @@ impl<T: TaskDefinitionInfo + Default + Clone> Engine<Building, T> {
     pub fn connect_to_root(&mut self, task_id: &TaskId<'static>) {
         let source = self.get_index(task_id);
         self.task_graph.add_edge(source, self.root_index, ());
+    }
+
+    /// Pre-size the task collections for an expected task count.
+    /// `TaskDefinition` values are large, so growing the definitions map
+    /// incrementally repeatedly reallocates and moves hundreds of kilobytes;
+    /// on large graphs those moves showed up as multi-millisecond
+    /// page-compaction stalls during engine construction.
+    pub fn reserve(&mut self, additional_tasks: usize) {
+        self.task_lookup.reserve(additional_tasks);
+        self.task_definitions.reserve(additional_tasks);
+        self.task_locations.reserve(additional_tasks);
     }
 
     pub fn add_definition(&mut self, task_id: TaskId<'static>, definition: T) -> Option<T> {
@@ -339,10 +402,40 @@ impl<T: TaskDefinitionInfo + Clone> Engine<Built, T> {
             .collect();
 
         self.reachable_closure(entrypoint_indices)
-            .into_iter()
+            .iter()
             .filter_map(|node| match self.task_graph.node_weight(node)? {
                 TaskNode::Task(id) => Some(id.clone()),
                 TaskNode::Root => None,
+            })
+            .collect()
+    }
+
+    /// Returns the watch-mode execution closure for directly affected tasks:
+    /// transitive dependents plus only cacheable transitive dependencies.
+    /// Persistent non-interruptible tasks are excluded because watch mode
+    /// cannot restart them.
+    pub fn watch_execution_closure_for_affected(
+        &self,
+        directly_affected: &HashSet<TaskId<'static>>,
+    ) -> HashSet<TaskId<'static>> {
+        let entrypoint_indices: Vec<_> = directly_affected
+            .iter()
+            .filter_map(|task_id| self.task_lookup.get(task_id))
+            .copied()
+            .collect();
+
+        self.watch_reachable_closure(entrypoint_indices)
+            .iter()
+            .filter_map(|node| match self.task_graph.node_weight(node)? {
+                TaskNode::Task(id)
+                    if !self
+                        .task_definitions
+                        .get(id)
+                        .is_some_and(|def| def.persistent() && !def.interruptible()) =>
+                {
+                    Some(id.clone())
+                }
+                TaskNode::Task(_) | TaskNode::Root => None,
             })
             .collect()
     }
@@ -382,6 +475,31 @@ impl<T: TaskDefinitionInfo + Clone> Engine<Built, T> {
         self.prune_to_reachable(&reachable, false)
     }
 
+    /// Returns a new engine containing only the given directly affected tasks,
+    /// their transitive dependents, and cacheable transitive dependencies.
+    /// Persistent non-interruptible tasks are excluded. Used for task-level
+    /// watch detection after matching changed files against task inputs.
+    pub fn retain_watch_affected_tasks(self, affected_tasks: &HashSet<TaskId>) -> Self {
+        let entrypoint_indices: Vec<_> = affected_tasks
+            .iter()
+            .filter_map(|task_id| self.task_lookup.get(task_id))
+            .copied()
+            .collect();
+
+        let original_task_count = self.task_graph.node_count().saturating_sub(1);
+        let reachable = self.watch_reachable_closure(entrypoint_indices);
+        let retained_task_count = reachable.len().saturating_sub(1);
+
+        tracing::info!(
+            directly_affected = affected_tasks.len(),
+            retained = retained_task_count,
+            pruned = original_task_count.saturating_sub(retained_task_count),
+            "task graph pruned for watch"
+        );
+
+        self.prune_to_reachable(&reachable, true)
+    }
+
     /// Prunes the engine to only the given tasks and their transitive
     /// dependencies (upstream tasks needed for execution).
     ///
@@ -398,7 +516,7 @@ impl<T: TaskDefinitionInfo + Clone> Engine<Built, T> {
         let original_task_count = self.task_graph.node_count().saturating_sub(1);
 
         // Forward DFS only: find the filtered tasks + transitive dependencies.
-        let mut reachable = HashSet::new();
+        let mut reachable = NodeMembership::for_graph(&self.task_graph);
         reachable.insert(self.root_index);
         depth_first_search(&self.task_graph, entrypoint_indices, |event| {
             if let DfsEvent::Discover(n, _) = event {
@@ -417,15 +535,28 @@ impl<T: TaskDefinitionInfo + Clone> Engine<Built, T> {
         self.prune_to_reachable(&reachable, false)
     }
 
+    /// Retains exactly the given task nodes and any dependency edges between
+    /// them. Unlike `retain_filtered_tasks`, this does not add transitive
+    /// dependencies.
+    pub fn retain_task_subset(self, retained_tasks: &HashSet<TaskId>) -> Self {
+        let mut retained = NodeMembership::for_graph(&self.task_graph);
+        retained_tasks
+            .iter()
+            .filter_map(|task| self.task_lookup.get(task))
+            .copied()
+            .for_each(|index| {
+                retained.insert(index);
+            });
+        retained.insert(self.root_index);
+        self.prune_to_reachable(&retained, false)
+    }
+
     /// Computes the full reachable set from seed nodes: reverse DFS for
     /// transitive dependents, then forward DFS for transitive dependencies.
     /// Root is always included so `prune_to_reachable` can recover it.
-    fn reachable_closure(
-        &self,
-        entrypoint_indices: Vec<petgraph::graph::NodeIndex>,
-    ) -> HashSet<petgraph::graph::NodeIndex> {
+    fn reachable_closure(&self, entrypoint_indices: Vec<NodeIndex>) -> NodeMembership {
         // Reverse DFS: find transitive dependents (downstream consumers).
-        let mut reachable = HashSet::new();
+        let mut reachable = NodeMembership::for_graph(&self.task_graph);
         reachable.insert(self.root_index);
         depth_first_search(Reversed(&self.task_graph), entrypoint_indices, |event| {
             if let DfsEvent::Discover(n, _) = event {
@@ -436,11 +567,7 @@ impl<T: TaskDefinitionInfo + Clone> Engine<Built, T> {
         // Forward DFS: find transitive dependencies (upstream tasks needed as
         // cache hits). Root is excluded as a seed since it has no outgoing
         // edges in the forward direction.
-        let forward_seeds: Vec<_> = reachable
-            .iter()
-            .copied()
-            .filter(|&n| n != self.root_index)
-            .collect();
+        let forward_seeds: Vec<_> = reachable.iter().filter(|&n| n != self.root_index).collect();
         depth_first_search(&self.task_graph, forward_seeds, |event| {
             if let DfsEvent::Discover(n, _) = event {
                 reachable.insert(n);
@@ -453,12 +580,9 @@ impl<T: TaskDefinitionInfo + Clone> Engine<Built, T> {
     /// Computes the watch-mode reachable set from changed package task nodes:
     /// reverse DFS for transitive dependents, then forward traversal for only
     /// cacheable transitive dependencies.
-    fn watch_reachable_closure(
-        &self,
-        entrypoint_indices: Vec<petgraph::graph::NodeIndex>,
-    ) -> HashSet<petgraph::graph::NodeIndex> {
+    fn watch_reachable_closure(&self, entrypoint_indices: Vec<NodeIndex>) -> NodeMembership {
         // Reverse DFS: find transitive dependents (downstream consumers).
-        let mut reachable = HashSet::new();
+        let mut reachable = NodeMembership::for_graph(&self.task_graph);
         reachable.insert(self.root_index);
         depth_first_search(Reversed(&self.task_graph), entrypoint_indices, |event| {
             if let DfsEvent::Discover(n, _) = event {
@@ -466,11 +590,7 @@ impl<T: TaskDefinitionInfo + Clone> Engine<Built, T> {
             }
         });
 
-        let mut stack: Vec<_> = reachable
-            .iter()
-            .copied()
-            .filter(|&n| n != self.root_index)
-            .collect();
+        let mut stack: Vec<_> = reachable.iter().filter(|&n| n != self.root_index).collect();
 
         while let Some(node) = stack.pop() {
             for dependency in self
@@ -490,7 +610,7 @@ impl<T: TaskDefinitionInfo + Clone> Engine<Built, T> {
         reachable
     }
 
-    fn is_cacheable_task_node(&self, node: petgraph::graph::NodeIndex) -> bool {
+    fn is_cacheable_task_node(&self, node: NodeIndex) -> bool {
         let Some(TaskNode::Task(task)) = self.task_graph.node_weight(node) else {
             return false;
         };
@@ -509,12 +629,12 @@ impl<T: TaskDefinitionInfo + Clone> Engine<Built, T> {
     /// by watch mode).
     fn prune_to_reachable(
         mut self,
-        reachable: &HashSet<petgraph::graph::NodeIndex>,
+        reachable: &NodeMembership,
         exclude_non_interruptible_persistent: bool,
     ) -> Self {
         let pruned_graph = self.task_graph.filter_map(
             |node_idx, node| {
-                if !reachable.contains(&node_idx) {
+                if !reachable.contains(node_idx) {
                     return None;
                 }
                 if exclude_non_interruptible_persistent
@@ -845,8 +965,12 @@ impl TaskWarning {
 }
 
 impl TaskError {
-    pub fn new(task_id: String, cause: TaskErrorCause) -> Self {
-        Self { task_id, cause }
+    pub fn task_id(&self) -> &str {
+        &self.task_id
+    }
+
+    pub fn cause(&self) -> &TaskErrorCause {
+        &self.cause
     }
 
     pub fn exit_code(&self) -> Option<i32> {
@@ -873,18 +997,6 @@ impl TaskError {
     }
 }
 
-impl TaskErrorCause {
-    pub fn from_spawn(err: std::io::Error) -> Self {
-        TaskErrorCause::Spawn {
-            msg: err.to_string(),
-        }
-    }
-
-    pub fn from_execution(command: String, exit_code: i32) -> Self {
-        TaskErrorCause::Exit { command, exit_code }
-    }
-}
-
 #[cfg(test)]
 mod task_error_tests {
     use super::*;
@@ -908,6 +1020,8 @@ mod task_error_tests {
 #[cfg(test)]
 mod affected_tasks_tests {
     use std::collections::HashSet;
+
+    use turborepo_types::TaskDefinition;
 
     use super::*;
 
@@ -937,8 +1051,29 @@ mod affected_tasks_tests {
         engine.seal()
     }
 
-    fn task_ids_set(engine: &Engine) -> HashSet<TaskId<'static>> {
+    fn task_ids_set<T: TaskDefinitionInfo + Clone>(
+        engine: &Engine<Built, T>,
+    ) -> HashSet<TaskId<'static>> {
         engine.task_ids().cloned().collect()
+    }
+
+    #[test]
+    fn node_membership_handles_sparse_nodes() {
+        let mut graph = Graph::<TaskNode, ()>::default();
+        let first = graph.add_node(TaskNode::Root);
+        let last = (0..6)
+            .map(|_| graph.add_node(TaskNode::Task(TaskId::new("pkg", "task"))))
+            .last()
+            .expect("range is non-empty");
+
+        let mut membership = NodeMembership::for_graph(&graph);
+        assert!(membership.insert(last));
+
+        assert!(!membership.contains(first));
+        assert!(membership.contains(last));
+        assert!(!membership.insert(NodeIndex::new(graph.node_bound())));
+        assert!(!membership.contains(NodeIndex::new(graph.node_bound())));
+        assert_eq!(membership.iter().collect::<Vec<_>>(), vec![last]);
     }
 
     #[test]
@@ -951,6 +1086,65 @@ mod affected_tasks_tests {
         let pruned_ids = task_ids_set(&pruned);
 
         assert_eq!(closure, pruned_ids);
+    }
+
+    /// Builds the issue #13347 shape: app#dev depends on pkg#dev, where the
+    /// package task is non-cacheable and the app task is persistent.
+    fn build_watch_dev_engine() -> Engine<Built, TaskDefinition> {
+        let mut engine: Engine<Building, TaskDefinition> = Engine::new();
+        let pkg = TaskId::new("pkg", "dev");
+        let app = TaskId::new("app", "dev");
+        let pkg_idx = engine.get_index(&pkg);
+        let app_idx = engine.get_index(&app);
+
+        engine.add_definition(
+            pkg.clone(),
+            TaskDefinition {
+                cache: false,
+                ..Default::default()
+            },
+        );
+        engine.add_definition(
+            app.clone(),
+            TaskDefinition {
+                cache: false,
+                persistent: true,
+                ..Default::default()
+            },
+        );
+        engine.task_graph_mut().add_edge(app_idx, pkg_idx, ());
+        engine.connect_to_root(&pkg);
+
+        engine.seal()
+    }
+
+    #[test]
+    fn watch_closure_excludes_non_cacheable_dependencies_and_persistent_tasks() {
+        let engine = build_watch_dev_engine();
+        let app_affected: HashSet<_> = [TaskId::new("app", "dev")].into_iter().collect();
+        let pkg_affected: HashSet<_> = [TaskId::new("pkg", "dev")].into_iter().collect();
+
+        assert!(
+            engine
+                .watch_execution_closure_for_affected(&app_affected)
+                .is_empty(),
+            "an app change should not rerun its non-cacheable dependency or persistent task"
+        );
+        assert_eq!(
+            engine.watch_execution_closure_for_affected(&pkg_affected),
+            [TaskId::new("pkg", "dev")].into_iter().collect(),
+            "a package change should rerun the package task without restarting the persistent app"
+        );
+    }
+
+    #[test]
+    fn watch_closure_matches_retain_watch_affected_tasks() {
+        let engine = build_watch_dev_engine();
+        let affected: HashSet<_> = [TaskId::new("pkg", "dev")].into_iter().collect();
+        let closure = engine.watch_execution_closure_for_affected(&affected);
+        let pruned = engine.retain_watch_affected_tasks(&affected);
+
+        assert_eq!(closure, task_ids_set(&pruned));
     }
 
     #[test]
@@ -1259,6 +1453,128 @@ mod affected_tasks_tests {
             "^build dependency must survive for the app to execute"
         );
     }
+
+    #[test]
+    fn package_subgraph_keeps_dependents_and_cacheable_dependencies() {
+        let mut engine: Engine<Building, TaskDefinition> = Engine::new();
+
+        let lib_build = TaskId::new("lib", "build");
+        let tools_dev = TaskId::new("tools", "dev");
+        let app_build = TaskId::new("app", "build");
+        let app_test = TaskId::new("app", "test");
+        let consumer_build = TaskId::new("consumer", "build");
+        let unrelated_build = TaskId::new("unrelated", "build");
+
+        let lib_idx = engine.get_index(&lib_build);
+        let tools_idx = engine.get_index(&tools_dev);
+        let app_idx = engine.get_index(&app_build);
+        engine.get_index(&app_test);
+        let consumer_idx = engine.get_index(&consumer_build);
+        engine.get_index(&unrelated_build);
+
+        engine.add_definition(lib_build.clone(), TaskDefinition::default());
+        engine.add_definition(
+            tools_dev.clone(),
+            TaskDefinition {
+                cache: false,
+                ..Default::default()
+            },
+        );
+        engine.add_definition(app_build.clone(), TaskDefinition::default());
+        engine.add_definition(app_test.clone(), TaskDefinition::default());
+        engine.add_definition(consumer_build.clone(), TaskDefinition::default());
+        engine.add_definition(unrelated_build.clone(), TaskDefinition::default());
+
+        engine.task_graph_mut().add_edge(app_idx, lib_idx, ());
+        engine.task_graph_mut().add_edge(app_idx, tools_idx, ());
+        engine.task_graph_mut().add_edge(consumer_idx, app_idx, ());
+        engine.connect_to_root(&lib_build);
+        engine.connect_to_root(&tools_dev);
+        engine.connect_to_root(&unrelated_build);
+
+        let subgraph = engine
+            .seal()
+            .create_engine_for_subgraph(&HashSet::from([PackageName::from("app")]));
+        assert!(subgraph.tasks().any(|node| *node == TaskNode::Root));
+        let ids = task_ids_set(&subgraph);
+
+        assert!(ids.contains(&app_build));
+        assert!(ids.contains(&app_test));
+        assert!(ids.contains(&consumer_build));
+        assert!(ids.contains(&lib_build));
+        assert!(!ids.contains(&tools_dev));
+        assert!(!ids.contains(&unrelated_build));
+    }
+
+    #[test]
+    fn tasks_impacted_by_packages_batches_transitive_dependents() {
+        // Graph structure:
+        //   a:build  <--  b:build  <--  c:build
+        //   a:test       b:test        c:test
+        let mut engine: Engine<Building, TaskDefinition> = Engine::new();
+
+        let a_build = TaskId::new("a", "build");
+        let a_test = TaskId::new("a", "test");
+        let a_build_idx = engine.get_index(&a_build);
+        engine.get_index(&a_test);
+        engine.add_definition(a_build.clone(), TaskDefinition::default());
+        engine.add_definition(a_test.clone(), TaskDefinition::default());
+
+        let b_build = TaskId::new("b", "build");
+        let b_test = TaskId::new("b", "test");
+        let b_build_idx = engine.get_index(&b_build);
+        engine.get_index(&b_test);
+        engine.add_definition(b_build.clone(), TaskDefinition::default());
+        engine.add_definition(b_test.clone(), TaskDefinition::default());
+        engine
+            .task_graph_mut()
+            .add_edge(b_build_idx, a_build_idx, ());
+
+        let c_build = TaskId::new("c", "build");
+        let c_test = TaskId::new("c", "test");
+        let c_build_idx = engine.get_index(&c_build);
+        engine.get_index(&c_test);
+        engine.add_definition(c_build.clone(), TaskDefinition::default());
+        engine.add_definition(c_test.clone(), TaskDefinition::default());
+        engine
+            .task_graph_mut()
+            .add_edge(c_build_idx, b_build_idx, ());
+
+        let engine = engine.seal();
+        let task_ids = |packages: HashSet<PackageName>| {
+            engine
+                .tasks_impacted_by_packages(&packages)
+                .into_iter()
+                .filter_map(|node| match node {
+                    TaskNode::Task(id) => Some(id.clone()),
+                    TaskNode::Root => None,
+                })
+                .collect::<HashSet<_>>()
+        };
+
+        assert_eq!(
+            task_ids(HashSet::from([PackageName::from("a")])),
+            HashSet::from([
+                a_build.clone(),
+                a_test.clone(),
+                b_build.clone(),
+                c_build.clone(),
+            ])
+        );
+        assert_eq!(
+            task_ids(HashSet::from([PackageName::from("b")])),
+            HashSet::from([b_build.clone(), b_test, c_build.clone()])
+        );
+        assert_eq!(
+            task_ids(HashSet::from([
+                PackageName::from("a"),
+                PackageName::from("c"),
+            ])),
+            HashSet::from([a_build, a_test, b_build, c_build, c_test])
+        );
+        assert!(task_ids(HashSet::new()).is_empty());
+        assert!(task_ids(HashSet::from([PackageName::from("missing")])).is_empty());
+    }
 }
 
 use std::sync::{Arc, Mutex};
@@ -1275,10 +1591,6 @@ impl TaskErrorCollectorWrapper {
 
     pub fn from_arc(arc: Arc<Mutex<Vec<TaskError>>>) -> Self {
         Self(arc)
-    }
-
-    pub fn into_inner(self) -> Arc<Mutex<Vec<TaskError>>> {
-        self.0
     }
 }
 
@@ -1316,10 +1628,6 @@ impl TaskWarningCollectorWrapper {
 
     pub fn from_arc(arc: Arc<Mutex<Vec<TaskWarning>>>) -> Self {
         Self(arc)
-    }
-
-    pub fn into_inner(self) -> Arc<Mutex<Vec<TaskWarning>>> {
-        self.0
     }
 }
 

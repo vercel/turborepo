@@ -1,32 +1,34 @@
-# Turborepo starter with berry (yarn v2+)
+# Turborepo starter with Yarn Berry
 
 This is a community-maintained example. If you experience a problem, please submit a pull request with a fix. GitHub Issues will be closed.
 
 ## Using this example
 
-Run the following command:
+Use Node.js 26.11.1 or newer and Yarn 4.18.1 (pinned in `packageManager`). Install [Corepack](https://yarnpkg.com/corepack) if it is not available, then enable its Yarn shim:
 
 ```sh
+npm install --global corepack
+corepack enable
 npx create-turbo@latest -e with-berry
+cd my-turborepo
+yarn install
 ```
+
+Corepack selects the project's pinned Yarn version; no vendored Yarn binary is needed. This example uses Yarn's `node-modules` linker.
 
 ## What's inside?
 
-This Turborepo uses [yarn v2+ (berry)](https://yarnpkg.com/) as a packages manager. It includes the following packages/apps:
+This Turborepo uses [modern Yarn (Berry)](https://yarnpkg.com/) as its package manager. It includes:
 
-### Apps and Packages
+- `docs`: a [Next.js](https://nextjs.org/) App Router app on port 3001
+- `web`: another Next.js App Router app on port 3000
+- `@repo/ui`: a React component library shared as source by both apps
+- `@repo/eslint-config`: shared ESLint flat configurations with TypeScript, Next.js, Turborepo, and Prettier-compatible rules
+- `@repo/typescript-config`: shared TypeScript configurations
 
-- `docs`: a [Next.js](https://nextjs.org/) app
-- `web`: another [Next.js](https://nextjs.org/) app
-- `@repo/ui`: a stub React component library shared by both `web` and `docs` applications
-- `@repo/eslint-config`: `eslint` configurations (includes `eslint-config-next` and `eslint-config-prettier`)
-- `@repo/typescript-config`: `tsconfig.json`s used throughout the monorepo
-
-Each package/app is 100% [TypeScript](https://www.typescriptlang.org/).
+Workspace dependencies use Yarn's `workspace:*` protocol.
 
 ### Utilities
-
-This Turborepo has some additional tools already setup for you:
 
 - [TypeScript](https://www.typescriptlang.org/) for static type checking
 - [ESLint](https://eslint.org/) for code linting
@@ -34,51 +36,48 @@ This Turborepo has some additional tools already setup for you:
 
 ### Build
 
-To build all apps and packages, run the following command:
+From the repository root:
 
-```
-cd my-turborepo
+```sh
 yarn build
 ```
 
+Builds run after type checking, including generation of Next.js route types.
+
 ### Develop
 
-To develop all apps and packages, run the following command:
-
-```
-cd my-turborepo
+```sh
 yarn dev
+```
+
+Edit `apps/web/app/page.tsx` or `apps/docs/app/page.tsx` to get started.
+
+### Lint and type check
+
+```sh
+yarn lint
+yarn check-types
 ```
 
 ### Remote Caching
 
 > [!TIP]
-> Vercel Remote Cache is free for all plans. Get started today at [vercel.com](https://vercel.com/signup?/signup?utm_source=remote-cache-sdk&utm_campaign=free_remote_cache).
+> Vercel Remote Cache is free for all plans. Get started today at [vercel.com](https://vercel.com/signup?utm_source=remote-cache-sdk&utm_campaign=free_remote_cache).
 
-Turborepo can use a technique known as [Remote Caching](https://turborepo.dev/docs/core-concepts/remote-caching) to share cache artifacts across machines, enabling you to share build caches with your team and CI/CD pipelines.
+Turborepo's [Remote Caching](https://turborepo.dev/docs/core-concepts/remote-caching) shares cache artifacts across machines and CI/CD pipelines.
 
-By default, Turborepo will cache locally. To enable Remote Caching you will need an account with Vercel. If you don't have an account you can [create one](https://vercel.com/signup?utm_source=turborepo-examples), then enter the following commands:
+Turborepo caches locally by default. To enable Remote Caching, create a [Vercel account](https://vercel.com/signup?utm_source=turborepo-examples), then run from the repository root:
 
-```
-cd my-turborepo
-npx turbo login
-```
-
-This will authenticate the Turborepo CLI with your [Vercel account](https://vercel.com/docs/concepts/personal-accounts/overview).
-
-Next, you can link your Turborepo to your Remote Cache by running the following command from the root of your turborepo:
-
-```
-npx turbo link
+```sh
+yarn turbo login
+yarn turbo link
 ```
 
 ## Useful Links
-
-Learn more about the power of Turborepo:
 
 - [Tasks](https://turborepo.dev/docs/crafting-your-repository/running-tasks)
 - [Caching](https://turborepo.dev/docs/crafting-your-repository/caching)
 - [Remote Caching](https://turborepo.dev/docs/core-concepts/remote-caching)
 - [Filtering](https://turborepo.dev/docs/crafting-your-repository/running-tasks#using-filters)
 - [Configuration Options](https://turborepo.dev/docs/reference/configuration)
-- [CLI Usage](https://turborepo.dev/docs/reference/command-line-reference)
+- [CLI Usage](https://turborepo.dev/docs/reference/run)

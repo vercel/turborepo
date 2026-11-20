@@ -107,12 +107,11 @@ impl TurborepoConfig {
             .with_allow_comments()
             .with_allow_trailing_commas();
 
-        let (config, errs) = biome_deserialize::json::deserialize_from_json_str::<TurborepoConfig>(
+        let (config, errs) = turborepo_errors::json::deserialize_from_json_str::<TurborepoConfig>(
             input,
             jsonc_options,
             source,
-        )
-        .consume();
+        );
 
         if let Some(config) = config {
             // Only accept the config if there were no errors during parsing
@@ -216,6 +215,15 @@ mod test {
         let config = TurborepoConfig::from_str(input, "somewhere").unwrap();
         assert!(config.applications.contains_key("web"));
         assert!(config.applications.contains_key("docs"));
+    }
+
+    // Regression test for https://github.com/vercel/turborepo/issues/13197
+    // Unterminated string literals used to panic inside biome during
+    // deserialization instead of producing a parse error.
+    #[test]
+    fn test_unterminated_string_reports_parse_error() {
+        let input = "{\"version\": \"\n}";
+        assert!(TurborepoConfig::from_str(input, "somewhere").is_err());
     }
 
     #[test]

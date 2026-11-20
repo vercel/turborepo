@@ -93,10 +93,15 @@ function lockfileValidationCommand(
       return {
         command:
           "pnpm install --frozen-lockfile --ignore-scripts --offline --store-dir ./.pnpm-validation-store",
+        // pnpm 12 checks every locked version against `minimumReleaseAge`
+        // using registry metadata, which fails offline before the tarball
+        // fetch this validation relies on.
+        env: { pnpm_config_minimum_release_age: "0" },
         acceptsFailure(result) {
           const output = combinedOutput(result);
           return (
             (output.includes("Lockfile is up to date") ||
+              output.includes("Lockfile is up-to-date") ||
               output.includes("Already up to date")) &&
             output.includes("ERR_PNPM_NO_OFFLINE_TARBALL")
           );
@@ -458,7 +463,7 @@ export class LocalRunner {
           // turbo prune
           const pruneCommand = `turbo prune ${targetWorkspace.name}${
             tc.docker ? " --docker" : ""
-          }`;
+          }${tc.production ? " --production" : ""}`;
           log(`[${label}] ${pruneCommand}`);
           const pruneResult = await exec(pruneCommand, tmpDir, {
             PATH: fullPath

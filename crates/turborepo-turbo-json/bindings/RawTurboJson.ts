@@ -49,7 +49,7 @@ globalDependencies?: Array<string>,
  */
 globalEnv?: Array<string>, 
 /**
- * An allowlist of environment variables that should be made to all tasks,
+ * An allowlist of environment variables that should be made available to all tasks,
  * but should not contribute to the task's cache key, e.g.
  * `AWS_SECRET_KEY`.
  *
@@ -129,10 +129,8 @@ cacheMaxSize?: string,
  */
 noUpdateNotifier?: boolean, 
 /**
- * Used to tag a package for boundaries rules.
- *
- * Boundaries rules can restrict which packages a tag group can import
- * or be imported by.
+ * Arbitrary string labels for this package. In the root configuration,
+ * these labels apply to the root package.
  */
 tags?: Array<string>, 
 /**
@@ -163,4 +161,9 @@ futureFlags?: FutureFlags,
  * like `inputs`, `env`, `ui`, etc. are placed here instead of at the
  * top level.
  */
-global?: GlobalConfig, };
+global?: GlobalConfig, 
+/**
+ * Repository policy for `turbo setup`. Only allowed in the root
+ * turbo.json and requires `futureFlags.experimentalSetup`.
+ */
+setup?: SetupPolicy, };

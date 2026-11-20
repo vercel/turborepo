@@ -41,23 +41,24 @@
     "preset": "@repo/jest-presets/browser"
   },
   "devDependencies": {
-    "@jest/globals": "^30.2.0",
+    "@jest/globals": "30.5.1",
     "@repo/eslint-config": "workspace:*",
     "@repo/jest-presets": "workspace:*",
     "@repo/typescript-config": "workspace:*",
-    "@types/node": "^22.15.3",
-    "bunchee": "^6.4.0",
-    "eslint": "^9.39.0",
-    "jest": "^30.2.0",
-    "typescript": "5.9.3"
+    "@types/node": "26.4.1",
+    "@typescript/native": "npm:typescript@7.0.2",
+    "bunchee": "7.0.1",
+    "eslint": "10.9.1",
+    "jest": "30.5.1",
+    "typescript": "npm:@typescript/typescript6@6.0.2"
   },
   "peerDependencies": {
-    "@types/react": ">=18",
-    "@types/react-dom": ">=18",
-    "react": ">=18",
-    "react-dom": ">=18"
+    "@types/react": "19.2.18",
+    "@types/react-dom": "19.2.7",
+    "react": "19.2.8",
+    "react-dom": "19.2.8"
   },
   "dependencies": {
-    "@swc/helpers": "^0.5.18"
+    "@swc/helpers": "0.5.23"
   }
 }

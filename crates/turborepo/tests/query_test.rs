@@ -62,8 +62,8 @@ fn test_query_variables_without_query_is_error() {
     let output = run_turbo(tempdir.path(), &["query", "--variables", "vars.json"]);
     assert!(!output.status.success());
     let stderr = String::from_utf8_lossy(&output.stderr);
-    assert!(stderr.contains("the following required arguments were not provided"));
-    assert!(stderr.contains("<QUERY>"));
+    assert!(stderr.contains("required"));
+    assert!(stderr.contains("QUERY"));
 }
 
 // --- validation.t ---

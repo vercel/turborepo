@@ -1,6 +1,6 @@
 /** @type {import('jest').Config} */
 const config = {
-  preset: "ts-jest/presets/js-with-ts",
+  preset: "@turbo/test-utils",
   testEnvironment: "node",
   testPathIgnorePatterns: ["__fixtures__/", "/__tests__/test-utils.ts"],
   coveragePathIgnorePatterns: ["__fixtures__/", "/__tests__/test-utils.ts"],

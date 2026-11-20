@@ -1,102 +1,76 @@
 /**
- * @lastModified 2025-02-04
- * @see https://elysiajs.com/recipe/drizzle.html#utility
+ * @see https://elysiajs.com/integrations/drizzle#utility
  */
 
-import {
-  Kind,
-  type Static,
-  type TObject,
-  type TSchema,
-} from "@sinclair/typebox";
+import type { Static, TObject, TSchema } from "@sinclair/typebox";
+import { Kind } from "@sinclair/typebox";
 import type { Table } from "drizzle-orm";
-import {
-  type BuildSchema,
-  createInsertSchema,
-  createSelectSchema,
-} from "drizzle-typebox";
+import type { BuildSchema } from "drizzle-typebox";
+import { createInsertSchema, createSelectSchema } from "drizzle-typebox";
 
-type Spread<
-  T extends TObject | Table,
-  Mode extends "select" | "insert" | undefined,
-> = T extends TObject<infer Fields>
-  ? {
-      [K in keyof Fields]: Fields[K];
-    }
-  : T extends Table
-    ? Mode extends "select"
-      ? BuildSchema<"select", T["_"]["columns"], undefined>["properties"]
-      : Mode extends "insert"
-        ? BuildSchema<"insert", T["_"]["columns"], undefined>["properties"]
-        : {}
-    : {};
+type Mode = "select" | "insert" | undefined;
 
-/**
- * 将 Drizzle 模式展开为一个普通对象
- */
-export const spread = <
-  T extends TObject | Table,
-  Mode extends "select" | "insert" | undefined,
->(
-  schema: T,
-  mode?: Mode
-): Spread<T, Mode> => {
-  const newSchema: Record<string, unknown> = {};
-  let table;
-
-  switch (mode) {
-    case "insert":
-    case "select":
-      if (Kind in schema) {
-        table = schema;
-        break;
+type Spread<T extends TObject | Table, M extends Mode> =
+  T extends TObject<infer Fields>
+    ? {
+        [K in keyof Fields]: Fields[K];
       }
+    : T extends Table
+      ? M extends "select" | "insert"
+        ? BuildSchema<M, T["_"]["columns"], undefined>["properties"]
+        : Record<string, never>
+      : Record<string, never>;
 
-      table =
-        mode === "insert"
-          ? createInsertSchema(schema)
-          : createSelectSchema(schema);
+const isSchema = (schema: TObject | Table): schema is TObject => Kind in schema;
 
-      break;
-
-    default:
-      if (!(Kind in schema)) throw new Error("期望是一个模式");
-      table = schema;
+const toSchema = (schema: TObject | Table, mode: Mode): TObject => {
+  if (isSchema(schema)) {
+    return schema;
   }
 
-  for (const key of Object.keys(table.properties))
-    newSchema[key] = table.properties[key];
+  if (mode === "insert") {
+    return createInsertSchema(schema);
+  }
 
-  return newSchema as any;
+  if (mode === "select") {
+    return createSelectSchema(schema);
+  }
+
+  throw new Error("Expected a TypeBox schema");
 };
 
 /**
- * 将 Drizzle 表展开为一个普通对象
+ * Spread a Drizzle table or TypeBox schema into a plain object of fields
+ */
+export const spread = <T extends TObject | Table, M extends Mode>(
+  schema: T,
+  mode?: M
+): Spread<T, M> => ({ ...toSchema(schema, mode).properties }) as Spread<T, M>;
+
+/**
+ * Spread a record of Drizzle tables or TypeBox schemas into plain objects
  *
- * 如果 `mode` 是 'insert'，则模式将经过插入优化
- * 如果 `mode` 是 'select'，则模式将经过选择优化
- * 如果 `mode` 是未定义，模式将按原样展开，模型需要手动优化
+ * If `mode` is 'insert', the schemas are optimized for inserts
+ * If `mode` is 'select', the schemas are optimized for selects
+ * If `mode` is undefined, the schemas are spread as-is
  */
 export const spreads = <
   T extends Record<string, TObject | Table>,
-  Mode extends "select" | "insert" | undefined,
+  M extends Mode,
 >(
   models: T,
-  mode?: Mode
+  mode?: M
 ): {
-  [K in keyof T]: Spread<T[K], Mode>;
-} => {
-  const newSchema: Record<string, unknown> = {};
-  const keys = Object.keys(models);
-
-  for (const key of keys) newSchema[key] = spread(models[key]!, mode);
-
-  return newSchema as any;
-};
+  [K in keyof T]: Spread<T[K], M>;
+} =>
+  Object.fromEntries(
+    Object.entries(models).map(([key, model]) => [key, spread(model, mode)])
+  ) as {
+    [K in keyof T]: Spread<T[K], M>;
+  };
 
 /**
- * 🛠️ 自动 DTO 推导工具
- * 提取 Contract 中所有 TSchema 字段的静态类型
+ * Infer the static types of every TypeBox schema in a contract object
  */
 export type InferDTO<T> = {
   [K in keyof T]: T[K] extends TSchema ? Static<T[K]> : never;
@@ -109,7 +83,3 @@ export function pick<T, K extends keyof T>(obj: T, keys: K[]): Pick<T, K> {
   }
   return result;
 }
-
-// 使用
-// const picked = pick(original, ['id', 'name', 'email']);
-// 类型自动推导为 { id: string; name: string; email: string; }

@@ -87,15 +87,19 @@ fn copy_symlink(src: &Path, dst: &Path) -> Result<(), anyhow::Error> {
 /// Configures user, writes .npmrc, adds all files, and commits.
 pub fn setup_git(target_dir: &Path) -> Result<(), anyhow::Error> {
     let git = |args: &[&str]| -> Result<(), anyhow::Error> {
-        let status = cmd("git")
+        let output = cmd("git")
             .args(args)
             .current_dir(target_dir)
-            .stdout(std::process::Stdio::null())
-            .stderr(std::process::Stdio::null())
-            .status()
+            .output()
             .map_err(|e| anyhow::anyhow!("failed to run git: {e}"))?;
-        if !status.success() {
-            anyhow::bail!("git {:?} failed with {}", args, status);
+        if !output.status.success() {
+            anyhow::bail!(
+                "git {:?} failed with {}\nstdout:\n{}\nstderr:\n{}",
+                args,
+                output.status,
+                String::from_utf8_lossy(&output.stdout),
+                String::from_utf8_lossy(&output.stderr),
+            );
         }
         Ok(())
     };
@@ -252,12 +256,18 @@ pub fn install_deps(
     }
 
     // Stage and commit installed deps
-    let _ = cmd("git")
+    let output = cmd("git")
         .args(["add", "."])
         .current_dir(target_dir)
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
-        .status();
+        .output()?;
+    if !output.status.success() {
+        anyhow::bail!(
+            "git add failed with {}\nstdout:\n{}\nstderr:\n{}",
+            output.status,
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr),
+        );
+    }
 
     git_commit_if_changed(target_dir, "Install dependencies")?;
 
@@ -313,18 +323,32 @@ fn run_cmd(dir: &Path, program: &str, args: &[&str], path_env: &str) -> Result<(
 }
 
 fn git_commit_if_changed(dir: &Path, message: &str) -> Result<(), anyhow::Error> {
-    let output = cmd("git")
+    let status_output = cmd("git")
         .args(["status", "--porcelain"])
         .current_dir(dir)
         .output()?;
+    if !status_output.status.success() {
+        anyhow::bail!(
+            "git status failed with {}\nstdout:\n{}\nstderr:\n{}",
+            status_output.status,
+            String::from_utf8_lossy(&status_output.stdout),
+            String::from_utf8_lossy(&status_output.stderr),
+        );
+    }
 
-    if !output.stdout.is_empty() {
-        let _ = cmd("git")
+    if !status_output.stdout.is_empty() {
+        let commit_output = cmd("git")
             .args(["commit", "-am", message, "--quiet"])
             .current_dir(dir)
-            .stdout(std::process::Stdio::null())
-            .stderr(std::process::Stdio::null())
-            .status();
+            .output()?;
+        if !commit_output.status.success() {
+            anyhow::bail!(
+                "git commit failed with {}\nstdout:\n{}\nstderr:\n{}",
+                commit_output.status,
+                String::from_utf8_lossy(&commit_output.stdout),
+                String::from_utf8_lossy(&commit_output.stderr),
+            );
+        }
     }
     Ok(())
 }
@@ -528,4 +552,43 @@ fn normalize_lockfile_on_windows(_dir: &Path, _filename: &str) {
             let _ = fs::write(&path, normalized);
         }
     }
+}
+
+/// The tool store turbo locates under `home` when `XDG_DATA_HOME` is
+/// `xdg_data_home`, or unset, as integration tests run the binary. Windows
+/// locates it through the shell, not `HOME`; tests there set
+/// `TURBO_TOOL_STORE` instead.
+pub fn user_tool_store(home: &Path, xdg_data_home: Option<&Path>) -> PathBuf {
+    let data = xdg_data_home.map_or_else(|| home.join(".local/share"), Path::to_owned);
+    data.join("turborepo").join("tools")
+}
+
+/// Installs `tools` for `root` into `store` exactly as setup publishes them,
+/// without downloads, and returns what the repository's record names.
+/// `selection` is a `--no-lock` clone's recorded selection.
+pub fn install_tools(
+    root: &Path,
+    store: &Path,
+    tools: Vec<turborepo_tool_install::Tool>,
+    selection: Option<&[u8]>,
+    stage: impl FnMut(&turborepo_tool_install::Tool, &Path) -> Result<(), turborepo_tool_install::Error>,
+) -> turborepo_cli::test_support::RecordedInstallation {
+    turborepo_cli::test_support::install_tools_for_tests(
+        root,
+        Some(store),
+        tools,
+        selection,
+        stage,
+    )
+    .expect("install fixture tools");
+    installed(root, store).expect("recorded installation")
+}
+
+/// What `root`'s setup record in `store` names, if anything.
+pub fn installed(
+    root: &Path,
+    store: &Path,
+) -> Option<turborepo_cli::test_support::RecordedInstallation> {
+    turborepo_cli::test_support::recorded_installation_for_tests(root, store)
+        .expect("read the recorded installation")
 }

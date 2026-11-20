@@ -1,0 +1,1 @@
+exports.FORMAT = 'json';

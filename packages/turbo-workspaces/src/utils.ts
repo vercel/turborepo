@@ -45,10 +45,10 @@ const SUPPORTED_PACKAGE_MANAGERS = new Set<PackageManager>([
   "npm",
   "pnpm",
   "yarn",
-  "bun"
+  "bun",
+  "nub",
+  "aube"
 ]);
-const DEV_ENGINES_VERSION_REGEX =
-  /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/;
 
 function getPackageJson({
   workspaceRoot
@@ -158,7 +158,7 @@ function getWorkspacePackageManager({
 
   if (!isPackageManager(name)) {
     throw invalidDevEnginesPackageManager(
-      "`devEngines.packageManager.name` must be one of `npm`, `pnpm`, `yarn`, or `bun`"
+      "`devEngines.packageManager.name` must be one of `npm`, `pnpm`, `yarn`, `bun`, `nub`, or `aube`"
     );
   }
 
@@ -187,13 +187,35 @@ function getWorkspacePackageManager({
     );
   }
 
-  if (
-    !DEV_ENGINES_VERSION_REGEX.test(version) ||
-    semver.valid(version) === null
-  ) {
+  if (semver.validRange(version) === null) {
     throw invalidDevEnginesPackageManager(
-      "`devEngines.packageManager.version` must be an exact semantic version"
+      "`devEngines.packageManager.version` must be a valid semantic version range"
     );
+  }
+
+  const minVersion = semver.minVersion(version);
+  if (minVersion === null) {
+    throw invalidDevEnginesPackageManager(
+      "`devEngines.packageManager.version` must admit at least one version"
+    );
+  }
+
+  for (const disjunct of version.split("||")) {
+    const disjunctMinVersion = semver.minVersion(disjunct.trim());
+    if (disjunctMinVersion === null) {
+      throw invalidDevEnginesPackageManager(
+        "`devEngines.packageManager.version` must admit at least one version"
+      );
+    }
+
+    if (
+      disjunctMinVersion.major !== minVersion.major ||
+      semver.satisfies(`${disjunctMinVersion.major + 1}.0.0`, disjunct.trim())
+    ) {
+      throw invalidDevEnginesPackageManager(
+        "`devEngines.packageManager.version` must only allow versions within one major version"
+      );
+    }
   }
 
   return name;
@@ -236,6 +258,7 @@ function setPackageManagerDeclaration({
   packageManager: PackageManager;
   version: string;
 }): void {
+  const normalizedVersion = semver.valid(version) ?? version;
   delete packageJson.packageManager;
   const devEngines =
     packageJson.devEngines &&
@@ -247,7 +270,7 @@ function setPackageManagerDeclaration({
     ...devEngines,
     packageManager: {
       name: packageManager,
-      version
+      version: normalizedVersion
     }
   };
 }
@@ -310,7 +333,31 @@ function getPnpmWorkspaces({
 }: {
   workspaceRoot: string;
 }): Array<string> {
-  const workspaceFile = path.join(workspaceRoot, "pnpm-workspace.yaml");
+  return getYamlWorkspaces({
+    workspaceRoot,
+    workspaceFileName: "pnpm-workspace.yaml"
+  });
+}
+
+function getAubeWorkspaces({
+  workspaceRoot
+}: {
+  workspaceRoot: string;
+}): Array<string> {
+  return getYamlWorkspaces({
+    workspaceRoot,
+    workspaceFileName: "aube-workspace.yaml"
+  });
+}
+
+function getYamlWorkspaces({
+  workspaceRoot,
+  workspaceFileName
+}: {
+  workspaceRoot: string;
+  workspaceFileName: string;
+}): Array<string> {
+  const workspaceFile = path.join(workspaceRoot, workspaceFileName);
   if (existsSync(workspaceFile)) {
     try {
       const workspaceConfig = yaml.load(readFileSync(workspaceFile, "utf8"));
@@ -414,6 +461,98 @@ function expandWorkspaces({
         }
       };
     });
+}
+
+type LockfilePackageManager = Exclude<PackageManager, "nub" | "aube">;
+
+const FOREIGN_LOCKFILE_PROBE_ORDER: Array<{
+  manager: LockfilePackageManager;
+  lockfiles: Array<string>;
+}> = [
+  { manager: "bun", lockfiles: ["bun.lock", "bun.lockb"] },
+  { manager: "yarn", lockfiles: ["yarn.lock"] },
+  { manager: "npm", lockfiles: ["package-lock.json"] }
+];
+
+function getPnpmLockfileNames({
+  workspaceRoot
+}: {
+  workspaceRoot: string;
+}): Array<string> {
+  const packageManager = getWorkspacePackageManager({ workspaceRoot });
+
+  if (packageManager === "nub") {
+    return ["nub.lock", "lock.yaml", "aube-lock.yaml", "pnpm-lock.yaml"];
+  }
+  if (packageManager === "aube") {
+    return ["aube-lock.yaml", "nub.lock", "lock.yaml", "pnpm-lock.yaml"];
+  }
+  return ["aube-lock.yaml", "nub.lock", "lock.yaml", "pnpm-lock.yaml"];
+}
+
+function getUnderlyingLockfileManager({
+  workspaceRoot
+}: {
+  workspaceRoot: string;
+}): LockfilePackageManager {
+  const [bun, ...remainingManagers] = FOREIGN_LOCKFILE_PROBE_ORDER;
+  if (
+    bun.lockfiles.some((lockfile) =>
+      existsSync(path.join(workspaceRoot, lockfile))
+    )
+  ) {
+    return bun.manager;
+  }
+
+  if (
+    getPnpmLockfileNames({ workspaceRoot }).some((lockfile) =>
+      existsSync(path.join(workspaceRoot, lockfile))
+    )
+  ) {
+    return "pnpm";
+  }
+
+  for (const { manager, lockfiles } of remainingManagers) {
+    if (
+      lockfiles.some((lockfile) =>
+        existsSync(path.join(workspaceRoot, lockfile))
+      )
+    ) {
+      return manager;
+    }
+  }
+
+  return "npm";
+}
+
+function getUnderlyingLockfileName({
+  workspaceRoot
+}: {
+  workspaceRoot: string;
+}): string {
+  const manager = getUnderlyingLockfileManager({ workspaceRoot });
+
+  switch (manager) {
+    case "bun": {
+      if (existsSync(path.join(workspaceRoot, "bun.lock"))) {
+        return "bun.lock";
+      }
+      return "bun.lockb";
+    }
+    case "pnpm": {
+      return (
+        getPnpmLockfileNames({ workspaceRoot }).find((lockfile) =>
+          existsSync(path.join(workspaceRoot, lockfile))
+        ) ?? "pnpm-lock.yaml"
+      );
+    }
+    case "yarn": {
+      return "yarn.lock";
+    }
+    case "npm": {
+      return "package-lock.json";
+    }
+  }
 }
 
 function directoryInfo({ directory }: { directory: string }) {
@@ -522,7 +661,10 @@ export {
   expandPaths,
   expandWorkspaces,
   parseWorkspacePackages,
+  getAubeWorkspaces,
   getPnpmWorkspaces,
+  getUnderlyingLockfileManager,
+  getUnderlyingLockfileName,
   directoryInfo,
   getMainStep,
   isCompatibleWithBunWorkspaces,

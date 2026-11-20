@@ -1,0 +1,902 @@
+#![allow(clippy::unwrap_used)]
+use std::{fs, io::Write, path::PathBuf, sync::Arc};
+
+use serde_json::{Value, json};
+use sha2::{Digest, Sha256};
+use turborepo_setup::{
+    git::FakeGit,
+    lock::{Ecosystems, Snapshot, StorageError},
+    test_support::{LoopbackServer, OwnedSetupFixture},
+};
+
+use super::*;
+
+const ENABLED: &str = r#"{"futureFlags":{"experimentalSetup":true}}"#;
+/// Unsupported download policy for fail-closed revalidation races.
+const UNSUPPORTED_SETUP: &str =
+    r#"{"futureFlags":{"experimentalSetup":true},"setup":{"unknown":true}}"#;
+/// The overrides managed `turbo run` applies from the committed root config
+/// and the fixture's trusted setup record, plus the managed bin first on PATH.
+fn run_overrides(
+    owned: &OwnedSetupFixture,
+) -> Result<(turborepo_run::EnvironmentVariableMap, PathBuf), String> {
+    use crate::commands::managed::{ManagedTools, context};
+    let root = owned.root();
+    let tools = ManagedTools::inspect(
+        root,
+        &root.join("turbo.json"),
+        true,
+        Some(owned.home()),
+        context,
+    )?
+    .ok_or("unmanaged")?;
+    let env = tools.revalidate()?;
+    let bin = std::env::split_paths(&env["PATH"]).next().unwrap();
+    Ok((env, bin))
+}
+/// For plain setup in fixtures whose Node cannot run pnpm.
+const SKIP_DEPENDENCIES: &str =
+    r#"{"futureFlags":{"experimentalSetup":true},"setup":{"javascript":{"dependencies":"skip"}}}"#;
+fn archive(root: &str, files: &[(&str, &str)]) -> Vec<u8> {
+    let mut tar = tar::Builder::new(Vec::new());
+    for (path, body) in files {
+        let mut header = tar::Header::new_gnu();
+        header.set_size(body.len() as u64);
+        header.set_mode(0o755);
+        header.set_cksum();
+        tar.append_data(&mut header, format!("{root}/{path}"), body.as_bytes())
+            .unwrap();
+    }
+    let mut gzip = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::default());
+    gzip.write_all(&tar.into_inner().unwrap()).unwrap();
+    gzip.finish().unwrap()
+}
+struct Fixture {
+    owned: OwnedSetupFixture,
+    /// Answers every Git question of this fixture's setup runs.
+    git: Arc<FakeGit>,
+    lock: Value,
+    node: Vec<u8>,
+    pnpm: Vec<u8>,
+    node_path: String,
+}
+impl Fixture {
+    fn new() -> Self {
+        let owned = OwnedSetupFixture::new().unwrap();
+        let root = owned.root();
+        owned.fake_git().unwrap();
+        fs::write(root.join("turbo.json"), ENABLED).unwrap();
+        fs::write(root.join(".nvmrc"), "24.0.0\n").unwrap();
+        fs::write(
+            root.join("package.json"),
+            r#"{"packageManager":"pnpm@10.0.0","scripts":{"build":"touch task-ran"}}"#,
+        )
+        .unwrap();
+        fs::create_dir_all(root.join("apps/web/src")).unwrap();
+        let (platform, spelling) = match provision::platform().unwrap() {
+            turborepo_setup::lock::Platform::MacosArm64 => ("macos-arm64", "darwin-arm64"),
+            turborepo_setup::lock::Platform::MacosX64 => ("macos-x64", "darwin-x64"),
+            turborepo_setup::lock::Platform::LinuxX64Gnu => ("linux-x64-gnu", "linux-x64"),
+            _ => ("linux-arm64-gnu", "linux-arm64"),
+        };
+        let prefix = format!("node-v24.0.0-{spelling}");
+        let node_path = format!("/dist/v24.0.0/{prefix}.tar.gz");
+        // Would visibly fail if any tool probe, task, or install hook executed.
+        let node = archive(
+            &prefix,
+            &[
+                ("bin/node", "#!/bin/sh\ntouch probe-ran\nexit 91\n"),
+                ("resource", "node resource"),
+            ],
+        );
+        let pnpm = archive(
+            "package",
+            &[
+                (
+                    "package.json",
+                    r#"{"name":"pnpm","version":"10.0.0","bin":{"pnpm":"bin/pnpm.cjs","pnpx":"bin/pnpx.cjs"},"scripts":{"install":"touch hook-ran"}}"#,
+                ),
+                ("bin/pnpm.cjs", "throw new Error('must not run');"),
+                ("bin/pnpx.cjs", "throw new Error('must not run');"),
+                ("dist/resource", "pnpm resource"),
+            ],
+        );
+        let lock = json!({"schemaVersion":0,"tools":{
+            "node":{"adapter":"node","version":"24.0.0","declarations":[{"file":".nvmrc","request":"24.0.0"}],
+                "installation":{"kind":"managed","artifacts":{platform:{"distribution":{
+                    "url":format!("https://nodejs.org{node_path}"),"sha256":format!("{:x}",Sha256::digest(&node)),
+                    "format":"tar-gz","rootPrefix":prefix,"executables":{"node":"bin/node"}
+                }}}}},
+            "pnpm":{"adapter":"pnpm","version":"10.0.0","declarations":[{"file":"package.json","field":"/packageManager","request":"pnpm@10.0.0"}],
+                "installation":{"kind":"managed","artifacts":{"any":{"package":{
+                    "url":"https://registry.npmjs.org/pnpm/-/pnpm-10.0.0.tgz","sha256":format!("{:x}",Sha256::digest(&pnpm)),
+                    "format":"tar-gz","rootPrefix":"package","executables":{"pnpm":"bin/pnpm.cjs","pnpx":"bin/pnpx.cjs"}
+                }}}}}
+        }});
+        let f = Self {
+            owned,
+            git: FakeGit::shared(),
+            lock,
+            node,
+            pnpm,
+            node_path,
+        };
+        f.save();
+        f
+    }
+    fn save(&self) {
+        fs::write(self.owned.root().join("turbo.lock"), self.lock.to_string()).unwrap();
+    }
+    fn declare(&mut self, package: Value) {
+        fs::write(self.owned.root().join("package.json"), package.to_string()).unwrap();
+        for (id, declarations) in turborepo_setup::lock::probe_native(self.owned.root()).unwrap() {
+            self.lock["tools"][id]["declarations"] = serde_json::to_value(declarations).unwrap();
+        }
+        self.save();
+    }
+    fn args(&self, flags: &[&str]) -> Args {
+        let mut words = vec![
+            "turbo".into(),
+            "setup".into(),
+            "--cwd".into(),
+            self.owned.root().join("apps/web/src").into_os_string(),
+        ];
+        words.extend(flags.iter().map(std::ffi::OsString::from));
+        Args::parse_args(words).unwrap()
+    }
+    fn transports(&self, origin: &str) -> provision::Transports {
+        provision::Transports {
+            tool_store: Some(self.owned.home().to_owned()),
+            registry:
+                turborepo_setup::registry_resolution::RegistryTransport::loopback_http_for_tests(
+                    origin,
+                )
+                .unwrap(),
+            node: turborepo_setup::node_provision::NodeTransport::loopback_http_for_tests(origin)
+                .unwrap(),
+            pnpm: turborepo_setup::pnpm_provision::PnpmTransport::loopback_http_for_tests(origin)
+                .unwrap(),
+            uv: turborepo_setup::uv_resolution::UvTransport::loopback_http_for_tests(origin)
+                .unwrap(),
+            rustup: turborepo_setup::rustup_provision::RustupTransport::loopback_http_for_tests(
+                origin,
+            )
+            .unwrap(),
+            python: turborepo_setup::python_resolution::PythonTransport::loopback_http_for_tests(
+                origin,
+            )
+            .unwrap(),
+            artifact: Some(
+                turborepo_setup::artifact_provision::ArtifactTransport::loopback_http_for_tests(
+                    origin,
+                )
+                .unwrap(),
+            ),
+            go: turborepo_setup::go_resolution::GoTransport::loopback_http_for_tests(origin)
+                .unwrap(),
+            bun: turborepo_setup::bun_provision::BunTransport::loopback_http_for_tests(origin)
+                .unwrap(),
+        }
+    }
+    fn run(&self, upstream: &LoopbackServer, flags: &[&str]) -> Result<i32, Error> {
+        self.run_with(upstream.origin(), self.owned.home(), flags)
+    }
+    /// Setup against `origin`, installing into the tool store at `store`,
+    /// which another fixture's repository may share.
+    fn run_with(
+        &self,
+        origin: &str,
+        store: &std::path::Path,
+        flags: &[&str],
+    ) -> Result<i32, Error> {
+        let args = self.args(flags);
+        crate::cli::dispatch_setup(&args, |args, setup_args| {
+            let mut transports = self.transports(origin);
+            transports.tool_store = Some(store.to_owned());
+            run_with_policy(args, setup_args, Some(transports), self.git.clone(), || {
+                Ok(self
+                    .owned
+                    .policy_at(&self.owned.root().join("apps/web/src"))?)
+            })
+        })
+        .unwrap()
+    }
+    /// A managed Node that appends the arguments after its script (the
+    /// package manager's CLI) to `record`, then runs `body` in its cwd.
+    fn record_node(&mut self, record: &str, body: &str) {
+        let prefix = self.node_path.rsplit('/').next().unwrap();
+        let prefix = prefix.trim_end_matches(".tar.gz").to_owned();
+        let node = format!("#!/bin/sh\nshift\necho \"$*\" >> {record}\n{body}\n");
+        self.node = archive(&prefix, &[("bin/node", &node), ("resource", "node")]);
+        let artifacts = &mut self.lock["tools"]["node"]["installation"]["artifacts"];
+        let parts = artifacts
+            .as_object_mut()
+            .unwrap()
+            .values_mut()
+            .next()
+            .unwrap();
+        parts["distribution"]["sha256"] = json!(format!("{:x}", Sha256::digest(&self.node)));
+        self.save();
+    }
+    /// The effective dependency setup that `flags` select, without running it.
+    fn dependencies(&self, flags: &[&str]) -> dependencies::Dependencies {
+        let args = self.args(flags);
+        let Some(crate::cli::Command::Setup { setup_args }) = &args.command else {
+            unreachable!("setup words");
+        };
+        let request = SetupRequest::new(setup_args, false).unwrap();
+        let discovery = root::Discovery::capture(&args, self.git.clone()).unwrap();
+        let javascript = [turborepo_repository::toolchain::ToolchainId::JAVASCRIPT];
+        let plan = effective::Plan::new(discovery.policy(), javascript, request.tools_only);
+        let snapshot = self.sources().unwrap();
+        dependencies::Dependencies::select(&discovery, &plan, &snapshot, &request).unwrap()
+    }
+    /// The fixture root's Snapshot, guarded through this fixture's Git.
+    fn sources(&self) -> Result<Snapshot, StorageError> {
+        Snapshot::capture_with(self.owned.root(), Ecosystems::default())
+    }
+    /// The repository's record: setup rewrites it only when what it binds
+    /// changes.
+    fn manifest(&self) -> Option<Vec<u8>> {
+        Installed::open(&self.owned).record()
+    }
+    fn no_execution(&self) {
+        for path in ["node_modules", "task-ran", "hook-ran", "probe-ran"] {
+            assert!(!self.owned.root().join(path).exists());
+        }
+    }
+}
+fn trees(report: &str) -> String {
+    let lines: Vec<_> = report
+        .lines()
+        .map(|line| {
+            let indent = &line[..line.len() - line.trim_start().len()];
+            let Some(path) = line.trim_start().strip_prefix("Installed: ") else {
+                return line.to_owned();
+            };
+            let path = path.replace('\\', "/");
+            let (_, tree) = path
+                .split_once("/trees/")
+                .unwrap_or_else(|| panic!("{line}"));
+            let (key, rest) = tree.split_once("/root").unwrap_or_else(|| panic!("{line}"));
+            assert!(
+                key.len() == 32 && key.chars().all(|c| c.is_ascii_hexdigit()),
+                "{line}"
+            );
+            format!("{indent}Installed: <tree>{rest}")
+        })
+        .collect();
+    lines.join("\n")
+}
+
+/// The installation setup recorded for a fixture root in its tool store.
+struct Installed {
+    root: PathBuf,
+    store: turborepo_tool_install::UserStore,
+}
+/// The environment the record names: its tools, bin and tree roots.
+struct Current {
+    tools: Vec<turborepo_tool_install::Tool>,
+    bin: PathBuf,
+    /// The repository's stable link to `bin`, which `.turbo/bin` names.
+    stable_bin: PathBuf,
+    trees: std::collections::BTreeMap<String, PathBuf>,
+    /// A `--no-lock` clone's recorded selection.
+    record: Option<SelectionBytes>,
+}
+struct SelectionBytes(Vec<u8>);
+impl SelectionBytes {
+    fn bytes(&self) -> &[u8] {
+        &self.0
+    }
+}
+impl Current {
+    fn tree(&self, id: &str) -> &std::path::Path {
+        &self.trees[id]
+    }
+    /// How a Unix launcher names `path` in `id`'s tree.
+    fn launched(&self, id: &str, path: &str) -> String {
+        let key = self.tree(id).parent().unwrap().file_name().unwrap();
+        format!("\"$store\"'/trees/{}/root/{path}'", key.to_str().unwrap())
+    }
+}
+impl Installed {
+    fn open(owned: &OwnedSetupFixture) -> Self {
+        let root = owned.root().canonicalize().unwrap();
+        let store = trust::user_store(Some(owned.home()), &root).unwrap();
+        Self { root, store }
+    }
+    fn trust(&self) -> trust::TrustStore {
+        trust::TrustStore::new(&self.store, &self.root).unwrap()
+    }
+    fn record(&self) -> Option<Vec<u8>> {
+        fs::read(self.trust().path()).ok()
+    }
+    fn current(&self) -> Result<Option<Current>, turborepo_tool_install::Error> {
+        let installed = super::recorded_installation_for_tests(&self.root, self.store.root())
+            .map_err(|e| turborepo_tool_install::Error::Io(std::io::Error::other(e)))?;
+        Ok(installed.map(|installed| Current {
+            tools: installed.tools,
+            bin: installed.bin,
+            stable_bin: installed.stable_bin,
+            trees: installed.trees,
+            record: installed.selection.map(SelectionBytes),
+        }))
+    }
+}
+struct Upstream(LoopbackServer);
+impl std::ops::Deref for Upstream {
+    type Target = LoopbackServer;
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+impl Upstream {
+    fn new(f: &Fixture, corrupt: bool, drift: Option<(PathBuf, String)>) -> Self {
+        Self(
+            LoopbackServer::node_pnpm(
+                f.node_path.clone(),
+                f.node.clone(),
+                f.pnpm.clone(),
+                corrupt,
+                move |request| {
+                    if request == "/pnpm/-/pnpm-10.0.0.tgz"
+                        && let Some((path, body)) = &drift
+                    {
+                        fs::write(path, body).unwrap();
+                    }
+                },
+            )
+            .unwrap(),
+        )
+    }
+}
+#[path = "check_tests.rs"]
+mod checks;
+#[path = "plan_tests.rs"]
+mod plans;
+#[path = "shared_store_tests.rs"]
+mod shared_store;
+
+const FROZEN: &[&str] = &["--frozen", "--tools-only"];
+#[path = "additional_tools_tests.rs"]
+mod additional_tools;
+#[path = "authorization_tests.rs"]
+mod authorization;
+#[path = "bun_tests.rs"]
+mod bun;
+#[path = "first_lock.rs"]
+mod first_lock;
+#[path = "force_tests.rs"]
+mod force;
+#[path = "managed_exec_tests.rs"]
+mod managed_exec;
+#[path = "managed_run_tests.rs"]
+mod managed_run;
+#[path = "native_handoff_tests.rs"]
+mod native_handoff;
+#[path = "native_plain_run_tests.rs"]
+mod native_plain_run;
+#[path = "npm_tests.rs"]
+mod npm;
+#[path = "offline_tests.rs"]
+mod offline_repeat;
+#[path = "pnpm_install_tests.rs"]
+mod pnpm_install;
+#[path = "publication_guards.rs"]
+mod publication_guards;
+#[path = "rustup_tests.rs"]
+mod rustup;
+#[cfg(target_os = "macos")]
+#[path = "trust_acl_tests.rs"]
+mod trust_acl;
+#[path = "trust_publication_test.rs"]
+mod trust_publication;
+#[path = "trust_tests.rs"]
+mod trusted_roots;
+#[path = "unlocked_trust_tests.rs"]
+mod unlocked_trust;
+#[path = "uv_tests.rs"]
+mod uv;
+#[path = "yarn_tests.rs"]
+mod yarn;
+#[test]
+fn authored_pins_fail_before_mutation_and_dev_integrity_cannot_reuse_unverified_tools() {
+    for algorithm in ["sha1", "sha256"] {
+        for top in [true, false] {
+            let mut f = Fixture::new();
+            let digest = "0".repeat(if algorithm == "sha1" { 40 } else { 64 });
+            let request = format!("10.0.0+{algorithm}.{digest}");
+            f.declare(if top {
+                json!({"packageManager":format!("pnpm@{request}")})
+            } else {
+                json!({"devEngines":{"packageManager":{"name":"pnpm","version":request}}})
+            });
+            let u = Upstream::new(&f, false, None);
+            assert!(f.run(&u, FROZEN).is_err());
+            assert_eq!(u.hits(), 0);
+            assert!(!f.owned.root().join(".turbo").exists());
+        }
+    }
+    let mut f = Fixture::new();
+    let u = Upstream::new(&f, false, None);
+    f.run(&u, FROZEN).unwrap();
+    let before = f.manifest().unwrap();
+    f.declare(
+        json!({"packageManager":"pnpm@10.0.0","devEngines":{"packageManager":{
+            "name":"pnpm","version":format!("10.0.0+sha512.{}", "0".repeat(128))
+        }}}),
+    );
+    assert!(f.run(&u, FROZEN).is_err());
+    assert_eq!(u.hits(), 4); // Reused Node, but the new dev pin requires registry verification.
+    assert_eq!(f.manifest().unwrap(), before);
+    f.no_execution();
+}
+#[test]
+fn authoritative_pnpm_keeps_wrong_manager_advisories_in_frozen_local_and_check() {
+    for on_fail in ["warn", "ignore"] {
+        let mut f = Fixture::new();
+        f.declare(
+            json!({"packageManager":"pnpm@10.0.0","devEngines":{"packageManager":{
+                "name":"npm","version":"11.6.1","onFail":on_fail
+            }}}),
+        );
+        let snapshot = f.sources().unwrap();
+        let declaration = snapshot.package_manager().unwrap().unwrap();
+        assert_eq!(
+            declaration.manager,
+            turborepo_setup::package_manager::Manager::Pnpm
+        );
+        assert_eq!(declaration.warnings.len(), usize::from(on_fail == "warn"));
+        fs::write(
+            f.owned.root().join("turbo.lock"),
+            snapshot.previous_lock().unwrap().canonical_bytes().unwrap(),
+        )
+        .unwrap();
+        // Plain --check needs the lockfile pnpm would install from.
+        fs::write(f.owned.root().join("pnpm-lock.yaml"), "").unwrap();
+        let u = Upstream::new(&f, false, None);
+        assert_eq!(f.run(&u, FROZEN).unwrap(), 0);
+        let before = publication_guards::state(f.owned.root());
+        for flags in [
+            FROZEN,
+            &["--tools-only", "--no-frozen"],
+            &["--check", "--tools-only", "--offline"],
+            &["--check"],
+        ] {
+            assert_eq!(f.run(&u, flags).unwrap(), 0);
+            assert_eq!(publication_guards::state(f.owned.root()), before);
+        }
+        assert_eq!(u.hits(), 3);
+        f.no_execution();
+    }
+}
+#[test]
+fn frozen_node_pnpm_command_repeat_is_noop_and_preserves_complete_resources() {
+    let f = Fixture::new();
+    let u = Upstream::new(&f, false, None);
+    let lock = fs::read(f.owned.root().join("turbo.lock")).unwrap();
+    assert_eq!(f.run(&u, FROZEN).unwrap(), 0);
+    assert_eq!(u.hits(), 3);
+    let manifest = f.manifest().unwrap();
+    let store = Installed::open(&f.owned);
+    let current = store.current().unwrap().unwrap();
+    assert_eq!(current.tools.len(), 2);
+    assert_eq!(
+        fs::read(current.tree("node").join("resource")).unwrap(),
+        b"node resource"
+    );
+    assert_eq!(
+        fs::read(current.tree("pnpm").join("dist/resource")).unwrap(),
+        b"pnpm resource"
+    );
+    drop(store);
+    assert_eq!(f.run(&u, FROZEN).unwrap(), 0);
+    assert_eq!(u.hits(), 3);
+    assert_eq!(f.manifest().unwrap(), manifest);
+    assert_eq!(fs::read(f.owned.root().join("turbo.lock")).unwrap(), lock);
+    f.no_execution();
+}
+#[test]
+fn root_policy_and_cli_overrides_select_the_effective_setup() {
+    let configure = |f: &Fixture, flags: &str, setup: &str| {
+        let json =
+            format!(r#"{{"futureFlags":{{"experimentalSetup":true{flags}}},"setup":{setup}}}"#);
+        fs::write(f.owned.root().join("turbo.json"), json).unwrap();
+    };
+    // A repository-chosen tools-only setup needs no --tools-only.
+    let f = Fixture::new();
+    configure(&f, "", r#"{"dependencies":"skip"}"#);
+    let u = Upstream::new(&f, false, None);
+    assert_eq!(f.run(&u, &["--frozen"]).unwrap(), 0);
+    assert_eq!(f.run(&u, &["--check"]).unwrap(), 0);
+    assert_eq!(u.hits(), 3);
+    f.no_execution();
+
+    // --tools-only overrides locked dependencies for one invocation.
+    let f = Fixture::new();
+    configure(&f, "", r#"{"dependencies":"locked"}"#);
+    let u = Upstream::new(&f, false, None);
+    // Locked pnpm dependencies need pnpm-lock.yaml before any download.
+    assert!(matches!(
+        f.run(&u, &["--frozen"]),
+        Err(Error::Dependencies(_))
+    ));
+    assert_eq!(u.hits(), 0);
+    assert_eq!(f.run(&u, FROZEN).unwrap(), 0);
+    assert_eq!(u.hits(), 3);
+
+    let cargo = r#","experimentalCargoWorkspaces":true"#;
+    let f = Fixture::new();
+    configure(&f, cargo, r#"{"rust":{"tools":"verify-system"}}"#);
+    let u = Upstream::new(&f, false, None);
+    assert!(f.run(&u, FROZEN).is_err());
+    assert_eq!(u.hits(), 0);
+    configure(&f, cargo, r#"{"tools":"managed"}"#);
+    assert_eq!(f.run(&u, FROZEN).unwrap(), 0);
+    assert_eq!(u.hits(), 3);
+    f.no_execution();
+
+    // Explicitly skipped Rust is not interpreted while JavaScript proceeds.
+    let f = Fixture::new();
+    configure(&f, cargo, r#"{"rust":{"tools":"skip"}}"#);
+    fs::write(f.owned.root().join("rust-toolchain.toml"), "invalid = [").unwrap();
+    let u = Upstream::new(&f, false, None);
+    assert_eq!(f.run(&u, FROZEN).unwrap(), 0);
+    assert_eq!(u.hits(), 3);
+    f.no_execution();
+
+    // Skipped JavaScript tools prepare nothing and never hide locked tools.
+    let f = Fixture::new();
+    configure(&f, "", r#"{"javascript":{"tools":"skip"}}"#);
+    let u = Upstream::new(&f, false, None);
+    assert!(matches!(f.run(&u, FROZEN), Err(Error::Unsupported(_))));
+    fs::remove_file(f.owned.root().join("turbo.lock")).unwrap();
+    assert_eq!(f.run(&u, &["--frozen"]).unwrap(), 0);
+    assert_eq!(u.hits(), 0);
+    assert!(!f.owned.root().join(".turbo").exists());
+    f.no_execution();
+}
+
+#[test]
+fn unsupported_modes_and_policy_fail_before_traffic_or_storage() {
+    for flags in [
+        vec!["--plan"],
+        vec!["--check"],
+        vec!["--no-frozen", "--tools-only"],
+        vec!["--no-lock"],
+        vec!["--no-lock", "--tools-only", "--force"],
+        vec!["--no-lock", "--tools-only", "--plan"],
+        vec!["--no-lock", "--tools-only", "--offline"],
+        vec!["--frozen"],
+        vec!["--plan", "--tools-only", "--no-lock"],
+        vec!["--frozen", "--tools-only", "--offline"],
+        vec!["--no-lock", "--offline"],
+        vec!["--frozen", "--offline"],
+    ] {
+        let f = Fixture::new();
+        let u = Upstream::new(&f, false, None);
+        if flags == ["--no-frozen", "--tools-only"] {
+            assert_eq!(f.run(&u, &flags).unwrap(), 0);
+            assert_eq!(u.hits(), 3);
+        } else if flags == ["--check"] {
+            // Like --check --tools-only: nothing installed is an error, read-only.
+            let result = f.run(&u, &flags);
+            assert!(result.is_err() && !matches!(result, Err(Error::NotImplemented)));
+            assert_eq!(u.hits(), 0);
+            assert!(!f.owned.root().join(".turbo").exists());
+        } else {
+            let result = f.run(&u, &flags);
+            match flags.as_slice() {
+                // Plain and offline setup and plans need the fixture's missing
+                // pnpm-lock.yaml.
+                ["--plan"] | ["--frozen"] | ["--frozen", "--offline"] => {
+                    assert!(matches!(result, Err(Error::Dependencies(_))));
+                }
+                // It cannot install locked dependencies (#14486).
+                ["--no-lock"] => {
+                    assert!(
+                        matches!(&result, Err(Error::Unsupported(_))),
+                        "{flags:?}: {result:?}"
+                    );
+                }
+                _ if flags.contains(&"--offline") && !flags.contains(&"--no-lock") => {
+                    assert!(
+                        matches!(&result, Err(Error::OfflineMissing(_))),
+                        "{flags:?}: {result:?}"
+                    );
+                }
+                _ => assert!(
+                    matches!(&result, Err(Error::NotImplemented)),
+                    "{flags:?}: {result:?}"
+                ),
+            }
+            assert_eq!(u.hits(), 0);
+            assert!(!f.owned.root().join(".turbo").exists());
+        }
+        f.no_execution();
+    }
+    let f = Fixture::new();
+    let u = Upstream::new(&f, false, None);
+    fs::write(f.owned.root().join("turbo.json"), UNSUPPORTED_SETUP).unwrap();
+    assert!(f.run(&u, FROZEN).is_err());
+    assert_eq!(u.hits(), 0);
+    assert!(!f.owned.root().join(".turbo").exists());
+}
+#[test]
+fn ambient_npmrc_drift_during_locked_downloads_keeps_official_sources_and_lock() {
+    for flags in [FROZEN, &["--force", "--tools-only", "--no-frozen"][..]] {
+        for location in ["root", "nested", "home"] {
+            let f = Fixture::new();
+            let path = match location {
+                "root" => f.owned.root().join(".npmrc"),
+                "nested" => f.owned.root().join("apps/web/.npmrc"),
+                _ => f.owned.home().join(".npmrc"),
+            };
+            fs::write(&path, "registry=https://before.invalid\n").unwrap();
+            let lock = fs::read(f.owned.root().join("turbo.lock")).unwrap();
+            let u = Upstream::new(
+                &f,
+                false,
+                Some((path.clone(), "registry=https://after.invalid\n".into())),
+            );
+            assert_eq!(f.run(&u, flags).unwrap(), 0, "{flags:?} {location}");
+            assert_eq!(u.hits(), 3);
+            assert_eq!(
+                fs::read_to_string(&path).unwrap(),
+                "registry=https://after.invalid\n"
+            );
+            assert_eq!(fs::read(f.owned.root().join("turbo.lock")).unwrap(), lock);
+            assert!(f.manifest().is_some());
+            f.no_execution();
+        }
+    }
+}
+
+#[test]
+fn readonly_modes_accept_late_ambient_npmrc_drift_without_traffic_or_mutation() {
+    for flags in [
+        &["--check", "--tools-only"][..],
+        &["--plan", "--tools-only"],
+        &["--offline", "--tools-only"],
+    ] {
+        for location in ["root", "nested", "home"] {
+            let f = Fixture::new();
+            let u = Upstream::new(&f, false, None);
+            f.run(&u, FROZEN).unwrap();
+            let path = match location {
+                "root" => f.owned.root().join(".npmrc"),
+                "nested" => f.owned.root().join("apps/web/.npmrc"),
+                _ => f.owned.home().join(".npmrc"),
+            };
+            fs::write(&path, "registry=https://before.invalid\n").unwrap();
+            let calls = std::cell::Cell::new(0);
+            let expected = std::cell::RefCell::new(None);
+            let args = f.args(flags);
+            let result = crate::cli::dispatch_setup(&args, |args, setup| {
+                run_with_policy(
+                    args,
+                    setup,
+                    Some(f.transports(u.origin())),
+                    f.git.clone(),
+                    || {
+                        calls.set(calls.get() + 1);
+                        if calls.get() == 2 {
+                            fs::write(&path, "registry=https://after.invalid\n").unwrap();
+                            *expected.borrow_mut() =
+                                Some(checks::snapshot(f.owned.root().parent().unwrap()));
+                        }
+                        Ok(f.owned.policy_at(&f.owned.root().join("apps/web/src"))?)
+                    },
+                )
+            })
+            .unwrap();
+            assert_eq!(result.unwrap(), 0, "{flags:?} {location}");
+            assert!(calls.get() >= 2);
+            assert_eq!(
+                checks::snapshot(f.owned.root().parent().unwrap()),
+                expected.into_inner().unwrap()
+            );
+            assert_eq!(u.hits(), 3);
+            f.no_execution();
+        }
+    }
+}
+
+#[test]
+fn missing_stale_non_native_or_wrong_exact_lock_never_mutates() {
+    for case in 0..6 {
+        let mut f = Fixture::new();
+        let u = Upstream::new(&f, false, None);
+        match case {
+            0 => fs::remove_file(f.owned.root().join("turbo.lock")).unwrap(),
+            1 => fs::write(f.owned.root().join(".nvmrc"), "26.0.0").unwrap(),
+            2 => {
+                f.lock["tools"]["node"]["adapter"] = json!("generic-download");
+                f.save();
+            }
+            3 => {
+                f.lock["tools"]["pnpm"]["version"] = json!("11.0.0");
+                f.save();
+            }
+            4 => {
+                fs::write(f.owned.root().join(".nvmrc"), "26.0.0").unwrap();
+                f.lock["tools"]["node"]["declarations"][0]["request"] = json!("26.0.0");
+                f.save();
+            }
+            _ => fs::write(f.owned.root().join("turbo.json"), "{}").unwrap(),
+        }
+        assert!(f.run(&u, FROZEN).is_err(), "case {case}");
+        assert_eq!(u.hits(), 0);
+        assert!(!f.owned.root().join(".turbo").exists());
+        f.no_execution();
+    }
+}
+#[test]
+fn late_failures_preserve_previous_inventory_and_never_publish_partial_node() {
+    for case in 0..9 {
+        let mut f = Fixture::new();
+        let first = Upstream::new(&f, false, None);
+        assert_eq!(f.run(&first, FROZEN).unwrap(), 0);
+        let selected = f.manifest().unwrap();
+        // Change the desired artifact, leaving the prior generation healthy.
+        let prefix = f
+            .node_path
+            .rsplit('/')
+            .next()
+            .unwrap()
+            .trim_end_matches(".tar.gz");
+        f.node = archive(
+            prefix,
+            &[
+                ("bin/node", "#!/bin/sh\ntouch probe-ran\nexit 91\n"),
+                ("resource", "new resource"),
+            ],
+        );
+        let artifacts = f.lock["tools"]["node"]["installation"]["artifacts"]
+            .as_object_mut()
+            .unwrap();
+        artifacts.values_mut().next().unwrap()["distribution"]["sha256"] =
+            json!(format!("{:x}", Sha256::digest(&f.node)));
+        // pnpm's tree does not depend on Node, so change it too: the late
+        // failures below happen while its new artifact downloads.
+        f.pnpm = archive(
+            "package",
+            &[
+                (
+                    "package.json",
+                    r#"{"name":"pnpm","version":"10.0.0","bin":{"pnpm":"bin/pnpm.cjs","pnpx":"bin/pnpx.cjs"}}"#,
+                ),
+                ("bin/pnpm.cjs", "throw new Error('must not run');"),
+                ("bin/pnpx.cjs", "throw new Error('must not run');"),
+                ("dist/resource", "new pnpm resource"),
+            ],
+        );
+        f.lock["tools"]["pnpm"]["installation"]["artifacts"]["any"]["package"]["sha256"] =
+            json!(format!("{:x}", Sha256::digest(&f.pnpm)));
+        f.save();
+        let drift = match case {
+            1 => Some((f.owned.root().join(".nvmrc"), "26.0.0".into())),
+            2 => Some((f.owned.root().join("turbo.lock"), format!("{} ", f.lock))),
+            3 => Some((f.owned.root().join("apps/web/turbo.json"), ENABLED.into())),
+            4 => Some((
+                f.owned.root().join("apps/web/pnpm-workspace.yaml"),
+                "packages: []".into(),
+            )),
+            5 => Some((
+                f.owned.root().join("apps/web/.git"),
+                "gitdir: /not-probed\n".into(),
+            )),
+            6 => Some((f.owned.root().join("turbo.json"), UNSUPPORTED_SETUP.into())),
+            7 => Some((f.owned.root().join("package.json"), "{}".into())),
+            8 => Some((
+                f.owned.root().join("apps/web/package.json"),
+                r#"{"workspaces":[]}"#.into(),
+            )),
+            _ => None,
+        };
+        let u = Upstream::new(&f, case == 0, drift);
+        assert!(f.run(&u, FROZEN).is_err(), "case {case}");
+        assert_eq!(u.hits(), 3);
+        assert_eq!(f.manifest().unwrap(), selected);
+        let store = Installed::open(&f.owned);
+        assert_eq!(store.current().unwrap().unwrap().tools.len(), 2);
+        f.no_execution();
+    }
+    let f = Fixture::new();
+    let u = Upstream::new(&f, true, None);
+    assert!(f.run(&u, FROZEN).is_err());
+    assert_eq!(u.hits(), 3);
+    assert!(f.manifest().is_none());
+    // Verification failed before publication: no tree, partial or whole.
+    let trees = fs::read_dir(f.owned.home().join("trees"));
+    assert_eq!(trees.map_or(0, |trees| trees.count()), 0);
+}
+
+#[test]
+fn telemetry_report_counts_artifact_bytes_and_reuse() {
+    use turborepo_telemetry::events::setup::{
+        SetupDependencies, SetupFailure, SetupLock, SetupMode,
+    };
+    let f = Fixture::new();
+    let u = Upstream::new(&f, false, None);
+    let run = |flags: &[&str]| {
+        let mut report = telemetry::Report::default();
+        let result = crate::cli::dispatch_setup(&f.args(flags), |args, setup_args| {
+            let transports = f.transports(u.origin());
+            run_reporting(
+                args,
+                setup_args,
+                Some(transports),
+                f.git.clone(),
+                &mut report,
+                &output::Console::capture(output::Mode::Plain).0,
+                || Ok(f.owned.policy_at(&f.owned.root().join("apps/web/src"))?),
+            )
+            .map(|completed| completed.exit_code())
+        })
+        .unwrap();
+        (result.map_err(|error| telemetry::failure(&error)), report)
+    };
+    let provision = Some((
+        SetupMode::Provision,
+        SetupLock::Frozen,
+        SetupDependencies::Skip,
+    ));
+    let ready = |downloaded_bytes, tools_installed, tools_reused| telemetry::Report {
+        gated: true,
+        request: provision,
+        downloaded_bytes,
+        tools_installed,
+        tools_reused,
+    };
+    // First ready state downloads both verified artifacts; a repeat reuses them.
+    let artifacts = (f.node.len() + f.pnpm.len()) as u64;
+    assert_eq!(run(FROZEN), (Ok(0), ready(artifacts, 2, 0)));
+    assert_eq!(run(FROZEN), (Ok(0), ready(0, 0, 2)));
+    let before = checks::snapshot(f.owned.root().parent().unwrap());
+    assert_eq!(
+        run(&["--plan", "--tools-only", "--frozen"]),
+        (
+            Ok(0),
+            telemetry::Report {
+                gated: true,
+                request: Some((SetupMode::Plan, SetupLock::Frozen, SetupDependencies::Skip)),
+                ..Default::default()
+            }
+        )
+    );
+    assert_eq!(checks::snapshot(f.owned.root().parent().unwrap()), before);
+    assert_eq!(u.hits(), 3);
+    assert_eq!(
+        run(&["--check", "--tools-only", "--frozen"]),
+        (
+            Ok(0),
+            telemetry::Report {
+                gated: true,
+                request: Some((SetupMode::Check, SetupLock::Frozen, SetupDependencies::Skip)),
+                ..Default::default()
+            }
+        )
+    );
+    assert_eq!(
+        run(&["--frozen"]).1.request,
+        Some((
+            SetupMode::Provision,
+            SetupLock::Frozen,
+            SetupDependencies::Locked
+        ))
+    );
+    fs::remove_file(f.owned.root().join("turbo.lock")).unwrap();
+    assert_eq!(
+        run(FROZEN),
+        (Err(SetupFailure::LockMissing), ready(0, 0, 0))
+    );
+    // The gate decides whether anything is recorded at all.
+    fs::write(f.owned.root().join("turbo.json"), "{}").unwrap();
+    assert_eq!(
+        run(FROZEN),
+        (Err(SetupFailure::Request), telemetry::Report::default())
+    );
+    f.no_execution();
+}

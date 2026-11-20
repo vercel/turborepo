@@ -13,6 +13,9 @@ use tokio::{
 use tracing_test::traced_test;
 use turbopath::AbsoluteSystemPathBuf;
 
+#[cfg(unix)]
+mod shutdown_adversarial;
+
 use super::{Child, ChildInput, ChildOutput, ChildStdin, Command};
 use crate::{
     PtySize,

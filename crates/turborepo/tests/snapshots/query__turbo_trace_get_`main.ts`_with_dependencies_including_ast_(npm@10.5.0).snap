@@ -1,0 +1,599 @@
+---
+source: crates/turborepo/tests/query.rs
+assertion_line: 50
+expression: query_output
+---
+{
+  "data": {
+    "file": {
+      "path": "main.ts",
+      "dependencies": {
+        "files": {
+          "items": [
+            {
+              "path": "bar.js",
+              "ast": {
+                "type": "Program",
+                "body": [
+                  {
+                    "type": "ExportDefaultDeclaration",
+                    "declaration": {
+                      "type": "FunctionDeclaration",
+                      "id": {
+                        "type": "Identifier",
+                        "decorators": [],
+                        "name": "bar",
+                        "optional": false,
+                        "typeAnnotation": null,
+                        "start": 24,
+                        "end": 27
+                      },
+                      "generator": false,
+                      "async": false,
+                      "declare": false,
+                      "typeParameters": null,
+                      "params": [],
+                      "returnType": null,
+                      "body": {
+                        "type": "BlockStatement",
+                        "body": [
+                          {
+                            "type": "ExpressionStatement",
+                            "expression": {
+                              "type": "CallExpression",
+                              "callee": {
+                                "type": "MemberExpression",
+                                "object": {
+                                  "type": "Identifier",
+                                  "decorators": [],
+                                  "name": "console",
+                                  "optional": false,
+                                  "typeAnnotation": null,
+                                  "start": 34,
+                                  "end": 41
+                                },
+                                "property": {
+                                  "type": "Identifier",
+                                  "decorators": [],
+                                  "name": "log",
+                                  "optional": false,
+                                  "typeAnnotation": null,
+                                  "start": 42,
+                                  "end": 45
+                                },
+                                "optional": false,
+                                "computed": false,
+                                "start": 34,
+                                "end": 45
+                              },
+                              "typeArguments": null,
+                              "arguments": [
+                                {
+                                  "type": "Literal",
+                                  "value": "bar",
+                                  "raw": "\"bar\"",
+                                  "start": 46,
+                                  "end": 51
+                                }
+                              ],
+                              "optional": false,
+                              "start": 34,
+                              "end": 52
+                            },
+                            "directive": null,
+                            "start": 34,
+                            "end": 53
+                          }
+                        ],
+                        "start": 30,
+                        "end": 55
+                      },
+                      "expression": false,
+                      "start": 15,
+                      "end": 55
+                    },
+                    "exportKind": "value",
+                    "start": 0,
+                    "end": 55
+                  }
+                ],
+                "sourceType": "module",
+                "hashbang": null,
+                "start": 0,
+                "end": 56
+              }
+            },
+            {
+              "path": "button.css",
+              "ast": {
+                "type": "Program",
+                "body": [],
+                "sourceType": "module",
+                "hashbang": null,
+                "start": 0,
+                "end": 0
+              }
+            },
+            {
+              "path": "button.json",
+              "ast": {
+                "type": "Program",
+                "body": [],
+                "sourceType": "module",
+                "hashbang": null,
+                "start": 0,
+                "end": 0
+              }
+            },
+            {
+              "path": "button.tsx",
+              "ast": {
+                "type": "Program",
+                "body": [
+                  {
+                    "type": "ImportDeclaration",
+                    "specifiers": [],
+                    "source": {
+                      "type": "Literal",
+                      "value": "./button.css",
+                      "raw": "\"./button.css\"",
+                      "start": 7,
+                      "end": 21
+                    },
+                    "phase": null,
+                    "attributes": [],
+                    "importKind": "value",
+                    "start": 0,
+                    "end": 22
+                  },
+                  {
+                    "type": "ImportDeclaration",
+                    "specifiers": [],
+                    "source": {
+                      "type": "Literal",
+                      "value": "./button.json",
+                      "raw": "\"./button.json\"",
+                      "start": 30,
+                      "end": 45
+                    },
+                    "phase": null,
+                    "attributes": [
+                      {
+                        "type": "ImportAttribute",
+                        "key": {
+                          "type": "Identifier",
+                          "decorators": [],
+                          "name": "type",
+                          "optional": false,
+                          "typeAnnotation": null,
+                          "start": 53,
+                          "end": 57
+                        },
+                        "value": {
+                          "type": "Literal",
+                          "value": "json",
+                          "raw": "\"json\"",
+                          "start": 59,
+                          "end": 65
+                        },
+                        "start": 53,
+                        "end": 65
+                      }
+                    ],
+                    "importKind": "value",
+                    "start": 23,
+                    "end": 68
+                  },
+                  {
+                    "type": "ExportNamedDeclaration",
+                    "declaration": {
+                      "type": "VariableDeclaration",
+                      "kind": "const",
+                      "declarations": [
+                        {
+                          "type": "VariableDeclarator",
+                          "id": {
+                            "type": "Identifier",
+                            "decorators": [],
+                            "name": "Button",
+                            "optional": false,
+                            "typeAnnotation": null,
+                            "start": 83,
+                            "end": 89
+                          },
+                          "init": {
+                            "type": "ArrowFunctionExpression",
+                            "expression": false,
+                            "async": false,
+                            "typeParameters": null,
+                            "params": [
+                              {
+                                "type": "ObjectPattern",
+                                "decorators": [],
+                                "properties": [
+                                  {
+                                    "type": "Property",
+                                    "kind": "init",
+                                    "key": {
+                                      "type": "Identifier",
+                                      "decorators": [],
+                                      "name": "children",
+                                      "optional": false,
+                                      "typeAnnotation": null,
+                                      "start": 95,
+                                      "end": 103
+                                    },
+                                    "value": {
+                                      "type": "Identifier",
+                                      "decorators": [],
+                                      "name": "children",
+                                      "optional": false,
+                                      "typeAnnotation": null,
+                                      "start": 95,
+                                      "end": 103
+                                    },
+                                    "method": false,
+                                    "shorthand": true,
+                                    "computed": false,
+                                    "optional": false,
+                                    "start": 95,
+                                    "end": 103
+                                  }
+                                ],
+                                "optional": false,
+                                "typeAnnotation": {
+                                  "type": "TSTypeAnnotation",
+                                  "typeAnnotation": {
+                                    "type": "TSTypeLiteral",
+                                    "members": [
+                                      {
+                                        "type": "TSPropertySignature",
+                                        "computed": false,
+                                        "optional": false,
+                                        "readonly": false,
+                                        "key": {
+                                          "type": "Identifier",
+                                          "decorators": [],
+                                          "name": "children",
+                                          "optional": false,
+                                          "typeAnnotation": null,
+                                          "start": 109,
+                                          "end": 117
+                                        },
+                                        "typeAnnotation": {
+                                          "type": "TSTypeAnnotation",
+                                          "typeAnnotation": {
+                                            "type": "TSTypeReference",
+                                            "typeName": {
+                                              "type": "TSQualifiedName",
+                                              "left": {
+                                                "type": "Identifier",
+                                                "decorators": [],
+                                                "name": "React",
+                                                "optional": false,
+                                                "typeAnnotation": null,
+                                                "start": 119,
+                                                "end": 124
+                                              },
+                                              "right": {
+                                                "type": "Identifier",
+                                                "decorators": [],
+                                                "name": "ReactNode",
+                                                "optional": false,
+                                                "typeAnnotation": null,
+                                                "start": 125,
+                                                "end": 134
+                                              },
+                                              "start": 119,
+                                              "end": 134
+                                            },
+                                            "typeArguments": null,
+                                            "start": 119,
+                                            "end": 134
+                                          },
+                                          "start": 117,
+                                          "end": 134
+                                        },
+                                        "accessibility": null,
+                                        "static": false,
+                                        "start": 109,
+                                        "end": 134
+                                      }
+                                    ],
+                                    "start": 107,
+                                    "end": 136
+                                  },
+                                  "start": 105,
+                                  "end": 136
+                                },
+                                "start": 93,
+                                "end": 136
+                              }
+                            ],
+                            "returnType": null,
+                            "body": {
+                              "type": "BlockStatement",
+                              "body": [
+                                {
+                                  "type": "ReturnStatement",
+                                  "argument": {
+                                    "type": "JSXElement",
+                                    "openingElement": {
+                                      "type": "JSXOpeningElement",
+                                      "name": {
+                                        "type": "JSXIdentifier",
+                                        "name": "button",
+                                        "start": 153,
+                                        "end": 159
+                                      },
+                                      "typeArguments": null,
+                                      "attributes": [],
+                                      "selfClosing": false,
+                                      "start": 152,
+                                      "end": 160
+                                    },
+                                    "children": [
+                                      {
+                                        "type": "JSXExpressionContainer",
+                                        "expression": {
+                                          "type": "Identifier",
+                                          "decorators": [],
+                                          "name": "children",
+                                          "optional": false,
+                                          "typeAnnotation": null,
+                                          "start": 161,
+                                          "end": 169
+                                        },
+                                        "start": 160,
+                                        "end": 170
+                                      }
+                                    ],
+                                    "closingElement": {
+                                      "type": "JSXClosingElement",
+                                      "name": {
+                                        "type": "JSXIdentifier",
+                                        "name": "button",
+                                        "start": 172,
+                                        "end": 178
+                                      },
+                                      "start": 170,
+                                      "end": 179
+                                    },
+                                    "start": 152,
+                                    "end": 179
+                                  },
+                                  "start": 145,
+                                  "end": 180
+                                }
+                              ],
+                              "start": 141,
+                              "end": 182
+                            },
+                            "id": null,
+                            "generator": false,
+                            "start": 92,
+                            "end": 182
+                          },
+                          "definite": false,
+                          "start": 83,
+                          "end": 182
+                        }
+                      ],
+                      "declare": false,
+                      "start": 77,
+                      "end": 183
+                    },
+                    "specifiers": [],
+                    "source": null,
+                    "exportKind": "value",
+                    "attributes": [],
+                    "start": 70,
+                    "end": 183
+                  }
+                ],
+                "sourceType": "module",
+                "hashbang": null,
+                "start": 0,
+                "end": 184
+              }
+            },
+            {
+              "path": "foo.js",
+              "ast": {
+                "type": "Program",
+                "body": [
+                  {
+                    "type": "ImportDeclaration",
+                    "specifiers": [
+                      {
+                        "type": "ImportSpecifier",
+                        "imported": {
+                          "type": "Identifier",
+                          "decorators": [],
+                          "name": "bar",
+                          "optional": false,
+                          "typeAnnotation": null,
+                          "start": 9,
+                          "end": 12
+                        },
+                        "local": {
+                          "type": "Identifier",
+                          "decorators": [],
+                          "name": "bar",
+                          "optional": false,
+                          "typeAnnotation": null,
+                          "start": 9,
+                          "end": 12
+                        },
+                        "importKind": "value",
+                        "start": 9,
+                        "end": 12
+                      }
+                    ],
+                    "source": {
+                      "type": "Literal",
+                      "value": "./bar",
+                      "raw": "\"./bar\"",
+                      "start": 20,
+                      "end": 27
+                    },
+                    "phase": null,
+                    "attributes": [
+                      {
+                        "type": "ImportAttribute",
+                        "key": {
+                          "type": "Identifier",
+                          "decorators": [],
+                          "name": "type",
+                          "optional": false,
+                          "typeAnnotation": null,
+                          "start": 35,
+                          "end": 39
+                        },
+                        "value": {
+                          "type": "Literal",
+                          "value": "js",
+                          "raw": "\"js\"",
+                          "start": 41,
+                          "end": 45
+                        },
+                        "start": 35,
+                        "end": 45
+                      }
+                    ],
+                    "importKind": "value",
+                    "start": 0,
+                    "end": 48
+                  },
+                  {
+                    "type": "ExportDefaultDeclaration",
+                    "declaration": {
+                      "type": "FunctionDeclaration",
+                      "id": {
+                        "type": "Identifier",
+                        "decorators": [],
+                        "name": "foo",
+                        "optional": false,
+                        "typeAnnotation": null,
+                        "start": 74,
+                        "end": 77
+                      },
+                      "generator": false,
+                      "async": false,
+                      "declare": false,
+                      "typeParameters": null,
+                      "params": [],
+                      "returnType": null,
+                      "body": {
+                        "type": "BlockStatement",
+                        "body": [
+                          {
+                            "type": "IfStatement",
+                            "test": {
+                              "type": "UnaryExpression",
+                              "operator": "!",
+                              "argument": {
+                                "type": "MemberExpression",
+                                "object": {
+                                  "type": "MemberExpression",
+                                  "object": {
+                                    "type": "Identifier",
+                                    "decorators": [],
+                                    "name": "process",
+                                    "optional": false,
+                                    "typeAnnotation": null,
+                                    "start": 89,
+                                    "end": 96
+                                  },
+                                  "property": {
+                                    "type": "Identifier",
+                                    "decorators": [],
+                                    "name": "env",
+                                    "optional": false,
+                                    "typeAnnotation": null,
+                                    "start": 97,
+                                    "end": 100
+                                  },
+                                  "optional": false,
+                                  "computed": false,
+                                  "start": 89,
+                                  "end": 100
+                                },
+                                "property": {
+                                  "type": "Identifier",
+                                  "decorators": [],
+                                  "name": "IS_CI",
+                                  "optional": false,
+                                  "typeAnnotation": null,
+                                  "start": 101,
+                                  "end": 106
+                                },
+                                "optional": false,
+                                "computed": false,
+                                "start": 89,
+                                "end": 106
+                              },
+                              "prefix": true,
+                              "start": 88,
+                              "end": 106
+                            },
+                            "consequent": {
+                              "type": "BlockStatement",
+                              "body": [
+                                {
+                                  "type": "ReturnStatement",
+                                  "argument": {
+                                    "type": "Literal",
+                                    "value": "bar",
+                                    "raw": "\"bar\"",
+                                    "start": 121,
+                                    "end": 126
+                                  },
+                                  "start": 114,
+                                  "end": 127
+                                }
+                              ],
+                              "start": 108,
+                              "end": 131
+                            },
+                            "alternate": null,
+                            "start": 84,
+                            "end": 131
+                          },
+                          {
+                            "type": "ReturnStatement",
+                            "argument": {
+                              "type": "Literal",
+                              "value": "foo",
+                              "raw": "\"foo\"",
+                              "start": 141,
+                              "end": 146
+                            },
+                            "start": 134,
+                            "end": 147
+                          }
+                        ],
+                        "start": 80,
+                        "end": 149
+                      },
+                      "expression": false,
+                      "start": 65,
+                      "end": 149
+                    },
+                    "exportKind": "value",
+                    "start": 50,
+                    "end": 149
+                  }
+                ],
+                "sourceType": "module",
+                "hashbang": null,
+                "start": 0,
+                "end": 150
+              }
+            }
+          ]
+        }
+      }
+    }
+  }
+}

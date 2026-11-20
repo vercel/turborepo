@@ -115,6 +115,9 @@ fn test_monorepo_env_var_in_summary() -> Result<(), anyhow::Error> {
 
     let config_dir = tempfile::tempdir()?;
     let mut cmd = assert_cmd::Command::cargo_bin("turbo")?;
+    for key in common::ambient_turbo_env_keys() {
+        cmd.env_remove(&key);
+    }
     cmd.env("TURBO_TELEMETRY_MESSAGE_DISABLED", "1")
         .env("TURBO_GLOBAL_WARNING_DISABLED", "1")
         .env("TURBO_PRINT_VERSION_DISABLED", "1")

@@ -49,6 +49,23 @@ bunx create-turbo@latest -e with-tailwind
 ```
 
 </Tab>
+
+<Tab value="nub">
+
+```bash title="Terminal"
+nubx create-turbo@latest -e with-tailwind
+```
+
+</Tab>
+
+<Tab value="aube">
+
+```bash title="Terminal"
+aubx create-turbo@latest -e with-tailwind
+```
+
+</Tab>
+
 </PackageManagerTabs>
 
 ## Guide
@@ -95,6 +112,23 @@ bunx create-turbo@latest
 ```
 
 </Tab>
+
+<Tab value="nub">
+
+```bash title="Terminal"
+nubx create-turbo@latest
+```
+
+</Tab>
+
+<Tab value="aube">
+
+```bash title="Terminal"
+aubx create-turbo@latest
+```
+
+</Tab>
+
 </PackageManagerTabs>
 
 </Step>
@@ -311,6 +345,25 @@ cd packages/ui && bun install @repo/ui @repo/tailwind-config --dev
 ```
 
 </Tab>
+
+<Tab value="nub">
+
+```bash title="Terminal"
+cd apps/web && nub add @repo/ui @repo/tailwind-config --save-dev
+cd packages/ui && nub add @repo/ui @repo/tailwind-config --save-dev
+```
+
+</Tab>
+
+<Tab value="aube">
+
+```bash title="Terminal"
+cd apps/web && aube add @repo/ui @repo/tailwind-config --save-dev
+cd packages/ui && aube add @repo/ui @repo/tailwind-config --save-dev
+```
+
+</Tab>
+
 </PackageManagerTabs>
 
 Then, configure the files in your application so the styles from the UI package are reflected in the application.

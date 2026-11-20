@@ -11,13 +11,15 @@ describe("create-turbo-config", () => {
 
   it("package.json config exists but no turbo.json config - basic", () => {
     // load the fixture for the test
-    const { root, read } = useFixture({ fixture: "no-turbo-json-config" });
+    const { root, read, readOptional } = useFixture({
+      fixture: "no-turbo-json-config"
+    });
 
     // turbo.json should not exist
-    expect(read("turbo.json")).toBeUndefined();
+    expect(readOptional("turbo.json")).toBeUndefined();
 
     // get config from package.json for comparison later
-    const turboConfig = JSON.parse(read("package.json") || "{}").turbo;
+    const turboConfig = JSON.parse(read("package.json")).turbo;
     expect(turboConfig).toBeDefined();
     // run the transformer
     const result = transformer({
@@ -26,7 +28,7 @@ describe("create-turbo-config", () => {
     });
 
     // turbo.json should now exist (and match the package.json config)
-    expect(JSON.parse(read("turbo.json") || "{}")).toEqual(turboConfig);
+    expect(JSON.parse(read("turbo.json"))).toEqual(turboConfig);
 
     // result should be correct
     expect(result.fatalError).toBeUndefined();
@@ -48,13 +50,15 @@ describe("create-turbo-config", () => {
 
   it("package.json config exists but no turbo.json config - repeat run", () => {
     // load the fixture for the test
-    const { root, read } = useFixture({ fixture: "no-turbo-json-config" });
+    const { root, read, readOptional } = useFixture({
+      fixture: "no-turbo-json-config"
+    });
 
     // turbo.json should not exist
-    expect(read("turbo.json")).toBeUndefined();
+    expect(readOptional("turbo.json")).toBeUndefined();
 
     // get config from package.json for comparison later
-    const turboConfig = JSON.parse(read("package.json") || "{}").turbo;
+    const turboConfig = JSON.parse(read("package.json")).turbo;
     expect(turboConfig).toBeDefined();
     // run the transformer
     const result = transformer({
@@ -63,7 +67,7 @@ describe("create-turbo-config", () => {
     });
 
     // turbo.json should now exist (and match the package.json config)
-    expect(JSON.parse(read("turbo.json") || "{}")).toEqual(turboConfig);
+    expect(JSON.parse(read("turbo.json"))).toEqual(turboConfig);
 
     // result should be correct
     expect(result.fatalError).toBeUndefined();
@@ -107,13 +111,15 @@ describe("create-turbo-config", () => {
 
   it("package.json config exists but no turbo.json config - dry", () => {
     // load the fixture for the test
-    const { root, read } = useFixture({ fixture: "no-turbo-json-config" });
+    const { root, read, readOptional } = useFixture({
+      fixture: "no-turbo-json-config"
+    });
 
     // turbo.json should not exist
-    expect(read("turbo.json")).toBeUndefined();
+    expect(readOptional("turbo.json")).toBeUndefined();
 
     // get config from package.json for comparison later
-    const turboConfig = JSON.parse(read("package.json") || "{}").turbo;
+    const turboConfig = JSON.parse(read("package.json")).turbo;
     expect(turboConfig).toBeDefined();
     // run the transformer
     const result = transformer({
@@ -122,7 +128,7 @@ describe("create-turbo-config", () => {
     });
 
     // turbo.json still not exist (dry run)
-    expect(read("turbo.json")).toBeUndefined();
+    expect(readOptional("turbo.json")).toBeUndefined();
 
     // result should be correct
     expect(result.fatalError).toBeUndefined();
@@ -144,13 +150,15 @@ describe("create-turbo-config", () => {
 
   it("package.json config exists but no turbo.json config - print", () => {
     // load the fixture for the test
-    const { root, read } = useFixture({ fixture: "no-turbo-json-config" });
+    const { root, read, readOptional } = useFixture({
+      fixture: "no-turbo-json-config"
+    });
 
     // turbo.json should not exist
-    expect(read("turbo.json")).toBeUndefined();
+    expect(readOptional("turbo.json")).toBeUndefined();
 
     // get config from package.json for comparison later
-    const turboConfig = JSON.parse(read("package.json") || "{}").turbo;
+    const turboConfig = JSON.parse(read("package.json")).turbo;
     expect(turboConfig).toBeDefined();
     // run the transformer
     const result = transformer({
@@ -159,7 +167,7 @@ describe("create-turbo-config", () => {
     });
 
     // turbo.json should now exist (and match the package.json config)
-    expect(JSON.parse(read("turbo.json") || "{}")).toEqual(turboConfig);
+    expect(JSON.parse(read("turbo.json"))).toEqual(turboConfig);
 
     // result should be correct
     expect(result.fatalError).toBeUndefined();
@@ -181,13 +189,15 @@ describe("create-turbo-config", () => {
 
   it("package.json config exists but no turbo.json config - dry & print", () => {
     // load the fixture for the test
-    const { root, read } = useFixture({ fixture: "no-turbo-json-config" });
+    const { root, read, readOptional } = useFixture({
+      fixture: "no-turbo-json-config"
+    });
 
     // turbo.json should not exist
-    expect(read("turbo.json")).toBeUndefined();
+    expect(readOptional("turbo.json")).toBeUndefined();
 
     // get config from package.json for comparison later
-    const turboConfig = JSON.parse(read("package.json") || "{}").turbo;
+    const turboConfig = JSON.parse(read("package.json")).turbo;
     expect(turboConfig).toBeDefined();
     // run the transformer
     const result = transformer({
@@ -196,7 +206,7 @@ describe("create-turbo-config", () => {
     });
 
     // turbo.json still not exist (dry run)
-    expect(read("turbo.json")).toBeUndefined();
+    expect(readOptional("turbo.json")).toBeUndefined();
 
     // result should be correct
     expect(result.fatalError).toBeUndefined();
@@ -218,13 +228,15 @@ describe("create-turbo-config", () => {
 
   it("no package.json config or turbo.json file exists", () => {
     // load the fixture for the test
-    const { root, read } = useFixture({ fixture: "no-package-json-config" });
+    const { root, read, readOptional } = useFixture({
+      fixture: "no-package-json-config"
+    });
 
     // turbo.json should not exist
-    expect(read("turbo.json")).toBeUndefined();
+    expect(readOptional("turbo.json")).toBeUndefined();
 
     // get config from package.json for comparison later
-    const packageJsonConfig = JSON.parse(read("package.json") || "{}");
+    const packageJsonConfig = JSON.parse(read("package.json"));
     const turboConfig = packageJsonConfig.turbo;
     expect(turboConfig).toBeUndefined();
     // run the transformer
@@ -234,10 +246,10 @@ describe("create-turbo-config", () => {
     });
 
     // turbo.json should still not exist
-    expect(read("turbo.json")).toBeUndefined();
+    expect(readOptional("turbo.json")).toBeUndefined();
 
     // make sure we didn't change the package.json
-    expect(JSON.parse(read("package.json") || "{}")).toEqual(packageJsonConfig);
+    expect(JSON.parse(read("package.json"))).toEqual(packageJsonConfig);
 
     // result should be correct
     expect(result.fatalError).toBeUndefined();
@@ -259,10 +271,12 @@ describe("create-turbo-config", () => {
 
   it("no package.json file exists", () => {
     // load the fixture for the test
-    const { root, read } = useFixture({ fixture: "no-package-json-file" });
+    const { root, read, readOptional } = useFixture({
+      fixture: "no-package-json-file"
+    });
 
     // turbo.json should not exist
-    expect(read("turbo.json")).toBeUndefined();
+    expect(readOptional("turbo.json")).toBeUndefined();
 
     // run the transformer
     const result = transformer({
@@ -271,7 +285,7 @@ describe("create-turbo-config", () => {
     });
 
     // turbo.json should still not exist
-    expect(read("turbo.json")).toBeUndefined();
+    expect(readOptional("turbo.json")).toBeUndefined();
 
     // result should be correct
     expect(result.fatalError?.message).toMatch(
@@ -281,13 +295,15 @@ describe("create-turbo-config", () => {
 
   it("turbo.json file exists and no package.json config exists", () => {
     // load the fixture for the test
-    const { root, read } = useFixture({ fixture: "turbo-json-config" });
+    const { root, read, readOptional } = useFixture({
+      fixture: "turbo-json-config"
+    });
 
     // turbo.json should exist
     expect(read("turbo.json")).toBeDefined();
 
     // no config should exist in package.json
-    const packageJsonConfig = JSON.parse(read("package.json") || "{}");
+    const packageJsonConfig = JSON.parse(read("package.json"));
     const turboConfig = packageJsonConfig.turbo;
     expect(turboConfig).toBeUndefined();
 
@@ -301,7 +317,7 @@ describe("create-turbo-config", () => {
     expect(read("turbo.json")).toBeDefined();
 
     // make sure we didn't change the package.json
-    expect(JSON.parse(read("package.json") || "{}")).toEqual(packageJsonConfig);
+    expect(JSON.parse(read("package.json"))).toEqual(packageJsonConfig);
 
     // result should be correct
     expect(result.fatalError).toBeUndefined();
@@ -323,15 +339,17 @@ describe("create-turbo-config", () => {
 
   it("turbo.json file exists and package.json config exists", () => {
     // load the fixture for the test
-    const { root, read } = useFixture({ fixture: "both-configs" });
+    const { root, read, readOptional } = useFixture({
+      fixture: "both-configs"
+    });
 
     // turbo.json should exist
-    const turboJsonConfig = JSON.parse(read("turbo.json") || "{}");
+    const turboJsonConfig = JSON.parse(read("turbo.json"));
     expect(turboJsonConfig.pipeline).toBeDefined();
 
     // no config should exist in package.json
-    const packageJsonConfig = JSON.parse(read("package.json") || "{}");
-    const turboConfig = JSON.parse(read("package.json") || "{}").turbo;
+    const packageJsonConfig = JSON.parse(read("package.json"));
+    const turboConfig = JSON.parse(read("package.json")).turbo;
     expect(turboConfig).toBeDefined();
 
     // run the transformer
@@ -341,10 +359,10 @@ describe("create-turbo-config", () => {
     });
 
     // make sure we didn't change the package.json
-    expect(JSON.parse(read("package.json") || "{}")).toEqual(packageJsonConfig);
+    expect(JSON.parse(read("package.json"))).toEqual(packageJsonConfig);
 
     // make sure we didn't change the turbo.json
-    expect(JSON.parse(read("turbo.json") || "{}")).toEqual(turboJsonConfig);
+    expect(JSON.parse(read("turbo.json"))).toEqual(turboJsonConfig);
 
     // result should be correct
     expect(result.fatalError?.message).toBeUndefined();
@@ -366,13 +384,15 @@ describe("create-turbo-config", () => {
 
   it("errors when unable to write json", () => {
     // load the fixture for the test
-    const { root, read } = useFixture({ fixture: "no-turbo-json-config" });
+    const { root, read, readOptional } = useFixture({
+      fixture: "no-turbo-json-config"
+    });
 
     // turbo.json should not exist
-    expect(read("turbo.json")).toBeUndefined();
+    expect(readOptional("turbo.json")).toBeUndefined();
 
     // get config from package.json for comparison later
-    const turboConfig = JSON.parse(read("package.json") || "{}").turbo;
+    const turboConfig = JSON.parse(read("package.json")).turbo;
     expect(turboConfig).toBeDefined();
 
     const mockWriteJsonSync = jest
@@ -388,7 +408,7 @@ describe("create-turbo-config", () => {
     });
 
     // turbo.json should still not exist (error writing)
-    expect(read("turbo.json")).toBeUndefined();
+    expect(readOptional("turbo.json")).toBeUndefined();
 
     // result should be correct
     expect(result.fatalError).toBeDefined();

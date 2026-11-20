@@ -18,6 +18,14 @@ Generate a partial monorepo for a target package. The output will be placed into
 turbo prune [package]
 ```
 
+### Task dependencies
+
+By default, `turbo prune` follows package dependencies, not task dependencies. An explicit dependency such as `"dependsOn": ["mycrate#build:types"]` does not by itself retain `mycrate` in the pruned output.
+
+Enable [`futureFlags.affectedUsingTaskInputs`](/docs/reference/configuration#affectedusingtaskinputs) to also retain packages required by task dependencies, including dependencies across enabled toolchains. Their package dependencies and inherited Package Configurations are retained as well.
+
+The command still accepts package names, not task names. It considers all configured tasks of retained packages, not only `build`. With `--production`, package development dependencies are excluded unless they are otherwise required, for example by an explicit task dependency.
+
 ### Example
 
 Starting with a repository with the following structure:
@@ -210,6 +218,12 @@ Customize the directory the pruned output is generated in.
 Default: `true`
 
 Respect `.gitignore` file(s) when copying files to the output directory.
+
+#### `--production`
+
+Default: `false`
+
+Exclude in-workspace packages listed only in `devDependencies` when selecting which packages to include in the pruned output. Only workspace packages reachable through `dependencies` (and non-optional peer workspace dependencies) are included. For Bun repositories, references to excluded workspaces are also removed from the pruned manifests and lockfile so the output can be installed with a frozen lockfile.
 
 ### Including `globalDependencies`
 

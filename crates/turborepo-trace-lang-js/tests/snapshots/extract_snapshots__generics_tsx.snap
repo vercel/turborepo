@@ -1,0 +1,18 @@
+---
+source: crates/turborepo-trace-lang-js/tests/extract_snapshots.rs
+expression: "render(\"generics.tsx\")"
+---
+1:1 import "react"
+    span: import { lazy, useState } from 'react'
+2:1 import "./row" [type_only]
+    span: import type { Row } from './row'
+15:57 require "./unbox"
+    span: require('./unbox')
+22:27 dynamic_import "./lazy-cell" [lazy]
+    span: import('./lazy-cell')
+28:54 require "./in-attribute"
+    span: require('./in-attribute')
+30:21 dynamic_import "./in-child" [lazy]
+    span: import('./in-child')
+38:22 require "./after-the-elements"
+    span: require('./after-the-elements')

@@ -17,10 +17,6 @@ pub fn get_agent() -> Option<&'static str> {
     *AGENT.get_or_init(detect)
 }
 
-pub fn is_ai_agent() -> bool {
-    get_agent().is_some()
-}
-
 /// Checks a single env var; returns `true` when set to a non-empty value.
 fn env_is_set(name: &str) -> bool {
     !env::var(name).unwrap_or_default().is_empty()

@@ -2,9 +2,12 @@
 
 mod common;
 
-use std::{fs, path::Path, process::Stdio};
+use std::{fs, path::Path};
 
-use common::{git, replace_turbo_json, run_turbo_with_env, setup};
+use common::{
+    apply_lockfile_patch, git, git_commit_staged_if_changed, replace_turbo_json,
+    run_turbo_with_env, setup,
+};
 use serde_json::Value;
 
 const TURBO_JSON_GLOBAL_DEPS: &str = r#"{
@@ -121,7 +124,7 @@ fn setup_global_inputs_fixture(dir: &Path, turbo_json: &str) {
     setup::setup_integration_test(dir, "global_inputs", "npm@10.5.0", false).unwrap();
     fs::write(dir.join("turbo.json"), turbo_json).unwrap();
     git(dir, &["add", "."]);
-    git(dir, &["commit", "-m", "set turbo config", "--quiet"]);
+    git_commit_staged_if_changed(dir, "set turbo config");
 }
 
 fn setup_lockfile_fixture(dir: &Path, pm_name: &str) {
@@ -148,17 +151,6 @@ fn setup_lockfile_fixture(dir: &Path, pm_name: &str) {
     git(dir, &["commit", "-m", "Initial", "--quiet"]);
 }
 
-fn apply_patch(dir: &Path, target: &str, patch_file: &str) {
-    let status = std::process::Command::new("patch")
-        .args([target, patch_file])
-        .current_dir(dir)
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .status()
-        .unwrap();
-    assert!(status.success(), "patch {target} {patch_file} failed");
-}
-
 #[test]
 fn baseline_monorepo_hashes() {
     let tempdir = tempfile::tempdir().unwrap();
@@ -171,6 +163,82 @@ fn baseline_monorepo_hashes() {
         "baseline_monorepo_global_cache_inputs",
         global_cache_inputs_contract(&json)
     );
+}
+
+#[test]
+fn turbo_lock_without_setup_flag_keeps_hashes_and_flagged_runs_require_setup() {
+    let tempdir = tempfile::tempdir().unwrap();
+    let dir = tempdir.path();
+    setup::setup_integration_test(dir, "basic_monorepo", "npm@10.5.0", false).unwrap();
+    let config_path = dir.join("turbo.json");
+    let mut config = serde_json::json!({ "tasks": { "build": { "outputs": [] } } });
+    let lock_path = dir.join("turbo.lock");
+    let lock_contents = "not a valid setup lockfile\n";
+
+    // All flag and lock states must retain the same omitted-flag baseline.
+    fs::write(&config_path, serde_json::to_string(&config).unwrap()).unwrap();
+    let baseline = dry_json(dir, &["run", "build", "--dry=json"]);
+    let baseline_task_hashes = task_hash_contract(&baseline);
+    let baseline_global_inputs = global_cache_inputs_contract(&baseline);
+
+    for enabled in [None, Some(false), Some(true)] {
+        if let Some(enabled) = enabled {
+            config["futureFlags"] = serde_json::json!({ "experimentalSetup": enabled });
+        }
+        fs::write(&config_path, serde_json::to_string(&config).unwrap()).unwrap();
+        let without_lock = dry_json(dir, &["run", "build", "--dry=json"]);
+        fs::write(&lock_path, lock_contents).unwrap();
+        if enabled == Some(true) {
+            // A flagged root lock makes runs managed: without valid setup they
+            // fail instead of hashing or executing with host tools.
+            for args in [
+                &["run", "build", "--dry=json"][..],
+                &["run", "build", "--force"],
+            ] {
+                let output = common::run_turbo(dir, args);
+                let stderr = String::from_utf8_lossy(&output.stderr);
+                assert!(!output.status.success(), "{args:?}: {stderr}");
+                assert!(
+                    stderr.contains("managed setup validation failed"),
+                    "{stderr}"
+                );
+            }
+            assert_eq!(baseline_task_hashes, task_hash_contract(&without_lock));
+            assert_eq!(
+                baseline_global_inputs,
+                global_cache_inputs_contract(&without_lock)
+            );
+            assert_eq!(fs::read_to_string(&lock_path).unwrap(), lock_contents);
+            fs::remove_file(&lock_path).unwrap();
+            continue;
+        }
+        let with_lock = dry_json(dir, &["run", "build", "--dry=json"]);
+        for (state, actual) in [
+            ("without lock", &without_lock),
+            ("with malformed lock", &with_lock),
+        ] {
+            assert_eq!(
+                baseline_task_hashes,
+                task_hash_contract(actual),
+                "task hashes changed {state} with experimentalSetup={enabled:?}"
+            );
+            assert_eq!(
+                baseline_global_inputs,
+                global_cache_inputs_contract(actual),
+                "global inputs changed {state} with experimentalSetup={enabled:?}"
+            );
+        }
+        assert_eq!(without_lock["tasks"], with_lock["tasks"]);
+        let output = common::run_turbo(dir, &["run", "build", "--force"]);
+        assert!(
+            output.status.success(),
+            "run failed with experimentalSetup={enabled:?}:\n{}\n{}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
+        assert_eq!(fs::read_to_string(&lock_path).unwrap(), lock_contents);
+        fs::remove_file(&lock_path).unwrap();
+    }
 }
 
 #[test]
@@ -426,49 +494,46 @@ fn framework_inference_hashes() {
     insta::assert_snapshot!("framework_inference_task_hashes", contract);
 }
 
-#[test]
-fn lockfile_aware_hashes() {
+fn lockfile_aware_contract(pm_name: &str) -> String {
     let tempdir = tempfile::tempdir().unwrap();
-    setup_lockfile_fixture(tempdir.path(), "npm");
+    setup_lockfile_fixture(tempdir.path(), pm_name);
+    let (lockfile, dependency_patch) = match pm_name {
+        "npm" => ("package-lock.json", "package-lock.patch"),
+        "pnpm" => ("pnpm-lock.yaml", "pnpm-lock.patch"),
+        "yarn" | "berry" => ("yarn.lock", "yarn-lock.patch"),
+        "bun" => ("bun.lock", "bun-lock.patch"),
+        _ => unreachable!("unsupported package manager fixture"),
+    };
 
-    let a_initial = dry_json(
-        tempdir.path(),
-        &["run", "build", "--filter=a", "--dry=json"],
-    );
-    let b_initial = dry_json(
-        tempdir.path(),
-        &["run", "build", "--filter=b", "--dry=json"],
-    );
+    let run = |package| {
+        dry_json(
+            tempdir.path(),
+            &["run", "build", &format!("--filter={package}"), "--dry=json"],
+        )
+    };
+    let a_initial = run("a");
+    let b_initial = run("b");
+    apply_lockfile_patch(tempdir.path(), lockfile, dependency_patch);
+    let a_dep_bump = run("a");
+    let b_dep_bump = run("b");
+    apply_lockfile_patch(tempdir.path(), lockfile, "turbo-bump.patch");
+    let a_root_bump = run("a");
+    let b_root_bump = run("b");
 
-    apply_patch(tempdir.path(), "package-lock.json", "package-lock.patch");
-
-    let a_dep_bump = dry_json(
-        tempdir.path(),
-        &["run", "build", "--filter=a", "--dry=json"],
-    );
-    let b_dep_bump = dry_json(
-        tempdir.path(),
-        &["run", "build", "--filter=b", "--dry=json"],
-    );
-
-    apply_patch(tempdir.path(), "package-lock.json", "turbo-bump.patch");
-
-    let a_root_bump = dry_json(
-        tempdir.path(),
-        &["run", "build", "--filter=a", "--dry=json"],
-    );
-    let b_root_bump = dry_json(
-        tempdir.path(),
-        &["run", "build", "--filter=b", "--dry=json"],
-    );
-
-    let contract = labeled_contracts(&[
+    labeled_contracts(&[
         ("a-initial", task_hash_contract(&a_initial)),
         ("b-initial", task_hash_contract(&b_initial)),
         ("a-after-b-dep-bump", task_hash_contract(&a_dep_bump)),
         ("b-after-b-dep-bump", task_hash_contract(&b_dep_bump)),
         ("a-after-root-bump", task_hash_contract(&a_root_bump)),
         ("b-after-root-bump", task_hash_contract(&b_root_bump)),
-    ]);
-    insta::assert_snapshot!("lockfile_aware_npm_task_hashes", contract);
+    ])
+}
+
+#[test]
+fn lockfile_aware_hashes() {
+    let contract = ["npm", "pnpm", "yarn", "berry", "bun"]
+        .map(|pm_name| format!("[{pm_name}]\n{}", lockfile_aware_contract(pm_name)))
+        .join("\n\n");
+    insta::assert_snapshot!("lockfile_aware_task_hashes", contract);
 }

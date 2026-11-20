@@ -1,34 +1,35 @@
-const { resolve } = require("node:path");
+const js = require("@eslint/js");
+const parser = require("eslint-parser-oxc");
+const prettier = require("eslint-config-prettier/flat");
+const turbo = require("eslint-config-turbo/flat").default;
+const globals = require("globals");
 
-const project = resolve(process.cwd(), "tsconfig.json");
-
-/** @type {import("eslint").Linter.Config} */
-module.exports = {
-  extends: ["eslint:recommended", "prettier", "turbo"],
-  plugins: ["only-warn"],
-  globals: {
-    React: true,
-    JSX: true,
+/** @type {import("eslint").Linter.Config[]} */
+module.exports = [
+  {
+    ignores: [
+      "node_modules/**",
+      "dist/**",
+      "build/**",
+      ".next/**",
+      ".cache/**",
+      "public/**",
+      "**/gatsby-types.d.ts",
+      "next-env.d.ts",
+    ],
   },
-  env: {
-    node: true,
-  },
-  settings: {
-    "import/resolver": {
-      typescript: {
-        project,
-      },
+  js.configs.recommended,
+  {
+    files: ["**/*.{js,jsx,ts,tsx}"],
+    languageOptions: {
+      parser,
+      globals: { ...globals.node, ...globals.browser },
     },
   },
-  ignorePatterns: [
-    // Ignore dotfiles
-    ".*.js",
-    "node_modules/",
-    "dist/",
-  ],
-  overrides: [
-    {
-      files: ["*.js?(x)", "*.ts?(x)"],
-    },
-  ],
-};
+  {
+    files: ["**/*.js"],
+    languageOptions: { sourceType: "commonjs" },
+  },
+  ...turbo,
+  prettier,
+];

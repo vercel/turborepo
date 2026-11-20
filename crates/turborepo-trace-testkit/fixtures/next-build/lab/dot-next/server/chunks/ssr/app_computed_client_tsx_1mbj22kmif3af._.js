@@ -1,0 +1,3 @@
+module.exports=[95979,a=>{"use strict";var b=a.i(87924),c=a.i(72131);a.s(["ComputedClient",0,function(){let[a,d]=(0,c.useState)("");return(0,c.useEffect)(()=>{fetch(new URLSearchParams(window.location.search).get("endpoint")??"").then(a=>a.json()).then(a=>d(JSON.stringify(a)))},[]),(0,b.jsx)("p",{"data-testid":"computed",children:a})}])}];
+
+//# sourceMappingURL=app_computed_client_tsx_1mbj22kmif3af._.js.map

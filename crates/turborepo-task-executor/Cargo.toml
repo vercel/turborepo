@@ -1,7 +1,7 @@
 [package]
 name = "turborepo-task-executor"
 version = "0.1.0"
-edition = "2024"
+edition = { workspace = true }
 license = "MIT"
 
 [lints]
@@ -25,11 +25,11 @@ turborepo-run-cache = { path = "../turborepo-run-cache" }
 turborepo-ui = { path = "../turborepo-ui", features = ["tui"] }
 
 # Command execution
+shell-words = { workspace = true }
 turborepo-env = { workspace = true }
 turborepo-process = { workspace = true }
 
 # CI detection for output
-turborepo-ci = { workspace = true }
 
 # Run summary for TaskTracker
 turborepo-run-summary = { path = "../turborepo-run-summary" }
@@ -38,13 +38,11 @@ turborepo-run-summary = { path = "../turborepo-run-summary" }
 turborepo-telemetry = { path = "../turborepo-telemetry" }
 
 # Used for output types
-either = { workspace = true }
 
 # Async runtime
 tokio = { workspace = true }
 
 # Async utilities
-futures = { workspace = true }
 
 # Serialization (for config)
 serde = { workspace = true }
@@ -53,7 +51,6 @@ serde = { workspace = true }
 console = { workspace = true }
 
 # Error handling
-miette = { workspace = true }
 thiserror = { workspace = true }
 
 # Logging
@@ -67,7 +64,10 @@ chrono = { workspace = true }
 which = { workspace = true }
 
 # Case conversion for error codes
-convert_case = "0.6.0"
 
 [dev-dependencies]
 tempfile = { workspace = true }
+tokio = { workspace = true, features = ["test-util"] }
+turborepo-repository = { path = "../turborepo-repository", features = [
+  "test-util",
+] }

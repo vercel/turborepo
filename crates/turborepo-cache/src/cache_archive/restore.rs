@@ -8,9 +8,9 @@ use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPathBuf
 use crate::{
     CacheError,
     cache_archive::{
-        restore_directory::{CachedDirTree, restore_directory},
+        restore_directory::{CachedDirTree, restore_directory, validate_restore_path},
         restore_manifest::RestoreManifest,
-        restore_regular::restore_regular,
+        restore_regular::{RegularRestore, restore_regular},
         restore_symlink::{
             canonicalize_linkname, restore_symlink, restore_symlink_allow_missing_target,
         },
@@ -70,7 +70,7 @@ impl<'a> CacheReader<'a> {
         let mut new_manifest = RestoreManifest::new();
         anchor.create_dir_all()?;
 
-        let dir_cache = CachedDirTree::new(anchor.to_owned());
+        let dir_cache = CachedDirTree::new(anchor.to_owned())?;
         let mut tr = tar::Archive::new(&mut self.reader);
 
         Self::restore_entries(
@@ -96,26 +96,34 @@ impl<'a> CacheReader<'a> {
 
         for entry in tr.entries()? {
             let mut entry = entry?;
-            let entry_type = entry.header().entry_type();
             match restore_entry(&mut dir_cache, anchor, &mut entry, previous_manifest) {
                 Err(CacheError::LinkTargetDoesNotExist(_, _)) => {
                     symlinks.push(entry);
                 }
                 Err(e) => return Err(e),
-                Ok((restored_path, skipped)) => {
-                    if entry_type == tar::EntryType::Regular {
-                        let key = restored_path.as_str().to_owned();
-                        if skipped {
+                Ok((restored_path, regular)) => {
+                    let key = restored_path.to_unix().into_inner();
+                    match regular {
+                        Some(RegularRestore::Skipped) => {
                             if let Some(existing) =
                                 previous_manifest.and_then(|m| m.files.get(&key))
                             {
                                 new_manifest.order.push(key.clone());
                                 new_manifest.files.insert(key, *existing);
                             }
-                        } else {
+                        }
+                        Some(RegularRestore::Written(Some(metadata))) => {
+                            let _ = new_manifest.record_file_metadata(key, &metadata);
+                        }
+                        Some(RegularRestore::Written(None)) => {
                             let resolved = anchor.resolve(&restored_path);
                             let _ = new_manifest.record_file(key, &resolved);
                         }
+                        None => match entry.header().entry_type() {
+                            tar::EntryType::Directory => new_manifest.record_dir(key),
+                            tar::EntryType::Symlink => record_symlink(new_manifest, key, &entry)?,
+                            _ => {}
+                        },
                     }
                     restored.push(restored_path);
                 }
@@ -123,7 +131,7 @@ impl<'a> CacheReader<'a> {
         }
 
         let mut restored_symlinks =
-            Self::topologically_restore_symlinks(&mut dir_cache, anchor, &symlinks)?;
+            Self::topologically_restore_symlinks(&mut dir_cache, anchor, &symlinks, new_manifest)?;
         restored.append(&mut restored_symlinks);
         Ok(())
     }
@@ -132,6 +140,7 @@ impl<'a> CacheReader<'a> {
         dir_cache: &mut CachedDirTree,
         anchor: &AbsoluteSystemPath,
         symlinks: &[Entry<'_, T>],
+        new_manifest: &mut RestoreManifest,
     ) -> Result<Vec<AnchoredSystemPathBuf>, CacheError> {
         let mut graph = DiGraph::new();
         let mut entry_lookup = HashMap::new();
@@ -171,6 +180,7 @@ impl<'a> CacheReader<'a> {
                 continue;
             };
             let file = restore_symlink_allow_missing_target(dir_cache, anchor, entry)?;
+            record_symlink(new_manifest, file.to_unix().into_inner(), entry)?;
             restored.push(file);
         }
 
@@ -178,22 +188,22 @@ impl<'a> CacheReader<'a> {
     }
 }
 
-/// Returns `(path, skipped)` where `skipped` is true only for regular
-/// files that matched the manifest and were not rewritten.
+/// Returns the restored path, plus the outcome for regular files.
 fn restore_entry<T: Read>(
     dir_cache: &mut CachedDirTree,
     anchor: &AbsoluteSystemPath,
     entry: &mut Entry<T>,
     manifest: Option<&RestoreManifest>,
-) -> Result<(AnchoredSystemPathBuf, bool), CacheError> {
+) -> Result<(AnchoredSystemPathBuf, Option<RegularRestore>), CacheError> {
+    let processed_name = AnchoredSystemPathBuf::from_system_path(&entry.path()?)?;
+    validate_restore_path(&processed_name)?;
     let header = entry.header();
 
     match header.entry_type() {
-        tar::EntryType::Directory => {
-            restore_directory(dir_cache, anchor, entry).map(|p| (p, false))
-        }
-        tar::EntryType::Regular => restore_regular(dir_cache, anchor, entry, manifest),
-        tar::EntryType::Symlink => restore_symlink(dir_cache, anchor, entry).map(|p| (p, false)),
+        tar::EntryType::Directory => restore_directory(dir_cache, anchor, entry).map(|p| (p, None)),
+        tar::EntryType::Regular => restore_regular(dir_cache, anchor, entry, manifest)
+            .map(|(p, regular)| (p, Some(regular))),
+        tar::EntryType::Symlink => restore_symlink(dir_cache, anchor, entry).map(|p| (p, None)),
         ty => Err(CacheError::RestoreUnsupportedFileType(
             ty,
             Backtrace::capture(),
@@ -201,11 +211,31 @@ fn restore_entry<T: Read>(
     }
 }
 
+/// Records a symlink the restore just wrote, with the target it was written
+/// with, so the next fetch's fast path notices it being removed or retargeted.
+fn record_symlink<T: Read>(
+    manifest: &mut RestoreManifest,
+    key: String,
+    entry: &Entry<T>,
+) -> Result<(), CacheError> {
+    let target = entry
+        .link_name()?
+        .ok_or_else(|| CacheError::LinkTargetNotOnHeader(Backtrace::capture()))?;
+    let target = target.to_str().ok_or_else(|| {
+        CacheError::PathError(
+            turbopath::PathError::InvalidUnicode(target.to_string_lossy().to_string()),
+            Backtrace::capture(),
+        )
+    })?;
+    manifest.record_symlink(key, target);
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use std::{fs, fs::File, io::empty, path::Path};
 
-    use anyhow::Result;
+    use anyhow::{Context, Result};
     use tar::Header;
     use tempfile::{TempDir, tempdir};
     use test_case::test_case;
@@ -367,10 +397,6 @@ mod tests {
         buf
     }
 
-    // Expected output of the cache
-    #[derive(Debug)]
-    struct ExpectedOutput(Vec<AnchoredSystemPathBuf>);
-
     enum TarFile {
         File {
             body: Vec<u8>,
@@ -504,6 +530,131 @@ mod tests {
             .into_iter()
             .map(|item| AnchoredSystemPathBuf::try_from(Path::new(item)).unwrap())
             .collect()
+    }
+
+    #[test_case(".git"; "git_file")]
+    #[test_case(".git/hooks/post-checkout"; "hook")]
+    #[test_case("nested/.git/config"; "nested_repository")]
+    #[test_case(".GIT/hooks/post-checkout"; "uppercase")]
+    #[test_case("nested/.GiT/config"; "mixed_case")]
+    #[test_case(".g\u{200c}it/hooks/post-checkout"; "hfs_ignorable_character")]
+    #[cfg_attr(windows, test_case(".git./hooks/post-checkout"; "trailing_dot"))]
+    #[cfg_attr(windows, test_case(".git /hooks/post-checkout"; "trailing_space"))]
+    #[cfg_attr(windows, test_case(".git:payload"; "alternate_data_stream"))]
+    #[cfg_attr(windows, test_case("GIT~1/hooks/post-checkout"; "short_name"))]
+    fn restore_rejects_git_metadata_entries(path: &'static str) -> Result<()> {
+        for entry in [
+            RawTarEntry::File {
+                path,
+                body: b"malicious hook".to_vec(),
+            },
+            RawTarEntry::Directory { path },
+            // A missing target also exercises the deferred-symlink path.
+            RawTarEntry::Symlink {
+                link_path: path,
+                link_target: "missing",
+            },
+        ] {
+            let tar_bytes = generate_raw_tar(&[entry]);
+            let output_dir = tempdir()?;
+            let anchor = AbsoluteSystemPathBuf::try_from(output_dir.path())?;
+            let mut reader = CacheReader::from_reader(&tar_bytes[..], false)?;
+
+            let error = reader
+                .restore(&anchor, None)
+                .expect_err("Git metadata entry must be rejected");
+            assert!(
+                matches!(error, crate::CacheError::GitMetadataWrite(_, _))
+                    // The path parser already rejects some Windows aliases
+                    // before they reach the Git metadata check.
+                    || cfg!(windows) && matches!(error, crate::CacheError::PathError(_, _))
+            );
+            assert_eq!(fs::read_dir(output_dir.path())?.count(), 0);
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn restore_preserves_existing_git_metadata() -> Result<()> {
+        let output_dir = tempdir()?;
+        let anchor = AbsoluteSystemPathBuf::try_from(output_dir.path())?;
+        let hooks = output_dir.path().join(".git/hooks");
+        fs::create_dir_all(&hooks)?;
+        let hook = hooks.join("post-checkout");
+        fs::write(&hook, b"original hook")?;
+        let tar_bytes = generate_raw_tar(&[RawTarEntry::File {
+            path: ".git/hooks/post-checkout",
+            body: b"malicious hook".to_vec(),
+        }]);
+        let mut reader = CacheReader::from_reader(&tar_bytes[..], false)?;
+
+        assert!(matches!(
+            reader.restore(&anchor, None),
+            Err(crate::CacheError::GitMetadataWrite(_, _))
+        ));
+        assert_eq!(fs::read(&hook)?, b"original hook");
+        Ok(())
+    }
+
+    #[test]
+    fn restore_rejects_git_metadata_writes_through_archive_symlink() -> Result<()> {
+        for entry in [
+            RawTarEntry::File {
+                path: "alias/hooks/post-checkout",
+                body: b"malicious hook".to_vec(),
+            },
+            RawTarEntry::Directory {
+                path: "alias/hooks",
+            },
+            RawTarEntry::Symlink {
+                link_path: "alias/hooks/post-checkout",
+                link_target: "../../target",
+            },
+        ] {
+            let output_dir = tempdir()?;
+            let anchor = AbsoluteSystemPathBuf::try_from(output_dir.path())?;
+            fs::create_dir(output_dir.path().join(".git"))?;
+            fs::write(output_dir.path().join("target"), b"target")?;
+            let tar_bytes = generate_raw_tar(&[
+                RawTarEntry::Symlink {
+                    link_path: "alias",
+                    link_target: ".git",
+                },
+                entry,
+            ]);
+            let mut reader = CacheReader::from_reader(&tar_bytes[..], false)?;
+
+            assert!(matches!(
+                reader.restore(&anchor, None),
+                Err(crate::CacheError::GitMetadataWrite(_, _))
+            ));
+            // The symlink itself is harmless and must have been restored;
+            // rejection must happen at the subsequent write destination.
+            assert_eq!(
+                fs::read_link(output_dir.path().join("alias"))?,
+                Path::new(".git")
+            );
+            assert_eq!(fs::read_dir(output_dir.path().join(".git"))?.count(), 0);
+        }
+        Ok(())
+    }
+
+    #[test_case(".github/workflows/build.yml")]
+    #[test_case("dist/.gitignore")]
+    #[test_case("dist/.gitkeep")]
+    #[test_case("dist/file.git")]
+    fn restore_allows_non_metadata_git_names(path: &'static str) -> Result<()> {
+        let tar_bytes = generate_raw_tar(&[RawTarEntry::File {
+            path,
+            body: b"output".to_vec(),
+        }]);
+        let output_dir = tempdir()?;
+        let anchor = AbsoluteSystemPathBuf::try_from(output_dir.path())?;
+        let mut reader = CacheReader::from_reader(&tar_bytes[..], false)?;
+
+        reader.restore(&anchor, None)?;
+        assert_eq!(fs::read(output_dir.path().join(path))?, b"output");
+        Ok(())
     }
 
     #[test]
@@ -681,6 +832,36 @@ mod tests {
             );
         }
 
+        Ok(())
+    }
+
+    /// A manifest that disagrees with its archive about what an entry is
+    /// must not spare the archive's regular file from being written.
+    #[cfg(unix)]
+    #[test]
+    fn restore_writes_regular_file_recorded_as_symlink() -> Result<()> {
+        let repo_root = tempdir()?;
+        let anchor = AbsoluteSystemPath::from_std_path(repo_root.path())?;
+        anchor.join_component("a.txt").create_with_contents("a")?;
+        let x = anchor.join_component("x");
+        x.symlink_to_file("a.txt")?;
+        let previous = crate::cache_archive::RestoreManifest::from_disk(
+            anchor,
+            &[AnchoredSystemPathBuf::from_raw("x")?],
+        );
+        assert!(previous.file_matches("x", &x));
+
+        let tar = generate_raw_tar(&[RawTarEntry::File {
+            path: "x",
+            body: b"regular".to_vec(),
+        }]);
+        let (_, manifest) =
+            CacheReader::from_reader(&tar[..], false)?.restore(anchor, Some(&previous))?;
+
+        assert!(!x.symlink_metadata()?.is_symlink());
+        assert_eq!(fs::read(x.as_path())?, b"regular");
+        assert_eq!(fs::read(anchor.join_component("a.txt").as_path())?, b"a");
+        assert!(!manifest.files["x"].is_symlink);
         Ok(())
     }
 
@@ -969,7 +1150,7 @@ mod tests {
                     },
                     TarFile::Symlink {
                         link_path: AnchoredSystemPathBuf::from_raw("folder/symlink").unwrap(),
-                        link_target: AnchoredSystemPathBuf::from_raw("../").unwrap(),
+                        link_target: AnchoredSystemPathBuf::from_raw("..").unwrap(),
                     },
                     TarFile::File {
                         path: AnchoredSystemPathBuf::from_raw("folder/symlink/folder-sibling")
@@ -983,7 +1164,7 @@ mod tests {
                     },
                     TarFile::Symlink {
                         link_path: AnchoredSystemPathBuf::from_raw("folder/symlink").unwrap(),
-                        link_target: AnchoredSystemPathBuf::from_raw("../").unwrap(),
+                        link_target: AnchoredSystemPathBuf::from_raw("..").unwrap(),
                     },
                     TarFile::File {
                         path: AnchoredSystemPathBuf::from_raw("folder/symlink/folder-sibling")
@@ -995,16 +1176,11 @@ mod tests {
                         body: b"folder-sibling".to_vec(),
                     },
                 ],
-                #[cfg(unix)]
                 expected_output: Ok(into_anchored_system_path_vec(vec![
                     "folder",
                     "folder/symlink",
                     "folder/symlink/folder-sibling",
                 ])),
-                #[cfg(windows)]
-                expected_output: Err("IO error: The filename, directory name, or volume label \
-                                      syntax is incorrect. (os error 123)"
-                    .to_string()),
             },
             TestCase {
                 name: "pathological symlinks",
@@ -1076,7 +1252,12 @@ mod tests {
                 #[cfg(unix)]
                 expected_output: Err("IO error: Is a directory (os error 21)".to_string()),
                 #[cfg(windows)]
-                expected_output: Err("IO error: Access is denied. (os error 5)".to_string()),
+                expected_output: Err(format!(
+                    "IO error: {}",
+                    std::io::Error::from_raw_os_error(
+                        windows_sys::Win32::Foundation::ERROR_ACCESS_DENIED as i32
+                    )
+                )),
             },
             TestCase {
                 name: "symlink cycle",
@@ -1236,42 +1417,55 @@ mod tests {
             for test in &tests {
                 debug!("test: {}", test.name);
                 let input_dir = tempdir()?;
-                let archive_path = generate_tar(&input_dir, &test.input_files)?;
+                let archive_path =
+                    generate_tar(&input_dir, &test.input_files).with_context(|| {
+                        format!("failed to generate archive for test: {}", test.name)
+                    })?;
                 let output_dir = tempdir()?;
                 let output_dir_path = output_dir.path().to_string_lossy();
                 let anchor = AbsoluteSystemPath::new(&output_dir_path)?;
 
                 let archive_path = if is_compressed {
-                    compress_tar(&archive_path)?
+                    compress_tar(&archive_path).with_context(|| {
+                        format!("failed to compress archive for test: {}", test.name)
+                    })?
                 } else {
                     archive_path
                 };
 
-                let mut cache_reader = CacheReader::open(&archive_path)?;
+                let mut cache_reader = CacheReader::open(&archive_path)
+                    .with_context(|| format!("failed to open archive for test: {}", test.name))?;
 
                 match (
                     cache_reader.restore(anchor, None).map(|(f, _)| f),
                     &test.expected_output,
                 ) {
                     (Ok(restored_files), Err(expected_error)) => {
-                        panic!("expected error: {expected_error:?}, received {restored_files:?}");
+                        panic!(
+                            "test {:?} expected error: {expected_error:?}, received \
+                             {restored_files:?}",
+                            test.name
+                        );
                     }
                     (Ok(restored_files), Ok(expected_files)) => {
-                        assert_eq!(&restored_files, expected_files);
+                        assert_eq!(&restored_files, expected_files, "test: {:?}", test.name);
                     }
                     (Err(err), Err(expected_error)) => {
-                        assert_eq!(&err.to_string(), expected_error);
+                        let actual_error = err.to_string();
+                        assert_eq!(&actual_error, expected_error, "test: {:?}", test.name);
                         continue;
                     }
                     (Err(err), Ok(_)) => {
-                        panic!("unexpected error: {err:?}");
+                        panic!("test {:?} returned an unexpected error: {err:?}", test.name);
                     }
                 };
 
                 let expected_files = &test.expected_files;
 
                 for expected_file in expected_files {
-                    assert_file_exists(anchor, expected_file)?;
+                    assert_file_exists(anchor, expected_file).with_context(|| {
+                        format!("failed to verify restored file for test: {}", test.name)
+                    })?;
                 }
             }
         }
@@ -1305,6 +1499,44 @@ mod tests {
 
     mod absolute_path_tests {
         use super::*;
+
+        #[cfg(windows)]
+        #[test_case::test_case("C:/Windows/Temp/evil.txt", tar::EntryType::Regular ; "file")]
+        #[test_case::test_case("C:/Windows/Temp/evil/", tar::EntryType::Directory ; "directory")]
+        #[test_case::test_case("C:/", tar::EntryType::Directory ; "drive root")]
+        #[test_case::test_case("C:evil.txt", tar::EntryType::Regular ; "drive-relative file")]
+        #[test_case::test_case("C:evil/", tar::EntryType::Directory ; "drive-relative directory")]
+        fn test_windows_drive_prefixed_path_rejected(
+            path: &str,
+            entry_type: tar::EntryType,
+        ) -> Result<()> {
+            // Bypass tar::Builder's path validation to model an untrusted artifact.
+            let mut tar_bytes = generate_raw_tar_with_unsafe_path(path, b"");
+            let mut header = Header::from_byte_slice(&tar_bytes[..512]).clone();
+            header.set_entry_type(entry_type);
+            header.set_cksum();
+            tar_bytes[..512].copy_from_slice(header.as_bytes());
+
+            let mut reader = CacheReader::from_reader(&tar_bytes[..], false)?;
+            let output_dir = tempdir()?;
+            let output_dir_path = output_dir.path().to_string_lossy().into_owned();
+            let anchor = AbsoluteSystemPath::new(&output_dir_path)?;
+
+            let result = reader.restore(anchor, None);
+            assert!(
+                matches!(
+                    result,
+                    Err(crate::CacheError::PathError(
+                        turbopath::PathError::NotRelative(_),
+                        _
+                    ))
+                ),
+                "drive-prefixed path {path} should be rejected before restoration, got: {result:?}"
+            );
+            assert_eq!(fs::read_dir(output_dir.path())?.count(), 0);
+
+            Ok(())
+        }
 
         #[test]
         fn test_absolute_path_file_rejected() -> Result<()> {
@@ -2354,6 +2586,49 @@ mod tests {
         Ok(())
     }
 
+    #[cfg(any(unix, windows))]
+    #[test]
+    fn test_archive_directory_symlink_is_traversable() -> Result<()> {
+        let archive = generate_raw_tar(&[
+            RawTarEntry::Directory {
+                path: "actual-dist",
+            },
+            RawTarEntry::Symlink {
+                link_path: "dist",
+                link_target: "actual-dist",
+            },
+            RawTarEntry::File {
+                path: "dist/index.js",
+                body: b"content".to_vec(),
+            },
+        ]);
+
+        let output_dir = tempdir()?;
+        let output_dir_path = output_dir.path().to_string_lossy();
+        let anchor = AbsoluteSystemPath::new(&output_dir_path)?;
+        let mut cache_reader = CacheReader::from_reader(&archive[..], false)?;
+
+        cache_reader.restore(anchor, None)?;
+
+        assert!(
+            anchor
+                .join_component("dist")
+                .symlink_metadata()?
+                .is_symlink()
+        );
+        assert_eq!(
+            fs::read(
+                anchor
+                    .join_component("dist")
+                    .join_component("index.js")
+                    .as_path()
+            )?,
+            b"content"
+        );
+
+        Ok(())
+    }
+
     // Regression tests for https://github.com/vercel/turborepo/issues/8476
     //
     // When a symlink exists on disk at a path where the tar expects a real
@@ -2363,6 +2638,138 @@ mod tests {
     #[cfg(unix)]
     mod pre_existing_symlink_tests {
         use super::*;
+
+        #[test]
+        fn test_nested_archive_symlinks_use_descriptor_resolved_locations() -> Result<()> {
+            let archive = generate_raw_tar(&[
+                RawTarEntry::Directory { path: "real" },
+                RawTarEntry::Directory { path: "other" },
+                RawTarEntry::Symlink {
+                    link_path: "a",
+                    link_target: "real",
+                },
+                RawTarEntry::Symlink {
+                    link_path: "a/b",
+                    link_target: "../other",
+                },
+                RawTarEntry::File {
+                    path: "a/b/file.txt",
+                    body: b"content".to_vec(),
+                },
+            ]);
+
+            let output_dir = tempdir()?;
+            let output_dir_path = output_dir.path().to_string_lossy();
+            let anchor = AbsoluteSystemPath::new(&output_dir_path)?;
+            let mut cache_reader = CacheReader::from_reader(&archive[..], false)?;
+
+            cache_reader.restore(anchor, None)?;
+
+            assert!(anchor.join_component("a").symlink_metadata()?.is_symlink());
+            assert!(
+                anchor
+                    .join_component("real")
+                    .join_component("b")
+                    .symlink_metadata()?
+                    .is_symlink()
+            );
+            assert_eq!(
+                fs::read(
+                    anchor
+                        .join_component("other")
+                        .join_component("file.txt")
+                        .as_path()
+                )?,
+                b"content"
+            );
+
+            Ok(())
+        }
+
+        #[test]
+        fn test_nested_archive_symlink_target_uses_physical_parent() -> Result<()> {
+            let archive = generate_raw_tar(&[
+                RawTarEntry::Directory { path: "p" },
+                RawTarEntry::Directory { path: "p/q" },
+                RawTarEntry::Directory { path: "p/q/y" },
+                RawTarEntry::Directory { path: "x" },
+                RawTarEntry::Directory { path: "y" },
+                RawTarEntry::Symlink {
+                    link_path: "p/q/a",
+                    link_target: "../../x",
+                },
+                RawTarEntry::Symlink {
+                    link_path: "p/q/a/b",
+                    link_target: "../y",
+                },
+                RawTarEntry::File {
+                    path: "p/q/a/b/file.txt",
+                    body: b"content".to_vec(),
+                },
+            ]);
+
+            let output_dir = tempdir()?;
+            let output_dir_path = output_dir.path().to_string_lossy();
+            let anchor = AbsoluteSystemPath::new(&output_dir_path)?;
+            let mut cache_reader = CacheReader::from_reader(&archive[..], false)?;
+
+            cache_reader.restore(anchor, None)?;
+
+            assert_eq!(
+                fs::read(
+                    anchor
+                        .join_component("y")
+                        .join_component("file.txt")
+                        .as_path()
+                )?,
+                b"content"
+            );
+            assert!(
+                !anchor
+                    .join_component("p")
+                    .join_component("q")
+                    .join_component("y")
+                    .join_component("file.txt")
+                    .try_exists()?
+            );
+
+            Ok(())
+        }
+
+        #[test]
+        fn test_regular_entry_invalidates_restored_symlink() -> Result<()> {
+            let archive = generate_raw_tar(&[
+                RawTarEntry::Directory { path: "target" },
+                RawTarEntry::Symlink {
+                    link_path: "a",
+                    link_target: "target",
+                },
+                RawTarEntry::File {
+                    path: "a",
+                    body: b"regular".to_vec(),
+                },
+                RawTarEntry::File {
+                    path: "a/child.txt",
+                    body: b"must not be redirected".to_vec(),
+                },
+            ]);
+
+            let output_dir = tempdir()?;
+            let output_dir_path = output_dir.path().to_string_lossy();
+            let anchor = AbsoluteSystemPath::new(&output_dir_path)?;
+            let mut cache_reader = CacheReader::from_reader(&archive[..], false)?;
+
+            assert!(cache_reader.restore(anchor, None).is_err());
+            assert_eq!(fs::read(anchor.join_component("a").as_path())?, b"regular");
+            assert!(
+                !anchor
+                    .join_component("target")
+                    .join_component("child.txt")
+                    .try_exists()?
+            );
+
+            Ok(())
+        }
 
         #[test]
         fn test_pre_existing_symlink_does_not_overwrite_target() -> Result<()> {

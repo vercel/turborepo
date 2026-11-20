@@ -21,18 +21,22 @@
 use biome_deserialize_macros::Deserializable;
 use schemars::JsonSchema;
 use serde::Serialize;
-use struct_iterable::Iterable;
 use ts_rs::TS;
 
 /// Opt into breaking changes prior to major releases, experimental features,
 /// and beta features.
-#[derive(
-    Serialize, Default, Debug, Copy, Clone, Iterable, Deserializable, PartialEq, Eq, JsonSchema,
-)]
+#[derive(Serialize, Default, Debug, Copy, Clone, Deserializable, PartialEq, Eq, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 #[schemars(rename_all = "camelCase")]
 #[deserializable()]
 pub struct FutureFlags {
+    /// Include file executable permissions in task hashes. Disabled by default.
+    /// Enabling this flag changes all task hashes. On Unix, any executable bit
+    /// marks a regular file as executable. On Windows, files are
+    /// non-executable. Symlink permissions and other permission bits do not
+    /// affect hashes.
+    #[serde(default)]
+    pub hash_file_permissions: bool,
     /// When using `outputLogs: "errors-only"`, show task hashes when tasks
     /// complete successfully. This provides visibility into which tasks are
     /// running without showing full output logs.
@@ -54,9 +58,18 @@ pub struct FutureFlags {
     /// Use task-level `inputs` globs to determine which tasks are affected by
     /// changed files when running with `--affected`. When enabled, only tasks
     /// whose declared inputs match the changed files are selected, rather than
-    /// selecting all tasks in changed packages.
+    /// selecting all tasks in changed packages. `turbo query`'s
+    /// `affectedPackages` reports the owners of affected tasks, including
+    /// dependents connected only by explicit task dependencies. `turbo prune`
+    /// retains task dependency owners and their package dependencies, including
+    /// across enabled toolchains, in addition to its package-based closure.
     #[serde(default)]
     pub affected_using_task_inputs: bool,
+    /// When GitHub Actions reports a base branch that is not available as a
+    /// local ref, fall back to `origin/<branch>`. This supports detached
+    /// checkouts where only remote-tracking refs are present.
+    #[serde(default)]
+    pub github_actions_remote_base_ref_fallback: bool,
     /// Use task-level `inputs` globs to determine which tasks to re-run when
     /// files change in `turbo watch`. When enabled, only tasks whose declared
     /// inputs match the changed files are re-executed, rather than re-running
@@ -74,6 +87,13 @@ pub struct FutureFlags {
     /// traverse the task graph in addition to the package graph.
     #[serde(default)]
     pub filter_using_tasks: bool,
+    /// Select requested task entrypoints according to whether the task resolves
+    /// a command in the repository. When any package can run a requested task,
+    /// packages without a command are not used as entrypoints. Tasks with no
+    /// command anywhere remain available for graph-only orchestration, and
+    /// missing tasks reached as dependencies remain in the Task Graph.
+    #[serde(default)]
+    pub strict_task_entrypoint_selection: bool,
     /// Move global configuration keys (like `globalDependencies`, `ui`,
     /// `envMode`, etc.) under a top-level `global` key for clarity.
     ///
@@ -82,17 +102,69 @@ pub struct FutureFlags {
     /// `globalPassThroughEnv` becomes `global.passThroughEnv`.
     #[serde(default)]
     pub global_configuration: bool,
-    /// Enable incremental task caching. When enabled, Turborepo persists
-    /// tool-managed incremental build artifacts (e.g. `.tsbuildinfo`) across
-    /// runs via the remote cache, restoring them before execution on cache
-    /// misses to speed up rebuilds.
+    /// Treat the crates of a Cargo workspace as Turborepo packages.
+    ///
+    /// When enabled, Rust crates are discovered via `cargo metadata` and
+    /// participate in the package graph: they resolve in `--filter`
+    /// expressions, propagate `--affected`, and appear in `turbo query`.
+    /// Filtered builds execute each selected crate. Unfiltered builds prefer
+    /// entrypoints, falling back to libraries when no entrypoints exist.
+    /// Entrypoints also expose `run` and `dev`. The `test`, `check`, `lint`,
+    /// and `format` tasks are selectable per crate with `--filter`. An
+    /// unfiltered run executes one workspace-wide
+    /// Cargo verification command; filtered runs use the selected crates,
+    /// or the workspace command when the workspace package is selected
+    /// directly.
+    ///
+    /// All crates implicitly register `build` and the verification tasks;
+    /// entrypoints with one binary also register `run` and `dev`. The workspace
+    /// package registers the verification tasks. Normal task definitions
+    /// configure or override these defaults, and package configuration can
+    /// exclude them with `extends: false`.
+    ///
+    /// Task caching uses Cargo-derived inputs and caches entrypoint build
+    /// deliverables. Library builds and formatting default to uncached. This
+    /// feature is experimental.
+    #[serde(default)]
+    pub experimental_cargo_workspaces: bool,
+    /// Treat the members of a uv workspace as Turborepo packages.
+    ///
+    /// When enabled, Python packages are discovered from the root
+    /// `pyproject.toml`'s `[tool.uv.workspace]` members and participate in
+    /// the package graph, resolve in `--filter` expressions, and appear in
+    /// `turbo query`. uv is the only supported Python package manager. This
+    /// feature is experimental.
+    #[serde(default)]
+    pub experimental_python_workspaces: bool,
+    /// Treat the modules listed in a `go.work` file as Turborepo packages.
+    ///
+    /// When enabled, Go modules are discovered from the repository-root
+    /// `go.work` via the Go toolchain and participate in the package graph:
+    /// they resolve in `--filter` expressions, propagate `--affected`, and
+    /// appear in `turbo query`. This feature is experimental.
+    #[serde(default)]
+    pub experimental_go_workspaces: bool,
+    /// Allow task definitions to declare the command they run via the
+    /// `command` field, replacing the toolchain's own resolution
+    /// (package.json scripts, Cargo verb tables). Using `command` without
+    /// this flag is a hard error — silently ignoring it would change what
+    /// executes.
     #[serde(default)]
     #[schemars(skip)]
-    pub incremental_tasks: bool,
+    pub experimental_task_command: bool,
+    /// Opt into experimental setup features that are still in progress.
+    ///
+    /// Setup invocation requires this flag; help is available without it.
+    /// The `turbo.lock` format is unstable. Only parsing and help are
+    /// implemented; provisioning, planning, and checking return a
+    /// diagnostic. Setup does not interpret `turbo.lock` or change run or
+    /// hash behavior.
+    #[serde(default)]
+    pub experimental_setup: bool,
 }
 
-// Manual TS impl because #[derive(TS)] conflicts with the Iterable and
-// Deserializable derives. Each new field must be added to inline(),
+// Manual TS impl because #[derive(TS)] conflicts with the Deserializable
+// derive. Each new field must be added to inline(),
 // inline_flattened(), decl(), and decl_concrete() below.
 impl TS for FutureFlags {
     type WithoutGenerics = Self;
@@ -104,33 +176,47 @@ impl TS for FutureFlags {
 
     fn inline() -> String {
         "{ errorsOnlyShowHash?: boolean, experimentalObservability?: boolean, longerSignatureKey?: \
-         boolean, affectedUsingTaskInputs?: boolean, watchUsingTaskInputs?: boolean, \
-         pruneIncludesGlobalFiles?: boolean, filterUsingTasks?: boolean, globalConfiguration?: \
-         boolean }"
+         boolean, affectedUsingTaskInputs?: boolean, githubActionsRemoteBaseRefFallback?: boolean, \
+         watchUsingTaskInputs?: boolean, pruneIncludesGlobalFiles?: boolean, filterUsingTasks?: \
+         boolean, strictTaskEntrypointSelection?: boolean, globalConfiguration?: boolean, \
+         experimentalCargoWorkspaces?: boolean, experimentalPythonWorkspaces?: boolean, \
+         experimentalGoWorkspaces?: boolean, experimentalTaskCommand?: boolean, \
+         experimentalSetup?: boolean, hashFilePermissions?: boolean }"
             .to_string()
     }
 
     fn inline_flattened() -> String {
         "{ errorsOnlyShowHash?: boolean, experimentalObservability?: boolean, longerSignatureKey?: \
-         boolean, affectedUsingTaskInputs?: boolean, watchUsingTaskInputs?: boolean, \
-         pruneIncludesGlobalFiles?: boolean, filterUsingTasks?: boolean, globalConfiguration?: \
-         boolean }"
+         boolean, affectedUsingTaskInputs?: boolean, githubActionsRemoteBaseRefFallback?: boolean, \
+         watchUsingTaskInputs?: boolean, pruneIncludesGlobalFiles?: boolean, filterUsingTasks?: \
+         boolean, strictTaskEntrypointSelection?: boolean, globalConfiguration?: boolean, \
+         experimentalCargoWorkspaces?: boolean, experimentalPythonWorkspaces?: boolean, \
+         experimentalGoWorkspaces?: boolean, experimentalTaskCommand?: boolean, \
+         experimentalSetup?: boolean, hashFilePermissions?: boolean }"
             .to_string()
     }
 
     fn decl() -> String {
         "type FutureFlags = { errorsOnlyShowHash?: boolean, experimentalObservability?: boolean, \
          longerSignatureKey?: boolean, affectedUsingTaskInputs?: boolean, watchUsingTaskInputs?: \
-         boolean, pruneIncludesGlobalFiles?: boolean, filterUsingTasks?: boolean, \
-         globalConfiguration?: boolean };"
+         boolean, githubActionsRemoteBaseRefFallback?: boolean, pruneIncludesGlobalFiles?: \
+         boolean, filterUsingTasks?: boolean, strictTaskEntrypointSelection?: boolean, \
+         globalConfiguration?: boolean, experimentalCargoWorkspaces?: boolean, \
+         experimentalPythonWorkspaces?: boolean, experimentalGoWorkspaces?: boolean, \
+         experimentalTaskCommand?: boolean, experimentalSetup?: boolean, hashFilePermissions?: \
+         boolean };"
             .to_string()
     }
 
     fn decl_concrete() -> String {
         "type FutureFlags = { errorsOnlyShowHash?: boolean, experimentalObservability?: boolean, \
          longerSignatureKey?: boolean, affectedUsingTaskInputs?: boolean, watchUsingTaskInputs?: \
-         boolean, pruneIncludesGlobalFiles?: boolean, filterUsingTasks?: boolean, \
-         globalConfiguration?: boolean };"
+         boolean, githubActionsRemoteBaseRefFallback?: boolean, pruneIncludesGlobalFiles?: \
+         boolean, filterUsingTasks?: boolean, strictTaskEntrypointSelection?: boolean, \
+         globalConfiguration?: boolean, experimentalCargoWorkspaces?: boolean, \
+         experimentalPythonWorkspaces?: boolean, experimentalGoWorkspaces?: boolean, \
+         experimentalTaskCommand?: boolean, experimentalSetup?: boolean, hashFilePermissions?: \
+         boolean };"
             .to_string()
     }
 
@@ -139,9 +225,45 @@ impl TS for FutureFlags {
     }
 }
 
-impl FutureFlags {
-    /// Create a new FutureFlags
-    pub fn new() -> Self {
-        Self::default()
+impl FutureFlags {}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn hash_file_permissions_defaults_to_false_and_parses() {
+        assert!(!FutureFlags::default().hash_file_permissions);
+        for (json, expected) in [
+            (r#"{}"#, false),
+            (r#"{"futureFlags":{}}"#, false),
+            (r#"{"futureFlags":{"hashFilePermissions":false}}"#, false),
+            (r#"{"futureFlags":{"hashFilePermissions":true}}"#, true),
+        ] {
+            let raw = crate::RawRootTurboJson::parse(json, "turbo.json").unwrap();
+            assert_eq!(
+                raw.future_flags
+                    .as_ref()
+                    .map(|flags| flags.as_inner().hash_file_permissions)
+                    .unwrap_or_default(),
+                expected
+            );
+            let raw: crate::RawTurboJson = raw.try_into().unwrap();
+            let config = crate::TurboJson::try_from(raw).unwrap();
+            assert_eq!(config.future_flags.hash_file_permissions, expected);
+        }
+    }
+
+    #[test]
+    fn future_flags_are_optional_in_all_typescript_forms() {
+        for typescript in [
+            FutureFlags::inline(),
+            FutureFlags::inline_flattened(),
+            FutureFlags::decl(),
+            FutureFlags::decl_concrete(),
+        ] {
+            assert!(typescript.contains("experimentalSetup?: boolean"));
+            assert!(typescript.contains("hashFilePermissions?: boolean"));
+        }
     }
 }

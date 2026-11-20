@@ -11,10 +11,12 @@
 # 7. Publish the VS Code extension from the release tag
 # 8. Alias versioned docs (e.g., v2-5-4.turborepo.dev)
 # 9. Create a release branch and open a PR, even if VS Code publishing fails
-# 10. On failure, cleanup the staging branch and release tag automatically
+# 10. On failure before npm publishing starts, cleanup the staging branch
 #
 # Canary releases run on an hourly schedule.
 # Manual releases are triggered via workflow_dispatch.
+# GitHub's manual-run branch selector cannot be restricted, so entry jobs are
+# gated to refs/heads/main. All release jobs depend on stage succeeding.
 #
 # RECOVERY: If a release fails and cleanup doesn't work, use the
 # 'clear-staging-branch' input to manually clear the stale staging branch.
@@ -23,6 +25,7 @@ name: Release
 
 env:
   CARGO_PROFILE_RELEASE_LTO: true
+  TURBO_TELEMETRY_MESSAGE_DISABLED: "1"
   HUSKY: "0"
   RELEASE_TURBO_CLI: true # TODO: do we need this?
 
@@ -108,7 +111,7 @@ jobs:
   check-skip:
     name: "Check Skip Conditions"
     runs-on: ubuntu-24.04
-    if: ${{ github.event_name == 'schedule' }}
+    if: ${{ github.ref == 'refs/heads/main' && github.event_name == 'schedule' }}
     outputs:
       should_skip: ${{ steps.check.outputs.should_skip }}
     steps:
@@ -122,7 +125,7 @@ jobs:
           # Uses the GitHub API instead of a full clone to avoid fetching entire repo history.
           LAST_VERSION_COMMIT=$(gh api "repos/${{ github.repository }}/commits?path=version.txt&per_page=1" --jq '.[0].sha')
           CHANGES=$(gh api "repos/${{ github.repository }}/compare/${LAST_VERSION_COMMIT}...${{ github.sha }}" \
-            --jq '[.files[].filename | select(startswith("crates/") or startswith("packages/") or startswith("cli/"))] | length')
+            --jq '[.files[].filename | select(startswith("crates/") or startswith("packages/"))] | length')
 
           if [ "$CHANGES" = "0" ]; then
             echo "Skipping: No relevant changes since last release (${LAST_VERSION_COMMIT:0:12})"
@@ -133,7 +136,7 @@ jobs:
 
   stage:
     needs: [check-skip]
-    if: ${{ always() && (github.event_name == 'workflow_dispatch' || needs.check-skip.outputs.should_skip != 'true') }}
+    if: ${{ always() && github.ref == 'refs/heads/main' && (github.event_name == 'workflow_dispatch' || needs.check-skip.outputs.should_skip != 'true') }}
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     permissions:
@@ -144,13 +147,7 @@ jobs:
       version: ${{ steps.version.outputs.version }}
       previous-tag: ${{ steps.previous-tag.outputs.tag }}
     steps:
-      - name: Ensure release runs from default branch
-        if: ${{ github.ref_name != github.event.repository.default_branch }}
-        run: |
-          echo "::error::Release workflow must run from the default branch."
-          exit 1
-
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           ref: ${{ inputs.sha || github.sha }}
           filter: blob:none
@@ -166,9 +163,8 @@ jobs:
             exit 1
           fi
 
-      - uses: ./.github/actions/setup-node
-        with:
-          enable-corepack: false
+      - name: Setup Node
+        uses: ./.github/actions/setup-node
 
       - name: Get base SHA
         id: base-sha
@@ -204,6 +200,9 @@ jobs:
           echo "tag=$PREV_TAG" >> $GITHUB_OUTPUT
           echo "Previous tag: $PREV_TAG"
 
+      - name: Build release tool
+        run: pnpm --filter @turbo/releaser build
+
       - name: Clear stale staging branch (if requested)
         if: ${{ inputs.clear-staging-branch }}
         env:
@@ -215,7 +214,11 @@ jobs:
           echo ""
 
           # Calculate what version we're about to release so we know which staging branch to delete
-          ./scripts/version.js "$INCREMENT" "$TAG_OVERRIDE"
+          VERSION_ARGS=(--version-path version.txt --increment "$INCREMENT")
+          if [ -n "$TAG_OVERRIDE" ]; then
+            VERSION_ARGS+=(--tag-override "$TAG_OVERRIDE")
+          fi
+          packages/turbo-releaser/dist/index.js version "${VERSION_ARGS[@]}"
           VERSION=$(head -n 1 version.txt)
 
           if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.]+)?$ ]]; then
@@ -248,7 +251,11 @@ jobs:
             exit 1
           fi
 
-          ./scripts/version.js "$INCREMENT" "$TAG_OVERRIDE"
+          VERSION_ARGS=(--version-path version.txt --increment "$INCREMENT")
+          if [ -n "$TAG_OVERRIDE" ]; then
+            VERSION_ARGS+=(--tag-override "$TAG_OVERRIDE")
+          fi
+          packages/turbo-releaser/dist/index.js version "${VERSION_ARGS[@]}"
           VERSION=$(head -n 1 version.txt)
 
           if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.]+)?$ ]]; then
@@ -273,15 +280,18 @@ jobs:
           cat version.txt
 
       - name: Prepare stage branch
-        run: |
-          cd cli && make prepare-stage-release
+        run: packages/turbo-releaser/dist/index.js prepare-stage --repo-root . --version-path version.txt
 
       - name: Commit stage branch
         id: stage
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          cd cli && make commit-stage-release
+          VERSION=$(head -n 1 version.txt)
+          node scripts/create-github-api-commit.mjs \
+            --branch "staging-${VERSION}" \
+            --message "publish ${VERSION} to registry" \
+            --all-tracked
           echo "stage-branch=$(git branch --show-current)" >> $GITHUB_OUTPUT
 
   # TODO: Re-enable Rust unit tests once flakiness is resolved.
@@ -292,7 +302,7 @@ jobs:
   #   needs: [stage]
   #   if: ${{ always() && needs.stage.result == 'success' }}
   #   steps:
-  #     - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+  #     - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
   #       with:
   #         ref: ${{ needs.stage.outputs.stage-branch }}
   #
@@ -318,19 +328,18 @@ jobs:
     needs: [stage]
     if: ${{ always() && needs.stage.result == 'success' }}
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           ref: ${{ needs.stage.outputs.stage-branch }}
           filter: blob:none
           persist-credentials: false
 
-      - name: Setup Environment
-        uses: ./.github/actions/setup-environment
+      - name: Setup Node
+        uses: ./.github/actions/setup-node
         with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          rust: "false"
-          capnproto: "false"
-          node-extra-flags: "--no-frozen-lockfile"
+          extra-flags: "--no-frozen-lockfile"
+        env:
+          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: 1
 
       - name: Install Bun
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
@@ -340,20 +349,25 @@ jobs:
         with:
           turbo-version: ${{ inputs.ci-tag-override || '' }}
 
+      - name: Install managed tools
+        run: turbo setup --tools-only
+
       - name: Run JS Package Tests
-        run: turbo run check-types test --filter="./packages/*" --filter="!turborepo-repository" --color
+        run: turbo run check-types test --filter="./packages/*" --filter="!@turbo/repository" --color
 
   build-rust:
     name: "Build Rust"
+    # Keep Apple credentials only in this environment, restricted to branch main.
+    environment: "Apple code signing (main-only)"
     needs: [stage]
     if: ${{ always() && needs.stage.result == 'success' }}
     strategy:
       fail-fast: false
       matrix:
         settings:
-          - host: macos-14
+          - host: macos-15-xlarge
             target: "x86_64-apple-darwin"
-          - host: macos-14
+          - host: macos-15-xlarge
             target: "aarch64-apple-darwin"
           - host: ubuntu-24.04
             target: "x86_64-unknown-linux-musl"
@@ -370,11 +384,15 @@ jobs:
     timeout-minutes: 45
     steps:
       - name: Checkout repo
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           ref: ${{ needs.stage.outputs.stage-branch }}
           filter: blob:none
           persist-credentials: false
+
+      - name: Setup Homebrew dependencies
+        if: runner.os == 'macOS'
+        run: brew install bash capnp
 
       - name: Setup Protoc
         uses: ./.github/actions/setup-protoc
@@ -383,6 +401,7 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Setup capnproto
+        if: runner.os != 'macOS'
         uses: ./.github/actions/setup-capnproto
 
       - name: Rust Setup
@@ -400,6 +419,11 @@ jobs:
       - name: Build Setup
         if: ${{ matrix.settings.setup }}
         run: ${{ matrix.settings.setup }}
+
+      - name: Test Windows standalone installer
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: ./scripts/install.windows.test.ps1
 
       - name: Build
         run: ${{ matrix.settings.rust-build-env }} cargo build --profile release-turborepo -p turbo --target ${{ matrix.settings.target }}
@@ -498,10 +522,49 @@ jobs:
         run: rm -f "${APPLE_CERT_PATH:-}" "${APPLE_API_KEY_PATH:-}"
 
       - name: Upload Artifacts
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: turbo-${{ matrix.settings.target }}
           path: target/${{ matrix.settings.target }}/release-turborepo/turbo*
+
+  standalone-archives:
+    name: "Package Standalone Archives"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    needs: [stage, build-rust]
+    if: ${{ always() && needs.stage.result == 'success' && needs.build-rust.result == 'success' }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ needs.stage.outputs.stage-branch }}
+          filter: blob:none
+          persist-credentials: false
+
+      - name: Setup Node
+        uses: ./.github/actions/setup-node
+        with:
+          package-install: false
+
+      - name: Download Rust artifacts
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: turbo-*
+          path: rust-artifacts
+
+      - name: Test standalone archive layout and POSIX installer
+        run: node --test scripts/package-standalone-archives.test.mjs scripts/install.test.mjs
+
+      - name: Package standalone archives
+        run: node scripts/package-standalone-archives.mjs "${{ needs.stage.outputs.version }}"
+
+      - name: Upload standalone archives
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: standalone-turbo-${{ needs.stage.outputs.version }}
+          path: |
+            standalone-artifacts/*.tar.gz
+            standalone-artifacts/SHA256SUMS
+          if-no-files-found: error
 
   npm-publish:
     name: "Publish To NPM"
@@ -513,56 +576,76 @@ jobs:
     env:
       NPM_CONFIG_PROVENANCE: "true"
     # TODO: Add rust-smoke-test back to needs and if-condition when re-enabled.
-    needs: [stage, build-rust, js-smoke-test]
-    if: ${{ always() && needs.stage.result == 'success' && needs.build-rust.result == 'success' && needs.js-smoke-test.result == 'success' }}
+    needs: [stage, build-rust, js-smoke-test, standalone-archives]
+    if: ${{ always() && needs.stage.result == 'success' && needs.build-rust.result == 'success' && needs.js-smoke-test.result == 'success' && needs.standalone-archives.result == 'success' }}
+    outputs:
+      publish-started: ${{ steps.publish-state.outputs.started }}
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           ref: ${{ needs.stage.outputs.stage-branch }}
+          fetch-depth: 2
           filter: blob:none
           persist-credentials: false
 
-      - uses: ./.github/actions/setup-node
+      - name: Setup Node
+        uses: ./.github/actions/setup-node
         with:
-          enable-corepack: false
           extra-flags: "--no-frozen-lockfile"
+
+      - name: Download Rust artifacts
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: turbo-*
+          path: rust-artifacts
 
       - name: Install Global Turbo
         uses: ./.github/actions/install-global-turbo
         with:
           turbo-version: ${{ inputs.ci-tag-override || '' }}
 
-      - name: Download Rust artifacts
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
-        with:
-          path: rust-artifacts
-
       - name: Move Rust artifacts into place
         run: |
-          mv rust-artifacts/turbo-aarch64-apple-darwin cli/dist-darwin-arm64
-          mv rust-artifacts/turbo-aarch64-unknown-linux-musl cli/dist-linux-arm64
-          cp -r rust-artifacts/turbo-x86_64-pc-windows-msvc cli/dist-windows-arm64
-          mv rust-artifacts/turbo-x86_64-unknown-linux-musl cli/dist-linux-x64
-          mv rust-artifacts/turbo-x86_64-apple-darwin cli/dist-darwin-x64
-          mv rust-artifacts/turbo-x86_64-pc-windows-msvc cli/dist-windows-x64
+          mkdir release-artifacts
+          mv rust-artifacts/turbo-aarch64-apple-darwin release-artifacts/dist-darwin-arm64
+          mv rust-artifacts/turbo-aarch64-unknown-linux-musl release-artifacts/dist-linux-arm64
+          cp -r rust-artifacts/turbo-x86_64-pc-windows-msvc release-artifacts/dist-windows-arm64
+          mv rust-artifacts/turbo-x86_64-unknown-linux-musl release-artifacts/dist-linux-x64
+          mv rust-artifacts/turbo-x86_64-apple-darwin release-artifacts/dist-darwin-x64
+          mv rust-artifacts/turbo-x86_64-pc-windows-msvc release-artifacts/dist-windows-x64
 
       - name: Ensure npm version
         run: npm install -g npm@11.5.1
 
+      - name: Install managed tools
+        run: turbo setup --tools-only
+
+      - name: Build release tool
+        run: turbo run build --filter=@turbo/releaser
+
+      - name: Mark publishing started
+        if: ${{ !inputs.dry_run }}
+        id: publish-state
+        run: echo "started=true" >> "$GITHUB_OUTPUT"
+
       - name: Perform Release
         run: |
-          SKIP_FLAG=""
+          RELEASE_ARGS=()
           if [ "${{ inputs.dry_run }}" = "true" ]; then
-            SKIP_FLAG="--skip-publish"
+            RELEASE_ARGS+=("--skip-publish")
           fi
-          cd cli && make publish-turbo SKIP_PUBLISH=$SKIP_FLAG
+          packages/turbo-releaser/dist/index.js publish \
+            --repo-root . \
+            --artifacts-dir release-artifacts \
+            --version-path version.txt \
+            "${RELEASE_ARGS[@]}"
 
       # Upload published artifacts in case they are needed for debugging later
       - name: Upload Artifacts
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: turbo-combined
-          path: cli/dist
+          path: release-artifacts/dist
 
   create-release-tag:
     name: "Create Release Tag"
@@ -573,18 +656,25 @@ jobs:
     needs: [stage, npm-publish]
     if: ${{ always() && !inputs.dry_run && needs.npm-publish.result == 'success' }}
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           ref: ${{ needs.stage.outputs.stage-branch }}
           filter: blob:none
           persist-credentials: false
+
+      - uses: ./.github/actions/setup-node
+        with:
+          extra-flags: "--no-frozen-lockfile"
+
+      - name: Build release tool
+        run: pnpm --filter @turbo/releaser build
 
       - name: Create and push release tag
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh auth setup-git
-          cd cli && make create-release-tag
+          packages/turbo-releaser/dist/index.js tag --repo-root . --version-path version.txt
 
       - name: Create GitHub Release
         env:
@@ -592,6 +682,20 @@ jobs:
           VERSION: ${{ needs.stage.outputs.version }}
           PREVIOUS_TAG: ${{ needs.stage.outputs.previous-tag }}
         run: |
+          EXPECTED_SHA=$(git rev-parse HEAD)
+          for ATTEMPT in {1..24}; do
+            REMOTE_SHA=$(gh api "repos/${{ github.repository }}/git/ref/tags/v${VERSION}" --jq '.object.sha' 2>/dev/null || true)
+            if [ "$REMOTE_SHA" = "$EXPECTED_SHA" ]; then
+              echo "Tag v${VERSION} is visible through the GitHub API."
+              break
+            fi
+            if [ "$ATTEMPT" -eq 24 ]; then
+              echo "::error::Tag v${VERSION} did not resolve to ${EXPECTED_SHA} through the GitHub API after 2 minutes. Last observed SHA: ${REMOTE_SHA:-missing}."
+              exit 1
+            fi
+            sleep 5
+          done
+
           PRERELEASE_FLAG=""
           if [[ "$VERSION" == *"-canary."* ]]; then
             PRERELEASE_FLAG=("--prerelease")
@@ -604,11 +708,51 @@ jobs:
             NOTES_START_TAG_FLAG=("--notes-start-tag" "$PREVIOUS_TAG")
           fi
 
-          gh release create "v${VERSION}" \
-            --title "Turborepo v${VERSION}" \
-            --generate-notes \
-            "${NOTES_START_TAG_FLAG[@]}" \
-            "${PRERELEASE_FLAG[@]}"
+          if gh release view "v${VERSION}" >/dev/null 2>&1; then
+            echo "GitHub release v${VERSION} already exists. Skipping."
+          else
+            gh release create "v${VERSION}" \
+              --title "Turborepo v${VERSION}" \
+              --generate-notes \
+              --draft \
+              "${NOTES_START_TAG_FLAG[@]}" \
+              "${PRERELEASE_FLAG[@]}"
+          fi
+
+  publish-standalone-assets:
+    name: "Publish Standalone Release Assets"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    needs: [stage, standalone-archives, create-release-tag]
+    if: ${{ always() && !inputs.dry_run && needs.stage.result == 'success' && needs.standalone-archives.result == 'success' && needs.create-release-tag.result == 'success' }}
+    steps:
+      - name: Download standalone release assets
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: standalone-turbo-${{ needs.stage.outputs.version }}
+          path: standalone-artifacts
+
+      - name: Attach standalone archives and checksum manifest
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPOSITORY: ${{ github.repository }}
+          VERSION: ${{ needs.stage.outputs.version }}
+        run: |
+          IS_DRAFT=$(gh release view "v${VERSION}" --repo "${REPOSITORY}" --json isDraft --jq .isDraft)
+          if [ "${IS_DRAFT}" != "true" ]; then
+            echo "::error::Refusing to replace assets on published release v${VERSION}."
+            exit 1
+          fi
+          gh release upload "v${VERSION}" standalone-artifacts/*.tar.gz standalone-artifacts/SHA256SUMS --repo "${REPOSITORY}" --clobber
+
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPOSITORY: ${{ github.repository }}
+          VERSION: ${{ needs.stage.outputs.version }}
+        run: gh release edit "v${VERSION}" --repo "${REPOSITORY}" --draft=false
 
   publish-vscode-extension:
     name: "Publish VS Code Extension"
@@ -629,6 +773,13 @@ jobs:
     timeout-minutes: 10
     needs: [stage, npm-publish]
     if: ${{ always() && !inputs.dry_run && needs.npm-publish.result == 'success' }}
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      VERCEL_TEAM_ID: ${{ secrets.VERCEL_TEAM_ID }}
+      VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+      VERCEL_OIDC_POLICY_ID: ${{ secrets.VERCEL_OIDC_POLICY_ID }}
     outputs:
       success: ${{ steps.alias.outcome == 'success' }}
       subdomain: ${{ steps.version.outputs.subdomain }}
@@ -636,7 +787,7 @@ jobs:
       docs_url: ${{ steps.alias.outputs.docs_url }}
     steps:
       - name: Checkout staging branch
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           ref: ${{ needs.stage.outputs.stage-branch }}
           filter: blob:none
@@ -651,44 +802,91 @@ jobs:
           echo "version=${VERSION}" >> $GITHUB_OUTPUT
           echo "subdomain=${SUBDOMAIN}" >> $GITHUB_OUTPUT
 
-      - name: Install Vercel CLI
-        run: npm install -g vercel@53.1.0
+      - name: Exchange GitHub OIDC token for Vercel access token
+        id: vercel-token
+        run: |
+          set -euo pipefail
+          : "${VERCEL_TEAM_ID:?Missing VERCEL_TEAM_ID secret}"
+          : "${VERCEL_PROJECT_ID:?Missing VERCEL_PROJECT_ID secret}"
+          : "${VERCEL_OIDC_POLICY_ID:?Missing VERCEL_OIDC_POLICY_ID secret}"
+          OIDC_TOKEN=$(curl --fail --silent --show-error --retry 3 \
+            --get --data-urlencode "audience=https://github.com/vercel" \
+            --header "Authorization: bearer ${ACTIONS_ID_TOKEN_REQUEST_TOKEN}" \
+            "${ACTIONS_ID_TOKEN_REQUEST_URL}" \
+            | jq -er '.value | select(type == "string" and length > 0)')
+          echo "::add-mask::${OIDC_TOKEN}"
+
+          VERCEL_TOKEN=$(curl --fail --silent --show-error --retry 3 \
+            --request POST https://api.vercel.com/login/oauth/token \
+            --data-urlencode "client_id=cl_HYyOPBNtFMfHhaUn9L4QPfTZz6TP47bp" \
+            --data-urlencode "grant_type=urn:ietf:params:oauth:grant-type:token-exchange" \
+            --data-urlencode "subject_token_type=urn:ietf:params:oauth:token-type:id_token" \
+            --data-urlencode "requested_token_type=urn:ietf:params:oauth:token-type:access_token" \
+            --data-urlencode "team_id=${VERCEL_TEAM_ID}" \
+            --data-urlencode "policy_id=${VERCEL_OIDC_POLICY_ID}" \
+            --data-urlencode "subject_token=${OIDC_TOKEN}" \
+            | jq -er '.access_token | select(type == "string" and length > 0)')
+          echo "::add-mask::${VERCEL_TOKEN}"
+          echo "token=${VERCEL_TOKEN}" >> "$GITHUB_OUTPUT"
 
       - name: Find Vercel deployment for SHA
         id: find-deployment
         env:
           BASE_SHA: ${{ needs.stage.outputs.base-sha }}
-          VERCEL_TOKEN: ${{ secrets.TURBO_TOKEN }}
+          VERCEL_TOKEN: ${{ steps.vercel-token.outputs.token }}
         run: |
-          SHA="${BASE_SHA}"
-          VERCEL_LIST_STDERR="${RUNNER_TEMP}/vercel-list.stderr"
-          if ! VERCEL_LIST_OUTPUT=$(vercel list turbo-site --scope=vercel -m githubCommitSha="${SHA}" --status=READY --token="${VERCEL_TOKEN}" 2>"${VERCEL_LIST_STDERR}"); then
-            echo "::error::Failed to list Vercel deployments for SHA ${SHA}. Vercel CLI stderr was captured without printing to logs."
+          set -euo pipefail
+          if ! DEPLOYMENT_ID=$(curl --fail --silent --show-error --retry 3 \
+            --get https://api.vercel.com/v6/deployments \
+            --header "Authorization: Bearer ${VERCEL_TOKEN}" \
+            --data-urlencode "teamId=${VERCEL_TEAM_ID}" \
+            --data-urlencode "projectId=${VERCEL_PROJECT_ID}" \
+            --data-urlencode "meta-githubCommitSha=${BASE_SHA}" \
+            --data-urlencode "state=READY" \
+            --data-urlencode "limit=1" \
+            | jq -er '.deployments[0].uid | select(type == "string" and length > 0)'); then
+            echo "::error::Failed to find a READY turbo-site deployment for SHA ${BASE_SHA}."
             exit 1
           fi
-          DEPLOYMENT_URL=$(printf '%s\n' "${VERCEL_LIST_OUTPUT}" | grep -E '^\S+\.vercel\.(app|sh)' | head -n 1 | awk '{print $1}' || true)
-
-          if [ -z "$DEPLOYMENT_URL" ]; then
-            echo "::error::No deployment found for SHA ${SHA}."
-            exit 1
-          fi
-
-          echo "deployment_url=${DEPLOYMENT_URL}" >> $GITHUB_OUTPUT
+          echo "deployment_id=${DEPLOYMENT_ID}" >> "$GITHUB_OUTPUT"
 
       - name: Assign subdomain alias
         id: alias
         env:
-          VERCEL_TOKEN: ${{ secrets.TURBO_TOKEN }}
+          SUBDOMAIN: ${{ steps.version.outputs.subdomain }}
+          DEPLOYMENT_ID: ${{ steps.find-deployment.outputs.deployment_id }}
+          VERCEL_TOKEN: ${{ steps.vercel-token.outputs.token }}
         run: |
-          ALIAS="${{ steps.version.outputs.subdomain }}.turborepo.dev"
-          DEPLOYMENT_URL="${{ steps.find-deployment.outputs.deployment_url }}"
-          vercel alias set "${DEPLOYMENT_URL}" "${ALIAS}" --token="${VERCEL_TOKEN}" --scope=vercel
-          echo "docs_url=https://${ALIAS}" >> $GITHUB_OUTPUT
+          set -euo pipefail
+          ALIAS="${SUBDOMAIN}.turborepo.dev"
+          HTTP_STATUS=$(curl --silent --show-error --retry 3 \
+            --request POST \
+            --header "Authorization: Bearer ${VERCEL_TOKEN}" \
+            --header "Content-Type: application/json" \
+            --data "$(jq -cn --arg alias "$ALIAS" '{alias: $alias}')" \
+            --output "${RUNNER_TEMP}/vercel-alias.json" \
+            --write-out '%{http_code}' \
+            "https://api.vercel.com/v2/deployments/${DEPLOYMENT_ID}/aliases?teamId=${VERCEL_TEAM_ID}")
+          case "$HTTP_STATUS" in
+            200)
+              jq -e --arg alias "$ALIAS" '.alias == $alias' "${RUNNER_TEMP}/vercel-alias.json" > /dev/null
+              ;;
+            409)
+              jq -e --arg alias "$ALIAS" '.error.code == "not_modified" and .error.alias == $alias' "${RUNNER_TEMP}/vercel-alias.json" > /dev/null
+              ;;
+            *)
+              echo "::error::Failed to assign ${ALIAS} (HTTP ${HTTP_STATUS})."
+              exit 1
+              ;;
+          esac
+          echo "docs_url=https://${ALIAS}" >> "$GITHUB_OUTPUT"
 
       - name: Notify Slack on failure
         if: failure()
-        uses: slackapi/slack-github-action@007b2c3c751a190b6f0f040e47ed024deaa72844 # v1.23.0
+        uses: slackapi/slack-github-action@0d95c9a7becc1e6e297d76df9bc735c44f4cbcbc # v3.0.5
         with:
+          webhook: ${{ secrets.DOCS_ALIAS_FAILURE_SLACK_WEBHOOK_URL }}
+          webhook-type: incoming-webhook
           payload: |
             {
               "text": "Versioned docs aliasing failed for v${{ steps.version.outputs.version }}",
@@ -710,8 +908,6 @@ jobs:
                 }
               ]
             }
-        env:
-          SLACK_WEBHOOK_URL: ${{ secrets.DOCS_ALIAS_FAILURE_SLACK_WEBHOOK_URL }}
 
   update-examples:
     name: "Update Examples"
@@ -724,15 +920,23 @@ jobs:
 
   create-release-pr:
     name: "Create Release PR"
-    needs: [stage, npm-publish, create-release-tag, alias-versioned-docs]
-    if: ${{ always() && needs.npm-publish.result == 'success' && needs.create-release-tag.result == 'success' && !inputs.dry_run }}
+    needs:
+      [
+        stage,
+        npm-publish,
+        create-release-tag,
+        publish-standalone-assets,
+        alias-versioned-docs
+      ]
+    if: ${{ always() && needs.npm-publish.result == 'success' && needs.create-release-tag.result == 'success' && needs.publish-standalone-assets.result == 'success' && !inputs.dry_run }}
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     permissions:
+      actions: write
       contents: write
       pull-requests: write
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           ref: ${{ needs.stage.outputs.stage-branch }}
           filter: blob:none
@@ -740,8 +944,10 @@ jobs:
 
       - uses: ./.github/actions/setup-node
         with:
-          enable-corepack: false
           extra-flags: "--no-frozen-lockfile"
+
+      - name: Build release tool
+        run: pnpm --filter @turbo/releaser build
 
       - name: Commit lockfile if updated by install
         env:
@@ -765,7 +971,9 @@ jobs:
           if [ "$TAG" = "latest" ]; then
             VERSION="${{ needs.stage.outputs.version }}"
             echo "Stable release detected (${VERSION}). Bumping to next prepatch canary..."
-            ./scripts/version.js prepatch
+            packages/turbo-releaser/dist/index.js version \
+              --version-path version.txt \
+              --increment prepatch
             cat version.txt
             echo "updated=true" >> $GITHUB_OUTPUT
             echo "version=${VERSION}" >> $GITHUB_OUTPUT
@@ -815,16 +1023,23 @@ jobs:
             echo "First release - no previous tag." >> pr-body.md
           fi
 
-      - name: Create PR with auto-merge
+      - name: Checkout trusted release validator
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ github.sha }}
+          path: .release-validator
+          persist-credentials: false
+
+      - name: Create, validate, and merge release PR
         id: create-pr
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           VERSION="${{ needs.stage.outputs.version }}"
           STAGE_BRANCH="${{ needs.stage.outputs.stage-branch }}"
 
           PR_URL=$(gh pr create \
-            --title "release(turborepo): ${VERSION}" \
+            --title "chore: Release Turborepo ${VERSION}" \
             --body-file pr-body.md \
             --head "${STAGE_BRANCH}" \
             --base main)
@@ -833,7 +1048,56 @@ jobs:
           PR_NUM=$(echo "$PR_URL" | grep -oE '[0-9]+$')
           echo "number=$PR_NUM" >> $GITHUB_OUTPUT
 
-          gh pr merge "$PR_NUM" --auto --squash
+          PR=$(gh api "repos/${{ github.repository }}/pulls/${PR_NUM}")
+          BASE_SHA=$(jq -r '.base.sha' <<< "$PR")
+          HEAD_SHA=$(jq -r '.head.sha' <<< "$PR")
+          PR_CREATED_AT=$(jq -r '.created_at' <<< "$PR")
+          PR_BASE_SHA="$BASE_SHA" \
+          PR_HEAD_SHA="$HEAD_SHA" \
+          PR_HEAD_REF="$STAGE_BRANCH" \
+          PR_TITLE="chore: Release Turborepo ${VERSION}" \
+            node .release-validator/scripts/validate-release-pr.mjs
+
+          for WORKFLOW in turborepo-test.yml; do
+            RUN_ID=""
+            for _ in $(seq 1 30); do
+              RUN_ID=$(gh api --method GET \
+                "repos/${{ github.repository }}/actions/workflows/${WORKFLOW}/runs" \
+                -f event=pull_request \
+                -f per_page=20 \
+                --jq "[.workflow_runs[] | select(.event == \"pull_request\" and .head_sha == \"${HEAD_SHA}\" and .head_branch == \"${STAGE_BRANCH}\" and .head_repository.full_name == \"${{ github.repository }}\" and .actor.login == \"github-actions[bot]\" and .triggering_actor.login == \"github-actions[bot]\" and .created_at >= \"${PR_CREATED_AT}\" and (([.pull_requests[].number] | length) == 0 or ([.pull_requests[].number] | index(${PR_NUM})) != null))][0].id // \"\"")
+              if [ -n "$RUN_ID" ]; then
+                break
+              fi
+              sleep 2
+            done
+            if [ -z "$RUN_ID" ]; then
+              echo "::error::Unable to find approval-required ${WORKFLOW} run for ${HEAD_SHA}"
+              exit 1
+            fi
+            RUN_CONCLUSION=$(gh api "repos/${{ github.repository }}/actions/runs/${RUN_ID}" --jq '.conclusion // ""')
+            if [ "$RUN_CONCLUSION" = "action_required" ]; then
+              gh api --method POST "repos/${{ github.repository }}/actions/runs/${RUN_ID}/approve" --silent
+            fi
+          done
+
+          gh pr checks "$PR_NUM" --required --watch --fail-fast
+          CURRENT_PR=$(gh api "repos/${{ github.repository }}/pulls/${PR_NUM}")
+          if [[ "$(jq -r '.user.login' <<< "$CURRENT_PR")" != "github-actions[bot]" || \
+                "$(jq -r '.user.id' <<< "$CURRENT_PR")" != "41898282" || \
+                "$(jq -r '.title' <<< "$CURRENT_PR")" != "chore: Release Turborepo ${VERSION}" || \
+                "$(jq -r '.base.ref' <<< "$CURRENT_PR")" != "main" || \
+                "$(jq -r '.base.sha' <<< "$CURRENT_PR")" != "$BASE_SHA" || \
+                "$(jq -r '.base.repo.full_name' <<< "$CURRENT_PR")" != "${{ github.repository }}" || \
+                "$(jq -r '.head.ref' <<< "$CURRENT_PR")" != "$STAGE_BRANCH" || \
+                "$(jq -r '.head.sha' <<< "$CURRENT_PR")" != "$HEAD_SHA" || \
+                "$(jq -r '.head.repo.full_name' <<< "$CURRENT_PR")" != "${{ github.repository }}" || \
+                "$(jq -r '.state' <<< "$CURRENT_PR")" != "open" || \
+                "$(jq -r '.draft' <<< "$CURRENT_PR")" != "false" ]]; then
+            echo "::error::Release PR metadata changed after validation"
+            exit 1
+          fi
+          gh pr merge "$PR_NUM" --squash --match-head-commit "$HEAD_SHA"
 
   cleanup-on-failure:
     name: "Cleanup Failed Release"
@@ -855,6 +1119,7 @@ jobs:
       ${{
         always()
         && needs.stage.result == 'success'
+        && needs.npm-publish.outputs.publish-started != 'true'
         && (
           needs.build-rust.result == 'failure'
           || needs.js-smoke-test.result == 'failure'

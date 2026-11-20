@@ -4,7 +4,7 @@ mod common;
 
 use std::{fs, path::Path};
 
-use common::{replace_turbo_json, run_turbo, run_turbo_with_env, setup};
+use common::{combined_output, replace_turbo_json, run_turbo, run_turbo_with_env, setup};
 
 /// Get all task hashes as a sorted string. When the global hash (including
 /// env mode) changes, all task hashes change.
@@ -37,6 +37,11 @@ fn all_task_hashes(dir: &Path, extra_args: &[&str]) -> String {
 fn setup_strict_env() -> tempfile::TempDir {
     let tempdir = tempfile::tempdir().unwrap();
     setup::setup_integration_test(tempdir.path(), "strict_env_vars", "npm@10.5.0", false).unwrap();
+    // This fixture uses Node, not POSIX shell syntax. Use npm's native shell:
+    // an unqualified `bash` on Windows can resolve to the WSL launcher instead
+    // of Git Bash. Changing the task script alone would still leave npm
+    // launching Bash through the shared setup's script-shell override.
+    fs::write(tempdir.path().join(".npmrc"), "update-notifier=false\n").unwrap();
     tempdir
 }
 
@@ -112,13 +117,14 @@ fn test_global_hash_default_mode() {
 fn test_usage_strict() {
     let tempdir = setup_strict_env();
 
+    // Never replace SystemRoot on Windows: Node/npm need the real OS path to
+    // initialize cryptography before the task script can inspect its env.
     let env_vars = &[
         ("GLOBAL_VAR_PT", "higlobalpt"),
         ("GLOBAL_VAR_DEP", "higlobaldep"),
         ("LOCAL_VAR_PT", "hilocalpt"),
         ("LOCAL_VAR_DEP", "hilocaldep"),
         ("OTHER_VAR", "hiother"),
-        ("SYSTEMROOT", "hisysroot"),
     ];
 
     let out_path = if cfg!(windows) {
@@ -128,27 +134,36 @@ fn test_usage_strict() {
     };
 
     // Default config: no vars available in strict mode
-    run_turbo_with_env(
+    let output = run_turbo_with_env(
         tempdir.path(),
         &["build", "-vv", "--env-mode=strict"],
         env_vars,
     );
+    assert!(output.status.success(), "{}", combined_output(&output));
     let out = fs::read_to_string(tempdir.path().join(out_path)).unwrap();
     assert!(
-        out.contains("globalpt: ''") && out.contains("localpt: ''") && out.contains("other: ''"),
+        out.contains("globalpt: ''")
+            && out.contains("localpt: ''")
+            && out.contains("globaldep: ''")
+            && out.contains("localdep: ''")
+            && out.contains("other: ''"),
         "strict default: no vars should be available, got: {out}"
     );
 
     // With all.json: declared vars available, others not
     replace_turbo_json(tempdir.path(), "strict_env_vars/all.json");
-    run_turbo_with_env(
+    let output = run_turbo_with_env(
         tempdir.path(),
         &["build", "-vv", "--env-mode=strict"],
         env_vars,
     );
+    assert!(output.status.success(), "{}", combined_output(&output));
     let out = fs::read_to_string(tempdir.path().join(out_path)).unwrap();
     assert!(
-        out.contains("globalpt: 'higlobalpt'") && out.contains("localpt: 'hilocalpt'"),
+        out.contains("globalpt: 'higlobalpt'")
+            && out.contains("localpt: 'hilocalpt'")
+            && out.contains("globaldep: 'higlobaldep'")
+            && out.contains("localdep: 'hilocaldep'"),
         "strict all.json: declared vars should be available, got: {out}"
     );
     assert!(
@@ -169,7 +184,6 @@ fn test_usage_loose() {
         ("LOCAL_VAR_PT", "hilocalpt"),
         ("LOCAL_VAR_DEP", "hilocaldep"),
         ("OTHER_VAR", "hiother"),
-        ("SYSTEMROOT", "hisysroot"),
     ];
 
     let out_path = if cfg!(windows) {
@@ -179,11 +193,12 @@ fn test_usage_loose() {
     };
 
     // Loose mode: all vars available
-    run_turbo_with_env(
+    let output = run_turbo_with_env(
         tempdir.path(),
         &["build", "-vv", "--env-mode=loose"],
         env_vars,
     );
+    assert!(output.status.success(), "{}", combined_output(&output));
     let out = fs::read_to_string(tempdir.path().join(out_path)).unwrap();
     assert!(
         out.contains("globalpt: 'higlobalpt'") && out.contains("other: 'hiother'"),
@@ -192,16 +207,47 @@ fn test_usage_loose() {
 
     // With all.json: still all vars available
     replace_turbo_json(tempdir.path(), "strict_env_vars/all.json");
-    run_turbo_with_env(
+    let output = run_turbo_with_env(
         tempdir.path(),
         &["build", "-vv", "--env-mode=loose"],
         env_vars,
     );
+    assert!(output.status.success(), "{}", combined_output(&output));
     let out = fs::read_to_string(tempdir.path().join(out_path)).unwrap();
     assert!(
         out.contains("globalpt: 'higlobalpt'") && out.contains("other: 'hiother'"),
         "loose all.json: all vars should still be available, got: {out}"
     );
+}
+
+// Fail fast if either npm's script shell or the task starts relying on Bash
+// again. Shadow every real Bash (including Windows' WSL launcher) with this
+// test executable, which rejects Bash's arguments instead of hanging.
+#[test]
+fn test_usage_does_not_require_bash() {
+    let tempdir = setup_strict_env();
+    let shell_dir = tempfile::tempdir().unwrap();
+    let bash = if cfg!(windows) { "bash.exe" } else { "bash" };
+    fs::copy(
+        std::env::current_exe().unwrap(),
+        shell_dir.path().join(bash),
+    )
+    .unwrap();
+    let path = setup::prepend_to_path(shell_dir.path());
+    let out_path = tempdir.path().join("apps/my-app/out.txt");
+
+    for mode in ["strict", "loose"] {
+        let output = run_turbo_with_env(
+            tempdir.path(),
+            &["build", "--force", &format!("--env-mode={mode}")],
+            &[("PATH", &path), ("OTHER_VAR", "hiother")],
+        );
+        assert!(output.status.success(), "{}", combined_output(&output));
+        let out = fs::read_to_string(&out_path).unwrap();
+        let expected = if mode == "strict" { "" } else { "hiother" };
+        assert!(out.contains(&format!("other: '{expected}'")), "{out}");
+        fs::remove_file(&out_path).unwrap();
+    }
 }
 
 // --- dry-json.t ---

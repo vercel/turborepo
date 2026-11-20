@@ -4,7 +4,7 @@
 
 use std::path::PathBuf;
 
-use dirs_next::config_dir as dirs_config_dir;
+use dirs_next::{cache_dir as dirs_cache_dir, config_dir as dirs_config_dir};
 use thiserror::Error;
 use turbopath::{AbsoluteSystemPathBuf, PathError};
 
@@ -31,6 +31,15 @@ pub fn vercel_config_dir() -> Result<Option<AbsoluteSystemPathBuf>, PathError> {
         std::env::var("VERCEL_CONFIG_DIR_PATH").ok().as_deref(),
         dirs_config_dir(),
     )
+}
+
+/// Returns the path to the user's cache directory (`dirs_next::cache_dir`:
+/// `$XDG_CACHE_HOME` or `~/.cache` on Linux, `~/Library/Caches` on macOS), for
+/// state that belongs to this machine and must not travel with a repository.
+pub fn cache_dir() -> Result<Option<AbsoluteSystemPathBuf>, PathError> {
+    dirs_cache_dir()
+        .map(AbsoluteSystemPathBuf::try_from)
+        .transpose()
 }
 
 fn config_dir_from_parts(

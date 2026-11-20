@@ -3,7 +3,41 @@
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
-      "outputs": ["dist"]
+      "outputs": ["dist"],
+      "tags": ["ci"]
+    },
+    "test": {
+      "command": [
+        "node",
+        "--import",
+        "tsx",
+        "--test",
+        "src/e2e.test.ts",
+        "src/native.test.ts",
+        "src/npm.test.ts",
+        "src/operations.test.ts",
+        "src/packager.test.ts",
+        "src/publish.test.ts",
+        "src/stage.test.ts",
+        "src/tag.test.ts",
+        "src/version-command.test.ts",
+        "src/version.test.ts"
+      ],
+      "tags": ["ci"]
+    },
+    "lint:prettier": {
+      "command": [
+        "pnpm",
+        "exec",
+        "prettier",
+        "-c",
+        ".",
+        "--cache",
+        "--ignore-path=../../.prettierignore"
+      ]
+    },
+    "check-types": {
+      "tags": ["ci"]
     }
   }
 }

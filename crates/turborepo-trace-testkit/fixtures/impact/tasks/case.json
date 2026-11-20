@@ -1,0 +1,91 @@
+{
+  "description": "build tasks (§19): package scripts and turbo.json tasks whose outputs tests load. `packages/db` generates src/generated/client.js with `node scripts/gen.js` (turbo `codegen`); `packages/ui` is consumed through its build output dist/ (`tsc -p tsconfig.build.json`, turbo `build` with declared `inputs` and `^build`). Generated and built files are gitignored. The oracle never runs builds or generators, so the tests affected through them are declared with expect_affected.",
+  "mutations": [
+    {
+      "name": "script-config-edit",
+      "description": "edit the tsconfig the ui build script names (tsc -p tsconfig.build.json); app loads ui's dist",
+      "ops": [
+        {
+          "op": "replace",
+          "path": "packages/ui/tsconfig.build.json",
+          "find": "\"module\": \"commonjs\"",
+          "with": "\"module\": \"commonjs\", \"declaration\": true"
+        }
+      ],
+      "expect_affected": ["packages/app/test/app.test.js"]
+    },
+    {
+      "name": "turbo-inputs-file",
+      "description": "edit build-info.json, declared only in turbo.json `@t/ui#build` inputs",
+      "ops": [
+        {
+          "op": "replace",
+          "path": "packages/ui/build-info.json",
+          "find": "stable",
+          "with": "beta"
+        }
+      ],
+      "expect_affected": ["packages/app/test/app.test.js"]
+    },
+    {
+      "name": "task-dep-change",
+      "description": "edit an input of db#build, which ui#build depends on through `^build`",
+      "ops": [
+        {
+          "op": "replace",
+          "path": "packages/db/tsconfig.build.json",
+          "find": "\"allowJs\": true",
+          "with": "\"allowJs\": true, \"checkJs\": true"
+        }
+      ],
+      "expect_affected": ["packages/app/test/app.test.js"]
+    },
+    {
+      "name": "generator-input",
+      "description": "edit schema.json, read by the generator of the gitignored src/generated/client.js that db's test imports",
+      "ops": [
+        {
+          "op": "replace",
+          "path": "packages/db/schema.json",
+          "find": "[\"users\"]",
+          "with": "[\"users\", \"posts\"]"
+        }
+      ],
+      "expect_affected": ["packages/db/test/client.test.js"]
+    },
+    {
+      "name": "edit-generator",
+      "description": "edit the generator script itself",
+      "ops": [
+        {
+          "op": "append",
+          "path": "packages/db/scripts/gen.js",
+          "text": "\n// edited\n"
+        }
+      ],
+      "expect_affected": ["packages/db/test/client.test.js"]
+    },
+    {
+      "name": "edit-other",
+      "description": "control: edit an unrelated package",
+      "ops": [
+        {
+          "op": "append",
+          "path": "packages/other/src/index.js",
+          "text": "\n// edited\n"
+        }
+      ]
+    },
+    {
+      "name": "ui-readme",
+      "description": "control: edit a file of ui that is not an input of its build",
+      "ops": [
+        {
+          "op": "append",
+          "path": "packages/ui/README.md",
+          "text": "\nMore docs.\n"
+        }
+      ]
+    }
+  ]
+}

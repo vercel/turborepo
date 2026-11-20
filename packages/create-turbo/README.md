@@ -1,6 +1,6 @@
 # Welcome to Turborepo
 
-[Turborepo](https://turborepo.dev) is a high-performance monorepo build-system for modern JavaScript and TypeScript codebases.
+[Turborepo](https://turborepo.dev) is the build system for coding agents.
 
 To get started, open a new shell and run:
 

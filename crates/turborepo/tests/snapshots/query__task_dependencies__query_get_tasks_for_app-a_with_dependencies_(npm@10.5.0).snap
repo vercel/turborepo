@@ -14,9 +14,58 @@ expression: query_output
             }
           },
           {
+            "fullName": "app-a#build0",
+            "directDependencies": {
+              "items": [
+                {
+                  "fullName": "app-a#prepare"
+                },
+                {
+                  "fullName": "lib-a#build0"
+                }
+              ]
+            }
+          },
+          {
+            "fullName": "app-a#build1",
+            "directDependencies": {
+              "items": [
+                {
+                  "fullName": "lib-a#build1"
+                }
+              ]
+            }
+          },
+          {
+            "fullName": "app-a#build2",
+            "directDependencies": {
+              "items": [
+                {
+                  "fullName": "app-a#custom"
+                }
+              ]
+            }
+          },
+          {
             "fullName": "app-a#custom",
             "directDependencies": {
               "items": []
+            }
+          },
+          {
+            "fullName": "app-a#prepare",
+            "directDependencies": {
+              "items": []
+            }
+          },
+          {
+            "fullName": "app-a#side-quest",
+            "directDependencies": {
+              "items": [
+                {
+                  "fullName": "app-a#prepare"
+                }
+              ]
             }
           },
           {

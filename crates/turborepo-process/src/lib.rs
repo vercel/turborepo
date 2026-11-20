@@ -16,6 +16,8 @@ mod child;
 mod command;
 #[cfg(windows)]
 mod job_object;
+#[cfg(any(windows, test))]
+mod process_tree;
 
 use std::{
     collections::HashMap,
@@ -25,11 +27,129 @@ use std::{
 };
 
 pub use command::Command;
+/// Kill-on-close process tree containment, shared with setup's installers.
+#[cfg(windows)]
+pub use job_object::JobObject;
 use tokio::task::JoinSet;
 use tracing::{debug, trace};
 use turborepo_task_id::TaskId;
 
 pub use self::child::{Child, ChildExit, ChildStdin};
+
+/// Spawns a child in a way where SIGINT is correctly forwarded to the child.
+pub fn spawn_child(
+    mut command: std::process::Command,
+) -> io::Result<Arc<shared_child::SharedChild>> {
+    let shared_child = Arc::new(shared_child::SharedChild::spawn(&mut command)?);
+
+    #[cfg(not(target_os = "windows"))]
+    let handler_shared_child = shared_child.clone();
+
+    ctrlc::set_handler(move || {
+        // On Windows the child shares our console, so the OS delivers the
+        // CTRL_C_EVENT to it directly and it can run its own graceful
+        // shutdown. Killing the child here would race ahead of that
+        // shutdown and terminate it immediately, so this handler only
+        // swallows the event to keep this process alive long enough to
+        // collect the child's exit status.
+
+        // on unix, we should send a SIGTERM to the child
+        // so that go can gracefully shut down process groups
+        // SAFETY: we could pull in the nix crate to handle this
+        // 'safely' but nix::sys::signal::kill just calls libc::kill
+        #[cfg(not(target_os = "windows"))]
+        unsafe {
+            libc::kill(handler_shared_child.id() as i32, libc::SIGTERM);
+        }
+    })
+    .map_err(io::Error::other)?;
+
+    Ok(shared_child)
+}
+
+/// Hands this process off to `command` (`turbo exec`'s program, or the turbo
+/// a global turbo defers to), so killing this process kills it too. This
+/// process becomes `command` (`execve`) and returns only if it cannot start:
+/// SIGKILL, every other signal, job control, and the exit status, including
+/// a signal death, reach or come from `command` as if it ran directly.
+#[cfg(unix)]
+pub fn hand_off(mut command: std::process::Command) -> io::Result<std::process::ExitStatus> {
+    use std::{io::Write, os::unix::process::CommandExt};
+    // Nothing buffered may be lost with the process image.
+    let _ = io::stdout().flush();
+    let _ = io::stderr().flush();
+    Err(command.exec())
+}
+
+/// Hands this process off to `command`, so killing this process kills it too.
+/// Windows has no `execve`: `command` runs as a [`spawn_contained_child`], and
+/// its exit status, including an `NTSTATUS` value, is returned unchanged.
+#[cfg(windows)]
+pub fn hand_off(command: std::process::Command) -> io::Result<std::process::ExitStatus> {
+    spawn_contained_child(command)?.wait()
+}
+
+/// Starts `command` with its process tree tied to this process: terminating
+/// this process (CI cancellation, an IDE's stop button, `taskkill /F`) also
+/// terminates the program and every process it starts. Windows never
+/// cascades termination by itself. Ctrl+C is handled as in [`spawn_child`].
+///
+/// The program starts suspended, joins a kill-on-close job object, and only
+/// then runs, so even descendants it starts immediately are in the job. Like
+/// task jobs, this is best effort: a program that cannot join a job (for
+/// example under a parent job that forbids nesting) runs uncontained.
+#[cfg(windows)]
+pub fn spawn_contained_child(mut command: std::process::Command) -> io::Result<ContainedChild> {
+    use std::os::windows::{io::AsRawHandle, process::CommandExt};
+
+    // The child shares our console, which delivers Ctrl+C to it directly.
+    // Swallow the event so this process stays alive to report its status.
+    ctrlc::set_handler(|| {}).map_err(io::Error::other)?;
+    let job = job_object::JobObject::new()
+        .map_err(|err| debug!("failed to create a job object: {err}"))
+        .ok();
+    if job.is_some() {
+        command.creation_flags(windows_sys::Win32::System::Threading::CREATE_SUSPENDED);
+    }
+    let mut child = command.spawn()?;
+    let job = match job {
+        Some(job) => match job.assign_suspended_process(child.as_raw_handle()) {
+            Ok(joined) => joined.then_some(job),
+            Err(err) => {
+                // Its threads could not be resumed, so the program never ran.
+                let _ = child.kill();
+                let _ = child.wait();
+                return Err(err);
+            }
+        },
+        None => None,
+    };
+    Ok(ContainedChild { child, job })
+}
+
+/// A program started by [`spawn_contained_child`].
+#[cfg(windows)]
+pub struct ContainedChild {
+    child: std::process::Child,
+    job: Option<job_object::JobObject>,
+}
+
+#[cfg(windows)]
+impl ContainedChild {
+    /// Waits for the program to exit on its own, then releases the job:
+    /// anything it deliberately left running (a daemon, an editor window)
+    /// outlives this process, as it would had the program run directly.
+    /// Only terminating this process while the program runs kills the tree.
+    pub fn wait(mut self) -> io::Result<std::process::ExitStatus> {
+        let status = self.child.wait()?;
+        if let Some(job) = &self.job
+            && let Err(err) = job.release_on_close()
+        {
+            debug!("failed to release the job object: {err}");
+        }
+        Ok(status)
+    }
+}
 
 /// A process manager that is responsible for spawning and managing child
 /// processes. When the manager is Open, new child processes can be spawned
@@ -468,9 +588,8 @@ mod test {
 
         let code = child.wait().await;
         assert_eq!(code, Some(ChildExit::Finished(Some(0))));
+        assert!(manager.running_task_ids().is_empty());
 
-        // TODO: maybe we should do some assertion that there was nothing to shut down
-        // and this is a noop?
         manager.stop().await;
     }
 
@@ -516,9 +635,11 @@ mod test {
             assert!(lock.children.is_empty());
         }
 
-        // TODO: actually do some check that this is idempotent
-        // idempotent
         manager.stop().await;
+
+        let lock = manager.state.lock().unwrap();
+        assert!(lock.is_closing);
+        assert!(lock.children.is_empty());
     }
 
     #[test_case("stop", "sleep_5_interruptable.js", STOPPED_EXIT)]

@@ -1,68 +1,47 @@
-const { resolve } = require('node:path');
+import eslint from '@eslint/js';
+import angular from 'angular-eslint';
+import eslintConfigPrettier from 'eslint-config-prettier';
+import turboConfig from 'eslint-config-turbo/flat';
+import tseslint from 'typescript-eslint';
 
-const project = resolve(process.cwd(), 'tsconfig.json');
-
-/**
- * This is a custom ESLint configuration for use with
- * Angular libraries
- */
-
-/** @type {import("eslint").Linter.Config} */
-module.exports = {
-  extends: ['eslint:recommended', 'prettier', 'eslint-config-turbo'],
-  plugins: ['only-warn'],
-  parser: '@typescript-eslint/parser',
-  parserOptions: {
-    sourceType: 'module',
-    ecmaVersion: 'latest'
+export default tseslint.config(
+  {
+    ignores: ['dist/**', 'node_modules/**']
   },
-  settings: {
-    'import/resolver': {
-      typescript: {
-        project
-      }
+  ...turboConfig,
+  {
+    files: ['**/*.ts'],
+    extends: [
+      eslint.configs.recommended,
+      ...tseslint.configs.recommended,
+      ...angular.configs.tsRecommended
+    ],
+    processor: angular.processInlineTemplates,
+    rules: {
+      '@angular-eslint/directive-selector': [
+        'error',
+        {
+          type: 'attribute',
+          prefix: 'lib',
+          style: 'camelCase'
+        }
+      ],
+      '@angular-eslint/component-selector': [
+        'error',
+        {
+          type: 'element',
+          prefix: 'lib',
+          style: 'kebab-case'
+        }
+      ]
     }
   },
-  env: {
-    browser: true,
-    node: true
+  {
+    files: ['**/*.html'],
+    extends: [
+      ...angular.configs.templateRecommended,
+      ...angular.configs.templateAccessibility
+    ]
   },
-  ignorePatterns: ['node_modules', 'dist/', 'projects/**/*'],
-  overrides: [
-    {
-      files: ['*.ts'],
-      extends: [
-        'eslint:recommended',
-        'plugin:@typescript-eslint/recommended',
-        'plugin:@angular-eslint/recommended',
-        'plugin:@angular-eslint/template/process-inline-templates'
-      ],
-      rules: {
-        '@angular-eslint/directive-selector': [
-          'error',
-          {
-            type: 'attribute',
-            prefix: 'app',
-            style: 'camelCase'
-          }
-        ],
-        '@angular-eslint/component-selector': [
-          'error',
-          {
-            type: 'element',
-            prefix: 'app',
-            style: 'kebab-case'
-          }
-        ]
-      }
-    },
-    {
-      files: ['*.html'],
-      extends: [
-        'plugin:@angular-eslint/template/recommended',
-        'plugin:@angular-eslint/template/accessibility'
-      ],
-      rules: {}
-    }
-  ]
-};
+  eslintConfigPrettier
+);

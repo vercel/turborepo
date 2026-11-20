@@ -1,0 +1,95 @@
+---
+source: crates/turborepo-trace-frameworks/tests/nextjs.rs
+expression: "redact(serde_json::to_string_pretty(&v).unwrap(), root)"
+---
+{
+  "file": "<fixture>/next.config.ts",
+  "uncertainties": [
+    {
+      "kind": "unsupported_syntax",
+      "file": "<fixture>/next.config.ts",
+      "line": 0,
+      "field": null,
+      "detail": "the exported config is wrapped by plugin calls; read `nextConfig` and assumed the wrappers keep basePath, i18n, redirects and rewrites"
+    }
+  ],
+  "wrapped": true,
+  "base_path": null,
+  "i18n": null,
+  "page_extensions": [
+    "tsx",
+    "ts"
+  ],
+  "trailing_slash": false,
+  "redirects": [
+    {
+      "source": "/home",
+      "destination": "/",
+      "has": [],
+      "missing": [],
+      "no_base_path": false,
+      "no_locale": false,
+      "conditional": false
+    },
+    {
+      "source": "/old-blog/:slug",
+      "destination": "/blog/:slug",
+      "has": [],
+      "missing": [],
+      "no_base_path": false,
+      "no_locale": false,
+      "conditional": false
+    },
+    {
+      "source": "/beta",
+      "destination": "/dashboard",
+      "has": [
+        {
+          "type": "cookie",
+          "key": "beta",
+          "value": null
+        }
+      ],
+      "missing": [],
+      "no_base_path": false,
+      "no_locale": false,
+      "conditional": false
+    }
+  ],
+  "rewrites": {
+    "before_files": [
+      {
+        "source": "/docs/:path*",
+        "destination": "https://docs.example.com/:path*",
+        "has": [],
+        "missing": [],
+        "no_base_path": false,
+        "no_locale": false,
+        "conditional": false
+      }
+    ],
+    "after_files": [
+      {
+        "source": "/api/v1/:path*",
+        "destination": "https://api.example.com/v1/:path*",
+        "has": [],
+        "missing": [],
+        "no_base_path": false,
+        "no_locale": false,
+        "conditional": false
+      },
+      {
+        "source": "/team-alias/:team",
+        "destination": "/:team",
+        "has": [],
+        "missing": [],
+        "no_base_path": false,
+        "no_locale": false,
+        "conditional": false
+      }
+    ],
+    "fallback": []
+  },
+  "rules_complete": true,
+  "rules_source": "config"
+}

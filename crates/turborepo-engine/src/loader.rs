@@ -1,7 +1,7 @@
 //! Trait abstraction for TurboJson loading.
 //!
 //! This trait allows the engine to be decoupled from the concrete
-//! TurboJsonLoader implementation in turborepo-lib.
+//! TurboJsonLoader implementation in turborepo-run.
 
 use turborepo_repository::package_graph::PackageName;
 use turborepo_turbo_json::TurboJson;
@@ -18,6 +18,5 @@ pub trait TurboJsonLoader {
     /// Returns the TurboJson configuration or an error if loading fails.
     /// The error should indicate if no turbo.json exists (via
     /// is_no_turbo_json).
-    #[allow(clippy::result_large_err)]
     fn load(&self, package: &PackageName) -> Result<&TurboJson, BuilderError>;
 }

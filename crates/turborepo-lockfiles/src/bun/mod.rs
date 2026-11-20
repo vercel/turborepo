@@ -2,7 +2,8 @@
 //!
 //! This module provides comprehensive support for Bun lockfiles (`bun.lockb`),
 //! handling both binary and JSON formats with support for lockfile versions 0
-//! and 1.
+//! through 3. Newer versions are parsed as version 3 with a warning, since
+//! every Bun lockfile revision so far has only added to the schema.
 //!
 //! ## Lockfile Version Support
 //!
@@ -11,11 +12,26 @@
 //! - Simple workspace support
 //! - Limited override functionality
 //!
-//! ### Version 1 (Current)
+//! ### Version 1 (Bun <1.4)
 //! - Enhanced workspace dependency resolution with optimized lookup strategies
 //! - Improved catalog support with multiple catalog types
 //! - Advanced override functionality with precedence rules
 //! - Optimized subgraph filtering for workspace dependencies
+//!
+//! ### Version 2 (Bun 1.4+)
+//! - Schema-compatible with V1 for the surfaces turbo reads (workspaces,
+//!   packages, catalogs, overrides, patched dependencies). Bun writes
+//!   `configVersion: 1` as a sibling top-level key — already parsed in V1 — so
+//!   only the version tag needs to be accepted; no downstream branches fork on
+//!   V2.
+//!
+//! ### Version 3
+//! - Values in the top-level `overrides` section may be objects scoping
+//!   overrides to one parent package (`"webpack@^4": { "terser": "4.8.1" }`,
+//!   with `"."` standing for the parent itself). Bun stamps version 3 only when
+//!   such a rule exists. `turbo prune` copies the section verbatim, exactly as
+//!   for flat overrides, because Bun's `--frozen-lockfile` compares the whole
+//!   set against the (also copied verbatim) root package.json.
 //!
 //! ## Key Features
 //!
@@ -112,16 +128,17 @@ pub use types::{PackageIdent, PackageKey, VersionSpec};
 type Map<K, V> = std::collections::BTreeMap<K, V>;
 type BTreeSet<T> = std::collections::BTreeSet<T>;
 
-#[cfg(test)]
-pub(super) use data::WorkspaceEntry;
 pub(super) use data::{BunLockfileData, LockfileVersion, PackageEntry, PackageInfo, RootInfo};
+#[cfg(test)]
+pub(super) use data::{OverrideValue, WorkspaceEntry};
 
 /// Check if a package identifier refers to a git or GitHub package.
 ///
 /// Git and GitHub packages have different serialization formats than npm
 /// packages:
 /// - npm packages: `[ident, registry, info, checksum]` (4 elements)
-/// - git/github packages: `[ident, info, checksum]` (3 elements, no registry)
+/// - git/github packages: `[ident, info, bun-tag, integrity?]` (3 or 4
+///   elements, no registry)
 ///
 /// This function is used in deserialization, serialization, and encoding to
 /// ensure consistent handling of these package types.

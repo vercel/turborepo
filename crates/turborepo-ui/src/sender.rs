@@ -30,9 +30,15 @@ impl UISender {
         }
     }
 
-    pub fn status(&self, task: String, status: String, result: CacheResult) {
+    pub fn status(
+        &self,
+        task: String,
+        status: String,
+        result: CacheResult,
+        output_logs: OutputLogs,
+    ) {
         match self {
-            UISender::Tui(sender) => sender.status(task, status, result),
+            UISender::Tui(sender) => sender.status(task, status, result, output_logs),
         }
     }
     fn set_stdin(&self, task: String, stdin: Box<dyn std::io::Write + Send>) {
@@ -79,11 +85,6 @@ pub struct TaskSender {
 }
 
 impl TaskSender {
-    /// Access the underlying UISender
-    pub fn as_app(&self) -> &UISender {
-        &self.handle
-    }
-
     /// Mark the task as started
     pub fn start(&self, output_logs: OutputLogs) {
         self.handle.start_task(self.name.clone(), output_logs);
@@ -115,12 +116,11 @@ impl TaskSender {
         self.handle.set_stdin(self.name.clone(), stdin);
     }
 
-    pub fn status(&self, status: &str, result: CacheResult) {
-        // Since this will be rendered via ratatui we any ANSI escape codes will not be
-        // handled.
-        // TODO: prevent the status from having ANSI codes in this scenario
+    pub fn status(&self, status: &str, result: CacheResult, output_logs: OutputLogs) {
+        // Ratatui does not render ANSI escape codes in the status, so strip them.
         let status = console::strip_ansi_codes(status).into_owned();
-        self.handle.status(self.name.clone(), status, result);
+        self.handle
+            .status(self.name.clone(), status, result, output_logs);
     }
 }
 

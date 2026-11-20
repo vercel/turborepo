@@ -1,0 +1,38 @@
+{
+  "description": "A computed require in first-party code. The oracle sees the one feature loaded at runtime; static selectors cannot, so turbotrace must report the loader's tests as affected or unknown per --on-uncertain (extra selections here are expected).",
+  "mutations": [
+    {
+      "name": "edit-alpha",
+      "description": "modify the feature loaded at runtime",
+      "ops": [
+        {
+          "op": "append",
+          "path": "src/features/alpha.ts",
+          "text": "\n// edited\n"
+        }
+      ]
+    },
+    {
+      "name": "edit-beta",
+      "description": "modify a feature the loader does not pick",
+      "ops": [
+        {
+          "op": "append",
+          "path": "src/features/beta.ts",
+          "text": "\n// edited\n"
+        }
+      ]
+    },
+    {
+      "name": "add-gamma",
+      "description": "add a new feature file",
+      "ops": [
+        {
+          "op": "write",
+          "path": "src/features/gamma.ts",
+          "content": "export const name = 'gamma';\n"
+        }
+      ]
+    }
+  ]
+}

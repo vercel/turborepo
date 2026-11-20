@@ -8,10 +8,11 @@
       "outputs": [".next/**", "!.next/cache/**", "!.next/dev/**", "dist/**"]
     },
     "lint": {
-      "dependsOn": ["^lint"]
+      "dependsOn": ["^lint"],
+      "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/biome.json"]
     },
     "check-types": {
-      "dependsOn": ["^check-types"]
+      "dependsOn": ["^check-types", "@repo/vitest-config#build"]
     },
     "dev": {
       "cache": false,
@@ -20,7 +21,11 @@
     "test": {
       "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/vitest.config.ts"],
       "dependsOn": ["transit", "@repo/vitest-config#build"],
-      "outputs": ["coverage.json"]
+      "outputs": ["coverage/blob/**"]
+    },
+    "//#test:projects": {
+      "dependsOn": ["@repo/vitest-config#build"],
+      "cache": false
     },
     "transit": {
       "dependsOn": ["^transit"]

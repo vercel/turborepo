@@ -3,10 +3,28 @@
   "extends": ["//"],
   "tasks": {
     "test": {
-      "dependsOn": ["build"]
+      "dependsOn": ["build"],
+      "command": ["pnpm", "exec", "jest"],
+      "tags": ["ci"]
     },
     "build": {
-      "dependsOn": ["^build"]
+      "dependsOn": ["^build"],
+      "command": ["pnpm", "exec", "tsdown"],
+      "tags": ["ci"]
+    },
+    "lint:prettier": {
+      "command": [
+        "pnpm",
+        "exec",
+        "prettier",
+        "-c",
+        ".",
+        "--cache",
+        "--ignore-path=../../.prettierignore"
+      ]
+    },
+    "check-types": {
+      "tags": ["ci"]
     }
   }
 }

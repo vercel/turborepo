@@ -43,9 +43,10 @@ impl LocalTurboConfig {
     }
 
     fn turbo_version_from_lockfile(repo_state: &RepoState) -> Option<String> {
-        if let Ok(package_manager) = &repo_state.package_manager {
+        let javascript = repo_state.javascript.as_ref()?;
+        if let Ok(package_manager) = &javascript.package_manager {
             let lockfile = package_manager
-                .read_lockfile(&repo_state.root, &repo_state.root_package_json)
+                .read_lockfile(&repo_state.root, &javascript.package_json)
                 .ok()?;
             return lockfile.turbo_version();
         }
@@ -56,7 +57,7 @@ impl LocalTurboConfig {
         // download.
         PackageManager::supported_managers().iter().find_map(|pm| {
             let lockfile = pm
-                .read_lockfile(&repo_state.root, &repo_state.root_package_json)
+                .read_lockfile(&repo_state.root, &javascript.package_json)
                 .ok()?;
             lockfile.turbo_version()
         })
@@ -68,7 +69,9 @@ mod test {
     use tempfile::TempDir;
     use turbopath::AbsoluteSystemPath;
     use turborepo_repository::{
-        inference::RepoMode, package_json::PackageJson, package_manager::Error,
+        inference::{JavaScriptRoot, RepoMode},
+        package_json::PackageJson,
+        package_manager::Error,
     };
 
     use super::*;
@@ -80,8 +83,10 @@ mod test {
         let repo = RepoState {
             root: root.to_owned(),
             mode: RepoMode::MultiPackage,
-            root_package_json: PackageJson::default(),
-            package_manager: Ok(PackageManager::Npm),
+            javascript: Some(JavaScriptRoot {
+                package_json: PackageJson::default(),
+                package_manager: Ok(PackageManager::Npm),
+            }),
         };
         let lockfile = root.join_component("package-lock.json");
         lockfile.create_with_contents(include_bytes!(
@@ -104,8 +109,10 @@ mod test {
         let repo = RepoState {
             root: root.to_owned(),
             mode: RepoMode::MultiPackage,
-            root_package_json: PackageJson::default(),
-            package_manager: Err(Error::MissingPackageManager),
+            javascript: Some(JavaScriptRoot {
+                package_json: PackageJson::default(),
+                package_manager: Err(Error::MissingPackageManager),
+            }),
         };
         let lockfile = root.join_component("package-lock.json");
         lockfile.create_with_contents(include_bytes!(
@@ -128,15 +135,17 @@ mod test {
         let repo = RepoState {
             root: root.to_owned(),
             mode: RepoMode::MultiPackage,
-            root_package_json: PackageJson {
-                dependencies: Some(
-                    vec![("turbo".into(), "^2.0.0".into())]
-                        .into_iter()
-                        .collect(),
-                ),
-                ..Default::default()
-            },
-            package_manager: Err(Error::MissingPackageManager),
+            javascript: Some(JavaScriptRoot {
+                package_json: PackageJson {
+                    dependencies: Some(
+                        vec![("turbo".into(), "^2.0.0".into())]
+                            .into_iter()
+                            .collect(),
+                    ),
+                    ..Default::default()
+                },
+                package_manager: Err(Error::MissingPackageManager),
+            }),
         };
 
         assert_eq!(LocalTurboConfig::infer_internal(&repo, Some(true)), None,);
@@ -150,15 +159,17 @@ mod test {
         let repo = RepoState {
             root: root.to_owned(),
             mode: RepoMode::MultiPackage,
-            root_package_json: PackageJson {
-                dev_dependencies: Some(
-                    vec![("turbo".into(), "^2.0.0".into())]
-                        .into_iter()
-                        .collect(),
-                ),
-                ..Default::default()
-            },
-            package_manager: Err(Error::MissingPackageManager),
+            javascript: Some(JavaScriptRoot {
+                package_json: PackageJson {
+                    dev_dependencies: Some(
+                        vec![("turbo".into(), "^2.0.0".into())]
+                            .into_iter()
+                            .collect(),
+                    ),
+                    ..Default::default()
+                },
+                package_manager: Err(Error::MissingPackageManager),
+            }),
         };
 
         assert_eq!(LocalTurboConfig::infer_internal(&repo, Some(true)), None);
@@ -172,8 +183,10 @@ mod test {
         let repo = RepoState {
             root: root.to_owned(),
             mode: RepoMode::MultiPackage,
-            root_package_json: PackageJson::default(),
-            package_manager: Err(Error::MissingPackageManager),
+            javascript: Some(JavaScriptRoot {
+                package_json: PackageJson::default(),
+                package_manager: Err(Error::MissingPackageManager),
+            }),
         };
         let turbo_json = root.join_component("turbo.json");
         turbo_json
@@ -189,13 +202,34 @@ mod test {
         let repo = RepoState {
             root: root.to_owned(),
             mode: RepoMode::MultiPackage,
-            root_package_json: PackageJson::default(),
-            package_manager: Err(Error::MissingPackageManager),
+            javascript: Some(JavaScriptRoot {
+                package_json: PackageJson::default(),
+                package_manager: Err(Error::MissingPackageManager),
+            }),
         };
         let turbo_json = root.join_component("turbo.json");
         turbo_json
             .create_with_contents(include_bytes!("../fixtures/local_config/turbo.v2.json"))?;
         assert_eq!(LocalTurboConfig::infer_internal(&repo, Some(true)), None,);
+        Ok(())
+    }
+
+    #[test]
+    fn native_root_does_not_resolve_a_javascript_lockfile() -> Result<(), Box<dyn std::error::Error>>
+    {
+        let tmpdir = TempDir::with_prefix("local_config")?;
+        let root = AbsoluteSystemPath::from_std_path(tmpdir.path())?;
+        let repo = RepoState {
+            root: root.to_owned(),
+            mode: RepoMode::MultiPackage,
+            javascript: None,
+        };
+        root.join_component("package-lock.json")
+            .create_with_contents(include_bytes!(
+                "../fixtures/local_config/turbov2.package-lock.json"
+            ))?;
+
+        assert_eq!(LocalTurboConfig::infer_internal(&repo, Some(true)), None);
         Ok(())
     }
 
@@ -206,8 +240,10 @@ mod test {
         let repo = RepoState {
             root: root.to_owned(),
             mode: RepoMode::MultiPackage,
-            root_package_json: PackageJson::default(),
-            package_manager: Err(Error::MissingPackageManager),
+            javascript: Some(JavaScriptRoot {
+                package_json: PackageJson::default(),
+                package_manager: Err(Error::MissingPackageManager),
+            }),
         };
         assert_eq!(LocalTurboConfig::infer_internal(&repo, Some(true)), None,);
         Ok(())

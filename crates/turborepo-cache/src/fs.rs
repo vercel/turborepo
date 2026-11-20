@@ -18,6 +18,24 @@ pub struct FSCache {
     scm_state: LazyScmState,
 }
 
+/// Outcome of [`FSCache::lookup`].
+pub(crate) enum LocalLookup {
+    /// There is no archive for the hash.
+    Miss,
+    /// Every output recorded by the restore manifest is unchanged on disk, so
+    /// the archive need not be opened.
+    Unchanged(CacheHitMetadata, Vec<AnchoredSystemPathBuf>),
+    /// The archive must be extracted with [`FSCache::restore`], passing the
+    /// manifest so unchanged files can still be skipped.
+    Restore(Option<crate::cache_archive::RestoreManifest>),
+    /// The manifest is over the caller's size limit and was not read.
+    ManifestTooLarge,
+}
+
+/// Uniquifies temporary archive names for concurrent installs of distinct
+/// hashes within this process.
+static ARCHIVE_TEMP_COUNTER: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
 #[derive(Debug, Deserialize, Serialize)]
 struct CacheMetadata {
     hash: String,
@@ -90,6 +108,32 @@ impl FSCache {
         anchor: &AbsoluteSystemPath,
         hash: &str,
     ) -> Result<Option<(CacheHitMetadata, Vec<AnchoredSystemPathBuf>)>, CacheError> {
+        match self.lookup(anchor, hash, u64::MAX)? {
+            LocalLookup::Miss => Ok(None),
+            LocalLookup::Unchanged(metadata, files) => Ok(Some((metadata, files))),
+            LocalLookup::Restore(previous_manifest) => {
+                self.restore(anchor, hash, previous_manifest)
+            }
+            // Unreachable with an unlimited manifest size, but restoring is
+            // always correct.
+            LocalLookup::ManifestTooLarge => self.restore(anchor, hash, None),
+        }
+    }
+
+    /// First step of [`Self::fetch`]. It only reads metadata: the archive's
+    /// existence, the restore manifest, one stat per recorded output, and the
+    /// archive's metadata sidecar. It never opens the archive.
+    ///
+    /// Returns [`LocalLookup::ManifestTooLarge`] without reading a manifest
+    /// larger than `max_manifest_bytes`, so callers can bound how much
+    /// checking they do in place.
+    #[tracing::instrument(skip_all)]
+    pub(crate) fn lookup(
+        &self,
+        anchor: &AbsoluteSystemPath,
+        hash: &str,
+        max_manifest_bytes: u64,
+    ) -> Result<LocalLookup, CacheError> {
         let cache_path = self
             .cache_directory
             .join_component(&format!("{hash}.tar.zst"));
@@ -97,14 +141,18 @@ impl FSCache {
         // Check if the archive exists before doing any work.
         if !cache_path.as_path().exists() {
             self.log_fetch(analytics::CacheEvent::Miss, hash, 0);
-            return Ok(None);
+            return Ok(LocalLookup::Miss);
         }
 
         let manifest_path = self
             .cache_directory
             .join_component(&format!("{hash}-manifest.json"));
 
-        let previous_manifest = crate::cache_archive::RestoreManifest::read(&manifest_path);
+        let Ok(previous_manifest) =
+            crate::cache_archive::RestoreManifest::read_at_most(&manifest_path, max_manifest_bytes)
+        else {
+            return Ok(LocalLookup::ManifestTooLarge);
+        };
 
         // Fast path: if a manifest exists and ALL files on disk still match,
         // skip opening/decompressing the tar entirely.
@@ -117,7 +165,7 @@ impl FSCache {
                     .join_component(&format!("{hash}-meta.json")),
             )?;
             self.log_fetch(analytics::CacheEvent::Hit, hash, meta.duration);
-            return Ok(Some((
+            return Ok(LocalLookup::Unchanged(
                 CacheHitMetadata {
                     time_saved: meta.duration,
                     source: CacheSource::Local,
@@ -125,12 +173,29 @@ impl FSCache {
                     dirty_hash: meta.dirty_hash,
                 },
                 file_list,
-            )));
+            ));
         }
 
-        // Slow path: decompress and extract the archive. Pass any existing
-        // manifest so that individual files still matching on disk can be
-        // skipped, avoiding unnecessary writes and filesystem notifications.
+        Ok(LocalLookup::Restore(previous_manifest))
+    }
+
+    /// Second step of [`Self::fetch`]: decompress and extract the archive.
+    /// `previous_manifest` lets individual files that still match on disk be
+    /// skipped, avoiding unnecessary writes and filesystem notifications.
+    #[tracing::instrument(skip_all)]
+    pub(crate) fn restore(
+        &self,
+        anchor: &AbsoluteSystemPath,
+        hash: &str,
+        previous_manifest: Option<crate::cache_archive::RestoreManifest>,
+    ) -> Result<Option<(CacheHitMetadata, Vec<AnchoredSystemPathBuf>)>, CacheError> {
+        let cache_path = self
+            .cache_directory
+            .join_component(&format!("{hash}.tar.zst"));
+        let manifest_path = self
+            .cache_directory
+            .join_component(&format!("{hash}-manifest.json"));
+
         let mut cache_reader = match CacheReader::open(&cache_path) {
             Ok(reader) => reader,
             Err(CacheError::IO(ref e, _)) if e.kind() == std::io::ErrorKind::NotFound => {
@@ -143,10 +208,9 @@ impl FSCache {
         let (restored_files, new_manifest) =
             cache_reader.restore(anchor, previous_manifest.as_ref())?;
 
-        let manifest_path_owned = manifest_path.to_owned();
-        std::thread::spawn(move || {
-            let _ = new_manifest.write_atomic(&manifest_path_owned);
-        });
+        // Write the manifest before returning: a detached writer is lost when
+        // the process exits first, and every later hit then restores again.
+        let _ = new_manifest.write_atomic(&manifest_path);
 
         let meta = CacheMetadata::read(
             &self
@@ -202,38 +266,14 @@ impl FSCache {
         }))
     }
 
-    #[tracing::instrument(skip_all)]
-    pub fn put(
+    /// Writes the `-manifest.json` and `-meta.json` sidecars for an installed
+    /// archive.
+    fn write_sidecars(
         &self,
-        anchor: &AbsoluteSystemPath,
         hash: &str,
-        files: &[AnchoredSystemPathBuf],
+        manifest: &crate::cache_archive::RestoreManifest,
         duration: u64,
     ) -> Result<(), CacheError> {
-        let cache_path = self
-            .cache_directory
-            .join_component(&format!("{hash}.tar.zst"));
-
-        let mut cache_item = CacheWriter::create(&cache_path)?;
-        let mut manifest = crate::cache_archive::RestoreManifest::new();
-
-        for file in files {
-            cache_item.add_file(anchor, file)?;
-
-            let source_path = anchor.resolve(file);
-            let unix_path = file.to_unix();
-            if let Ok(m) = source_path.symlink_metadata() {
-                if m.is_file() {
-                    let _ = manifest.record_file(unix_path.as_str().to_owned(), &source_path);
-                } else if m.is_dir() {
-                    manifest.record_dir(unix_path.as_str().to_owned());
-                }
-            }
-        }
-
-        // Finish the archive (performs atomic rename from temp to final path)
-        cache_item.finish()?;
-
         // Write manifest alongside the archive so the first fetch() can
         // skip decompression when outputs are still on disk.
         let manifest_path = self
@@ -264,6 +304,66 @@ impl FSCache {
 
         temp_metadata_path.create_with_contents(&meta_json)?;
         temp_metadata_path.rename(&metadata_path)?;
+
+        Ok(())
+    }
+
+    #[tracing::instrument(skip_all)]
+    pub fn put(
+        &self,
+        anchor: &AbsoluteSystemPath,
+        hash: &str,
+        files: &[AnchoredSystemPathBuf],
+        duration: u64,
+    ) -> Result<(), CacheError> {
+        let cache_path = self
+            .cache_directory
+            .join_component(&format!("{hash}.tar.zst"));
+
+        let mut cache_item = CacheWriter::create(&cache_path)?;
+        let manifest = cache_item.add_files(anchor, files)?;
+
+        // Finish the archive (performs atomic rename from temp to final path)
+        cache_item.finish()?;
+
+        self.write_sidecars(hash, &manifest, duration)?;
+
+        Ok(())
+    }
+
+    /// Atomically installs an already-built compressed archive, avoiding a
+    /// second read/compress pass when the same artifact has another
+    /// destination (a remote write or a verified remote download).
+    #[tracing::instrument(skip_all)]
+    pub(crate) fn put_archive(
+        &self,
+        hash: &str,
+        artifact: &crate::artifact_body::Artifact,
+        duration: u64,
+    ) -> Result<(), CacheError> {
+        let cache_path = self
+            .cache_directory
+            .join_component(&format!("{hash}.tar.zst"));
+
+        // Write to a temporary sibling and atomically rename, matching the
+        // publication semantics of CacheWriter::create.
+        let temp_path = self.cache_directory.join_component(&format!(
+            ".{hash}.tar.zst.{}.{}.tmp",
+            std::process::id(),
+            ARCHIVE_TEMP_COUNTER.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+        ));
+        {
+            let file = temp_path.create()?;
+            // Match the 1 MiB flush granularity of CacheWriter::create so the
+            // copy does not turn into per-8-KiB write syscalls.
+            let mut buffered = std::io::BufWriter::with_capacity(2usize.pow(20), file);
+            artifact.body().copy_to(&mut buffered)?;
+            // Flush explicitly; BufWriter's Drop would ignore the error.
+            std::io::Write::flush(&mut buffered)?;
+        }
+        temp_path.rename(&cache_path)?;
+
+        self.write_sidecars(hash, artifact.manifest(), duration)?;
 
         Ok(())
     }
@@ -439,7 +539,7 @@ mod test {
     use turbopath::AnchoredSystemPath;
     use turborepo_analytics::start_analytics;
     use turborepo_api_client::{APIAuth, APIClient};
-    use turborepo_types::SecretString;
+    use turborepo_types::Credential;
     use turborepo_vercel_api_mock::start_test_server;
 
     use super::*;
@@ -450,7 +550,7 @@ mod test {
 
     #[tokio::test]
     async fn test_fs_cache() -> Result<()> {
-        let port = port_scanner::request_open_port().unwrap();
+        let port = turborepo_vercel_api_mock::request_open_port().unwrap();
         let (ready_tx, ready_rx) = tokio::sync::oneshot::channel();
         tokio::spawn(start_test_server(port, Some(ready_tx)));
 
@@ -486,7 +586,7 @@ mod test {
         )?;
         let api_auth = APIAuth {
             team_id: Some("my-team".to_string()),
-            token: SecretString::new("my-token".to_string()),
+            token: Credential::from("my-token".to_string()),
             team_slug: None,
         };
         let (analytics_sender, analytics_handle) =
@@ -1155,6 +1255,337 @@ mod test {
         assert!(tar.exists());
     }
 
+    #[test]
+    fn put_archive_restores_files_changed_before_install() -> Result<()> {
+        for change in ["modify", "delete"] {
+            let repo_root = tempdir()?;
+            let anchor = AbsoluteSystemPath::from_std_path(repo_root.path())?;
+            let output = anchor.join_component("output.txt");
+            output.create_with_contents("archived")?;
+            let files = vec![AnchoredSystemPathBuf::from_raw("output.txt")?];
+            let artifact = crate::artifact_body::Artifact::from_files(anchor, &files)?;
+            match change {
+                "modify" => output.create_with_contents("changed after archiving")?,
+                _ => output.remove_file()?,
+            }
+            let cache = FSCache::new(
+                Utf8Path::new("cache"),
+                anchor,
+                None,
+                LazyScmState::resolved(None),
+            )?;
+            cache.put_archive("before-install", &artifact, 50)?;
+
+            cache
+                .fetch(anchor, "before-install")?
+                .expect("cache should hit");
+            assert_eq!(output.read_to_string()?, "archived", "{change}");
+        }
+        Ok(())
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn put_archive_restores_symlinks_changed_before_install() -> Result<()> {
+        for change in ["retarget", "delete"] {
+            let repo_root = tempdir()?;
+            let anchor = AbsoluteSystemPath::from_std_path(repo_root.path())?;
+            let files = symlinked_outputs(anchor)?;
+            let artifact = crate::artifact_body::Artifact::from_files(anchor, &files)?;
+            let link = anchor.join_components(&["dist", "link"]);
+            link.remove_file()?;
+            if change == "retarget" {
+                link.symlink_to_file("b.txt")?;
+            }
+            let cache = FSCache::new(
+                Utf8Path::new("cache"),
+                anchor,
+                None,
+                LazyScmState::resolved(None),
+            )?;
+            cache.put_archive("before-install", &artifact, 50)?;
+
+            cache
+                .fetch(anchor, "before-install")?
+                .expect("cache should hit");
+            assert_eq!(link.read_link()?.as_str(), "a.txt", "{change}");
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn put_archive_after_restore_restores_changed_files() -> Result<()> {
+        for change in ["modify", "delete"] {
+            let source = tempdir()?;
+            let source_anchor = AbsoluteSystemPath::from_std_path(source.path())?;
+            source_anchor
+                .join_component("output.txt")
+                .create_with_contents("archived")?;
+            let files = vec![AnchoredSystemPathBuf::from_raw("output.txt")?];
+            let built = crate::artifact_body::Artifact::from_files(source_anchor, &files)?;
+
+            let workspace = tempdir()?;
+            let anchor = AbsoluteSystemPath::from_std_path(workspace.path())?;
+            let (_restored, artifact) = built.body().restore(anchor)?;
+            let output = anchor.join_component("output.txt");
+            match change {
+                "modify" => output.create_with_contents("changed after restore")?,
+                _ => output.remove_file()?,
+            }
+            let cache = FSCache::new(
+                Utf8Path::new("cache"),
+                anchor,
+                None,
+                LazyScmState::resolved(None),
+            )?;
+            cache.put_archive("after-restore", &artifact, 50)?;
+
+            cache
+                .fetch(anchor, "after-restore")?
+                .expect("cache should hit");
+            assert_eq!(output.read_to_string()?, "archived", "{change}");
+        }
+        Ok(())
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn put_archive_after_restore_restores_changed_symlinks() -> Result<()> {
+        for change in ["retarget", "delete"] {
+            let source = tempdir()?;
+            let source_anchor = AbsoluteSystemPath::from_std_path(source.path())?;
+            let files = symlinked_outputs(source_anchor)?;
+            let built = crate::artifact_body::Artifact::from_files(source_anchor, &files)?;
+
+            let workspace = tempdir()?;
+            let anchor = AbsoluteSystemPath::from_std_path(workspace.path())?;
+            let (_restored, artifact) = built.body().restore(anchor)?;
+            let link = anchor.join_components(&["dist", "link"]);
+            link.remove_file()?;
+            if change == "retarget" {
+                link.symlink_to_file("b.txt")?;
+            }
+            let cache = FSCache::new(
+                Utf8Path::new("cache"),
+                anchor,
+                None,
+                LazyScmState::resolved(None),
+            )?;
+            cache.put_archive("after-restore", &artifact, 50)?;
+
+            cache
+                .fetch(anchor, "after-restore")?
+                .expect("cache should hit");
+            assert_eq!(link.read_link()?.as_str(), "a.txt", "{change}");
+        }
+        Ok(())
+    }
+
+    /// Lays out `dist/` with files, an empty directory, and symlinks, and
+    /// returns the paths a task caching `dist/**` would save. Restoring them
+    /// into an empty `dist/` writes `link` as soon as it is read, and defers
+    /// `dangling` and `early` (whose target comes later in the archive) until
+    /// every other entry is restored.
+    #[cfg(unix)]
+    fn symlinked_outputs(repo_root: &AbsoluteSystemPath) -> Result<Vec<AnchoredSystemPathBuf>> {
+        let dist = repo_root.join_component("dist");
+        dist.join_component("empty").create_dir_all()?;
+        dist.join_component("a.txt").create_with_contents("a")?;
+        dist.join_component("b.txt").create_with_contents("b")?;
+        dist.join_component("late.txt")
+            .create_with_contents("late")?;
+        dist.join_component("link").symlink_to_file("a.txt")?;
+        dist.join_component("dangling").symlink_to_file("missing")?;
+        dist.join_component("early").symlink_to_file("late.txt")?;
+        [
+            "dist",
+            "dist/a.txt",
+            "dist/b.txt",
+            "dist/dangling",
+            "dist/early",
+            "dist/empty",
+            "dist/late.txt",
+            "dist/link",
+        ]
+        .into_iter()
+        .map(|path| Ok(AnchoredSystemPathBuf::from_raw(path)?))
+        .collect()
+    }
+
+    /// A cache hit must leave every cached symlink in place: the manifest
+    /// fast path may only skip the restore when symlinks match too. Both ways
+    /// an archive is installed locally (saving outputs, and installing a
+    /// remote hit) write the manifest the fast path trusts.
+    #[test]
+    #[cfg(unix)]
+    fn fetch_restores_symlinks_changed_since_put() -> Result<()> {
+        for (installer, change) in ["put", "put_archive"].into_iter().flat_map(|installer| {
+            ["delete", "delete dangling", "retarget"].map(|change| (installer, change))
+        }) {
+            let repo_root = tempdir()?;
+            let repo_root_path = AbsoluteSystemPath::from_std_path(repo_root.path())?;
+            let files = symlinked_outputs(repo_root_path)?;
+            let cache = FSCache::new(
+                Utf8Path::new("cache"),
+                repo_root_path,
+                None,
+                LazyScmState::resolved(None),
+            )?;
+            if installer == "put" {
+                cache.put(repo_root_path, "symlinks", &files, 50)?;
+            } else {
+                let artifact = crate::artifact_body::Artifact::from_files(repo_root_path, &files)?;
+                cache.put_archive("symlinks", &artifact, 50)?;
+            }
+
+            let dist = repo_root_path.join_component("dist");
+            match change {
+                "delete" => dist.join_component("link").remove_file()?,
+                "delete dangling" => dist.join_component("dangling").remove_file()?,
+                _ => {
+                    dist.join_component("link").remove_file()?;
+                    dist.join_component("link").symlink_to_file("b.txt")?;
+                }
+            }
+
+            let (_, restored) = cache
+                .fetch(repo_root_path, "symlinks")?
+                .expect("cache should hit");
+            assert_eq!(
+                dist.join_component("link").read_link()?.as_str(),
+                "a.txt",
+                "{installer}, {change}: symlink should be restored"
+            );
+            assert_eq!(
+                dist.join_component("dangling").read_link()?.as_str(),
+                "missing",
+                "{installer}, {change}: dangling symlink should be restored"
+            );
+            assert!(restored.contains(&AnchoredSystemPathBuf::from_raw("dist/link")?));
+        }
+        Ok(())
+    }
+
+    /// The manifest written after a restore records the same entries as the
+    /// one written at save time, including directories and symlinks.
+    #[test]
+    #[cfg(unix)]
+    fn restore_manifest_records_directories_and_symlinks() -> Result<()> {
+        let repo_root = tempdir()?;
+        let repo_root_path = AbsoluteSystemPath::from_std_path(repo_root.path())?;
+        let files = symlinked_outputs(repo_root_path)?;
+        let cache = FSCache::new(
+            Utf8Path::new("cache"),
+            repo_root_path,
+            None,
+            LazyScmState::resolved(None),
+        )?;
+        cache.put(repo_root_path, "restored", &files, 50)?;
+
+        let dist = repo_root_path.join_component("dist");
+        dist.remove_dir_all()?;
+        let archive = cache.cache_directory().join_component("restored.tar.zst");
+        let (restored, manifest) = CacheReader::open(&archive)?.restore(repo_root_path, None)?;
+        assert_eq!(
+            manifest.validate_all(repo_root_path),
+            Some(restored),
+            "the fast path should report what the restore did"
+        );
+
+        dist.join_component("empty").remove_dir()?;
+        assert!(
+            manifest.validate_all(repo_root_path).is_none(),
+            "a deleted directory must invalidate the manifest"
+        );
+        dist.join_component("empty").create_dir_all()?;
+        assert!(manifest.validate_all(repo_root_path).is_some());
+
+        // `link` is restored as soon as it is read; `dangling` and `early`
+        // only once every other entry is restored.
+        for link in ["link", "dangling", "early"] {
+            let link = dist.join_component(link);
+            let target = link.read_link()?;
+            link.remove_file()?;
+            assert!(
+                manifest.validate_all(repo_root_path).is_none(),
+                "deleting {link} must invalidate the manifest"
+            );
+            link.symlink_to_file("b.txt")?;
+            assert!(
+                manifest.validate_all(repo_root_path).is_none(),
+                "retargeting {link} must invalidate the manifest"
+            );
+            link.remove_file()?;
+            link.symlink_to_file(target.as_str())?;
+            assert!(manifest.validate_all(repo_root_path).is_some());
+        }
+
+        // A restore that skips unchanged files still records them.
+        dist.join_component("link").remove_file()?;
+        let (restored, manifest) =
+            CacheReader::open(&archive)?.restore(repo_root_path, Some(&manifest))?;
+        assert_eq!(manifest.validate_all(repo_root_path), Some(restored));
+        Ok(())
+    }
+
+    /// Manifests written before symlinks were recorded cannot vouch for
+    /// them, so they must not short-circuit a restore, but their regular
+    /// files still spare unchanged outputs from being rewritten.
+    #[test]
+    #[cfg(unix)]
+    fn fetch_ignores_manifest_without_version() -> Result<()> {
+        let repo_root = tempdir()?;
+        let repo_root_path = AbsoluteSystemPath::from_std_path(repo_root.path())?;
+        let files = symlinked_outputs(repo_root_path)?;
+        let cache = FSCache::new(
+            Utf8Path::new("cache"),
+            repo_root_path,
+            None,
+            LazyScmState::resolved(None),
+        )?;
+        cache.put(repo_root_path, "legacy", &files, 50)?;
+
+        // Rewrite the manifest the way an older turbo wrote it: no version
+        // and no symlink entries.
+        let manifest_path = cache
+            .cache_directory()
+            .join_component("legacy-manifest.json");
+        let mut manifest: serde_json::Value =
+            serde_json::from_str(&manifest_path.read_to_string()?)?;
+        let manifest = manifest.as_object_mut().unwrap();
+        manifest.remove("version");
+        let links = manifest.remove("link_targets").unwrap_or_default();
+        let links = links.as_object().cloned().unwrap_or_default();
+        let entries = manifest["files"].as_object_mut().unwrap();
+        entries.retain(|path, _| !links.contains_key(path));
+        let kept = entries
+            .keys()
+            .cloned()
+            .collect::<std::collections::HashSet<_>>();
+        manifest["order"]
+            .as_array_mut()
+            .unwrap()
+            .retain(|path| kept.contains(path.as_str().unwrap()));
+        manifest_path.create_with_contents(serde_json::to_string(&manifest)?)?;
+
+        let dist = repo_root_path.join_component("dist");
+        let unchanged = dist.join_component("a.txt");
+        let unchanged_mtime = unchanged.symlink_metadata()?.modified()?;
+        std::thread::sleep(Duration::from_millis(50));
+        let link = dist.join_component("link");
+        link.remove_file()?;
+        cache
+            .fetch(repo_root_path, "legacy")?
+            .expect("cache should hit");
+        assert_eq!(link.read_link()?.as_str(), "a.txt");
+        assert_eq!(
+            unchanged.symlink_metadata()?.modified()?,
+            unchanged_mtime,
+            "unchanged file should not be rewritten"
+        );
+        Ok(())
+    }
+
     /// When the manifest fast path fails because one file changed, the slow
     /// path should still skip writing files that haven't changed. This
     /// prevents unnecessary filesystem notifications (inotify/fsevents) for
@@ -1208,6 +1639,104 @@ mod test {
 
         // changing.txt should be restored to its original cached content.
         assert_eq!(changing_file.read_to_string()?, "original");
+
+        Ok(())
+    }
+
+    #[test]
+    fn lookup_reports_each_outcome() -> Result<()> {
+        let repo_root = tempdir()?;
+        let repo_root_path = AbsoluteSystemPath::from_std_path(repo_root.path())?;
+        let output = repo_root_path.join_component("output.txt");
+        output.create_with_contents("cached")?;
+        let files = vec![AnchoredSystemPathBuf::from_raw("output.txt")?];
+        let hash = "lookup_outcomes";
+
+        let cache = FSCache::new(
+            Utf8Path::new("cache"),
+            repo_root_path,
+            None,
+            LazyScmState::resolved(None),
+        )?;
+        assert!(matches!(
+            cache.lookup(repo_root_path, hash, u64::MAX)?,
+            LocalLookup::Miss
+        ));
+
+        cache.put(repo_root_path, hash, &files, 50)?;
+        match cache.lookup(repo_root_path, hash, u64::MAX)? {
+            LocalLookup::Unchanged(metadata, restored) => {
+                assert_eq!(metadata.time_saved, 50);
+                assert_eq!(restored, files);
+            }
+            _ => panic!("unchanged outputs should not need a restore"),
+        }
+        assert!(matches!(
+            cache.lookup(repo_root_path, hash, 1)?,
+            LocalLookup::ManifestTooLarge
+        ));
+
+        // A changed output (different size) needs a restore, which keeps the
+        // manifest so unchanged files can still be skipped.
+        output.create_with_contents("changed")?;
+        let LocalLookup::Restore(Some(previous_manifest)) =
+            cache.lookup(repo_root_path, hash, u64::MAX)?
+        else {
+            panic!("a changed output should need a restore with the manifest");
+        };
+        let (metadata, restored) = cache
+            .restore(repo_root_path, hash, Some(previous_manifest))?
+            .expect("the archive exists");
+        assert_eq!(metadata.time_saved, 50);
+        assert_eq!(restored, files);
+        assert_eq!(output.read_to_string()?, "cached");
+
+        Ok(())
+    }
+
+    /// The manifest of a restore must be on disk when `fetch` returns: turbo
+    /// can exit right after the last restore, and a manifest written later is
+    /// lost, so every following hit would restore every file again.
+    #[test]
+    fn fetch_writes_restore_manifest_before_returning() -> Result<()> {
+        let repo_root = tempdir()?;
+        let repo_root_path = AbsoluteSystemPath::from_std_path(repo_root.path())?;
+        let dist = repo_root_path.join_component("dist");
+        dist.create_dir_all()?;
+        let mut files = vec![AnchoredSystemPathBuf::from_raw("dist")?];
+        for i in 0..2000 {
+            let name = format!("f{i}.js");
+            dist.join_component(&name)
+                .create_with_contents(format!("export const v = {i};\n"))?;
+            files.push(AnchoredSystemPathBuf::from_raw(format!("dist/{name}"))?);
+        }
+        let hash = "manifest_written_before_return";
+
+        let cache = FSCache::new(
+            Utf8Path::new("cache"),
+            repo_root_path,
+            None,
+            LazyScmState::resolved(None),
+        )?;
+        cache.put(repo_root_path, hash, &files, 50)?;
+
+        // Outputs are gone, as after a branch switch or a clean: every file
+        // is restored and gets a new mtime.
+        dist.remove_dir_all()?;
+        let (_, restored) = cache.fetch(repo_root_path, hash)?.expect("cache hit");
+        assert_eq!(restored.len(), files.len());
+
+        // Nothing changed since the restore, so the next lookup must take the
+        // fast path instead of restoring every file again.
+        assert!(
+            matches!(
+                cache.lookup(repo_root_path, hash, u64::MAX)?,
+                LocalLookup::Unchanged(..)
+            ),
+            "the restore manifest must describe the restored files"
+        );
+        let tmp = repo_root_path.join_components(&["cache", &format!("{hash}-manifest.json.tmp")]);
+        assert!(!tmp.exists(), "no partial manifest should be left behind");
 
         Ok(())
     }

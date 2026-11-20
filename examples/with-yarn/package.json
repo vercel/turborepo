@@ -9,14 +9,15 @@
     "build": "turbo run build",
     "dev": "turbo run dev",
     "lint": "turbo run lint",
+    "check-types": "turbo run check-types",
     "format": "prettier --write \"**/*.{ts,tsx,md}\""
   },
   "devDependencies": {
-    "prettier": "^3.2.5",
-    "turbo": "2.9.6"
+    "prettier": "3.9.10",
+    "turbo": "2.11.10"
   },
   "packageManager": "yarn@1.22.22",
   "engines": {
-    "node": ">=18"
+    "node": ">=26.13.0"
   }
 }

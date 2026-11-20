@@ -1,8 +1,16 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { test } from "node:test";
 import path from "node:path";
 import { tmpdir, arch as osArch, platform } from "node:os";
-import { access, mkdir, realpath, rm, writeFile } from "node:fs/promises";
+import {
+  access,
+  mkdir,
+  readFile,
+  realpath,
+  rm,
+  writeFile
+} from "node:fs/promises";
 import { execFileSync, execSync } from "node:child_process";
 import { constants } from "node:fs";
 import operations from "./operations";
@@ -27,13 +35,28 @@ test("produces installable archive", async () => {
     "#!/bin/bash\necho Invoked fake turbo!"
   );
 
-  const tarPath = await operations.packPlatform({
+  const artifact = await operations.packPlatform({
     platform: { os, arch },
     version: "0.1.2",
     srcDir: tempDir,
     packagePrefix: "@turbo"
   });
-  assert.ok(path.isAbsolute(tarPath));
+  assert.equal(artifact.packageName, `@turbo/${os}-${humanArch}`);
+  assert.equal(artifact.version, "0.1.2");
+  assert.ok(path.isAbsolute(artifact.tarball));
+  const firstIntegrity = createHash("sha512")
+    .update(new Uint8Array(await readFile(artifact.tarball)))
+    .digest("base64");
+  const rebuiltArtifact = await operations.packPlatform({
+    platform: { os, arch },
+    version: "0.1.2",
+    srcDir: tempDir,
+    packagePrefix: "@turbo"
+  });
+  const rebuiltIntegrity = createHash("sha512")
+    .update(new Uint8Array(await readFile(rebuiltArtifact.tarball)))
+    .digest("base64");
+  assert.equal(rebuiltIntegrity, firstIntegrity);
 
   // Make a fake repo to install the tarball in
   const fakeRepo = path.join(tempDir, "fake-repo");
@@ -42,7 +65,7 @@ test("produces installable archive", async () => {
     path.join(fakeRepo, "package.json"),
     JSON.stringify({ name: "fake-repo" })
   );
-  execFileSync("npm", ["install", tarPath], { cwd: fakeRepo });
+  execFileSync("npm", ["install", artifact.tarball], { cwd: fakeRepo });
 
   // The scoped platform package installs the binary at a known path.
   // In production, the main `turbo` package resolves it via require.resolve.

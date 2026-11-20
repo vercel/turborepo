@@ -1,0 +1,234 @@
+---
+source: crates/turborepo-trace-lang-js/tests/resolve.rs
+expression: json
+---
+{
+  "version": 1,
+  "base": "<fixture>",
+  "entries": [
+    {
+      "path": "index.js",
+      "files": [
+        "index.js",
+        "node_modules/.pnpm/bar@2.0.0/node_modules/bar/index.js",
+        "node_modules/.pnpm/bar@2.0.0/node_modules/bar/package.json",
+        "node_modules/.pnpm/foo@1.0.0/node_modules/bar",
+        "node_modules/.pnpm/foo@1.0.0/node_modules/foo/index.js",
+        "node_modules/.pnpm/foo@1.0.0/node_modules/foo/package.json",
+        "node_modules/foo",
+        "package.json"
+      ]
+    }
+  ],
+  "files": [
+    {
+      "path": "index.js",
+      "reasons": [
+        "initial"
+      ],
+      "parents": [],
+      "parsed": true,
+      "lang": "js"
+    },
+    {
+      "path": "node_modules/.pnpm/bar@2.0.0/node_modules/bar/index.js",
+      "reasons": [
+        "dependency"
+      ],
+      "parents": [
+        "node_modules/.pnpm/foo@1.0.0/node_modules/foo/index.js"
+      ],
+      "parsed": true,
+      "lang": "js"
+    },
+    {
+      "path": "node_modules/.pnpm/bar@2.0.0/node_modules/bar/package.json",
+      "reasons": [
+        "manifest"
+      ],
+      "parents": [
+        "node_modules/.pnpm/bar@2.0.0/node_modules/bar/index.js",
+        "node_modules/.pnpm/foo@1.0.0/node_modules/foo/index.js"
+      ],
+      "parsed": false
+    },
+    {
+      "path": "node_modules/.pnpm/foo@1.0.0/node_modules/bar",
+      "reasons": [
+        "resolve"
+      ],
+      "parents": [
+        "node_modules/.pnpm/foo@1.0.0/node_modules/foo/index.js"
+      ],
+      "parsed": false
+    },
+    {
+      "path": "node_modules/.pnpm/foo@1.0.0/node_modules/foo/index.js",
+      "reasons": [
+        "dependency"
+      ],
+      "parents": [
+        "index.js"
+      ],
+      "parsed": true,
+      "lang": "js"
+    },
+    {
+      "path": "node_modules/.pnpm/foo@1.0.0/node_modules/foo/package.json",
+      "reasons": [
+        "manifest"
+      ],
+      "parents": [
+        "index.js",
+        "node_modules/.pnpm/foo@1.0.0/node_modules/foo/index.js"
+      ],
+      "parsed": false
+    },
+    {
+      "path": "node_modules/foo",
+      "reasons": [
+        "resolve"
+      ],
+      "parents": [
+        "index.js"
+      ],
+      "parsed": false
+    },
+    {
+      "path": "package.json",
+      "reasons": [
+        "manifest"
+      ],
+      "parents": [
+        "index.js"
+      ],
+      "parsed": false
+    }
+  ],
+  "edges": [
+    {
+      "from": "index.js",
+      "kind": "require",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "foo",
+      "span": [
+        12,
+        26
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "node_modules/.pnpm/foo@1.0.0/node_modules/foo/index.js"
+      }
+    },
+    {
+      "from": "index.js",
+      "kind": "manifest",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "foo",
+      "span": [
+        12,
+        26
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "node_modules/.pnpm/foo@1.0.0/node_modules/foo/package.json"
+      }
+    },
+    {
+      "from": "index.js",
+      "kind": "manifest",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "foo",
+      "span": [
+        12,
+        26
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "package.json"
+      }
+    },
+    {
+      "from": "node_modules/.pnpm/bar@2.0.0/node_modules/bar/index.js",
+      "kind": "manifest",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "package.json scope",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "node_modules/.pnpm/bar@2.0.0/node_modules/bar/package.json"
+      }
+    },
+    {
+      "from": "node_modules/.pnpm/foo@1.0.0/node_modules/foo/index.js",
+      "kind": "require",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "bar",
+      "span": [
+        17,
+        31
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "node_modules/.pnpm/bar@2.0.0/node_modules/bar/index.js"
+      }
+    },
+    {
+      "from": "node_modules/.pnpm/foo@1.0.0/node_modules/foo/index.js",
+      "kind": "manifest",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "bar",
+      "span": [
+        17,
+        31
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "node_modules/.pnpm/bar@2.0.0/node_modules/bar/package.json"
+      }
+    },
+    {
+      "from": "node_modules/.pnpm/foo@1.0.0/node_modules/foo/index.js",
+      "kind": "manifest",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "bar",
+      "span": [
+        17,
+        31
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "node_modules/.pnpm/foo@1.0.0/node_modules/foo/package.json"
+      }
+    }
+  ],
+  "uncertainties": [],
+  "symlinks": {
+    "node_modules/.pnpm/foo@1.0.0/node_modules/bar": "node_modules/.pnpm/bar@2.0.0/node_modules/bar",
+    "node_modules/foo": "node_modules/.pnpm/foo@1.0.0/node_modules/foo"
+  },
+  "stats": {
+    "entries": 1,
+    "files": 8,
+    "parsed_files": 3,
+    "edges": 7,
+    "uncertainties": 0
+  }
+}

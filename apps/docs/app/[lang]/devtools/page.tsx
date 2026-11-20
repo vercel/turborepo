@@ -1,20 +1,20 @@
-import { notFound } from "next/navigation";
-import { enableDevtools } from "../../../flags";
+import type { Metadata } from "next";
 import { DevtoolsClientComponent } from "./devtools-client";
 import { createMetadata } from "@/lib/create-metadata";
+import { getLocalizedPath } from "@/lib/geistdocs/public-path";
 
-export const metadata = createMetadata({
-  title: "Turborepo Devtools",
-  description: "Visualize your Turborepo package and task graphs",
-  canonicalPath: "/devtools"
-});
+export const generateMetadata = async ({
+  params
+}: PageProps<"/[lang]/devtools">): Promise<Metadata> => {
+  const { lang } = await params;
 
-export default async function DevtoolsPage() {
-  const showDevtools = await enableDevtools();
+  return createMetadata({
+    title: "Turborepo Devtools",
+    description: "Visualize your Turborepo package and task graphs",
+    canonicalPath: getLocalizedPath(lang, "/devtools")
+  });
+};
 
-  if (!showDevtools) {
-    return notFound();
-  }
-
+export default function DevtoolsPage() {
   return <DevtoolsClientComponent />;
 }

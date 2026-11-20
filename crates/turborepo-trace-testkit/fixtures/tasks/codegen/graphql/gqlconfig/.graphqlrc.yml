@@ -1,0 +1,8 @@
+schema: schema.graphql
+documents: 'src/**/*.graphql'
+extensions:
+  codegen:
+    generates:
+      src/graphql.ts:
+        plugins:
+          - typescript

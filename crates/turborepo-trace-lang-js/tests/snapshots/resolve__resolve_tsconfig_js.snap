@@ -1,0 +1,366 @@
+---
+source: crates/turborepo-trace-lang-js/tests/resolve.rs
+expression: json
+---
+{
+  "version": 1,
+  "base": "<fixture>",
+  "entries": [
+    {
+      "path": "src/main.ts",
+      "files": [
+        "lib/util.ts",
+        "package.json",
+        "src/esm.mjs",
+        "src/main.ts",
+        "src/page.js",
+        "src/widget.jsx"
+      ]
+    },
+    {
+      "path": "jsapp/src/index.js",
+      "files": [
+        "jsapp/components/button.js",
+        "jsapp/package.json",
+        "jsapp/src/index.js"
+      ]
+    }
+  ],
+  "files": [
+    {
+      "path": "jsapp/components/button.js",
+      "reasons": [
+        "dependency"
+      ],
+      "parents": [
+        "jsapp/src/index.js"
+      ],
+      "parsed": true,
+      "lang": "js"
+    },
+    {
+      "path": "jsapp/package.json",
+      "reasons": [
+        "manifest"
+      ],
+      "parents": [
+        "jsapp/components/button.js",
+        "jsapp/src/index.js"
+      ],
+      "parsed": false
+    },
+    {
+      "path": "jsapp/src/index.js",
+      "reasons": [
+        "initial"
+      ],
+      "parents": [],
+      "parsed": true,
+      "lang": "js"
+    },
+    {
+      "path": "lib/util.ts",
+      "reasons": [
+        "dependency"
+      ],
+      "parents": [
+        "src/esm.mjs",
+        "src/page.js",
+        "src/widget.jsx"
+      ],
+      "parsed": true,
+      "lang": "js"
+    },
+    {
+      "path": "package.json",
+      "reasons": [
+        "manifest"
+      ],
+      "parents": [
+        "lib/util.ts",
+        "src/esm.mjs",
+        "src/main.ts",
+        "src/page.js",
+        "src/widget.jsx"
+      ],
+      "parsed": false
+    },
+    {
+      "path": "src/esm.mjs",
+      "reasons": [
+        "dependency"
+      ],
+      "parents": [
+        "src/main.ts"
+      ],
+      "parsed": true,
+      "lang": "js"
+    },
+    {
+      "path": "src/main.ts",
+      "reasons": [
+        "initial"
+      ],
+      "parents": [],
+      "parsed": true,
+      "lang": "js"
+    },
+    {
+      "path": "src/page.js",
+      "reasons": [
+        "dependency"
+      ],
+      "parents": [
+        "src/main.ts"
+      ],
+      "parsed": true,
+      "lang": "js"
+    },
+    {
+      "path": "src/widget.jsx",
+      "reasons": [
+        "dependency"
+      ],
+      "parents": [
+        "src/main.ts"
+      ],
+      "parsed": true,
+      "lang": "js"
+    }
+  ],
+  "edges": [
+    {
+      "from": "jsapp/components/button.js",
+      "kind": "manifest",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "package.json scope",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "jsapp/package.json"
+      }
+    },
+    {
+      "from": "jsapp/src/index.js",
+      "kind": "require",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "@/components/button",
+      "span": [
+        15,
+        45
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "jsapp/components/button.js"
+      }
+    },
+    {
+      "from": "jsapp/src/index.js",
+      "kind": "manifest",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "@/components/button",
+      "span": [
+        15,
+        45
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "jsapp/package.json"
+      }
+    },
+    {
+      "from": "lib/util.ts",
+      "kind": "manifest",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "package.json scope",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "package.json"
+      }
+    },
+    {
+      "from": "src/esm.mjs",
+      "kind": "import",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "#/lib/util",
+      "span": [
+        0,
+        33
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "lib/util.ts"
+      }
+    },
+    {
+      "from": "src/esm.mjs",
+      "kind": "manifest",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "#/lib/util",
+      "span": [
+        0,
+        33
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "package.json"
+      }
+    },
+    {
+      "from": "src/main.ts",
+      "kind": "import",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "./page.js",
+      "span": [
+        0,
+        28
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "src/page.js"
+      }
+    },
+    {
+      "from": "src/main.ts",
+      "kind": "manifest",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "./page.js",
+      "span": [
+        0,
+        28
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "package.json"
+      }
+    },
+    {
+      "from": "src/main.ts",
+      "kind": "import",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "./esm.mjs",
+      "span": [
+        30,
+        57
+      ],
+      "line": 2,
+      "target": {
+        "type": "file",
+        "path": "src/esm.mjs"
+      }
+    },
+    {
+      "from": "src/main.ts",
+      "kind": "import",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "./widget.jsx",
+      "span": [
+        59,
+        96
+      ],
+      "line": 3,
+      "target": {
+        "type": "file",
+        "path": "src/widget.jsx"
+      }
+    },
+    {
+      "from": "src/page.js",
+      "kind": "import",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "#/lib/util",
+      "span": [
+        0,
+        33
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "lib/util.ts"
+      }
+    },
+    {
+      "from": "src/page.js",
+      "kind": "manifest",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "#/lib/util",
+      "span": [
+        0,
+        33
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "package.json"
+      }
+    },
+    {
+      "from": "src/widget.jsx",
+      "kind": "import",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "#/lib/util",
+      "span": [
+        0,
+        33
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "lib/util.ts"
+      }
+    },
+    {
+      "from": "src/widget.jsx",
+      "kind": "manifest",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "#/lib/util",
+      "span": [
+        0,
+        33
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "package.json"
+      }
+    }
+  ],
+  "uncertainties": [],
+  "symlinks": {},
+  "stats": {
+    "entries": 2,
+    "files": 9,
+    "parsed_files": 7,
+    "edges": 14,
+    "uncertainties": 0
+  }
+}

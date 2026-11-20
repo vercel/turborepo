@@ -88,7 +88,8 @@ export async function create(
   // selected package manager can be undefined if the user chooses to skip transforms
   const selectedPackageManagerDetails = await prompts.packageManager({
     manager: packageManager,
-    skipTransforms
+    skipTransforms,
+    availablePackageManagers
   });
 
   if (packageManager && opts.skipTransforms) {

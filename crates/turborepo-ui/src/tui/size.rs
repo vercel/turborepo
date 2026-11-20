@@ -38,6 +38,12 @@ impl SizeInfo {
         self.cols.saturating_sub(self.rendered_pane_cols())
     }
 
+    /// Number of task rows visible in the task list, accounting for the
+    /// header row and the two key-bind footer rows rendered by the table.
+    pub fn task_list_visible_task_rows(&self) -> u16 {
+        self.rows.saturating_sub(3)
+    }
+
     pub fn pane_cols(&self) -> u16 {
         self.pane_cols_with_sidebar(true)
     }

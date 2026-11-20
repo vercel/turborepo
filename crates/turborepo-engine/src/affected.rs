@@ -7,23 +7,35 @@
 //! considered (e.g. tasks with `$TURBO_ROOT$` inputs in non-affected
 //! packages).
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 
-use turbopath::AnchoredSystemPathBuf;
 use turborepo_repository::package_graph::{PackageGraph, PackageName};
 use turborepo_task_id::TaskId;
 use turborepo_types::{
-    TaskDefinition, TaskInputs,
-    task_input_matching::{compile_globs, file_matches_compiled_inputs},
+    EffectiveTaskInputs, TaskDefinition, TaskInputChanges, TaskInputs, TaskOutputs,
+    task_input_matching::CompiledEffectiveInputs,
 };
 
 use crate::{Built, Engine};
+
+#[derive(Debug, thiserror::Error)]
+pub enum AffectednessError {
+    #[error("engine task refers to unknown package {0}")]
+    UnknownTaskPackage(PackageName),
+    #[error("invalid input glob {glob:?} for task {task}: {error}")]
+    InvalidGlob {
+        task: TaskId<'static>,
+        glob: String,
+        error: String,
+    },
+}
 
 /// Fallback inputs when a task has no definition in the engine.
 /// `default: true` means all files in the package directory are considered
 /// inputs, matching turbo's default hashing behavior.
 static DEFAULT_TASK_INPUTS: TaskInputs = TaskInputs {
     globs: Vec::new(),
+    derived_globs: Vec::new(),
     default: true,
     jit_globs: Vec::new(),
     jit_default: false,
@@ -31,7 +43,12 @@ static DEFAULT_TASK_INPUTS: TaskInputs = TaskInputs {
     eager: true,
 };
 
-/// Returns the set of tasks whose input globs match at least one changed file.
+static DEFAULT_TASK_OUTPUTS: TaskOutputs = TaskOutputs {
+    inclusions: Vec::new(),
+    exclusions: Vec::new(),
+};
+
+/// Returns the set of tasks whose effective inputs match a changed file.
 ///
 /// Iterates every task in the engine regardless of which packages are
 /// "affected" at the package level. This is critical for correctness:
@@ -44,40 +61,57 @@ static DEFAULT_TASK_INPUTS: TaskInputs = TaskInputs {
 ///
 /// Does NOT include transitive dependents. Callers should propagate
 /// through the task graph separately if needed.
+///
+/// # Errors
+///
+/// Returns an error when an engine task refers to a package absent from
+/// authoritative repository knowledge or contains an invalid input glob.
 pub fn match_tasks_against_changed_files(
     engine: &Engine<Built, TaskDefinition>,
     pkg_dep_graph: &PackageGraph,
-    changed_files: &HashSet<AnchoredSystemPathBuf>,
-) -> HashMap<TaskId<'static>, String> {
+    changed_files: &TaskInputChanges,
+) -> Result<HashMap<TaskId<'static>, String>, AffectednessError> {
     let mut matched = HashMap::new();
 
-    // Pre-convert all file paths to Unix strings once, avoiding repeated
-    // allocation in the O(tasks × files) inner loop.
-    let changed_unix: Vec<String> = changed_files
+    let changed_unix: Vec<_> = changed_files
+        .files
         .iter()
-        .map(|f| f.to_unix().to_string())
+        .map(|f| (f.to_unix().to_string(), changed_files.tracked.contains(f)))
         .collect();
 
-    // Compile globs once per unique (package_path, inputs) pair.
-    let mut compiled_cache: HashMap<(String, TaskInputs), _> = HashMap::new();
+    let mut compiled_cache: HashMap<(String, EffectiveTaskInputs<'_>), _> = HashMap::new();
 
     for task_id in engine.task_ids() {
         let pkg_name = PackageName::from(task_id.package());
-        let Some(pkg_dir) = pkg_dep_graph.package_dir(&pkg_name) else {
-            continue;
-        };
+        let pkg_dir = pkg_dep_graph
+            .package_dir(&pkg_name)
+            .ok_or_else(|| AffectednessError::UnknownTaskPackage(pkg_name.clone()))?;
         let pkg_unix = pkg_dir.to_unix();
         let pkg_str = pkg_unix.to_string();
 
         let inputs = engine
             .task_definition(task_id)
-            .map(|def| &def.inputs)
-            .unwrap_or(&DEFAULT_TASK_INPUTS);
+            .map(|def| EffectiveTaskInputs {
+                declared: &def.inputs,
+                tracked_outputs: &def.outputs,
+            })
+            .unwrap_or(EffectiveTaskInputs {
+                declared: &DEFAULT_TASK_INPUTS,
+                tracked_outputs: &DEFAULT_TASK_OUTPUTS,
+            });
 
-        let cache_key = (pkg_str.clone(), inputs.clone());
-        let compiled = compiled_cache
-            .entry(cache_key)
-            .or_insert_with(|| compile_globs(inputs));
+        let cache_key = (pkg_str.clone(), inputs);
+        if !compiled_cache.contains_key(&cache_key) {
+            let compiled = CompiledEffectiveInputs::compile(inputs, &pkg_str).map_err(|error| {
+                AffectednessError::InvalidGlob {
+                    task: task_id.clone(),
+                    glob: error.glob,
+                    error: error.error.to_string(),
+                }
+            })?;
+            compiled_cache.insert(cache_key.clone(), compiled);
+        }
+        let compiled = &compiled_cache[&cache_key];
 
         let pkg_prefix_slash = if pkg_str.is_empty() {
             String::new()
@@ -85,20 +119,20 @@ pub fn match_tasks_against_changed_files(
             format!("{pkg_str}/")
         };
 
-        for file_unix in &changed_unix {
-            if file_matches_compiled_inputs(file_unix, &pkg_str, &pkg_prefix_slash, compiled) {
+        for (file_unix, tracked_change) in &changed_unix {
+            if compiled.matches(file_unix, &pkg_str, &pkg_prefix_slash, *tracked_change) {
                 matched.insert(task_id.clone(), file_unix.clone());
                 break;
             }
         }
     }
 
-    matched
+    Ok(matched)
 }
 
 #[cfg(test)]
 mod tests {
-    use std::collections::{HashMap, HashSet};
+    use std::collections::HashMap;
 
     use turbopath::{AbsoluteSystemPath, AnchoredSystemPathBuf};
     use turborepo_errors::Spanned;
@@ -162,11 +196,13 @@ mod tests {
         engine.seal()
     }
 
-    fn changed(files: &[&str]) -> HashSet<AnchoredSystemPathBuf> {
-        files
-            .iter()
-            .map(|f| AnchoredSystemPathBuf::from_raw(f).unwrap())
-            .collect()
+    fn changed(files: &[&str]) -> TaskInputChanges {
+        TaskInputChanges::from_tracked(
+            files
+                .iter()
+                .map(|f| AnchoredSystemPathBuf::from_raw(f).unwrap())
+                .collect(),
+        )
     }
 
     fn def_with_inputs(globs: &[&str], default: bool) -> TaskDefinition {
@@ -211,7 +247,8 @@ mod tests {
             &engine,
             &pkg_graph,
             &changed(&["packages/lib-a/README.md"]),
-        );
+        )
+        .unwrap();
         assert_eq!(result.len(), 1, "only build should match .md: {result:?}");
         assert!(result.contains_key(&a_build));
 
@@ -220,7 +257,8 @@ mod tests {
             &engine,
             &pkg_graph,
             &changed(&["packages/lib-a/foo.test.ts"]),
-        );
+        )
+        .unwrap();
         assert_eq!(
             result.len(),
             2,
@@ -247,7 +285,8 @@ mod tests {
             &engine,
             &pkg_graph,
             &changed(&["packages/lib-a/src/index.ts"]),
-        );
+        )
+        .unwrap();
         assert_eq!(
             result.len(),
             1,
@@ -278,7 +317,8 @@ mod tests {
         // Only a root-level file changed. lib-a has default inputs so its
         // source dir didn't change. lib-b's $TURBO_ROOT$ input DID change.
         let result =
-            match_tasks_against_changed_files(&engine, &pkg_graph, &changed(&["config.txt"]));
+            match_tasks_against_changed_files(&engine, &pkg_graph, &changed(&["config.txt"]))
+                .unwrap();
         assert!(
             result.contains_key(&b_build),
             "lib-b#build should match via $TURBO_ROOT$ input: {result:?}"
@@ -317,7 +357,8 @@ mod tests {
 
         // Only build-config.txt changes at the root.
         let result =
-            match_tasks_against_changed_files(&engine, &pkg_graph, &changed(&["build-config.txt"]));
+            match_tasks_against_changed_files(&engine, &pkg_graph, &changed(&["build-config.txt"]))
+                .unwrap();
         assert!(
             result.contains_key(&a_build),
             "lib-a#build should match its declared $TURBO_ROOT$ input: {result:?}"
@@ -326,5 +367,20 @@ mod tests {
             !result.contains_key(&a_test),
             "lib-a#test should NOT match a root file it didn't declare: {result:?}"
         );
+    }
+
+    #[tokio::test]
+    async fn unknown_task_package_is_an_error() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPath::from_std_path(tmp.path()).unwrap();
+        let pkg_graph = make_pkg_graph(root, &[]).await;
+        let unknown = TaskId::new("missing", "build");
+        let engine = make_engine(&[(unknown, TaskDefinition::default())]);
+
+        assert!(matches!(
+            match_tasks_against_changed_files(&engine, &pkg_graph, &changed(&["file.txt"])),
+            Err(AffectednessError::UnknownTaskPackage(package))
+                if package == PackageName::from("missing")
+        ));
     }
 }

@@ -1,4 +1,7 @@
-use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
+use std::{
+    collections::{BTreeMap, BTreeSet, HashMap, HashSet},
+    ops::Bound,
+};
 
 use semver::{Version, VersionReq};
 
@@ -6,6 +9,41 @@ use super::{
     BunLockfile, BunLockfileData, Error, Map, PackageEntry, PackageIdent, PackageIndex,
     PackageInfo, PackageKey, data::WorkspaceEntry,
 };
+
+/// The entries of `packages` whose keys start with `prefix`, in key order.
+///
+/// Keys sharing a prefix are contiguous in a sorted map and sort at or after
+/// the prefix itself, so this visits exactly the entries a full scan filtered
+/// by `starts_with` would, without touching the rest of the lockfile.
+fn keys_with_prefix<'a>(
+    packages: &'a Map<String, PackageEntry>,
+    prefix: &'a str,
+) -> impl Iterator<Item = (&'a String, &'a PackageEntry)> + 'a {
+    packages
+        .range::<str, _>((Bound::Included(prefix), Bound::Unbounded))
+        .take_while(move |(key, _)| key.starts_with(prefix))
+}
+
+/// Drop one top-level entry named `name` from the per-name counts.
+fn remove_top_level_name(top_level_pkg_names: &mut HashMap<String, usize>, name: &str) {
+    if let Some(count) = top_level_pkg_names.get_mut(name) {
+        *count -= 1;
+        if *count == 0 {
+            top_level_pkg_names.remove(name);
+        }
+    }
+}
+
+fn workspace_dependency_target<'a>(name: &'a str, version: &'a str) -> Option<&'a str> {
+    if version == "*" {
+        return Some(name);
+    }
+    let specifier = version.strip_prefix("workspace:")?;
+    match specifier.rsplit_once('@') {
+        Some((target, "*" | "^" | "~")) if !target.is_empty() => Some(target),
+        _ => Some(name),
+    }
+}
 
 impl BunLockfile {
     fn include_duplicate_alias_children(&self, pruned_data: &mut BunLockfileData) {
@@ -21,8 +59,9 @@ impl BunLockfile {
                     .push(key.clone());
             }
 
-            let current_keys: std::collections::HashSet<String> =
-                pruned_data.packages.keys().cloned().collect();
+            // `pruned_data.packages` is not modified until the additions are
+            // applied, so it holds exactly the keys present at the start of this
+            // pass. Children of a key are the contiguous range after `"{key}/"`.
             let mut additions = BTreeMap::new();
 
             for keys in keys_by_ident.values().filter(|keys| keys.len() > 1) {
@@ -30,17 +69,17 @@ impl BunLockfile {
                 for key in keys {
                     let prefix = format!("{key}/");
                     child_suffixes.extend(
-                        current_keys
-                            .iter()
-                            .filter_map(|current_key| current_key.strip_prefix(&prefix))
-                            .map(ToString::to_string),
+                        keys_with_prefix(&pruned_data.packages, &prefix)
+                            .map(|(current_key, _)| current_key[prefix.len()..].to_string()),
                     );
                 }
 
                 for key in keys {
                     for suffix in &child_suffixes {
                         let child_key = format!("{key}/{suffix}");
-                        if current_keys.contains(&child_key) || additions.contains_key(&child_key) {
+                        if pruned_data.packages.contains_key(&child_key)
+                            || additions.contains_key(&child_key)
+                        {
                             continue;
                         }
                         if let Some(entry) = self.data.packages.get(&child_key) {
@@ -72,10 +111,11 @@ impl BunLockfile {
             lockfile_version: self.data.lockfile_version,
             config_version: self.data.config_version,
             workspaces: Map::new(),
-            // trustedDependencies are intentionally left empty. turbo prune
-            // copies the root package.json which is the source of truth for
-            // trusted scripts; bun re-derives the set at install time.
-            trusted_dependencies: Vec::new(),
+            // Copied verbatim for the same reason as overrides below: turbo
+            // prune copies the root package.json unchanged, and bun diffs the
+            // lockfile's trustedDependencies against package.json's on install.
+            // Dropping the section makes every entry register as newly added.
+            trusted_dependencies: self.data.trusted_dependencies.clone(),
             overrides: Map::new(),
             catalog: self.data.catalog.clone(),
             catalogs: self.data.catalogs.clone(),
@@ -83,15 +123,48 @@ impl BunLockfile {
             patched_dependencies: Map::new(),
         };
 
+        let retained_workspace_names: HashSet<_> = workspace_packages
+            .iter()
+            .filter_map(|path| {
+                self.data
+                    .workspaces
+                    .get(path)
+                    .map(|workspace| workspace.name.as_str())
+            })
+            .collect();
+        let all_workspace_names: HashSet<_> = self
+            .data
+            .workspaces
+            .iter()
+            .filter_map(|(path, workspace)| (!path.is_empty()).then_some(workspace.name.as_str()))
+            .collect();
+        let prune_workspace_dev_dependencies = |entry: &WorkspaceEntry| {
+            let mut entry = entry.clone();
+            if let Some(dev_dependencies) = &mut entry.dev_dependencies {
+                dev_dependencies.retain(|name, version| {
+                    workspace_dependency_target(name, version).is_none_or(|target| {
+                        !all_workspace_names.contains(target)
+                            || retained_workspace_names.contains(target)
+                    })
+                });
+                if dev_dependencies.is_empty() {
+                    entry.dev_dependencies = None;
+                }
+            }
+            entry
+        };
+
         if let Some(root) = self.data.workspaces.get("") {
-            pruned_data.workspaces.insert("".to_string(), root.clone());
+            pruned_data
+                .workspaces
+                .insert("".to_string(), prune_workspace_dev_dependencies(root));
         }
 
         for ws_path in workspace_packages {
             if let Some(entry) = self.data.workspaces.get(ws_path) {
                 pruned_data
                     .workspaces
-                    .insert(ws_path.clone(), entry.clone());
+                    .insert(ws_path.clone(), prune_workspace_dev_dependencies(entry));
             }
         }
 
@@ -101,6 +174,42 @@ impl BunLockfile {
             .iter()
             .filter_map(|ws_path| self.data.workspaces.get(ws_path).map(|ws| ws.name.clone()))
             .collect();
+
+        // Every lockfile key for each ident, in key order. Looking idents up here
+        // instead of scanning all packages per requested ident keeps this linear
+        // in the size of the lockfile.
+        let mut keys_by_ident: HashMap<&str, Vec<&String>> = HashMap::new();
+        for (lockfile_key, entry) in &self.data.packages {
+            keys_by_ident
+                .entry(entry.ident.as_str())
+                .or_default()
+                .push(lockfile_key);
+        }
+        let workspace_names: HashSet<&str> = self
+            .data
+            .workspaces
+            .values()
+            .map(|ws| ws.name.as_str())
+            .collect();
+        let include_keys_for_ident = |keys_to_include: &mut HashSet<String>, pkg: &str| {
+            for lockfile_key in keys_by_ident.get(pkg).into_iter().flatten() {
+                if let Some(slash_pos) = lockfile_key.find('/') {
+                    let prefix = &lockfile_key[..slash_pos];
+
+                    let is_workspace_prefix = workspace_names.contains(prefix);
+
+                    if is_workspace_prefix {
+                        if target_workspace_names.contains(prefix) {
+                            keys_to_include.insert((*lockfile_key).clone());
+                        }
+                    } else {
+                        keys_to_include.insert((*lockfile_key).clone());
+                    }
+                } else {
+                    keys_to_include.insert((*lockfile_key).clone());
+                }
+            }
+        };
 
         // When idents map to multiple lockfile keys, only include workspace-specific
         // entries for target workspaces to avoid pulling in unrelated workspace
@@ -114,7 +223,8 @@ impl BunLockfile {
                 let name = &pkg[..at_pos];
 
                 if let Some(entry) = self.data.packages.get(name)
-                    && entry.ident.contains("@workspace:")
+                    && let Some(workspace_path) = PackageIdent::parse(&entry.ident).workspace_path()
+                    && pruned_data.workspaces.contains_key(workspace_path)
                 {
                     keys_to_include.insert(name.to_string());
                     // Continue to also find package entries with this ident
@@ -122,51 +232,9 @@ impl BunLockfile {
                     // "storybook/storybook")
                 }
 
-                for (lockfile_key, entry) in &self.data.packages {
-                    if &entry.ident != pkg {
-                        continue;
-                    }
-
-                    if let Some(slash_pos) = lockfile_key.find('/') {
-                        let prefix = &lockfile_key[..slash_pos];
-
-                        let is_workspace_prefix =
-                            self.data.workspaces.values().any(|ws| ws.name == prefix);
-
-                        if is_workspace_prefix {
-                            if target_workspace_names.contains(prefix) {
-                                keys_to_include.insert(lockfile_key.clone());
-                            }
-                        } else {
-                            keys_to_include.insert(lockfile_key.clone());
-                        }
-                    } else {
-                        keys_to_include.insert(lockfile_key.clone());
-                    }
-                }
+                include_keys_for_ident(&mut keys_to_include, pkg);
             } else {
-                for (lockfile_key, entry) in &self.data.packages {
-                    if &entry.ident != pkg {
-                        continue;
-                    }
-
-                    if let Some(slash_pos) = lockfile_key.find('/') {
-                        let prefix = &lockfile_key[..slash_pos];
-
-                        let is_workspace_prefix =
-                            self.data.workspaces.values().any(|ws| ws.name == prefix);
-
-                        if is_workspace_prefix {
-                            if target_workspace_names.contains(prefix) {
-                                keys_to_include.insert(lockfile_key.clone());
-                            }
-                        } else {
-                            keys_to_include.insert(lockfile_key.clone());
-                        }
-                    } else {
-                        keys_to_include.insert(lockfile_key.clone());
-                    }
-                }
+                include_keys_for_ident(&mut keys_to_include, pkg);
             }
         }
 
@@ -348,14 +416,14 @@ impl BunLockfile {
                 if pruned_key != *key {
                     let old_prefix = format!("{key}/");
                     let new_prefix = format!("{pruned_key}/");
-                    for (descendant_key, descendant_entry) in &self.data.packages {
-                        if descendant_key.starts_with(&old_prefix) {
-                            let renamed_key =
-                                format!("{}{}", new_prefix, &descendant_key[old_prefix.len()..]);
-                            pruned_data
-                                .packages
-                                .insert(renamed_key, descendant_entry.clone());
-                        }
+                    for (descendant_key, descendant_entry) in
+                        keys_with_prefix(&self.data.packages, &old_prefix)
+                    {
+                        let renamed_key =
+                            format!("{}{}", new_prefix, &descendant_key[old_prefix.len()..]);
+                        pruned_data
+                            .packages
+                            .insert(renamed_key, descendant_entry.clone());
                     }
                 }
 
@@ -378,7 +446,9 @@ impl BunLockfile {
                 // and have "bundled": true in their info
                 // Note: We search using the original key from the source lockfile
                 let bundled_prefix = format!("{key}/");
-                for (lockfile_key, bundled_entry) in &self.data.packages {
+                for (lockfile_key, bundled_entry) in
+                    keys_with_prefix(&self.data.packages, &bundled_prefix)
+                {
                     if lockfile_key.starts_with(&bundled_prefix)
                         && let Some(bundled_info) = &bundled_entry.info
                         && bundled_info
@@ -437,6 +507,7 @@ impl BunLockfile {
                             registry: None,
                             info: Some(info),
                             checksum: None,
+                            integrity: None,
                             root: None,
                         };
                         pruned_data.packages.insert(key.clone(), entry);
@@ -587,31 +658,58 @@ impl BunLockfile {
             self.workspace_required_patched_idents(&pruned_data.workspaces);
         self.restore_patched_hoisted_entries(&mut pruned_data, &required_patched_idents);
 
-        loop {
-            let top_level_pkg_names: HashSet<String> = pruned_data
-                .packages
-                .iter()
-                .filter(|(key, _)| PackageKey::parse(key).parent().is_none())
-                .filter_map(|(_, entry)| {
-                    let ident = PackageIdent::parse(&entry.ident);
-                    if !ident.is_workspace() {
-                        Some(ident.name().to_string())
-                    } else {
-                        None
-                    }
-                })
-                .collect();
+        let pruned_workspace_names: HashSet<String> = pruned_data
+            .workspaces
+            .values()
+            .map(|workspace| workspace.name.clone())
+            .collect();
 
+        // Promotion is decided by package names, which only depend on a key or
+        // an ident string, so parse each string once. Top-level names are
+        // counted so that each promotion can update them for just the keys it
+        // renames, including entries a rename overwrites.
+        let mut key_parents: HashMap<String, Option<String>> = HashMap::new();
+        let mut ident_names: HashMap<String, Option<String>> = HashMap::new();
+        let mut parent_of = |key: &str| -> Option<String> {
+            key_parents
+                .entry(key.to_string())
+                .or_insert_with(|| PackageKey::parse(key).parent())
+                .clone()
+        };
+        // The package name of a non-workspace ident, `None` for workspaces.
+        let mut non_workspace_name = |ident: &str| -> Option<String> {
+            ident_names
+                .entry(ident.to_string())
+                .or_insert_with(|| {
+                    let ident = PackageIdent::parse(ident);
+                    (!ident.is_workspace()).then(|| ident.name().to_string())
+                })
+                .clone()
+        };
+        let patched_pkg_names: HashSet<String> = required_patched_idents
+            .iter()
+            .map(|patched_ident| PackageIdent::parse(patched_ident).name().to_string())
+            .collect();
+        let mut top_level_pkg_names: HashMap<String, usize> = HashMap::new();
+        for (key, entry) in &pruned_data.packages {
+            if parent_of(key).is_none()
+                && let Some(name) = non_workspace_name(&entry.ident)
+            {
+                *top_level_pkg_names.entry(name).or_default() += 1;
+            }
+        }
+
+        loop {
             // Find the first nested entry (by sorted key order) whose package
             // name has no top-level entry. We promote one package per iteration
             // because promotion renames children, which may expose further
             // entries that need promotion.
-            let mut sorted_pkg_keys: Vec<_> = pruned_data.packages.keys().cloned().collect();
-            sorted_pkg_keys.sort();
-
             let mut promote_target: Option<(String, String)> = None; // (pkg_name, old_key)
-            for key in &sorted_pkg_keys {
-                if let Some(parent) = PackageKey::parse(key).parent() {
+            for (key, entry) in &pruned_data.packages {
+                if let Some(parent) = parent_of(key) {
+                    if pruned_workspace_names.contains(&parent) {
+                        continue;
+                    }
                     if (parent == "npm" || parent.starts_with("npm/"))
                         && pruned_data.packages.contains_key(&parent)
                     {
@@ -621,20 +719,13 @@ impl BunLockfile {
                     continue;
                 }
 
-                let entry = &pruned_data.packages[key];
-                let ident = PackageIdent::parse(&entry.ident);
-                if ident.is_workspace() {
+                let Some(pkg_name) = non_workspace_name(&entry.ident) else {
+                    continue;
+                };
+                if patched_pkg_names.contains(&pkg_name) {
                     continue;
                 }
-
-                let pkg_name = ident.name().to_string();
-                if required_patched_idents
-                    .iter()
-                    .any(|patched_ident| PackageIdent::parse(patched_ident).name() == pkg_name)
-                {
-                    continue;
-                }
-                if !top_level_pkg_names.contains(&pkg_name) {
+                if !top_level_pkg_names.contains_key(&pkg_name) {
                     promote_target = Some((pkg_name, key.clone()));
                     break;
                 }
@@ -648,16 +739,33 @@ impl BunLockfile {
             let old_prefix = format!("{old_key}/");
             let new_prefix = format!("{pkg_name}/");
             let mut renames: Vec<(String, String)> = vec![(old_key, pkg_name)];
-            for key in &sorted_pkg_keys {
-                if key.starts_with(&old_prefix) {
-                    let new_key = format!("{new_prefix}{}", &key[old_prefix.len()..]);
-                    renames.push((key.clone(), new_key));
-                }
-            }
+            renames.extend(
+                keys_with_prefix(&pruned_data.packages, &old_prefix).map(|(key, _)| {
+                    (
+                        key.clone(),
+                        format!("{new_prefix}{}", &key[old_prefix.len()..]),
+                    )
+                }),
+            );
 
             for (old, new) in renames {
                 if let Some(entry) = pruned_data.packages.remove(&old) {
-                    pruned_data.packages.insert(new, entry);
+                    if parent_of(&old).is_none()
+                        && let Some(name) = non_workspace_name(&entry.ident)
+                    {
+                        remove_top_level_name(&mut top_level_pkg_names, &name);
+                    }
+                    let new_is_top_level = parent_of(&new).is_none();
+                    let added_name = non_workspace_name(&entry.ident);
+                    if let Some(replaced) = pruned_data.packages.insert(new, entry)
+                        && new_is_top_level
+                        && let Some(name) = non_workspace_name(&replaced.ident)
+                    {
+                        remove_top_level_name(&mut top_level_pkg_names, &name);
+                    }
+                    if new_is_top_level && let Some(name) = added_name {
+                        *top_level_pkg_names.entry(name).or_default() += 1;
+                    }
                 }
             }
         }
@@ -728,53 +836,18 @@ impl BunLockfile {
         // After pruning removes some versions, nested entries that now match
         // the hoisted entry are redundant and must be removed — bun's
         // --frozen-lockfile rejects them.
-        {
-            let hoisted_idents: HashMap<String, String> = pruned_data
-                .packages
-                .iter()
-                .filter(|(key, entry)| {
-                    let parsed = PackageKey::parse(key);
-                    if parsed.parent().is_some() {
-                        return false;
-                    }
-                    let ident = PackageIdent::parse(&entry.ident);
-                    let pkg_name = ident.name();
-                    *key == pkg_name
-                })
-                .map(|(_, entry)| {
-                    let ident = PackageIdent::parse(&entry.ident);
-                    (ident.name().to_string(), entry.ident.clone())
-                })
-                .collect();
-
-            pruned_data.packages.retain(|key, entry| {
-                if PackageKey::parse(key).parent().is_none() {
-                    return true;
-                }
-                let ident = PackageIdent::parse(&entry.ident);
-                if ident.is_workspace() {
-                    return true;
-                }
-                match hoisted_idents.get(ident.name()) {
-                    Some(hoisted_ident) => &entry.ident != hoisted_ident,
-                    None => true,
-                }
-            });
-        }
+        Self::remove_redundant_nested_entries(&mut pruned_data);
 
         // De-aliasing can turn a workspace-scoped package key like
         // `@repo/app/pkg` into `pkg`. Its nested resolutions need to remain
         // addressable from the new key, otherwise bun treats required deps as
         // missing during frozen installs.
         loop {
-            let package_snapshot: Vec<(String, PackageEntry)> = pruned_data
-                .packages
-                .iter()
-                .map(|(key, entry)| (key.clone(), entry.clone()))
-                .collect();
+            // Additions are applied after the pass, so the pass can read the
+            // current packages in place instead of from a snapshot copy.
             let mut additions = Vec::new();
 
-            for (key, entry) in package_snapshot {
+            for (key, entry) in &pruned_data.packages {
                 let Some(info) = &entry.info else {
                     continue;
                 };
@@ -793,14 +866,28 @@ impl BunLockfile {
                         pruned_data.packages.get(&nested_key).is_some_and(|entry| {
                             self.version_satisfies_spec(entry.version(), dep_version)
                         });
-                    if top_level_satisfies || nested_satisfies {
+                    // Bun resolution walks up from the dependent's key, so an
+                    // entry in an ancestor scope also satisfies the dependency.
+                    let ancestor_satisfies = || {
+                        let mut scope = PackageKey::parse(key).parent();
+                        while let Some(parent) = scope {
+                            if let Some(entry) =
+                                pruned_data.packages.get(&format!("{parent}/{dep_name}"))
+                            {
+                                return self.version_satisfies_spec(entry.version(), dep_version);
+                            }
+                            scope = PackageKey::parse(&parent).parent();
+                        }
+                        false
+                    };
+                    if top_level_satisfies || nested_satisfies || ancestor_satisfies() {
                         continue;
                     }
 
                     let exact_source = self
                         .data
                         .packages
-                        .get_key_value(&key)
+                        .get_key_value(key)
                         .filter(|(_, source_entry)| source_entry.ident == entry.ident)
                         .and_then(|(source_key, _)| {
                             self.nested_dependency_entry(source_key, dep_name, dep_version)
@@ -812,7 +899,8 @@ impl BunLockfile {
                             .packages
                             .iter()
                             .filter(|(source_key, source_entry)| {
-                                source_key.as_str() != key && source_entry.ident == entry.ident
+                                source_key.as_str() != key.as_str()
+                                    && source_entry.ident == entry.ident
                             })
                             .find_map(|(source_key, _)| {
                                 self.nested_dependency_entry(source_key, dep_name, dep_version)
@@ -827,12 +915,59 @@ impl BunLockfile {
                     };
 
                     let source_prefix = format!("{source_parent_key}/");
-                    let pruned_dep_key =
-                        if let Some(suffix) = source_dep_key.strip_prefix(&source_prefix) {
-                            format!("{key}/{suffix}")
-                        } else {
-                            source_dep_key
+                    let pruned_dep_key = if let Some(suffix) =
+                        source_dep_key.strip_prefix(&source_prefix)
+                    {
+                        format!("{key}/{suffix}")
+                    } else {
+                        // The entry was found in an ancestor scope of the source
+                        // key, so its key can't be re-parented under the
+                        // dependent's pruned key. Bun resolves dependencies by
+                        // walking up the dependent's scope chain by name, so the
+                        // verbatim key is fine as long as SOME entry named
+                        // dep_name is reachable from the dependent. When none is
+                        // (the dependent was renamed by de-aliasing/promotion and
+                        // the ancestor chain was pruned), bun fails to parse the
+                        // lockfile; nest the entry directly under the dependent
+                        // instead. See
+                        // https://github.com/vercel/turborepo/issues/13233
+                        let name_resolvable = pruned_data.packages.contains_key(dep_name) || {
+                            let mut resolvable = false;
+                            let mut scope = Some(key.clone());
+                            while let Some(scope_key) = scope {
+                                if pruned_data
+                                    .packages
+                                    .contains_key(&format!("{scope_key}/{dep_name}"))
+                                {
+                                    resolvable = true;
+                                    break;
+                                }
+                                scope = PackageKey::parse(&scope_key).parent();
+                            }
+                            resolvable
                         };
+                        // The verbatim key only makes sense if its root scope
+                        // survived pruning. When the entire chain was pruned
+                        // away (e.g. "@expo/cli/ora/chalk" when "@expo/cli"
+                        // is gone), nothing can ever resolve to the verbatim
+                        // key, so bun's lockfile clean pass strips the
+                        // package and `bun install --frozen-lockfile` fails.
+                        // Nest the entry under the dependent instead so the
+                        // dependent resolves the version it was locked to.
+                        // See https://github.com/vercel/turborepo/issues/13310
+                        let root_scope_exists = {
+                            let mut topmost = source_dep_key.clone();
+                            while let Some(parent) = PackageKey::parse(&topmost).parent() {
+                                topmost = parent;
+                            }
+                            topmost == source_dep_key || pruned_data.packages.contains_key(&topmost)
+                        };
+                        if name_resolvable && root_scope_exists {
+                            source_dep_key
+                        } else {
+                            format!("{key}/{dep_name}")
+                        }
+                    };
 
                     if pruned_data.packages.contains_key(&pruned_dep_key) {
                         continue;
@@ -856,6 +991,16 @@ impl BunLockfile {
         // sync; keeping only one sibling makes `bun install --frozen-lockfile`
         // rewrite the pruned lockfile.
         self.include_duplicate_alias_children(&mut pruned_data);
+
+        // FINAL SWEEP: emulate bun's lockfile "clean" pass. Bun resolves every
+        // dependency edge from the workspaces by walking up the dependent's
+        // scope chain by name, and strips any package whose resolution is
+        // never reached that way. If the pruned lockfile still contains such
+        // packages (e.g. a nested "chalk@2.4.2" whose only dependents were
+        // pruned away), `bun install --frozen-lockfile` rejects the lockfile.
+        // Drop them the same way bun would. See
+        // https://github.com/vercel/turborepo/issues/13310
+        Self::remove_unreachable_entries(&mut pruned_data);
 
         self.preserve_patched_dependencies(&mut pruned_data);
 
@@ -887,6 +1032,184 @@ impl BunLockfile {
             key_to_entry,
             index,
         })
+    }
+
+    /// Remove nested entries that resolve to the same ident bun would pick
+    /// anyway. A nested entry that matches the hoisted top-level is redundant
+    /// ONLY if removing it would not change resolution. Bun resolves a nested
+    /// package by walking up parent scopes (nearest ancestor wins). If an
+    /// INTERMEDIATE ancestor scope pins a different version of the same
+    /// package, the nested entry shadows it and must be kept — otherwise bun
+    /// resolves to the intermediate (wrong) version instead of the hoisted
+    /// one. See vercel/turborepo#12962 follow-up: a 3-level split such as
+    /// `@vite-pwa/nuxt/@nuxt/kit/pathe@2` sitting above
+    /// `@vite-pwa/nuxt/pathe@1` was incorrectly dropped.
+    fn remove_redundant_nested_entries(pruned_data: &mut BunLockfileData) {
+        let hoisted_idents: HashMap<String, String> = pruned_data
+            .packages
+            .iter()
+            .filter(|(key, entry)| {
+                let parsed = PackageKey::parse(key);
+                if parsed.parent().is_some() {
+                    return false;
+                }
+                let ident = PackageIdent::parse(&entry.ident);
+                let pkg_name = ident.name();
+                *key == pkg_name
+            })
+            .map(|(_, entry)| {
+                let ident = PackageIdent::parse(&entry.ident);
+                (ident.name().to_string(), entry.ident.clone())
+            })
+            .collect();
+
+        let redundant_keys: Vec<String> = pruned_data
+            .packages
+            .iter()
+            .filter_map(|(key, entry)| {
+                PackageKey::parse(key).parent()?;
+                let ident = PackageIdent::parse(&entry.ident);
+                if ident.is_workspace() {
+                    return None;
+                }
+                let name = ident.name();
+                // Only a candidate if it matches the hoisted top-level ident.
+                match hoisted_idents.get(name) {
+                    Some(hoisted_ident) if hoisted_ident == &entry.ident => {}
+                    _ => return None,
+                }
+                let suffix = format!("/{name}");
+                let parent_scope = key.strip_suffix(&suffix)?;
+                // Find the nearest ancestor scope (longest strict prefix-scope
+                // of parent_scope) that also provides `name`.
+                let nearest = pruned_data
+                    .packages
+                    .iter()
+                    .filter_map(|(other_key, other_entry)| {
+                        let anc = other_key.strip_suffix(&suffix)?;
+                        let descends =
+                            parent_scope == anc || parent_scope.starts_with(&format!("{anc}/"));
+                        (anc.len() < parent_scope.len() && descends)
+                            .then_some((anc.len(), &other_entry.ident))
+                    })
+                    .max_by_key(|(len, _)| *len)
+                    .map(|(_, ident)| ident);
+                // Without this entry, resolution falls to the nearest ancestor
+                // (or the hoisted top-level when none). Redundant only if that
+                // resolves to the same ident.
+                let resolves_to = nearest.unwrap_or(&entry.ident);
+                (resolves_to == &entry.ident).then(|| key.clone())
+            })
+            .collect();
+        for key in redundant_keys {
+            pruned_data.packages.remove(&key);
+        }
+    }
+
+    /// Resolve a dependency name the way bun does: try the scope itself, then
+    /// walk up the scope chain, finally falling back to the top level.
+    fn resolve_dependency_key(
+        packages: &Map<String, PackageEntry>,
+        scope: &str,
+        dep_name: &str,
+    ) -> Option<String> {
+        let mut scope = (!scope.is_empty()).then(|| scope.to_string());
+        while let Some(scope_key) = scope {
+            let candidate = format!("{scope_key}/{dep_name}");
+            if packages.contains_key(&candidate) {
+                return Some(candidate);
+            }
+            scope = PackageKey::parse(&scope_key).parent();
+        }
+        packages
+            .contains_key(dep_name)
+            .then(|| dep_name.to_string())
+    }
+
+    /// Remove packages that bun's lockfile clean pass would strip: resolutions
+    /// (idents) where no key is ever reached when resolving dependency edges
+    /// from the workspaces via bun's scope-walking name resolution. Bun
+    /// tolerates individual unreferenced keys as long as the package they
+    /// resolve to is referenced somewhere, so keys of reachable idents are
+    /// kept even when the keys themselves are never resolved to. Workspace
+    /// mapping entries are always kept, matching bun's behavior.
+    fn remove_unreachable_entries(pruned_data: &mut BunLockfileData) {
+        let mut visited: HashSet<String> = HashSet::new();
+        let mut queue: Vec<String> = Vec::new();
+
+        let visit = |visited: &mut HashSet<String>,
+                     queue: &mut Vec<String>,
+                     scope: &str,
+                     dep_name: &str| {
+            if let Some(key) = Self::resolve_dependency_key(&pruned_data.packages, scope, dep_name)
+                && visited.insert(key.clone())
+            {
+                queue.push(key);
+            }
+        };
+
+        for (ws_path, ws_entry) in &pruned_data.workspaces {
+            let scope = if ws_path.is_empty() {
+                ""
+            } else {
+                ws_entry.name.as_str()
+            };
+            for deps in [
+                ws_entry.dependencies.as_ref(),
+                ws_entry.dev_dependencies.as_ref(),
+                ws_entry.optional_dependencies.as_ref(),
+                ws_entry.peer_dependencies.as_ref(),
+            ]
+            .into_iter()
+            .flatten()
+            {
+                for dep_name in deps.keys() {
+                    visit(&mut visited, &mut queue, scope, dep_name);
+                }
+            }
+        }
+
+        while let Some(key) = queue.pop() {
+            let Some(entry) = pruned_data.packages.get(&key) else {
+                continue;
+            };
+            let ident = PackageIdent::parse(&entry.ident);
+            // Workspace mapping entries resolve their dependencies from the
+            // workspace's own scope (keys are prefixed with the workspace
+            // name), not from the mapping entry's key.
+            let scope = if ident.is_workspace() {
+                ident.name().to_string()
+            } else {
+                key.clone()
+            };
+            let Some(info) = &entry.info else {
+                continue;
+            };
+            let dep_names: Vec<String> = info
+                .dependencies
+                .keys()
+                .chain(info.optional_dependencies.keys())
+                .chain(info.peer_dependencies.keys())
+                .cloned()
+                .collect();
+            for dep_name in dep_names {
+                visit(&mut visited, &mut queue, &scope, &dep_name);
+            }
+        }
+
+        let reachable_idents: HashSet<String> = visited
+            .iter()
+            .filter_map(|key| {
+                pruned_data
+                    .packages
+                    .get(key)
+                    .map(|entry| entry.ident.clone())
+            })
+            .collect();
+
+        pruned_data.packages.retain(|_key, entry| {
+            entry.ident.contains("@workspace:") || reachable_idents.contains(&entry.ident)
+        });
     }
 
     fn workspace_required_patched_idents(

@@ -1,4 +1,4 @@
-import { Badge } from "./badge";
+import { Badge } from "@vercel/geistdocs/components/badge";
 
 /**
  * A custom variant of the Badge for experimental features

@@ -5,7 +5,8 @@ import fs from "fs-extra";
 import type { Project } from "../src/types";
 import {
   getWorkspacePackageManager,
-  isCompatibleWithBunWorkspaces
+  isCompatibleWithBunWorkspaces,
+  setPackageManagerDeclaration
 } from "../src/utils";
 
 function makeWorkspace(packageJson: unknown): string {
@@ -17,6 +18,27 @@ function makeWorkspace(packageJson: unknown): string {
 }
 
 describe("utils", () => {
+  describe("setPackageManagerDeclaration", () => {
+    it("normalizes a leading v from package manager versions", () => {
+      const packageJson: {
+        name: string;
+        version: string;
+        devEngines?: { packageManager?: unknown };
+      } = { name: "test", version: "0.0.0" };
+
+      setPackageManagerDeclaration({
+        packageJson,
+        packageManager: "nub",
+        version: "v0.2.10"
+      });
+
+      expect(packageJson.devEngines?.packageManager).toEqual({
+        name: "nub",
+        version: "0.2.10"
+      });
+    });
+  });
+
   describe("isCompatibleWithBunWorkspace", () => {
     it.each([
       { globs: ["apps/*"], expected: true },
@@ -41,7 +63,15 @@ describe("utils", () => {
       ["npm", "10.5.0"],
       ["pnpm", "9.12.3"],
       ["yarn", "4.5.0+sha224.abc"],
-      ["bun", "1.1.0"]
+      ["bun", "1.1.0"],
+      ["nub", "0.1.0"],
+      ["pnpm", "^9.0.0"],
+      ["pnpm", "9"],
+      ["pnpm", ">=9.0.0 <10.0.0"],
+      ["pnpm", ">=9.0.0 <10.0.0 || >=9.5.0 <10.0.0"],
+      ["pnpm", "^6.35.1"],
+      ["yarn", "^4.0.0"],
+      ["yarn", "^1.22.0"]
     ] as const)("reads %s from devEngines.packageManager", (name, version) => {
       const workspaceRoot = makeWorkspace({
         devEngines: {
@@ -141,10 +171,6 @@ describe("utils", () => {
         "version` must not contain"
       ],
       [
-        { devEngines: { packageManager: { name: "pnpm", version: "^9.0.0" } } },
-        "exact semantic version"
-      ],
-      [
         {
           devEngines: {
             packageManager: {
@@ -153,11 +179,7 @@ describe("utils", () => {
             }
           }
         },
-        "exact semantic version"
-      ],
-      [
-        { devEngines: { packageManager: { name: "pnpm", version: "9" } } },
-        "exact semantic version"
+        "valid semantic version range"
       ],
       [
         {
@@ -168,7 +190,50 @@ describe("utils", () => {
             }
           }
         },
-        "exact semantic version"
+        "valid semantic version range"
+      ],
+      [
+        {
+          devEngines: {
+            packageManager: { name: "pnpm", version: ">=1.0.0 <1.0.0" }
+          }
+        },
+        "at least one version"
+      ],
+      [
+        {
+          devEngines: {
+            packageManager: {
+              name: "pnpm",
+              version: "9 || >=1.0.0 <1.0.0"
+            }
+          }
+        },
+        "at least one version"
+      ],
+      [
+        { devEngines: { packageManager: { name: "pnpm", version: "*" } } },
+        "one major version"
+      ],
+      [
+        {
+          devEngines: { packageManager: { name: "pnpm", version: ">=9.0.0" } }
+        },
+        "one major version"
+      ],
+      [
+        {
+          devEngines: {
+            packageManager: { name: "pnpm", version: ">=6.0.0 <10.0.0" }
+          }
+        },
+        "one major version"
+      ],
+      [
+        {
+          devEngines: { packageManager: { name: "pnpm", version: "9 || 10" } }
+        },
+        "one major version"
       ]
     ])(
       "rejects invalid devEngines.packageManager %#",

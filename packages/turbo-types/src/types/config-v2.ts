@@ -6,6 +6,18 @@ export type OutputLogs =
   | "errors-only";
 export type EnvMode = "loose" | "strict";
 export type UI = "tui" | "stream" | "stream-with-experimental-timestamps";
+export type ToolPolicy = "managed" | "skip";
+export type DependencyPolicy = "locked" | "skip";
+export type ArtifactPlatform =
+  | "macos-x64"
+  | "macos-arm64"
+  | "linux-x64-gnu"
+  | "linux-arm64-gnu"
+  | "linux-x64-musl"
+  | "linux-arm64-musl"
+  | "windows-x64"
+  | "windows-arm64";
+export type ArtifactFormat = "binary" | "tar" | "tar-gz" | "zip";
 /**
  * This is a relative Unix-style path (e.g. `./src/index.ts` or `src/index.ts`).  Absolute paths (e.g. `/tmp/foo`) are not valid.
  */
@@ -52,8 +64,8 @@ export interface WorkspaceSchema extends BaseSchema {
    */
   extends: Array<string>;
   /**
-   * Used to tag a package for boundaries rules. Boundaries rules can restrict
-   * which packages a tag group can import or be imported by.
+   * Arbitrary string labels for this package. In the root configuration,
+   * these labels apply to the root package.
    */
   tags?: Array<string>;
   /**
@@ -63,6 +75,20 @@ export interface WorkspaceSchema extends BaseSchema {
 }
 
 export interface RootSchema extends BaseSchema {
+  /**
+   * Arbitrary string labels for this package. In the root configuration,
+   * these labels apply to the root package.
+   */
+  tags?: Array<string>;
+
+  /**
+   * Controls whether turbo maintains a root AGENTS.md block for AI agents.
+   * Set to true to opt in to future automatic updates.
+   *
+   * @defaultValue `false`
+   */
+  agentGuidance?: boolean;
+
   /**
    * A list of globs to include in the set of implicit global hash dependencies.
    *
@@ -95,8 +121,8 @@ export interface RootSchema extends BaseSchema {
   globalEnv?: Array<EnvWildcard>;
 
   /**
-   * An allowlist of environment variables that should be made to all tasks, but
-   * should not contribute to the task's cache key, e.g. `AWS_SECRET_KEY`.
+   * An allowlist of environment variables that should be made available to all tasks,
+   * but should not contribute to the task's cache key, e.g. `AWS_SECRET_KEY`.
    *
    * Documentation: https://turborepo.dev/docs/reference/configuration#globalpassthroughenv
    *
@@ -227,9 +253,24 @@ export interface RootSchema extends BaseSchema {
    * @defaultValue `{}`
    */
   futureFlags?: FutureFlags;
+
+  /**
+   * Repository policy for `turbo setup`. Only allowed in the root turbo.json
+   * and requires `futureFlags.experimentalSetup`.
+   */
+  setup?: SetupPolicy;
 }
 
 export interface FutureFlags {
+  /**
+   * Include file executable permissions in task hashes. Disabled by default.
+   * Enabling this flag changes all task hashes. On Unix, any executable bit
+   * marks a regular file as executable. On Windows, files are non-executable.
+   * Symlink permissions and other permission bits do not affect hashes.
+   *
+   * @defaultValue `false`
+   */
+  hashFilePermissions?: boolean;
   /**
    * When using `outputLogs: "errors-only"`, show task hashes when tasks
    * complete successfully. This provides visibility into which tasks are
@@ -267,6 +308,14 @@ export interface FutureFlags {
    */
   affectedUsingTaskInputs?: boolean;
   /**
+   * When GitHub Actions reports a base branch that is not available as a
+   * local ref, fall back to `origin/<branch>`. This supports detached
+   * checkouts where only remote-tracking refs are present.
+   *
+   * @defaultValue `false`
+   */
+  githubActionsRemoteBaseRefFallback?: boolean;
+  /**
    * Use task-level `inputs` globs to determine which tasks to re-run when
    * files change in `turbo watch`. When enabled, only tasks whose declared
    * inputs match the changed files are re-executed, rather than re-running
@@ -293,6 +342,15 @@ export interface FutureFlags {
    */
   filterUsingTasks?: boolean;
   /**
+   * Select requested task entrypoints according to whether the task resolves
+   * a command in the repository. When any package can run a requested task,
+   * packages without a command are skipped as entrypoints. Tasks with no
+   * command anywhere remain available for graph-only orchestration.
+   *
+   * @defaultValue `false`
+   */
+  strictTaskEntrypointSelection?: boolean;
+  /**
    * Move global configuration keys under a top-level `global` key.
    *
    * When enabled, keys like `globalDependencies`, `globalEnv`, `ui`,
@@ -303,6 +361,75 @@ export interface FutureFlags {
    * @defaultValue `false`
    */
   globalConfiguration?: boolean;
+  /**
+   * Treat the crates of a Cargo workspace as Turborepo packages.
+   *
+   * When enabled, Rust crates are discovered via `cargo metadata` and
+   * participate in the package graph: they resolve in `--filter`
+   * expressions, propagate `--affected`, and appear in `turbo query`.
+   * Filtered builds execute each selected crate. Unfiltered builds prefer
+   * entrypoints, falling back to libraries when no entrypoints exist.
+   * Entrypoints also expose `run` and `dev`. The `test`, `check`, `lint`, and
+   * `format` tasks are selectable per crate with `--filter`. An
+   * unfiltered run executes one workspace-wide Cargo verification command;
+   * filtered runs use the selected crates, or the workspace command when the
+   * workspace package is selected directly.
+   *
+   * All crates implicitly register `build` and the verification tasks;
+   * entrypoints with one binary also register `run` and `dev`. The workspace
+   * package registers the verification tasks. Normal task definitions
+   * configure or override these defaults, and package configuration can
+   * exclude them with `extends: false`.
+   *
+   * Task caching uses Cargo-derived inputs and caches entrypoint build
+   * deliverables. Library builds and formatting default to uncached. This
+   * feature is experimental.
+   *
+   * @defaultValue `false`
+   */
+  experimentalCargoWorkspaces?: boolean;
+
+  /**
+   * Treat the members of a uv workspace as Turborepo packages.
+   *
+   * When enabled, Python packages are discovered from the root
+   * `pyproject.toml`'s `[tool.uv.workspace]` members and participate in the
+   * package graph: they resolve in `--filter` expressions, propagate
+   * `--affected`, and appear in `turbo query`. Buildable packages register `build`
+   * (`uv build --package`), and all packages register `format` and `check`.
+   * Direct pytest declarations register ownership-scoped `test` tasks; the
+   * user-named workspace package registers workspace-wide quality tasks.
+   * External dependencies hash from `uv.lock` per
+   * package, and `turbo prune` produces a reachability-pruned `uv.lock`
+   * and root `pyproject.toml`. uv is the only supported Python package
+   * manager. This feature is experimental.
+   *
+   * @defaultValue `false`
+   */
+  experimentalPythonWorkspaces?: boolean;
+
+  /**
+   * Treat the modules listed in a `go.work` file as Turborepo packages.
+   *
+   * When enabled, Go modules are discovered from the repository-root
+   * `go.work` via the Go toolchain and participate in the package graph:
+   * they resolve in `--filter` expressions, propagate `--affected`, and
+   * appear in `turbo query`. This feature is experimental.
+   *
+   * @defaultValue `false`
+   */
+  experimentalGoWorkspaces?: boolean;
+
+  /**
+   * Opt into experimental setup features that are still in progress.
+   *
+   * All future setup surfaces must require this flag. The `turbo.lock`
+   * format is unstable. This parser-only foundation ships no setup commands
+   * and does not interpret `turbo.lock` or change run or hash behavior.
+   *
+   * @defaultValue `false`
+   */
+  experimentalSetup?: boolean;
 }
 
 export interface GlobalConfig {
@@ -329,8 +456,8 @@ export interface GlobalConfig {
   env?: Array<EnvWildcard>;
 
   /**
-   * An allowlist of environment variables that should be made to all tasks, but
-   * should not contribute to the task's cache key.
+   * An allowlist of environment variables that should be made available to all tasks,
+   * but should not contribute to the task's cache key.
    *
    * Replaces `globalPassThroughEnv` when `futureFlags.globalConfiguration` is enabled.
    *
@@ -427,6 +554,116 @@ export interface GlobalConfig {
   noUpdateNotifier?: boolean;
 }
 
+export interface SetupPolicy {
+  /**
+   * How `turbo setup` prepares tools for every toolchain.
+   *
+   * - `"managed"`: Provision the locked version for this repository.
+   * - `"skip"`: Neither provision nor verify the tool, which also skips the toolchain's dependencies.
+   *
+   * Without `setup`, `turbo setup` infers what to prepare from native
+   * declaration files, and detected tools are managed. Toolchain keys
+   * override root values.
+   */
+  tools?: ToolPolicy;
+
+  /**
+   * How `turbo setup` prepares dependencies for every toolchain.
+   *
+   * - `"locked"`: Install from the committed ecosystem lockfile without changing it.
+   * - `"skip"`: Do not install dependencies.
+   */
+  dependencies?: DependencyPolicy;
+
+  /** Setup policy for the JavaScript toolchain. */
+  javascript?: ToolchainSetupPolicy;
+
+  /** Setup policy for the Rust toolchain. Requires `futureFlags.experimentalCargoWorkspaces`. */
+  rust?: ToolchainSetupPolicy;
+
+  /** Setup policy for the Python toolchain. Requires `futureFlags.experimentalPythonWorkspaces`. */
+  python?: ToolchainSetupPolicy;
+
+  /** Setup policy for the Go toolchain. Requires `futureFlags.experimentalGoWorkspaces`. */
+  go?: ToolchainSetupPolicy;
+
+  /** Tools that no built-in adapter manages, keyed by tool ID. */
+  additionalTools?: Record<string, AdditionalTool>;
+
+  /**
+   * Credential-free HTTPS mirrors for setup downloads. `turbo.lock` keeps the
+   * official URLs, and environment variables override these values.
+   */
+  mirrors?: SetupMirrors;
+
+  /**
+   * Toolchain IDs in the order `turbo setup` installs their dependencies,
+   * one at a time. Without it, every toolchain's installer runs at the same
+   * time. Set it when one ecosystem's install needs another's dependencies,
+   * such as a Python build hook that runs npm.
+   *
+   * It must list each of the repository's toolchains exactly once; a
+   * missing, unknown, or repeated toolchain is an error.
+   */
+  dependencyInstallOrder?: string[];
+}
+
+export interface SetupMirrors {
+  /** Replaces `https://nodejs.org/dist` for Node.js release metadata and archives. */
+  node?: string;
+
+  /** Replaces `https://registry.npmjs.org` for npm, pnpm, and Yarn packages. */
+  npmRegistry?: string;
+
+  /** Replaces the `https://github.com` origin for Bun releases, keeping official paths. */
+  bun?: string;
+
+  /** Replaces the `https://releases.astral.sh` origin for uv, keeping official paths. */
+  uv?: string;
+
+  /** Replaces the `https://releases.astral.sh` origin for CPython, keeping official paths. */
+  python?: string;
+
+  /** Replaces `https://go.dev` and `https://dl.google.com` for Go, keeping official paths. */
+  go?: string;
+
+  /** Replaces the `https://static.rust-lang.org` origin for rustup and Rust, keeping official paths. */
+  rust?: string;
+}
+
+export interface AdditionalTool {
+  /** The exact version of the tool. Ranges and channels are not allowed. */
+  version: string;
+
+  /** Artifacts keyed by platform. Platforms without an artifact are unsupported. */
+  artifacts: Partial<Record<ArtifactPlatform, AdditionalToolArtifact>>;
+}
+
+export interface AdditionalToolArtifact {
+  /** HTTPS download URL without credentials, a query, or a fragment. */
+  url: string;
+
+  /** Lowercase hex SHA-256 digest of the downloaded bytes. */
+  sha256: string;
+
+  /** `binary` for a single executable file, or the archive format. */
+  format: ArtifactFormat;
+
+  /** The single top-level archive directory. Omit it for archives without one. */
+  rootPrefix?: string;
+
+  /** Executable names mapped to paths relative to `rootPrefix` or the archive top level. */
+  executables: Record<string, string>;
+}
+
+export interface ToolchainSetupPolicy {
+  /** How `turbo setup` prepares this toolchain's tools. */
+  tools?: ToolPolicy;
+
+  /** How `turbo setup` prepares this toolchain's dependencies. */
+  dependencies?: DependencyPolicy;
+}
+
 export interface StartupInput {
   mode: "startup";
   globs?: Array<string>;
@@ -453,6 +690,15 @@ export interface Pipeline {
    * task execution or caching behavior.
    */
   description?: string;
+
+  /**
+   * Arbitrary string labels for this task. Package configurations replace
+   * inherited tags by default; an empty array clears them. Include
+   * `$TURBO_EXTENDS$` to append labels to inherited tags.
+   *
+   * @defaultValue `[]`
+   */
+  tags?: Array<string>;
 
   /**
    * The list of tasks that this task depends on.

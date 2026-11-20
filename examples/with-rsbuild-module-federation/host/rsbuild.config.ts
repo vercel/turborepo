@@ -1,11 +1,16 @@
 import { pluginModuleFederation } from "@module-federation/rsbuild-plugin";
-import { defineConfig } from "@rsbuild/core";
+import { defaultAllowedOrigins, defineConfig } from "@rsbuild/core";
 import { pluginReact } from "@rsbuild/plugin-react";
 import { dependencies } from "./package.json";
 
 export default defineConfig({
   html: {
     favicon: "./public/favicon.ico",
+  },
+  server: {
+    cors: {
+      origin: defaultAllowedOrigins,
+    },
   },
   plugins: [
     pluginReact(),

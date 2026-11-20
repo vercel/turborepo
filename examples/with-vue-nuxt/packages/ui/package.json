@@ -2,14 +2,16 @@
   "name": "ui",
   "version": "0.0.0",
   "private": true,
+  "type": "module",
   "main": "./index.ts",
   "types": "./index.ts",
   "scripts": {
     "lint": "eslint ."
   },
   "devDependencies": {
+    "eslint": "10.9.1",
     "eslint-config-custom": "workspace:*",
     "tsconfig": "workspace:*",
-    "vue": "^3.4.21"
+    "vue": "3.5.42"
   }
 }

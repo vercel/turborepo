@@ -1,8 +1,7 @@
 import * as React from "react";
-import type { HeadProps, PageProps } from "gatsby";
 import { Button } from "@repo/ui/button";
 
-function IndexPage(_: PageProps): JSX.Element {
+export default function IndexPage() {
   return (
     <main>
       <h1>Web</h1>
@@ -11,8 +10,6 @@ function IndexPage(_: PageProps): JSX.Element {
   );
 }
 
-export default IndexPage;
-
-export function Head(_: HeadProps): JSX.Element {
+export function Head() {
   return <title>Home Page</title>;
 }

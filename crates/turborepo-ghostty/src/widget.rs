@@ -1,16 +1,15 @@
+use libghostty_vt::{
+    RenderState, Terminal,
+    render::{CellIterator, CursorViewport, CursorVisualStyle, RowIterator},
+};
 use ratatui::{
     buffer::Buffer,
     layout::{Position, Rect},
-    style::{Color, Modifier},
+    style::Modifier,
     widgets::Widget,
 };
 
-use crate::{
-    convert,
-    render::{CellIterator, CursorViewport, CursorVisualStyle, RenderState, RowIterator},
-    style::RgbColor,
-    terminal::Terminal,
-};
+use crate::convert;
 
 /// Cursor information extracted during rendering.
 #[derive(Debug, Clone, Default)]
@@ -61,17 +60,9 @@ impl<'a, 'alloc, 'cb> TerminalWidget<'a, 'alloc, 'cb> {
     }
 }
 
-fn rgb_to_color(color: RgbColor) -> Color {
-    Color::Rgb(color.r, color.g, color.b)
-}
-
 impl Widget for &mut TerminalWidget<'_, '_, '_> {
     fn render(self, area: Rect, buf: &mut Buffer) {
         let Ok(snapshot) = self.render_state.update(self.terminal) else {
-            return;
-        };
-
-        let Ok(colors) = snapshot.colors() else {
             return;
         };
 
@@ -98,9 +89,6 @@ impl Widget for &mut TerminalWidget<'_, '_, '_> {
             };
             self.cursor.blinking = cursor_blinking;
         }
-
-        let default_fg = rgb_to_color(colors.foreground);
-        let default_bg = rgb_to_color(colors.background);
 
         let Ok(mut row_iter) = RowIterator::new() else {
             return;
@@ -140,25 +128,8 @@ impl Widget for &mut TerminalWidget<'_, '_, '_> {
                     },
                 };
 
-                let fg = cell
-                    .fg_color()
-                    .ok()
-                    .flatten()
-                    .map(rgb_to_color)
-                    .unwrap_or(default_fg);
-                let bg = cell
-                    .bg_color()
-                    .ok()
-                    .flatten()
-                    .map(rgb_to_color)
-                    .unwrap_or(default_bg);
-
                 let cell_style = cell.style().ok();
-                let mut ratatui_style = cell_style
-                    .as_ref()
-                    .map(|style| convert::style(style, &colors.palette))
-                    .unwrap_or_default();
-                ratatui_style = ratatui_style.fg(fg).bg(bg);
+                let mut ratatui_style = cell_style.as_ref().map(convert::style).unwrap_or_default();
 
                 if row_selection.is_some_and(|selection| {
                     col_idx >= selection.start_x && col_idx <= selection.end_x
@@ -184,7 +155,7 @@ impl Widget for &mut TerminalWidget<'_, '_, '_> {
 
 #[cfg(test)]
 mod tests {
-    use ratatui::{Terminal, backend::TestBackend, widgets::Widget};
+    use ratatui::{Terminal, backend::TestBackend, style::Color, widgets::Widget};
 
     use super::*;
     use crate::Parser;
@@ -197,7 +168,7 @@ mod tests {
         let backend = TestBackend::new(cols, rows);
         let mut terminal = Terminal::new(backend).expect("terminal");
 
-        let mut parser_long = Parser::new(rows, cols, 0);
+        let mut parser_long = Parser::try_new(rows, cols, 0).expect("parser");
         parser_long.process(b"Line 1\r\nLine 2\r\nLine 3\r\nLine 4\r\nLine 5");
         terminal
             .draw(|frame| {
@@ -207,7 +178,7 @@ mod tests {
             })
             .expect("draw long");
 
-        let mut parser_short = Parser::new(rows, cols, 0);
+        let mut parser_short = Parser::try_new(rows, cols, 0).expect("parser");
         parser_short.process(b"Short");
         terminal
             .draw(|frame| {
@@ -231,5 +202,72 @@ mod tests {
                 );
             }
         }
+    }
+
+    #[test]
+    fn renders_ansi_palette_color() {
+        let (cols, rows): (u16, u16) = (20, 5);
+        let backend = TestBackend::new(cols, rows);
+        let mut terminal = Terminal::new(backend).expect("terminal");
+
+        let mut parser = Parser::try_new(rows, cols, 0).expect("parser");
+        parser.process(b"\x1b[31mRed\x1b[0m");
+        terminal
+            .draw(|frame| {
+                let mut widget =
+                    TerminalWidget::new(&mut parser.terminal, &mut parser.render_state);
+                widget.render(frame.area(), frame.buffer_mut());
+            })
+            .expect("draw");
+
+        let buf = terminal.backend().buffer();
+        let cell = &buf[ratatui::layout::Position::new(0, 0)];
+        assert_eq!(cell.symbol(), "R");
+        assert_eq!(cell.fg, Color::Indexed(1));
+    }
+
+    #[test]
+    fn renders_truecolor() {
+        let (cols, rows): (u16, u16) = (20, 5);
+        let backend = TestBackend::new(cols, rows);
+        let mut terminal = Terminal::new(backend).expect("terminal");
+
+        let mut parser = Parser::try_new(rows, cols, 0).expect("parser");
+        parser.process(b"\x1b[38;2;12;34;56mColor\x1b[0m");
+        terminal
+            .draw(|frame| {
+                let mut widget =
+                    TerminalWidget::new(&mut parser.terminal, &mut parser.render_state);
+                widget.render(frame.area(), frame.buffer_mut());
+            })
+            .expect("draw");
+
+        let buf = terminal.backend().buffer();
+        let cell = &buf[ratatui::layout::Position::new(0, 0)];
+        assert_eq!(cell.symbol(), "C");
+        assert_eq!(cell.fg, Color::Rgb(12, 34, 56));
+    }
+
+    #[test]
+    fn leaves_default_colors_reset() {
+        let (cols, rows): (u16, u16) = (20, 5);
+        let backend = TestBackend::new(cols, rows);
+        let mut terminal = Terminal::new(backend).expect("terminal");
+
+        let mut parser = Parser::try_new(rows, cols, 0).expect("parser");
+        parser.process(b"Plain");
+        terminal
+            .draw(|frame| {
+                let mut widget =
+                    TerminalWidget::new(&mut parser.terminal, &mut parser.render_state);
+                widget.render(frame.area(), frame.buffer_mut());
+            })
+            .expect("draw");
+
+        let buf = terminal.backend().buffer();
+        let cell = &buf[ratatui::layout::Position::new(0, 0)];
+        assert_eq!(cell.symbol(), "P");
+        assert_eq!(cell.fg, Color::Reset);
+        assert_eq!(cell.bg, Color::Reset);
     }
 }

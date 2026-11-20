@@ -14,7 +14,7 @@ use turbopath::{
 };
 use turborepo_ci::Vendor;
 
-use crate::{Error, GitRepo, SCM};
+use crate::{Error, GitRepo, RepoGitIndex, SCM};
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct InvalidRange {
@@ -23,17 +23,10 @@ pub struct InvalidRange {
 }
 
 impl SCM {
-    pub fn get_current_branch(&self, path: &AbsoluteSystemPath) -> Result<String, Error> {
-        match self {
-            Self::Git(git) => git.get_current_branch(),
-            Self::Manual => Err(Error::GitRequired(path.to_owned())),
-        }
-    }
-
     pub fn get_current_sha(&self, path: &AbsoluteSystemPath) -> Result<String, Error> {
         match self {
             Self::Git(git) => git.get_current_sha(),
-            Self::Manual => Err(Error::GitRequired(path.to_owned())),
+            Self::Manual(_) => Err(Error::GitRequired(path.to_owned())),
         }
     }
 
@@ -42,8 +35,11 @@ impl SCM {
         _path: &AbsoluteSystemPath,
     ) -> (Option<String>, Option<String>) {
         match self {
-            Self::Git(git) => (git.get_current_branch().ok(), git.get_current_sha().ok()),
-            Self::Manual => (None, None),
+            Self::Git(git) => git.get_current_branch_and_sha().unwrap_or_else(|_| {
+                // Preserve partial results for unusual states such as an unborn branch.
+                (git.get_current_branch().ok(), git.get_current_sha().ok())
+            }),
+            Self::Manual(_) => (None, None),
         }
     }
 
@@ -54,8 +50,45 @@ impl SCM {
     pub fn get_dirty_hash(&self) -> Option<String> {
         match self {
             Self::Git(git) => git.get_dirty_hash(),
-            Self::Manual => None,
+            Self::Manual(_) => None,
         }
+    }
+
+    /// Compute a dirty hash from an already-built repo index instead of
+    /// spawning `git status`. This preserves the same tracked-content diff
+    /// input as [`Self::get_dirty_hash`], while reusing the untracked-file
+    /// state Turbo already collected for file hashing.
+    pub fn get_dirty_hash_from_repo_index(&self, repo_index: &RepoGitIndex) -> Option<String> {
+        match self {
+            Self::Git(git) => git.get_dirty_hash_from_repo_index(repo_index),
+            Self::Manual(_) => None,
+        }
+    }
+
+    /// Select changed paths tracked in the index or HEAD, including staged
+    /// deletions. Committed deletions require provenance from the compared
+    /// diff.
+    pub fn tracked_changed_files(
+        &self,
+        turbo_root: &AbsoluteSystemPath,
+        changed_files: &HashSet<AnchoredSystemPathBuf>,
+    ) -> Result<HashSet<AnchoredSystemPathBuf>, Error> {
+        let Self::Git(git) = self else {
+            return Ok(HashSet::new());
+        };
+        let pathspec = git.root.anchor(turbo_root)?;
+        let pathspec = if pathspec.as_str().is_empty() {
+            String::new()
+        } else {
+            format!(":(literal){}", pathspec.to_unix())
+        };
+        let output = git.execute_git_command(
+            &["ls-files", "--cached", "--with-tree=HEAD", "-z"],
+            &pathspec,
+        )?;
+        let mut tracked = HashSet::new();
+        git.add_files_from_stdout(&mut tracked, turbo_root, output)?;
+        Ok(changed_files.intersection(&tracked).cloned().collect())
     }
 
     /// get the actual changed files between two git refs
@@ -81,13 +114,25 @@ impl SCM {
         }
         match self {
             Self::Git(git) => {
-                match git.changed_files(
-                    turbo_root,
-                    from_commit,
-                    to_commit,
+                let key = ChangedFilesKey {
+                    turbo_root: turbo_root.to_owned(),
+                    from_commit: from_commit.map(str::to_owned),
+                    to_commit: to_commit.map(str::to_owned),
                     include_uncommitted,
                     merge_base,
-                ) {
+                };
+                let result = match git.change_prefetch.take_changed_files(&key) {
+                    Some(result) => result,
+                    None => git.changed_files(
+                        turbo_root,
+                        from_commit,
+                        to_commit,
+                        include_uncommitted,
+                        merge_base,
+                        |_| {},
+                    ),
+                };
+                match result {
                     Ok(files) => Ok(Ok(files)),
                     Err(ref error @ Error::Git(ref message, _))
                         if allow_unknown_objects
@@ -108,7 +153,30 @@ impl SCM {
                     Err(e) => Err(e),
                 }
             }
-            Self::Manual => Err(Error::GitRequired(turbo_root.to_owned())),
+            Self::Manual(_) => Err(Error::GitRequired(turbo_root.to_owned())),
+        }
+    }
+
+    /// Checks HEAD tree membership without reading a blob or consulting the
+    /// index. This also works when committed content is absent in a blobless
+    /// checkout, and does not mistake a staged addition for a committed path.
+    pub fn is_path_committed(&self, path: &AbsoluteSystemPath) -> Result<bool, Error> {
+        match self {
+            Self::Git(git) => {
+                let relative = git.root.anchor(path)?.to_unix();
+                let output = git.execute_git_command(
+                    &[
+                        "--literal-pathspecs",
+                        "ls-tree",
+                        "-z",
+                        "--name-only",
+                        "HEAD",
+                    ],
+                    relative.as_str(),
+                )?;
+                Ok(!output.is_empty())
+            }
+            Self::Manual(_) => Ok(false),
         }
     }
 
@@ -117,10 +185,249 @@ impl SCM {
         from_commit: Option<&str>,
         file_path: &AbsoluteSystemPath,
     ) -> Result<Vec<u8>, Error> {
+        self.previous_content_at(&RangeBase::new(from_commit, None, false), file_path)
+    }
+
+    /// Returns the content of `file_path` at the base of the range that
+    /// [`Self::changed_files`] compares for the same arguments: the merge base
+    /// of `from_commit` and `to_commit` (`HEAD` when absent) when `merge_base`
+    /// is set, and `from_commit` otherwise.
+    pub fn previous_content_in_range(
+        &self,
+        from_commit: Option<&str>,
+        to_commit: Option<&str>,
+        merge_base: bool,
+        file_path: &AbsoluteSystemPath,
+    ) -> Result<Vec<u8>, Error> {
+        self.previous_content_at(
+            &RangeBase::new(from_commit, to_commit, merge_base),
+            file_path,
+        )
+    }
+
+    fn previous_content_at(
+        &self,
+        base: &RangeBase,
+        file_path: &AbsoluteSystemPath,
+    ) -> Result<Vec<u8>, Error> {
         match self {
-            Self::Git(git) => git.previous_content(from_commit, file_path),
-            Self::Manual => Err(Error::GitRequired(file_path.to_owned())),
+            Self::Git(git) => git
+                .change_prefetch
+                .take_previous_content(base, file_path)
+                .unwrap_or_else(|| git.previous_content_at(base, file_path)),
+            Self::Manual(_) => Err(Error::GitRequired(file_path.to_owned())),
         }
+    }
+
+    /// Starts change detection for `requests` on background threads so the
+    /// git subprocesses overlap package graph construction. A later
+    /// [`Self::changed_files`] call with identical arguments consumes the
+    /// result instead of spawning git again; any other call is unaffected.
+    ///
+    /// For each request, the base-revision content of every
+    /// `previous_content_candidates` path that turns out to be changed is
+    /// fetched as well, for a matching later [`Self::previous_content`] call.
+    /// Each prefetched result is consumed at most once, so callers observe
+    /// exactly one computation per query, as without the prefetch.
+    pub fn prefetch_changes(
+        &self,
+        requests: Vec<ChangedFilesRequest>,
+        previous_content_candidates: Vec<AbsoluteSystemPathBuf>,
+    ) {
+        let Self::Git(git) = self else {
+            return;
+        };
+        let candidates = std::sync::Arc::new(previous_content_candidates);
+        for request in requests {
+            let ChangedFilesRequest {
+                turbo_root,
+                from_commit,
+                to_commit,
+                include_uncommitted,
+                merge_base,
+            } = request;
+            let key = ChangedFilesKey {
+                turbo_root,
+                from_commit,
+                to_commit,
+                include_uncommitted,
+                merge_base,
+            };
+            if git.change_prefetch.contains(&key) {
+                continue;
+            }
+            let worker = git.clone();
+            let candidates = candidates.clone();
+            let thread_key = key.clone();
+            let spawned = std::thread::Builder::new()
+                .name("turbo-scm-prefetch".to_string())
+                .spawn(move || {
+                    let key = thread_key;
+                    let from_commit = key.from_commit.as_deref();
+                    let base = key.range_base();
+                    let mut previous = Vec::new();
+                    let fetch_previous =
+                        |files: &HashSet<AnchoredSystemPathBuf>,
+                         previous: &mut Vec<PrefetchedContent>| {
+                            for candidate in candidates.iter() {
+                                if previous.iter().any(|(path, _)| path == candidate) {
+                                    continue;
+                                }
+                                let Ok(anchored) = key.turbo_root.anchor(candidate) else {
+                                    continue;
+                                };
+                                if files.contains(&anchored) {
+                                    previous.push((
+                                        candidate.clone(),
+                                        worker.previous_content_at(&base, candidate),
+                                    ));
+                                }
+                            }
+                        };
+                    // Committed changes are known first; their base content is
+                    // fetched while the uncommitted-change scans still run.
+                    let files = worker.changed_files(
+                        &key.turbo_root,
+                        from_commit,
+                        key.to_commit.as_deref(),
+                        key.include_uncommitted,
+                        key.merge_base,
+                        |committed| fetch_previous(committed, &mut previous),
+                    );
+                    if let Ok(files) = &files {
+                        fetch_previous(files, &mut previous);
+                    }
+                    PrefetchedChanges { files, previous }
+                });
+            if let Ok(handle) = spawned {
+                git.change_prefetch.insert(key, handle);
+            }
+        }
+    }
+}
+
+/// Arguments for one [`SCM::prefetch_changes`] change-detection query.
+#[derive(Debug, Clone)]
+pub struct ChangedFilesRequest {
+    pub turbo_root: AbsoluteSystemPathBuf,
+    pub from_commit: Option<String>,
+    pub to_commit: Option<String>,
+    pub include_uncommitted: bool,
+    pub merge_base: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct ChangedFilesKey {
+    turbo_root: AbsoluteSystemPathBuf,
+    from_commit: Option<String>,
+    to_commit: Option<String>,
+    include_uncommitted: bool,
+    merge_base: bool,
+}
+
+impl ChangedFilesKey {
+    fn range_base(&self) -> RangeBase {
+        RangeBase::new(
+            self.from_commit.as_deref(),
+            self.to_commit.as_deref(),
+            self.merge_base,
+        )
+    }
+}
+
+/// The revision a range's previous file contents are read from: `from_commit`,
+/// or its merge base with `to_commit` (`HEAD` when absent).
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct RangeBase {
+    from_commit: Option<String>,
+    /// Only meaningful for merge-base ranges; `None` otherwise.
+    to_commit: Option<String>,
+    merge_base: bool,
+}
+
+impl RangeBase {
+    fn new(from_commit: Option<&str>, to_commit: Option<&str>, merge_base: bool) -> Self {
+        Self {
+            from_commit: from_commit.map(str::to_owned),
+            to_commit: to_commit.filter(|_| merge_base).map(str::to_owned),
+            merge_base,
+        }
+    }
+}
+
+/// A prefetched base-revision file: its path and `git show` result.
+type PrefetchedContent = (AbsoluteSystemPathBuf, Result<Vec<u8>, Error>);
+
+struct PrefetchedChanges {
+    files: Result<HashSet<AnchoredSystemPathBuf>, Error>,
+    previous: Vec<PrefetchedContent>,
+}
+
+type PreviousContentEntry = (RangeBase, AbsoluteSystemPathBuf, Result<Vec<u8>, Error>);
+
+/// Pending and completed prefetched change-detection results.
+#[derive(Default)]
+pub(crate) struct ChangePrefetch {
+    pending: std::sync::Mutex<Vec<(ChangedFilesKey, std::thread::JoinHandle<PrefetchedChanges>)>>,
+    previous_content: std::sync::Mutex<Vec<PreviousContentEntry>>,
+}
+
+impl ChangePrefetch {
+    fn contains(&self, key: &ChangedFilesKey) -> bool {
+        self.pending
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .iter()
+            .any(|(pending, _)| pending == key)
+    }
+
+    fn insert(&self, key: ChangedFilesKey, handle: std::thread::JoinHandle<PrefetchedChanges>) {
+        self.pending
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .push((key, handle));
+    }
+
+    fn take_changed_files(
+        &self,
+        key: &ChangedFilesKey,
+    ) -> Option<Result<HashSet<AnchoredSystemPathBuf>, Error>> {
+        let handle = {
+            let mut pending = self
+                .pending
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
+            let index = pending.iter().position(|(pending, _)| pending == key)?;
+            pending.swap_remove(index).1
+        };
+        let PrefetchedChanges { files, previous } = match handle.join() {
+            Ok(prefetched) => prefetched,
+            Err(payload) => std::panic::resume_unwind(payload),
+        };
+        self.previous_content
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .extend(
+                previous
+                    .into_iter()
+                    .map(|(path, content)| (key.range_base(), path, content)),
+            );
+        Some(files)
+    }
+
+    fn take_previous_content(
+        &self,
+        base: &RangeBase,
+        file_path: &AbsoluteSystemPath,
+    ) -> Option<Result<Vec<u8>, Error>> {
+        let mut previous = self
+            .previous_content
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let index = previous
+            .iter()
+            .position(|(entry, path, _)| entry == base && &**path == file_path)?;
+        Some(previous.swap_remove(index).2)
     }
 }
 
@@ -193,6 +500,30 @@ impl CIEnv {
 }
 
 impl GitRepo {
+    fn get_current_branch_and_sha(&self) -> Result<(Option<String>, Option<String>), Error> {
+        let output =
+            self.execute_git_command(&["rev-parse", "HEAD", "--symbolic-full-name", "HEAD"], "")?;
+        let output = String::from_utf8(output)?;
+        let mut lines = output.lines();
+        let sha = lines
+            .next()
+            .ok_or_else(|| Error::git_error("git did not return HEAD"))?;
+        let branch = lines
+            .next()
+            .ok_or_else(|| Error::git_error("git did not return the current branch"))?;
+        if lines.next().is_some() {
+            return Err(Error::git_error("git returned unexpected revision output"));
+        }
+
+        // Match `git branch --show-current`: only a local branch is reported, without
+        // its `refs/heads/` prefix. Detached HEAD and other symbolic refs are empty.
+        let branch = branch
+            .strip_prefix("refs/heads/")
+            .unwrap_or_default()
+            .to_owned();
+        Ok((Some(branch), Some(sha.to_owned())))
+    }
+
     fn get_current_branch(&self) -> Result<String, Error> {
         let output = self.execute_git_command(&["branch", "--show-current"], "")?;
         let output = String::from_utf8(output)?;
@@ -205,7 +536,8 @@ impl GitRepo {
         Ok(output.trim().to_owned())
     }
 
-    fn validate_git_ref(git_ref: &str) -> Result<(), Error> {
+    /// Rejects a ref that git would read as an option (`-...`).
+    pub fn validate_git_ref(git_ref: &str) -> Result<(), Error> {
         if git_ref.starts_with('-') {
             return Err(Error::InvalidGitRef(git_ref.to_string()));
         }
@@ -246,31 +578,165 @@ impl GitRepo {
 
         let mut hasher = Sha256::new();
         hasher.update(&status_output);
+        self.finish_dirty_hash(hasher, true)
+    }
+
+    fn get_dirty_hash_from_repo_index(&self, repo_index: &RepoGitIndex) -> Option<String> {
+        use sha2::{Digest, Sha256};
+
+        let mut hasher = Sha256::new();
+        let has_status = repo_index.append_dirty_status_to_hasher(&mut hasher);
+
+        // If the repo index proved the working tree clean of unstaged
+        // changes, and the index's cache-tree equals HEAD's tree (no staged
+        // changes), then `git diff HEAD` is guaranteed to produce no output
+        // — skip spawning it. On stat-stale indexes (snapshot-restored
+        // workspaces) that subprocess re-hashes every tracked file with
+        // sha1dc and costs seconds of serial wall time.
+        let info_attributes_exists = self
+            .root
+            .join_components(&[".git", "info", "attributes"])
+            .exists();
+        if let Some((root, sensitivity)) =
+            repo_index.tracked_diff_clean_root(info_attributes_exists)
+        {
+            let eol_ok = match sensitivity {
+                crate::repo_index::EolSensitivity::ConfigIndependent => true,
+                crate::repo_index::EolSensitivity::RequiresInertEolConversion => {
+                    self.eol_conversion_inert()
+                }
+            };
+            if eol_ok
+                && self
+                    .head_tree_oid()
+                    .is_some_and(|head_tree| head_tree == root)
+            {
+                // The diff would have contributed nothing to the hasher, so
+                // the resulting hash is identical to the diff-running path.
+                if !has_status {
+                    return None;
+                }
+                return Some(hex::encode(hasher.finalize()));
+            }
+        }
+
+        self.finish_dirty_hash(hasher, has_status)
+    }
+
+    /// Returns true when git provably performs no eol conversion at checkin:
+    /// `core.autocrlf` is unset or false, no `core.attributesFile` is
+    /// configured, and no default global/system attribute files exist.
+    /// Conservative on any failure.
+    fn eol_conversion_inert(&self) -> bool {
+        let Ok(output) = self.execute_git_command(&["config", "-z", "--list"], "") else {
+            return false;
+        };
+        let mut autocrlf_ok = true;
+        for kv in output.split(|b| *b == 0) {
+            // `-z` output: `key\nvalue` per NUL-terminated record.
+            let mut parts = kv.splitn(2, |b| *b == b'\n');
+            let key = parts.next().unwrap_or_default();
+            let value = parts.next().unwrap_or_default();
+            match key {
+                b"core.autocrlf" => {
+                    // Last definition wins, mirroring git.
+                    autocrlf_ok = value.eq_ignore_ascii_case(b"false");
+                }
+                b"core.attributesfile" => return false,
+                _ => {}
+            }
+        }
+        if !autocrlf_ok {
+            return false;
+        }
+
+        // Default global attributes locations git consults when
+        // core.attributesFile is unset.
+        let xdg_attrs = std::env::var_os("XDG_CONFIG_HOME")
+            .map(|base| {
+                std::path::PathBuf::from(base)
+                    .join("git")
+                    .join("attributes")
+            })
+            .or_else(|| {
+                std::env::var_os("HOME")
+                    .map(|home| std::path::PathBuf::from(home).join(".config/git/attributes"))
+            });
+        if xdg_attrs.is_some_and(|p| p.exists()) {
+            return false;
+        }
+        // System-wide attributes. The exact path depends on git's compiled
+        // prefix; /etc/gitattributes is the common location.
+        !std::path::Path::new("/etc/gitattributes").exists()
+    }
+
+    /// Resolve `HEAD^{tree}` to its oid. `None` on failure (unborn HEAD,
+    /// corrupt repo) — callers treat that as "nothing proven".
+    fn head_tree_oid(&self) -> Option<String> {
+        let output = self
+            .execute_git_command(&["rev-parse", "HEAD^{tree}"], "")
+            .ok()?;
+        let output = String::from_utf8(output).ok()?;
+        let trimmed = output.trim();
+        (!trimmed.is_empty()).then(|| trimmed.to_owned())
+    }
+
+    fn finish_dirty_hash(&self, mut hasher: sha2::Sha256, has_status: bool) -> Option<String> {
+        use sha2::Digest;
 
         // Try `git diff HEAD` first. In a freshly initialized repo with no
         // commits, HEAD doesn't exist and git exits with code 128. Fall back
         // to `git diff --cached` which diffs the index against an empty tree,
         // correctly capturing staged file content without needing HEAD.
-        if !self.stream_diff_into_hasher(
-            &["diff", "HEAD", "--no-ext-diff", "--no-color"],
-            &mut hasher,
-        ) && !self.stream_diff_into_hasher(
-            &["diff", "--cached", "--no-ext-diff", "--no-color"],
+        //
+        // Both commands disable Git's opportunistic index refresh. The dirty
+        // hash is metadata, so collecting it must not mutate the repository or
+        // contend with a concurrent Git command for .git/index.lock.
+        let diff_has_content = match self.stream_diff_into_hasher(
+            &[
+                "-c",
+                "diff.autoRefreshIndex=false",
+                "diff",
+                "HEAD",
+                "--no-ext-diff",
+                "--no-color",
+            ],
             &mut hasher,
         ) {
-            turborepo_log::warn(
-                turborepo_log::Source::turbo(turborepo_log::Subsystem::Scm),
-                "failed to run git diff for dirty hash",
-            )
-            .emit();
+            Some(has_content) => has_content,
+            None => match self.stream_diff_into_hasher(
+                &[
+                    "-c",
+                    "diff.autoRefreshIndex=false",
+                    "diff",
+                    "--cached",
+                    "--no-ext-diff",
+                    "--no-color",
+                ],
+                &mut hasher,
+            ) {
+                Some(has_content) => has_content,
+                None => {
+                    turborepo_log::warn(
+                        turborepo_log::Source::turbo(turborepo_log::Subsystem::Scm),
+                        "failed to run git diff for dirty hash",
+                    )
+                    .emit();
+                    false
+                }
+            },
+        };
+
+        if !has_status && !diff_has_content {
+            return None;
         }
 
         Some(hex::encode(hasher.finalize()))
     }
 
     /// Spawn a git diff subprocess, streaming its stdout into `hasher`.
-    /// Returns `true` if the command exited successfully.
-    fn stream_diff_into_hasher(&self, args: &[&str], hasher: &mut sha2::Sha256) -> bool {
+    /// Returns whether the diff had content, or `None` if the command failed.
+    fn stream_diff_into_hasher(&self, args: &[&str], hasher: &mut sha2::Sha256) -> Option<bool> {
         use std::{io::Read, process::Stdio};
 
         use sha2::Digest;
@@ -284,22 +750,29 @@ impl GitRepo {
             .spawn()
         {
             Ok(child) => child,
-            Err(_) => return false,
+            Err(_) => return None,
         };
 
+        let mut has_content = false;
         if let Some(stdout) = child.stdout.take() {
             let mut reader = std::io::BufReader::new(stdout);
             let mut buf = [0u8; 65536];
             loop {
                 match reader.read(&mut buf) {
                     Ok(0) => break,
-                    Ok(n) => hasher.update(&buf[..n]),
+                    Ok(n) => {
+                        has_content = true;
+                        hasher.update(&buf[..n]);
+                    }
                     Err(_) => break,
                 }
             }
         }
 
-        child.wait().is_ok_and(|s| s.success())
+        child
+            .wait()
+            .is_ok_and(|s| s.success())
+            .then_some(has_content)
     }
 
     /// for GitHub Actions environment variables, see: https://docs.github.com/en/actions/writing-workflows/choosing-what-your-workflow-does/store-information-in-variables#default-environment-variables
@@ -352,7 +825,10 @@ impl GitRepo {
         None
     }
 
-    fn resolve_base(&self, base_override: Option<&str>, env: CIEnv) -> Result<String, Error> {
+    /// The base ref of a change comparison: `base_override` (validated), else
+    /// the GitHub Actions base (with the `origin/` fallback when that future
+    /// flag is on), else `main`, else `master`.
+    pub fn resolve_base(&self, base_override: Option<&str>, env: CIEnv) -> Result<String, Error> {
         if let Some(valid_from) = base_override {
             Self::validate_git_ref(valid_from)?;
             return Ok(valid_from.to_string());
@@ -364,26 +840,44 @@ impl GitRepo {
             // because at this point we know we're in a GITHUB CI environment
             // and we should really know by now what the base ref is
             // so it's better to just error if something went wrong
-            return match self
-                .execute_git_command(&["rev-parse", "--end-of-options", &github_base_ref], "")
-            {
+            let local_result =
+                self.execute_git_command(&["rev-parse", "--end-of-options", &github_base_ref], "");
+            match local_result {
                 Ok(_) => {
                     eprintln!("Resolved base ref from GitHub Actions event: {github_base_ref}");
-                    Ok(github_base_ref)
+                    return Ok(github_base_ref);
                 }
-                Err(e) => {
+                Err(local_error) if self.github_actions_remote_base_ref_fallback => {
+                    let remote_ref = format!("origin/{github_base_ref}");
+                    match self
+                        .execute_git_command(&["rev-parse", "--end-of-options", &remote_ref], "")
+                    {
+                        Ok(_) => {
+                            eprintln!("Resolved base ref from GitHub Actions event: {remote_ref}");
+                            return Ok(remote_ref);
+                        }
+                        Err(remote_error) => eprintln!(
+                            "Failed to resolve base ref '{github_base_ref}' ({local_error}) or \
+                             '{remote_ref}' ({remote_error}) from GitHub Actions event"
+                        ),
+                    }
+                }
+                Err(error) => {
                     eprintln!(
                         "Failed to resolve base ref '{github_base_ref}' from GitHub Actions \
-                         event: {e}"
+                         event: {error}"
                     );
-                    Err(Error::UnableToResolveRef)
                 }
-            };
+            }
+            return Err(Error::UnableToResolveRef);
         }
 
         default_base_ref(|branch| self.execute_git_command(&["rev-parse", branch], "").is_ok())
     }
 
+    /// `on_committed` runs with the committed (`diff-tree`) changes as soon
+    /// as they are known, while the uncommitted-change scans may still be
+    /// running. It is not called if the committed diff fails.
     fn changed_files(
         &self,
         turbo_root: &AbsoluteSystemPath,
@@ -391,6 +885,7 @@ impl GitRepo {
         to_commit: Option<&str>,
         include_uncommitted: bool,
         merge_base: bool,
+        on_committed: impl FnOnce(&HashSet<AnchoredSystemPathBuf>),
     ) -> Result<HashSet<AnchoredSystemPathBuf>, Error> {
         let turbo_root_relative_to_git_root = self.root.anchor(turbo_root)?;
         let pathspec = turbo_root_relative_to_git_root.as_str();
@@ -411,32 +906,55 @@ impl GitRepo {
 
         args.extend(["--end-of-options", &valid_from, to_commit]);
 
-        let output = self.execute_git_command(&args, pathspec)?;
-        self.add_files_from_stdout(&mut files, turbo_root, output)?;
-
         // We only care about non-tracked files if we haven't specified both ends up the
         // comparison
-        if include_uncommitted {
-            // Add untracked files or unstaged changes, i.e. files that are not in git at
-            // all
-            let ls_files_output = self.execute_git_command(
-                &[
-                    "ls-files",
-                    "--others",
-                    "--modified",
-                    "--exclude-standard",
-                    "-z",
-                ],
-                pathspec,
-            )?;
-            self.add_files_from_stdout(&mut files, turbo_root, ls_files_output)?;
-            // Include any files that have been staged, but not committed
-            let diff_output =
-                self.execute_git_command(&["diff", "--name-only", "--cached", "-z"], pathspec)?;
-            self.add_files_from_stdout(&mut files, turbo_root, diff_output)?;
+        if !include_uncommitted {
+            let output = self.execute_git_command(&args, pathspec)?;
+            self.add_files_from_stdout(&mut files, turbo_root, output)?;
+            on_committed(&files);
+            return Ok(files);
         }
 
-        Ok(files)
+        // The three queries are independent read-only git invocations, so they
+        // run concurrently. Results are applied, and errors reported, in the
+        // same order as running them one after another.
+        std::thread::scope(|scope| {
+            // Add untracked files or unstaged changes, i.e. files that are not in git at
+            // all
+            let ls_files = scope.spawn(|| {
+                self.execute_git_command(
+                    &[
+                        "ls-files",
+                        "--others",
+                        "--modified",
+                        "--exclude-standard",
+                        "-z",
+                    ],
+                    pathspec,
+                )
+            });
+            // Include any files that have been staged, but not committed
+            let staged = scope.spawn(|| {
+                // Both sides of a rename can affect different packages.
+                self.execute_git_command(
+                    &["diff", "--name-only", "--cached", "--no-renames", "-z"],
+                    pathspec,
+                )
+            });
+            let join = |handle: std::thread::ScopedJoinHandle<'_, Result<Vec<u8>, Error>>| {
+                handle
+                    .join()
+                    .unwrap_or_else(|payload| std::panic::resume_unwind(payload))
+            };
+
+            let output = self.execute_git_command(&args, pathspec)?;
+            self.add_files_from_stdout(&mut files, turbo_root, output)?;
+            on_committed(&files);
+
+            self.add_files_from_stdout(&mut files, turbo_root, join(ls_files)?)?;
+            self.add_files_from_stdout(&mut files, turbo_root, join(staged)?)?;
+            Ok(files)
+        })
     }
 
     pub fn execute_git_command(&self, args: &[&str], pathspec: &str) -> Result<Vec<u8>, Error> {
@@ -489,16 +1007,35 @@ impl GitRepo {
         Ok(anchored_to_turbo_root_file_path)
     }
 
-    fn previous_content(
+    fn previous_content_at(
         &self,
-        from_commit: Option<&str>,
+        base: &RangeBase,
         file_path: &AbsoluteSystemPath,
     ) -> Result<Vec<u8>, Error> {
         let anchored_file_path = self.root.anchor(file_path)?;
-        let valid_from = self.resolve_base(from_commit, CIEnv::new())?;
-        let arg = format!("{}:{}", valid_from, anchored_file_path.as_str());
+        let revision = self.resolve_range_base(base)?;
+        let arg = format!("{}:{}", revision, anchored_file_path.to_unix());
 
         self.execute_git_command(&["show", "--end-of-options", &arg], "")
+    }
+
+    /// Resolves the revision `diff-tree` compares against for this range.
+    fn resolve_range_base(&self, base: &RangeBase) -> Result<String, Error> {
+        let valid_from = self.resolve_base(base.from_commit.as_deref(), CIEnv::new())?;
+        if !base.merge_base {
+            return Ok(valid_from);
+        }
+        let to_commit = base.to_commit.as_deref().unwrap_or("HEAD");
+        Self::validate_git_ref(to_commit)?;
+        let output = self.execute_git_command(
+            &["merge-base", "--end-of-options", &valid_from, to_commit],
+            "",
+        )?;
+        let merge_base = String::from_utf8_lossy(&output).trim().to_string();
+        if merge_base.is_empty() {
+            return Err(Error::UnableToResolveRef);
+        }
+        Ok(merge_base)
     }
 }
 
@@ -555,14 +1092,39 @@ mod tests {
 
     use tempfile::{NamedTempFile, TempDir};
     use test_case::test_case;
-    use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, PathError};
+    use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPathBuf, PathError};
     use which::which;
 
     use super::{CIEnv, InvalidRange, default_base_ref, previous_content};
     use crate::{
-        Error, GitRepo, SCM,
+        Error, GitRepo, RepoGitIndex, SCM,
         git::{GitHubCommit, GitHubEvent},
     };
+
+    #[test]
+    fn previous_content_reads_nested_paths() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        run_git(root, &["init", "--quiet", "--initial-branch=main"]);
+        fs::create_dir_all(root.join("packages").join("a")).unwrap();
+        let contents = b"{\"name\":\"a\"}\n";
+        fs::write(
+            root.join("packages").join("a").join("package.json"),
+            contents,
+        )
+        .unwrap();
+        run_git(root, &["add", "."]);
+        run_git(root, &["commit", "--quiet", "-m", "nested manifest"]);
+        assert_eq!(
+            previous_content(
+                root.to_path_buf(),
+                Some("HEAD"),
+                "packages/a/package.json".to_string()
+            )
+            .unwrap(),
+            contents
+        );
+    }
 
     fn run_git(repo_root: &Path, args: &[&str]) -> String {
         let output = Command::new("git")
@@ -600,6 +1162,139 @@ mod tests {
 
         let path = repo_root.path().to_path_buf();
         Ok((repo_root, path))
+    }
+
+    #[test]
+    fn tracked_changed_files_exclude_generated_outputs_and_keep_deletions() -> Result<(), Error> {
+        for nested in [false, true] {
+            let (_repo, path) = setup_repository(Some("main"))?;
+            let dir = if nested {
+                path.join("nested[repo]")
+            } else {
+                path.clone()
+            };
+            fs::create_dir_all(&dir)?;
+            fs::write(dir.join(".gitignore"), "ignored.txt\n")?;
+            for file in ["tracked.txt", "removed.txt", "deleted.txt"] {
+                fs::write(dir.join(file), "original")?;
+            }
+            run_git(&path, &["add", "."]);
+            run_git(&path, &["commit", "-m", "Initial"]);
+            fs::write(dir.join("generated.txt"), "generated")?;
+            fs::write(dir.join("ignored.txt"), "generated")?;
+            fs::write(dir.join("staged.txt"), "staged")?;
+            run_git(&dir, &["add", "staged.txt"]);
+            run_git(&dir, &["rm", "--cached", "removed.txt"]);
+            fs::remove_file(dir.join("deleted.txt"))?;
+            let root = AbsoluteSystemPath::from_std_path(&dir)?;
+            let scm = SCM::new(root);
+            let changed: HashSet<_> = [
+                "tracked.txt",
+                "removed.txt",
+                "deleted.txt",
+                "staged.txt",
+                "generated.txt",
+                "ignored.txt",
+            ]
+            .into_iter()
+            .map(|file| AnchoredSystemPathBuf::from_raw(file).unwrap())
+            .collect();
+            let expected: HashSet<_> = ["tracked.txt", "removed.txt", "deleted.txt", "staged.txt"]
+                .into_iter()
+                .map(|file| AnchoredSystemPathBuf::from_raw(file).unwrap())
+                .collect();
+            assert_eq!(scm.tracked_changed_files(root, &changed)?, expected);
+            assert!(
+                SCM::Manual(crate::FileHashMode::ContentOnly)
+                    .tracked_changed_files(root, &changed)?
+                    .is_empty()
+            );
+            run_git(&dir, &["add", "-u"]);
+            run_git(&path, &["commit", "-m", "Remove tracked files"]);
+            let selected = scm.tracked_changed_files(root, &changed)?;
+            assert!(!selected.contains(&AnchoredSystemPathBuf::from_raw("deleted.txt")?));
+            assert!(!selected.contains(&AnchoredSystemPathBuf::from_raw("removed.txt")?));
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn dirty_hash_does_not_refresh_git_index() -> Result<(), Error> {
+        let (_repo, path) = setup_repository(Some("main"))?;
+        fs::write(path.join(".gitattributes"), "*.txt text\n")?;
+        fs::write(path.join("file.txt"), "contents\n")?;
+        run_git(&path, &["add", "."]);
+        run_git(&path, &["commit", "-m", "Initial"]);
+
+        let root = AbsoluteSystemPathBuf::try_from(path.as_path())?;
+        let scm = SCM::new(&root);
+        let repo_index = scm
+            .build_repo_index_eager()
+            .expect("failed to build repo index");
+        let index_path = root.join_components(&[".git", "index"]);
+        let index_before = fs::read(index_path.as_std_path())?;
+
+        // Make the working tree stat-dirty without changing file content. The
+        // .gitattributes file forces the dirty-hash path to run git diff rather
+        // than using the repo-index clean-tree shortcut.
+        let file = root.join_component("file.txt");
+        fs::write(file.as_std_path(), "contents\n")?;
+        let file_handle = fs::File::options().write(true).open(file.as_std_path())?;
+        file_handle
+            .set_modified(std::time::SystemTime::now() + std::time::Duration::from_secs(1))?;
+
+        assert!(scm.get_dirty_hash_from_repo_index(&repo_index).is_none());
+        assert_eq!(index_before, fs::read(index_path.as_std_path())?);
+        Ok(())
+    }
+
+    #[test]
+    fn committed_path_detection_does_not_require_blob_contents() {
+        let (_temp, repo) = setup_repository(Some("main")).unwrap();
+        run_git(
+            &repo,
+            &[
+                "-c",
+                "commit.gpgsign=false",
+                "commit",
+                "--allow-empty",
+                "-m",
+                "Initial",
+            ],
+        );
+        let root = AbsoluteSystemPath::from_std_path(&repo).unwrap();
+        let scm = SCM::new(root);
+        let lock = root.join_components(&["nested[repo]", "turbo.lock"]);
+        fs::create_dir_all(repo.join("nested[repo]")).unwrap();
+        fs::write(&lock, "toolchain resolution\n").unwrap();
+        assert!(!scm.is_path_committed(&lock).unwrap());
+        run_git(&repo, &["add", "nested[repo]/turbo.lock"]);
+        assert!(!scm.is_path_committed(&lock).unwrap());
+        run_git(
+            &repo,
+            &["-c", "commit.gpgsign=false", "commit", "-m", "Lock"],
+        );
+        assert!(scm.is_path_committed(&lock).unwrap());
+        assert!(
+            !SCM::Manual(crate::FileHashMode::ContentOnly)
+                .is_path_committed(&lock)
+                .unwrap()
+        );
+
+        let blob = run_git(&repo, &["rev-parse", "HEAD:nested[repo]/turbo.lock"]);
+        fs::remove_file(&lock).unwrap();
+        fs::remove_file(repo.join(".git/objects").join(&blob[..2]).join(&blob[2..])).unwrap();
+        let blob_check = Command::new("git")
+            .args(["cat-file", "-e", &blob])
+            .current_dir(&repo)
+            .output()
+            .unwrap();
+        assert!(
+            !blob_check.status.success(),
+            "deleted blob should be unavailable: {}",
+            String::from_utf8_lossy(&blob_check.stderr)
+        );
+        assert!(scm.is_path_committed(&lock).unwrap());
     }
 
     fn changed_files(
@@ -651,6 +1346,43 @@ mod tests {
         run_git(repo_root, &["add", &dest.to_string_lossy()]);
         run_git(repo_root, &["commit", "-m", "Commit"]);
         run_git(repo_root, &["rev-parse", "HEAD"])
+    }
+
+    #[test]
+    fn test_current_branch_and_sha() -> Result<(), Error> {
+        let (_repo, root) = setup_repository(Some("main"))?;
+        fs::write(root.join("file.txt"), "contents")?;
+        let sha = commit_file(&root, Path::new("file.txt"), None);
+        // A tag that shadows the branch name must not make Git disambiguate the
+        // reported branch as `heads/main`.
+        run_git(&root, &["tag", "main"]);
+        let root = AbsoluteSystemPath::from_std_path(&root)?;
+        let scm = SCM::new(root);
+
+        assert_eq!(
+            scm.get_current_branch_and_sha(root),
+            (Some("main".to_owned()), Some(sha.clone()))
+        );
+
+        run_git(root.as_std_path(), &["checkout", "--detach", &sha]);
+        assert_eq!(
+            scm.get_current_branch_and_sha(root),
+            (Some(String::new()), Some(sha))
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn test_current_branch_and_sha_on_unborn_branch() -> Result<(), Error> {
+        let (_repo, root) = setup_repository(Some("main"))?;
+        let root = AbsoluteSystemPath::from_std_path(&root)?;
+        let scm = SCM::new(root);
+
+        assert_eq!(
+            scm.get_current_branch_and_sha(root),
+            (Some("main".to_owned()), None)
+        );
+        Ok(())
     }
 
     #[test]
@@ -752,6 +1484,60 @@ mod tests {
         );
         Ok(())
     }
+    #[test_case("", "index.js", "moved.js"; "repository_root")]
+    #[test_case("nested repo", "file with spaces.txt", "renamed file.txt"; "nested_root_with_spaces")]
+    fn test_staged_rename_includes_both_paths(
+        prefix: &str,
+        source_name: &str,
+        destination_name: &str,
+    ) -> Result<(), Error> {
+        let (_repo, repo_path) = setup_repository(None)?;
+        let turbo_root = repo_path.join(prefix);
+        fs::create_dir_all(turbo_root.join("packages/util"))?;
+        fs::create_dir_all(turbo_root.join("packages/another"))?;
+        let source = Path::new(prefix).join("packages/util").join(source_name);
+        let destination = Path::new(prefix)
+            .join("packages/another")
+            .join(destination_name);
+        fs::write(repo_path.join(&source), "module.exports = 42;\n")?;
+        commit_file(&repo_path, &source, None);
+        run_git(&repo_path, &["config", "diff.renames", "true"]);
+        run_git(
+            &repo_path,
+            &[
+                "mv",
+                &source.to_string_lossy(),
+                &destination.to_string_lossy(),
+            ],
+        );
+        assert!(run_git(&repo_path, &["diff", "--cached", "--name-status"]).starts_with("R100"));
+
+        let files = changed_files(
+            repo_path.clone(),
+            turbo_root.clone(),
+            Some("HEAD"),
+            None,
+            true,
+        )?;
+        assert_eq!(
+            files,
+            HashSet::from([
+                Path::new("packages")
+                    .join("util")
+                    .join(source_name)
+                    .to_string_lossy()
+                    .into_owned(),
+                Path::new("packages")
+                    .join("another")
+                    .join(destination_name)
+                    .to_string_lossy()
+                    .into_owned(),
+            ])
+        );
+        assert!(changed_files(repo_path, turbo_root, Some("HEAD"), None, false)?.is_empty());
+        Ok(())
+    }
+
     #[test]
     fn test_merge_base() -> Result<(), Error> {
         let (repo_root, repo_path) = setup_repository(None)?;
@@ -803,6 +1589,179 @@ mod tests {
             HashSet::from(["qux.js".to_string(), "baz.js".to_string()])
         );
 
+        Ok(())
+    }
+
+    #[test]
+    fn previous_content_in_range_reads_at_merge_base() -> Result<(), Error> {
+        let (repo_root, repo_path) = setup_repository(Some("main"))?;
+        let root = AbsoluteSystemPathBuf::try_from(repo_root.path())?;
+        let lockfile = root.join_component("yarn.lock");
+
+        fs::write(repo_root.path().join("yarn.lock"), "branch point")?;
+        let branch_point = commit_file(&repo_path, Path::new("yarn.lock"), None);
+        run_git(&repo_path, &["checkout", "-b", "feature"]);
+        fs::write(repo_root.path().join("yarn.lock"), "feature")?;
+        commit_file(&repo_path, Path::new("yarn.lock"), None);
+        run_git(&repo_path, &["checkout", "main"]);
+        fs::write(repo_root.path().join("yarn.lock"), "main tip")?;
+        commit_file(&repo_path, Path::new("yarn.lock"), None);
+        run_git(&repo_path, &["checkout", "feature"]);
+
+        let scm = SCM::new(&root);
+        assert_eq!(scm.previous_content(Some("main"), &lockfile)?, b"main tip");
+        assert_eq!(
+            scm.previous_content_in_range(Some("main"), None, false, &lockfile)?,
+            b"main tip"
+        );
+        assert_eq!(
+            scm.previous_content_in_range(Some("main"), None, true, &lockfile)?,
+            b"branch point"
+        );
+        assert_eq!(
+            scm.previous_content_in_range(Some("main"), Some("HEAD"), true, &lockfile)?,
+            b"branch point"
+        );
+        assert_eq!(
+            scm.previous_content_in_range(Some(&branch_point), Some("main"), true, &lockfile)?,
+            b"branch point"
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn prefetched_changes_match_direct_queries_and_are_consumed_once() -> Result<(), Error> {
+        let (repo_root, repo_path) = setup_repository(Some("main"))?;
+        fs::write(repo_root.path().join("yarn.lock"), "old")?;
+        fs::write(repo_root.path().join("foo.js"), "let z = 0;")?;
+        run_git(&repo_path, &["add", "yarn.lock"]);
+        let base = commit_file(&repo_path, Path::new("foo.js"), None);
+        fs::write(repo_root.path().join("yarn.lock"), "new")?;
+        commit_file(&repo_path, Path::new("yarn.lock"), None);
+        // Unstaged, untracked, and staged changes on top of the commits.
+        fs::write(repo_root.path().join("foo.js"), "let z = 1;")?;
+        fs::write(repo_root.path().join("untracked.js"), "")?;
+        fs::write(repo_root.path().join("staged.js"), "")?;
+        run_git(&repo_path, &["add", "staged.js"]);
+
+        let root = AbsoluteSystemPathBuf::try_from(repo_root.path())?;
+        let lockfile = root.join_component("yarn.lock");
+        let direct_scm = SCM::new(&root);
+        let direct = direct_scm
+            .changed_files(&root, Some(&base), None, true, true, true)?
+            .unwrap();
+        let direct_previous = direct_scm.previous_content(Some(&base), &lockfile)?;
+        assert_eq!(direct_previous, b"old");
+
+        let scm = SCM::new(&root);
+        scm.prefetch_changes(
+            vec![super::ChangedFilesRequest {
+                turbo_root: root.clone(),
+                from_commit: Some(base.clone()),
+                to_commit: None,
+                include_uncommitted: true,
+                merge_base: true,
+            }],
+            vec![lockfile.clone(), root.join_component("pnpm-lock.yaml")],
+        );
+        // Clones share the prefetched results.
+        let clone = scm.clone();
+        let SCM::Git(git) = &clone else {
+            panic!("expected git scm");
+        };
+        let prefetched = clone
+            .changed_files(&root, Some(&base), None, true, true, true)?
+            .unwrap();
+        assert_eq!(prefetched, direct);
+        assert_eq!(
+            prefetched
+                .iter()
+                .map(|f| f.to_string())
+                .collect::<HashSet<_>>(),
+            HashSet::from([
+                "yarn.lock".to_string(),
+                "foo.js".to_string(),
+                "untracked.js".to_string(),
+                "staged.js".to_string(),
+            ])
+        );
+        assert!(git.change_prefetch.pending.lock().unwrap().is_empty());
+        assert_eq!(
+            git.change_prefetch.previous_content.lock().unwrap().len(),
+            1
+        );
+        // Content prefetched for a merge-base range is served only to the
+        // same range, not to a plain read at the base tip.
+        assert_eq!(
+            clone.previous_content(Some(&base), &lockfile)?,
+            direct_previous
+        );
+        assert_eq!(
+            git.change_prefetch.previous_content.lock().unwrap().len(),
+            1
+        );
+        assert_eq!(
+            clone.previous_content_in_range(Some(&base), None, true, &lockfile)?,
+            direct_previous
+        );
+        assert!(
+            git.change_prefetch
+                .previous_content
+                .lock()
+                .unwrap()
+                .is_empty()
+        );
+        // Consumed results fall back to direct queries.
+        assert_eq!(
+            scm.changed_files(&root, Some(&base), None, true, true, true)?
+                .unwrap(),
+            direct
+        );
+        assert_eq!(
+            scm.previous_content(Some(&base), &lockfile)?,
+            direct_previous
+        );
+
+        // A mismatched query is not served from the prefetch.
+        scm.prefetch_changes(
+            vec![super::ChangedFilesRequest {
+                turbo_root: root.clone(),
+                from_commit: Some(base.clone()),
+                to_commit: None,
+                include_uncommitted: false,
+                merge_base: true,
+            }],
+            Vec::new(),
+        );
+        assert_eq!(
+            scm.changed_files(&root, Some(&base), None, true, true, true)?
+                .unwrap(),
+            direct
+        );
+        assert_eq!(
+            scm.changed_files(&root, Some(&base), None, false, true, true)?
+                .unwrap()
+                .iter()
+                .map(|f| f.to_string())
+                .collect::<HashSet<_>>(),
+            HashSet::from(["yarn.lock".to_string()])
+        );
+
+        // Errors are preserved through the prefetch.
+        scm.prefetch_changes(
+            vec![super::ChangedFilesRequest {
+                turbo_root: root.clone(),
+                from_commit: Some("does-not-exist".to_string()),
+                to_commit: None,
+                include_uncommitted: true,
+                merge_base: true,
+            }],
+            Vec::new(),
+        );
+        assert!(
+            scm.changed_files(&root, Some("does-not-exist"), None, true, false, true)
+                .is_err()
+        );
         Ok(())
     }
 
@@ -1125,6 +2084,7 @@ mod tests {
         for (branches, expected) in [
             (vec!["main"], Some("main")),
             (vec!["master"], Some("master")),
+            (vec!["origin/main"], None),
             (vec!["ziltoid"], None),
             (vec!["ziltoid", "main"], Some("main")),
             (vec!["ziltoid", "master"], Some("master")),
@@ -1135,6 +2095,65 @@ mod tests {
 
             assert_eq!(actual.as_deref(), expected);
         }
+    }
+
+    #[test]
+    fn test_github_base_ref_remote_fallback_respects_flag() -> Result<(), Error> {
+        let (repo_root, repo_path) = setup_repository(Some("main"))?;
+        let root = AbsoluteSystemPathBuf::try_from(repo_root.path()).unwrap();
+        let file = root.join_component("todo.txt");
+        file.create_with_contents("test remote base ref fallback")?;
+        let commit = commit_file(&repo_path, Path::new("todo.txt"), None);
+
+        run_git(&repo_path, &["checkout", "--detach", &commit]);
+        run_git(&repo_path, &["branch", "-D", "main"]);
+        run_git(
+            &repo_path,
+            &["update-ref", "refs/remotes/origin/main", &commit],
+        );
+
+        let github_env = || CIEnv {
+            is_github_actions: true,
+            github_base_ref: Ok("main".to_string()),
+            github_event_path: Err(VarError::NotPresent),
+        };
+        let mut git = GitRepo::find(&root).unwrap();
+
+        assert_matches!(
+            git.resolve_base(None, github_env()),
+            Err(Error::UnableToResolveRef)
+        );
+        git.github_actions_remote_base_ref_fallback = true;
+        assert_matches!(
+            git.resolve_base(None, CIEnv::none()),
+            Err(Error::UnableToResolveRef)
+        );
+        assert_eq!(
+            git.resolve_base(None, github_env())?,
+            "origin/main".to_string()
+        );
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_github_base_ref_remote_fallback_errors_when_refs_are_missing() -> Result<(), Error> {
+        let (repo_root, repo_path) = setup_repository(Some("main"))?;
+        let root = AbsoluteSystemPathBuf::try_from(repo_root.path()).unwrap();
+        let file = root.join_component("todo.txt");
+        file.create_with_contents("test missing base refs")?;
+        commit_file(&repo_path, Path::new("todo.txt"), None);
+
+        let mut git = GitRepo::find(&root).unwrap();
+        git.github_actions_remote_base_ref_fallback = true;
+        let env = CIEnv {
+            is_github_actions: true,
+            github_base_ref: Ok("missing".to_string()),
+            github_event_path: Err(VarError::NotPresent),
+        };
+
+        assert_matches!(git.resolve_base(None, env), Err(Error::UnableToResolveRef));
+        Ok(())
     }
 
     #[test]
@@ -1667,7 +2686,524 @@ mod tests {
 
     #[test]
     fn test_dirty_hash_manual_scm_returns_none() {
-        assert_eq!(SCM::Manual.get_dirty_hash(), None);
+        assert_eq!(
+            SCM::Manual(crate::FileHashMode::ContentOnly).get_dirty_hash(),
+            None
+        );
+    }
+
+    /// Differential matrix: the repo-index dirty hash must agree with the
+    /// `git status`-based dirty hash on whether the tree is dirty, across
+    /// every class of working-tree state. This is the contract that protects
+    /// cache provenance metadata from regressing.
+    #[test]
+    fn test_dirty_hash_paths_agree_across_states() {
+        type Mutation = fn(&Path);
+        let cases: &[(&str, Mutation, bool)] = &[
+            ("clean", |_root| {}, false),
+            (
+                "unstaged_modification",
+                |root| fs::write(root.join("foo.txt"), "modified").unwrap(),
+                true,
+            ),
+            (
+                "staged_modification",
+                |root| {
+                    fs::write(root.join("foo.txt"), "staged").unwrap();
+                    run_git(root, &["add", "foo.txt"]);
+                },
+                true,
+            ),
+            (
+                "staged_new_file",
+                |root| {
+                    fs::write(root.join("brand_new.txt"), "new").unwrap();
+                    run_git(root, &["add", "brand_new.txt"]);
+                },
+                true,
+            ),
+            (
+                "staged_deletion",
+                |root| {
+                    run_git(root, &["rm", "-q", "foo.txt"]);
+                },
+                true,
+            ),
+            (
+                "unstaged_deletion",
+                |root| fs::remove_file(root.join("foo.txt")).unwrap(),
+                true,
+            ),
+            (
+                "untracked_file",
+                |root| fs::write(root.join("untracked.txt"), "hi").unwrap(),
+                true,
+            ),
+            (
+                "untracked_nested",
+                |root| {
+                    fs::create_dir_all(root.join("deep/dir")).unwrap();
+                    fs::write(root.join("deep/dir/f.txt"), "hi").unwrap();
+                },
+                true,
+            ),
+            (
+                "gitignored_untracked",
+                |root| fs::write(root.join("ignored.tmp"), "hi").unwrap(),
+                false,
+            ),
+            (
+                "intent_to_add",
+                |root| {
+                    fs::write(root.join("ita.txt"), "ita").unwrap();
+                    run_git(root, &["add", "-N", "ita.txt"]);
+                },
+                true,
+            ),
+            (
+                "racy_rewrite_same_content",
+                |root| {
+                    // Rewrite identical content: mtime changes, content does
+                    // not. The gix index conservatively classifies this as
+                    // modified; the dirty hash must not.
+                    let path = root.join("foo.txt");
+                    let content = fs::read(&path).unwrap();
+                    fs::write(&path, content).unwrap();
+                },
+                false,
+            ),
+        ];
+
+        for (name, mutate, expected_dirty) in cases {
+            let (repo_root, repo_path) = setup_repository(None).unwrap();
+            fs::write(repo_root.path().join("foo.txt"), "initial").unwrap();
+            fs::write(repo_root.path().join(".gitignore"), "*.tmp\n").unwrap();
+            commit_file(&repo_path, Path::new("foo.txt"), None);
+            run_git(repo_root.path(), &["add", ".gitignore"]);
+            run_git(repo_root.path(), &["commit", "-q", "-m", "gitignore"]);
+
+            mutate(repo_root.path());
+
+            let git_root = AbsoluteSystemPathBuf::try_from(repo_root.path()).unwrap();
+            let scm = SCM::new(&git_root);
+            let git = make_git_repo(&git_root);
+            let repo_index = RepoGitIndex::new(&git).unwrap();
+
+            let old = scm.get_dirty_hash();
+            let new = scm.get_dirty_hash_from_repo_index(&repo_index);
+
+            assert_eq!(
+                old.is_some(),
+                *expected_dirty,
+                "{name}: status-based path expected dirty={expected_dirty}, got {old:?}"
+            );
+            assert_eq!(
+                new.is_some(),
+                *expected_dirty,
+                "{name}: repo-index path expected dirty={expected_dirty}, got {new:?}"
+            );
+
+            // Determinism: rebuilding the index over the same state must
+            // reproduce the same hash.
+            let repo_index2 = RepoGitIndex::new(&git).unwrap();
+            let new2 = scm.get_dirty_hash_from_repo_index(&repo_index2);
+            assert_eq!(
+                new, new2,
+                "{name}: repo-index dirty hash must be deterministic"
+            );
+        }
+    }
+
+    #[test]
+    fn test_dirty_hash_from_repo_index_unstaged_modification() {
+        // Regression test: an unstaged modification to a tracked file must
+        // produce a dirty hash. An earlier version of the repo-index path
+        // short-circuited on `git diff --cached` (staged-only) and missed
+        // this, the most common dirty state.
+        let (repo_root, repo_path) = setup_repository(None).unwrap();
+        let file = repo_root.path().join("foo.txt");
+        fs::write(&file, "initial").unwrap();
+        commit_file(&repo_path, Path::new("foo.txt"), None);
+
+        fs::write(&file, "modified but not staged").unwrap();
+
+        let git_root = AbsoluteSystemPathBuf::try_from(repo_root.path()).unwrap();
+        let scm = SCM::new(&git_root);
+        let git = make_git_repo(&git_root);
+        let repo_index = RepoGitIndex::new(&git).unwrap();
+
+        assert!(
+            scm.get_dirty_hash_from_repo_index(&repo_index).is_some(),
+            "unstaged modification must produce a dirty hash"
+        );
+    }
+
+    #[test]
+    fn test_dirty_hash_from_repo_index_untracked_name_sensitivity() {
+        // Different untracked file names must produce different hashes.
+        let (repo_root, repo_path) = setup_repository(None).unwrap();
+        fs::write(repo_root.path().join("foo.txt"), "initial").unwrap();
+        commit_file(&repo_path, Path::new("foo.txt"), None);
+
+        let git_root = AbsoluteSystemPathBuf::try_from(repo_root.path()).unwrap();
+        let scm = SCM::new(&git_root);
+        let git = make_git_repo(&git_root);
+
+        fs::write(repo_root.path().join("name_one.txt"), "x").unwrap();
+        let hash_one = scm.get_dirty_hash_from_repo_index(&RepoGitIndex::new(&git).unwrap());
+        fs::remove_file(repo_root.path().join("name_one.txt")).unwrap();
+
+        fs::write(repo_root.path().join("name_two.txt"), "x").unwrap();
+        let hash_two = scm.get_dirty_hash_from_repo_index(&RepoGitIndex::new(&git).unwrap());
+
+        assert_ne!(
+            hash_one, hash_two,
+            "different untracked file names must produce different hashes"
+        );
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn test_dirty_hash_untracked_symlink_agreement() {
+        // An untracked symlink is the one entry class where the repo-index
+        // untracked walk (regular files only) and `git status` (lists
+        // symlinks) could disagree. Pin whatever the truth is.
+        let (repo_root, repo_path) = setup_repository(None).unwrap();
+        fs::write(repo_root.path().join("foo.txt"), "initial").unwrap();
+        commit_file(&repo_path, Path::new("foo.txt"), None);
+
+        std::os::unix::fs::symlink("foo.txt", repo_root.path().join("untracked_link")).unwrap();
+
+        let git_root = AbsoluteSystemPathBuf::try_from(repo_root.path()).unwrap();
+        let scm = SCM::new(&git_root);
+        let git = make_git_repo(&git_root);
+        let repo_index = RepoGitIndex::new(&git).unwrap();
+
+        let old = scm.get_dirty_hash();
+        let new = scm.get_dirty_hash_from_repo_index(&repo_index);
+
+        assert_eq!(
+            old.is_some(),
+            new.is_some(),
+            "untracked symlink dirtiness must agree: status-based={old:?}, repo-index={new:?}"
+        );
+        assert!(new.is_some(), "untracked symlink must dirty the tree");
+
+        // A broken symlink is still untracked state.
+        fs::remove_file(repo_root.path().join("untracked_link")).unwrap();
+        std::os::unix::fs::symlink("does_not_exist", repo_root.path().join("broken_link")).unwrap();
+        let repo_index = RepoGitIndex::new(&git).unwrap();
+        let broken = scm.get_dirty_hash_from_repo_index(&repo_index);
+        assert!(
+            broken.is_some(),
+            "broken untracked symlink must dirty the tree"
+        );
+        assert_ne!(
+            new, broken,
+            "different symlink names must produce different hashes"
+        );
+    }
+
+    #[test]
+    fn test_dirty_hash_from_repo_index_clean_tree_returns_none() {
+        let (repo_root, repo_path) = setup_repository(None).unwrap();
+        let file = repo_root.path().join("foo.txt");
+        fs::write(&file, "initial").unwrap();
+        commit_file(&repo_path, Path::new("foo.txt"), None);
+
+        let git_root = AbsoluteSystemPathBuf::try_from(repo_root.path()).unwrap();
+        let scm = SCM::new(&git_root);
+        let git = make_git_repo(&git_root);
+        let repo_index = RepoGitIndex::new(&git).unwrap();
+
+        assert_eq!(scm.get_dirty_hash_from_repo_index(&repo_index), None);
+    }
+
+    #[test]
+    fn test_dirty_hash_from_repo_index_untracked_file() {
+        let (repo_root, repo_path) = setup_repository(None).unwrap();
+        let file = repo_root.path().join("foo.txt");
+        fs::write(&file, "initial").unwrap();
+        commit_file(&repo_path, Path::new("foo.txt"), None);
+
+        fs::write(repo_root.path().join("untracked.txt"), "new file").unwrap();
+
+        let git_root = AbsoluteSystemPathBuf::try_from(repo_root.path()).unwrap();
+        let scm = SCM::new(&git_root);
+        let git = make_git_repo(&git_root);
+        let repo_index = RepoGitIndex::new(&git).unwrap();
+
+        assert!(scm.get_dirty_hash_from_repo_index(&repo_index).is_some());
+    }
+
+    #[test]
+    fn test_dirty_hash_from_repo_index_staged_changes() {
+        let (repo_root, repo_path) = setup_repository(None).unwrap();
+        let file = repo_root.path().join("foo.txt");
+        fs::write(&file, "initial").unwrap();
+        commit_file(&repo_path, Path::new("foo.txt"), None);
+
+        fs::write(&file, "staged content").unwrap();
+        run_git(repo_root.path(), &["add", "foo.txt"]);
+
+        let git_root = AbsoluteSystemPathBuf::try_from(repo_root.path()).unwrap();
+        let scm = SCM::new(&git_root);
+        let git = make_git_repo(&git_root);
+        let repo_index = RepoGitIndex::new(&git).unwrap();
+
+        assert!(scm.get_dirty_hash_from_repo_index(&repo_index).is_some());
+    }
+
+    /// After `git read-tree HEAD` every index entry loses its stat info, so
+    /// every tracked file becomes a verification candidate (the
+    /// snapshot-restored-workspace scenario). On a clean tree the
+    /// verification pass must prove `git diff HEAD` empty and skip it.
+    #[test]
+    fn test_dirty_hash_stale_index_clean_tree_skips_diff() {
+        let (repo_root, repo_path) = setup_repository(None).unwrap();
+        fs::write(repo_root.path().join("foo.txt"), "initial").unwrap();
+        commit_file(&repo_path, Path::new("foo.txt"), None);
+        fs::write(repo_root.path().join("bar.txt"), "other content\n").unwrap();
+        run_git(repo_root.path(), &["add", "bar.txt"]);
+        run_git(repo_root.path(), &["commit", "-q", "-m", "bar"]);
+        #[cfg(unix)]
+        {
+            std::os::unix::fs::symlink("foo.txt", repo_root.path().join("link.txt")).unwrap();
+            run_git(repo_root.path(), &["add", "link.txt"]);
+            run_git(repo_root.path(), &["commit", "-q", "-m", "link"]);
+        }
+
+        run_git(repo_root.path(), &["read-tree", "HEAD"]);
+
+        let git_root = AbsoluteSystemPathBuf::try_from(repo_root.path()).unwrap();
+        let scm = SCM::new(&git_root);
+        let git = make_git_repo(&git_root);
+        let repo_index = RepoGitIndex::new(&git).unwrap();
+
+        assert!(
+            repo_index.tracked_diff_clean_root(false).is_some(),
+            "clean stale index must prove the tree clean"
+        );
+        assert_eq!(scm.get_dirty_hash_from_repo_index(&repo_index), None);
+        assert_eq!(scm.get_dirty_hash(), None, "subprocess path must agree");
+    }
+
+    /// A genuinely modified file on a stale index must block the skip and
+    /// produce a dirty hash through the diff path.
+    #[test]
+    fn test_dirty_hash_stale_index_modified_file() {
+        let (repo_root, repo_path) = setup_repository(None).unwrap();
+        fs::write(repo_root.path().join("foo.txt"), "initial").unwrap();
+        commit_file(&repo_path, Path::new("foo.txt"), None);
+
+        run_git(repo_root.path(), &["read-tree", "HEAD"]);
+        fs::write(repo_root.path().join("foo.txt"), "changed").unwrap();
+
+        let git_root = AbsoluteSystemPathBuf::try_from(repo_root.path()).unwrap();
+        let scm = SCM::new(&git_root);
+        let git = make_git_repo(&git_root);
+        let repo_index = RepoGitIndex::new(&git).unwrap();
+
+        assert!(repo_index.tracked_diff_clean_root(false).is_none());
+        assert!(scm.get_dirty_hash_from_repo_index(&repo_index).is_some());
+        assert!(scm.get_dirty_hash().is_some(), "subprocess path must agree");
+    }
+
+    /// Staged changes invalidate the index's cache-tree, so the skip gate
+    /// must not fire even when every candidate verifies clean.
+    #[test]
+    fn test_dirty_hash_stale_index_staged_change_blocks_skip() {
+        let (repo_root, repo_path) = setup_repository(None).unwrap();
+        fs::write(repo_root.path().join("foo.txt"), "initial").unwrap();
+        commit_file(&repo_path, Path::new("foo.txt"), None);
+
+        run_git(repo_root.path(), &["read-tree", "HEAD"]);
+        fs::write(repo_root.path().join("foo.txt"), "staged").unwrap();
+        run_git(repo_root.path(), &["add", "foo.txt"]);
+
+        let git_root = AbsoluteSystemPathBuf::try_from(repo_root.path()).unwrap();
+        let scm = SCM::new(&git_root);
+        let git = make_git_repo(&git_root);
+        let repo_index = RepoGitIndex::new(&git).unwrap();
+
+        assert!(
+            repo_index.tracked_diff_clean_root(false).is_none(),
+            "staged change must block the diff skip"
+        );
+        assert!(scm.get_dirty_hash_from_repo_index(&repo_index).is_some());
+        assert!(scm.get_dirty_hash().is_some(), "subprocess path must agree");
+    }
+
+    /// An exec-bit flip is content-identical but `git diff HEAD` reports it
+    /// as a mode change. Verification must not let the skip fire.
+    #[cfg(unix)]
+    #[test]
+    fn test_dirty_hash_stale_index_exec_bit_flip() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let (repo_root, repo_path) = setup_repository(None).unwrap();
+        fs::write(repo_root.path().join("foo.txt"), "initial").unwrap();
+        commit_file(&repo_path, Path::new("foo.txt"), None);
+
+        run_git(repo_root.path(), &["read-tree", "HEAD"]);
+        fs::set_permissions(
+            repo_root.path().join("foo.txt"),
+            fs::Permissions::from_mode(0o755),
+        )
+        .unwrap();
+
+        let git_root = AbsoluteSystemPathBuf::try_from(repo_root.path()).unwrap();
+        let scm = SCM::new(&git_root);
+        let git = make_git_repo(&git_root);
+        let repo_index = RepoGitIndex::new(&git).unwrap();
+
+        assert!(
+            repo_index.tracked_diff_clean_root(false).is_none(),
+            "exec-bit mismatch must block the diff skip"
+        );
+        assert!(
+            scm.get_dirty_hash_from_repo_index(&repo_index).is_some(),
+            "mode change must produce a dirty hash"
+        );
+        assert!(scm.get_dirty_hash().is_some(), "subprocess path must agree");
+    }
+
+    /// CRLF-containing content that raw-matches the index blocks the skip
+    /// (git's checkin conversion could disagree under configs we don't
+    /// read), but the diff then confirms cleanliness — both paths must
+    /// still report clean.
+    #[test]
+    fn test_dirty_hash_stale_index_crlf_content_stays_clean() {
+        let (repo_root, _repo_path) = setup_repository(None).unwrap();
+        run_git(repo_root.path(), &["config", "core.autocrlf", "false"]);
+        fs::write(repo_root.path().join("win.txt"), b"a\r\nb\r\n").unwrap();
+        run_git(repo_root.path(), &["add", "win.txt"]);
+        run_git(repo_root.path(), &["commit", "-q", "-m", "crlf"]);
+
+        run_git(repo_root.path(), &["read-tree", "HEAD"]);
+
+        let git_root = AbsoluteSystemPathBuf::try_from(repo_root.path()).unwrap();
+        let scm = SCM::new(&git_root);
+        let git = make_git_repo(&git_root);
+        let repo_index = RepoGitIndex::new(&git).unwrap();
+
+        let evidence = repo_index.tracked_diff_clean_root(false);
+        assert!(
+            matches!(
+                evidence,
+                Some((
+                    _,
+                    crate::repo_index::EolSensitivity::RequiresInertEolConversion
+                ))
+            ),
+            "CRLF text content must make the proof eol-sensitive, got {evidence:?}"
+        );
+        // Whether the skip fires depends on the machine's git config; the
+        // observable result must be clean either way (skip and diff agree).
+        assert_eq!(
+            scm.get_dirty_hash_from_repo_index(&repo_index),
+            None,
+            "tree must be reported clean"
+        );
+        assert_eq!(scm.get_dirty_hash(), None, "subprocess path must agree");
+    }
+
+    /// Binary content with CRLFs must not be treated as config-independent:
+    /// a forced `text` attribute from a global/system attributes file makes
+    /// git eol-convert even binary content, so the proof must stay
+    /// eol-sensitive.
+    #[test]
+    fn test_dirty_hash_stale_index_binary_crlf_content_stays_eol_sensitive() {
+        let (repo_root, _repo_path) = setup_repository(None).unwrap();
+        run_git(repo_root.path(), &["config", "core.autocrlf", "false"]);
+        fs::write(repo_root.path().join("blob.bin"), b"\x00binary\r\ndata\r\n").unwrap();
+        run_git(repo_root.path(), &["add", "blob.bin"]);
+        run_git(repo_root.path(), &["commit", "-q", "-m", "bin"]);
+
+        run_git(repo_root.path(), &["read-tree", "HEAD"]);
+
+        let git_root = AbsoluteSystemPathBuf::try_from(repo_root.path()).unwrap();
+        let scm = SCM::new(&git_root);
+        let git = make_git_repo(&git_root);
+        let repo_index = RepoGitIndex::new(&git).unwrap();
+
+        let evidence = repo_index.tracked_diff_clean_root(false);
+        assert!(
+            matches!(
+                evidence,
+                Some((
+                    _,
+                    crate::repo_index::EolSensitivity::RequiresInertEolConversion
+                ))
+            ),
+            "binary CRLF content must make the proof eol-sensitive, got {evidence:?}"
+        );
+        // Whether the skip fires depends on the machine's git config; the
+        // observable result must be clean either way (skip and diff agree).
+        assert_eq!(
+            scm.get_dirty_hash_from_repo_index(&repo_index),
+            None,
+            "tree must be reported clean"
+        );
+        assert_eq!(scm.get_dirty_hash(), None, "subprocess path must agree");
+    }
+
+    /// A retargeted symlink on a stale index must be caught as dirty.
+    #[cfg(unix)]
+    #[test]
+    fn test_dirty_hash_stale_index_symlink_retarget() {
+        let (repo_root, repo_path) = setup_repository(None).unwrap();
+        fs::write(repo_root.path().join("foo.txt"), "initial").unwrap();
+        commit_file(&repo_path, Path::new("foo.txt"), None);
+        std::os::unix::fs::symlink("foo.txt", repo_root.path().join("link.txt")).unwrap();
+        run_git(repo_root.path(), &["add", "link.txt"]);
+        run_git(repo_root.path(), &["commit", "-q", "-m", "link"]);
+
+        run_git(repo_root.path(), &["read-tree", "HEAD"]);
+        fs::remove_file(repo_root.path().join("link.txt")).unwrap();
+        std::os::unix::fs::symlink("elsewhere.txt", repo_root.path().join("link.txt")).unwrap();
+
+        let git_root = AbsoluteSystemPathBuf::try_from(repo_root.path()).unwrap();
+        let scm = SCM::new(&git_root);
+        let git = make_git_repo(&git_root);
+        let repo_index = RepoGitIndex::new(&git).unwrap();
+
+        assert!(repo_index.tracked_diff_clean_root(false).is_none());
+        assert!(scm.get_dirty_hash_from_repo_index(&repo_index).is_some());
+        assert!(scm.get_dirty_hash().is_some(), "subprocess path must agree");
+    }
+
+    /// Verified stat-stale entries must yield identical package hashes to a
+    /// fresh index, with nothing left to re-hash per package.
+    #[test]
+    fn test_stale_index_package_hashes_match_fresh() {
+        let (repo_root, repo_path) = setup_repository(None).unwrap();
+        fs::write(repo_root.path().join("foo.txt"), "initial").unwrap();
+        commit_file(&repo_path, Path::new("foo.txt"), None);
+        fs::write(repo_root.path().join("bar.txt"), "more\n").unwrap();
+        run_git(repo_root.path(), &["add", "bar.txt"]);
+        run_git(repo_root.path(), &["commit", "-q", "-m", "bar"]);
+
+        let git_root = AbsoluteSystemPathBuf::try_from(repo_root.path()).unwrap();
+        let git = make_git_repo(&git_root);
+        let prefix = turbopath::RelativeUnixPathBuf::new("").unwrap();
+
+        let fresh = RepoGitIndex::new(&git).unwrap();
+        let (fresh_hashes, _fresh_to_hash) = fresh.get_package_hashes(&prefix).unwrap();
+
+        run_git(repo_root.path(), &["read-tree", "HEAD"]);
+
+        let stale = RepoGitIndex::new(&git).unwrap();
+        let (stale_hashes, stale_to_hash) = stale.get_package_hashes(&prefix).unwrap();
+
+        assert_eq!(
+            fresh_hashes, stale_hashes,
+            "stale-index package hashes must match fresh-index hashes"
+        );
+        assert!(
+            stale_to_hash.is_empty(),
+            "verified entries must not be deferred to per-package hashing, got {stale_to_hash:?}"
+        );
     }
 
     #[test]
@@ -1710,6 +3246,10 @@ mod tests {
             root: root.to_owned(),
             bin,
             attrs: std::sync::OnceLock::new(),
+            github_actions_remote_base_ref_fallback: false,
+            file_hash_mode: crate::FileHashMode::ContentOnly,
+            slowest_files: None,
+            change_prefetch: Default::default(),
         }
     }
 

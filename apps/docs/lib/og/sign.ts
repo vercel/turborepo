@@ -100,19 +100,14 @@ export function createSignedDocsOgUrl(
 }
 
 /**
- * Creates a signed OG image URL for blog pages.
+ * Creates a signed OG image URL using the default social card.
  */
-export function createSignedBlogOgUrl(version: string): string {
-  const sig = signOgParams({ version });
-  return `/api/og/blog?version=${encodeURIComponent(version)}&sig=${sig}`;
-}
-
-/**
- * Creates a signed OG image URL for general pages (home, showcase, etc.).
- * If title is empty, generates an OG image with just the logo.
- */
-export function createSignedOgUrl(title: string): string {
-  const sig = signOgParams({ title });
-  const params = new URLSearchParams({ title, sig });
+export function createSignedOgUrl(
+  title: string,
+  section = "Turborepo"
+): string {
+  const values = { title, section };
+  const sig = signOgParams(values);
+  const params = new URLSearchParams({ ...values, sig });
   return `/api/og?${params.toString()}`;
 }

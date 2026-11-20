@@ -672,17 +672,22 @@ impl WalkTree {
     ) -> Self {
         let root = root.into();
         let WalkBehavior { link, depth } = behavior.into();
-        let builder = WalkDir::new(root.as_path());
+        let builder = WalkDir::new(root.as_path())
+            .follow_links(match link {
+                LinkBehavior::ReadFile => false,
+                LinkBehavior::ReadTarget => true,
+            })
+            .max_depth(depth);
+        // Following links can reach one directory by several paths. Sorting
+        // makes the path a walk reaches first the same on every file system.
+        let builder = match link {
+            LinkBehavior::ReadFile => builder,
+            LinkBehavior::ReadTarget => builder.sort_by_file_name(),
+        };
         WalkTree {
             prefix,
             is_dir: false,
-            input: builder
-                .follow_links(match link {
-                    LinkBehavior::ReadFile => false,
-                    LinkBehavior::ReadTarget => true,
-                })
-                .max_depth(depth)
-                .into_iter(),
+            input: builder.into_iter(),
         }
     }
 }
@@ -1088,10 +1093,6 @@ impl From<EntryResidue> for TreeResidue<()> {
     }
 }
 
-// TODO: Rust's testing framework does not provide a mechanism for maintaining
-// shared state. This       means that tests that write to the file system must
-// do so individually rather than writing       before and after all tests have
-// run. This should probably be avoided.
 #[cfg(test)]
 mod tests {
     use std::{collections::HashSet, path::PathBuf};
@@ -1324,10 +1325,7 @@ mod tests {
         // on windows the slash path doesn't escape the colon. to make
         // it a valid glob, we must
         #[cfg(windows)]
-        let slash_path = {
-            let regex = regex::Regex::new("([A-Z]):").unwrap();
-            regex.replace(&slash_path, "$1\\:")
-        };
+        let slash_path = { regex::regex!("([A-Z]):").replace(&slash_path, "$1\\:") };
 
         let glob_exp = format!("{}/{}", slash_path, "**/*.rs");
 

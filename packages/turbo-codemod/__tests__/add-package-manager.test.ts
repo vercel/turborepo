@@ -178,7 +178,9 @@ describe("add-package-manager-2", () => {
           pnpm: packageManager === "pnpm" ? packageManagerVersion : undefined,
           npm: packageManager === "npm" ? packageManagerVersion : undefined,
           yarn: packageManager === "yarn" ? packageManagerVersion : undefined,
-          bun: packageManager === "bun" ? packageManagerVersion : undefined
+          bun: packageManager === "bun" ? packageManagerVersion : undefined,
+          nub: packageManager === "nub" ? packageManagerVersion : undefined,
+          aube: packageManager === "aube" ? packageManagerVersion : undefined
         });
 
       const mockGetWorkspaceDetails = jest
@@ -191,7 +193,7 @@ describe("add-package-manager-2", () => {
         );
 
       // verify package manager
-      const beforePackageJson = JSON.parse(read("package.json") || "{}");
+      const beforePackageJson = JSON.parse(read("package.json"));
       expect(beforePackageJson.packageManager).toEqual(
         existingPackageManagerString
       );
@@ -213,7 +215,7 @@ describe("add-package-manager-2", () => {
         expect(mockGetWorkspaceDetails).toHaveBeenCalled();
       }
 
-      const afterPackageJson = JSON.parse(read("package.json") || "{}");
+      const afterPackageJson = JSON.parse(read("package.json"));
       expect(afterPackageJson.packageManager).toEqual(
         existingPackageManagerString
       );
@@ -258,9 +260,7 @@ describe("add-package-manager-2", () => {
         .mockRejectedValue(undefined);
 
       // package manager should not exist
-      expect(
-        JSON.parse(read("package.json") || "{}").packageManager
-      ).toBeUndefined();
+      expect(JSON.parse(read("package.json")).packageManager).toBeUndefined();
       // run the transformer
       const result = await transformer({
         root,
@@ -287,7 +287,9 @@ describe("add-package-manager-2", () => {
           pnpm: undefined,
           npm: undefined,
           yarn: undefined,
-          bun: undefined
+          bun: undefined,
+          nub: undefined,
+          aube: undefined
         });
 
       const mockGetWorkspaceDetails = jest
@@ -300,9 +302,7 @@ describe("add-package-manager-2", () => {
         );
 
       // package manager should not exist
-      expect(
-        JSON.parse(read("package.json") || "{}").packageManager
-      ).toBeUndefined();
+      expect(JSON.parse(read("package.json")).packageManager).toBeUndefined();
       // run the transformer
       const result = await transformer({
         root,
@@ -335,7 +335,9 @@ describe("add-package-manager-2", () => {
           pnpm: packageManagerVersion,
           npm: undefined,
           yarn: undefined,
-          bun: undefined
+          bun: undefined,
+          nub: undefined,
+          aube: undefined
         });
 
       const mockGetWorkspaceDetails = jest
@@ -354,9 +356,7 @@ describe("add-package-manager-2", () => {
         });
 
       // package manager should not exist
-      expect(
-        JSON.parse(read("package.json") || "{}").packageManager
-      ).toBeUndefined();
+      expect(JSON.parse(read("package.json")).packageManager).toBeUndefined();
       // run the transformer
       const result = await transformer({
         root,
@@ -364,9 +364,7 @@ describe("add-package-manager-2", () => {
       });
 
       // package manager should still not exist (we couldn't write it)
-      expect(
-        JSON.parse(read("package.json") || "{}").packageManager
-      ).toBeUndefined();
+      expect(JSON.parse(read("package.json")).packageManager).toBeUndefined();
 
       // result should be correct
       expect(result.fatalError?.message).toMatch(

@@ -1,35 +1,22 @@
 {
   "$schema": "https://turborepo.dev/schema.json",
-  "globalDependencies": [
-    "**/.env.*local"
-  ],
+  "ui": "tui",
+  "globalDependencies": ["**/.env.*local"],
   "tasks": {
+    "build": {
+      "dependsOn": ["^build"],
+      "inputs": ["$TURBO_DEFAULT$", ".env*"],
+      "outputs": [".next/**", "!.next/cache/**", "!.next/dev/**", "dist/**"]
+    },
+    "lint": {
+      "dependsOn": ["^lint"]
+    },
+    "check-types": {
+      "dependsOn": ["^check-types"]
+    },
     "dev": {
       "cache": false,
       "persistent": true
-    },
-    "build": {
-      "dependsOn": [
-        "^build"
-      ],
-      "outputs": [
-        ".next/**",
-        "!.next/cache/**",
-        "!.next/dev/**",
-        "dist/**"
-      ]
-    },
-    "type-check": {
-      "dependsOn": [
-        "^type-check"
-      ],
-      "inputs": [
-        "$TURBO_DEFAULT$"
-      ],
-      "outputs": [
-        "**/*.tsbuildinfo"
-      ] // 关键：缓存 TS 的增量信息，让下次检查秒开
-    },
-    "lint": {}
+    }
   }
 }

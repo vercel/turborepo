@@ -107,7 +107,7 @@ fn test_new_fields_parsing() {
     assert_eq!(lockfile.data.overrides.len(), 1);
     assert_eq!(
         lockfile.data.overrides.get("foo"),
-        Some(&"1.0.0".to_string())
+        Some(&OverrideValue::Version("1.0.0".to_string()))
     );
 
     assert_eq!(lockfile.data.catalog.len(), 1);
@@ -632,10 +632,13 @@ fn test_integration_complex_subgraph_filtering() {
     assert!(subgraph_data.workspaces.contains_key("packages/shared"));
     assert!(!subgraph_data.workspaces.contains_key("apps/api"));
 
-    // Verify package filtering
-    assert_eq!(subgraph_data.packages.len(), 2);
-    assert!(subgraph_data.packages.contains_key("react-19"));
-    assert!(subgraph_data.packages.contains_key("lodash-override"));
+    // Verify package filtering. The requested react@19.0.0 and lodash@4.17.21
+    // resolutions only exist under alias-style keys ("react-19",
+    // "lodash-override") that no surviving package references by name, so the
+    // final sweep drops them the same way bun's clean pass would. In a real
+    // bun lockfile, overridden dependencies are keyed under the dependency
+    // name and survive pruning.
+    assert_eq!(subgraph_data.packages.len(), 0);
     assert!(!subgraph_data.packages.contains_key("express"));
 
     // All overrides are preserved to stay in sync with root package.json
@@ -1787,6 +1790,109 @@ fn test_all_transitive_closures_deterministic_with_workspace_scoped_packages() {
         prev_app_a = Some(app_a_pkgs.clone());
         prev_app_b = Some(app_b_pkgs.clone());
     }
+
+    // `lib` is nested under workspace names, so its edges must be reported
+    // as workspace-sensitive (forcing the per-workspace walk above).
+    let resolver = lockfile
+        .transitive_edge_resolver()
+        .expect("bun supports edge resolution");
+    assert!(matches!(
+        resolver.resolve_edge("lib", ">=1.0.0").unwrap(),
+        crate::TransitiveEdgeResolution::WorkspaceSensitive
+    ));
+    assert!(matches!(
+        resolver.resolve_edge("shared", "^1.0.0").unwrap(),
+        crate::TransitiveEdgeResolution::Global(Some(_))
+    ));
+}
+
+// Without workspace-scoped entries every transitive edge resolves the same way
+// for every workspace, so closures come from the shared DP. They must match
+// independent per-workspace walks, including nested, overridden, and
+// workspace-protocol edges.
+#[test]
+fn test_all_transitive_closures_dp_matches_per_workspace_walk() {
+    use std::collections::{BTreeMap, HashMap, HashSet};
+
+    let lockfile_content = r#"{
+            "lockfileVersion": 1,
+            "workspaces": {
+                "": { "name": "test-monorepo" },
+                "apps/app-a": {
+                    "name": "app-a",
+                    "dependencies": { "shared": "^1.0.0", "pkg-b": "workspace:packages/pkg-b" }
+                },
+                "apps/app-b": {
+                    "name": "app-b",
+                    "dependencies": { "chalk": "^4.0.0", "lib": "^2.0.0" }
+                },
+                "packages/pkg-b": {
+                    "name": "pkg-b",
+                    "version": "0.1.0"
+                }
+            },
+            "overrides": { "pinned": "1.0.0" },
+            "packages": {
+                "app-a": ["app-a@workspace:apps/app-a"],
+                "app-b": ["app-b@workspace:apps/app-b"],
+                "pkg-b": ["pkg-b@workspace:packages/pkg-b"],
+                "shared": ["shared@1.0.0", "", {
+                    "dependencies": { "lib": ">=1.0.0", "pinned": "^2.0.0", "cycle-a": "^1.0.0" }
+                }, "sha512-shared"],
+                "lib": ["lib@2.0.0", "", {}, "sha512-lib2"],
+                "pinned": ["pinned@1.0.0", "", {}, "sha512-pinned"],
+                "cycle-a": ["cycle-a@1.0.0", "", { "dependencies": { "cycle-b": "^1.0.0" } }, "sha512-a"],
+                "cycle-b": ["cycle-b@1.0.0", "", { "dependencies": { "cycle-a": "^1.0.0" } }, "sha512-b"],
+                "chalk": ["chalk@4.1.2", "", { "dependencies": { "ansi-styles": "^4.1.0" } }, "sha512-chalk"],
+                "ansi-styles": ["ansi-styles@6.2.1", "", {}, "sha512-ansi6"],
+                "chalk/ansi-styles": ["ansi-styles@4.3.0", "", {}, "sha512-ansi4"]
+            }
+        }"#;
+
+    let lockfile = BunLockfile::from_str(lockfile_content).unwrap();
+    let workspaces: HashMap<String, BTreeMap<String, String>> = [
+        (
+            "apps/app-a",
+            &[("shared", "^1.0.0"), ("pkg-b", "workspace:packages/pkg-b")][..],
+        ),
+        ("apps/app-b", &[("chalk", "^4.0.0"), ("lib", "^2.0.0")][..]),
+    ]
+    .into_iter()
+    .map(|(ws, deps)| {
+        (
+            ws.to_string(),
+            deps.iter()
+                .map(|(name, range)| (name.to_string(), range.to_string()))
+                .collect(),
+        )
+    })
+    .collect();
+
+    let sorted =
+        crate::all_transitive_closures_sorted(&lockfile, workspaces.clone(), false).unwrap();
+    // The DP interns packages, so the shared `lib@2.0.0` is one allocation.
+    let lib_in = |ws: &str| {
+        sorted[ws]
+            .iter()
+            .find(|pkg| pkg.key == "lib@2.0.0")
+            .cloned()
+            .unwrap_or_else(|| panic!("{ws} must contain lib@2.0.0"))
+    };
+    assert!(
+        std::sync::Arc::ptr_eq(&lib_in("apps/app-a"), &lib_in("apps/app-b")),
+        "closures must come from the shared DP"
+    );
+
+    for (ws, deps) in workspaces {
+        let legacy = crate::transitive_closure(&lockfile, &ws, deps, false).unwrap();
+        let dp: HashSet<crate::Package> = sorted[&ws].iter().map(|pkg| (**pkg).clone()).collect();
+        assert_eq!(dp, legacy, "closure mismatch for {ws}");
+    }
+    let app_b: Vec<&str> = sorted["apps/app-b"]
+        .iter()
+        .map(|pkg| pkg.key.as_str())
+        .collect();
+    assert!(app_b.contains(&"ansi-styles@4.3.0") && !app_b.contains(&"ansi-styles@6.2.1"));
 }
 
 // Regression test for https://github.com/vercel/turborepo/issues/12816
@@ -2185,4 +2291,801 @@ fn test_subgraph_preserves_patch_when_patched_version_missing_from_lockfile_keys
         pruned.data.packages.contains_key("pkg-old/is-odd"),
         "nested is-odd@2.0.0 should remain under pkg-old"
     );
+}
+
+#[test]
+fn test_parses_v2_lockfile_and_resolves_workspace_and_external() {
+    let contents = serde_json::to_string(&json!({
+        "lockfileVersion": 2,
+        "configVersion": 1,
+        "workspaces": {
+            "": {
+                "name": "root",
+                "devDependencies": { "is-odd": "3.0.1" },
+            },
+            "packages/a": {
+                "name": "a",
+                "version": "0.0.0",
+                "dependencies": { "is-number": "^6.0.0" },
+            },
+        },
+        "packages": {
+            "a": ["a@workspace:packages/a"],
+            "is-number": ["is-number@6.0.0", "", {}, "sha512-stub"],
+            "is-odd": [
+                "is-odd@3.0.1",
+                "",
+                { "dependencies": { "is-number": "^6.0.0" } },
+                "sha512-stub",
+            ],
+        },
+    }))
+    .unwrap();
+
+    let lockfile = BunLockfile::from_str(&contents).expect("Bun lockfileVersion 2 should parse");
+    assert_eq!(lockfile.data.lockfile_version, 2);
+    assert_eq!(lockfile.data.config_version, Some(1));
+
+    // Workspace-direct resolution (the V1 optimization path) is gated on
+    // `lockfile_version >= 1`, so it must keep firing for V2.
+    // `VersionSpec::Workspace` is parsed from a bare workspace path; matches
+    // how every other test exercises it.
+    let workspace_dep = lockfile
+        .resolve_package("", "a", "packages/a")
+        .unwrap()
+        .expect("workspace dep resolves on V2");
+    assert_eq!(workspace_dep.key, "a@0.0.0");
+
+    // Hoisted external resolution is shared with V1; spot-check one entry.
+    let external = lockfile
+        .resolve_package("packages/a", "is-number", "^6.0.0")
+        .unwrap()
+        .expect("hoisted external resolves on V2");
+    assert_eq!(external.version, "6.0.0");
+}
+
+/// Regression for a 3-level nested version split that `turbo prune` drops.
+///
+/// `@vite-pwa/nuxt@1` depends on `pathe@^1` (direct) AND `@nuxt/kit@^3`, while
+/// the workspace also depends on `@nuxt/kit@^4`. The hoisted `@nuxt/kit@4`
+/// keeps `@nuxt/kit@3` nested under `@vite-pwa/nuxt`, and that nested
+/// `@nuxt/kit@3` needs `pathe@^2` — recorded at the 3-level key
+/// `@vite-pwa/nuxt/@nuxt/kit/pathe`. Prune must preserve that key, otherwise
+/// bun resolves the nested `@nuxt/kit@3`'s pathe to the nearest ancestor
+/// `@vite-pwa/nuxt/pathe@1.1.2` (wrong major).
+#[test]
+fn test_prune_preserves_three_level_nested_version() {
+    let contents = serde_json::to_string(&json!({
+        "lockfileVersion": 1,
+        "workspaces": {
+            "": { "name": "root" },
+            "apps/web": {
+                "name": "web",
+                "dependencies": {
+                    "@nuxt/kit": "^4.4.8",
+                    "@vite-pwa/nuxt": "1.1.1"
+                }
+            }
+        },
+        "packages": {
+            "@nuxt/kit": ["@nuxt/kit@4.4.8", "", { "dependencies": { "pathe": "^2.0.3" } }, "sha512-a"],
+            "@vite-pwa/nuxt": ["@vite-pwa/nuxt@1.1.1", "", { "dependencies": { "@nuxt/kit": "^3.9.0", "pathe": "^1.1.1" } }, "sha512-b"],
+            "pathe": ["pathe@2.0.3", "", {}, "sha512-c"],
+            "@vite-pwa/nuxt/@nuxt/kit": ["@nuxt/kit@3.21.8", "", { "dependencies": { "pathe": "^2.0.3" } }, "sha512-d"],
+            "@vite-pwa/nuxt/pathe": ["pathe@1.1.2", "", {}, "sha512-e"],
+            "@vite-pwa/nuxt/@nuxt/kit/pathe": ["pathe@2.0.3", "", {}, "sha512-c"]
+        }
+    }))
+    .unwrap();
+
+    let lockfile = BunLockfile::from_str(&contents).unwrap();
+
+    let unresolved_deps: std::collections::BTreeMap<String, String> = [
+        ("@nuxt/kit".to_string(), "^4.4.8".to_string()),
+        ("@vite-pwa/nuxt".to_string(), "1.1.1".to_string()),
+    ]
+    .into_iter()
+    .collect();
+    let closure = crate::transitive_closure(&lockfile, "apps/web", unresolved_deps, false).unwrap();
+    let package_idents: Vec<String> = closure.iter().map(|pkg| pkg.key.clone()).collect();
+
+    let subgraph = lockfile
+        .subgraph(&["apps/web".into()], &package_idents)
+        .unwrap();
+    let pruned = subgraph.lockfile().unwrap();
+
+    assert!(
+        pruned
+            .packages
+            .contains_key("@vite-pwa/nuxt/@nuxt/kit/pathe"),
+        "3-level nested pathe@2.0.3 must be preserved so the nested @nuxt/kit@3 resolves pathe@2, \
+         not the sibling @vite-pwa/nuxt/pathe@1.1.2. pruned pathe keys: {:?}",
+        pruned
+            .packages
+            .keys()
+            .filter(|k| k.ends_with("pathe"))
+            .collect::<Vec<_>>()
+    );
+}
+
+// https://github.com/vercel/turborepo/issues/13204
+// A scoped package like "@types/webpack" whose unscoped name matches one of
+// its own dependencies ("webpack") must not be treated as a nested entry for
+// that dependency. The parent-chain walk previously split "@types/webpack" at
+// the scope separator, found the "@types/webpack" entry under the bogus
+// ancestor key "@types" + "/webpack", and pinned the webpack dependency to
+// @types/webpack's version, dropping webpack from the pruned lockfile.
+#[test]
+fn test_scoped_package_name_not_mistaken_for_nested_entry() {
+    let contents = serde_json::to_string(&json!({
+        "lockfileVersion": 1,
+        "workspaces": {
+            "": {
+                "name": "test-root"
+            },
+            "packages/app": {
+                "name": "app",
+                "version": "0.0.0",
+                "dependencies": {
+                    "@types/webpack": "5.28.5"
+                }
+            }
+        },
+        "packages": {
+            "@types/webpack": ["@types/webpack@5.28.5", "", {
+                "dependencies": {
+                    "tapable": "^2.2.0",
+                    "webpack": "^5"
+                }
+            }, "sha512-types-webpack"],
+            "tapable": ["tapable@2.3.3", "", {}, "sha512-tapable"],
+            "webpack": ["webpack@5.108.3", "", {
+                "dependencies": {
+                    "tapable": "^2.3.0"
+                }
+            }, "sha512-webpack"]
+        }
+    }))
+    .unwrap();
+
+    let lockfile = BunLockfile::from_str(&contents).unwrap();
+
+    // The webpack dependency of @types/webpack must keep its original spec
+    // instead of being pinned to @types/webpack's own version.
+    let deps = lockfile
+        .all_dependencies("@types/webpack@5.28.5")
+        .unwrap()
+        .expect("@types/webpack should have dependencies");
+    assert_eq!(deps.get("webpack"), Some(&"^5".to_string()));
+
+    let unresolved_deps: std::collections::BTreeMap<String, String> =
+        [("@types/webpack".to_string(), "5.28.5".to_string())]
+            .into_iter()
+            .collect();
+    let closure =
+        crate::transitive_closure(&lockfile, "packages/app", unresolved_deps, false).unwrap();
+
+    assert!(
+        closure.iter().any(|pkg| pkg.key == "webpack@5.108.3"),
+        "webpack should be in the transitive closure of @types/webpack"
+    );
+
+    let subgraph = <BunLockfile as crate::Lockfile>::subgraph(
+        &lockfile,
+        &["packages/app".into()],
+        &closure
+            .iter()
+            .map(|pkg| pkg.key.clone())
+            .collect::<Vec<_>>(),
+    )
+    .unwrap();
+    let encoded = subgraph.encode().unwrap();
+    let encoded_str = String::from_utf8(encoded).unwrap();
+    let pruned = BunLockfile::from_str(&encoded_str).unwrap();
+
+    assert!(
+        pruned.data.packages.contains_key("webpack"),
+        "webpack must remain in the pruned lockfile"
+    );
+}
+
+// Regression test for https://github.com/vercel/turborepo/issues/13233
+// When a dependency is resolved from an ancestor scope of its source key
+// (e.g. `@headlessui/react/@floating-ui/react/@floating-ui/utils` providing
+// `@floating-ui/utils` for a deeply nested `@floating-ui/dom`), the entry must
+// not be copied into the pruned lockfile under that stale ancestor key once
+// the dependent has been renamed by promotion/de-aliasing. Bun rejects the
+// resulting lockfile because the dependent can no longer resolve the
+// dependency.
+#[test]
+fn test_subgraph_relocates_ancestor_scoped_dep_for_renamed_dependent() {
+    let contents = serde_json::to_string(&json!({
+            "lockfileVersion": 1,
+            "configVersion": 1,
+            "workspaces": {
+                "": {
+                    "name": "test-monorepo"
+                },
+                "packages/app": {
+                    "name": "app",
+                    "dependencies": {
+                        "@radix-ui/react-popper": "1.2.8"
+                    }
+                },
+                "packages/other": {
+                    "name": "other",
+                    "dependencies": {
+                        "@floating-ui/core": "1.7.5",
+                        "@floating-ui/dom": "1.7.6",
+                        "@floating-ui/react": "0.27.19",
+                        "@floating-ui/react-dom": "2.1.8",
+                        "@floating-ui/utils": "0.2.11",
+                        "@headlessui/react": "2.2.0"
+                    }
+                }
+            },
+            "packages": {
+                "@floating-ui/core": ["@floating-ui/core@1.7.5", "", { "dependencies": { "@floating-ui/utils": "^0.2.11" } }, "sha512-core175"],
+                "@floating-ui/dom": ["@floating-ui/dom@1.7.6", "", { "dependencies": { "@floating-ui/core": "^1.7.5", "@floating-ui/utils": "^0.2.11" } }, "sha512-dom176"],
+                "@floating-ui/react": ["@floating-ui/react@0.27.19", "", { "dependencies": { "@floating-ui/react-dom": "^2.1.8", "@floating-ui/utils": "^0.2.11" } }, "sha512-react02719"],
+                "@floating-ui/react-dom": ["@floating-ui/react-dom@2.1.8", "", { "dependencies": { "@floating-ui/dom": "^1.7.6" } }, "sha512-reactdom218"],
+                "@floating-ui/utils": ["@floating-ui/utils@0.2.11", "", {}, "sha512-utils0211"],
+                "@headlessui/react": ["@headlessui/react@2.2.0", "", { "dependencies": { "@floating-ui/react": "^0.26.16" } }, "sha512-headlessui"],
+                "@radix-ui/react-popper": ["@radix-ui/react-popper@1.2.8", "", { "dependencies": { "@floating-ui/react-dom": "^2.0.0" } }, "sha512-popper"],
+                "app": ["app@workspace:packages/app"],
+                "other": ["other@workspace:packages/other"],
+                "@headlessui/react/@floating-ui/react": ["@floating-ui/react@0.26.16", "", { "dependencies": { "@floating-ui/react-dom": "^2.1.0", "@floating-ui/utils": "^0.2.0" } }, "sha512-react02616"],
+                "@radix-ui/react-popper/@floating-ui/react-dom": ["@floating-ui/react-dom@2.1.7", "", { "dependencies": { "@floating-ui/dom": "^1.7.5" } }, "sha512-reactdom217"],
+                "@headlessui/react/@floating-ui/react/@floating-ui/react-dom": ["@floating-ui/react-dom@2.1.7", "", { "dependencies": { "@floating-ui/dom": "^1.7.5" } }, "sha512-reactdom217"],
+                "@headlessui/react/@floating-ui/react/@floating-ui/utils": ["@floating-ui/utils@0.2.10", "", {}, "sha512-utils0210"],
+                "@radix-ui/react-popper/@floating-ui/react-dom/@floating-ui/dom": ["@floating-ui/dom@1.7.5", "", { "dependencies": { "@floating-ui/core": "^1.7.4", "@floating-ui/utils": "^0.2.10" } }, "sha512-dom175"],
+                "@headlessui/react/@floating-ui/react/@floating-ui/react-dom/@floating-ui/dom": ["@floating-ui/dom@1.7.5", "", { "dependencies": { "@floating-ui/core": "^1.7.4", "@floating-ui/utils": "^0.2.10" } }, "sha512-dom175"],
+                "@radix-ui/react-popper/@floating-ui/react-dom/@floating-ui/dom/@floating-ui/core": ["@floating-ui/core@1.7.4", "", { "dependencies": { "@floating-ui/utils": "^0.2.10" } }, "sha512-core174"],
+                "@radix-ui/react-popper/@floating-ui/react-dom/@floating-ui/dom/@floating-ui/utils": ["@floating-ui/utils@0.2.10", "", {}, "sha512-utils0210"],
+                "@headlessui/react/@floating-ui/react/@floating-ui/react-dom/@floating-ui/dom/@floating-ui/core": ["@floating-ui/core@1.7.4", "", { "dependencies": { "@floating-ui/utils": "^0.2.10" } }, "sha512-core174"]
+            }
+        }))
+        .unwrap();
+
+    let lockfile = BunLockfile::from_str(&contents).unwrap();
+    let mut app_deps = std::collections::BTreeMap::new();
+    app_deps.insert("@radix-ui/react-popper".to_string(), "1.2.8".to_string());
+
+    let closure = crate::transitive_closure(&lockfile, "packages/app", app_deps, false).unwrap();
+    let package_idents: Vec<String> = closure.iter().map(|pkg| pkg.key.clone()).collect();
+    let subgraph = lockfile
+        .subgraph(&["packages/app".into()], &package_idents)
+        .unwrap();
+    let data = subgraph.lockfile().unwrap();
+
+    // Every nested key must still have its parent chain in the lockfile.
+    for key in data.packages.keys() {
+        if let Some(parent) = PackageKey::parse(key).parent() {
+            assert!(
+                data.packages.contains_key(&parent),
+                "nested key {key} is unreachable: parent {parent} is missing"
+            );
+        }
+    }
+
+    // Every declared dependency must resolve the way bun does: direct nested
+    // entry, then ancestor scopes, then top-level.
+    for (key, entry) in &data.packages {
+        let Some(info) = &entry.info else { continue };
+        for dep_name in info.dependencies.keys() {
+            let mut resolved = data.packages.contains_key(&format!("{key}/{dep_name}"));
+            let mut scope = PackageKey::parse(key).parent();
+            while !resolved && let Some(parent) = scope {
+                resolved = data.packages.contains_key(&format!("{parent}/{dep_name}"));
+                scope = PackageKey::parse(&parent).parent();
+            }
+            resolved = resolved || data.packages.contains_key(dep_name.as_str());
+            assert!(
+                resolved,
+                "package {key} cannot resolve dependency {dep_name}"
+            );
+        }
+    }
+}
+
+/// Prunes `lockfile` down to `workspace` and the closure of `deps`, then
+/// encodes the result the way `turbo prune` writes bun.lock.
+fn prune_to_string(lockfile: &BunLockfile, workspace: &str, deps: &[(&str, &str)]) -> String {
+    let deps: std::collections::BTreeMap<String, String> = deps
+        .iter()
+        .map(|(name, version)| (name.to_string(), version.to_string()))
+        .collect();
+    let closure = crate::transitive_closure(lockfile, workspace, deps, false).unwrap();
+    let package_idents: Vec<String> = closure.iter().map(|pkg| pkg.key.clone()).collect();
+    let subgraph =
+        <BunLockfile as crate::Lockfile>::subgraph(lockfile, &[workspace.into()], &package_idents)
+            .unwrap();
+    String::from_utf8(subgraph.encode().unwrap()).unwrap()
+}
+
+// Bun writes lockfileVersion 3 when `overrides` contains nested rules, which
+// are stored as object values. Bun's `--frozen-lockfile` compares the whole
+// overrides set against the root package.json (which prune copies verbatim),
+// so the section has to survive prune byte-for-byte, nested rules included.
+#[test]
+fn test_parses_v3_lockfile_with_nested_overrides() {
+    let overrides = json!({
+        "lodash": "4.17.21",
+        "micromatch": {
+            ".": "4.0.5",
+            "picomatch": "2.3.2",
+        },
+        "webpack@^4": {
+            "terser": "4.8.1",
+        },
+    });
+    let contents = serde_json::to_string(&json!({
+        "lockfileVersion": 3,
+        "configVersion": 1,
+        "workspaces": {
+            "": {
+                "name": "root",
+                "dependencies": {
+                    "picomatch": "2.2.0",
+                },
+            },
+            "packages/app": {
+                "name": "app",
+                "dependencies": {
+                    "lodash": "^4.0.0",
+                    "micromatch": "^4.0.0",
+                    "webpack": "^4.0.0",
+                },
+            },
+            "packages/other": {
+                "name": "other",
+                "dependencies": {
+                    "is-odd": "3.0.1",
+                },
+            },
+        },
+        "overrides": overrides,
+        "packages": {
+            "app": ["app@workspace:packages/app"],
+            "is-odd": ["is-odd@3.0.1", "", {}, "sha512-is-odd"],
+            "lodash": ["lodash@4.17.21", "", {}, "sha512-lodash"],
+            "micromatch": ["micromatch@4.0.5", "", { "dependencies": { "picomatch": "^2.2.0" } }, "sha512-micromatch"],
+            "micromatch/picomatch": ["picomatch@2.3.2", "", {}, "sha512-picomatch-232"],
+            "other": ["other@workspace:packages/other"],
+            "picomatch": ["picomatch@2.2.0", "", {}, "sha512-picomatch-220"],
+            "terser": ["terser@4.8.1", "", {}, "sha512-terser"],
+            "webpack": ["webpack@4.47.0", "", { "dependencies": { "terser": "^4.0.0" } }, "sha512-webpack"],
+        },
+    }))
+    .unwrap();
+
+    let lockfile = BunLockfile::from_str(&contents).expect("lockfileVersion 3 should parse");
+    assert_eq!(lockfile.data.lockfile_version, 3);
+    let expected_overrides: Map<String, OverrideValue> = serde_json::from_value(overrides).unwrap();
+    assert_eq!(lockfile.data.overrides, expected_overrides);
+
+    // Flat rules and the parent's own "." rule apply; a nested child rule and a
+    // rule keyed by a parent range do not (Bun materializes those as nested
+    // lockfile keys, which resolution follows on its own).
+    assert_eq!(lockfile.apply_overrides("lodash", "^4.0.0"), "4.17.21");
+    assert_eq!(lockfile.apply_overrides("micromatch", "^4.0.0"), "4.0.5");
+    assert_eq!(lockfile.apply_overrides("picomatch", "^2.2.0"), "^2.2.0");
+    assert_eq!(lockfile.apply_overrides("webpack", "^4.0.0"), "^4.0.0");
+    assert_eq!(lockfile.apply_overrides("terser", "^4.0.0"), "^4.0.0");
+
+    let micromatch = lockfile
+        .resolve_package("packages/app", "micromatch", "^4.0.0")
+        .unwrap()
+        .unwrap();
+    assert_eq!(micromatch.key, "micromatch@4.0.5");
+    let deps = lockfile
+        .all_dependencies("micromatch@4.0.5")
+        .unwrap()
+        .unwrap();
+    assert_eq!(deps.get("picomatch"), Some(&"=2.3.2".to_string()));
+
+    let pruned = prune_to_string(
+        &lockfile,
+        "packages/app",
+        &[
+            ("lodash", "^4.0.0"),
+            ("micromatch", "^4.0.0"),
+            ("webpack", "^4.0.0"),
+        ],
+    );
+    assert!(
+        pruned.starts_with("{\n  \"lockfileVersion\": 3,\n"),
+        "pruned lockfile should keep version 3:\n{pruned}"
+    );
+    assert!(
+        pruned.contains(
+            "  \"overrides\": {\n    \"lodash\": \"4.17.21\",\n    \"micromatch\": {\n      \".\": \
+             \"4.0.5\",\n      \"picomatch\": \"2.3.2\",\n    },\n    \"webpack@^4\": {\n      \
+             \"terser\": \"4.8.1\",\n    },\n  },\n"
+        ),
+        "nested overrides should be written in bun's format:\n{pruned}"
+    );
+
+    let reparsed = BunLockfile::from_str(&pruned).expect("pruned v3 lockfile should reparse");
+    assert_eq!(reparsed.data.lockfile_version, 3);
+    assert_eq!(reparsed.data.overrides, expected_overrides);
+    assert_eq!(
+        reparsed.data.packages["micromatch/picomatch"].ident,
+        "picomatch@2.3.2"
+    );
+    assert_eq!(reparsed.data.packages["picomatch"].ident, "picomatch@2.2.0");
+    assert!(!reparsed.data.packages.contains_key("is-odd"));
+}
+
+// Bun accepts object overrides at every lockfile version on read; a lockfile
+// that fails the version 2 invariants but has nested rules is written as
+// version 1 with objects in it.
+#[test]
+fn test_object_overrides_parse_at_older_lockfile_versions() {
+    let contents = serde_json::to_string(&json!({
+        "lockfileVersion": 1,
+        "workspaces": { "": { "name": "root" } },
+        "overrides": { "webpack": { "terser": "4.8.1" } },
+        "packages": {},
+    }))
+    .unwrap();
+
+    let lockfile = BunLockfile::from_str(&contents).unwrap();
+    assert_eq!(lockfile.apply_overrides("webpack", "^4"), "^4");
+    assert_eq!(lockfile.apply_overrides("terser", "^4"), "^4");
+    let encoded = String::from_utf8(lockfile.encode().unwrap()).unwrap();
+    assert!(encoded.contains("\"webpack\": {\n      \"terser\": \"4.8.1\",\n    },"));
+}
+
+#[test]
+fn test_newer_lockfile_versions_are_accepted_and_preserved() {
+    let contents = serde_json::to_string(&json!({
+        "lockfileVersion": 4,
+        "workspaces": { "": { "name": "root" } },
+        "packages": {},
+    }))
+    .unwrap();
+
+    let lockfile = BunLockfile::from_str(&contents).expect("newer versions should parse");
+    assert_eq!(lockfile.data.lockfile_version, 4);
+    let encoded = String::from_utf8(lockfile.encode().unwrap()).unwrap();
+    assert!(encoded.starts_with("{\n  \"lockfileVersion\": 4,\n"));
+
+    let v3 =
+        BunLockfile::from_str(&contents.replace("\"lockfileVersion\":4", "\"lockfileVersion\":3"))
+            .unwrap();
+    assert!(
+        crate::Lockfile::global_change(&lockfile, &v3),
+        "a version change is still a global change"
+    );
+}
+
+#[test]
+fn test_negative_lockfile_version_is_rejected() {
+    let contents = serde_json::to_string(&json!({
+        "lockfileVersion": -1,
+        "workspaces": { "": { "name": "root" } },
+        "packages": {},
+    }))
+    .unwrap();
+
+    assert!(matches!(
+        BunLockfile::from_str(&contents),
+        Err(crate::Error::UnsupportedBunVersion(-1))
+    ));
+}
+
+// Bun diffs the lockfile's trustedDependencies against the ones declared in
+// package.json on every install; prune copies the root package.json verbatim,
+// so the lockfile section has to be copied verbatim too.
+#[test]
+fn test_prune_preserves_trusted_dependencies() {
+    let contents = serde_json::to_string(&json!({
+        "lockfileVersion": 1,
+        "workspaces": {
+            "": { "name": "root" },
+            "packages/app": {
+                "name": "app",
+                "dependencies": { "esbuild": "0.25.0" },
+            },
+            "packages/other": {
+                "name": "other",
+                "dependencies": { "sharp": "0.34.0" },
+            },
+        },
+        "trustedDependencies": ["esbuild", "sharp"],
+        "packages": {
+            "app": ["app@workspace:packages/app"],
+            "esbuild": ["esbuild@0.25.0", "", {}, "sha512-esbuild"],
+            "other": ["other@workspace:packages/other"],
+            "sharp": ["sharp@0.34.0", "", {}, "sha512-sharp"],
+        },
+    }))
+    .unwrap();
+
+    let lockfile = BunLockfile::from_str(&contents).unwrap();
+    let pruned = prune_to_string(&lockfile, "packages/app", &[("esbuild", "0.25.0")]);
+
+    assert!(
+        pruned.contains("  \"trustedDependencies\": [\n    \"esbuild\",\n    \"sharp\",\n  ],\n"),
+        "trustedDependencies should be copied verbatim:\n{pruned}"
+    );
+    let reparsed = BunLockfile::from_str(&pruned).unwrap();
+    assert_eq!(reparsed.data.trusted_dependencies, ["esbuild", "sharp"]);
+    assert!(!reparsed.data.packages.contains_key("sharp"));
+}
+
+// Bun links workspace bins from the `bin`/`binDir` fields of the workspace
+// entries, so a pruned lockfile without them installs the workspaces with no
+// bins.
+#[test]
+fn test_prune_preserves_workspace_bins() {
+    let contents = serde_json::to_string(&json!({
+        "lockfileVersion": 1,
+        "workspaces": {
+            "": {},
+            "packages/cli": {
+                "name": "cli",
+                "version": "1.0.0",
+                "bin": { "cli": "bin/cli.js", "cli-dev": "bin/dev.js" },
+                "dependencies": { "scripts": "workspace:*", "tool": "workspace:*" },
+            },
+            "packages/scripts": {
+                "name": "scripts",
+                "version": "1.0.0",
+                "binDir": "scripts",
+            },
+            "packages/tool": {
+                "name": "tool",
+                "version": "1.0.0",
+                "bin": "tool.js",
+            },
+            "packages/unrelated": {
+                "name": "unrelated",
+                "bin": "unrelated.js",
+            },
+        },
+        "packages": {
+            "cli": ["cli@workspace:packages/cli"],
+            "scripts": ["scripts@workspace:packages/scripts"],
+            "tool": ["tool@workspace:packages/tool"],
+            "unrelated": ["unrelated@workspace:packages/unrelated"],
+        },
+    }))
+    .unwrap();
+
+    let lockfile = BunLockfile::from_str(&contents).unwrap();
+    assert_eq!(lockfile.data.workspaces[""].name, "");
+    assert_eq!(
+        lockfile.data.workspaces["packages/tool"].bin,
+        Some(json!("tool.js"))
+    );
+
+    let subgraph = <BunLockfile as crate::Lockfile>::subgraph(
+        &lockfile,
+        &[
+            "packages/cli".into(),
+            "packages/scripts".into(),
+            "packages/tool".into(),
+        ],
+        &[],
+    )
+    .unwrap();
+    let pruned = String::from_utf8(subgraph.encode().unwrap()).unwrap();
+
+    assert!(
+        pruned.contains(
+            "    \"packages/cli\": {\n      \"name\": \"cli\",\n      \"version\": \"1.0.0\",\n      \
+             \"bin\": {\n        \"cli\": \"bin/cli.js\",\n        \"cli-dev\": \"bin/dev.js\",\n      \
+             },\n      \"dependencies\": {\n"
+        ),
+        "object bin should be preserved:\n{pruned}"
+    );
+    assert!(
+        pruned.contains("      \"binDir\": \"scripts\",\n"),
+        "binDir should be preserved:\n{pruned}"
+    );
+    assert!(
+        pruned.contains("      \"bin\": \"tool.js\",\n"),
+        "string bin should be preserved:\n{pruned}"
+    );
+    assert!(
+        !pruned.contains("unrelated"),
+        "unrelated workspace should be pruned:\n{pruned}"
+    );
+
+    let reparsed = BunLockfile::from_str(&pruned).unwrap();
+    for path in ["", "packages/cli", "packages/scripts", "packages/tool"] {
+        assert_eq!(
+            reparsed.data.workspaces[path], lockfile.data.workspaces[path],
+            "workspace entry for {path:?} should round-trip"
+        );
+    }
+}
+
+// Bun omits the root workspace's `name` when the root package.json has none.
+#[test]
+fn test_root_workspace_without_name_round_trips() {
+    let contents = serde_json::to_string(&json!({
+        "lockfileVersion": 1,
+        "workspaces": {
+            "": {
+                "dependencies": { "is-odd": "3.0.1" },
+            },
+        },
+        "packages": {
+            "is-odd": ["is-odd@3.0.1", "", {}, "sha512-is-odd"],
+        },
+    }))
+    .unwrap();
+
+    let lockfile = BunLockfile::from_str(&contents).expect("root workspace name is optional");
+    let resolved = lockfile
+        .resolve_package("", "is-odd", "3.0.1")
+        .unwrap()
+        .unwrap();
+    assert_eq!(resolved.key, "is-odd@3.0.1");
+
+    let pruned = prune_to_string(&lockfile, "", &[("is-odd", "3.0.1")]);
+    assert!(
+        pruned.contains(
+            "  \"workspaces\": {\n    \"\": {\n      \"dependencies\": {\n        \"is-odd\": \
+             \"3.0.1\",\n      },\n    },\n  },\n"
+        ),
+        "root entry should be written without a name:\n{pruned}"
+    );
+    assert!(BunLockfile::from_str(&pruned).is_ok());
+}
+
+// git and github entries carry an optional 4th element pinning the packed
+// checkout: [ident, INFO, bun-tag, integrity]. Dropping it silently removes
+// the content pin from the pruned lockfile.
+#[test]
+fn test_prune_preserves_git_integrity() {
+    let contents = serde_json::to_string(&json!({
+        "lockfileVersion": 1,
+        "workspaces": {
+            "": { "name": "root" },
+            "packages/app": {
+                "name": "app",
+                "dependencies": {
+                    "from-git": "git+https://github.com/user/from-git.git#v1",
+                    "from-github": "github:user/from-github#abc123",
+                    "legacy": "github:user/legacy#def456",
+                },
+            },
+        },
+        "packages": {
+            "app": ["app@workspace:packages/app"],
+            "from-git": [
+                "from-git@git+https://github.com/user/from-git.git#0123456789abcdef",
+                { "dependencies": { "is-odd": "3.0.1" } },
+                "0123456789abcdef",
+                "sha512-from-git",
+            ],
+            "from-github": ["from-github@github:user/from-github#abc123", {}, "abc123", "sha512-from-github"],
+            "is-odd": ["is-odd@3.0.1", "", {}, "sha512-is-odd"],
+            "legacy": ["legacy@github:user/legacy#def456", {}, "def456"],
+        },
+    }))
+    .unwrap();
+
+    let lockfile = BunLockfile::from_str(&contents).unwrap();
+    let from_git = &lockfile.data.packages["from-git"];
+    assert_eq!(from_git.checksum.as_deref(), Some("0123456789abcdef"));
+    assert_eq!(from_git.integrity.as_deref(), Some("sha512-from-git"));
+    assert_eq!(lockfile.data.packages["legacy"].integrity, None);
+
+    let pruned = prune_to_string(
+        &lockfile,
+        "packages/app",
+        &[
+            ("from-git", "git+https://github.com/user/from-git.git#v1"),
+            ("from-github", "github:user/from-github#abc123"),
+            ("legacy", "github:user/legacy#def456"),
+        ],
+    );
+    assert!(
+        pruned.contains(
+            "    \"from-git\": [\"from-git@git+https://github.com/user/from-git.git#0123456789abcdef\", \
+             { \"dependencies\": { \"is-odd\": \"3.0.1\" } }, \"0123456789abcdef\", \
+             \"sha512-from-git\"],"
+        ),
+        "git integrity should be preserved:\n{pruned}"
+    );
+    assert!(
+        pruned.contains(
+            "    \"from-github\": [\"from-github@github:user/from-github#abc123\", {}, \
+             \"abc123\", \"sha512-from-github\"],"
+        ),
+        "github integrity should be preserved:\n{pruned}"
+    );
+    assert!(
+        pruned.contains("    \"legacy\": [\"legacy@github:user/legacy#def456\", {}, \"def456\"],"),
+        "entries without integrity should stay 3 elements:\n{pruned}"
+    );
+
+    let reparsed = BunLockfile::from_str(&pruned).unwrap();
+    assert_eq!(reparsed.data.packages, lockfile.data.packages);
+}
+
+// Local tarballs are written as [ident, INFO, integrity?] and root
+// dependencies as [ident, { bin, binDir }]; Bun rejects either of them in the
+// registry 4-tuple shape with "Expected an object".
+#[test]
+fn test_prune_preserves_local_tarball_and_root_entry_shapes() {
+    let contents = serde_json::to_string(&json!({
+        "lockfileVersion": 1,
+        "workspaces": {
+            "": {
+                "name": "mono",
+                "dependencies": {
+                    "bar": "./vendor/bar-0.0.2.tgz",
+                    "baz": "file:./vendor/baz.tar.gz",
+                    "mono-self": "npm:mono@root:",
+                    "remote": "https://example.com/remote-1.0.0.tgz",
+                    "@scope/self-dir": "*",
+                    "self-plain": "*",
+                },
+            },
+        },
+        "packages": {
+            "@scope/self-dir": ["@scope/self-dir@root:", { "binDir": "bin" }],
+            "bar": ["bar@./vendor/bar-0.0.2.tgz", { "dependencies": { "is-odd": "3.0.1" } }, "sha512-bar"],
+            "baz": ["baz@./vendor/baz.tar.gz", {}],
+            "is-odd": ["is-odd@3.0.1", "", {}, "sha512-is-odd"],
+            "mono-self": ["mono@root:", { "bin": { "mono": "cli.js" } }],
+            "remote": ["remote@https://example.com/remote-1.0.0.tgz", {}, "sha512-remote"],
+            "self-plain": ["self-plain@root:", {}],
+        },
+    }))
+    .unwrap();
+
+    let lockfile = BunLockfile::from_str(&contents).unwrap();
+    assert_eq!(
+        lockfile.data.packages["mono-self"].root,
+        Some(RootInfo {
+            bin: Some(json!({ "mono": "cli.js" })),
+            bin_dir: None,
+        })
+    );
+    assert_eq!(
+        lockfile.data.packages["self-plain"].root,
+        Some(RootInfo {
+            bin: None,
+            bin_dir: None,
+        })
+    );
+
+    let pruned = prune_to_string(
+        &lockfile,
+        "",
+        &[
+            ("bar", "./vendor/bar-0.0.2.tgz"),
+            ("baz", "file:./vendor/baz.tar.gz"),
+            ("mono-self", "npm:mono@root:"),
+            ("remote", "https://example.com/remote-1.0.0.tgz"),
+            ("@scope/self-dir", "*"),
+            ("self-plain", "*"),
+        ],
+    );
+
+    for expected in [
+        "    \"@scope/self-dir\": [\"@scope/self-dir@root:\", { \"binDir\": \"bin\" }],",
+        "    \"bar\": [\"bar@./vendor/bar-0.0.2.tgz\", { \"dependencies\": { \"is-odd\": \
+         \"3.0.1\" } }, \"sha512-bar\"],",
+        "    \"baz\": [\"baz@./vendor/baz.tar.gz\", {}],",
+        "    \"is-odd\": [\"is-odd@3.0.1\", \"\", {}, \"sha512-is-odd\"],",
+        "    \"mono-self\": [\"mono@root:\", { \"bin\": { \"mono\": \"cli.js\" } }],",
+        "    \"remote\": [\"remote@https://example.com/remote-1.0.0.tgz\", {}, \"sha512-remote\"],",
+        "    \"self-plain\": [\"self-plain@root:\", {}],",
+    ] {
+        assert!(
+            pruned.contains(expected),
+            "expected pruned lockfile to contain:\n{expected}\n\ngot:\n{pruned}"
+        );
+    }
+
+    let reparsed = BunLockfile::from_str(&pruned).unwrap();
+    assert_eq!(reparsed.data.packages, lockfile.data.packages);
 }

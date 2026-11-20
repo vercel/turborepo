@@ -1,0 +1,247 @@
+---
+source: crates/turborepo-trace-lang-go/tests/fixtures.rs
+expression: json
+---
+{
+  "version": 1,
+  "base": "<fixture>",
+  "entries": [
+    {
+      "path": "app/main.go",
+      "files": [
+        "app/go.mod",
+        "app/main.go",
+        "go.work",
+        "shared/go.mod",
+        "shared/pkg/pkg.go"
+      ]
+    }
+  ],
+  "files": [
+    {
+      "path": "app/go.mod",
+      "reasons": [
+        "manifest"
+      ],
+      "parents": [
+        "app/main.go",
+        "shared/pkg/pkg.go"
+      ],
+      "parsed": false
+    },
+    {
+      "path": "app/main.go",
+      "reasons": [
+        "initial"
+      ],
+      "parents": [],
+      "parsed": true,
+      "lang": "go"
+    },
+    {
+      "path": "go.work",
+      "reasons": [
+        "manifest"
+      ],
+      "parents": [
+        "app/main.go",
+        "shared/pkg/pkg.go"
+      ],
+      "parsed": false
+    },
+    {
+      "path": "shared/go.mod",
+      "reasons": [
+        "manifest"
+      ],
+      "parents": [
+        "app/main.go",
+        "shared/pkg/pkg.go"
+      ],
+      "parsed": false
+    },
+    {
+      "path": "shared/pkg/pkg.go",
+      "reasons": [
+        "dependency"
+      ],
+      "parents": [
+        "app/main.go"
+      ],
+      "parsed": true,
+      "lang": "go"
+    }
+  ],
+  "edges": [
+    {
+      "from": "app/main.go",
+      "kind": "import",
+      "phase": "build",
+      "flags": [],
+      "spec": "example.com/shared/pkg",
+      "span": [
+        21,
+        45
+      ],
+      "line": 3,
+      "target": {
+        "type": "glob",
+        "pattern": "shared/pkg/*.go",
+        "matches": [
+          "shared/pkg/pkg.go"
+        ],
+        "truncated": false
+      }
+    },
+    {
+      "from": "app/main.go",
+      "kind": "manifest",
+      "phase": "build",
+      "flags": [],
+      "spec": "go.mod",
+      "span": [
+        21,
+        45
+      ],
+      "line": 3,
+      "target": {
+        "type": "file",
+        "path": "app/go.mod"
+      }
+    },
+    {
+      "from": "app/main.go",
+      "kind": "manifest",
+      "phase": "build",
+      "flags": [],
+      "spec": "go.work",
+      "span": [
+        21,
+        45
+      ],
+      "line": 3,
+      "target": {
+        "type": "file",
+        "path": "go.work"
+      }
+    },
+    {
+      "from": "app/main.go",
+      "kind": "manifest",
+      "phase": "build",
+      "flags": [],
+      "spec": "go.mod",
+      "span": [
+        21,
+        45
+      ],
+      "line": 3,
+      "target": {
+        "type": "file",
+        "path": "shared/go.mod"
+      }
+    },
+    {
+      "from": "shared/pkg/pkg.go",
+      "kind": "manifest",
+      "phase": "build",
+      "flags": [],
+      "spec": "go.mod",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "app/go.mod"
+      }
+    },
+    {
+      "from": "shared/pkg/pkg.go",
+      "kind": "manifest",
+      "phase": "build",
+      "flags": [],
+      "spec": "go.work",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "go.work"
+      }
+    },
+    {
+      "from": "shared/pkg/pkg.go",
+      "kind": "manifest",
+      "phase": "build",
+      "flags": [],
+      "spec": "go.mod",
+      "span": [
+        0,
+        0
+      ],
+      "line": 1,
+      "target": {
+        "type": "file",
+        "path": "shared/go.mod"
+      }
+    },
+    {
+      "from": "shared/pkg/pkg.go",
+      "kind": "import",
+      "phase": "build",
+      "flags": [],
+      "spec": "os",
+      "span": [
+        20,
+        24
+      ],
+      "line": 3,
+      "target": {
+        "type": "builtin",
+        "name": "os"
+      }
+    },
+    {
+      "from": "shared/pkg/pkg.go",
+      "kind": "fs_read",
+      "phase": "runtime",
+      "flags": [],
+      "spec": "hello.txt",
+      "span": [
+        118,
+        129
+      ],
+      "line": 6,
+      "target": {
+        "type": "unresolved"
+      },
+      "uncertainty": "cwd_dependent"
+    }
+  ],
+  "uncertainties": [
+    {
+      "file": "shared/pkg/pkg.go",
+      "kind": "cwd_dependent",
+      "detail": "hello.txt is relative to the working directory",
+      "spec": "hello.txt",
+      "span": [
+        118,
+        129
+      ],
+      "line": 6,
+      "col": 28
+    }
+  ],
+  "symlinks": {},
+  "stats": {
+    "entries": 1,
+    "files": 5,
+    "parsed_files": 2,
+    "edges": 9,
+    "uncertainties": 1
+  }
+}

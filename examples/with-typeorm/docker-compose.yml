@@ -1,9 +1,3 @@
-version: "3"
-
-volumes:
-  database:
-    driver: local
-
 services:
   mysql:
     platform: linux/amd64
@@ -17,3 +11,6 @@ services:
       MYSQL_ALLOW_EMPTY_PASSWORD: 1
     volumes:
       - database:/var/lib/mysql
+
+volumes:
+  database:

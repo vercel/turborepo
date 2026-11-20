@@ -1,0 +1,18 @@
+{
+  "name": "web",
+  "targets": {
+    "build": {
+      "executor": "@nx/vite:build",
+      "outputs": ["{options.outputPath}"],
+      "options": { "configFile": "apps/web/vite.config.ts", "outputPath": "dist/apps/web" }
+    },
+    "test": { "executor": "@nx/jest:jest", "options": { "jestConfig": "apps/web/jest.config.ts" } },
+    "deploy": {
+      "executor": "nx:run-commands",
+      "dependsOn": ["build"],
+      "options": { "command": "node tools/deploy.js {projectRoot}", "cwd": "." }
+    },
+    "lint": { "executor": "@nx/eslint:lint" },
+    "e2e": { "executor": "@nx-extend/e2e:run", "inputs": ["default"] }
+  }
+}

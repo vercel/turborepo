@@ -1,0 +1,22 @@
+{
+  "name": "my-turborepo",
+  "private": true,
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "turbo run dev",
+    "start": "turbo run start",
+    "test": "turbo run test",
+    "lint": "turbo run lint",
+    "check-types": "turbo run check-types",
+    "format": "prettier --write \"**/*.{ts,tsx,md}\""
+  },
+  "devDependencies": {
+    "prettier": "3.10.1",
+    "turbo": "2.11.11",
+    "typescript": "7.0.2"
+  },
+  "packageManager": "pnpm@12.21.0",
+  "engines": {
+    "node": ">=26.13.1"
+  }
+}

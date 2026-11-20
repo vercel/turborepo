@@ -1,0 +1,12 @@
+{
+  "name": "format-deps",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "format:files": "oxfmt --no-error-on-unmatched-pattern --write",
+    "fmt": "oxfmt .",
+    "fmt:all": "pnpm format:files \"**/*.{js,ts,json}\"",
+    "fmt:check": "oxfmt --check .",
+    "lint:fix": "oxlint --fix"
+  }
+}

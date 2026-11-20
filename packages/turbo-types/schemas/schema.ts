@@ -95,8 +95,8 @@ export interface RootSchema extends BaseSchema {
   globalEnv?: Array<EnvWildcard>;
 
   /**
-   * An allowlist of environment variables that should be made to all tasks, but
-   * should not contribute to the task's cache key, e.g. `AWS_SECRET_KEY`.
+   * An allowlist of environment variables that should be made available to all tasks,
+   * but should not contribute to the task's cache key, e.g. `AWS_SECRET_KEY`.
    *
    * Documentation: https://turborepo.dev/docs/reference/configuration#globalpassthroughenv
    *
@@ -231,6 +231,15 @@ export interface RootSchema extends BaseSchema {
 
 export interface FutureFlags {
   /**
+   * Include file executable permissions in task hashes. Disabled by default.
+   * Enabling this flag changes all task hashes. On Unix, any executable bit
+   * marks a regular file as executable. On Windows, files are non-executable.
+   * Symlink permissions and other permission bits do not affect hashes.
+   *
+   * @defaultValue `false`
+   */
+  hashFilePermissions?: boolean;
+  /**
    * When using `outputLogs: "errors-only"`, show task hashes when tasks
    * complete successfully. This provides visibility into which tasks are
    * running without showing full output logs.
@@ -293,6 +302,15 @@ export interface FutureFlags {
    */
   filterUsingTasks?: boolean;
   /**
+   * Select requested task entrypoints according to whether the task resolves
+   * a command in the repository. When any package can run a requested task,
+   * packages without a command are skipped as entrypoints. Tasks with no
+   * command anywhere remain available for graph-only orchestration.
+   *
+   * @defaultValue `false`
+   */
+  strictTaskEntrypointSelection?: boolean;
+  /**
    * Move global configuration keys under a top-level `global` key.
    *
    * When enabled, keys like `globalDependencies`, `globalEnv`, `ui`,
@@ -303,6 +321,17 @@ export interface FutureFlags {
    * @defaultValue `false`
    */
   globalConfiguration?: boolean;
+
+  /**
+   * Opt into experimental setup features that are still in progress.
+   *
+   * All future setup surfaces must require this flag. The `turbo.lock`
+   * format is unstable. This parser-only foundation ships no setup commands
+   * and does not interpret `turbo.lock` or change run or hash behavior.
+   *
+   * @defaultValue `false`
+   */
+  experimentalSetup?: boolean;
 }
 
 export interface GlobalConfig {
@@ -329,8 +358,8 @@ export interface GlobalConfig {
   env?: Array<EnvWildcard>;
 
   /**
-   * An allowlist of environment variables that should be made to all tasks, but
-   * should not contribute to the task's cache key.
+   * An allowlist of environment variables that should be made available to all tasks,
+   * but should not contribute to the task's cache key.
    *
    * Replaces `globalPassThroughEnv` when `futureFlags.globalConfiguration` is enabled.
    *

@@ -1,6 +1,8 @@
 #![cfg_attr(test, allow(clippy::expect_used, clippy::unwrap_used))]
 #![allow(dead_code)]
 
+pub mod process;
+pub mod process_launcher;
 pub mod setup;
 
 use std::{
@@ -9,11 +11,50 @@ use std::{
     process::Output,
 };
 
+/// A Windows arm64 host, read from the system environment, which x64
+/// emulation does not rewrite (unlike this process's PROCESSOR_ARCHITECTURE).
+/// Independent of turbo's own host probe.
+pub fn windows_arm64_host() -> bool {
+    let Some(root) = std::env::var_os("SystemRoot") else {
+        return false;
+    };
+    std::process::Command::new(Path::new(&root).join(r"System32\reg.exe"))
+        .args([
+            "query",
+            r"HKLM\SYSTEM\CurrentControlSet\Control\Session Manager\Environment",
+            "/v",
+            "PROCESSOR_ARCHITECTURE",
+        ])
+        .output()
+        .is_ok_and(|output| String::from_utf8_lossy(&output.stdout).contains("ARM64"))
+}
+
 pub fn manifest_dir() -> PathBuf {
     match std::env::var("CARGO_MANIFEST_DIR") {
         Ok(dir) => PathBuf::from(dir),
         Err(_) => PathBuf::from(env!("CARGO_MANIFEST_DIR")),
     }
+}
+
+/// Keep native toolchain caches outside fixture workspaces and their task
+/// inputs. Nextest starts a separate process for each test, so a process-local
+/// TempDir would still force every test to recompile. These caches live under
+/// Cargo's target directory and can be removed with the build artifacts.
+pub fn integration_toolchain_cache_dir(name: &str) -> PathBuf {
+    let workspace = manifest_dir().join("../..");
+    let target = std::env::var_os("CARGO_TARGET_DIR")
+        .map(PathBuf::from)
+        .map(|path| {
+            if path.is_absolute() {
+                path
+            } else {
+                workspace.join(path)
+            }
+        })
+        .unwrap_or_else(|| workspace.join("target"));
+    let cache = target.join("integration-toolchain-caches").join(name);
+    fs::create_dir_all(&cache).expect("create integration toolchain cache directory");
+    cache
 }
 
 /// Insta filters that normalize non-deterministic parts of turbo's stdout:
@@ -28,6 +69,27 @@ pub fn turbo_output_filters() -> Vec<(&'static str, &'static str)> {
     ]
 }
 
+/// Env keys in the test process that can carry real turbo configuration
+/// into spawned turbo children — TURBO_TEAM/TURBO_TOKEN exported by CI
+/// credential steps, the paired RUSTC_WRAPPER used by turbo's embedded
+/// sccache, VERCEL_ARTIFACTS_* on Vercel builds, or a developer's local
+/// settings. Tests assert against turbo's defaults, so every harness that
+/// spawns turbo must remove these before applying its own vars;
+/// per-test overrides (explicit env sets after removal) still win because
+/// later ops on a key replace earlier ones.
+pub fn ambient_turbo_env_keys() -> Vec<std::ffi::OsString> {
+    std::env::vars_os()
+        .map(|(key, _)| key)
+        .filter(|key| {
+            let key = key.to_string_lossy();
+            key.starts_with("TURBO_")
+                || key == "RUSTC_WRAPPER"
+                || key == "VERCEL_ARTIFACTS_OWNER"
+                || key == "VERCEL_ARTIFACTS_TOKEN"
+        })
+        .collect()
+}
+
 /// Return a pre-configured `Command` for the turbo binary with all standard
 /// env var suppression applied. Callers can chain `.arg()`, `.env()`, etc.
 /// before calling `.output()`.
@@ -37,6 +99,9 @@ pub fn turbo_command(test_dir: &Path) -> assert_cmd::Command {
     if corepack_dir.exists() {
         cmd.env("PATH", setup::prepend_to_path(&corepack_dir))
             .env("COREPACK_HOME", setup::corepack_home());
+    }
+    for key in ambient_turbo_env_keys() {
+        cmd.env_remove(&key);
     }
     cmd.env("TURBO_TELEMETRY_MESSAGE_DISABLED", "1")
         .env("TURBO_GLOBAL_WARNING_DISABLED", "1")
@@ -73,15 +138,43 @@ pub fn run_turbo_with_env(test_dir: &Path, args: &[&str], env: &[(&str, &str)]) 
     cmd.output().expect("failed to execute turbo")
 }
 
-/// Run a git command silently in the given directory.
+/// Run a git command in the given directory, failing with its output on error.
 pub fn git(dir: &Path, args: &[&str]) {
-    std::process::Command::new("git")
+    let output = std::process::Command::new("git")
         .args(args)
         .current_dir(dir)
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
-        .status()
-        .expect("git command failed");
+        .output()
+        .expect("failed to execute git command");
+    assert!(
+        output.status.success(),
+        "git {} failed in {} with status {}\nstdout:\n{}\nstderr:\n{}",
+        args.join(" "),
+        dir.display(),
+        output.status,
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr),
+    );
+}
+
+/// Commit staged changes, or do nothing when the index matches `HEAD`.
+pub fn git_commit_staged_if_changed(dir: &Path, message: &str) {
+    let output = std::process::Command::new("git")
+        .args(["diff", "--cached", "--quiet"])
+        .current_dir(dir)
+        .output()
+        .expect("failed to inspect staged git changes");
+
+    match output.status.code() {
+        Some(0) => {}
+        Some(1) => git(dir, &["commit", "-m", message, "--quiet"]),
+        _ => panic!(
+            "git diff --cached --quiet failed in {} with status {}\nstdout:\n{}\nstderr:\n{}",
+            dir.display(),
+            output.status,
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr),
+        ),
+    }
 }
 
 /// Combine stdout and stderr into a single string.
@@ -177,6 +270,32 @@ pub fn setup_lockfile_test(dir: &Path, pm_name: &str) {
 
     git(dir, &["add", "."]);
     git(dir, &["commit", "-m", "Initial", "--quiet"]);
+}
+
+/// Applies a lockfile-aware-caching fixture patch (copied into `dir` by
+/// [`setup_lockfile_test`]) to `target`. The fixture patches name scratch
+/// files as their destination, so the `+++` header is rewritten to `target`.
+pub fn apply_lockfile_patch(dir: &Path, target: &str, patch_file: &str) {
+    let patch = fs::read_to_string(dir.join(patch_file))
+        .unwrap()
+        .lines()
+        .map(|line| {
+            line.strip_prefix("+++ ")
+                .map_or_else(|| line.to_string(), |_| format!("+++ {target}"))
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+        + "\n";
+    let rewritten = tempfile::NamedTempFile::new().unwrap();
+    fs::write(rewritten.path(), patch).unwrap();
+    let status = std::process::Command::new("git")
+        .args(["apply", "--unsafe-paths"])
+        .arg(rewritten.path())
+        .current_dir(dir)
+        .stdout(std::process::Stdio::null())
+        .status()
+        .unwrap();
+    assert!(status.success(), "git apply {patch_file} failed");
 }
 
 /// Set up a find-turbo test fixture. Copies the fixture directory, makes
@@ -364,7 +483,7 @@ pub fn setup_fixture(
 /// resolution requires `node_modules`.
 #[macro_export]
 macro_rules! check_json_output {
-    (@with_install $install:expr, $fixture:expr, $package_manager:expr, $command:expr, $($name:expr => [$($query:expr),*$(,)?],)*) => {
+    (@with_install $install:expr, $fixture:expr, $package_manager:expr, $command:expr, $($name:expr => [$($query:expr),*$(,)?] $(; $status:expr)?,)*) => {
         {
             let tempdir = tempfile::tempdir()?;
             $crate::common::setup_fixture($fixture, $package_manager, tempdir.path(), $install)?;
@@ -382,10 +501,37 @@ macro_rules! check_json_output {
 
                 let stdout = String::from_utf8_lossy(&output.stdout);
                 let stderr = String::from_utf8_lossy(&output.stderr);
+                let expected_status = 0 $(+ $status)?;
+                assert_eq!(
+                    output.status.code(),
+                    Some(expected_status),
+                    "turbo {} returned status {}; expected {}\nstdout:\n{}\nstderr:\n{}",
+                    $command,
+                    output.status,
+                    expected_status,
+                    stdout,
+                    stderr,
+                );
 
-                println!("stderr: {}", stderr);
-
-                let query_output: serde_json::Value = serde_json::from_str(&stdout)?;
+                let mut query_output: serde_json::Value = serde_json::from_str(&stdout)?;
+                // `turbo query` embeds the CLI version as the first key. Verify
+                // it, then drop it so snapshots stay stable across releases.
+                if $command == "query" {
+                    let object = query_output
+                        .as_object_mut()
+                        .expect("turbo query output should be a JSON object");
+                    assert_eq!(
+                        object.keys().next().map(String::as_str),
+                        Some("version"),
+                        "turbo query output should start with a version key:\n{}",
+                        stdout,
+                    );
+                    let version = object.shift_remove("version").unwrap();
+                    assert!(
+                        version.as_str().is_some_and(|v| !v.is_empty()),
+                        "version should be a non-empty string: {version}"
+                    );
+                }
                 let test_name = format!(
                     "{}_{}_({})",
                     $fixture,
@@ -402,10 +548,10 @@ macro_rules! check_json_output {
             )*
         }
     };
-    (@install $fixture:expr, $package_manager:expr, $command:expr, $($name:expr => [$($query:expr),*$(,)?],)*) => {
-        $crate::check_json_output!(@with_install true, $fixture, $package_manager, $command, $($name => [$($query),*],)*)
+    (@install $fixture:expr, $package_manager:expr, $command:expr, $($name:expr => [$($query:expr),*$(,)?] $(; $status:expr)?,)*) => {
+        $crate::check_json_output!(@with_install true, $fixture, $package_manager, $command, $($name => [$($query),*] $(; $status)?,)*)
     };
-    ($fixture:expr, $package_manager:expr, $command:expr, $($name:expr => [$($query:expr),*$(,)?],)*) => {
-        $crate::check_json_output!(@with_install false, $fixture, $package_manager, $command, $($name => [$($query),*],)*)
+    ($fixture:expr, $package_manager:expr, $command:expr, $($name:expr => [$($query:expr),*$(,)?] $(; $status:expr)?,)*) => {
+        $crate::check_json_output!(@with_install false, $fixture, $package_manager, $command, $($name => [$($query),*] $(; $status)?,)*)
     }
 }

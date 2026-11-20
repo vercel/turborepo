@@ -14,35 +14,120 @@
 
 mod berry;
 mod bun;
+mod cargo;
+mod closure_dp;
 mod error;
 mod npm;
 mod pnpm;
+mod uv;
 mod yarn1;
 
 use std::{
     any::Any,
     borrow::Cow,
     collections::{BTreeMap, HashMap, HashSet},
+    sync::Arc,
 };
 
 pub use berry::{Error as BerryError, *};
 pub use bun::{BunLockfile, bun_global_change};
+pub use cargo::{
+    CargoExternalClosures, Error as CargoLockError, PrunedCargoLock,
+    cargo_external_closure_indices, cargo_external_closures, cargo_prune_lock,
+};
 use dashmap::DashMap;
 pub use error::Error;
 pub use npm::*;
 pub use pnpm::{PnpmLockfile, pnpm_global_change, pnpm_subgraph};
 use rayon::prelude::*;
+use rustc_hash::{FxBuildHasher, FxHashMap, FxHashSet};
 use serde::Serialize;
 use turbopath::RelativeUnixPathBuf;
+pub use uv::{
+    Error as UvLockError, PrunedUvLock, UvPackageKey, changed_package_names as uv_changed_packages,
+    uv_package_keys, uv_prune_lock,
+};
 pub use yarn1::{Yarn1Lockfile, yarn_subgraph};
 
-type ResolveCache = DashMap<String, Option<Package>>;
-type DepsCache = DashMap<String, Option<BTreeMap<String, String>>>;
+// The closure walk visits every edge of every workspace's dependency closure,
+// so these caches are probed millions of times on large repos. They use
+// FxHash instead of the DoS-resistant default: lockfile contents are developer
+// tooling input, not an adversarial hash-flooding vector, and the long string
+// keys make SipHash a measurable cost.
+//
+// Resolutions cache interned package ids (plus a shared `Arc` of the package)
+// so a cache hit is a refcount bump instead of cloning the package's strings.
+type ResolveCache = DashMap<String, Option<(u32, Arc<Package>)>, FxBuildHasher>;
+// Dependency maps are shared behind an `Arc` so cache hits are a refcount bump
+// instead of a deep clone of the map. The cache is shared across all
+// workspaces, so each package's dependency map would otherwise be cloned once
+// per workspace whose closure contains it. Keyed by interned package id to
+// avoid re-hashing package key strings on every node visit.
+type DepsCache = DashMap<u32, Option<Arc<BTreeMap<String, String>>>, FxBuildHasher>;
+
+/// Assigns dense integer ids to resolved packages. Distinct cache keys (e.g.
+/// the same package reached from different workspaces) intern to the same id,
+/// letting visited-set checks hash a `u32` instead of two heap strings.
+#[derive(Default)]
+struct PackageInterner {
+    ids: DashMap<Package, (u32, Arc<Package>), FxBuildHasher>,
+    next: std::sync::atomic::AtomicU32,
+}
+
+impl PackageInterner {
+    fn intern(&self, package: Package) -> (u32, Arc<Package>) {
+        match self.ids.entry(package) {
+            dashmap::mapref::entry::Entry::Occupied(entry) => entry.get().clone(),
+            dashmap::mapref::entry::Entry::Vacant(entry) => {
+                let id = self.next.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                let package = Arc::new(entry.key().clone());
+                entry.insert((id, package.clone()));
+                (id, package)
+            }
+        }
+    }
+}
 
 #[derive(Debug, PartialEq, Eq, Clone, PartialOrd, Ord, Hash, Serialize)]
 pub struct Package {
     pub key: String,
     pub version: String,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PackageSource {
+    Registry,
+    Git,
+    File,
+    Link,
+    Workspace,
+    Patch,
+}
+
+pub fn package_source_from_identifier(identifier: &str) -> PackageSource {
+    if identifier.starts_with("patch:") || identifier.contains("patch_hash=") {
+        PackageSource::Patch
+    } else if identifier.contains("@workspace:") || identifier.starts_with("workspace:") {
+        PackageSource::Workspace
+    } else if identifier.contains("@link:") || identifier.starts_with("link:") {
+        PackageSource::Link
+    } else if identifier.contains("@file:")
+        || identifier.starts_with("file:")
+        || identifier.starts_with("./")
+        || identifier.starts_with("../")
+    {
+        PackageSource::File
+    } else if identifier.contains("@git:")
+        || identifier.contains("@git+")
+        || identifier.contains("@github:")
+        || identifier.starts_with("git:")
+        || identifier.starts_with("git+")
+        || identifier.starts_with("github:")
+    {
+        PackageSource::Git
+    } else {
+        PackageSource::Registry
+    }
 }
 
 /// A trait for exposing common operations for lockfile parsing, analysis, and
@@ -103,6 +188,12 @@ pub trait Lockfile: Send + Sync + Any + std::fmt::Debug {
         Ok(Vec::new())
     }
 
+    /// Files contributing to a resolved package, relative to the lockfile root.
+    /// This only looks up declarations; callers own reading and hashing files.
+    fn external_file_inputs(&self, _package: &Package) -> Result<Vec<RelativeUnixPathBuf>, Error> {
+        Ok(Vec::new())
+    }
+
     /// Package identifiers that have patches in the lockfile.
     ///
     /// Some package managers store patch paths outside of the lockfile, so
@@ -133,6 +224,51 @@ pub trait Lockfile: Send + Sync + Any + std::fmt::Debug {
     fn human_name(&self, package: &Package) -> Option<String> {
         None
     }
+
+    /// The source used to resolve a package.
+    fn package_source(&self, package: &Package) -> PackageSource {
+        package_source_from_identifier(&package.key)
+    }
+
+    /// The package-manager-specific lockfile format version, when exposed by
+    /// this lockfile implementation.
+    fn format_version(&self) -> Option<String> {
+        None
+    }
+
+    /// A resolver for transitive dependency edges whose resolution can be
+    /// proven identical across workspaces, enabling the shared closure DP
+    /// in [`all_transitive_closures`]. `None` (the default) means the
+    /// format cannot make that promise and closures use the per-workspace
+    /// walk.
+    fn transitive_edge_resolver(&self) -> Option<Box<dyn TransitiveEdgeResolver + '_>> {
+        None
+    }
+}
+
+/// Outcome of resolving a transitive `(name, version)` edge without a
+/// workspace context.
+pub enum TransitiveEdgeResolution {
+    /// Every workspace resolves this edge to the same package (or fails to
+    /// resolve it).
+    Global(Option<Package>),
+    /// Some workspace could resolve this edge differently; the shared DP
+    /// must not be used.
+    WorkspaceSensitive,
+}
+
+/// See [`Lockfile::transitive_edge_resolver`]. Edges are resolved from rayon
+/// workers, so resolvers must be shareable across threads.
+pub trait TransitiveEdgeResolver: Sync {
+    fn resolve_edge(&self, name: &str, version: &str) -> Result<TransitiveEdgeResolution, Error>;
+
+    /// Whether resolution (`resolve_package`, `all_dependencies`, and
+    /// `resolve_edge`) is costly enough per call that the shared DP should
+    /// run it on rayon workers. Cheap formats lose more to pool round-trips
+    /// than they gain.
+    fn parallel(&self) -> bool {
+        false
+    }
 }
 
 /// Takes a lockfile, and a map of workspace directory paths -> (package name,
@@ -142,8 +278,155 @@ pub fn all_transitive_closures<L: Lockfile + ?Sized>(
     workspaces: HashMap<String, BTreeMap<String, String>>,
     ignore_missing_packages: bool,
 ) -> Result<HashMap<String, HashSet<Package>>, Error> {
-    let resolve_cache: ResolveCache = DashMap::new();
-    let deps_cache: DepsCache = DashMap::new();
+    Ok(
+        all_transitive_closures_sorted(lockfile, workspaces, ignore_missing_packages)?
+            .into_iter()
+            .map(|(ws, closure)| (ws, closure.into_iter().map(|pkg| (*pkg).clone()).collect()))
+            .collect(),
+    )
+}
+
+/// Per-workspace transitive closures keyed by workspace directory, each
+/// sorted by `Package`'s `(key, version)` ordering with members shared via
+/// `Arc`.
+pub type SortedClosures = HashMap<String, Vec<Arc<Package>>>;
+
+/// Like [`all_transitive_closures`], but each closure is a `Vec` sorted by
+/// `Package`'s `(key, version)` ordering with members shared via `Arc`.
+/// The sorted form lets consumers hash or diff closures without re-sorting,
+/// and the `Arc` sharing avoids cloning two `String`s per closure member per
+/// workspace (shared dependencies are the overwhelming majority in a
+/// monorepo).
+pub fn all_transitive_closures_sorted<L: Lockfile + ?Sized>(
+    lockfile: &L,
+    workspaces: HashMap<String, BTreeMap<String, String>>,
+    ignore_missing_packages: bool,
+) -> Result<SortedClosures, Error> {
+    if let Some(closures) = shared_dp_closures(lockfile, &workspaces, ignore_missing_packages)? {
+        return Ok(closures.into_sorted());
+    }
+    legacy_sorted_closures(lockfile, workspaces, ignore_missing_packages)
+}
+
+/// Per-workspace transitive closures in index form: one package table sorted
+/// by `Package`'s `(key, version)` ordering, and each workspace's closure as
+/// ascending indices into it (so also in that order, duplicate-free).
+#[derive(Debug, Default)]
+pub struct IndexedClosures {
+    /// Every package in any closure, sorted and duplicate-free.
+    pub packages: Vec<Arc<Package>>,
+    /// Workspace directory -> ascending indices into `packages`.
+    pub closures: HashMap<String, Vec<u32>>,
+}
+
+impl IndexedClosures {
+    /// Materialize each closure as shared `Arc<Package>` members.
+    pub fn into_sorted(self) -> SortedClosures {
+        let Self { packages, closures } = self;
+        closures
+            .into_iter()
+            .map(|(ws, ids)| {
+                let members = ids
+                    .into_iter()
+                    .map(|id| Arc::clone(&packages[id as usize]))
+                    .collect();
+                (ws, members)
+            })
+            .collect()
+    }
+
+    /// Convert the legacy walk's per-workspace closures. They allocate their
+    /// members per workspace, so dedupe by value with one hash lookup per
+    /// member and sort only the distinct table; ranks are monotone in value,
+    /// so each (sorted) closure maps to ascending indices.
+    fn from_sorted(closures: SortedClosures) -> Self {
+        let mut slot_of: FxHashMap<&Package, u32> = FxHashMap::default();
+        let mut unique: Vec<&Arc<Package>> = Vec::new();
+        let slots: Vec<(&String, Vec<u32>)> = closures
+            .iter()
+            .map(|(ws, members)| {
+                let ids = members
+                    .iter()
+                    .map(|member| {
+                        *slot_of.entry(member.as_ref()).or_insert_with(|| {
+                            unique.push(member);
+                            (unique.len() - 1) as u32
+                        })
+                    })
+                    .collect();
+                (ws, ids)
+            })
+            .collect();
+        let mut order: Vec<u32> = (0..unique.len() as u32).collect();
+        order.sort_unstable_by(|&a, &b| unique[a as usize].cmp(unique[b as usize]));
+        let mut rank = vec![0u32; unique.len()];
+        for (position, &slot) in order.iter().enumerate() {
+            rank[slot as usize] = position as u32;
+        }
+        let packages = order
+            .iter()
+            .map(|&slot| Arc::clone(unique[slot as usize]))
+            .collect();
+        let closures = slots
+            .into_iter()
+            .map(|(ws, ids)| {
+                let ids = ids.into_iter().map(|slot| rank[slot as usize]).collect();
+                (ws.clone(), ids)
+            })
+            .collect();
+        Self { packages, closures }
+    }
+}
+
+/// Like [`all_transitive_closures_sorted`], in index form. Consumers that only
+/// need membership (grouping identical closures, building per-closure lists
+/// from a per-package table) avoid an `Arc` clone and drop per closure member.
+pub fn all_transitive_closures_indexed<L: Lockfile + ?Sized>(
+    lockfile: &L,
+    workspaces: HashMap<String, BTreeMap<String, String>>,
+    ignore_missing_packages: bool,
+) -> Result<IndexedClosures, Error> {
+    if let Some(closures) = shared_dp_closures(lockfile, &workspaces, ignore_missing_packages)? {
+        return Ok(closures);
+    }
+    Ok(IndexedClosures::from_sorted(legacy_sorted_closures(
+        lockfile,
+        workspaces,
+        ignore_missing_packages,
+    )?))
+}
+
+/// Shared DP fast path: computes each closure once over the global package
+/// graph instead of once per workspace. Only sound when the lockfile proves
+/// every transitive edge resolves identically across workspaces; any
+/// sensitive edge returns `None` so callers fall through to the legacy walk.
+fn shared_dp_closures<L: Lockfile + ?Sized>(
+    lockfile: &L,
+    workspaces: &HashMap<String, BTreeMap<String, String>>,
+    ignore_missing_packages: bool,
+) -> Result<Option<IndexedClosures>, Error> {
+    if workspaces.len() <= 1 {
+        return Ok(None);
+    }
+    let Some(resolver) = lockfile.transitive_edge_resolver() else {
+        return Ok(None);
+    };
+    closure_dp::all_transitive_closures_dp_indexed(
+        lockfile,
+        resolver.as_ref(),
+        workspaces,
+        ignore_missing_packages,
+    )
+}
+
+fn legacy_sorted_closures<L: Lockfile + ?Sized>(
+    lockfile: &L,
+    workspaces: HashMap<String, BTreeMap<String, String>>,
+    ignore_missing_packages: bool,
+) -> Result<SortedClosures, Error> {
+    let resolve_cache: ResolveCache = DashMap::default();
+    let deps_cache: DepsCache = DashMap::default();
+    let interner = PackageInterner::default();
     workspaces
         .into_par_iter()
         .map(|(workspace, unresolved_deps)| {
@@ -154,8 +437,11 @@ pub fn all_transitive_closures<L: Lockfile + ?Sized>(
                 ignore_missing_packages,
                 &resolve_cache,
                 &deps_cache,
+                &interner,
             )?;
-            Ok((workspace, closure))
+            let mut sorted: Vec<Arc<Package>> = closure.into_iter().map(Arc::new).collect();
+            sorted.sort_unstable();
+            Ok((workspace, sorted))
         })
         .collect()
 }
@@ -167,8 +453,9 @@ pub fn transitive_closure<L: Lockfile + ?Sized>(
     unresolved_deps: BTreeMap<String, String>,
     ignore_missing_packages: bool,
 ) -> Result<HashSet<Package>, Error> {
-    let resolve_cache: ResolveCache = DashMap::new();
-    let deps_cache: DepsCache = DashMap::new();
+    let resolve_cache: ResolveCache = DashMap::default();
+    let deps_cache: DepsCache = DashMap::default();
+    let interner = PackageInterner::default();
     transitive_closure_cached(
         lockfile,
         workspace_path,
@@ -176,6 +463,7 @@ pub fn transitive_closure<L: Lockfile + ?Sized>(
         ignore_missing_packages,
         &resolve_cache,
         &deps_cache,
+        &interner,
     )
 }
 
@@ -186,18 +474,22 @@ fn transitive_closure_cached<L: Lockfile + ?Sized>(
     ignore_missing_packages: bool,
     resolve_cache: &ResolveCache,
     deps_cache: &DepsCache,
+    interner: &PackageInterner,
 ) -> Result<HashSet<Package>, Error> {
     let mut ctx = ClosureContext {
         lockfile,
         workspace_path,
         resolve_cache,
         deps_cache,
+        interner,
         key_buf: String::new(),
     };
     let mut transitive_deps = HashSet::new();
+    let mut visited = FxHashSet::default();
     ctx.walk(
         &unresolved_deps,
         &mut transitive_deps,
+        &mut visited,
         ignore_missing_packages,
         true,
     )?;
@@ -209,6 +501,7 @@ struct ClosureContext<'a, L: Lockfile + ?Sized> {
     workspace_path: &'a str,
     resolve_cache: &'a ResolveCache,
     deps_cache: &'a DepsCache,
+    interner: &'a PackageInterner,
     key_buf: String,
 }
 
@@ -233,7 +526,7 @@ impl<L: Lockfile + ?Sized> ClosureContext<'_, L> {
         unresolved_deps: &BTreeMap<String, String>,
         ignore_missing_packages: bool,
         _is_workspace_root_deps: bool,
-    ) -> Result<Vec<Package>, Error> {
+    ) -> Result<Vec<(u32, Arc<Package>)>, Error> {
         let mut newly_resolved = Vec::new();
 
         for (name, specifier) in unresolved_deps {
@@ -261,9 +554,10 @@ impl<L: Lockfile + ?Sized> ClosureContext<'_, L> {
                             }
                             Err(e) => return Err(e),
                         };
+                    let interned = result.map(|pkg| self.interner.intern(pkg));
                     self.resolve_cache
-                        .insert(self.key_buf.clone(), result.clone());
-                    result
+                        .insert(self.key_buf.clone(), interned.clone());
+                    interned
                 }
             };
 
@@ -279,6 +573,7 @@ impl<L: Lockfile + ?Sized> ClosureContext<'_, L> {
         &mut self,
         unresolved_deps: &BTreeMap<String, String>,
         resolved_deps: &mut HashSet<Package>,
+        visited: &mut FxHashSet<u32>,
         ignore_missing_packages: bool,
         is_workspace_root_deps: bool,
     ) -> Result<(), Error> {
@@ -288,25 +583,25 @@ impl<L: Lockfile + ?Sized> ClosureContext<'_, L> {
             is_workspace_root_deps,
         )?;
 
-        for pkg in newly_resolved {
-            if resolved_deps.contains(&pkg) {
+        for (id, pkg) in newly_resolved {
+            if !visited.insert(id) {
                 continue;
             }
 
-            let all_deps = if let Some(cached) = self.deps_cache.get(&pkg.key) {
+            let all_deps = if let Some(cached) = self.deps_cache.get(&id) {
                 cached.clone()
             } else {
                 let deps = self
                     .lockfile
                     .all_dependencies(&pkg.key)?
-                    .map(|cow| cow.into_owned());
-                self.deps_cache.insert(pkg.key.clone(), deps.clone());
+                    .map(|cow| Arc::new(cow.into_owned()));
+                self.deps_cache.insert(id, deps.clone());
                 deps
             };
 
-            resolved_deps.insert(pkg);
+            resolved_deps.insert((*pkg).clone());
             if let Some(deps) = all_deps {
-                self.walk(&deps, resolved_deps, false, false)?;
+                self.walk(&deps, resolved_deps, visited, false, false)?;
             }
         }
 
@@ -319,5 +614,26 @@ impl Package {
         let key = key.into();
         let version = version.into();
         Self { key, version }
+    }
+}
+
+#[cfg(test)]
+mod package_source_tests {
+    use super::{PackageSource, package_source_from_identifier};
+
+    #[test]
+    fn classifies_supported_package_sources() {
+        for (identifier, expected) in [
+            ("lodash@4.17.21", PackageSource::Registry),
+            ("pkg@git+https://example.com/repo.git", PackageSource::Git),
+            ("pkg@github:owner/repo", PackageSource::Git),
+            ("pkg@file:../pkg", PackageSource::File),
+            ("pkg@link:../pkg", PackageSource::Link),
+            ("pkg@workspace:packages/pkg", PackageSource::Workspace),
+            ("pkg@1.0.0(patch_hash=abc)", PackageSource::Patch),
+            ("patch:pkg@npm:1.0.0#./pkg.patch", PackageSource::Patch),
+        ] {
+            assert_eq!(package_source_from_identifier(identifier), expected);
+        }
     }
 }

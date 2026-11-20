@@ -8,22 +8,20 @@ use std::{backtrace, collections::BTreeMap, fmt::Debug, sync::Arc};
 
 use biome_deserialize::{
     Deserializable, DeserializableValue, DeserializationDiagnostic, DeserializationVisitor,
-    VisitableType, json::deserialize_from_json_str,
+    VisitableType,
 };
 use biome_diagnostics::DiagnosticExt;
 use biome_json_parser::JsonParserOptions;
 use biome_json_syntax::TextRange;
-use convert_case::{Case, Casing};
 use miette::Diagnostic;
-use struct_iterable::Iterable;
 use thiserror::Error;
 use turborepo_errors::{ParseDiagnostic, Spanned, WithMetadata};
 use turborepo_task_id::TaskName;
 use turborepo_unescape::UnescapedString;
 
 use crate::raw::{
-    Pipeline, RawExperimentalCIConfig, RawExperimentalObservability, RawGlobalConfig,
-    RawObservabilityOtel, RawObservabilityOtelMetrics, RawObservabilityOtelRunAttributes,
+    Pipeline, RawCommand, RawExperimentalObservability, RawGlobalConfig, RawObservabilityOtel,
+    RawObservabilityOtelMetrics, RawObservabilityOtelRunAttributes,
     RawObservabilityOtelTaskAttributes, RawPackageTurboJson, RawRemoteCacheOptions,
     RawRootTurboJson, RawStructuredInput, RawTaskDefinition, RawTaskInput, RawTurboJson,
 };
@@ -58,22 +56,6 @@ impl BiomeParseError {
     }
 }
 
-/// Creates an unknown key diagnostic from a struct that implements Iterable
-#[allow(dead_code)]
-pub fn create_unknown_key_diagnostic_from_struct<T: Iterable>(
-    struct_iterable: &T,
-    unknown_key: &str,
-    range: TextRange,
-) -> DeserializationDiagnostic {
-    let allowed_keys = struct_iterable
-        .iter()
-        .map(|(k, _)| k.to_case(Case::Camel))
-        .collect::<Vec<_>>();
-    let allowed_keys_borrowed = allowed_keys.iter().map(|s| s.as_str()).collect::<Vec<_>>();
-
-    DeserializationDiagnostic::new_unknown_key(unknown_key, range, &allowed_keys_borrowed)
-}
-
 impl Deserializable for Pipeline {
     fn deserialize(
         value: &impl DeserializableValue,
@@ -91,6 +73,77 @@ impl Deserializable for RawTaskInput {
         diagnostics: &mut Vec<DeserializationDiagnostic>,
     ) -> Option<Self> {
         value.deserialize(RawTaskInputVisitor, name, diagnostics)
+    }
+}
+
+impl Deserializable for RawCommand {
+    fn deserialize(
+        value: &impl DeserializableValue,
+        name: &str,
+        diagnostics: &mut Vec<DeserializationDiagnostic>,
+    ) -> Option<Self> {
+        value.deserialize(RawCommandVisitor, name, diagnostics)
+    }
+}
+
+/// Dispatches the three JSON shapes of a task `command`: an argv array, an
+/// explicit `null` opt-out, or a per-toolchain map of argv arrays.
+struct RawCommandVisitor;
+
+impl DeserializationVisitor for RawCommandVisitor {
+    type Output = RawCommand;
+
+    const EXPECTED_TYPE: VisitableType = VisitableType::ARRAY
+        .union(VisitableType::NULL)
+        .union(VisitableType::MAP);
+
+    fn visit_null(
+        self,
+        _range: TextRange,
+        _name: &str,
+        _diagnostics: &mut Vec<DeserializationDiagnostic>,
+    ) -> Option<Self::Output> {
+        Some(RawCommand::OptOut)
+    }
+
+    fn visit_array(
+        self,
+        values: impl Iterator<Item = Option<impl DeserializableValue>>,
+        _range: TextRange,
+        name: &str,
+        diagnostics: &mut Vec<DeserializationDiagnostic>,
+    ) -> Option<Self::Output> {
+        let items: Vec<Spanned<UnescapedString>> = values
+            .flatten()
+            .filter_map(|value| Spanned::deserialize(&value, name, diagnostics))
+            .collect();
+        // An empty array is the same opt-out as `null`.
+        if items.is_empty() {
+            return Some(RawCommand::OptOut);
+        }
+        Some(RawCommand::Argv(items))
+    }
+
+    fn visit_map(
+        self,
+        members: impl Iterator<Item = Option<(impl DeserializableValue, impl DeserializableValue)>>,
+        _range: TextRange,
+        name: &str,
+        diagnostics: &mut Vec<DeserializationDiagnostic>,
+    ) -> Option<Self::Output> {
+        let mut entries = Vec::new();
+        for (key, value) in members.flatten() {
+            let Some(key) = Spanned::<String>::deserialize(&key, name, diagnostics) else {
+                continue;
+            };
+            let Some(argv) =
+                Vec::<Spanned<UnescapedString>>::deserialize(&value, key.as_inner(), diagnostics)
+            else {
+                continue;
+            };
+            entries.push((key, argv));
+        }
+        Some(RawCommand::PerToolchain(entries))
     }
 }
 
@@ -198,69 +251,23 @@ impl DeserializationVisitor for PipelineVisitor {
 
 impl WithMetadata for Pipeline {
     fn add_text(&mut self, text: Arc<str>) {
-        for (_, entry) in self.0.iter_mut() {
+        for entry in self.0.values_mut() {
             entry.add_text(text.clone());
             entry.value.add_text(text.clone());
         }
     }
 
     fn add_path(&mut self, path: Arc<str>) {
-        for (_, entry) in self.0.iter_mut() {
+        for entry in self.0.values_mut() {
             entry.add_path(path.clone());
             entry.value.add_path(path.clone());
         }
     }
 }
 
-impl Deserializable for RawExperimentalCIConfig {
-    fn deserialize(
-        value: &impl DeserializableValue,
-        name: &str,
-        diagnostics: &mut Vec<DeserializationDiagnostic>,
-    ) -> Option<Self> {
-        value.deserialize(RawExperimentalCIConfigVisitor, name, diagnostics)
-    }
-}
-
-struct RawExperimentalCIConfigVisitor;
-
-impl DeserializationVisitor for RawExperimentalCIConfigVisitor {
-    type Output = RawExperimentalCIConfig;
-
-    const EXPECTED_TYPE: VisitableType = VisitableType::BOOL.union(VisitableType::MAP);
-
-    fn visit_bool(
-        self,
-        value: bool,
-        _range: TextRange,
-        _name: &str,
-        _diagnostics: &mut Vec<DeserializationDiagnostic>,
-    ) -> Option<Self::Output> {
-        Some(RawExperimentalCIConfig::Enabled(value))
-    }
-
-    fn visit_map(
-        self,
-        members: impl Iterator<Item = Option<(impl DeserializableValue, impl DeserializableValue)>>,
-        _range: TextRange,
-        _name: &str,
-        diagnostics: &mut Vec<DeserializationDiagnostic>,
-    ) -> Option<Self::Output> {
-        let entries = members
-            .filter_map(|entry| {
-                let (key, value) = entry?;
-                let key = String::deserialize(&key, "", diagnostics)?;
-                let value = serde_json::Value::deserialize(&value, "", diagnostics)?;
-                Some((key, value))
-            })
-            .collect();
-
-        Some(RawExperimentalCIConfig::Options(entries))
-    }
-}
-
 impl WithMetadata for RawTaskDefinition {
     fn add_text(&mut self, text: Arc<str>) {
+        self.tags.add_text(text.clone());
         self.depends_on.add_text(text.clone());
         if let Some(depends_on) = &mut self.depends_on {
             depends_on.value.add_text(text.clone());
@@ -277,6 +284,7 @@ impl WithMetadata for RawTaskDefinition {
     }
 
     fn add_path(&mut self, path: Arc<str>) {
+        self.tags.add_path(path.clone());
         self.depends_on.add_path(path.clone());
         if let Some(depends_on) = &mut self.depends_on {
             depends_on.value.add_path(path.clone());
@@ -454,6 +462,7 @@ impl WithMetadata for RawGlobalConfig {
 impl WithMetadata for RawRootTurboJson {
     fn add_text(&mut self, text: Arc<str>) {
         self.span.add_text(text.clone());
+        self.agent_guidance.add_text(text.clone());
         self.tags.add_text(text.clone());
         if let Some(tags) = &mut self.tags {
             tags.value.add_text(text.clone());
@@ -479,6 +488,10 @@ impl WithMetadata for RawRootTurboJson {
         self.no_update_notifier.add_text(text.clone());
         self.concurrency.add_text(text.clone());
         self.future_flags.add_text(text.clone());
+        self.setup.add_text(text.clone());
+        if let Some(setup) = &mut self.setup {
+            setup.value.add_text(text.clone());
+        }
         self.global.add_text(text.clone());
         if let Some(global) = &mut self.global {
             global.value.add_text(text);
@@ -487,6 +500,7 @@ impl WithMetadata for RawRootTurboJson {
 
     fn add_path(&mut self, path: Arc<str>) {
         self.span.add_path(path.clone());
+        self.agent_guidance.add_path(path.clone());
         self.tags.add_path(path.clone());
         if let Some(tags) = &mut self.tags {
             tags.value.add_path(path.clone());
@@ -511,6 +525,10 @@ impl WithMetadata for RawRootTurboJson {
         self.no_update_notifier.add_path(path.clone());
         self.concurrency.add_path(path.clone());
         self.future_flags.add_path(path.clone());
+        self.setup.add_path(path.clone());
+        if let Some(setup) = &mut self.setup {
+            setup.value.add_path(path.clone());
+        }
         self.global.add_path(path.clone());
         if let Some(global) = &mut self.global {
             global.value.add_path(path);
@@ -531,12 +549,14 @@ impl WithMetadata for RawPackageTurboJson {
             boundaries.value.add_text(text.clone());
         }
         self.tasks.add_text(text.clone());
+        self.setup.add_text(text.clone());
         self.pipeline.add_text(text);
     }
 
     fn add_path(&mut self, path: Arc<str>) {
         self.span.add_path(path.clone());
         self.extends.add_path(path.clone());
+        self.setup.add_path(path.clone());
         self.tags.add_path(path.clone());
         if let Some(tags) = &mut self.tags {
             tags.value.add_path(path.clone());
@@ -584,7 +604,7 @@ pub fn parse_turbo_json<T: Deserializable + WithMetadata>(
     text: &str,
     file_path: &str,
 ) -> Result<T, BiomeParseError> {
-    let result = deserialize_from_json_str::<T>(
+    let (deserialized, errors) = turborepo_errors::json::deserialize_from_json_str::<T>(
         text,
         JsonParserOptions::default()
             .with_allow_comments()
@@ -592,9 +612,8 @@ pub fn parse_turbo_json<T: Deserializable + WithMetadata>(
         file_path,
     );
 
-    if !result.diagnostics().is_empty() {
-        let diagnostics = result
-            .into_diagnostics()
+    if !errors.is_empty() {
+        let diagnostics = errors
             .into_iter()
             .map(|d| {
                 d.with_file_source_code(text)
@@ -607,9 +626,7 @@ pub fn parse_turbo_json<T: Deserializable + WithMetadata>(
         return Err(BiomeParseError::new(diagnostics));
     }
 
-    let mut turbo_json = result
-        .into_deserialized()
-        .ok_or_else(BiomeParseError::empty)?;
+    let mut turbo_json = deserialized.ok_or_else(BiomeParseError::empty)?;
     turbo_json.add_text(Arc::from(text));
     turbo_json.add_path(Arc::from(file_path));
 
@@ -622,6 +639,117 @@ mod tests {
     use test_case::test_case;
 
     use super::*;
+
+    #[test]
+    fn test_task_tags_parse_with_metadata() {
+        let json = r#"{"tasks":{"build":{"tags":["","CI label","$TURBO_EXTENDS$","CI label","日本語","line\nlabel"]},"clear":{"tags":[]},"inherit":{}}}"#;
+        let root = RawRootTurboJson::parse(json, "turbo.json").unwrap();
+        let package_json = format!(r#"{{"extends":["//"],{}}}"#, &json[1..json.len() - 1]);
+        let package = RawPackageTurboJson::parse(&package_json, "packages/web/turbo.json").unwrap();
+        for (tasks, text, path) in [
+            (root.tasks.unwrap(), json, "turbo.json"),
+            (
+                package.tasks.unwrap(),
+                package_json.as_str(),
+                "packages/web/turbo.json",
+            ),
+        ] {
+            let tags = tasks
+                .get(&TaskName::from("build"))
+                .unwrap()
+                .tags
+                .as_ref()
+                .unwrap();
+            assert_eq!(
+                tags.iter().map(|tag| tag.as_str()).collect::<Vec<_>>(),
+                [
+                    "",
+                    "CI label",
+                    "$TURBO_EXTENDS$",
+                    "CI label",
+                    "日本語",
+                    "line\nlabel"
+                ]
+            );
+            for tag in tags {
+                assert_eq!(tag.text.as_deref(), Some(text));
+                assert_eq!(tag.path.as_deref(), Some(path));
+                assert!(tag.range.is_some());
+            }
+            assert_eq!(
+                tasks.get(&TaskName::from("clear")).unwrap().tags,
+                Some(vec![])
+            );
+            assert!(
+                tasks
+                    .get(&TaskName::from("inherit"))
+                    .unwrap()
+                    .tags
+                    .is_none()
+            );
+            let serialized =
+                serde_json::to_value(tasks.get(&TaskName::from("build")).unwrap().as_inner())
+                    .unwrap();
+            assert_eq!(
+                serialized["tags"],
+                serde_json::json!([
+                    "",
+                    "CI label",
+                    "$TURBO_EXTENDS$",
+                    "CI label",
+                    "日本語",
+                    "line\nlabel"
+                ])
+            );
+        }
+    }
+
+    #[test_case(r#""label""#; "scalar")]
+    #[test_case("[1]"; "number element")]
+    #[test_case("[true]"; "boolean element")]
+    #[test_case("[{}]"; "object element")]
+    #[test_case("[null]"; "null element")]
+    fn test_task_tags_reject_invalid_shapes(tags: &str) {
+        let json = format!(r#"{{"tasks":{{"build":{{"tags":{tags}}}}}}}"#);
+        assert!(RawRootTurboJson::parse(&json, "turbo.json").is_err());
+        let package_json = format!(r#"{{"extends":["//"],{}}}"#, &json[1..json.len() - 1]);
+        assert!(RawPackageTurboJson::parse(&package_json, "packages/web/turbo.json").is_err());
+    }
+
+    #[test_case(r#""true""#; "string")]
+    #[test_case("1"; "number")]
+    #[test_case("null"; "null")]
+    #[test_case("[]"; "array")]
+    #[test_case("{}"; "object")]
+    fn test_experimental_setup_rejects_non_boolean(value: &str) {
+        let json = format!(r#"{{"futureFlags":{{"experimentalSetup":{value}}}}}"#);
+        let error = RawRootTurboJson::parse(&json, "turbo.json").unwrap_err();
+        assert!(!error.diagnostics.is_empty());
+    }
+
+    #[test_case(""; "setup flag omitted")]
+    #[test_case(r#""experimentalSetup":true,"#; "setup flag enabled")]
+    #[test_case(r#""experimentalSetup":false,"#; "setup flag disabled")]
+    fn test_future_flags_reject_unknown_flags(setup_flag: &str) {
+        let json = format!(r#"{{"futureFlags":{{{setup_flag}"unknownSetupFlag":true}}}}"#);
+        let error = RawRootTurboJson::parse(&json, "turbo.json").unwrap_err();
+        assert!(!error.diagnostics.is_empty());
+    }
+
+    #[test_case(true; "enabled")]
+    #[test_case(false; "disabled")]
+    fn test_experimental_setup_not_allowed_in_package(enabled: bool) {
+        let json =
+            format!(r#"{{"extends":["//"],"futureFlags":{{"experimentalSetup":{enabled}}}}}"#);
+        assert!(RawPackageTurboJson::parse(&json, "packages/web/turbo.json").is_err());
+    }
+
+    #[test]
+    fn test_experimental_setup_enables_setup_configuration() {
+        let json = r#"{"futureFlags":{"experimentalSetup":true},"setup":{}}"#;
+        let raw = RawRootTurboJson::parse(json, "turbo.json").unwrap();
+        assert!(RawTurboJson::try_from(raw).unwrap().setup.is_some());
+    }
 
     #[test]
     fn test_biome_parse_error_new() {
@@ -641,6 +769,15 @@ mod tests {
         assert_eq!(err.to_string(), "Failed to parse turbo.json.");
     }
 
+    // Regression tests for https://github.com/vercel/turborepo/issues/13197
+    // Unterminated string literals used to panic inside biome during
+    // deserialization instead of producing a parse error.
+    #[test_case("{\"tasks\": {\"build\": {\"persistent\": \"\n}}}"; "quote before newline")]
+    #[test_case("{\"tasks\": {\"build\": {\"dependsOn\": [\""; "quote at eof")]
+    fn test_unterminated_string_reports_parse_error(json: &str) {
+        assert!(RawRootTurboJson::parse(json, "turbo.json").is_err());
+    }
+
     #[test_case(r#"{"daemon": true}"#; "daemon in package turbo.json")]
     fn test_root_only_fields_in_package_turbo_json(json: &str) {
         let result = RawPackageTurboJson::parse(json, "packages/foo/turbo.json");
@@ -652,6 +789,61 @@ mod tests {
             .render_report(&mut msg, report.as_ref())
             .unwrap();
         assert_snapshot!(msg);
+    }
+
+    #[test]
+    fn test_command_parses_three_shapes() {
+        let json = r#"{"tasks": {
+            "a": {"command": ["cargo", "nextest", "run"]},
+            "b": {"command": null},
+            "c": {"command": []},
+            "d": {"command": {"rust": ["cargo", "test"], "javascript": ["vitest"]}}
+        }}"#;
+        let parsed = RawRootTurboJson::parse(json, "turbo.json").unwrap();
+        let tasks = parsed.tasks.unwrap();
+        let command = |name: &str| {
+            tasks.0[&TaskName::from(name.to_string())]
+                .command
+                .clone()
+                .unwrap()
+                .into_inner()
+        };
+
+        let RawCommand::Argv(argv) = command("a") else {
+            panic!("expected argv");
+        };
+        assert_eq!(
+            argv.iter().map(|a| a.as_str()).collect::<Vec<_>>(),
+            vec!["cargo", "nextest", "run"]
+        );
+        // `null` and `[]` are the same explicit opt-out; absent is absent.
+        assert_eq!(command("b"), RawCommand::OptOut);
+        assert_eq!(command("c"), RawCommand::OptOut);
+        let RawCommand::PerToolchain(entries) = command("d") else {
+            panic!("expected map");
+        };
+        // Entries keep source order.
+        assert_eq!(
+            entries
+                .iter()
+                .map(|(key, _)| key.as_inner().as_str())
+                .collect::<Vec<_>>(),
+            vec!["rust", "javascript"]
+        );
+    }
+
+    #[test]
+    fn test_command_rejects_other_shapes() {
+        for json in [
+            r#"{"tasks": {"a": {"command": "cargo test"}}}"#,
+            r#"{"tasks": {"a": {"command": true}}}"#,
+            r#"{"tasks": {"a": {"command": 42}}}"#,
+        ] {
+            assert!(
+                RawRootTurboJson::parse(json, "turbo.json").is_err(),
+                "should reject: {json}"
+            );
+        }
     }
 
     #[test]
@@ -685,6 +877,41 @@ mod tests {
             result.no_update_notifier.as_ref().map(|v| *v.as_inner()),
             Some(true),
             "noUpdateNotifier should be parsed from a full turbo.json"
+        );
+    }
+
+    #[test]
+    fn test_agent_guidance_parses_as_optional() {
+        let default = RawRootTurboJson::parse(r#"{"tasks": {}}"#, "turbo.json").unwrap();
+        assert_eq!(default.agent_guidance, None);
+        let enabled = RawRootTurboJson::parse(r#"{"agentGuidance": true}"#, "turbo.json").unwrap();
+        assert_eq!(
+            enabled.agent_guidance.map(|value| *value.as_inner()),
+            Some(true)
+        );
+        let disabled =
+            RawRootTurboJson::parse(r#"{"agentGuidance": false}"#, "turbo.json").unwrap();
+        assert_eq!(
+            disabled.agent_guidance.map(|value| *value.as_inner()),
+            Some(false)
+        );
+    }
+
+    #[test_case(r#"{"agentGuidance": "false"}"#)]
+    #[test_case(r#"{"agentGuidance": 0}"#)]
+    #[test_case(r#"{"agentGuidance": null}"#)]
+    fn test_agent_guidance_rejects_non_booleans(json: &str) {
+        assert!(RawRootTurboJson::parse(json, "turbo.json").is_err());
+    }
+
+    #[test]
+    fn test_agent_guidance_is_root_only() {
+        assert!(
+            RawPackageTurboJson::parse(
+                r#"{"extends": ["//"], "agentGuidance": false}"#,
+                "packages/app/turbo.json"
+            )
+            .is_err()
         );
     }
 
@@ -741,7 +968,7 @@ mod tests {
 
         assert_eq!(
             task.experimental_ci.as_ref().map(|v| v.as_inner()),
-            Some(&RawExperimentalCIConfig::Enabled(true))
+            Some(&turborepo_types::ExperimentalCIConfig::Enabled(true))
         );
     }
 
@@ -769,7 +996,7 @@ mod tests {
 
         assert_eq!(
             task.experimental_ci.as_ref().map(|v| v.as_inner()),
-            Some(&RawExperimentalCIConfig::Options(
+            Some(&turborepo_types::ExperimentalCIConfig::Options(
                 serde_json::json!({
                     "provider": "github",
                     "enabled": true,

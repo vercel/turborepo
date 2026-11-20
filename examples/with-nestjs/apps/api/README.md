@@ -1,25 +1,27 @@
-# With-NestJs | API
+# With-NestJS | API
 
 ## Getting Started
 
-First, run the development server:
+From the monorepo root, install dependencies with `pnpm install`, then run:
 
 ```bash
-pnpm run dev
-# Also works with NPM, YARN, BUN, ...
+pnpm turbo run dev --filter=api...
 ```
 
-By default, your server will run at [localhost:3000](http://localhost:3000). You can use your favorite API platform like [Insomnia](https://insomnia.rest/) or [Postman](https://www.postman.com/) to test your APIs
+Turborepo builds shared packages before starting the development servers and watches the shared API package for changes.
 
-You can start editing the demo **APIs** by modifying [linksService](./src/links/links.service.ts) provider.
+By default, the API runs at [localhost:3000](http://localhost:3000). You can use an API client like [Insomnia](https://insomnia.rest/) or [Postman](https://www.postman.com/) to test it.
 
-### Important Note 🚧
+You can start editing the demo APIs by modifying the [links service](./src/links/links.service.ts).
 
-If you plan to `build` or `test` the app. Please make sure to build the `packages/*` first.
+To build or test only the API, run these commands from the monorepo root. Turborepo builds the required shared packages first:
+
+```bash
+pnpm turbo run build --filter=api
+pnpm turbo run test test:e2e --filter=api
+```
 
 ## Learn More
-
-Learn more about `NestJs` with following resources:
 
 - [Official Documentation](https://docs.nestjs.com) - A progressive Node.js framework for building efficient, reliable and scalable server-side applications.
 - [Official NestJS Courses](https://courses.nestjs.com) - Learn everything you need to master NestJS and tackle modern backend applications at any scale.

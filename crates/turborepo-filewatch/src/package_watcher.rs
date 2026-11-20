@@ -5,7 +5,7 @@ use std::{
     collections::HashMap,
     path::Path,
     sync::{
-        Arc,
+        Arc, RwLock,
         atomic::{AtomicUsize, Ordering},
     },
     time::Duration,
@@ -25,23 +25,22 @@ use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf};
 use turborepo_repository::{
     discovery::{
         DiscoveryResponse, LocalPackageDiscoveryBuilder, PackageDiscovery, PackageDiscoveryBuilder,
-        WorkspaceData,
+        WorkspaceData, discover_turbo_config_path,
     },
     package_manager::{self, PackageManager},
     workspaces::WorkspaceGlobs,
 };
 
 use crate::{
-    NotifyError,
+    SubscribeError, WatchScope, WatchSource, WatchSubscription,
     cookies::{CookieRegister, CookieWriter, CookiedOptionalWatch},
     debouncer::Debouncer,
-    optional_watch::OptionalWatch,
 };
 
 #[derive(Debug, Error)]
 enum PackageWatcherProcessError {
     #[error("filewatching not available, so package watching is not available")]
-    Filewatching(watch::error::RecvError),
+    Filewatching(SubscribeError),
     #[error("filewatching closed, package watching no longer available")]
     FilewatchingClosed(broadcast::error::RecvError),
 }
@@ -85,16 +84,29 @@ impl PackageWatcher {
     /// Creates a new package watcher whose current package data can be queried.
     /// `backup_discovery` is used to perform the initial discovery of packages,
     /// to populate the state before we can watch.
+    #[expect(
+        clippy::result_large_err,
+        reason = "preserve package discovery error details"
+    )]
     pub fn new(
         root: AbsoluteSystemPathBuf,
-        recv: OptionalWatch<broadcast::Receiver<Result<Event, NotifyError>>>,
+        source: impl Into<WatchSource>,
         cookie_writer: CookieWriter,
         allow_no_package_manager: bool,
     ) -> Result<Self, package_manager::Error> {
+        let source = source.into();
         let (exit_tx, exit_rx) = oneshot::channel();
-        let subscriber = Subscriber::new(root, cookie_writer, allow_no_package_manager)?;
+        let repository_ignore = source
+            .repository_ignore()
+            .unwrap_or_else(|| crate::RepositoryIgnore::new(root.as_std_path()));
+        let subscriber = Subscriber::new(
+            root,
+            cookie_writer,
+            allow_no_package_manager,
+            repository_ignore,
+        )?;
         let package_discovery_lazy = subscriber.package_discovery();
-        let handle = tokio::spawn(subscriber.watch(exit_rx, recv));
+        let handle = tokio::spawn(subscriber.watch(exit_rx, source));
         Ok(Self {
             _exit_tx: exit_tx,
             _handle: handle,
@@ -137,16 +149,32 @@ impl PackageWatcher {
 
 /// The underlying task that listens to file system events and updates the
 /// internal package state.
+/// Test seam for coalescing behavior: replaces real package discovery so a
+/// test can gate and count in-flight discoveries.
+#[cfg(test)]
+type DiscoveryHook = std::sync::Arc<
+    dyn Fn(
+            AbsoluteSystemPathBuf,
+            bool,
+        ) -> std::pin::Pin<Box<dyn std::future::Future<Output = PackageState> + Send>>
+        + Send
+        + Sync,
+>;
+
 struct Subscriber {
     repo_root: AbsoluteSystemPathBuf,
     // This is the list of paths that will trigger rediscovering everything.
     invalidation_paths: Vec<AbsoluteSystemPathBuf>,
+    watch_scope: WatchScope,
+    workspace_globs: Arc<RwLock<Option<WorkspaceGlobs>>>,
 
     package_discovery_tx: watch::Sender<Option<DiscoveryData>>,
     package_discovery_lazy: CookiedOptionalWatch<DiscoveryData, ()>,
     cookie_tx: CookieRegister,
     next_version: AtomicUsize,
     allow_no_package_manager: bool,
+    #[cfg(test)]
+    discovery_hook: Option<DiscoveryHook>,
 }
 
 /// PackageWatcher state. We either don't have a valid package manager,
@@ -168,6 +196,11 @@ enum State {
     Pending {
         debouncer: Arc<Debouncer>,
         version: Version,
+        /// Set when invalidations arrived after the in-flight discovery's
+        /// debounce finished. The running discovery's result is then stale
+        /// and must not be published; exactly one coalesced follow-up runs
+        /// instead of one overlapping discovery per invalidation.
+        rerun_after_current: bool,
     },
     Ready(Box<PackageState>),
 }
@@ -178,7 +211,11 @@ enum State {
 // or going from no package manager to some package manager.
 const INVALIDATION_PATHS: &[&str] = &[
     "package.json",
+    package_manager::aube::WORKSPACE_CONFIGURATION_PATH,
+    package_manager::aube::LOCKFILE,
     "pnpm-workspace.yaml",
+    package_manager::nub::LOCKFILE,
+    package_manager::nub::LEGACY_LOCKFILE,
     package_manager::pnpm::LOCKFILE,
     package_manager::npm::LOCKFILE,
     package_manager::yarn::LOCKFILE,
@@ -186,30 +223,114 @@ const INVALIDATION_PATHS: &[&str] = &[
     package_manager::bun::LOCKFILE,
 ];
 
+fn matches_workspace_glob(
+    repo_root: &AbsoluteSystemPath,
+    workspace_globs: &WorkspaceGlobs,
+    path: &AbsoluteSystemPath,
+) -> bool {
+    workspace_globs
+        .target_is_workspace(repo_root, path)
+        .unwrap_or(false)
+}
+
+fn workspace_event_is_relevant(
+    repo_root: &AbsoluteSystemPath,
+    workspace_globs: &WorkspaceGlobs,
+    path: &AbsoluteSystemPath,
+) -> bool {
+    std::iter::once(path)
+        .chain(path.parent())
+        .any(|candidate| matches_workspace_glob(repo_root, workspace_globs, candidate))
+}
+
+fn workspace_path_for_event<'a>(
+    repo_root: &AbsoluteSystemPath,
+    workspace_globs: &WorkspaceGlobs,
+    workspaces: &HashMap<AbsoluteSystemPathBuf, WorkspaceData>,
+    path: &'a AbsoluteSystemPath,
+) -> Option<&'a AbsoluteSystemPath> {
+    if workspaces.contains_key(path) {
+        return Some(path);
+    }
+
+    let parent = path.parent();
+    if parent.is_some_and(|parent| workspaces.contains_key(parent)) {
+        return parent;
+    }
+
+    // A directory that still exists is unambiguous. For file events (including
+    // removed files), prefer the parent before testing the path itself: recursive
+    // globs such as `**` can also match the file path.
+    if path.as_std_path().is_dir() && matches_workspace_glob(repo_root, workspace_globs, path) {
+        return Some(path);
+    }
+    if parent.is_some_and(|parent| matches_workspace_glob(repo_root, workspace_globs, parent)) {
+        return parent;
+    }
+    matches_workspace_glob(repo_root, workspace_globs, path).then_some(path)
+}
+
 impl Subscriber {
     /// Creates a new instance of PackageDiscovery. This will start a task that
     /// performs the initial discovery using the `backup_discovery` of your
     /// choice, and then listens to file system events to keep the package
     /// data up to date.
+    #[expect(
+        clippy::result_large_err,
+        reason = "preserve package discovery error details"
+    )]
     fn new(
         repo_root: AbsoluteSystemPathBuf,
         writer: CookieWriter,
         allow_no_package_manager: bool,
+        repository_ignore: crate::RepositoryIgnore,
     ) -> Result<Self, package_manager::Error> {
+        let cookie_root = writer.root().to_owned();
         let (package_discovery_tx, cookie_tx, package_discovery_lazy) =
             CookiedOptionalWatch::new(writer);
         let invalidation_paths = INVALIDATION_PATHS
             .iter()
             .map(|p| repo_root.join_component(p))
-            .collect();
+            .collect::<Vec<_>>();
+        let workspace_globs = Arc::new(RwLock::new(None::<WorkspaceGlobs>));
+        let watch_scope = {
+            let repo_root = repo_root.clone();
+            let invalidation_paths = invalidation_paths.clone();
+            let workspace_globs = workspace_globs.clone();
+            WatchScope::predicate(move |path| {
+                if invalidation_paths
+                    .iter()
+                    .any(|invalidation_path| path == invalidation_path.as_std_path())
+                    || path.starts_with(cookie_root.as_std_path())
+                {
+                    return true;
+                }
+
+                let Ok(path) = AbsoluteSystemPath::from_std_path(path) else {
+                    return false;
+                };
+                let workspace_globs = workspace_globs
+                    .read()
+                    .unwrap_or_else(|poisoned| poisoned.into_inner());
+                let Some(globs) = workspace_globs.as_ref() else {
+                    return path.file_name() == Some("package.json")
+                        && repository_ignore.is_relevant(path.as_std_path(), false);
+                };
+                workspace_event_is_relevant(&repo_root, globs, path)
+            })
+        };
         Ok(Self {
             repo_root,
             invalidation_paths,
+            watch_scope,
+            workspace_globs,
             package_discovery_tx,
             package_discovery_lazy,
             cookie_tx,
             next_version: AtomicUsize::new(0),
             allow_no_package_manager,
+            #[cfg(test)]
+            discovery_hook: None,
         })
     }
 
@@ -231,8 +352,16 @@ impl Subscriber {
         let debouncer_copy = debouncer.clone();
         let repo_root = self.repo_root.clone();
         let allow_no_package_manager = self.allow_no_package_manager;
+        #[cfg(test)]
+        let hook = self.discovery_hook.clone();
         tokio::task::spawn(async move {
             debouncer_copy.debounce().await;
+            #[cfg(test)]
+            let state = match hook {
+                Some(hook) => hook(repo_root, allow_no_package_manager).await,
+                None => discover_packages(repo_root, allow_no_package_manager).await,
+            };
+            #[cfg(not(test))]
             let state = discover_packages(repo_root, allow_no_package_manager).await;
             let _ = package_state_tx
                 .send(DiscoveryResult { version, state })
@@ -241,13 +370,10 @@ impl Subscriber {
         (version, debouncer)
     }
 
-    async fn watch_process(
-        mut self,
-        mut recv: OptionalWatch<broadcast::Receiver<Result<Event, NotifyError>>>,
-    ) -> PackageWatcherProcessError {
+    async fn watch_process(mut self, source: WatchSource) -> PackageWatcherProcessError {
         tracing::debug!("starting package watcher");
-        let mut recv = match recv.get().await {
-            Ok(r) => r.resubscribe(),
+        let mut recv: WatchSubscription = match source.subscribe(self.watch_scope.clone()).await {
+            Ok(subscription) => subscription,
             Err(e) => return PackageWatcherProcessError::Filewatching(e),
         };
 
@@ -257,13 +383,17 @@ impl Subscriber {
 
         // state represents the current state of this process, and is expected to be
         // updated in place by the various handler functions.
-        let mut state = State::Pending { debouncer, version };
+        let mut state = State::Pending {
+            debouncer,
+            version,
+            rerun_after_current: false,
+        };
 
         tracing::debug!("package watcher ready {:?}", state);
         loop {
             select! {
                 Some(discovery_result) = package_state_rx.recv() => {
-                    self.handle_discovery_result(discovery_result, &mut state);
+                    self.handle_discovery_result(discovery_result, &mut state, &package_state_tx);
                 },
                 file_event = recv.recv() => {
                     match file_event {
@@ -285,8 +415,18 @@ impl Subscriber {
         }
     }
 
-    fn handle_discovery_result(&self, package_result: DiscoveryResult, state: &mut State) {
-        if let State::Pending { version, .. } = state {
+    fn handle_discovery_result(
+        &self,
+        package_result: DiscoveryResult,
+        state: &mut State,
+        package_state_tx: &mpsc::Sender<DiscoveryResult>,
+    ) {
+        if let State::Pending {
+            version,
+            rerun_after_current,
+            ..
+        } = state
+        {
             // If this response matches an outstanding rediscovery request, write out the
             // corresponding state to downstream consumers and update our state
             // accordingly.
@@ -295,18 +435,29 @@ impl Subscriber {
             // we may have a higher version number, at which point we would
             // ignore this update, as we know it is stale.
             if package_result.version == *version {
+                if *rerun_after_current {
+                    // Invalidations arrived while this discovery was running,
+                    // so its result is already stale. Discard it and run
+                    // exactly one coalesced follow-up rather than one
+                    // overlapping discovery per invalidation.
+                    let (new_version, new_debouncer) =
+                        self.queue_rediscovery(false, package_state_tx.clone());
+                    *state = State::Pending {
+                        version: new_version,
+                        debouncer: new_debouncer,
+                        rerun_after_current: false,
+                    };
+                    return;
+                }
+                self.update_workspace_globs(&package_result.state);
                 self.write_state(&package_result.state);
                 *state = State::Ready(Box::new(package_result.state));
             }
         }
     }
 
-    async fn watch(
-        self,
-        exit_rx: oneshot::Receiver<()>,
-        recv: OptionalWatch<broadcast::Receiver<Result<Event, NotifyError>>>,
-    ) {
-        let process = tokio::spawn(self.watch_process(recv));
+    async fn watch(self, exit_rx: oneshot::Receiver<()>, source: WatchSource) {
+        let process = tokio::spawn(self.watch_process(source));
         tokio::select! {
             biased;
             _ = exit_rx => {
@@ -324,6 +475,17 @@ impl Subscriber {
 
     fn package_discovery(&self) -> CookiedOptionalWatch<DiscoveryData, ()> {
         self.package_discovery_lazy.clone()
+    }
+
+    fn update_workspace_globs(&self, state: &PackageState) {
+        let globs = match state {
+            PackageState::ValidWorkspaces { filter, .. } => Some((**filter).clone()),
+            PackageState::NoPackageManager(_) | PackageState::InvalidGlobs(_) => None,
+        };
+        *self
+            .workspace_globs
+            .write()
+            .unwrap_or_else(|poisoned| poisoned.into_inner()) = globs;
     }
 
     fn path_invalidates_everything(&self, path: &Path) -> bool {
@@ -372,21 +534,35 @@ impl Subscriber {
         state: &mut State,
         package_state_tx: &mpsc::Sender<DiscoveryResult>,
     ) {
-        if let State::Pending { debouncer, .. } = state
-            && debouncer.bump()
+        if let State::Pending {
+            debouncer,
+            rerun_after_current,
+            ..
+        } = state
         {
-            // We successfully bumped the debouncer, which was already pending,
-            // so a new discovery will happen shortly.
+            if debouncer.bump() {
+                // We successfully bumped the debouncer, which was already pending,
+                // so a new discovery will happen shortly.
+                return;
+            }
+            // The debounce already fired, so a discovery is running right now.
+            // Coalesce all further invalidations into one follow-up run
+            // instead of launching overlapping full discoveries whose results
+            // would be discarded anyway.
+            *rerun_after_current = true;
             return;
         }
-        // We either failed to bump the debouncer, or we don't have a rediscovery
-        // queued, but we need one.
+        // No rediscovery is queued, but we need one.
         let (version, debouncer) = self.queue_rediscovery(false, package_state_tx.clone());
-        *state = State::Pending { debouncer, version }
+        *state = State::Pending {
+            debouncer,
+            version,
+            rerun_after_current: false,
+        }
     }
 
-    // checks if the file event contains any changes to package.json files, or
-    // directories that would map to a workspace.
+    // Checks whether any event path identifies a workspace or a file directly in
+    // one.
     async fn handle_workspace_changes(
         &mut self,
         state: &mut State,
@@ -417,6 +593,7 @@ impl Subscriber {
 
         // here, we can only update if we have a valid package state
         let mut changed = false;
+        let mut rediscover = false;
         // if a path is not a valid utf8 string, it is not a valid path, so ignore
         for path in file_event
             .paths
@@ -426,70 +603,49 @@ impl Subscriber {
             let Ok(path_file) = AbsoluteSystemPathBuf::new(path) else {
                 continue;
             };
-            let path_workspace: &AbsoluteSystemPath =
-                if path_file.file_name() == Some("package.json") {
-                    // The file event is for a package.json file. Check if the parent is a workspace
-                    let Some(path_parent) = path_file.parent() else {
-                        continue;
-                    };
-                    if filter
-                        .target_is_workspace(&self.repo_root, path_parent)
-                        .unwrap_or(false)
-                    {
-                        path_parent
-                    } else {
-                        // irrelevant package.json file update, it's not in a directory
-                        // matching workspace globs
-                        continue;
-                    }
-                } else if filter
-                    .target_is_workspace(&self.repo_root, &path_file)
-                    .unwrap_or(false)
-                {
-                    // The file event is for a workspace directory itself
-                    &path_file
-                } else {
-                    // irrelevant file update, it's not a package.json file or a workspace directory
-                    continue;
-                };
+            let Some(path_workspace) =
+                workspace_path_for_event(&self.repo_root, filter, workspaces, &path_file)
+            else {
+                // Ignore paths that do not identify a workspace or a direct child of one.
+                continue;
+            };
 
             tracing::debug!("handling change to workspace {path_workspace}");
             let package_json = path_workspace.join_component("package.json");
-            let turbo_json = path_workspace.join_component("turbo.json");
-            let turbo_jsonc = path_workspace.join_component("turbo.jsonc");
-
-            let (package_exists, turbo_json_exists, turbo_jsonc_exists) = join!(
+            let (package_exists, turbo_json) = join!(
                 // It's possible that an IO error could occur other than the file not existing, but
                 // we will treat it like the file doesn't exist. It's possible we'll need to
                 // revisit this, depending on what kind of errors occur.
                 tokio::fs::try_exists(&package_json).map(|result| result.unwrap_or(false)),
-                tokio::fs::try_exists(&turbo_json),
-                tokio::fs::try_exists(&turbo_jsonc)
+                discover_turbo_config_path(path_workspace)
             );
 
             changed |= if package_exists {
-                workspaces
-                    .insert(
-                        path_workspace.to_owned(),
-                        WorkspaceData {
-                            package_json,
-                            turbo_json: turbo_json_exists
-                                .unwrap_or_default()
-                                .then_some(turbo_json)
-                                .or_else(|| {
-                                    turbo_jsonc_exists
-                                        .unwrap_or_default()
-                                        .then_some(turbo_jsonc)
-                                }),
-                        },
-                    )
-                    .is_none()
+                let turbo_json = match turbo_json {
+                    Ok(path) => path,
+                    Err(_) => {
+                        rediscover = true;
+                        break;
+                    }
+                };
+                let workspace_data = match WorkspaceData::new(package_json, turbo_json) {
+                    Ok(workspace_data) => workspace_data,
+                    Err(_) => {
+                        rediscover = true;
+                        break;
+                    }
+                };
+                let changed = workspaces.get(path_workspace) != Some(&workspace_data);
+                workspaces.insert(path_workspace.to_owned(), workspace_data);
+                changed
             } else {
                 workspaces.remove(path_workspace).is_some()
             }
         }
 
-        if changed {
+        if rediscover {
+            self.bump_or_queue_rediscovery(state, package_state_tx);
+        } else if changed {
             self.write_state(package_state);
         }
     }
@@ -571,10 +727,7 @@ async fn discover_packages(
     let workspaces = initial_discovery
         .workspaces
         .into_iter()
-        .filter_map(|p| {
-            let parent = p.package_json.parent()?.to_owned();
-            Some((parent, p))
-        })
+        .map(|workspace| (workspace.workspace_root().to_owned(), workspace))
         .collect::<HashMap<_, _>>();
     PackageState::ValidWorkspaces {
         package_manager: initial_discovery.package_manager,
@@ -585,12 +738,293 @@ async fn discover_packages(
 
 #[cfg(test)]
 mod test {
-    use std::time::Duration;
+    use std::{collections::HashMap, time::Duration};
 
     use turbopath::AbsoluteSystemPathBuf;
-    use turborepo_repository::{discovery::WorkspaceData, package_manager::PackageManager};
+    use turborepo_repository::{
+        discovery::WorkspaceData, package_manager::PackageManager, workspaces::WorkspaceGlobs,
+    };
 
-    use crate::{FileSystemWatcher, cookies::CookieWriter, package_watcher::PackageWatcher};
+    use crate::{
+        FileSystemWatcher,
+        cookies::CookieWriter,
+        package_watcher::{PackageWatcher, workspace_path_for_event},
+    };
+
+    /// Invalidations arriving while a discovery is already running must not
+    /// launch overlapping discoveries: one in-flight scan plus exactly one
+    /// coalesced follow-up per burst, then fresh state is published.
+    #[tokio::test]
+    async fn rediscovery_coalesces_during_in_flight_scan() {
+        use std::sync::{
+            Arc,
+            atomic::{AtomicUsize, Ordering},
+        };
+
+        use tokio::sync::{mpsc, oneshot};
+
+        use super::{PackageState, State, Subscriber};
+        use crate::WatchSource;
+
+        let tmp = tempfile::tempdir().unwrap();
+        let repo_root = AbsoluteSystemPathBuf::try_from(tmp.path())
+            .unwrap()
+            .to_realpath()
+            .unwrap();
+        let calls = Arc::new(AtomicUsize::new(0));
+        let in_flight = Arc::new(AtomicUsize::new(0));
+        let max_in_flight = Arc::new(AtomicUsize::new(0));
+        let (started_tx, mut started_rx) = mpsc::unbounded_channel();
+
+        let hook = {
+            let calls = calls.clone();
+            let in_flight = in_flight.clone();
+            let max_in_flight = max_in_flight.clone();
+            Arc::new(move |_, _| {
+                let calls = calls.clone();
+                let in_flight = in_flight.clone();
+                let max_in_flight = max_in_flight.clone();
+                let started_tx = started_tx.clone();
+                Box::pin(async move {
+                    let call = calls.fetch_add(1, Ordering::SeqCst) + 1;
+                    let now = in_flight.fetch_add(1, Ordering::SeqCst) + 1;
+                    max_in_flight.fetch_max(now, Ordering::SeqCst);
+                    let (release_tx, release_rx) = oneshot::channel::<()>();
+                    started_tx.send((call, release_tx)).unwrap();
+                    release_rx.await.unwrap();
+                    in_flight.fetch_sub(1, Ordering::SeqCst);
+                    PackageState::NoPackageManager(format!("scan-{call}"))
+                })
+                    as std::pin::Pin<Box<dyn std::future::Future<Output = PackageState> + Send>>
+            })
+        };
+
+        // Drive the production handlers directly. Native watchers can deliver
+        // one burst across several scans, so filesystem sleeps cannot establish
+        // that every invalidation arrived during the gated discovery.
+        let (_file_event_tx, source) = WatchSource::channel();
+        let cookie_writer = CookieWriter::new(
+            &repo_root.join_component("cookies"),
+            Duration::from_secs(5),
+            source,
+        );
+        let mut subscriber = Subscriber::new(
+            repo_root.clone(),
+            cookie_writer,
+            false,
+            crate::RepositoryIgnore::new(repo_root.as_std_path()),
+        )
+        .unwrap();
+        subscriber.discovery_hook = Some(hook);
+        // Observe publication without discover_packages(), which writes cookie
+        // files and can itself trigger additional invalidations while pending.
+        let published = subscriber.package_discovery_tx.subscribe();
+        let (package_state_tx, mut package_state_rx) = mpsc::channel(256);
+        let (version, debouncer) = subscriber.queue_rediscovery(true, package_state_tx.clone());
+        let mut state = State::Pending {
+            version,
+            debouncer,
+            rerun_after_current: false,
+        };
+
+        // Timeouts only guard deadlocks; channel handshakes establish ordering.
+        tokio::time::timeout(Duration::from_secs(5), async {
+            let (call, release_first) = started_rx.recv().await.unwrap();
+            assert_eq!(call, 1);
+            let event = notify::Event {
+                kind: notify::EventKind::Modify(notify::event::ModifyKind::Data(
+                    notify::event::DataChange::Content,
+                )),
+                paths: vec![repo_root.join_component("package.json").into()],
+                attrs: Default::default(),
+            };
+            for _ in 0..20 {
+                subscriber
+                    .handle_file_event(&mut state, &event, &package_state_tx)
+                    .await;
+            }
+            assert!(matches!(
+                &state,
+                State::Pending {
+                    version: pending_version,
+                    rerun_after_current: true,
+                    ..
+                } if *pending_version == version
+            ));
+            assert_eq!(calls.load(Ordering::SeqCst), 1);
+            assert_eq!(in_flight.load(Ordering::SeqCst), 1);
+            assert!(published.borrow().is_none());
+
+            release_first.send(()).unwrap();
+            let first = package_state_rx.recv().await.unwrap();
+            subscriber.handle_discovery_result(first, &mut state, &package_state_tx);
+            assert!(published.borrow().is_none(), "stale state was published");
+            assert!(
+                !published.has_changed().unwrap(),
+                "stale state was briefly published"
+            );
+
+            let (call, release_second) = started_rx.recv().await.unwrap();
+            assert_eq!(call, 2);
+            assert_eq!(calls.load(Ordering::SeqCst), 2);
+            assert_eq!(in_flight.load(Ordering::SeqCst), 1);
+            assert_eq!(
+                max_in_flight.load(Ordering::SeqCst),
+                1,
+                "discoveries overlapped"
+            );
+            release_second.send(()).unwrap();
+            let second = package_state_rx.recv().await.unwrap();
+            subscriber.handle_discovery_result(second, &mut state, &package_state_tx);
+
+            assert!(matches!(state, State::Ready(_)));
+            assert!(
+                matches!(published.borrow().as_ref(), Some(Err(message)) if message == "scan-2")
+            );
+            assert_eq!(calls.load(Ordering::SeqCst), 2);
+            assert_eq!(in_flight.load(Ordering::SeqCst), 0);
+            assert_eq!(subscriber.next_version.load(Ordering::SeqCst), 2);
+        })
+        .await
+        .expect("gated discoveries should complete");
+    }
+
+    #[test]
+    fn workspace_event_paths_resolve_without_filename_knowledge() {
+        let tmp = tempfile::tempdir().unwrap();
+        let repo_root = AbsoluteSystemPathBuf::try_from(tmp.path()).unwrap();
+        let workspace = repo_root.join_components(&["apps", "web"]);
+        let globs = WorkspaceGlobs::new(vec!["apps/*"], Vec::<&str>::new()).unwrap();
+        let workspaces = HashMap::new();
+
+        assert_eq!(
+            workspace_path_for_event(&repo_root, &globs, &workspaces, &workspace),
+            Some(&*workspace)
+        );
+        assert_eq!(
+            workspace_path_for_event(
+                &repo_root,
+                &globs,
+                &workspaces,
+                &workspace.join_component("future-workspace-metadata.toml")
+            ),
+            Some(&*workspace)
+        );
+        assert_eq!(
+            workspace_path_for_event(
+                &repo_root,
+                &globs,
+                &workspaces,
+                &workspace.join_components(&["src", "index.ts"])
+            ),
+            None
+        );
+
+        let recursive_globs = WorkspaceGlobs::new(vec!["**"], Vec::<&str>::new()).unwrap();
+        let package_json = workspace.join_component("package.json");
+        package_json.ensure_dir().unwrap();
+        package_json.create_with_contents("{}").unwrap();
+        assert_eq!(
+            workspace_path_for_event(&repo_root, &recursive_globs, &workspaces, &package_json),
+            Some(&*workspace),
+            "recursive globs must not resolve a manifest event to the manifest itself"
+        );
+    }
+
+    #[tokio::test]
+    #[tracing_test::traced_test]
+    async fn initial_discovery_detects_package_turbo_jsonc() {
+        let tmp = tempfile::tempdir().unwrap();
+        let repo_root = AbsoluteSystemPathBuf::try_from(tmp.path())
+            .unwrap()
+            .to_realpath()
+            .unwrap();
+        let workspace_dir = repo_root.join_components(&["apps", "web"]);
+        let package_json = workspace_dir.join_component("package.json");
+        let turbo_jsonc = workspace_dir.join_component("turbo.jsonc");
+
+        package_json.ensure_dir().unwrap();
+        package_json
+            .create_with_contents(r#"{"name":"web"}"#)
+            .unwrap();
+        turbo_jsonc.create_with_contents("{}").unwrap();
+        repo_root
+            .join_component("package.json")
+            .create_with_contents(r#"{"workspaces":["apps/*"], "packageManager":"npm@10.0.0"}"#)
+            .unwrap();
+        repo_root
+            .join_component("package-lock.json")
+            .create_with_contents("")
+            .unwrap();
+
+        let watcher = FileSystemWatcher::new_with_default_cookie_dir(&repo_root).unwrap();
+        let recv = watcher.watch();
+        let cookie_writer = CookieWriter::new(
+            watcher.cookie_dir(),
+            Duration::from_millis(100),
+            recv.clone(),
+        );
+        let package_watcher = PackageWatcher::new(repo_root, recv, cookie_writer, false).unwrap();
+
+        let data = package_watcher.discover_packages_blocking().await.unwrap();
+
+        assert_eq!(
+            data.workspaces,
+            vec![WorkspaceData::new(package_json, Some(turbo_jsonc)).unwrap()]
+        );
+    }
+
+    #[tokio::test]
+    #[tracing_test::traced_test]
+    async fn incremental_discovery_updates_package_turbo_config() {
+        let tmp = tempfile::tempdir().unwrap();
+        let repo_root = AbsoluteSystemPathBuf::try_from(tmp.path())
+            .unwrap()
+            .to_realpath()
+            .unwrap();
+        let workspace_dir = repo_root.join_components(&["apps", "web"]);
+        let package_json = workspace_dir.join_component("package.json");
+        let turbo_json = workspace_dir.join_component("turbo.json");
+        let turbo_jsonc = workspace_dir.join_component("turbo.jsonc");
+
+        package_json.ensure_dir().unwrap();
+        package_json
+            .create_with_contents(r#"{"name":"web"}"#)
+            .unwrap();
+        repo_root
+            .join_component("package.json")
+            .create_with_contents(r#"{"workspaces":["apps/*"], "packageManager":"npm@10.0.0"}"#)
+            .unwrap();
+        repo_root
+            .join_component("package-lock.json")
+            .create_with_contents("")
+            .unwrap();
+
+        let watcher = FileSystemWatcher::new_with_default_cookie_dir(&repo_root).unwrap();
+        let recv = watcher.watch();
+        let cookie_writer = CookieWriter::new(
+            watcher.cookie_dir(),
+            Duration::from_millis(100),
+            recv.clone(),
+        );
+        let package_watcher = PackageWatcher::new(repo_root, recv, cookie_writer, false).unwrap();
+
+        let data = package_watcher.discover_packages_blocking().await.unwrap();
+        assert_eq!(data.workspaces[0].turbo_json(), None);
+
+        turbo_json.create_with_contents("{}").unwrap();
+        let data = package_watcher.discover_packages_blocking().await.unwrap();
+        assert_eq!(data.workspaces[0].turbo_json(), Some(&*turbo_json));
+
+        turbo_json.remove_file().unwrap();
+        turbo_jsonc.create_with_contents("{}").unwrap();
+        let data = package_watcher.discover_packages_blocking().await.unwrap();
+        assert_eq!(data.workspaces[0].turbo_json(), Some(&*turbo_jsonc));
+
+        turbo_jsonc.remove_file().unwrap();
+        let data = package_watcher.discover_packages_blocking().await.unwrap();
+        assert_eq!(data.workspaces[0].turbo_json(), None);
+    }
 
     #[tokio::test]
     #[tracing_test::traced_test]
@@ -602,21 +1036,23 @@ mod test {
             .unwrap();
 
         let package_data = vec![
-            WorkspaceData {
-                package_json: repo_root.join_components(&["packages", "foo", "package.json"]),
-                turbo_json: None,
-            },
-            WorkspaceData {
-                package_json: repo_root.join_components(&["packages", "bar", "package.json"]),
-                turbo_json: None,
-            },
+            WorkspaceData::new(
+                repo_root.join_components(&["packages", "foo", "package.json"]),
+                None,
+            )
+            .unwrap(),
+            WorkspaceData::new(
+                repo_root.join_components(&["packages", "bar", "package.json"]),
+                None,
+            )
+            .unwrap(),
         ];
 
         // create folders and files
         for data in &package_data {
-            data.package_json.ensure_dir().unwrap();
-            let name = data.package_json.parent().unwrap().file_name().unwrap();
-            data.package_json
+            data.package_json().ensure_dir().unwrap();
+            let name = data.workspace_root().file_name().unwrap();
+            data.package_json()
                 .create_with_contents(format!("{{\"name\": \"{name}\"}}"))
                 .unwrap();
         }
@@ -646,18 +1082,20 @@ mod test {
 
         let mut data = package_watcher.discover_packages_blocking().await.unwrap();
         data.workspaces
-            .sort_by_key(|workspace| workspace.package_json.clone());
+            .sort_by_key(|workspace| workspace.package_json().to_owned());
         assert_eq!(
             data.workspaces,
             vec![
-                WorkspaceData {
-                    package_json: repo_root.join_components(&["packages", "bar", "package.json",]),
-                    turbo_json: None,
-                },
-                WorkspaceData {
-                    package_json: repo_root.join_components(&["packages", "foo", "package.json",]),
-                    turbo_json: None,
-                },
+                WorkspaceData::new(
+                    repo_root.join_components(&["packages", "bar", "package.json",]),
+                    None
+                )
+                .unwrap(),
+                WorkspaceData::new(
+                    repo_root.join_components(&["packages", "foo", "package.json",]),
+                    None
+                )
+                .unwrap(),
             ]
         );
 
@@ -671,13 +1109,16 @@ mod test {
 
         let mut data = package_watcher.discover_packages_blocking().await.unwrap();
         data.workspaces
-            .sort_by_key(|workspace| workspace.package_json.clone());
+            .sort_by_key(|workspace| workspace.package_json().to_owned());
         assert_eq!(
             data.workspaces,
-            vec![WorkspaceData {
-                package_json: repo_root.join_components(&["packages", "bar", "package.json"]),
-                turbo_json: None,
-            }]
+            vec![
+                WorkspaceData::new(
+                    repo_root.join_components(&["packages", "bar", "package.json"]),
+                    None
+                )
+                .unwrap()
+            ]
         );
 
         // move package bar
@@ -688,7 +1129,7 @@ mod test {
 
         let mut data = package_watcher.discover_packages_blocking().await.unwrap();
         data.workspaces
-            .sort_by_key(|workspace| workspace.package_json.clone());
+            .sort_by_key(|workspace| workspace.package_json().to_owned());
         assert_eq!(data.workspaces, vec![]);
     }
 
@@ -702,27 +1143,29 @@ mod test {
             .unwrap();
 
         let package_data = vec![
-            WorkspaceData {
-                package_json: repo_root
+            WorkspaceData::new(
+                repo_root
                     .join_component("packages")
                     .join_component("foo")
                     .join_component("package.json"),
-                turbo_json: None,
-            },
-            WorkspaceData {
-                package_json: repo_root
+                None,
+            )
+            .unwrap(),
+            WorkspaceData::new(
+                repo_root
                     .join_component("packages2")
                     .join_component("bar")
                     .join_component("package.json"),
-                turbo_json: None,
-            },
+                None,
+            )
+            .unwrap(),
         ];
 
         // create folders and files
         for data in &package_data {
-            data.package_json.ensure_dir().unwrap();
-            let name = data.package_json.parent().unwrap().file_name().unwrap();
-            data.package_json
+            data.package_json().ensure_dir().unwrap();
+            let name = data.workspace_root().file_name().unwrap();
+            data.package_json()
                 .create_with_contents(format!("{{\"name\": \"{name}\"}}"))
                 .unwrap();
         }
@@ -752,25 +1195,27 @@ mod test {
 
         let mut data = package_watcher.discover_packages_blocking().await.unwrap();
         data.workspaces
-            .sort_by_key(|workspace| workspace.package_json.clone());
+            .sort_by_key(|workspace| workspace.package_json().to_owned());
 
         assert_eq!(
             data.workspaces,
             vec![
-                WorkspaceData {
-                    package_json: repo_root
+                WorkspaceData::new(
+                    repo_root
                         .join_component("packages")
                         .join_component("foo")
                         .join_component("package.json"),
-                    turbo_json: None,
-                },
-                WorkspaceData {
-                    package_json: repo_root
+                    None
+                )
+                .unwrap(),
+                WorkspaceData::new(
+                    repo_root
                         .join_component("packages2")
                         .join_component("bar")
                         .join_component("package.json"),
-                    turbo_json: None,
-                },
+                    None
+                )
+                .unwrap(),
             ]
         );
 
@@ -784,17 +1229,20 @@ mod test {
 
         let mut data = package_watcher.discover_packages_blocking().await.unwrap();
         data.workspaces
-            .sort_by_key(|workspace| workspace.package_json.clone());
+            .sort_by_key(|workspace| workspace.package_json().to_owned());
 
         assert_eq!(
             data.workspaces,
-            vec![WorkspaceData {
-                package_json: repo_root
-                    .join_component("packages")
-                    .join_component("foo")
-                    .join_component("package.json"),
-                turbo_json: None,
-            }]
+            vec![
+                WorkspaceData::new(
+                    repo_root
+                        .join_component("packages")
+                        .join_component("foo")
+                        .join_component("package.json"),
+                    None
+                )
+                .unwrap()
+            ]
         );
 
         // move the packages2 workspace into package
@@ -804,24 +1252,26 @@ mod test {
             .unwrap();
         let mut data = package_watcher.discover_packages_blocking().await.unwrap();
         data.workspaces
-            .sort_by_key(|workspace| workspace.package_json.clone());
+            .sort_by_key(|workspace| workspace.package_json().to_owned());
         assert_eq!(
             data.workspaces,
             vec![
-                WorkspaceData {
-                    package_json: repo_root
+                WorkspaceData::new(
+                    repo_root
                         .join_component("packages")
                         .join_component("bar")
                         .join_component("package.json"),
-                    turbo_json: None,
-                },
-                WorkspaceData {
-                    package_json: repo_root
+                    None
+                )
+                .unwrap(),
+                WorkspaceData::new(
+                    repo_root
                         .join_component("packages")
                         .join_component("foo")
                         .join_component("package.json"),
-                    turbo_json: None,
-                },
+                    None
+                )
+                .unwrap(),
             ]
         );
     }

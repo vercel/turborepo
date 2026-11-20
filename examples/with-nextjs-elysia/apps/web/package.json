@@ -3,43 +3,35 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev  --port 3001",
     "build": "next build",
-    "start": "next start",
-    "lint": "biome check",
+    "check-types": "next typegen && tsc --noEmit",
+    "dev": "next dev --port 3001",
     "format": "biome format --write",
-    "check-types": "tsc --noEmit"
+    "lint": "biome check",
+    "start": "next start"
   },
   "dependencies": {
-    "next": "16.2.1",
-    "react": "19.2.4",
-    "react-dom": "19.2.4",
-    "@elysiajs/eden": "^1.4.8",
+    "@elysiajs/eden": "1.4.9",
     "@repo/contract": "workspace:*",
     "@repo/ui": "workspace:*",
-    "@tanstack/react-query": "^5.95.0",
-    "drizzle-orm": "^1.0.0-beta.18-7eb39f0",
-    "elysia": "^1.4.28",
-    "geist": "^1.7.1",
-    "sonner": "^2.0.7"
+    "@tanstack/react-query": "5.108.2",
+    "drizzle-orm": "0.45.4",
+    "elysia": "1.4.32",
+    "geist": "1.9.2",
+    "next": "16.4.6",
+    "react": "19.3.1",
+    "react-dom": "19.3.1",
+    "sonner": "2.0.8"
   },
   "devDependencies": {
-    "@biomejs/biome": "2.2.0",
-    "@tailwindcss/postcss": "^4",
-    "@types/node": "^20",
-    "@types/react": "^19",
-    "@types/react-dom": "^19",
+    "@biomejs/biome": "2.6.8",
+    "@repo/typescript-config": "workspace:*",
+    "@tailwindcss/postcss": "4.3.5",
+    "@types/node": "26.6.6",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
     "babel-plugin-react-compiler": "1.0.0",
-    "tailwindcss": "^4",
-    "typescript": "^5",
-    "@repo/typescript-config": "workspace:*"
-  },
-  "ignoreScripts": [
-    "sharp",
-    "unrs-resolver"
-  ],
-  "trustedDependencies": [
-    "sharp",
-    "unrs-resolver"
-  ]
+    "tailwindcss": "4.3.5",
+    "typescript": "7.0.2"
+  }
 }

@@ -2,23 +2,7 @@ use std::sync::Mutex;
 
 use turborepo_log::{Level, LogEvent, LogSink, OutputChannel, Source};
 
-use crate::tui::TuiSender;
-
-/// Normalize lone `\n` to `\r\n` for the TUI's virtual terminal emulator.
-///
-/// Already-correct `\r\n` sequences are left as-is.
-fn normalize_newlines(bytes: &[u8]) -> Vec<u8> {
-    let mut result = Vec::with_capacity(bytes.len());
-    let mut prev_cr = false;
-    for &b in bytes {
-        if b == b'\n' && !prev_cr {
-            result.push(b'\r');
-        }
-        result.push(b);
-        prev_cr = b == b'\r';
-    }
-    result
-}
+use crate::{terminal_sink::normalize_newlines, tui::TuiSender};
 
 /// Format a task-scoped log event as a string for the task output pane.
 ///
@@ -52,6 +36,7 @@ enum SinkState {
         task_output: Vec<(String, Vec<u8>)>,
     },
     Connected(TuiSender),
+    Disabled,
 }
 
 impl Default for TuiSink {
@@ -92,6 +77,14 @@ impl TuiSink {
         }
         *state = SinkState::Connected(sender);
     }
+
+    /// Discard startup output and stop buffering when the TUI will not start.
+    pub fn disable(&self) {
+        *self
+            .state
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner()) = SinkState::Disabled;
+    }
 }
 
 impl LogSink for TuiSink {
@@ -113,6 +106,7 @@ impl LogSink for TuiSink {
                     sender.log_event(event.clone());
                 }
             }
+            SinkState::Disabled => {}
         }
     }
 
@@ -121,14 +115,16 @@ impl LogSink for TuiSink {
             .state
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner());
-        let normalized = normalize_newlines(bytes);
+        // Normalize only when the bytes are kept: in stream mode the sink
+        // is disabled and every chunk would be copied and dropped.
         match &mut *state {
             SinkState::Buffering { task_output, .. } => {
-                task_output.push((task.to_string(), normalized));
+                task_output.push((task.to_string(), normalize_newlines(bytes)));
             }
             SinkState::Connected(sender) => {
-                let _ = sender.output(task.to_string(), normalized);
+                let _ = sender.output(task.to_string(), normalize_newlines(bytes));
             }
+            SinkState::Disabled => {}
         }
     }
 }
@@ -169,8 +165,21 @@ mod tests {
                 assert_eq!(events[0].message(), "first");
                 assert_eq!(events[1].message(), "second");
             }
-            SinkState::Connected(_) => panic!("expected Buffering state"),
+            SinkState::Connected(_) | SinkState::Disabled => panic!("expected Buffering state"),
         }
+    }
+
+    #[test]
+    fn disable_discards_buffer_and_future_output() {
+        let sink = TuiSink::new();
+        sink.emit(&make_event("buffered"));
+        sink.task_output("web#build", OutputChannel::Stdout, b"output\n");
+
+        sink.disable();
+        sink.emit(&make_event("ignored"));
+        sink.task_output("web#build", OutputChannel::Stdout, b"ignored\n");
+
+        assert!(matches!(*sink.state.lock().unwrap(), SinkState::Disabled));
     }
 
     #[test]

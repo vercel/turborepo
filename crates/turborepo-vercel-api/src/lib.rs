@@ -32,6 +32,10 @@ pub enum CachingStatus {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CachingStatusResponse {
     pub status: CachingStatus,
+    /// Whether the token can read but not write artifacts. Absent on servers
+    /// that predate read-only tokens.
+    #[serde(default, rename = "readOnly")]
+    pub read_only: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -153,7 +157,20 @@ mod tests {
     use test_case::test_case;
     use turborepo_types::SecretString;
 
-    use crate::{AnalyticsEvent, CacheEvent, CacheSource, VerificationResponse, VerifiedSsoUser};
+    use crate::{
+        AnalyticsEvent, CacheEvent, CacheSource, CachingStatus, CachingStatusResponse,
+        VerificationResponse, VerifiedSsoUser,
+    };
+
+    #[test_case(r#"{"status":"enabled"}"#, false ; "older server without readOnly")]
+    #[test_case(r#"{"status":"enabled","readOnly":false}"#, false ; "writable")]
+    #[test_case(r#"{"status":"enabled","readOnly":true}"#, true ; "read only")]
+    #[test_case(r#"{"status":"enabled","readOnly":true,"futureField":1}"#, true ; "unknown fields")]
+    fn caching_status_response_read_only(json: &str, read_only: bool) {
+        let response: CachingStatusResponse = serde_json::from_str(json).unwrap();
+        assert!(matches!(response.status, CachingStatus::Enabled));
+        assert_eq!(response.read_only, read_only);
+    }
 
     #[test]
     fn verified_sso_user_debug_redacts_token() {

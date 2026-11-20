@@ -76,7 +76,7 @@ impl Handle {
     /// backends based on the configuration provided.
     pub fn try_init(
         options: &ExperimentalObservabilityOptions,
-        token: Option<&str>,
+        token: Option<&turborepo_types::Credential>,
     ) -> Option<Self> {
         if let Some(otel_options) = options.otel.as_ref() {
             otel::try_init_otel(otel_options, token)

@@ -1,4 +1,4 @@
-use std::sync::OnceLock;
+use regex::regex;
 
 use super::{
     BunLockfile, PackageIdent, PackageInfo, PackageKey, is_git_or_github_package,
@@ -61,7 +61,6 @@ impl BunLockfile {
     /// Add trailing commas to JSON values before closing brackets/braces
     /// Handles strings, numbers, booleans, nulls, and nested structures
     fn add_trailing_commas(json: &str) -> String {
-        static TRAILING_COMMA_RE: OnceLock<Option<regex::Regex>> = OnceLock::new();
         // Match: any JSON value (string, number, boolean, null, ] or }) followed by
         // newline+whitespace and then a closing bracket/brace
         // Pattern covers:
@@ -70,12 +69,7 @@ impl BunLockfile {
         // - Booleans: true, false
         // - Null: null
         // - Nested closings: ] or }
-        let Some(re) = TRAILING_COMMA_RE
-            .get_or_init(|| regex::Regex::new(r#"("|true|false|null|\d|[\]}])\n(\s*)([\]}])"#).ok())
-            .as_ref()
-        else {
-            return json.to_string();
-        };
+        let re = regex!(r#"("|true|false|null|\d|[\]}])\n(\s*)([\]}])"#);
         // Run multiple passes until no more changes (handles deeply nested structures)
         let mut result = json.to_string();
         loop {
@@ -164,6 +158,18 @@ impl BunLockfile {
                 } else {
                     output.push_str(&format!("    \"{key}\": [{ident_json}],"));
                 }
+            } else if ident.is_root() {
+                // Root entries: [ident, { bin, binDir }]. Bun expects an object
+                // as the second element even when there are no bins.
+                let ident_json = serde_json::to_string(&entry.ident)?;
+                let root_json = match &entry.root {
+                    Some(root) => serde_json::to_string(root)?,
+                    None => "{}".to_string(),
+                };
+                let root_json_spaced = self.format_info_json(&root_json);
+                output.push_str(&format!(
+                    "    \"{key}\": [{ident_json}, {root_json_spaced}],"
+                ));
             } else if ident.is_local_package() || is_tarball_or_url_package(&entry.ident) {
                 let ident_json = serde_json::to_string(&entry.ident)?;
                 let info_json =
@@ -198,10 +204,19 @@ impl BunLockfile {
                 // GitHub and git packages have 3 elements (no registry)
                 // npm packages have 4 elements (with registry)
                 if is_git_or_github_package(&entry.ident) {
-                    // GitHub/git packages: [ident, info, checksum] - 3 elements
-                    output.push_str(&format!(
-                        "    \"{key}\": [{ident_json}, {info_json_spaced}, {checksum_json}],",
-                    ));
+                    // GitHub/git packages: [ident, info, bun-tag, integrity?]
+                    match &entry.integrity {
+                        Some(integrity) => {
+                            let integrity_json = serde_json::to_string(integrity)?;
+                            output.push_str(&format!(
+                                "    \"{key}\": [{ident_json}, {info_json_spaced}, \
+                                 {checksum_json}, {integrity_json}],",
+                            ));
+                        }
+                        None => output.push_str(&format!(
+                            "    \"{key}\": [{ident_json}, {info_json_spaced}, {checksum_json}],",
+                        )),
+                    }
                 } else {
                     // npm packages: [ident, registry, info, checksum] - 4 elements
                     let registry_json =

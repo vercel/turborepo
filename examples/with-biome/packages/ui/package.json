@@ -6,20 +6,20 @@
 		"./*": "./src/*.tsx"
 	},
 	"scripts": {
-		"lint": "biome check --write",
+		"lint": "biome check",
 		"generate:component": "turbo gen react-component",
 		"check-types": "tsc --noEmit"
 	},
 	"devDependencies": {
 		"@repo/biome-config": "workspace:^",
 		"@repo/typescript-config": "workspace:*",
-		"@types/node": "^22.15.3",
-		"@types/react": "19.2.2",
-		"@types/react-dom": "19.2.2",
-		"typescript": "5.9.2"
+		"@types/node": "26.5.0",
+		"@types/react": "19.2.18",
+		"@types/react-dom": "19.2.7",
+		"typescript": "7.0.2"
 	},
 	"dependencies": {
-		"react": "^19.2.0",
-		"react-dom": "^19.2.0"
+		"react": "19.2.8",
+		"react-dom": "19.2.8"
 	}
 }

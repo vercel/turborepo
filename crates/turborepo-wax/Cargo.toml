@@ -39,7 +39,12 @@ thiserror = { workspace = true }
   [dependencies.regex]
   default-features = false
   features = ["perf", "std", "unicode-case"]
-  version = "^1.9.0"
+  version = "^1.13.0"
+
+  [dependencies.regex-syntax]
+  default-features = false
+  features = ["std", "unicode-case"]
+  version = "^0.8.0"
 
   [dependencies.tardar]
   optional = true

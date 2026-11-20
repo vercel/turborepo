@@ -2,6 +2,7 @@
   "name": "non-monorepo",
   "version": "0.1.0",
   "private": true,
+  "type": "module",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
@@ -10,20 +11,27 @@
     "check-types": "next typegen && tsc --noEmit"
   },
   "dependencies": {
-    "geist": "^1.7.1",
-    "next": "16.2.5",
-    "react": "19.2.3",
-    "react-dom": "19.2.0"
+    "geist": "1.9.2",
+    "next": "16.4.6",
+    "react": "19.3.1",
+    "react-dom": "19.3.1"
   },
   "devDependencies": {
-    "@tailwindcss/postcss": "^4.2.1",
-    "@types/node": "^24.12.0",
-    "@types/react": "^19.2.14",
-    "@types/react-dom": "^19.2.3",
-    "eslint": "^9.39.4",
-    "eslint-config-next": "16.0.1",
-    "tailwindcss": "^4.2.1",
-    "typescript": "^5.9.3"
+    "@babel/core": "8.1.0",
+    "@babel/eslint-parser": "8.0.7",
+    "@next/eslint-plugin-next": "16.4.6",
+    "@tailwindcss/postcss": "4.3.5",
+    "@types/node": "26.6.6",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "eslint": "10.14.0",
+    "eslint-plugin-react-hooks": "7.1.1",
+    "tailwindcss": "4.3.5",
+    "turbo": "2.11.10",
+    "typescript": "7.0.2"
   },
-  "packageManager": "pnpm@10.19.0"
+  "engines": {
+    "node": "26.x"
+  },
+  "packageManager": "npm@12.2.2"
 }

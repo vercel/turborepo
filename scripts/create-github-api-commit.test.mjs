@@ -219,6 +219,72 @@ test("run reads changed files from repository root when invoked in a subdirector
   });
 });
 
+test("fetches the API-created commit before updating the local ref", async () => {
+  const cwd = process.cwd();
+  const originDir = mkdtempSync(join(tmpdir(), "github-api-commit-origin-"));
+  const cloneDir = join(mkdtempSync(join(tmpdir(), "github-api-commit-work-")), "clone");
+
+  try {
+    process.chdir(originDir);
+    git(["init"]);
+    git(["checkout", "-b", "main"]);
+    git(["config", "user.name", "Test User"]);
+    git(["config", "user.email", "test@example.com"]);
+    writeFileSync("file.txt", "base\n");
+    git(["add", "file.txt"]);
+    git(["commit", "-m", "initial"]);
+
+    git(["clone", "--quiet", originDir, cloneDir]);
+
+    // Simulate createCommitOnBranch: a commit that exists only on the remote,
+    // at the tip of the target branch.
+    git(["checkout", "-b", "release/test"]);
+    writeFileSync("file.txt", "remote change\n");
+    git(["add", "file.txt"]);
+    git(["commit", "-m", "api commit"]);
+    const remoteOnlySha = git(["rev-parse", "HEAD"]);
+    git(["checkout", "main"]);
+
+    process.chdir(cloneDir);
+    git(["config", "user.name", "Test User"]);
+    git(["config", "user.email", "test@example.com"]);
+    writeFileSync("file.txt", "local change\n");
+
+    process.env.GITHUB_REPOSITORY = "vercel/turbo";
+    process.env.GH_TOKEN = "test-token";
+    process.env.CREATE_GITHUB_API_COMMIT_VERIFY_ATTEMPTS = "1";
+    process.env.CREATE_GITHUB_API_COMMIT_VERIFY_DELAY_MS = "0";
+
+    const github = mockGitHub({
+      commitOid: remoteOnlySha,
+      remoteOid: null,
+      verified: true,
+    });
+    try {
+      await run({
+        allTracked: true,
+        branch: "release/test",
+        ifExists: "fail",
+        includeUntracked: false,
+        message: "test commit",
+        paths: [],
+      });
+
+      assert.equal(git(["rev-parse", "refs/heads/release/test"]), remoteOnlySha);
+    } finally {
+      github.restore();
+      delete process.env.GITHUB_REPOSITORY;
+      delete process.env.GH_TOKEN;
+      delete process.env.CREATE_GITHUB_API_COMMIT_VERIFY_ATTEMPTS;
+      delete process.env.CREATE_GITHUB_API_COMMIT_VERIFY_DELAY_MS;
+    }
+  } finally {
+    process.chdir(cwd);
+    rmSync(originDir, { force: true, recursive: true });
+    rmSync(join(cloneDir, ".."), { force: true, recursive: true });
+  }
+});
+
 test("update policy commits onto an existing remote branch", async () => {
   await withTempRepo(async () => {
     writeFileSync("file.txt", "changed\n");

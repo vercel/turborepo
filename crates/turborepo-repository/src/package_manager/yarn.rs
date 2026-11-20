@@ -21,7 +21,7 @@ impl<'a> YarnDetector<'a> {
         }
     }
 
-    fn detect_from_lockfile(&self) -> Result<PackageManager, Error> {
+    pub(crate) fn detect_from_lockfile(&self) -> Result<PackageManager, Error> {
         let yarn_lockfile = self.repo_root.join_component(LOCKFILE);
         let contents = String::from_utf8(yarn_lockfile.read()?)?;
         Self::detect_from_lockfile_contents(&contents)
@@ -38,6 +38,7 @@ impl<'a> YarnDetector<'a> {
         }
     }
 
+    #[expect(clippy::expect_used, reason = "the static semver range is valid")]
     pub fn detect_berry_or_yarn(version: &Version) -> Result<PackageManager, Error> {
         let berry_constraint: Range = ">=2.0.0-0".parse().expect("valid version");
         if berry_constraint.satisfies(version) {
@@ -114,8 +115,6 @@ impl Iterator for YarnDetector<'_> {
 
 #[cfg(test)]
 mod tests {
-    use std::collections::BTreeMap;
-
     use anyhow::Result;
     use serde_json::json;
     use turbopath::{AbsoluteSystemPath, RelativeUnixPathBuf};
@@ -217,7 +216,7 @@ mod tests {
                 ]
                 .iter()
                 .map(|(k, v)| (k.to_string(), v.to_string()))
-                .collect::<BTreeMap<_, _>>()
+                .collect::<turborepo_lockfiles::BerryResolutionMap>()
             )
             .as_ref()
         );

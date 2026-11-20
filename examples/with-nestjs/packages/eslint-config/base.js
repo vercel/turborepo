@@ -1,7 +1,7 @@
+import babelParser from "@babel/eslint-parser";
 import js from "@eslint/js";
 import eslintConfigPrettier from "eslint-config-prettier";
 import turboPlugin from "eslint-plugin-turbo";
-import tseslint from "typescript-eslint";
 import onlyWarn from "eslint-plugin-only-warn";
 
 /**
@@ -12,7 +12,27 @@ import onlyWarn from "eslint-plugin-only-warn";
 export const config = [
   js.configs.recommended,
   eslintConfigPrettier,
-  ...tseslint.configs.recommended,
+  {
+    files: ["**/*.{ts,tsx}"],
+    languageOptions: {
+      parser: babelParser,
+      parserOptions: {
+        sourceType: "module",
+        requireConfigFile: false,
+        babelOptions: {
+          babelrc: false,
+          configFile: false,
+          parserOpts: {
+            plugins: ["typescript", "jsx", "decorators-legacy"],
+          },
+        },
+      },
+    },
+    rules: {
+      "no-undef": "off",
+      "no-unused-vars": "off",
+    },
+  },
   {
     plugins: {
       turbo: turboPlugin,

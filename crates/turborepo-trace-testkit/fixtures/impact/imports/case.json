@@ -1,0 +1,70 @@
+{
+  "description": "Direct and transitive imports (test -> a -> b -> c).",
+  "mutations": [
+    {
+      "name": "edit-leaf",
+      "description": "modify the transitive leaf src/c.ts",
+      "ops": [
+        {
+          "op": "append",
+          "path": "src/c.ts",
+          "text": "\n// edited\n"
+        }
+      ]
+    },
+    {
+      "name": "edit-mid",
+      "description": "modify src/b.ts",
+      "ops": [
+        {
+          "op": "append",
+          "path": "src/b.ts",
+          "text": "\n// edited\n"
+        }
+      ]
+    },
+    {
+      "name": "edit-top",
+      "description": "modify src/a.ts",
+      "ops": [
+        {
+          "op": "append",
+          "path": "src/a.ts",
+          "text": "\n// edited\n"
+        }
+      ]
+    },
+    {
+      "name": "edit-test",
+      "description": "modify a test file",
+      "ops": [
+        {
+          "op": "append",
+          "path": "test/other.test.ts",
+          "text": "\n// edited\n"
+        }
+      ]
+    },
+    {
+      "name": "delete-imported",
+      "description": "delete src/other.ts",
+      "ops": [
+        {
+          "op": "delete",
+          "path": "src/other.ts"
+        }
+      ]
+    },
+    {
+      "name": "add-unrelated",
+      "description": "add a file nothing refers to",
+      "ops": [
+        {
+          "op": "write",
+          "path": "src/new.ts",
+          "content": "export const n = 1;\n"
+        }
+      ]
+    }
+  ]
+}

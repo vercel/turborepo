@@ -2,13 +2,16 @@
   "extends": ["//"],
   "tasks": {
     "build": {
-      "dependsOn": ["build:styles", "build:components"]
+      "dependsOn": ["build:styles", "build:components"],
+      "outputs": []
     },
     "build:styles": {
-      "outputs": ["dist/**"]
+      "dependsOn": ["^build"],
+      "outputs": ["dist/index.css"]
     },
     "build:components": {
-      "outputs": ["dist/**"]
+      "dependsOn": ["^build"],
+      "outputs": ["dist/**", "!dist/**/*.css"]
     },
     "dev": {
       "with": ["dev:styles", "dev:components"]

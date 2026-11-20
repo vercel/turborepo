@@ -1,0 +1,12 @@
+---
+source: crates/turborepo-trace-lang-js/tests/extract_snapshots.rs
+expression: "render(\"declarations.d.ts\")"
+---
+1:22 import "react" [type_only]
+    span: "react"
+2:1 import "./foo" [type_only]
+    span: import { Foo } from './foo'
+3:1 re_export "./bar" [type_only]
+    span: export * from './bar'
+4:37 dynamic_import "./baz" [lazy, type_only]
+    span: import('./baz')

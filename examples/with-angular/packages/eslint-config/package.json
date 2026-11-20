@@ -2,17 +2,20 @@
   "name": "@repo/eslint-config",
   "version": "0.0.0",
   "private": true,
+  "type": "module",
+  "exports": {
+    "./angular": "./angular.js",
+    "./library": "./library.js"
+  },
   "files": [
-    "library.js",
-    "angular.js"
+    "angular.js",
+    "library.js"
   ],
-  "description": "",
   "devDependencies": {
-    "@typescript-eslint/eslint-plugin": "^7.9.0",
-    "@typescript-eslint/parser": "^7.9.0",
-    "eslint-config-prettier": "^9.1.0",
-    "eslint-config-turbo": "^2.3.3",
-    "eslint-plugin-only-warn": "^1.1.0",
-    "typescript": "~5.4.2"
+    "@eslint/js": "10.0.1",
+    "angular-eslint": "22.2.0",
+    "eslint-config-prettier": "10.1.8",
+    "eslint-config-turbo": "2.10.12",
+    "typescript-eslint": "8.69.0"
   }
 }

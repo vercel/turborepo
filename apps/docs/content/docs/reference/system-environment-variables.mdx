@@ -27,6 +27,19 @@ System environment variables are always overridden by flag values provided direc
       </td>
       <td>Forces color to be shown in terminal logs</td>
     </tr>
+    <tr id="no_color">
+      <td>
+        <code>NO_COLOR</code>
+      </td>
+      <td>
+        When set to any non-empty value, suppresses color in terminal logs,
+        including task output, like{" "}
+        <a href="/docs/reference#--no-color">
+          <code>--no-color</code>
+        </a>
+        . <code>FORCE_COLOR</code> takes precedence.
+      </td>
+    </tr>
     <tr id="turbo_api">
       <td>
         <code>TURBO_API</code>
@@ -52,7 +65,7 @@ System environment variables are always overridden by flag values provided direc
       </td>
       <td>
         Control reading and writing for cache sources. Uses the same syntax as
-        <code>[--cache](/docs/reference/run#--cache-options)</code>.
+        <a href="/docs/reference/run#--cache-options"><code>--cache</code></a>.
       </td>
     </tr>
     <tr id="turbo_cache_dir">
@@ -120,6 +133,29 @@ System environment variables are always overridden by flag values provided direc
       <td>
         Enables global <code>turbo</code> to install the correct local version
         if one is not found.
+      </td>
+    </tr>
+    <tr id="turbo_env_mode">
+      <td>
+        <code>TURBO_ENV_MODE</code>
+      </td>
+      <td>
+        <span>Sets the environment mode, similar to using the</span>{" "}
+        <code>[--env-mode](/docs/reference/run#--env-mode-option)</code>
+        <span> flag.</span>
+      </td>
+    </tr>
+    <tr id="turbo_experimental_trace">
+      <td>
+        <code>TURBO_EXPERIMENTAL_TRACE</code>
+      </td>
+      <td>
+        Set to <code>1</code> or <code>true</code> to enable the experimental{" "}
+        <a href="/docs/reference/trace">
+          <code>turbo trace</code>
+        </a>{" "}
+        command. Only read from the environment: it is not a{" "}
+        <code>turbo.json</code> key and not an input to task hashes.
       </td>
     </tr>
     <tr id="turbo_force">
@@ -274,6 +310,15 @@ System environment variables are always overridden by flag values provided direc
       </td>
       <td>Always ignore the local filesystem cache for all tasks.</td>
     </tr>
+    <tr id="turbo_root_turbo_json">
+      <td>
+        <code>TURBO_ROOT_TURBO_JSON</code>
+      </td>
+      <td>
+        Use the <code>turbo.json</code> located at the provided path instead of
+        the one at the root of the repository.
+      </td>
+    </tr>
     <tr id="turbo_run_summary">
       <td>
         <code>TURBO_RUN_SUMMARY</code>
@@ -338,6 +383,15 @@ System environment variables are always overridden by flag values provided direc
         <a href="/docs/core-concepts/remote-caching">Remote Cache</a>.
       </td>
     </tr>
+    <tr id="turbo_tui_scrollback_length">
+      <td>
+        <code>TURBO_TUI_SCROLLBACK_LENGTH</code>
+      </td>
+      <td>
+        Number of lines to keep in scrollback for each task in the terminal
+        UI. Defaults to <code>2048</code>.
+      </td>
+    </tr>
     <tr id="turbo_ui">
       <td>
         <code>TURBO_UI</code>
@@ -346,12 +400,21 @@ System environment variables are always overridden by flag values provided direc
         Enables TUI when passed true or 1, disables when passed false or 0.
       </td>
     </tr>
+    <tr id="turbo_watch_startup_timeout">
+      <td>
+        <code>TURBO_WATCH_STARTUP_TIMEOUT</code>
+      </td>
+      <td>
+        Number of seconds <code>turbo watch</code> waits for the file watcher
+        to become ready before failing. Defaults to <code>120</code>.
+      </td>
+    </tr>
     <tr id="turbo_concurrency">
       <td>
         <code>TURBO_CONCURRENCY</code>
       </td>
       <td>
-        Controls [concurrency](/repo/docs/reference/run#--concurrency-number--percentage) settings in run or watch mode.
+        Controls [concurrency](/docs/reference/run#--concurrency-number--percentage) settings in run or watch mode.
       </td>
     </tr>
     <tr id="turbo_sso_login_callback_port">

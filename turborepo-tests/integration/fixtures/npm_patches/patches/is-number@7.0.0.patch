@@ -1,0 +1,9 @@
+--- a/index.js
++++ b/index.js
+@@ -15,4 +15,6 @@
+     return Number.isFinite ? Number.isFinite(+num) : isFinite(+num);
+   }
+   return false;
+ };
++
++// Patched by the npm prune regression fixture.
