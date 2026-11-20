@@ -77,7 +77,8 @@ pub enum Changes {
 pub struct AffectedRequest {
     /// The changes.
     pub changes: Changes,
-    /// `--tests`: frameworks (`jest`, `vitest`, `gotest`, `cargo-test`, `all`).
+    /// `--tests`: frameworks (`jest`, `vitest`, `node-test`, `gotest`,
+    /// `cargo-test`, `all`).
     /// Empty: `all`.
     pub tests: Vec<String>,
     /// `--strict`: every uncertainty selects, and no assumption is made.
@@ -90,7 +91,8 @@ pub struct AffectedRequest {
 /// The result of `turbo trace affected`.
 #[derive(Clone, Debug, Serialize)]
 pub struct AffectedTests {
-    /// The selected tests, sorted by path.
+    /// The selected tests, sorted by path and framework: one item per test
+    /// file and framework that takes it ([`AffectedTest::framework`]).
     pub items: Vec<AffectedTest>,
     /// The tasks that start tests the trace cannot map to files (a runner it
     /// does not cover, a command it cannot read): each must run whole, sorted
@@ -128,6 +130,14 @@ pub struct AffectedTest {
     pub package: String,
     /// The turbo task that runs it (`<package>#<script>`), when one is known.
     pub task: Option<String>,
+    /// The test framework whose run takes the file as a test (`jest`,
+    /// `vitest`, `node-test`, `gotest`, `cargo-test`). A file that several
+    /// frameworks take (a root jest config whose patterns match the files
+    /// of a `node --test` script) is one item per framework, each with the
+    /// task of that framework's run: a consumer that starts one runner
+    /// filters by this field. `None` for a file no framework lists
+    /// ([`Reason::UnknownTest`], [`Reason::NotInGraph`]).
+    pub framework: Option<String>,
     /// Why it is selected.
     pub reason: Reason,
 }
@@ -218,7 +228,7 @@ fn host_defaults() {
 /// The frameworks `--tests` takes: those whose tests `turbo trace` lists by
 /// file. (End-to-end specs selected by recorded visits, `playwright`, and the
 /// Python language, `pytest`, are not part of `turbo trace` yet.)
-pub const FRAMEWORKS: &[&str] = &["jest", "vitest", "gotest", "cargo-test", "all"];
+pub const FRAMEWORKS: &[&str] = &["jest", "vitest", "node-test", "gotest", "cargo-test", "all"];
 
 fn check_tests(req: &AffectedRequest) -> Result<(), Error> {
     match req.tests.iter().find(|t| !FRAMEWORKS.contains(&t.as_str())) {
@@ -401,6 +411,9 @@ fn report(
         tasks.sort_by(|a, b| a.id.cmp(&b.id));
     }
     let has_go_mod = crate::workflows::go_mod_dirs(repo.root.as_std_path());
+    let asked = |framework: &str| {
+        req.tests.is_empty() || req.tests.iter().any(|t| t == framework || t == "all")
+    };
     let kept = |package: &str| {
         req.packages
             .as_ref()
@@ -414,48 +427,74 @@ fn report(
         // turbo's package of a test: the nearest one around the file. The graph's
         // package of a file can be another (a Go module, a crate, a `package.json`
         // that is no workspace member), below or above turbo's.
+        //
+        // One item per framework that takes the file, each with the task of that
+        // framework's run; one item without a framework for a file none lists.
         let mut push = |path: &str, frameworks: &[String], reason: Reason| {
             let (dir, package) = containing_package(repo.packages, path);
             if !kept(&package) {
                 return;
             }
-            let covers = |l: &crate::selection::Launch| {
-                (frameworks.is_empty() || frameworks.contains(&l.framework))
-                    && under(&l.dir, path)
-                    && (l.framework != "gotest"
-                        || crate::workflows::go_test_runs(&l.dir, path, &has_go_mod))
+            let task_of = |frameworks: &[String]| {
+                let covers = |l: &crate::selection::Launch| {
+                    (frameworks.is_empty() || frameworks.contains(&l.framework))
+                        && crate::workflows::launch_matches(&l.framework, &l.dir, path)
+                        && (l.framework != "gotest"
+                            || crate::workflows::go_test_runs(&l.dir, path, &has_go_mod))
+                };
+                if dir == pkg.dir {
+                    // The graph's package is turbo's: one of its scripts, by what the
+                    // script and the scripts it runs start.
+                    tasks.iter().find(|t| t.runs.iter().any(covers))
+                } else {
+                    // Another package of turbo's holds the file: one of that package's
+                    // scripts, by what it starts itself. What the scripts of other
+                    // packages start is not counted: the root's `turbo run test` runs
+                    // them all, and a launch that the text of one of them names
+                    // without a directory would make the root script the task of
+                    // every test.
+                    scripts
+                        .get(dir.as_str())
+                        .into_iter()
+                        .flatten()
+                        .find(|t| t.own_runs.iter().any(covers))
+                }
+                .map(|t| format!("{package}#{}", t.name))
             };
-            let task = if dir == pkg.dir {
-                // The graph's package is turbo's: one of its scripts, by what the
-                // script and the scripts it runs start.
-                tasks.iter().find(|t| t.runs.iter().any(covers))
-            } else {
-                // Another package of turbo's holds the file: one of that package's
-                // scripts, by what it starts itself. What the scripts of other
-                // packages start is not counted: the root's `turbo run test` runs
-                // them all, and a launch that the text of one of them names
-                // without a directory would make the root script the task of
-                // every test.
-                scripts
-                    .get(dir.as_str())
-                    .into_iter()
-                    .flatten()
-                    .find(|t| t.own_runs.iter().any(covers))
+            if frameworks.is_empty() {
+                items.push(AffectedTest {
+                    path: path.to_owned(),
+                    package: package.clone(),
+                    task: task_of(&[]),
+                    framework: None,
+                    reason,
+                });
+                return;
             }
-            .map(|t| format!("{package}#{}", t.name));
-            items.push(AffectedTest {
-                path: path.to_owned(),
-                package,
-                task,
-                reason,
-            });
+            for framework in frameworks {
+                // `--tests`: the items of the frameworks asked for.
+                if !asked(framework) {
+                    continue;
+                }
+                items.push(AffectedTest {
+                    path: path.to_owned(),
+                    package: package.clone(),
+                    task: task_of(std::slice::from_ref(framework)),
+                    framework: Some(framework.clone()),
+                    reason: reason.clone(),
+                });
+            }
         };
         match all {
             Some(why) => {
                 for s in &pkg.selected {
                     push(&s.path, &s.frameworks, everything_reason(why));
                 }
-                for p in pkg.unselected.iter().chain(&pkg.unknown) {
+                for p in &pkg.unselected {
+                    let frameworks = pkg.frameworks.get(p).map_or(&[][..], Vec::as_slice);
+                    push(p, frameworks, everything_reason(why));
+                }
+                for p in &pkg.unknown {
                     push(p, &[], everything_reason(why));
                 }
             }
@@ -484,8 +523,10 @@ fn report(
             }
         }
     }
-    items.sort_by(|a, b| a.path.cmp(&b.path).then_with(|| a.package.cmp(&b.package)));
-    items.dedup_by(|a, b| a.path == b.path);
+    items.sort_by(|a, b| {
+        (&a.path, &a.framework, &a.package).cmp(&(&b.path, &b.framework, &b.package))
+    });
+    items.dedup_by(|a, b| a.path == b.path && a.framework == b.framework);
     uncovered.sort_by(|a, b| a.task.cmp(&b.task));
     uncovered.dedup();
     AffectedTests {
@@ -511,11 +552,6 @@ fn containing_package(packages: &Packages, path: &str) -> (String, String) {
         dir = parent;
     }
     (".".to_owned(), "//".to_owned())
-}
-
-/// `path` (root-relative) is `dir` or below it (`.`: the root).
-fn under(dir: &str, path: &str) -> bool {
-    dir == "." || dir.is_empty() || path.strip_prefix(dir).is_some_and(|r| r.starts_with('/'))
 }
 
 /// The selection document's class of a chain as a [`Reason`].

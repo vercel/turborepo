@@ -212,6 +212,10 @@ pub(crate) struct Package {
     /// The scripts that start tests.
     #[serde(default)]
     pub(crate) tasks: Vec<Task>,
+    /// The frameworks of the `unselected` files, by path (not part of the
+    /// written document: `selected` items carry theirs).
+    #[serde(skip)]
+    pub(crate) frameworks: BTreeMap<String, Vec<String>>,
 }
 
 /// Totals.
@@ -534,6 +538,7 @@ fn below<'s, 'p>(sorted: &'s [(&'p str, NodeId)], dir: &str) -> Vec<&'s (&'p str
 }
 
 /// Whether `path` is `dir` or below it (`.` and the empty string: everything).
+#[cfg(test)]
 fn under(dir: &str, path: &str) -> bool {
     let dir = dir.trim_end_matches('/');
     dir.is_empty()
@@ -551,6 +556,7 @@ struct Acc {
     unselected: Vec<String>,
     unknown: Vec<String>,
     tasks: Vec<Task>,
+    frameworks: BTreeMap<String, Vec<String>>,
 }
 
 /// Builds the document of an evaluation.
@@ -610,10 +616,15 @@ pub(crate) fn build(i: &Input<'_>) -> Document {
     }
     for n in i.entries.iter() {
         if !hit.contains(n) {
-            acc.entry(dir_of_node(n))
-                .or_default()
-                .unselected
-                .push(g.path(n).to_owned());
+            let a = acc.entry(dir_of_node(n)).or_default();
+            a.unselected.push(g.path(n).to_owned());
+            let frameworks = g.test_frameworks(n);
+            if !frameworks.is_empty() {
+                a.frameworks.insert(
+                    g.path(n).to_owned(),
+                    frameworks.into_iter().map(str::to_owned).collect(),
+                );
+            }
         }
     }
     // Entries that are no graph node: selected unless the policy ignores
@@ -666,6 +677,7 @@ pub(crate) fn build(i: &Input<'_>) -> Document {
         // --test`, Playwright, or a framework that was not asked for): the task
         // always starts.
         let mut foreign: Option<String> = None;
+        let mut outputs_before: Option<Vec<(String, String)>> = None;
         for (fw, d) in launched.launches() {
             list.push(Launch {
                 framework: fw.to_owned(),
@@ -678,7 +690,13 @@ pub(crate) fn build(i: &Input<'_>) -> Document {
                 Some((id, _)) if asked(id) => id,
                 _ => {
                     foreign.get_or_insert_with(|| {
-                        format!("starts {fw} tests, which this selection does not cover")
+                        if fw == turborepo_trace_frameworks::nodetest::UNMAPPED {
+                            "starts the Node.js test runner in a way the trace cannot map to test \
+                             files"
+                                .to_owned()
+                        } else {
+                            format!("starts {fw} tests, which this selection does not cover")
+                        }
                     });
                     continue;
                 }
@@ -693,7 +711,57 @@ pub(crate) fn build(i: &Input<'_>) -> Document {
                 v.sort_unstable();
                 v
             });
-            for &(path, t) in below(all, d) {
+            // The tests of the launch: those at or below its directory; for the
+            // Node.js test runner those its glob names.
+            let node_test = fw_static == turborepo_trace_frameworks::nodetest::ID;
+            let of_launch: Vec<&(&str, NodeId)> = if node_test {
+                let glob = crate::workflows::LaunchGlob::new(d);
+                all.iter().filter(|(path, _)| glob.matches(path)).collect()
+            } else {
+                below(all, d)
+            };
+            // A run of the Node.js test runner that searches where a task before it
+            // writes its outputs (a build the task depends on, a `pre` script):
+            // the compiled test files it finds there are no files of the graph.
+            if node_test {
+                let (searched, _) = turborepo_trace_tasks::glob::split_static_prefix(d);
+                let searched = searched.trim_end_matches('/');
+                let within = |inner: &str, outer: &str| {
+                    outer.is_empty()
+                        || outer == "."
+                        || inner == outer
+                        || inner
+                            .strip_prefix(outer)
+                            .is_some_and(|rest| rest.starts_with('/'))
+                };
+                let built = outputs_before
+                    .get_or_insert_with(|| runs.outputs_before(n))
+                    .iter()
+                    .find(|(_, out)| within(out, searched) || within(searched, out));
+                if let Some((task, out)) = built {
+                    foreign.get_or_insert_with(|| {
+                        format!(
+                            "runs the Node.js test runner where {task} writes its outputs \
+                             ({out}): the test files built there are not source files"
+                        )
+                    });
+                }
+            }
+            // A run of the Node.js test runner that names files of which none is a
+            // test of the graph (the output directory of a build): what it runs
+            // is not known.
+            if node_test
+                && of_launch.is_empty()
+                && !turborepo_trace_frameworks::nodetest::is_default_glob(d)
+            {
+                foreign.get_or_insert_with(|| {
+                    format!(
+                        "runs the Node.js test runner on {d}, which names no source file the \
+                         trace knows as a test"
+                    )
+                });
+            }
+            for &(path, t) in of_launch {
                 if !seen.contains(t) {
                     seen.insert(t);
                     tests += 1;
@@ -725,6 +793,33 @@ pub(crate) fn build(i: &Input<'_>) -> Document {
                 unmapped: launched.every_test().map(str::to_owned).or(foreign),
             },
         ));
+    }
+    // A file that only the Node.js test runner takes as a test, and that the mapped
+    // run of no task names: the adapter read a run in a script (behind a program
+    // it does not interpret) that no task is known to start. Nothing says the file
+    // runs as that run says, so it is listed like a test the selection does not
+    // know: it always runs.
+    if asked(turborepo_trace_frameworks::nodetest::ID) {
+        let globs: Vec<crate::workflows::LaunchGlob> = tasks
+            .iter()
+            .flat_map(|(_, t)| &t.runs)
+            .filter(|l| l.framework == turborepo_trace_frameworks::nodetest::ID)
+            .map(|l| crate::workflows::LaunchGlob::new(&l.dir))
+            .collect();
+        for a in acc.values_mut() {
+            let frameworks = std::mem::take(&mut a.frameworks);
+            let orphan = |path: &str| {
+                frameworks.get(path).is_some_and(|f| {
+                    f.len() == 1 && f[0] == turborepo_trace_frameworks::nodetest::ID
+                }) && !globs.iter().any(|g| g.matches(path))
+            };
+            let (orphans, known): (Vec<String>, Vec<String>) = std::mem::take(&mut a.unselected)
+                .into_iter()
+                .partition(|path| orphan(path));
+            a.unselected = known;
+            a.unknown.extend(orphans);
+            a.frameworks = frameworks;
+        }
     }
     for (dir, t) in tasks {
         // A task of a directory that is no package of the graph goes to the enclosing
@@ -810,10 +905,11 @@ pub(crate) fn build(i: &Input<'_>) -> Document {
         };
         let pkg_run = if run == Run::All { Run::All } else { would_run };
         for t in &mut a.tasks {
-            let unknown_below = a
-                .unknown
-                .iter()
-                .any(|u| t.runs.iter().any(|l| under(&l.dir, u)));
+            let unknown_below = a.unknown.iter().any(|u| {
+                t.runs
+                    .iter()
+                    .any(|l| crate::workflows::launch_matches(&l.framework, &l.dir, u))
+            });
             let would = if t.unmapped.is_some() || (t.tests > 0 && t.selected == t.tests) {
                 Run::All
             } else if t.selected == 0 && !unknown_below {
@@ -847,6 +943,7 @@ pub(crate) fn build(i: &Input<'_>) -> Document {
             unselected: a.unselected,
             unknown: a.unknown,
             tasks: a.tasks,
+            frameworks: a.frameworks,
         });
     }
     Document {

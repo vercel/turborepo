@@ -17,7 +17,8 @@
 //!
 //! | Found | Spec | Recognition |
 //! |---|---|---|
-//! | first-party JS bin | the target file as a JS `entry` (its closure and fs reads are traced), existing-file arguments as inputs, the bin package's `package.json` as config | `Full` (`Partial` plus a cwd membership if the bin reads relative to the cwd) |
+//! | first-party JS bin | the target file as a JS `entry` (its closure and fs reads are traced), existing-file arguments as inputs, the bin package's `package.json` as config; the entry and the files of its package it imports ([`wrapper::Scan::files`]) as definition files of the task | `Full` (`Partial` plus a cwd membership if the bin reads relative to the cwd) |
+//! | first-party bin that forwards its arguments to the program named first ([`forward`]: `tool-run node --test x`) | the bin's file as a JS `entry`, and the command behind it, recognized as if written without the bin | the forwarded command's |
 //! | first-party bin wrapping a known tool ([`wrapper`]) | the above, plus the remaining argv forwarded to the tool's recognizer (`jest-ci -c x` → jest with config `x`) and an `unknown_command` uncertainty naming the inference | `Partial` |
 //! | first-party Python bin (shebang) / shell bin | Python entry / `Auto` entry plus uncertainty | `Full` / `Partial` |
 //! | bin target missing (a build output) | the entry as a probe, the bin package as a membership, a `generated_file` uncertainty | `Partial` |
@@ -29,6 +30,7 @@
 //! uncertainty, as for any recognizer. [`go::GoTool`] (`go tool <x>`) is a
 //! regular recognizer.
 
+pub mod forward;
 pub mod go;
 pub mod npm;
 pub mod python;
@@ -63,6 +65,9 @@ pub mod ids {
     pub const BIN: &str = "bin";
     /// A first-party binary that wraps a known tool.
     pub const WRAPPER: &str = "bin-wrapper";
+    /// A first-party binary that forwards its arguments to the program named
+    /// by the first one.
+    pub const FORWARD: &str = "bin-forward";
     /// A third-party npm binary.
     pub const PACKAGE: &str = "bin-package";
     /// A Python console script.
@@ -349,7 +354,30 @@ fn first_party(
         EntryLang::Js => {
             out.entry(file.to_path_buf(), EntryLang::Js);
             let scan = scan_memo(file, pkg_dir);
+            // The bin is part of how the task runs what it starts: its entry file and the
+            // files of its package that the entry imports define the task
+            // ([`crate::runs`]).
+            for f in &scan.files {
+                out.defines(f.clone());
+            }
+            // A bin that forwards its arguments to the program named first is a prefix:
+            // the command is the one behind it.
+            if scan.forwards
+                && cmd
+                    .argv
+                    .get(1)
+                    .is_some_and(|w| w.is_static() && !w.glob && !w.text.starts_with('-'))
+            {
+                let mut fwd = cmd.shifted(1);
+                fwd.redirects.clear();
+                let rep = registry().recognize(&fwd, cx, out);
+                return Resolved {
+                    recognizer: ids::FORWARD,
+                    recognition: rep.recognition,
+                };
+            }
             if !scan.tools.is_empty() {
+                let runs_before = out.runs.len();
                 for t in &scan.tools {
                     let mut fwd = cmd.clone();
                     fwd.argv[0] = Word::lit(*t);
@@ -362,6 +390,15 @@ fn first_party(
                             rel(file, cx),
                             if scan.weak { "weak" } else { "strong" }
                         ),
+                    );
+                }
+                // The bin starts tests and not all files of its package were read: one
+                // of the others can change how (the environment it passes on), so the
+                // task is not known to run them as the tool alone would.
+                if scan.capped && out.runs.len() > runs_before {
+                    out.test_run(
+                        format!("{name} (a bin whose sources are not all read)"),
+                        cmd.cwd.clone(),
                     );
                 }
                 return Resolved {

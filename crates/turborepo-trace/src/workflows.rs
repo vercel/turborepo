@@ -115,6 +115,34 @@ fn under(dir: &str, path: &str) -> bool {
             .is_some_and(|rest| rest.starts_with('/'))
 }
 
+/// Whether the test at `path` is one the launch `(framework, dir)` of a run
+/// record starts: a test at or below the directory. For the Node.js test
+/// runner the record holds the glob of the files the run names
+/// (`turborepo_trace_tasks::recognizers::nodetest`), from the repository root
+/// on, and the test is one the glob matches.
+pub(crate) fn launch_matches(framework: &str, dir: &str, path: &str) -> bool {
+    if framework == turborepo_trace_frameworks::nodetest::ID {
+        return LaunchGlob::new(dir).matches(path);
+    }
+    under(dir, path)
+}
+
+/// The compiled glob of a Node.js test runner launch ([`launch_matches`]).
+pub(crate) struct LaunchGlob(turborepo_trace_frameworks::pattern::CompiledPattern);
+
+impl LaunchGlob {
+    pub(crate) fn new(glob: &str) -> Self {
+        let glob = glob.strip_prefix("./").unwrap_or(glob);
+        LaunchGlob(turborepo_trace_frameworks::pattern::CompiledPattern::new(
+            &turborepo_trace_frameworks::TestPattern::Glob(glob.to_owned()),
+        ))
+    }
+
+    pub(crate) fn matches(&self, path: &str) -> bool {
+        self.0.matches(path)
+    }
+}
+
 /// Resolves the `runs` records of task nodes to tests.
 pub(crate) struct Runs<'g> {
     g: &'g Graph,
@@ -381,6 +409,88 @@ impl<'g> Runs<'g> {
         out
     }
 
+    /// The directories (from the repository root) that the tasks before the
+    /// package script at `n` write their outputs to, each with its task: the
+    /// tasks it depends on (turbo's `dependsOn`, transitively) and its `pre`
+    /// script. A runner that searches a directory for test files after them
+    /// finds what they built there. Directories that the Node.js test runner
+    /// never enters (a name that starts with a dot, `node_modules`) are left
+    /// out.
+    pub(crate) fn outputs_before(&self, n: NodeId) -> Vec<(String, String)> {
+        let Some(rec) = self.recs.get(&n) else {
+            return Vec::new();
+        };
+        let mut todo: Vec<NodeId> = rec
+            .deps
+            .iter()
+            .filter_map(|d| self.g.node_by_path(d.as_str()))
+            .collect();
+        if let Some((dir, name)) = rec
+            .id
+            .as_str()
+            .strip_prefix("task:")
+            .and_then(|r| r.rsplit_once('#'))
+        {
+            todo.extend(self.g.node_by_path(&format!("task:{dir}#pre{name}")));
+        }
+        let mut seen: BTreeSet<NodeId> = BTreeSet::from([n]);
+        let mut out = Vec::new();
+        while let Some(t) = todo.pop() {
+            if !seen.insert(t) || seen.len() > 512 {
+                continue;
+            }
+            let Some(rec) = self.recs.get(&t) else {
+                continue;
+            };
+            todo.extend(
+                rec.deps
+                    .iter()
+                    .filter_map(|d| self.g.node_by_path(d.as_str())),
+            );
+            let Some((dir, _)) = rec
+                .id
+                .as_str()
+                .strip_prefix("task:")
+                .and_then(|r| r.rsplit_once('#'))
+            else {
+                continue;
+            };
+            for o in rec.outputs.iter() {
+                let path = o.path.as_str();
+                if o.package.is_some() || path.starts_with('/') {
+                    continue;
+                }
+                let (prefix, _) = turborepo_trace_tasks::glob::split_static_prefix(
+                    o.pattern.as_ref().map_or("", |p| p.as_str()),
+                );
+                let mut parts: Vec<&str> = Vec::new();
+                for part in dir
+                    .split('/')
+                    .chain(path.split('/'))
+                    .chain(prefix.split('/'))
+                {
+                    match part {
+                        "" | "." => {}
+                        ".." => {
+                            parts.pop();
+                        }
+                        part => parts.push(part),
+                    }
+                }
+                if parts
+                    .iter()
+                    .any(|part| part.starts_with('.') || *part == "node_modules")
+                {
+                    continue;
+                }
+                out.push((rec.id.as_str().to_owned(), parts.join("/")));
+            }
+        }
+        out.sort();
+        out.dedup();
+        out
+    }
+
     /// Whether the task at `n` launches tests itself: one of its own commands
     /// is a test runner or a test launch that can't be mapped.
     fn launches(&self, n: NodeId) -> bool {
@@ -410,7 +520,12 @@ impl<'g> Runs<'g> {
                 .tests
                 .entry(fw.clone())
                 .or_insert_with(|| g.tests(Some(fw)));
-            out.extend(all.iter().copied().filter(|&n| under(dir, g.path(n))));
+            if fw == turborepo_trace_frameworks::nodetest::ID {
+                let glob = LaunchGlob::new(dir);
+                out.extend(all.iter().copied().filter(|&n| glob.matches(g.path(n))));
+            } else {
+                out.extend(all.iter().copied().filter(|&n| under(dir, g.path(n))));
+            }
         }
         out
     }
@@ -847,7 +962,7 @@ pub fn script_effects(
                 let frameworks = g.test_frameworks(t);
                 launches.iter().any(|(fw, d)| {
                     frameworks.contains(&fw.as_str())
-                        && under(d, path)
+                        && launch_matches(fw, d, path)
                         && (fw != "gotest" || go_test_runs(d, path, &has_go_mod))
                 })
             };

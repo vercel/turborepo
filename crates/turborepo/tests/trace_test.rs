@@ -2382,3 +2382,988 @@ fn a_changed_jest_script_selects_the_tests_it_starts() {
         ])
     );
 }
+
+// ---------------------------------------------------------------------------
+// The Node.js test runner (`node --test`).
+
+const NODE_ADD: &str = "packages/math/test/add.test.js";
+const NODE_MUL: &str = "packages/math/test/mul.test.js";
+const NODE_INDEX: &str = "packages/math/src/index_test.js";
+const NODE_SLUG: &str = "packages/text/src/slug.test.ts";
+const NODE_TITLE: &str = "packages/text/src/nested/title.test.ts";
+const NODE_SLUG_E2E: &str = "packages/text/e2e/slug.spec.ts";
+const NODE_BUILT: &str = "packages/built/src/id.test.ts";
+const NODE_COMPUTED: &str = "packages/computed/test/one.test.js";
+
+/// The selection of the Node.js test runner fixture without the files it
+/// always lists: the tests of the two packages whose runs are not mapped.
+#[cfg(unix)]
+fn node_selection(dir: &Path, args: &[&str]) -> JsonSelection {
+    let mut selection = affected_json(dir, args);
+    for always in [NODE_BUILT, NODE_COMPUTED] {
+        assert!(
+            selection.tests.remove(always).is_some(),
+            "{always} is not listed: {:?}",
+            selection.tests
+        );
+    }
+    selection
+}
+
+#[cfg(unix)]
+fn expect_tests(selection: &JsonSelection, expected: &[(&str, &str)]) {
+    let got: Vec<(&str, &str)> = selection
+        .tests
+        .iter()
+        .map(|(path, task)| (path.as_str(), task.as_str()))
+        .collect();
+    assert_eq!(got, expected);
+}
+
+/// A run without file arguments takes the runner's default patterns below the
+/// package, a run with a quoted glob the files the glob names: each file is a
+/// test with a verdict of its own, of the task whose script names it.
+#[cfg(unix)]
+#[test]
+fn node_test_files_are_the_tests_of_the_script_that_names_them() {
+    let dir = fixture("trace_node_test");
+    let selection = node_selection(dir.path(), &["--changed", "packages/math/src/mul.js"]);
+    expect_tests(
+        &selection,
+        &[(NODE_INDEX, "math#test"), (NODE_MUL, "math#test")],
+    );
+    let selection = node_selection(dir.path(), &["--changed", "packages/text/src/slug.ts"]);
+    expect_tests(
+        &selection,
+        &[
+            (NODE_SLUG_E2E, "text#test:e2e"),
+            (NODE_SLUG, "text#test"),
+            (NODE_HEADING, "web#test"),
+        ],
+    );
+    let selection = node_selection(dir.path(), &["--changed", "packages/text/src/title.ts"]);
+    expect_tests(&selection, &[(NODE_TITLE, "text#test")]);
+    // The tasks of the mapped runs are covered.
+    assert_eq!(selection.uncovered, ["built#test", "computed#test"]);
+    // The framework has a name for `--tests`.
+    let selected = affected(
+        dir.path(),
+        &[
+            "--changed",
+            "packages/math/src/add.js",
+            "--tests",
+            "node-test",
+        ],
+    );
+    assert_selects(&selected, &[NODE_ADD, NODE_MUL, NODE_INDEX], &[NODE_SLUG]);
+}
+
+/// What a run loads before every test (`--import`), the env file it reads and
+/// a test's snapshot file are inputs of the tests of that run, and of no test
+/// of another run of the package.
+#[cfg(unix)]
+#[test]
+fn node_test_preloads_env_files_and_snapshots_are_inputs() {
+    let dir = fixture("trace_node_test");
+    // A module the preload imports.
+    let selection = node_selection(dir.path(), &["--changed", "packages/text/test/locale.mjs"]);
+    expect_tests(
+        &selection,
+        &[(NODE_TITLE, "text#test"), (NODE_SLUG, "text#test")],
+    );
+    let selection = node_selection(dir.path(), &["--changed", "packages/text/test/setup.mjs"]);
+    expect_tests(
+        &selection,
+        &[(NODE_TITLE, "text#test"), (NODE_SLUG, "text#test")],
+    );
+    let selected = affected(dir.path(), &["--changed", "packages/text/.env.test"]);
+    assert_selects(&selected, &[NODE_TITLE, NODE_SLUG], &[NODE_ADD]);
+    let selection = node_selection(
+        dir.path(),
+        &["--changed", "packages/text/src/slug.test.ts.snapshot"],
+    );
+    expect_tests(&selection, &[(NODE_SLUG, "text#test")]);
+}
+
+/// The command of a script that starts tests is part of how they run: an edit
+/// of the script selects the tests the script runs, and no test of another
+/// package.
+#[cfg(unix)]
+#[test]
+fn an_edited_test_script_selects_the_tests_it_runs() {
+    let dir = fixture("trace_jest");
+    let math = dir.path().join("packages/math/package.json");
+    let manifest = fs::read_to_string(&math).unwrap();
+    assert!(manifest.contains("\"test\": \"jest\""), "{manifest}");
+    fs::write(
+        &math,
+        manifest.replace("\"test\": \"jest\"", "\"test\": \"jest --runInBand\""),
+    )
+    .unwrap();
+    let selected = affected(dir.path(), &["--base", "HEAD"]);
+    assert_selects(&selected, &[JEST_ADD, JEST_MUL], &[JEST_GREET]);
+}
+
+/// A runner started as a file of `node` (`node ./node_modules/.bin/jest`) is
+/// no run of the Node.js test runner: no file becomes a `node-test` test, and
+/// the script's task is not reported as one that starts it.
+#[cfg(unix)]
+#[test]
+fn a_runner_started_as_a_node_script_is_no_node_test_run() {
+    let dir = fixture("trace_jest");
+    let math = dir.path().join("packages/math/package.json");
+    let manifest = fs::read_to_string(&math).unwrap();
+    fs::write(
+        &math,
+        manifest.replace(
+            "\"test\": \"jest\"",
+            "\"test\": \"node ./node_modules/.bin/jest\"",
+        ),
+    )
+    .unwrap();
+    git(
+        dir.path(),
+        &["commit", "--quiet", "-am", "jest as a node script"],
+    );
+    let output = trace(dir.path(), &["affected", "--changed", JEST_MUL, "--json"]);
+    assert!(output.status.success(), "{}", stderr(&output));
+    let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    let items = json["affectedTests"]["items"].as_array().unwrap();
+    assert_eq!(items.len(), 1, "{json}");
+    assert_eq!(items[0]["path"], JEST_MUL);
+    assert_eq!(items[0]["framework"], "jest", "{json}");
+    assert_eq!(json["uncoveredTasks"]["length"], 0, "{json}");
+}
+
+/// The text of the script is how its tests run: an edit selects the tests of
+/// that run.
+#[cfg(unix)]
+#[test]
+fn node_test_script_edit_selects_the_tests_of_the_run() {
+    let dir = fixture("trace_node_test");
+    let text = dir.path().join("packages/text/package.json");
+    let manifest = fs::read_to_string(&text).unwrap();
+    assert!(manifest.contains("--test-reporter spec"), "{manifest}");
+    fs::write(
+        &text,
+        manifest.replace("--test-reporter spec", "--test-reporter dot"),
+    )
+    .unwrap();
+    let selection = node_selection(dir.path(), &["--base", "HEAD"]);
+    expect_tests(
+        &selection,
+        &[(NODE_TITLE, "text#test"), (NODE_SLUG, "text#test")],
+    );
+}
+
+/// A run whose files are build outputs (`tsc && node --test dist/...`) or are
+/// named by the environment is not mapped to files: its task runs whole, and
+/// the files that look like its tests are always listed.
+#[cfg(unix)]
+#[test]
+fn node_test_runs_that_are_not_mapped_run_whole() {
+    let dir = fixture("trace_node_test");
+    let output = trace(
+        dir.path(),
+        &[
+            "affected",
+            "--changed",
+            "packages/math/src/add.js",
+            "--json",
+        ],
+    );
+    assert!(output.status.success(), "{}", stderr(&output));
+    let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    let uncovered: Vec<(&str, &str)> = json["uncoveredTasks"]["items"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|t| {
+            (
+                t["task"].as_str().unwrap(),
+                t["description"].as_str().unwrap(),
+            )
+        })
+        .collect();
+    let why = "starts the Node.js test runner in a way the trace cannot map to test files";
+    assert_eq!(uncovered, [("built#test", why), ("computed#test", why)]);
+    for path in [NODE_BUILT, NODE_COMPUTED] {
+        let item = json["affectedTests"]["items"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|i| i["path"] == path)
+            .unwrap_or_else(|| panic!("{path} is not listed: {json}"));
+        assert_eq!(item["reason"]["__typename"], "UnknownTest", "{item}");
+    }
+
+    // The same files named from another task's output directory, with no build in
+    // the script itself: none of them is a test the trace knows.
+    let built = dir.path().join("packages/built/package.json");
+    let manifest = fs::read_to_string(&built).unwrap();
+    fs::write(
+        &built,
+        manifest.replace("tsc -p tsconfig.json && node --test", "node --test"),
+    )
+    .unwrap();
+    git(
+        dir.path(),
+        &["commit", "--quiet", "-am", "test after build"],
+    );
+    let output = trace(
+        dir.path(),
+        &[
+            "affected",
+            "--changed",
+            "packages/math/src/add.js",
+            "--json",
+        ],
+    );
+    assert!(output.status.success(), "{}", stderr(&output));
+    let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    let built = json["uncoveredTasks"]["items"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|t| t["task"] == "built#test")
+        .unwrap_or_else(|| panic!("built#test is covered: {json}"));
+    assert!(
+        built["description"]
+            .as_str()
+            .unwrap()
+            .contains("names no source file the trace knows as a test"),
+        "{built}"
+    );
+}
+
+/// A root jest config whose default patterns also match the files of a
+/// `node --test` run: the files are tests of both runners. The run's task is
+/// the one named for them, and it is covered by the Node.js test runner's
+/// tests alone: a selection of jest tests only cannot speak for it.
+#[cfg(unix)]
+#[test]
+fn node_test_files_that_jest_also_claims_keep_the_task_of_their_run() {
+    let dir = fixture("trace_node_test");
+    fs::write(dir.path().join("jest.config.js"), "module.exports = {};\n").unwrap();
+    let root = dir.path().join("package.json");
+    let manifest = fs::read_to_string(&root).unwrap();
+    fs::write(
+        &root,
+        manifest.replace(
+            "\"private\": true,",
+            "\"private\": true,\n  \"scripts\": { \"test:jest\": \"jest\" },",
+        ),
+    )
+    .unwrap();
+    git(dir.path(), &["add", "-A"]);
+    git(
+        dir.path(),
+        &["commit", "--quiet", "-m", "a root jest config"],
+    );
+    let selection = affected_json(dir.path(), &["--changed", "packages/math/src/mul.js"]);
+    assert_eq!(
+        selection.tests[NODE_MUL], "math#test",
+        "{:?}",
+        selection.tests
+    );
+    assert_eq!(selection.tests[NODE_INDEX], "math#test");
+    assert!(!selection.tests.contains_key(NODE_ADD));
+    assert_eq!(selection.uncovered, ["built#test", "computed#test"]);
+    // Asked for jest alone, the run's task is not covered.
+    let selection = affected_json(
+        dir.path(),
+        &["--changed", "packages/math/src/mul.js", "--tests", "jest"],
+    );
+    assert!(
+        selection.tests.contains_key(NODE_MUL),
+        "{:?}",
+        selection.tests
+    );
+    assert!(
+        selection.uncovered.contains(&"math#test".to_owned()),
+        "{:?}",
+        selection.uncovered
+    );
+}
+
+// ---------------------------------------------------------------------------
+// The framework of an item.
+
+/// The items of a `--json` document as (path, framework, task).
+#[cfg(unix)]
+fn framework_items(dir: &Path, args: &[&str]) -> Vec<(String, String, String)> {
+    let mut words = vec!["affected", "--json"];
+    words.extend_from_slice(args);
+    let output = trace(dir, &words);
+    assert!(output.status.success(), "{}", stderr(&output));
+    let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    let items = json["affectedTests"]["items"].as_array().unwrap();
+    assert_eq!(json["affectedTests"]["length"], items.len());
+    items
+        .iter()
+        .map(|item| {
+            assert!(item.get("framework").is_some(), "no framework key: {item}");
+            let text = |key: &str| item[key].as_str().unwrap_or("-").to_owned();
+            (text("path"), text("framework"), text("task"))
+        })
+        .collect()
+}
+
+/// Every item says which framework's run takes the file as a test; a file no
+/// framework lists has none.
+#[cfg(unix)]
+#[test]
+fn json_items_name_their_framework() {
+    let dir = fixture("trace_jest");
+    let items = framework_items(dir.path(), &["--changed", JEST_MUL]);
+    assert_eq!(
+        items,
+        [(
+            JEST_MUL.to_owned(),
+            "jest".to_owned(),
+            "math#test".to_owned()
+        )]
+    );
+    let dir = fixture("trace_vitest");
+    let items = framework_items(dir.path(), &["--changed", VITEST_CLAMP]);
+    assert_eq!(
+        items,
+        [(
+            VITEST_CLAMP.to_owned(),
+            "vitest".to_owned(),
+            "core#test".to_owned()
+        )]
+    );
+    let dir = fixture("trace_node_test");
+    let items = framework_items(dir.path(), &["--changed", "packages/text/src/title.ts"]);
+    let item = |path: &str, framework: &str, task: &str| {
+        (path.to_owned(), framework.to_owned(), task.to_owned())
+    };
+    assert_eq!(
+        items,
+        [
+            item(NODE_BUILT, "-", "built#test"),
+            item(NODE_COMPUTED, "-", "computed#test"),
+            item(NODE_TITLE, "node-test", "text#test"),
+        ]
+    );
+    // `--explain` says it too.
+    let output = trace(
+        dir.path(),
+        &[
+            "affected",
+            "--changed",
+            "packages/text/src/title.ts",
+            "--explain",
+            NODE_TITLE,
+            NODE_SLUG,
+        ],
+    );
+    assert!(output.status.success(), "{}", stderr(&output));
+    let text = stdout(&output);
+    assert_eq!(
+        text.matches("  a test of: node-test\n").count(),
+        2,
+        "{text}"
+    );
+}
+
+/// A file that two frameworks take is one item per framework, each with the
+/// task of that framework's run, and one line in text mode: a consumer that
+/// starts one runner filters the items by `framework`.
+#[cfg(unix)]
+#[test]
+fn a_file_two_frameworks_take_is_one_item_per_framework() {
+    let dir = fixture("trace_node_test");
+    fs::write(dir.path().join("jest.config.js"), "module.exports = {};\n").unwrap();
+    git(dir.path(), &["add", "-A"]);
+    git(
+        dir.path(),
+        &["commit", "--quiet", "-m", "a root jest config"],
+    );
+    let items = framework_items(dir.path(), &["--changed", NODE_MUL]);
+    let item = |path: &str, framework: &str, task: &str| {
+        (path.to_owned(), framework.to_owned(), task.to_owned())
+    };
+    assert_eq!(
+        items,
+        [
+            item(NODE_MUL, "jest", "-"),
+            item(NODE_MUL, "node-test", "math#test"),
+        ]
+    );
+    let selected = trace(dir.path(), &["affected", "--changed", NODE_MUL]);
+    assert_eq!(stdout(&selected), format!("{NODE_MUL}\n"));
+}
+
+// ---------------------------------------------------------------------------
+// Bins that forward their arguments.
+
+const NODE_HEADING: &str = "packages/web/src/heading.test.ts";
+const VITEST_LABEL: &str = "packages/ui/test/label.test.ts";
+
+/// A first-party bin that starts the program named by its first argument with
+/// the rest is a prefix of the command: `tool-run node --test ...` and
+/// `tool-run vitest run` are the runs behind it, and their tasks are covered.
+#[cfg(unix)]
+#[test]
+fn a_bin_that_forwards_its_arguments_is_a_prefix_of_the_command() {
+    let dir = fixture("trace_node_test");
+    let selection = node_selection(dir.path(), &["--changed", "packages/web/src/heading.ts"]);
+    expect_tests(&selection, &[(NODE_HEADING, "web#test")]);
+    assert_eq!(selection.uncovered, ["built#test", "computed#test"]);
+    let selection = node_selection(dir.path(), &["--changed", "packages/ui/src/label.ts"]);
+    expect_tests(&selection, &[(VITEST_LABEL, "ui#test")]);
+
+    // A bin that picks the program itself is no prefix: nothing says what it
+    // starts.
+    let bin = dir.path().join("packages/tool-run/bin/run.mjs");
+    let source = fs::read_to_string(&bin).unwrap();
+    assert!(source.contains("spawnSync(program, rest,"), "{source}");
+    fs::write(
+        &bin,
+        source.replace(
+            "spawnSync(program, rest,",
+            "spawnSync(program === 'test' ? 'node' : program, rest,",
+        ),
+    )
+    .unwrap();
+    git(
+        dir.path(),
+        &["commit", "--quiet", "-am", "the bin picks the program"],
+    );
+    let selection = node_selection(dir.path(), &["--changed", "packages/web/src/heading.ts"]);
+    expect_tests(&selection, &[(NODE_HEADING, "")]);
+    // No task is known to start the run the script names: its file has no verdict
+    // to rely on, and is listed on every change.
+    let output = trace(
+        dir.path(),
+        &[
+            "affected",
+            "--changed",
+            "packages/math/src/add.js",
+            "--json",
+        ],
+    );
+    assert!(output.status.success(), "{}", stderr(&output));
+    let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    let heading = json["affectedTests"]["items"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|i| i["path"] == NODE_HEADING)
+        .unwrap_or_else(|| panic!("{NODE_HEADING} is not listed: {json}"));
+    assert_eq!(heading["reason"]["__typename"], "UnknownTest", "{heading}");
+}
+
+// ---------------------------------------------------------------------------
+// The source of a bin that a test script runs.
+
+/// A first-party bin that a test script runs is part of how the script runs
+/// its tests: a change of the bin's source (its entry file, or a file of its
+/// package that the entry imports) selects the tests of the scripts that run
+/// it, and no other test.
+#[cfg(unix)]
+#[test]
+fn the_source_of_a_bin_a_test_script_runs_selects_the_tests_of_the_script() {
+    // A bin that forwards to the runner named first.
+    let dir = fixture("trace_node_test");
+    let selection = node_selection(dir.path(), &["--changed", "packages/tool-run/bin/run.mjs"]);
+    expect_tests(
+        &selection,
+        &[(VITEST_LABEL, "ui#test"), (NODE_HEADING, "web#test")],
+    );
+
+    // A bin that wraps jest.
+    let dir = fixture("trace_jest");
+    let write = |rel: &str, text: &str| {
+        let path = dir.path().join(rel);
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        fs::write(path, text).unwrap();
+    };
+    write(
+        "packages/jest-ci/package.json",
+        "{\n  \"name\": \"jest-ci\",\n  \"version\": \"1.0.0\",\n  \"private\": true,\n  \"bin\": \
+         { \"jest-ci\": \"./bin/jest-ci.js\" }\n}\n",
+    );
+    write(
+        "packages/jest-ci/bin/jest-ci.js",
+        "#!/usr/bin/env node\nconst { spawnSync } = require('node:child_process');\n\nconst { \
+         flags } = require('../src/flags.js');\n\nconst result = spawnSync('jest', [...flags, \
+         ...process.argv.slice(2)], { stdio: 'inherit' });\nprocess.exit(result.status ?? 1);\n",
+    );
+    write(
+        "packages/jest-ci/src/flags.js",
+        "module.exports = { flags: ['--ci'] };\n",
+    );
+    let math = dir.path().join("packages/math/package.json");
+    let manifest = fs::read_to_string(&math).unwrap();
+    assert!(manifest.contains("\"test\": \"jest\""), "{manifest}");
+    fs::write(
+        &math,
+        manifest
+            .replace("\"test\": \"jest\"", "\"test\": \"jest-ci\"")
+            .replace(
+                "\"jest\": \"29.7.0\"",
+                "\"jest\": \"29.7.0\",\n    \"jest-ci\": \"*\"",
+            ),
+    )
+    .unwrap();
+    git(dir.path(), &["add", "-A"]);
+    git(dir.path(), &["commit", "--quiet", "-m", "a jest wrapper"]);
+    for changed in [
+        "packages/jest-ci/src/flags.js",
+        "packages/jest-ci/bin/jest-ci.js",
+    ] {
+        let selection = affected_json(dir.path(), &["--changed", changed]);
+        expect_tests(
+            &selection,
+            &[(JEST_ADD, "math#test"), (JEST_MUL, "math#test")],
+        );
+    }
+}
+
+/// What can change a `node --test` run from outside its command line: the
+/// environment, env files, an `.npmrc`, a build before the run, files that
+/// share a process, a bin in front of the runner. Each case asks that the
+/// change runs the test: the test is selected, or its task is among those
+/// that run whole.
+#[cfg(unix)]
+mod node_test_inputs_outside_the_command_line {
+    use super::*;
+
+    const ADD: &str = "packages/math/test/add.test.js";
+    const HEADING: &str = "packages/web/src/heading.test.ts";
+
+    fn put(dir: &Path, rel: &str, text: &str) {
+        let path = dir.join(rel);
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        fs::write(path, text).unwrap();
+    }
+
+    fn commit(dir: &Path) {
+        git(dir, &["add", "-A"]);
+        git(dir, &["commit", "--quiet", "-m", "probe"]);
+    }
+
+    /// The manifest of `packages/math` with these scripts (JSON members).
+    fn math_scripts(dir: &Path, scripts: &str) {
+        put(
+            dir,
+            "packages/math/package.json",
+            &format!(
+                r#"{{ "name": "math", "version": "1.0.0", "private": true, "type": "module", "exports": "./src/index.js", "scripts": {{ {scripts} }} }}"#
+            ),
+        );
+    }
+
+    /// Whether a change of `changed` runs `test`: it is selected, or `task`
+    /// runs whole.
+    fn runs(dir: &Path, changed: &str, test: &str, task: &str) -> bool {
+        let selection = affected_json(dir, &["--changed", changed]);
+        selection.tests.contains_key(test) || selection.uncovered.iter().any(|t| t == task)
+    }
+
+    #[test]
+    fn npmrc_node_options_preload() {
+        let dir = fixture("trace_node_test");
+        put(dir.path(), ".gitignore", "node_modules/\n.turbo\ndist/\n");
+        put(dir.path(), ".npmrc", "node-options=--require ./pre.cjs\n");
+        put(dir.path(), "packages/math/pre.cjs", "globalThis.pre = 1;\n");
+        commit(dir.path());
+        assert!(runs(dir.path(), "packages/math/pre.cjs", ADD, "math#test"));
+    }
+
+    #[test]
+    fn tsx_tsconfig_path_variable() {
+        let dir = fixture("trace_node_test");
+        math_scripts(
+            dir.path(),
+            r#""test": "TSX_TSCONFIG_PATH=tsconfig.alt.json tsx --test""#,
+        );
+        put(
+            dir.path(),
+            "packages/math/tsconfig.json",
+            r#"{ "compilerOptions": { "paths": { "@impl/*": ["./src/*"] } } }"#,
+        );
+        put(
+            dir.path(),
+            "packages/math/tsconfig.alt.json",
+            r#"{ "compilerOptions": { "paths": { "@impl/*": ["./alt/*"] } } }"#,
+        );
+        put(
+            dir.path(),
+            "packages/math/src/value.ts",
+            "export const value = 1;\n",
+        );
+        put(
+            dir.path(),
+            "packages/math/alt/value.ts",
+            "export const value = 2;\n",
+        );
+        put(
+            dir.path(),
+            "packages/math/test/alias.test.ts",
+            "import test from 'node:test';\nimport { value } from '@impl/value';\ntest('alias', \
+             () => { if (value !== 2) throw new Error('value'); });\n",
+        );
+        commit(dir.path());
+        assert!(runs(
+            dir.path(),
+            "packages/math/alt/value.ts",
+            "packages/math/test/alias.test.ts",
+            "math#test"
+        ));
+    }
+
+    #[test]
+    fn node_path_variable() {
+        let dir = fixture("trace_node_test");
+        math_scripts(dir.path(), r#""test": "NODE_PATH=lib node --test""#);
+        put(
+            dir.path(),
+            "packages/math/lib/shared.cjs",
+            "module.exports = 1;\n",
+        );
+        put(
+            dir.path(),
+            "packages/math/test/path.test.cjs",
+            "const test = require('node:test');\nrequire('shared.cjs');\ntest('path', () => {});\n",
+        );
+        commit(dir.path());
+        assert!(runs(
+            dir.path(),
+            "packages/math/lib/shared.cjs",
+            "packages/math/test/path.test.cjs",
+            "math#test"
+        ));
+    }
+
+    #[test]
+    fn exported_node_options_preload() {
+        let dir = fixture("trace_node_test");
+        math_scripts(
+            dir.path(),
+            r#""test": "export NODE_OPTIONS=\"--import ./pre.mjs\" && node --test""#,
+        );
+        put(dir.path(), "packages/math/pre.mjs", "globalThis.pre = 1;\n");
+        commit(dir.path());
+        assert!(runs(dir.path(), "packages/math/pre.mjs", ADD, "math#test"));
+    }
+
+    #[test]
+    fn env_file_node_options_preload() {
+        let dir = fixture("trace_node_test");
+        math_scripts(dir.path(), r#""test": "node --env-file=.env.test --test""#);
+        put(
+            dir.path(),
+            "packages/math/.env.test",
+            "NODE_OPTIONS=--import ./pre.mjs\n",
+        );
+        put(dir.path(), "packages/math/pre.mjs", "globalThis.pre = 1;\n");
+        commit(dir.path());
+        assert!(runs(dir.path(), "packages/math/pre.mjs", ADD, "math#test"));
+    }
+
+    #[test]
+    fn dotenv_wrapper_env_file() {
+        let dir = fixture("trace_node_test");
+        math_scripts(
+            dir.path(),
+            r#""test": "dotenv -e .env.test -- node --test""#,
+        );
+        put(dir.path(), "packages/math/.env.test", "MODE=test\n");
+        commit(dir.path());
+        assert!(runs(
+            dir.path(),
+            "packages/math/.env.test",
+            ADD,
+            "math#test"
+        ));
+    }
+
+    #[test]
+    fn isolation_none_shares_one_process() {
+        let dir = fixture("trace_node_test");
+        math_scripts(dir.path(), r#""test": "node --test --test-isolation=none""#);
+        put(
+            dir.path(),
+            "packages/math/src/state.js",
+            "globalThis.shared = 1;\n",
+        );
+        put(
+            dir.path(),
+            "packages/math/test/a-sets.test.js",
+            "import test from 'node:test';\nimport '../src/state.js';\ntest('sets', () => {});\n",
+        );
+        put(
+            dir.path(),
+            "packages/math/test/b-reads.test.js",
+            "import test from 'node:test';\ntest('reads', () => { if (globalThis.shared !== 1) \
+             throw new Error('shared'); });\n",
+        );
+        commit(dir.path());
+        assert!(runs(
+            dir.path(),
+            "packages/math/src/state.js",
+            "packages/math/test/b-reads.test.js",
+            "math#test"
+        ));
+    }
+
+    #[test]
+    fn custom_reporter_file() {
+        let dir = fixture("trace_node_test");
+        math_scripts(
+            dir.path(),
+            r#""test": "node --test --test-reporter ./reporter.mjs""#,
+        );
+        put(
+            dir.path(),
+            "packages/math/reporter.mjs",
+            "export default async function* reporter(source) { for await (const event of source) \
+             { void event; } }\n",
+        );
+        commit(dir.path());
+        assert!(runs(
+            dir.path(),
+            "packages/math/reporter.mjs",
+            ADD,
+            "math#test"
+        ));
+    }
+
+    /// `packages/math` with a TypeScript source whose compiled copy
+    /// (`dist/cases/test/shape.js`) the default patterns take, and no source
+    /// file of that test the patterns name.
+    fn compiled_test(dir: &Path, scripts: &str) {
+        math_scripts(dir, scripts);
+        put(
+            dir,
+            "packages/math/tsconfig.json",
+            r#"{ "compilerOptions": { "outDir": "dist", "rootDir": "src", "jsx": "react-jsx" }, "include": ["src"] }"#,
+        );
+        put(
+            dir,
+            "packages/math/src/value.ts",
+            "export const value = 1;\n",
+        );
+        put(
+            dir,
+            "packages/math/src/cases/test/shape.tsx",
+            "import test from 'node:test';\nimport { value } from '../../value';\ntest('shape', \
+             () => { if (value !== 1) throw new Error('value'); });\n",
+        );
+    }
+
+    #[test]
+    fn compiled_tests_of_a_build_the_task_depends_on() {
+        let dir = fixture("trace_node_test");
+        compiled_test(
+            dir.path(),
+            r#""build": "tsc -p tsconfig.json", "test": "node --test""#,
+        );
+        put(
+            dir.path(),
+            "turbo.json",
+            r#"{ "tasks": { "build": { "outputs": ["dist/**"] }, "test": { "dependsOn": ["build"] } } }"#,
+        );
+        commit(dir.path());
+        let selection = affected_json(dir.path(), &["--changed", "packages/math/src/value.ts"]);
+        assert!(
+            selection.uncovered.iter().any(|t| t == "math#test"),
+            "math#test is covered and nothing is selected: {:?}",
+            selection.tests
+        );
+    }
+
+    #[test]
+    fn compiled_tests_of_a_pretest_script() {
+        let dir = fixture("trace_node_test");
+        compiled_test(
+            dir.path(),
+            r#""pretest": "tsc -p tsconfig.json", "test": "node --test""#,
+        );
+        commit(dir.path());
+        let selection = affected_json(dir.path(), &["--changed", "packages/math/src/value.ts"]);
+        assert!(
+            selection.uncovered.iter().any(|t| t == "math#test"),
+            "math#test is covered and nothing is selected: {:?}",
+            selection.tests
+        );
+    }
+
+    #[test]
+    fn linked_test_file() {
+        let dir = fixture("trace_node_test");
+        put(
+            dir.path(),
+            "packages/math/shared/cases.js",
+            "import test from 'node:test';\nimport './dep.js';\ntest('cases', () => {});\n",
+        );
+        put(
+            dir.path(),
+            "packages/math/shared/dep.js",
+            "export default 1;\n",
+        );
+        std::os::unix::fs::symlink(
+            "../shared/cases.js",
+            dir.path().join("packages/math/test/cases.js"),
+        )
+        .unwrap();
+        commit(dir.path());
+        let selection = affected_json(dir.path(), &["--changed", "packages/math/shared/dep.js"]);
+        assert!(
+            selection.tests.contains_key("packages/math/test/cases.js")
+                || selection
+                    .tests
+                    .contains_key("packages/math/shared/cases.js")
+                || selection.uncovered.iter().any(|t| t == "math#test"),
+            "{:?}",
+            selection.tests
+        );
+    }
+
+    #[test]
+    fn forwarding_bin_sets_a_preload() {
+        let dir = fixture("trace_node_test");
+        put(
+            dir.path(),
+            "packages/tool-run/bin/run.mjs",
+            "#!/usr/bin/env node\nimport { spawnSync } from 'node:child_process';\nimport path \
+             from 'node:path';\nprocess.env.NODE_OPTIONS = '--import ' + \
+             path.join(import.meta.dirname, '../hooks/pre.mjs');\nconst result = \
+             spawnSync(process.argv[2], process.argv.slice(3), { stdio: 'inherit' \
+             });\nprocess.exit(result.status ?? 1);\n",
+        );
+        put(
+            dir.path(),
+            "packages/tool-run/hooks/pre.mjs",
+            "globalThis.pre = 1;\n",
+        );
+        commit(dir.path());
+        assert!(runs(
+            dir.path(),
+            "packages/tool-run/hooks/pre.mjs",
+            HEADING,
+            "web#test"
+        ));
+    }
+
+    #[test]
+    fn forwarding_bin_reads_an_env_file() {
+        let dir = fixture("trace_node_test");
+        put(
+            dir.path(),
+            "packages/tool-run/bin/run.mjs",
+            "#!/usr/bin/env node\nimport { spawnSync } from 'node:child_process';\nimport fs from \
+             'node:fs';\nconst env = { ...process.env };\nfor (const line of \
+             fs.readFileSync('.env.test', 'utf8').split('\\n')) {\n  const [key, value] = \
+             line.split('=');\n  if (key) env[key] = value;\n}\nconst [program, ...rest] = \
+             process.argv.slice(2);\nconst result = spawnSync(program, rest, { stdio: 'inherit', \
+             env });\nprocess.exit(result.status ?? 1);\n",
+        );
+        put(dir.path(), "packages/web/.env.test", "MODE=test\n");
+        commit(dir.path());
+        assert!(runs(
+            dir.path(),
+            "packages/web/.env.test",
+            HEADING,
+            "web#test"
+        ));
+    }
+
+    #[test]
+    fn forwarding_bin_thirteenth_file() {
+        let dir = fixture("trace_node_test");
+        put(
+            dir.path(),
+            "packages/tool-run/bin/run.mjs",
+            "#!/usr/bin/env node\nimport { spawnSync } from 'node:child_process';\nimport { \
+             environment } from '../src/m1.mjs';\nconst [program, ...rest] = \
+             process.argv.slice(2);\nconst result = spawnSync(program, rest, { stdio: 'inherit', \
+             env: environment() });\nprocess.exit(result.status ?? 1);\n",
+        );
+        for i in 1..13 {
+            put(
+                dir.path(),
+                &format!("packages/tool-run/src/m{i}.mjs"),
+                &format!("export {{ environment }} from './m{}.mjs';\n", i + 1),
+            );
+        }
+        put(
+            dir.path(),
+            "packages/tool-run/src/m13.mjs",
+            "export const environment = () => ({ ...process.env, TOOL_RUN: '1' });\n",
+        );
+        commit(dir.path());
+        assert!(runs(
+            dir.path(),
+            "packages/tool-run/src/m2.mjs",
+            HEADING,
+            "web#test"
+        ));
+        assert!(runs(
+            dir.path(),
+            "packages/tool-run/src/m13.mjs",
+            HEADING,
+            "web#test"
+        ));
+    }
+
+    #[test]
+    fn tests_filter_keeps_items_of_other_frameworks() {
+        let dir = fixture("trace_node_test");
+        put(dir.path(), "jest.config.js", "module.exports = {};\n");
+        commit(dir.path());
+        for (asked, other) in [("jest", "node-test"), ("node-test", "jest")] {
+            let output = trace(
+                dir.path(),
+                &[
+                    "affected",
+                    "--json",
+                    "--tests",
+                    asked,
+                    "--changed",
+                    "packages/math/src/add.js",
+                ],
+            );
+            assert!(output.status.success(), "{}", stderr(&output));
+            let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+            let items = json["affectedTests"]["items"].as_array().unwrap();
+            assert!(
+                items.iter().any(|i| i["framework"] == asked),
+                "no {asked} item: {json}"
+            );
+            assert!(
+                !items.iter().any(|i| i["framework"] == other),
+                "--tests {asked} lists an item of {other}: {json}"
+            );
+        }
+    }
+
+    #[test]
+    fn custom_snapshot_path() {
+        let dir = fixture("trace_node_test");
+        math_scripts(dir.path(), r#""test": "node --import ./snap.mjs --test""#);
+        put(
+            dir.path(),
+            "packages/math/snap.mjs",
+            "import { snapshot } from 'node:test';\nimport path from \
+             'node:path';\nsnapshot.setResolveSnapshotPath((file) => \
+             path.join(path.dirname(file), '__snapshots__', path.basename(file) + '.snap'));\n",
+        );
+        put(
+            dir.path(),
+            "packages/math/test/__snapshots__/add.test.js.snap",
+            "exports[`add 1`] = `3`;\n",
+        );
+        commit(dir.path());
+        assert!(runs(
+            dir.path(),
+            "packages/math/test/__snapshots__/add.test.js.snap",
+            ADD,
+            "math#test"
+        ));
+    }
+}

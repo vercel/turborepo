@@ -318,11 +318,19 @@ fn translate(src: &str, flags: &str) -> String {
 pub fn glob_to_regex(glob: &str) -> (String, bool) {
     let g = glob.strip_prefix("./").unwrap_or(glob);
     let mut approx = false;
-    let body = glob_body(g, &mut approx);
+    let body = glob_body(g, &mut approx, 0);
     (format!("^{body}$"), approx)
 }
 
-fn glob_body(g: &str, approx: &mut bool) -> String {
+/// How deep groups (`(…)`, `{…}`, extglobs) of a glob may nest. A part nested
+/// deeper is translated as "anything", an over-approximation.
+const MAX_GLOB_NESTING: usize = 32;
+
+fn glob_body(g: &str, approx: &mut bool, depth: usize) -> String {
+    if depth > MAX_GLOB_NESTING {
+        *approx = true;
+        return ".*".to_owned();
+    }
     let b: Vec<char> = g.chars().collect();
     let mut out = String::new();
     let mut i = 0;
@@ -336,7 +344,7 @@ fn glob_body(g: &str, approx: &mut bool) -> String {
             let inner: String = b[i + 2..close].iter().collect();
             let alts: Vec<String> = split_top(&inner, '|')
                 .iter()
-                .map(|a| glob_body(a, approx))
+                .map(|a| glob_body(a, approx, depth + 1))
                 .collect();
             let group = format!("(?:{})", alts.join("|"));
             match c {
@@ -394,8 +402,10 @@ fn glob_body(g: &str, approx: &mut bool) -> String {
                     let inner: String = b[i + 1..close].iter().collect();
                     let parts = split_top(&inner, ',');
                     if parts.len() > 1 {
-                        let alts: Vec<String> =
-                            parts.iter().map(|a| glob_body(a, approx)).collect();
+                        let alts: Vec<String> = parts
+                            .iter()
+                            .map(|a| glob_body(a, approx, depth + 1))
+                            .collect();
                         out.push_str(&format!("(?:{})", alts.join("|")));
                     } else {
                         out.push_str(&regex::escape(&format!("{{{inner}}}")));
@@ -412,7 +422,7 @@ fn glob_body(g: &str, approx: &mut bool) -> String {
                     let inner: String = b[i + 1..close].iter().collect();
                     let alts: Vec<String> = split_top(&inner, '|')
                         .iter()
-                        .map(|a| glob_body(a, approx))
+                        .map(|a| glob_body(a, approx, depth + 1))
                         .collect();
                     out.push_str(&format!("(?:{})", alts.join("|")));
                     i = close + 1;

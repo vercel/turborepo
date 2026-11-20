@@ -1691,8 +1691,8 @@ pub struct TraceAffectedArgs {
     /// A file that exists counts as modified, one that does not as deleted
     #[usage(long, value_name = "FILE", num_args = 1..)]
     pub changed: Vec<String>,
-    /// Only tests of these frameworks: jest, vitest, gotest, cargo-test or
-    /// all (default: all)
+    /// Only tests of these frameworks: jest, vitest, node-test, gotest,
+    /// cargo-test or all (default: all)
     #[usage(long, value_name = "FRAMEWORK", num_args = 1..)]
     pub tests: Vec<String>,
     /// Make no assumptions: every uncertainty selects

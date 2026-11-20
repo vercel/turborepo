@@ -211,7 +211,7 @@ fn jest_tests_and_inputs() {
             "test/c.test.js",
         ],
     );
-    assert_eq!(o.trim(), "unaffected test/c.test.js");
+    assert_eq!(o.trim(), "unaffected test/c.test.js\n  a test of: jest");
 
     // --exit-code.
     let o = run(
