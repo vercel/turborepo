@@ -304,6 +304,40 @@ fn a_graph_restored_at_another_location_is_reused_whole() {
     assert!(r.reused > 2);
 }
 
+/// A checkout can hold a link where the graph directory keeps its caches:
+/// installing a graph there replaces and removes cache files, so nothing is
+/// installed, and the files behind the link stay.
+#[cfg(unix)]
+#[test]
+fn a_linked_cache_directory_installs_nothing_and_removes_nothing() {
+    let p = Packed::new(fixture);
+    let file = p.pack("graph.tta", false);
+    let there = p.elsewhere("linked-cache");
+    let out = there.join(".turbotrace");
+    let outside = p.scratch.join("outside");
+    std::fs::create_dir_all(&outside).unwrap();
+    for name in ["composed", "tables"] {
+        std::fs::write(outside.join(name), "kept").unwrap();
+    }
+    std::fs::create_dir_all(&out).unwrap();
+    turborepo_trace_core::os::symlink(&outside, out.join("cache")).unwrap();
+
+    let r = unpack(&file, &there, &out);
+    assert!(
+        matches!(&r, Err(ArtifactError::Linked(at)) if *at == out.join("cache")),
+        "{:?}",
+        r.map(|u| u.header.label)
+    );
+    for name in ["composed", "tables"] {
+        assert_eq!(std::fs::read_to_string(outside.join(name)).unwrap(), "kept");
+    }
+    assert!(turborepo_trace_store::Manifest::read(&out).is_none());
+
+    // Without the link the same artifact installs.
+    std::fs::remove_file(out.join("cache")).unwrap();
+    unpack(&file, &there, &out).unwrap();
+}
+
 #[test]
 fn an_edit_after_the_artifact_retraces_its_package_only() {
     let p = Packed::new(fixture);

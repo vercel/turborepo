@@ -197,6 +197,9 @@ pub async fn restore(
     cache: &AsyncCache,
     candidates: &[String],
 ) -> Result<Option<Restored>, String> {
+    // The caches of an installed graph go where every command keeps them: the
+    // per-machine directory, not below the graph directory of the checkout.
+    crate::api::host_defaults();
     let out = graph_dir(root.as_std_path());
     if candidates.is_empty() || Manifest::read(&out).is_some() {
         return Ok(None);

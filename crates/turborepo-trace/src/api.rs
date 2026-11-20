@@ -217,7 +217,7 @@ pub(crate) fn machine_cache_dir() -> PathBuf {
 /// per-machine directory, not below `.turbo/trace` (some are keyed by this
 /// machine's file stamps, and `.turbo` travels: CI caches it with
 /// `actions/cache`).
-fn host_defaults() {
+pub(crate) fn host_defaults() {
     turborepo_trace_store::set_machine_cache(Some(machine_cache_dir()));
 }
 
