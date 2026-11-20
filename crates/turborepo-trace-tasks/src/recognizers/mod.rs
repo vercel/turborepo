@@ -6,6 +6,7 @@
 //! | [`run`] | `node`, `tsx`, `ts-node`, `bun`, `deno run`, `python`, `go run` with a file |
 //! | [`js`] | `tsc`, `next`, `vite`, `tsup`, `esbuild`, `rollup`, `webpack`, package managers' `run` |
 //! | [`testrunners`] | `jest`, `vitest`, `pytest`, `go test`, `cargo test` |
+//! | [`viteplus`] | `vp test`, `vp run`, `vp exec`, `vpr`, `vpx` |
 //! | [`fs`] | `cp`, `cat`, `rsync`, `mkdir`, `rm`, `echo`, ... |
 //! | [`bins`] | `go tool <x>`; npm package binaries and Python console scripts through the registry's unknown-program hook |
 //!
@@ -19,6 +20,7 @@ pub mod js;
 pub mod run;
 pub mod testrunners;
 pub mod util;
+pub mod viteplus;
 
 use crate::registry::Recognizer;
 
@@ -29,6 +31,7 @@ pub fn recognizers() -> Vec<&'static dyn Recognizer> {
     v.extend(bins::recognizers());
     v.extend(js::recognizers());
     v.extend(testrunners::recognizers());
+    v.extend(viteplus::recognizers());
     v.extend(run::recognizers());
     v
 }

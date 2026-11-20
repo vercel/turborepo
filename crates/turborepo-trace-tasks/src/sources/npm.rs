@@ -205,6 +205,16 @@ impl Recognizer for PackageManager {
                     cx.whole_package(out, &format!("{pm} {sub}"));
                     return Recognition::Partial;
                 }
+                if matches!(sub.as_str(), "exec" | "dlx" | "x") && rest.len() > 1 {
+                    // A command run in other packages or in a computed directory (`pnpm -r
+                    // exec vitest run`): where it runs is not followed, what it starts is.
+                    crate::runs::scan_text(
+                        &rest[1..].join(" "),
+                        &format!("`{}`", cmd.text.trim()),
+                        cx.repo_root,
+                        out,
+                    );
+                }
                 return Recognition::Ignored;
             }
             "" => return Recognition::Ignored,

@@ -72,7 +72,7 @@ pub const GRAPH_FRAMEWORKS: &[(&str, &str)] = &[
 ];
 
 /// Version of the framework integration, part of the options digest.
-pub const INTEGRATION_VERSION: &str = "frameworks-17";
+pub const INTEGRATION_VERSION: &str = "frameworks-18";
 
 /// The adapters of [`GRAPH_FRAMEWORKS`] that are compiled in.
 fn adapters() -> Vec<(&'static dyn Framework, &'static str)> {

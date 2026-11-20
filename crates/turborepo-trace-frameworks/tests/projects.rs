@@ -437,3 +437,46 @@ fn a_linked_directory_in_a_vitest_projects_glob() {
         ["packages/x", "packages/x/deep/z", "packages/y"]
     );
 }
+
+/// Configs written for vite-plus: `defineConfig` and `configDefaults` come
+/// from `vite-plus`, and the vitest options are under `test`. A config that
+/// only holds other settings (a plain object that `satisfies UserConfig`) is a
+/// project with vitest's defaults.
+#[test]
+fn a_vite_config_imported_from_vite_plus() {
+    let (_t, r) = tmp();
+    write(
+        &r,
+        "apps/web/vite.config.ts",
+        "import { configDefaults, defineConfig } from 'vite-plus';\nexport default defineConfig({ \
+         test: { include: ['src/**/*.check.ts'], exclude: [...configDefaults.exclude, 'e2e/**'], \
+         setupFiles: ['./setup.ts'] } });\n",
+    );
+    write(&r, "apps/web/setup.ts", "export {};\n");
+    write(
+        &r,
+        "vite.config.ts",
+        "import type { UserConfig } from 'vite-plus';\nexport default { check: { fmt: false } } \
+         satisfies UserConfig;\n",
+    );
+    let web = Vitest.load(&r.join("apps/web/vite.config.ts"));
+    assert_eq!(roots(&web, &r), ["apps/web"]);
+    assert!(web.uncertainties.is_empty(), "{:?}", web.uncertainties);
+    let p = &web.projects[0];
+    assert!(p.uncertainties.is_empty(), "{:?}", p.uncertainties);
+    let discovery = serde_json::to_string(&p.discovery).unwrap();
+    assert!(discovery.contains("src/**/*.check.ts"), "{discovery}");
+    // vite-plus hands on the defaults of the vitest it depends on (5): no
+    // `**/dist/**`, which only older versions leave out.
+    assert!(discovery.contains("**/node_modules/**"), "{discovery}");
+    assert!(discovery.contains("e2e/**"), "{discovery}");
+    assert!(!discovery.contains("**/dist/**"), "{discovery}");
+    let global = serde_json::to_string(&p.global).unwrap();
+    assert!(global.contains("setup.ts"), "{global}");
+
+    let root = Vitest.load(&r.join("vite.config.ts"));
+    assert_eq!(roots(&root, &r), [""]);
+    assert!(root.uncertainties.is_empty(), "{:?}", root.uncertainties);
+    let discovery = serde_json::to_string(&root.projects[0].discovery).unwrap();
+    assert!(discovery.contains("{test,spec}"), "{discovery}");
+}

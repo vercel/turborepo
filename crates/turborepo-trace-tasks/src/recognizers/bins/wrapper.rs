@@ -162,7 +162,8 @@ pub fn tools() -> &'static BTreeSet<&'static str> {
             "node", "nodejs", "bun", "deno", "npm", "pnpm", "yarn", "npx", "pnpx", "bunx",
             "corepack", "python", "python3", "python2", "py", "pypy3", "go", "cargo", "sh", "bash",
             "zsh", "git", "make", "docker", "turbo", "nx", "lerna", "standard", "tap", "lab",
-            "tape", "xo", "uvu", "test", "build", "run", "start", "dev", "lint",
+            "tape", "xo", "uvu", "test", "build", "run", "start", "dev", "lint", "vp", "vpr",
+            "vpx",
         ];
         let mut deny: BTreeSet<&str> = DENY.iter().copied().collect();
         deny.extend(WRAPPERS.iter().copied());

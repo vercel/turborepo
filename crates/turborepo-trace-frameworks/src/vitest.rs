@@ -8,7 +8,9 @@
 //! - Evaluation: `defineConfig`, `defineProject`, `defineWorkspace`,
 //!   `mergeConfig` of local configs, function configs (called with an unknown
 //!   `{ mode, command }`), and `configDefaults` from `vitest/config` (known
-//!   defaults).
+//!   defaults). A config written for vite-plus (`defineConfig` and
+//!   `configDefaults` from `vite-plus`, or a plain object that `satisfies
+//!   UserConfig`) is read the same way.
 //! - Fields: `root`, `test.root`, `test.dir`, `test.include`, `test.exclude`,
 //!   `test.setupFiles`, `test.globalSetup`, `test.environment`, `test.alias`,
 //!   `resolve.alias` (object and array forms, string and regex `find`),
@@ -118,9 +120,19 @@ pub const DEFAULT_EXTENSIONS: &[&str] = &["mjs", "js", "mts", "ts", "jsx", "tsx"
 #[derive(Copy, Clone, Debug, Default)]
 pub struct Vitest;
 
-/// Known values from `vitest/config` / `vitest/node`.
+/// vitest's default `exclude` since version 4, a part of [`DEFAULT_EXCLUDE`].
+pub const DEFAULT_EXCLUDE_4: &[&str] = &["**/node_modules/**", "**/.git/**"];
+
+/// Known values from `vitest/config` / `vitest/node`, and from vite-plus,
+/// which hands on vitest's (`vite-plus`, `vite-plus/test/config`). vite-plus 1
+/// depends on vitest 5, whose `configDefaults.exclude` is the short list:
+/// the tests it leaves out are left out by every version.
 fn externals(module: &str, path: &[String]) -> Option<ConfigVal> {
-    if !matches!(module, "vitest/config" | "vitest/node" | "vitest") {
+    let vite_plus = matches!(
+        module,
+        "vite-plus" | "vite-plus/test" | "vite-plus/test/config" | "vite-plus/test/node"
+    );
+    if !vite_plus && !matches!(module, "vitest/config" | "vitest/node" | "vitest") {
         return None;
     }
     let strs = |xs: &[&str]| ConfigVal::Arr(xs.iter().map(|s| ConfigVal::str(*s)).collect());
@@ -130,6 +142,9 @@ fn externals(module: &str, path: &[String]) -> Option<ConfigVal> {
         .collect::<Vec<_>>()
         .as_slice()
     {
+        ["configDefaults", "exclude"] | ["defaultExclude"] if vite_plus => {
+            Some(strs(DEFAULT_EXCLUDE_4))
+        }
         ["configDefaults", "exclude"] | ["defaultExclude"] => Some(strs(DEFAULT_EXCLUDE)),
         ["configDefaults", "include"] | ["defaultInclude"] => Some(strs(DEFAULT_INCLUDE)),
         _ => None,

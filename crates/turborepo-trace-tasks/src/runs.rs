@@ -10,8 +10,8 @@
 //!
 //! | Command | Recorded |
 //! |---|---|
-//! | a test runner (`jest`, `vitest`, `pytest`, `go test`, `cargo test`, `playwright test`, `mocha`, `node --test`) | [`TestRun::Tests`]: the framework and the directory the run is rooted at (config roots, package arguments), by the runner's recognizer; its config file is a definition file |
-//! | a task reference (`pnpm run x`, `pnpm -F web test`, `turbo run x`, `make x`, `npm-run-all`) | [`TestRun::Task`]: every task dependency the command adds. A computed package (`pnpm -F "$PKG" test`) means every package. A computed task name is [`TestRun::Computed`] ([`TestRun::Unknown`] when the command names `test`) |
+//! | a test runner (`jest`, `vitest`, `vp test`, `pytest`, `go test`, `cargo test`, `playwright test`, `mocha`, `node --test`) | [`TestRun::Tests`]: the framework and the directory the run is rooted at (config roots, package arguments), by the runner's recognizer; its config file is a definition file |
+//! | a task reference (`pnpm run x`, `pnpm -F web test`, `vp run x`, `turbo run x`, `make x`, `npm-run-all`) | [`TestRun::Task`]: every task dependency the command adds. A computed package (`pnpm -F "$PKG" test`) means every package. A computed task name is [`TestRun::Computed`] ([`TestRun::Unknown`] when the command names `test`) |
 //! | `turbo run x` | also the tasks `x` depends on in the root `turbo.json` (`dependsOn`, transitively): turbo runs them even when a package has no `x` script |
 //! | a script run by an interpreter (`node x.mjs`, `tsx x.ts`, `python x.py`, a file with a `node` shebang, a repository `bin`) | the script is a definition file; its text is scanned for [launch words](launch_word), for a JS/TS script without its comments |
 //! | an unknown program | the rest of its command line, if that is a recognized command (`timeout 600 pnpm test`); else its text is scanned |
@@ -20,9 +20,10 @@
 //!
 //! **Launch words.** Text the recognizers can't see through counts as starting
 //! tests only on evidence: it names a test runner (`jest`, `vitest`, `pytest`,
-//! `gotestsum`, `go test`, `cargo test`, `playwright`, `mocha`, `cypress`): the
-//! tests of that framework; or it names a task runner (`turbo`, a package
-//! manager, `make`, `nx`) on a line that also contains `test`, or `turbo` with
+//! `gotestsum`, `go test`, `cargo test`, `vp test`, `playwright`, `mocha`,
+//! `cypress`): the tests of that framework; or it names a task runner (`turbo`,
+//! a package manager, `make`, `nx`, `vp run`) on a line that also contains
+//! `test`, or `turbo` with
 //! a pipeline task that depends on a test task: every test. Text that merely
 //! names `turbo` or a package manager (a build, deploy or scoring script)
 //! starts no tests. This is the one assumption of the relation: tests are
@@ -110,6 +111,33 @@ fn has_word(text: &str, word: &str) -> bool {
     false
 }
 
+/// Whether `line` names vite-plus's `vp` with the subcommand `sub`: `vp test`
+/// is vitest and `vp run` a task runner (`vp test run`, `vp -C web test`,
+/// `spawn('vp', ['run', 'test:unit'])`). The word alone says nothing: `vp
+/// build`, a variable called `vp`.
+fn vp_subcommand(line: &str, sub: &str) -> bool {
+    let mut from = 0;
+    while let Some(i) = line[from..].find("vp") {
+        let at = from + i;
+        from = at + 2;
+        if !is_word(line, at, 2) {
+            continue;
+        }
+        let mut words = line[from..]
+            .split(|c: char| !(c.is_ascii_alphanumeric() || matches!(c, '_' | '-' | '.' | '/')))
+            .filter(|w| !w.is_empty());
+        let mut next = words.next();
+        if next == Some("-C") {
+            words.next();
+            next = words.next();
+        }
+        if next == Some(sub) {
+            return true;
+        }
+    }
+    false
+}
+
 /// The first launch word in `text` (see the module docs), with what it stands
 /// for.
 pub fn launch_word(text: &str) -> Option<(&'static str, Launch)> {
@@ -135,6 +163,8 @@ pub fn launch_word(text: &str) -> Option<(&'static str, Launch)> {
         ("make", None),
         ("nx", None),
         ("deno", None),
+        // vite-plus: `vpr test` (for `vp`, see [`vp_subcommand`]).
+        ("vpr", None),
     ];
     let mut any: Option<&'static str> = None;
     for line in text.lines() {
@@ -143,7 +173,13 @@ pub fn launch_word(text: &str) -> Option<(&'static str, Launch)> {
                 return Some((w, Launch::Framework(fw)));
             }
         }
+        if vp_subcommand(line, "test") {
+            return Some(("vp", Launch::Framework("vitest")));
+        }
         if line.contains("test") {
+            if any.is_none() && vp_subcommand(line, "run") {
+                any = Some("vp");
+            }
             for (w, fw) in WITH_TEST {
                 if has_word(line, w) {
                     match fw {
@@ -526,6 +562,20 @@ mod tests {
             Some(("go", Launch::Framework("gotest")))
         );
         assert_eq!(launch_word("go build ./..."), None);
+        // vite-plus: `vp test` is vitest, `vp run` a task runner.
+        assert_eq!(
+            launch_word("execSync('vp test run --coverage')"),
+            Some(("vp", Launch::Framework("vitest")))
+        );
+        assert_eq!(
+            launch_word("spawn('vp', ['-C', dir, 'test'])"),
+            Some(("vp", Launch::Framework("vitest")))
+        );
+        assert_eq!(launch_word("vp run test:unit"), Some(("vp", Launch::Any)));
+        assert_eq!(launch_word("vpr test"), Some(("vpr", Launch::Any)));
+        assert_eq!(launch_word("vp build && vp lint"), None);
+        assert_eq!(launch_word("const vp = viewport(test);"), None);
+        assert_eq!(launch_word("node_modules/.bin/vp-test"), None);
         assert_eq!(launch_word("pnpm install --frozen-lockfile"), None);
         assert_eq!(
             launch_word("execa('pnpm', ['run', 'test:unit'])"),

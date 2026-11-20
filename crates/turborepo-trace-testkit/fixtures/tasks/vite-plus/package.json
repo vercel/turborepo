@@ -1,0 +1,16 @@
+{
+  "name": "vite-plus-runs",
+  "private": true,
+  "scripts": {
+    "test": "vp test run",
+    "test:all": "vp run -r test",
+    "test:math": "vp run math#test",
+    "test:web": "vp exec vitest run --root apps/web",
+    "test:release": "vp run release-checks",
+    "check": "vp check && vp lint",
+    "seed": "vpx ./scripts/seed.ts"
+  },
+  "devDependencies": {
+    "vite-plus": "1.7.0"
+  }
+}

@@ -2254,17 +2254,18 @@ impl Module {
             match s {
                 Statement::ImportDeclaration(d) => {
                     let all_types = d.import_kind == ImportOrExportKind::Type;
-                    if matches!(lit(&d.source).as_str(), "vitest" | "@jest/globals")
-                        && d.specifiers.iter().flatten().any(|x| {
-                            let imported = match x {
-                                ImportDeclarationSpecifier::ImportSpecifier(x) => {
-                                    export_name(&x.imported)
-                                }
-                                _ => "vi".to_owned(),
-                            };
-                            MOCKERS.contains(&imported.as_str())
-                        })
-                    {
+                    if matches!(
+                        lit(&d.source).as_str(),
+                        "vitest" | "vite-plus/test" | "@jest/globals"
+                    ) && d.specifiers.iter().flatten().any(|x| {
+                        let imported = match x {
+                            ImportDeclarationSpecifier::ImportSpecifier(x) => {
+                                export_name(&x.imported)
+                            }
+                            _ => "vi".to_owned(),
+                        };
+                        MOCKERS.contains(&imported.as_str())
+                    }) {
                         return Err("test-runner mocks");
                     }
                     let kept = |used: &[bool]| match &d.specifiers {
@@ -4418,6 +4419,10 @@ mod tests {
             ),
             (
                 "import { vi } from 'vitest';\nexport const m = () => vi.fn();",
+                "test-runner mocks",
+            ),
+            (
+                "import { vi } from 'vite-plus/test';\nexport const m = () => vi.fn();",
                 "test-runner mocks",
             ),
             ("export const a = ;", "parse errors"),

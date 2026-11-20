@@ -869,7 +869,10 @@ impl<'a> Walk<'_, 'a, '_, '_> {
                 self.engine.site(e),
                 Some(V::Import(i))
                     if &*i.name == "expect"
-                        && matches!(&*i.module, "vitest" | "@jest/globals" | "bun:test")
+                        && matches!(
+                            &*i.module,
+                            "vitest" | "vite-plus/test" | "@jest/globals" | "bun:test"
+                        )
             )
     }
 

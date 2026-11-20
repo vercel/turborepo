@@ -242,7 +242,7 @@ pub const WRAPPERS: &[&str] = &[
 /// package, or one of the package at the command's directory (after `cd
 /// other/pkg`, and for tasks that are not package scripts themselves, such as
 /// the steps of a CI job, which have no script list).
-fn is_script(cx: &RecognizeCx<'_>, cmd: &Command, name: &str) -> bool {
+pub(crate) fn is_script(cx: &RecognizeCx<'_>, cmd: &Command, name: &str) -> bool {
     if cx.scripts.iter().any(|s| s == name) {
         return true;
     }
@@ -253,6 +253,41 @@ fn is_script(cx: &RecognizeCx<'_>, cmd: &Command, name: &str) -> bool {
         .ok()
         .and_then(|b| serde_json::from_slice::<serde_json::Value>(&b).ok())
         .is_some_and(|v| v.get("scripts").and_then(|s| s.get(name)).is_some())
+}
+
+/// A package manager's `exec`, `dlx` or `x` (`pnpm exec cmd`, `pnpm --dir x
+/// exec cmd`): the index of the command's first word and the directory a
+/// `-C`, `--dir`, `--cwd` or `--prefix` before the subcommand names. `None`
+/// for any other command, and when that directory is computed.
+fn pm_exec(cmd: &Command) -> Option<(usize, Option<String>)> {
+    let mut i = 1;
+    let mut dir = None;
+    while let Some(w) = cmd.argv.get(i) {
+        let a = w.text.as_str();
+        if matches!(a, "-C" | "--dir" | "--cwd" | "--prefix") {
+            let d = cmd.argv.get(i + 1).filter(|d| !d.dynamic)?;
+            dir = Some(d.text.clone());
+            i += 2;
+        } else if let Some((k, v)) = a.split_once('=')
+            && matches!(k, "--dir" | "--cwd" | "--prefix")
+        {
+            if w.dynamic {
+                return None;
+            }
+            dir = Some(v.to_string());
+            i += 1;
+        } else {
+            break;
+        }
+    }
+    if !matches!(cmd.argv.get(i)?.text.as_str(), "exec" | "dlx" | "x") {
+        return None;
+    }
+    i += 1;
+    while cmd.argv.get(i).is_some_and(|w| w.text.starts_with('-')) {
+        i += 1;
+    }
+    Some((i, dir))
 }
 
 /// Strips wrapper programs (`npx tsc` → `tsc`, `pnpm exec`, `yarn tsc` when
@@ -281,24 +316,35 @@ pub fn strip_wrappers(cmd: &Command, cx: &RecognizeCx<'_>, out: &mut TaskSpec) -
                 }
                 i
             }
-            "pnpm" | "yarn" | "bun" => match args.first().map(String::as_str) {
-                Some("exec" | "dlx" | "x") => {
-                    let mut i = 2;
-                    while c.argv.get(i).is_some_and(|w| w.text.starts_with('-')) {
-                        i += 1;
+            // `vp exec cmd`, `vpx cmd` (vite-plus): the command, where `-C` says.
+            "vp" | "vpx" => match crate::recognizers::viteplus::exec_command(&c) {
+                Some(inner) => {
+                    out.tool("npm", "vite-plus");
+                    c = inner;
+                    continue;
+                }
+                None => return c,
+            },
+            "pnpm" | "yarn" | "bun" => match pm_exec(&c) {
+                // `pnpm exec cmd`, `pnpm --dir x exec cmd`: the command, in that directory.
+                Some((i, dir)) => {
+                    if let Some(dir) = dir {
+                        c.cwd = c.path(&dir);
                     }
                     i
                 }
-                // `yarn tsc`, `pnpm tsc`: a binary when it is not a script or builtin.
-                Some(a)
-                    if !a.starts_with('-')
-                        && !(name == "bun" && crate::recognizers::util::is_pathish(a))
-                        && !is_pm_builtin(&name, a)
-                        && !is_script(cx, &c, a) =>
-                {
-                    1
-                }
-                _ => return c,
+                None => match args.first().map(String::as_str) {
+                    // `yarn tsc`, `pnpm tsc`: a binary when it is not a script or builtin.
+                    Some(a)
+                        if !a.starts_with('-')
+                            && !(name == "bun" && crate::recognizers::util::is_pathish(a))
+                            && !is_pm_builtin(&name, a)
+                            && !is_script(cx, &c, a) =>
+                    {
+                        1
+                    }
+                    _ => return c,
+                },
             },
             "cross-env" | "cross-env-shell" | "env" => {
                 let mut i = 1;

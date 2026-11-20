@@ -1,0 +1,9 @@
+{
+  "name": "web",
+  "scripts": {
+    "test": "vp test",
+    "test:math": "vp test run --root ../../packages/math",
+    "test:billing": "vp -C ../../services/billing test run",
+    "test:unit": "vp test run -c vite.unit.config.ts"
+  }
+}

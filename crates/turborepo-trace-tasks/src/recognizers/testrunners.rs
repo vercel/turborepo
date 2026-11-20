@@ -5,7 +5,7 @@
 //! | Program | Config | Adapter |
 //! |---|---|---|
 //! | `jest` | `-c/--config`, else `jest.config.*` / `package.json#jest` up from the cwd | [`turborepo_trace_frameworks::jest`] |
-//! | `vitest` | `-c/--config`, `--root`, else `vitest.config.*` / `vite.config.*` | [`turborepo_trace_frameworks::vitest`] |
+//! | `vitest`, `vp test` (vite-plus, [`crate::recognizers::viteplus`]) | `-c/--config`, `--root`, else `vitest.config.*` / `vite.config.*` | [`turborepo_trace_frameworks::vitest`] |
 //! | `pytest`, `py.test` | `-c`, else the nearest `pytest.ini` / `pyproject.toml` / `tox.ini` / `setup.cfg` | [`turborepo_trace_frameworks::pytest`] |
 //! | `playwright test` | `-c/--config`, else `playwright.config.*` | [`turborepo_trace_frameworks::playwright`] |
 //! | `go test` | packages (`./...`), `testdata/**` | none (package directories) |
@@ -285,72 +285,95 @@ impl Recognizer for Vitest {
     fn programs(&self) -> &'static [&'static str] {
         &["vitest"]
     }
-    fn recognize(&self, cmd: &Command, _cx: &RecognizeCx<'_>, out: &mut TaskSpec) -> Recognition {
+    fn recognize(&self, cmd: &Command, cx: &RecognizeCx<'_>, out: &mut TaskSpec) -> Recognition {
         out.tool("npm", "vitest");
-        let args = Args::new(
-            cmd,
-            0,
-            &[
-                "-c",
-                "--config",
-                "-r",
-                "--root",
-                "--dir",
-                "--project",
-                "--workspace",
-                "--outputFile",
-                "--reporter",
-                "--environment",
-                "--pool",
-                "--shard",
-                "-t",
-                "--testNamePattern",
-                "--mode",
-                "--coverage.reportsDirectory",
-            ],
-        )
-        .collect_all();
-        if let Some(o) = opt(&args, &["--outputFile"]) {
-            out.output(cmd.path(o));
-        }
-        let root = opt(&args, &["-r", "--root"])
-            .map(|r| cmd.path(r))
-            .unwrap_or_else(|| cmd.cwd.clone());
-        let config = match opt(&args, &["-c", "--config"]) {
-            Some(c) => Some(cmd.path(c)),
-            None => find_config(&root, VITEST_CONFIGS),
-        };
-        for n in VITEST_CONFIGS {
-            out.input(root.join(n));
-        }
-        match config {
-            Some(c) => {
-                let fi = turborepo_trace_frameworks::vitest::Vitest.load(&c);
-                let complete = add_framework_inputs(&fi, out);
-                if let Some(d) = opt(&args, &["--dir"]) {
-                    out.test_run("vitest", cmd.path(d));
-                    out.membership(cmd.path(d), "**", "vitest --dir");
-                }
-                if complete {
-                    Recognition::Full
-                } else {
-                    Recognition::Partial
-                }
+        vitest_run(cmd, cx, out)
+    }
+}
+
+/// A vitest run: `cmd` is the vitest command line (`vitest run --root x`, or
+/// the `test …` part of `vp test run --root x`), started in `cmd.cwd`.
+///
+/// The root is the directory the run is started in, or `--root`. The config is
+/// `-c/--config`, else the one in the root, else (vitest up to 4) the one of
+/// the nearest directory above it: that one only says how the run goes, the
+/// tests stay those below the root.
+pub fn vitest_run(cmd: &Command, cx: &RecognizeCx<'_>, out: &mut TaskSpec) -> Recognition {
+    let args = Args::new(
+        cmd,
+        0,
+        &[
+            "-c",
+            "--config",
+            "-r",
+            "--root",
+            "--dir",
+            "--project",
+            "--workspace",
+            "--outputFile",
+            "--reporter",
+            "--environment",
+            "--pool",
+            "--shard",
+            "-t",
+            "--testNamePattern",
+            "--mode",
+            "--coverage.reportsDirectory",
+        ],
+    )
+    .collect_all();
+    if let Some(o) = opt(&args, &["--outputFile"]) {
+        out.output(cmd.path(o));
+    }
+    let root = opt(&args, &["-r", "--root"])
+        .map(|r| cmd.path(r))
+        .unwrap_or_else(|| cmd.cwd.clone());
+    let config = match opt(&args, &["-c", "--config"]) {
+        Some(c) => Some(cmd.path(c)),
+        None => find_config(&root, VITEST_CONFIGS),
+    };
+    for n in VITEST_CONFIGS {
+        out.input(root.join(n));
+    }
+    match config {
+        Some(c) => {
+            let fi = turborepo_trace_frameworks::vitest::Vitest.load(&c);
+            let complete = add_framework_inputs(&fi, out);
+            if let Some(d) = opt(&args, &["--dir"]) {
+                out.test_run("vitest", cmd.path(d));
+                out.membership(cmd.path(d), "**", "vitest --dir");
             }
-            None => {
-                out.test_run("vitest", root.clone());
-                out.membership(
-                    root,
-                    "**/*.{test,spec}.{js,jsx,ts,tsx,mjs,cjs,mts,cts}",
-                    "vitest default test files",
-                );
-                out.membership(
-                    cmd.cwd.clone(),
-                    "**/*.{js,jsx,ts,tsx,mjs,cjs,mts,cts,snap}",
-                    "vitest default sources",
-                );
+            if complete {
                 Recognition::Full
+            } else {
+                Recognition::Partial
             }
+        }
+        None => {
+            // No config in the root. vitest up to 4 takes the one of the nearest
+            // directory above (5 takes none): it defines the run, whose root stays
+            // where it is.
+            let above = root
+                .ancestors()
+                .skip(1)
+                .take_while(|d| d.starts_with(cx.repo_root))
+                .find_map(|d| find_config(d, turborepo_trace_frameworks::vitest::CONFIG_NAMES));
+            if let Some(c) = above {
+                add_code_config(&c, out);
+                out.defines(c);
+            }
+            out.test_run("vitest", root.clone());
+            out.membership(
+                root,
+                "**/*.{test,spec}.{js,jsx,ts,tsx,mjs,cjs,mts,cts}",
+                "vitest default test files",
+            );
+            out.membership(
+                cmd.cwd.clone(),
+                "**/*.{js,jsx,ts,tsx,mjs,cjs,mts,cts,snap}",
+                "vitest default sources",
+            );
+            Recognition::Full
         }
     }
 }

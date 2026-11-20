@@ -542,6 +542,46 @@ fn vitest_affected_by_explicit_changes() {
     assert_eq!(selected, BTreeSet::new());
 }
 
+/// A package that runs its tests with vite-plus (`vp test run`, the config in
+/// a `vite.config.ts` that imports from `vite-plus`): `vp test` is a vitest
+/// run, so the selected tests belong to the package's task and no task runs
+/// whole.
+#[cfg(unix)]
+#[test]
+fn vite_plus_test_script_runs_the_vitest_tests_of_its_package() {
+    let dir = fixture("trace_vitest");
+    let web = dir.path().join("packages/web");
+    let manifest = fs::read_to_string(web.join("package.json")).unwrap();
+    let mut json: serde_json::Value = serde_json::from_str(&manifest).unwrap();
+    json["scripts"]["test"] = "vp test run".into();
+    fs::write(
+        web.join("package.json"),
+        serde_json::to_string_pretty(&json).unwrap(),
+    )
+    .unwrap();
+    fs::remove_file(web.join("vitest.config.ts")).unwrap();
+    fs::write(
+        web.join("vite.config.ts"),
+        "import { defineConfig } from \"vite-plus\";\n\nexport default defineConfig({\n  test: \
+         {\n    include: [\"test/**/*.test.ts\"],\n  },\n});\n",
+    )
+    .unwrap();
+    git(dir.path(), &["add", "-A"]);
+    git(dir.path(), &["commit", "--quiet", "-m", "vite-plus"]);
+
+    let format = dir.path().join("packages/web/src/format.ts");
+    let source = fs::read_to_string(&format).unwrap();
+    fs::write(&format, source.replace("1 item", "one item")).unwrap();
+    let selection = affected_json(dir.path(), &["--base", "HEAD"]);
+    assert_eq!(
+        selection.tests.get(VITEST_FORMAT).map(String::as_str),
+        Some("web#test"),
+        "{:?}",
+        selection.tests
+    );
+    assert_eq!(selection.uncovered, Vec::<String>::new());
+}
+
 #[cfg(unix)]
 #[test]
 fn vitest_affected_by_a_working_tree_edit() {

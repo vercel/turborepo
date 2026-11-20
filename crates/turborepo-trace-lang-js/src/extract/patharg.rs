@@ -113,6 +113,7 @@ fn tracked_module(m: &str) -> bool {
             | "child_process"
             | "worker_threads"
             | "vitest"
+            | "vite-plus/test"
             | "@jest/globals"
     )
 }
@@ -410,6 +411,7 @@ mod tests {
              });\nload('./a.json' + x);\n",
             // Modules whose path arguments are read by the main pass or the adapters.
             "import { vi } from 'vitest';\nvi.mock('./a.js');\n",
+            "import { vi } from 'vite-plus/test';\nvi.mock('./a.js');\n",
             "import fs from 'node:fs';\nfs.readFileSync('./a.json');\n",
         ] {
             assert!(assets(src).is_empty(), "{src}: {:?}", assets(src));
