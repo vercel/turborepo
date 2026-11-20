@@ -74,7 +74,13 @@
 //! - `--test-isolation` other than `process` (the files share one process);
 //! - a `--test-reporter` that is not built in (a module);
 //! - a preload file, or a file it imports by a relative path, that calls
-//!   `snapshot.setResolveSnapshotPath`.
+//!   `snapshot.setResolveSnapshotPath`;
+//! - an env file, a preload file or an `.npmrc` that is no regular file or
+//!   holds more than 4 MiB: it is not read;
+//! - the same command line started a second time in the script by a run that is
+//!   not mapped (after an `export`, behind such a variable or env file, in a
+//!   group, a branch, a subshell or a directory that is not followed): the task
+//!   recognizer sees one command at a time and cannot tell the two apart.
 //!
 //! The task that starts such a run runs whole (`turborepo-trace-tasks`,
 //! `recognizers/nodetest.rs`).
@@ -215,6 +221,9 @@ const MOVES: &[&str] = &[
     "--directory",
     "--project",
 ];
+
+/// The longest file argument that is read as a glob.
+const MAX_FILE_ARGUMENT: usize = 1024;
 
 /// An env file a run reads.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -459,6 +468,9 @@ pub fn parse(
                 "the file argument `{w}` is not a path or glob below the working directory"
             ));
         }
+        if p.len() > MAX_FILE_ARGUMENT {
+            return unmapped("a file argument is too long to read as a glob");
+        }
         if !glob_is_exact(p) {
             return unmapped(format!("the glob `{w}` is not translated exactly"));
         }
@@ -637,6 +649,11 @@ fn commands(text: &str) -> Vec<Simple> {
     r.out
 }
 
+/// Words in front of a command that open a group or a branch of the shell.
+const OPENERS: &[&str] = &[
+    "{", "!", "if", "then", "else", "elif", "while", "until", "do",
+];
+
 fn base_name(word: &str) -> &str {
     word.rsplit('/').next().unwrap_or(word)
 }
@@ -645,21 +662,53 @@ fn base_name(word: &str) -> &str {
 /// `package.json`), with exactly known files and preloads (module docs,
 /// "Scripts").
 pub fn script_runs(dir: &Path, text: &str) -> Vec<Run> {
-    let mut out = Vec::new();
+    let mut out: Vec<Run> = Vec::new();
+    // The runs the script starts that are not mapped, as far as their command
+    // lines are read, and whether their working directory is known. The task
+    // recognizer sees one command at a time: it cannot tell such a run from a
+    // mapped one with the same command line, so neither is mapped.
+    let mut refused: Vec<(Run, bool)> = Vec::new();
     // Where the commands run; `None` once a `cd` is not followed.
     let mut cwd = Some(dir.to_path_buf());
     let mut after_cd = false;
+    // A command before changed the environment of what follows (`export`, a file
+    // that is sourced, a bare assignment): what the runner then loads is not
+    // read, so no run after it is mapped.
+    let mut environment_changed = false;
     for cmd in commands(text) {
-        // A command that changes the environment of what follows (`export`, a file
-        // that is sourced, a bare assignment): what the runner then loads is not
-        // read, so no run after it is mapped.
-        if cmd.words.first().is_some_and(|(w, _)| {
+        // The command behind the words that open a group or a branch (`{ export
+        // X=1`, `then . ./env.sh`).
+        let opened = cmd
+            .words
+            .iter()
+            .take_while(|(w, _)| OPENERS.contains(&w.as_str()))
+            .count();
+        let inner = &cmd.words[opened..];
+        if inner.first().is_some_and(|(w, _)| {
             matches!(
                 w.as_str(),
                 "export" | "." | "source" | "eval" | "set" | "unset"
-            ) || cmd.words.iter().all(|(w, _)| assignment(w).is_some())
-        }) {
-            break;
+            )
+        }) || (!inner.is_empty() && inner.iter().all(|(w, _)| assignment(w).is_some()))
+        {
+            environment_changed = true;
+            continue;
+        }
+        if cmd.complex {
+            // A subshell or a function: what it leaves in the environment, and where
+            // its commands run, is not followed.
+            if cmd.words.iter().any(|(w, _)| w.starts_with('(')) {
+                environment_changed = true;
+            }
+            // A run inside it is not read word by word: no run of the script is
+            // told from it.
+            let plain = |w: &str| w.trim_start_matches('(').trim_end_matches(')').to_owned();
+            let words: Vec<String> = cmd.words.iter().map(|(w, _)| plain(w)).collect();
+            if words.iter().any(|w| PROGRAMS.contains(&base_name(w)))
+                && words.iter().any(|w| w == "--test")
+            {
+                return Vec::new();
+            }
         }
         // After `cd x ||`, `cd x |` or `cd x &` the directory of what follows is not
         // known.
@@ -680,10 +729,6 @@ pub fn script_runs(dir: &Path, text: &str) -> Vec<Run> {
             };
             continue;
         }
-        let Some(at) = &cwd else { continue };
-        if cmd.complex {
-            continue;
-        }
         let Some(i) = cmd
             .words
             .iter()
@@ -696,21 +741,14 @@ pub fn script_runs(dir: &Path, text: &str) -> Vec<Run> {
             let name = w.split_once('=').map_or(w, |(n, _)| n);
             MOVES.contains(&name)
         };
-        if before.iter().any(|(w, dynamic)| *dynamic || moves(w)) {
-            continue;
-        }
+        let moved = before.iter().any(|(w, dynamic)| *dynamic || moves(w));
         // A variable that changes what the runner resolves or loads, and that is
         // not read here.
-        if before
+        let resolution = before
             .iter()
-            .any(|(w, _)| assignment(w).is_some_and(|name| RESOLUTION_VARIABLES.contains(&name)))
-        {
-            continue;
-        }
+            .any(|(w, _)| assignment(w).is_some_and(|name| RESOLUTION_VARIABLES.contains(&name)));
         // The env files of a wrapper in front of the runner.
-        let Some(wrapper_env) = wrapper_env_files(before) else {
-            continue;
-        };
+        let wrapper_env = wrapper_env_files(before);
         let node_options = before
             .iter()
             .rev()
@@ -719,13 +757,35 @@ pub fn script_runs(dir: &Path, text: &str) -> Vec<Run> {
             .iter()
             .map(|(w, d)| (w.as_str(), *d))
             .collect();
-        if let Parsed::Run(mut run) = parse(base_name(&cmd.words[i].0), &args, node_options, at) {
-            run.env_files.extend(wrapper_env);
-            if reads_only_what_is_modelled(&run) {
-                out.push(run);
+        let at = cwd.as_deref().unwrap_or(dir);
+        let Parsed::Run(mut run) = parse(base_name(&cmd.words[i].0), &args, node_options, at)
+        else {
+            continue;
+        };
+        let known_cwd = cwd.is_some() && !moved;
+        match wrapper_env {
+            Some(files) if known_cwd && !cmd.complex && !resolution && !environment_changed => {
+                run.env_files.extend(files);
+                if reads_only_what_is_modelled(&run) {
+                    out.push(run);
+                } else {
+                    refused.push((run, true));
+                }
             }
+            _ => refused.push((run, known_cwd)),
         }
     }
+    out.retain(|run| {
+        !refused.iter().any(|(other, known_cwd)| {
+            if *known_cwd {
+                other.same_command(run)
+            } else {
+                other.patterns == run.patterns
+                    && other.preloads == run.preloads
+                    && other.global_setup == run.global_setup
+            }
+        })
+    });
     out
 }
 
@@ -798,21 +858,61 @@ fn wrapper_env_files(before: &[(String, bool)]) -> Option<Vec<EnvFile>> {
     )
 }
 
+/// The most a file read for the runs of a manifest may hold: the manifest, an
+/// env file, an `.npmrc`, a preload file.
+const READ_LIMIT: u64 = 4 << 20;
+
+/// A file read without a record ([`read_unrecorded`]).
+enum Unrecorded {
+    /// No file.
+    Absent,
+    /// The file.
+    Bytes(Vec<u8>),
+    /// Something that is not read: not a regular file (a device, a pipe, a
+    /// directory, also behind a link), or more than [`READ_LIMIT`] bytes.
+    Refused,
+}
+
+impl Unrecorded {
+    fn text(&self) -> Option<std::borrow::Cow<'_, str>> {
+        match self {
+            Unrecorded::Bytes(b) => Some(String::from_utf8_lossy(b)),
+            _ => None,
+        }
+    }
+}
+
 /// Reads a file without a record: what is computed from it is keyed by the
-/// runs ([`manifest_scripts`]).
-fn read_unrecorded(path: &Path) -> Option<String> {
-    let bytes = turborepo_trace_core::record::pause(|| fsx::read(path)).ok()?;
-    Some(String::from_utf8_lossy(&bytes).into_owned())
+/// runs ([`manifest_scripts`]). Only a regular file of at most [`READ_LIMIT`]
+/// bytes is read: a script names these paths, and a device or a pipe has no
+/// end.
+fn read_unrecorded(path: &Path) -> Unrecorded {
+    turborepo_trace_core::record::pause(|| {
+        if let Ok(meta) = std::fs::metadata(path)
+            && (!meta.is_file() || meta.len() > READ_LIMIT)
+        {
+            return Unrecorded::Refused;
+        }
+        match fsx::read(path) {
+            Ok(bytes) if bytes.len() as u64 > READ_LIMIT => Unrecorded::Refused,
+            Ok(bytes) => Unrecorded::Bytes(bytes),
+            Err(_) => Unrecorded::Absent,
+        }
+    })
 }
 
 /// Whether the run loads nothing that its command line does not say: no env
 /// file of it sets `NODE_OPTIONS` or a [`RESOLUTION_VARIABLES`] entry, and no
 /// preload file (or a file it imports by a relative path) moves the snapshot
-/// files (`snapshot.setResolveSnapshotPath`).
+/// files (`snapshot.setResolveSnapshotPath`). A file that is not read
+/// ([`Unrecorded::Refused`]) may do either.
 fn reads_only_what_is_modelled(run: &Run) -> bool {
     for e in &run.env_files {
-        let Some(text) = read_unrecorded(&run.cwd.join(&e.path)) else {
-            continue;
+        let file = read_unrecorded(&run.cwd.join(&e.path));
+        let text = match &file {
+            Unrecorded::Absent => continue,
+            Unrecorded::Refused => return false,
+            Unrecorded::Bytes(b) => String::from_utf8_lossy(b),
         };
         let sets = text.lines().any(|l| {
             let l = l.trim_start();
@@ -838,8 +938,11 @@ fn reads_only_what_is_modelled(run: &Run) -> bool {
             continue;
         }
         seen.push(file.clone());
-        let Some(text) = read_unrecorded(&file) else {
-            continue;
+        let read = read_unrecorded(&file);
+        let text = match &read {
+            Unrecorded::Absent => continue,
+            Unrecorded::Refused => return false,
+            Unrecorded::Bytes(b) => String::from_utf8_lossy(b),
         };
         if text.contains("setResolveSnapshotPath") {
             return false;
@@ -867,10 +970,13 @@ fn reads_only_what_is_modelled(run: &Run) -> bool {
 /// it to every script as `NODE_OPTIONS`, which is not read.
 fn npmrc_sets_node_options(dir: &Path) -> bool {
     for d in dir.ancestors() {
-        if read_unrecorded(&d.join(".npmrc")).is_some_and(|text| {
-            text.lines()
-                .any(|l| l.trim_start().starts_with("node-options"))
-        }) {
+        let npmrc = read_unrecorded(&d.join(".npmrc"));
+        if matches!(npmrc, Unrecorded::Refused)
+            || npmrc.text().is_some_and(|text| {
+                text.lines()
+                    .any(|l| l.trim_start().starts_with("node-options"))
+            })
+        {
             return true;
         }
         if turborepo_trace_core::record::pause(|| fsx::exists(&d.join(".git"))) {
@@ -887,7 +993,7 @@ pub fn manifest_scripts(manifest: &Path) -> Vec<(String, Vec<Run>)> {
     // only its runs matter here. Whoever keeps what is computed from them keys it
     // by the runs themselves (the graph store: the first-party key of the packages
     // the manifest governs).
-    let Ok(bytes) = turborepo_trace_core::record::pause(|| fsx::read(manifest)) else {
+    let Unrecorded::Bytes(bytes) = read_unrecorded(manifest) else {
         return Vec::new();
     };
     // (Most manifests start no test runner: the text says so without a parse.)
@@ -1307,6 +1413,139 @@ mod tests {
             runs("node --test test/unit/*.test.js && node --test test/e2e/*.test.js").len(),
             2
         );
+    }
+
+    /// A new directory below the temporary directory.
+    #[allow(clippy::expect_used)]
+    fn scratch(name: &str) -> PathBuf {
+        let nanos = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_or(0, |d| d.as_nanos());
+        let dir = std::env::temp_dir().join(format!(
+            "trace-node-test-{name}-{}-{nanos}",
+            std::process::id()
+        ));
+        std::fs::create_dir(&dir).expect("a new directory");
+        dir.canonicalize().expect("the directory")
+    }
+
+    #[test]
+    #[allow(clippy::expect_used)]
+    fn a_run_that_is_not_mapped_takes_the_same_command_with_it() {
+        let dir = scratch("same-command");
+        std::fs::write(dir.join(".env.plain"), "API_URL=http://localhost\n").expect("written");
+        std::fs::write(
+            dir.join(".env.preload"),
+            "NODE_OPTIONS=--import ./pre.mjs\n",
+        )
+        .expect("written");
+        for text in [
+            // The second run gets a preload from the environment.
+            "node --test a.test.js && export NODE_OPTIONS='--import ./pre.mjs' && node --test \
+             a.test.js",
+            "node --test a.test.js; . ./env.sh; node --test a.test.js",
+            "node --test a.test.js && NODE_PATH=lib node --test a.test.js",
+            "NODE_PATH=lib node --test a.test.js && node --test a.test.js",
+            // From an env file.
+            "node --test a.test.js && node --env-file=.env.preload --test a.test.js",
+            "node --test a.test.js && dotenv -e .env.preload -- node --test a.test.js",
+            "node --test a.test.js && env-cmd node --test a.test.js",
+            // In a group, a branch or a subshell.
+            "node --test a.test.js && { export NODE_OPTIONS=--import=./pre.mjs; node --test \
+             a.test.js; }",
+            "node --test a.test.js; if true; then export NODE_OPTIONS=--import=./pre.mjs; fi; \
+             node --test a.test.js",
+            "node --test a.test.js && (export NODE_OPTIONS=--import=./pre.mjs; node --test \
+             a.test.js)",
+            "node --test a.test.js && ( export NODE_OPTIONS=--import=./pre.mjs\nnode --test \
+             a.test.js\n)",
+            // Somewhere that is not followed: it may be the same directory.
+            "node --test a.test.js; cd \"$DIR\" && node --test a.test.js",
+            "node --test a.test.js && pnpm --dir \"$PWD\" exec node --test a.test.js",
+        ] {
+            assert!(script_runs(&dir, text).is_empty(), "{text}");
+        }
+        // Another command line is another run: the mapped one stays.
+        for text in [
+            "node --test a.test.js && NODE_PATH=lib node --test b.test.js",
+            "node --test a.test.js && export CI=1 && node --test b.test.js",
+            "node --test a.test.js && node --env-file=.env.preload --test b.test.js",
+            "node --env-file=.env.plain --test a.test.js",
+        ] {
+            let runs = script_runs(&dir, text);
+            assert_eq!(runs.len(), 1, "{text}");
+            assert_eq!(runs[0].patterns, ["a.test.js"], "{text}");
+        }
+        std::fs::remove_dir_all(&dir).expect("removed");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    #[allow(clippy::expect_used)]
+    fn an_env_file_that_is_no_regular_file_or_too_large_is_not_read() {
+        let dir = scratch("env-file");
+        // A device behind a link has no end; a directory is no file.
+        std::os::unix::fs::symlink("/dev/zero", dir.join(".env.stream")).expect("linked");
+        std::fs::create_dir(dir.join(".env.dir")).expect("created");
+        let large = std::fs::File::create(dir.join(".env.large")).expect("created");
+        large.set_len(READ_LIMIT + 1).expect("sized");
+        std::fs::write(dir.join(".env.plain"), "API_URL=http://localhost\n").expect("written");
+        for file in [".env.stream", ".env.dir", ".env.large"] {
+            for text in [
+                format!("node --env-file={file} --test a.test.js"),
+                format!("node --env-file-if-exists={file} --test a.test.js"),
+                format!("dotenv -e {file} -- node --test a.test.js"),
+            ] {
+                assert!(script_runs(&dir, &text).is_empty(), "{text}");
+            }
+        }
+        // Neither is a preload file, an `.npmrc` or the manifest itself.
+        std::os::unix::fs::symlink("/dev/zero", dir.join("pre.mjs")).expect("linked");
+        assert!(script_runs(&dir, "node --import ./pre.mjs --test a.test.js").is_empty());
+        assert_eq!(
+            script_runs(&dir, "node --env-file=.env.plain --test a.test.js").len(),
+            1
+        );
+        let manifest = dir.join("package.json");
+        std::fs::write(&manifest, r#"{"scripts":{"test":"node --test a.test.js"}}"#)
+            .expect("written");
+        assert_eq!(manifest_scripts(&manifest).len(), 1);
+        std::os::unix::fs::symlink("/dev/zero", dir.join(".npmrc")).expect("linked");
+        assert!(manifest_scripts(&manifest).is_empty());
+        std::fs::remove_file(dir.join(".npmrc")).expect("removed");
+        std::fs::remove_file(&manifest).expect("removed");
+        std::os::unix::fs::symlink("/dev/zero", &manifest).expect("linked");
+        assert!(manifest_scripts(&manifest).is_empty());
+        std::fs::remove_dir_all(&dir).expect("removed");
+    }
+
+    #[test]
+    #[allow(clippy::expect_used)]
+    fn a_file_argument_nested_or_long_beyond_reading_is_not_mapped() {
+        // On a small stack: the translation does not go as deep as the glob nests.
+        let nested = format!("{}a{}.test.js", "@(".repeat(20_000), ")".repeat(20_000));
+        let long = format!("{}.test.js", "a".repeat(MAX_FILE_ARGUMENT));
+        let deep = format!("{}a{}.test.js", "@(".repeat(40), ")".repeat(40));
+        let handle = std::thread::Builder::new()
+            .stack_size(256 * 1024)
+            .spawn(move || {
+                for file in [nested, long, deep] {
+                    assert!(
+                        matches!(run_of("node", &["--test", &file]), Parsed::Unmapped(_)),
+                        "{} bytes",
+                        file.len()
+                    );
+                    // A long name is exact; a glob nested deeper than is translated is not.
+                    assert_eq!(
+                        glob_is_exact(&file),
+                        !file.contains('('),
+                        "{} bytes",
+                        file.len()
+                    );
+                }
+            })
+            .expect("a thread");
+        handle.join().expect("no file argument ends the reader");
     }
 
     #[test]
