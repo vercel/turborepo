@@ -182,6 +182,25 @@ pub struct Registry {
     /// ([`crate::recognizers::codegen::recognizers`], specs included): their
     /// outputs are [`OutputKind::Generated`].
     generators: usize,
+    /// The recognizers from `fallbacks` on are the catch-alls
+    /// ([`crate::recognizers::fallback_recognizers`]): file utilities and
+    /// builtins without file effects, known by their name alone.
+    fallbacks: usize,
+}
+
+/// Whether the program of `cmd` is a file of the repository run by its path
+/// (`./scripts/test`), not an installed binary (`./node_modules/.bin/tsc`).
+fn own_script(cmd: &Command, cx: &RecognizeCx<'_>) -> bool {
+    let Some(w) = cmd.argv.first() else {
+        return false;
+    };
+    if !w.text.contains('/') || w.dynamic || w.glob {
+        return false;
+    }
+    let p = cmd.path(&w.text);
+    p.strip_prefix(cx.repo_root)
+        .is_ok_and(|rel| !rel.components().any(|c| c.as_os_str() == "node_modules"))
+        && cx.is_file(&p)
 }
 
 /// The compiled-in registry.
@@ -199,10 +218,12 @@ pub fn registry() -> &'static Registry {
         );
         recognizers.extend(crate::sources::recognizers());
         // Catch-alls last.
+        let fallbacks = recognizers.len();
         recognizers.extend(crate::recognizers::fallback_recognizers());
         Registry {
             recognizers,
             generators,
+            fallbacks,
         }
     })
 }
@@ -652,7 +673,12 @@ impl Registry {
             }
         }
         let cx2 = RecognizeCx { env: &env, ..*cx };
-        let found = self.find_index(&real);
+        // A script of the repository run by its path is that script, whatever the
+        // builtin or file utility of the same name does (`./scripts/test` is not
+        // `test`, `./scripts/install` not `install`).
+        let found = self
+            .find_index(&real)
+            .filter(|&i| i < self.fallbacks || !own_script(&real, &cx2));
         let generator = found.is_some_and(|i| i < self.generators);
         // Redirections: inputs and outputs, whatever the program. A generator's stdout
         // is a generated file (committed or not). Any other program's
