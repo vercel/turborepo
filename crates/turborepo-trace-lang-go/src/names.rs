@@ -952,8 +952,14 @@ fn steps_repeat(src: &[u8], toks: &[Tok], sig: &[usize], steps: &[usize]) -> boo
                         current = None;
                     }
                     let depth = frames.len();
-                    for_at.retain(|&d| d <= depth);
-                    literal_at.retain(|&d| d <= depth);
+                    // (Both lists are in the order of their depths: the deeper ones are
+                    // at the end.)
+                    while for_at.last().is_some_and(|&d| d > depth) {
+                        for_at.pop();
+                    }
+                    while literal_at.last().is_some_and(|&d| d > depth) {
+                        literal_at.pop();
+                    }
                 }
                 _ => {}
             },
