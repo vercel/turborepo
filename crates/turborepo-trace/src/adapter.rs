@@ -752,8 +752,9 @@ mod tests {
     }
 
     /// An untracked file that a `.ignore` file hides is a change: git does not
-    /// read `.ignore` files (the graph's own walk does), and the changes are
-    /// git's, as for `turbo run --affected`.
+    /// read `.ignore` files, and the changes are git's, as for `turbo run
+    /// --affected`. The graph's own walk does not read them either, so its
+    /// untracked files are the same.
     #[test]
     fn untracked_file_hidden_by_dot_ignore_is_changed() {
         let d = change_repo(&[(".ignore", "hidden/\n*.gen.js\n"), ("src/x.js", "1;\n")]);
@@ -767,6 +768,11 @@ mod tests {
                 "{p}: {b:?}"
             );
         }
+        assert_eq!(
+            walked(&r, "HEAD"),
+            theirs_without_graph(&r, "HEAD"),
+            "the engine with the walk (left) vs turbo's SCM (right)"
+        );
     }
 
     /// A file replaced by a directory of the same name. git (and

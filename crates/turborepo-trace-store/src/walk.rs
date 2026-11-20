@@ -1,6 +1,11 @@
-//! The repository walk: every regular file below the root, with `.gitignore`,
-//! `.ignore` and `.git/info/exclude` respected (also without a `.git`
-//! directory), in parallel.
+//! The repository walk: every regular file below the root, with `.gitignore`
+//! and `.git/info/exclude` respected (also without a `.git` directory), in
+//! parallel.
+//!
+//! A `.ignore` file is not: search tools read it, git and the test runners do
+//! not. A file it hides is still a change that git reports, a test that a
+//! runner runs and a module that a test loads. (turbo's own file walks do not
+//! read it either.)
 //!
 //! Always skipped: `.git`, `node_modules` (third-party code is reached through
 //! resolution), the store directory itself and every directory with the default
@@ -36,8 +41,9 @@ pub fn walk(root: &Path, out_dir: &Path, threads: usize) -> Vec<String> {
     split(walk_stamped(root, out_dir, threads).0).0
 }
 
-/// (2: the list holds the symbolic links too.)
-const MAGIC: &[u8; 8] = b"DTWALK2\n";
+/// (2: the list holds the symbolic links too; 3: `.ignore` files are not
+/// obeyed.)
+const MAGIC: &[u8; 8] = b"DTWALK3\n";
 
 /// What a symbolic link's path starts with in the list a walk makes and its
 /// cache holds: a link is no file of the walk (it is not followed, and what it
@@ -53,7 +59,7 @@ fn split(entries: Vec<String>) -> (Vec<String>, Vec<String>) {
     (files, links)
 }
 /// Ignore files whose stat is part of the walk stamp.
-const IGNORE_FILES: &[&str] = &[".gitignore", ".ignore"];
+const IGNORE_FILES: &[&str] = &[".gitignore"];
 
 fn mtime_ns(m: &std::fs::Metadata) -> i128 {
     m.mtime() as i128 * 1_000_000_000 + m.mtime_nsec() as i128
@@ -398,7 +404,7 @@ fn builder(root: &Path, threads: usize) -> WalkBuilder {
         .git_ignore(true)
         .git_exclude(true)
         .require_git(false)
-        .ignore(true)
+        .ignore(false)
         .follow_links(false)
         .threads(threads);
     b
@@ -676,6 +682,33 @@ mod tests {
             );
             assert_eq!(w.files.len(), if round == 2 { 5 } else { 4 }, "{round}");
         }
+    }
+
+    /// A `.ignore` file hides nothing from the walk (git and the test runners
+    /// do not read it), a `.gitignore` next to it does.
+    #[test]
+    fn does_not_obey_dot_ignore_files() {
+        let t = tempfile::tempdir().unwrap();
+        let r = t.path();
+        for f in ["src/a.ts", "src/a.test.ts", "gen/b.ts", "out/c.js"] {
+            std::fs::create_dir_all(r.join(f).parent().unwrap()).unwrap();
+            std::fs::write(r.join(f), "").unwrap();
+        }
+        std::fs::write(r.join(".ignore"), "gen/\n*.test.ts\n").unwrap();
+        std::fs::write(r.join("src/.ignore"), "a.ts\n").unwrap();
+        std::fs::write(r.join(".gitignore"), "out/\n").unwrap();
+        let files = walk(r, &r.join(".turbotrace"), 2);
+        assert_eq!(
+            files,
+            [
+                ".gitignore",
+                ".ignore",
+                "gen/b.ts",
+                "src/.ignore",
+                "src/a.test.ts",
+                "src/a.ts"
+            ]
+        );
     }
 
     #[test]
