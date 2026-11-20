@@ -8,7 +8,7 @@
 //! | `vitest` | `-c/--config`, `--root`, else `vitest.config.*` / `vite.config.*` | [`turborepo_trace_frameworks::vitest`] |
 //! | `pytest`, `py.test` | `-c`, else the nearest `pytest.ini` / `pyproject.toml` / `tox.ini` / `setup.cfg` | [`turborepo_trace_frameworks::pytest`] |
 //! | `playwright test` | `-c/--config`, else `playwright.config.*` | [`turborepo_trace_frameworks::playwright`] |
-//! | `go test` | packages (`./...`), `testdata/**` | none (package directories) |
+//! | `go test`, `gotestsum`, `go tool gotestsum` | packages (`./...`), `testdata/**`, in the directory of `-C` | none (package directories) |
 //! | `cargo test/build/check/clippy/run/bench/doc/nextest` | `--manifest-path`, else the workspace | none (workspace sources) |
 //! | `mocha`, `ava`, `tap`, `uvu`, `karma`, `cypress run` | config files, positional globs | none |
 //!
@@ -544,8 +544,131 @@ impl Recognizer for Playwright {
     }
 }
 
-/// `go test`.
+/// `go test`, also through `gotestsum`.
 pub struct GoTest;
+
+/// A command that starts `go test`.
+enum GoLaunch {
+    /// Written as `go test [-C <dir>] <arguments>`.
+    Test(Command),
+    /// `gotestsum --raw-command -- <program>`: the tests are started by a
+    /// program of the repository's own.
+    Raw,
+}
+
+/// `-args`, `--args`: the rest of a `go test` command line goes to the test
+/// binary, and names no packages.
+fn is_test_binary_args(word: &str) -> bool {
+    matches!(word, "-args" | "--args")
+}
+
+/// What `cmd` starts when it is a form of `go test`:
+///
+/// | Command | As |
+/// |---|---|
+/// | `go test <args>`, `go -C <dir> test <args>` | itself |
+/// | `gotestsum [options]` | `go test ./...` (gotestsum's default), or the packages of `--packages` |
+/// | `gotestsum [options] -- <args>` | `go test <args>`, with the packages of `--packages` |
+/// | `go tool gotestsum …`, `go run gotest.tools/gotestsum[@version] …` | `gotestsum …` |
+/// | `gotestsum --raw-command -- go test <args>` | `go test <args>` |
+/// | `gotestsum --raw-command -- <another program>` | [`GoLaunch::Raw`] |
+///
+/// gotestsum puts the packages of `--packages` before `-args`: what follows
+/// `-args` belongs to the test binary.
+fn go_launch(cmd: &Command) -> Option<GoLaunch> {
+    go_launch_of(cmd, false)
+}
+
+/// [`go_launch`]; `raw` for the command of `--raw-command`, which is read as
+/// `go test` only when it is written as `go test`: a gotestsum that starts
+/// another gotestsum is a program of its own, so the reading ends after one
+/// step however long the command line is.
+fn go_launch_of(cmd: &Command, raw: bool) -> Option<GoLaunch> {
+    use crate::spec::Word;
+    let lit = |words: &[&str]| words.iter().map(|w| Word::lit(*w)).collect::<Vec<_>>();
+    let rebuilt = |chdir: &[Word], rest: Vec<Word>| {
+        let mut c = cmd.clone();
+        c.argv = lit(&["go", "test"]);
+        c.argv.extend(chdir.iter().cloned());
+        c.argv.extend(rest);
+        c
+    };
+    let argv = &cmd.argv;
+    let (chdir, words): (&[Word], &[Word]) = match cmd.program_name()? {
+        "go" => {
+            // `go -C <dir> <command>`: the directory the command runs in.
+            let at = match argv.get(1).map(|w| w.text.as_str()) {
+                Some("-C") if argv.len() > 3 => 3,
+                Some(w) if w.starts_with("-C=") => 2,
+                _ => 1,
+            };
+            let chdir = &argv[1..at];
+            let is_gotestsum = |w: &Word| {
+                let name = w.text.split('@').next().unwrap_or(&w.text);
+                name.rsplit('/').next() == Some("gotestsum")
+            };
+            match argv.get(at).map(|w| w.text.as_str())? {
+                "test" => return Some(GoLaunch::Test(rebuilt(chdir, argv[at + 1..].to_vec()))),
+                "tool" | "run" if !raw && argv.get(at + 1).is_some_and(is_gotestsum) => {
+                    (chdir, &argv[at + 2..])
+                }
+                _ => return None,
+            }
+        }
+        "gotestsum" if !raw => (&[], &argv[1..]),
+        _ => return None,
+    };
+    // `gotestsum [options] [-- <go test arguments>]`.
+    let split = words.iter().position(|w| w.text == "--");
+    let (options, args) = match split {
+        Some(i) => (&words[..i], Some(&words[i + 1..])),
+        None => (words, None),
+    };
+    if options.iter().any(|w| w.text == "--raw-command") {
+        // Only a command that starts with `go` can be `go test`: no copy of another.
+        let is_go = args
+            .and_then(<[Word]>::first)
+            .is_some_and(|w| !w.dynamic && w.text.rsplit('/').next() == Some("go"));
+        if !is_go || !chdir.is_empty() {
+            return Some(GoLaunch::Raw);
+        }
+        let sub = cmd.shifted(argv.len() - args.map_or(0, <[Word]>::len));
+        return match (sub.program_name(), go_launch_of(&sub, true)) {
+            (Some("go"), Some(GoLaunch::Test(mut c))) => {
+                c.text.clone_from(&cmd.text);
+                Some(GoLaunch::Test(c))
+            }
+            _ => Some(GoLaunch::Raw),
+        };
+    }
+    // `--packages <list>`, `--packages=<list>`: space-separated.
+    let mut packages: Vec<Word> = Vec::new();
+    for (i, w) in options.iter().enumerate() {
+        let list = match w.text.strip_prefix("--packages=") {
+            Some(list) => Some((list, w.dynamic)),
+            None if w.text == "--packages" => {
+                options.get(i + 1).map(|v| (v.text.as_str(), v.dynamic))
+            }
+            None => None,
+        };
+        if let Some((list, dynamic)) = list {
+            packages.extend(list.split_whitespace().map(|p| Word {
+                dynamic,
+                ..Word::lit(p)
+            }));
+        }
+    }
+    let mut rest = args.map(<[Word]>::to_vec).unwrap_or_default();
+    if args.is_none() && packages.is_empty() {
+        packages = lit(&["./..."]);
+    }
+    let at = rest
+        .iter()
+        .position(|w| is_test_binary_args(&w.text))
+        .unwrap_or(rest.len());
+    rest.splice(at..at, packages);
+    Some(GoLaunch::Test(rebuilt(chdir, rest)))
+}
 
 impl Recognizer for GoTest {
     fn id(&self) -> &'static str {
@@ -555,37 +678,25 @@ impl Recognizer for GoTest {
         &["go", "gotestsum"]
     }
     fn matches(&self, cmd: &Command) -> bool {
-        match cmd.program_name() {
-            Some("go") => cmd.args().next() == Some("test"),
-            Some("gotestsum") => true,
-            _ => false,
-        }
+        go_launch(cmd).is_some()
     }
     fn recognize(&self, cmd: &Command, cx: &RecognizeCx<'_>, out: &mut TaskSpec) -> Recognition {
         out.tool("system", "go");
-        // `gotestsum [opts] -- [go test args]`
-        let cmd = if cmd.program_name() == Some("gotestsum") {
-            match cmd.argv.iter().position(|w| w.text == "--") {
-                Some(i) => {
-                    let mut c = cmd.shifted(i);
-                    c.argv[0] = crate::spec::Word::lit("go");
-                    c.argv.insert(1, crate::spec::Word::lit("test"));
-                    c
-                }
-                None => {
-                    let mut c = cmd.clone();
-                    c.argv = vec![crate::spec::Word::lit("go"), crate::spec::Word::lit("test")];
-                    c
-                }
+        let cmd = match go_launch(cmd) {
+            Some(GoLaunch::Test(c)) => c,
+            Some(GoLaunch::Raw) | None => {
+                // Which tests start is up to the program: the task runs whole.
+                let why = "`gotestsum --raw-command` starts tests with a program of its own";
+                out.runs_unknown(why);
+                cx.whole_package(out, why);
+                return Recognition::Partial;
             }
-        } else {
-            cmd.clone()
         };
         go_module_configs(&cmd.cwd, cx.repo_root, out);
         let words: Vec<&str> = cmd.args().skip(1).collect();
         let stop = words
             .iter()
-            .position(|w| *w == "-args")
+            .position(|w| is_test_binary_args(w))
             .unwrap_or(words.len());
         let sub = cmd.shifted(0);
         let args = Args::new(
@@ -614,9 +725,7 @@ impl Recognizer for GoTest {
                 "-C",
                 "-shuffle",
                 "-outputdir",
-                "-json",
                 "-vet",
-                "-failfast",
             ],
         )
         .collect_all();

@@ -958,7 +958,17 @@ fn affected(cmd: AffectedCmd, out: &mut dyn Write, host: Option<&Host>) -> Resul
     let wf = if cmd.no_workflows {
         crate::workflows::Effects::default()
     } else {
-        crate::workflows::effects(&g, &engine, &root, &kept, git.as_ref())
+        let mut wf = crate::workflows::effects(&g, &engine, &root, &kept, git.as_ref());
+        // Package scripts whose command changed select the tests they start.
+        crate::workflows::script_effects(
+            &g,
+            &root,
+            &kept,
+            git.as_ref(),
+            &|p| steer.is_steering(p),
+            &mut wf,
+        );
+        wf
     };
     turborepo_trace_core::timing::mark("affected: workflows");
     let mut fx = fx;

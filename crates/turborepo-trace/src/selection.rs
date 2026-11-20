@@ -166,6 +166,11 @@ pub(crate) struct Task {
     /// The test launches of its command, with those of the scripts the command
     /// starts.
     pub(crate) runs: Vec<Launch>,
+    /// Those of `runs` that the command starts in its own package: itself, or
+    /// through a script of the same package. The others are started by the
+    /// scripts of other packages that the command runs (`turbo run test`).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub(crate) own_runs: Vec<Launch>,
     /// Whether the task must start, and with what.
     pub(crate) run: Run,
     /// Known test files its launches cover.
@@ -698,6 +703,14 @@ pub(crate) fn build(i: &Input<'_>) -> Document {
                 }
             }
         }
+        let own_runs = runs
+            .of_own_command(n)
+            .launches()
+            .map(|(fw, d)| Launch {
+                framework: fw.to_owned(),
+                dir: d.to_owned(),
+            })
+            .collect();
         let dir = if dir.is_empty() { "." } else { dir };
         tasks.push((
             dir.to_owned(),
@@ -705,6 +718,7 @@ pub(crate) fn build(i: &Input<'_>) -> Document {
                 id: id.to_owned(),
                 name: name.to_owned(),
                 runs: list,
+                own_runs,
                 run: Run::All,
                 tests,
                 selected,
