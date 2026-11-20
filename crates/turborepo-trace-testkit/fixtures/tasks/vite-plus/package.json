@@ -5,10 +5,13 @@
     "test": "vp test run",
     "test:all": "vp run -r test",
     "test:math": "vp run math#test",
+    "test:math:deps": "vp run -t math#test",
+    "test:root:math": "vp run -w -F math test",
     "test:web": "vp exec vitest run --root apps/web",
     "test:release": "vp run release-checks",
     "check": "vp check && vp lint",
-    "seed": "vpx ./scripts/seed.ts"
+    "seed": "vpx ./scripts/seed.ts",
+    "seed:preloaded": "vpx -s --import ./scripts/env.ts ./scripts/seed.ts --dry-run"
   },
   "devDependencies": {
     "vite-plus": "1.7.0"

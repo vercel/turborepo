@@ -201,6 +201,10 @@ fn vp_run_exec_and_the_other_subcommands() {
     assert_eq!(runs(&set, &root, "task:packages/math#ci"), ["local#test"]);
     assert_eq!(runs(&set, &root, "task:.#test:all"), ["*#test"]);
     assert_eq!(runs(&set, &root, "task:.#test:math"), ["math#test"]);
+    // `-t` adds the workspace dependencies of the package, and `-w` with a
+    // filter selects in two ways: the script of every package.
+    assert_eq!(runs(&set, &root, "task:.#test:math:deps"), ["*#test"]);
+    assert_eq!(runs(&set, &root, "task:.#test:root:math"), ["*#test"]);
     assert_eq!(
         runs(&set, &root, "task:.#test:web"),
         ["tests:vitest:apps/web"]
@@ -208,6 +212,12 @@ fn vp_run_exec_and_the_other_subcommands() {
     assert!(runs(&set, &root, "task:.#check").is_empty());
     // `vpx <file>` runs the file: it defines the task.
     assert_eq!(definition(&set, &root, "task:.#seed"), ["scripts/seed.ts"]);
+    // Node's options come before the file: the file after them is the script,
+    // and a preloaded module defines the task too.
+    assert_eq!(
+        definition(&set, &root, "task:.#seed:preloaded"),
+        ["scripts/env.ts", "scripts/seed.ts"]
+    );
     // A task that is no script (one of a vite config's `run.tasks`) is not read:
     // partly recognized, and no test launch without a launch word.
     assert_eq!(

@@ -4,8 +4,8 @@
 //! | Command | What it is |
 //! |---|---|
 //! | `vp test [run\|watch\|dev\|related\|bench\|list] [filters] [options]` | a vitest run ([`crate::recognizers::testrunners::vitest_run`]): the options are vitest's, the root is the directory `vp` is started in |
-//! | `vp run [options] <task>`, `vpr <task>` | the package script `<task>` (`pkg#task`: of that package), with the package selection of `-r`, `-t`, `-w` and `-F`. A task that is no script is one of a vite config's `run.tasks`, which is not read: the command is partly recognized and its text is scanned for launch words ([`crate::runs`]) |
-//! | `vp exec <command>`, `vp dlx <command>`, `vpx <command>` | a wrapper around `<command>` ([`exec_command`]); `vpx <file>` runs the file with Node. With a package selection or `-c` (a shell line) the text is scanned |
+//! | `vp run [options] <task>`, `vpr <task>` | the package script `<task>` (`pkg#task`: of that package), with the package selection of `-r`, `-t`, `-w` and `-F`. `-t` selects a package and its workspace dependencies: with it, and when options select in more than one way, the script of every package. A task that is no script is one of a vite config's `run.tasks`, which is not read: the command is partly recognized and its text is scanned for launch words ([`crate::runs`]) |
+//! | `vp exec <command>`, `vp dlx <command>`, `vpx <command>` | a wrapper around `<command>` ([`exec_command`]); `vpx [node options] <file>` runs the file with Node. With a package selection or `-c` (a shell line) the text is scanned |
 //! | `vp -C <dir> …` | the same, started in `<dir>` |
 //!
 //! Every other subcommand (`vp build`, `vp lint`, `vp fmt`, `vp check`,
@@ -84,16 +84,28 @@ pub fn exec_command(cmd: &Command) -> Option<Command> {
         }
         (vp.sub + 1, vp.cwd)
     };
+    // `vpx [options] [node options] <script>`: an option that is not one of
+    // vpx's own starts Node's, which Node's command line reads (`--import
+    // ./setup.ts ./main.ts`: the script is `main.ts`).
+    let mut node_options = false;
     while let Some(w) = cmd.argv.get(i) {
         match w.text.as_str() {
             "--" => {
                 i += 1;
                 break;
             }
+            "-c" | "--shell-mode" => return None,
+            "-p" | "--package" | "--tsconfig" => i += 2,
+            a if vpx && (a.starts_with("--package=") || a.starts_with("--tsconfig=")) => i += 1,
+            "-s" | "--silent" if vpx => i += 1,
+            a if vpx && a.starts_with('-') => {
+                node_options = true;
+                break;
+            }
             "-r" | "--recursive" | "-t" | "--transitive" | "-w" | "--workspace-root" | "-F"
-            | "--filter" | "-c" | "--shell-mode" => return None,
+            | "--filter" => return None,
             a if a.starts_with("--filter=") => return None,
-            "-p" | "--package" | "--resume-from" | "--tsconfig" => i += 2,
+            "--resume-from" => i += 2,
             a if a.starts_with('-') => i += 1,
             _ => break,
         }
@@ -104,7 +116,7 @@ pub fn exec_command(cmd: &Command) -> Option<Command> {
     }
     let mut inner = cmd.shifted(i);
     inner.cwd = cwd;
-    if vpx && is_script_file(&first.text) {
+    if vpx && (node_options || is_script_file(&first.text)) {
         // `vpx <file>` runs a script as `tsx` does: Node with a loader.
         inner.argv.insert(0, Word::lit("node"));
     }
@@ -184,21 +196,27 @@ impl Recognizer for VitePlus {
 /// `vp run [options] <task> [args]`: the package script `<task>`, as the
 /// package manager's `run` (`vp.sub` is the index of `run`, or of `vpr`).
 fn run_task(cmd: &Command, vp: Vp, cx: &RecognizeCx<'_>, out: &mut TaskSpec) -> Recognition {
-    let mut pm = vec![Word::lit("pnpm")];
+    // The selections: every package (`-r`; `-t`, a package and its workspace
+    // dependencies, which is any package), the root (`-w`), and filters (`-F`
+    // and `pkg#task`).
+    let mut wide = false;
+    let mut root = false;
+    let mut filters: Vec<Word> = Vec::new();
     let mut task: Option<&Word> = None;
     let mut i = vp.sub + 1;
     while let Some(w) = cmd.argv.get(i) {
         i += 1;
         match w.text.as_str() {
-            // The package and its dependencies: any package.
-            "-r" | "--recursive" | "-t" | "--transitive" => pm.push(Word::lit("-r")),
-            "-w" | "--workspace-root" => pm.push(Word::lit("-w")),
+            "-r" | "--recursive" | "-t" | "--transitive" => wide = true,
+            "-w" | "--workspace-root" => root = true,
             "-F" | "--filter" => {
-                pm.push(Word::lit("--filter"));
-                pm.extend(cmd.argv.get(i).cloned());
+                filters.extend(cmd.argv.get(i).cloned());
                 i += 1;
             }
-            a if a.starts_with("--filter=") => pm.push(w.clone()),
+            a if a.starts_with("--filter=") => filters.push(Word {
+                text: a["--filter=".len()..].to_string(),
+                ..w.clone()
+            }),
             "--concurrency-limit" | "--log" => i += 1,
             a if a.starts_with('-') => {}
             _ => {
@@ -213,12 +231,25 @@ fn run_task(cmd: &Command, vp: Vp, cx: &RecognizeCx<'_>, out: &mut TaskSpec) -> 
     };
     let name = match task.text.rsplit_once('#') {
         Some((package, name)) if !package.is_empty() => {
-            pm.push(Word::lit("--filter"));
-            pm.push(Word::lit(package));
+            filters.push(Word::lit(package));
             name
         }
         _ => task.text.as_str(),
     };
+    // The package manager's command line takes one kind of selection: a
+    // combination (`-t app#test`: `app` and its dependencies; `-w -F app`) is
+    // the script of every package.
+    let mut pm = vec![Word::lit("pnpm")];
+    if wide || (root && !filters.is_empty()) {
+        pm.push(Word::lit("-r"));
+    } else if root {
+        pm.push(Word::lit("-w"));
+    } else {
+        for f in filters {
+            pm.push(Word::lit("--filter"));
+            pm.push(f);
+        }
+    }
     let mut run = cmd.clone();
     run.cwd = vp.cwd;
     if pm.len() == 1 && !task.dynamic && !is_script(cx, &run, name) {
