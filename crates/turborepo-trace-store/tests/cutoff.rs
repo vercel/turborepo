@@ -3074,6 +3074,69 @@ fn a_dependency_entry_retraces_no_file() {
     assert_eq!(rep.analyzed_files, 0, "no file of the package is analyzed");
 }
 
+/// The scripts of a manifest say which files the Node.js test runner takes as
+/// tests and what it loads before them. The adapter reads the manifest without
+/// a record (it changes with every dependency entry): the runs are part of the
+/// key of the packages the manifest governs, so a script that comes to start
+/// the runner, another preload and other files trace the package again, and
+/// nothing else of the manifest does.
+#[test]
+fn a_script_comes_to_start_the_node_test_runner() {
+    let (_t, r) = built_workspace();
+    write(
+        &r,
+        "packages/b/src/index.test.ts",
+        "import b from './index';\nimport test from 'node:test';\ntest('b', () => b);\n",
+    );
+    write(&r, "packages/b/test/setup.mjs", "process.env.B = '1';\n");
+    refresh_equals_cold(&r, "a test file and a setup file are added");
+    let manifest = |scripts: &str| {
+        format!(r#"{{"name":"b","main":"src/index.ts","scripts":{{{scripts}}},"description":"b"}}"#)
+    };
+    let tests = |r: &Path| {
+        let g = Graph::open(&r.join(".turbotrace")).unwrap();
+        let mut paths: Vec<String> = g
+            .tests(Some("node-test"))
+            .into_iter()
+            .map(|n| turborepo_trace_graph::GraphView::path(&g, n).to_owned())
+            .collect();
+        paths.sort();
+        paths
+    };
+    assert!(tests(&r).is_empty());
+    write(
+        &r,
+        "packages/b/package.json",
+        &manifest(r#""test":"node --test \"src/**/*.test.ts\"""#),
+    );
+    let rep = refresh_equals_cold(&r, "a script starts the runner");
+    assert!(rep.analyzed_files > 0, "the package is traced again");
+    assert_eq!(tests(&r), ["packages/b/src/index.test.ts"]);
+    // Another script: no run changes.
+    write(
+        &r,
+        "packages/b/package.json",
+        &manifest(r#""lint":"eslint src","test":"node --test \"src/**/*.test.ts\"""#),
+    );
+    let rep = refresh_equals_cold(&r, "a script that starts no runner is added");
+    assert_eq!(rep.analyzed_files, 0, "no file is analyzed");
+    write(
+        &r,
+        "packages/b/package.json",
+        &manifest(r#""test":"node --import ./test/setup.mjs --test \"src/**/*.test.ts\"""#),
+    );
+    let rep = refresh_equals_cold(&r, "the run gets a preload");
+    assert!(rep.analyzed_files > 0, "the package is traced again");
+    // The run names other files.
+    write(
+        &r,
+        "packages/b/package.json",
+        &manifest(r#""test":"node --test test/*.test.ts""#),
+    );
+    refresh_equals_cold(&r, "the run names other files");
+    assert!(tests(&r).is_empty());
+}
+
 /// A relative request names a directory that does not answer (its manifest
 /// names no entry, it has no index file). The resolver recorded the manifest of
 /// a directory that answered and nothing for one that did not: when the

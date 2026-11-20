@@ -115,6 +115,34 @@ fn under(dir: &str, path: &str) -> bool {
             .is_some_and(|rest| rest.starts_with('/'))
 }
 
+/// Whether the test at `path` is one the launch `(framework, dir)` of a run
+/// record starts: a test at or below the directory. For the Node.js test
+/// runner the record holds the glob of the files the run names
+/// (`turborepo_trace_tasks::recognizers::nodetest`), from the repository root
+/// on, and the test is one the glob matches.
+pub(crate) fn launch_matches(framework: &str, dir: &str, path: &str) -> bool {
+    if framework == turborepo_trace_frameworks::nodetest::ID {
+        return LaunchGlob::new(dir).matches(path);
+    }
+    under(dir, path)
+}
+
+/// The compiled glob of a Node.js test runner launch ([`launch_matches`]).
+pub(crate) struct LaunchGlob(turborepo_trace_frameworks::pattern::CompiledPattern);
+
+impl LaunchGlob {
+    pub(crate) fn new(glob: &str) -> Self {
+        let glob = glob.strip_prefix("./").unwrap_or(glob);
+        LaunchGlob(turborepo_trace_frameworks::pattern::CompiledPattern::new(
+            &turborepo_trace_frameworks::TestPattern::Glob(glob.to_owned()),
+        ))
+    }
+
+    pub(crate) fn matches(&self, path: &str) -> bool {
+        self.0.matches(path)
+    }
+}
+
 /// Resolves the `runs` records of task nodes to tests.
 pub(crate) struct Runs<'g> {
     g: &'g Graph,
@@ -410,7 +438,12 @@ impl<'g> Runs<'g> {
                 .tests
                 .entry(fw.clone())
                 .or_insert_with(|| g.tests(Some(fw)));
-            out.extend(all.iter().copied().filter(|&n| under(dir, g.path(n))));
+            if fw == turborepo_trace_frameworks::nodetest::ID {
+                let glob = LaunchGlob::new(dir);
+                out.extend(all.iter().copied().filter(|&n| glob.matches(g.path(n))));
+            } else {
+                out.extend(all.iter().copied().filter(|&n| under(dir, g.path(n))));
+            }
         }
         out
     }
@@ -847,7 +880,7 @@ pub fn script_effects(
                 let frameworks = g.test_frameworks(t);
                 launches.iter().any(|(fw, d)| {
                     frameworks.contains(&fw.as_str())
-                        && under(d, path)
+                        && launch_matches(fw, d, path)
                         && (fw != "gotest" || go_test_runs(d, path, &has_go_mod))
                 })
             };

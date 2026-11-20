@@ -16,6 +16,7 @@ pub mod bins;
 pub mod codegen;
 pub mod fs;
 pub mod js;
+pub mod nodetest;
 pub mod run;
 pub mod testrunners;
 pub mod util;

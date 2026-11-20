@@ -1,0 +1,10 @@
+{
+  "name": "text",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --import ./test/setup.mjs --env-file=.env.test --test-reporter spec --test \"src/**/*.test.ts\"",
+    "test:e2e": "node --test-name-pattern=slug --test \"e2e/*.spec.ts\""
+  }
+}

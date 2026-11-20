@@ -9,8 +9,9 @@
 //! store and `affected` can treat them like any other edge, probe or
 //! membership.
 //!
-//! Adapters are compiled in, like languages ([`frameworks`]): [`jest::Jest`]
-//! and [`vitest::Vitest`].
+//! Adapters are compiled in, like languages ([`frameworks`]): [`jest::Jest`],
+//! [`vitest::Vitest`] and [`nodetest::NodeTest`] (the Node.js test runner,
+//! whose "config" is the `package.json` script that starts it).
 //!
 //! # Shape
 //!
@@ -66,6 +67,7 @@ pub mod jsconfig;
 pub mod location;
 pub mod mocks;
 pub mod nextjs;
+pub mod nodetest;
 pub mod pattern;
 pub mod playwright;
 #[cfg(feature = "python")]
@@ -154,6 +156,7 @@ pub fn frameworks() -> &'static [&'static dyn Framework] {
     &[
         &jest::Jest,
         &vitest::Vitest,
+        &nodetest::NodeTest,
         #[cfg(feature = "rust")]
         &cargotest::CargoTest,
         #[cfg(feature = "go")]

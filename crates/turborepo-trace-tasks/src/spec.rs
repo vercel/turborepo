@@ -717,11 +717,13 @@ pub enum TestRun {
     /// A test runner invocation: the test files of `framework` at or below
     /// `dir`.
     Tests {
-        /// Framework id as test records use it (`jest`, `vitest`, `pytest`,
-        /// `gotest`, `cargo-test`), or another runner's name
-        /// (`playwright`, `mocha`, `node-test`).
+        /// Framework id as test records use it (`jest`, `vitest`, `node-test`,
+        /// `pytest`, `gotest`, `cargo-test`), or another runner's name
+        /// (`playwright`, `mocha`, `node --test` for a run of the Node.js
+        /// test runner that is not mapped to files).
         framework: String,
-        /// Directory (absolute) the run is rooted at.
+        /// Directory (absolute) the run is rooted at. For `node-test`: the
+        /// glob (absolute) of the files the run names, one record per glob.
         dir: PathBuf,
     },
     /// Another task this one executes (`pnpm run test`, `turbo run test`, a

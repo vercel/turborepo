@@ -77,7 +77,8 @@ pub enum Changes {
 pub struct AffectedRequest {
     /// The changes.
     pub changes: Changes,
-    /// `--tests`: frameworks (`jest`, `vitest`, `gotest`, `cargo-test`, `all`).
+    /// `--tests`: frameworks (`jest`, `vitest`, `node-test`, `gotest`,
+    /// `cargo-test`, `all`).
     /// Empty: `all`.
     pub tests: Vec<String>,
     /// `--strict`: every uncertainty selects, and no assumption is made.
@@ -218,7 +219,7 @@ fn host_defaults() {
 /// The frameworks `--tests` takes: those whose tests `turbo trace` lists by
 /// file. (End-to-end specs selected by recorded visits, `playwright`, and the
 /// Python language, `pytest`, are not part of `turbo trace` yet.)
-pub const FRAMEWORKS: &[&str] = &["jest", "vitest", "gotest", "cargo-test", "all"];
+pub const FRAMEWORKS: &[&str] = &["jest", "vitest", "node-test", "gotest", "cargo-test", "all"];
 
 fn check_tests(req: &AffectedRequest) -> Result<(), Error> {
     match req.tests.iter().find(|t| !FRAMEWORKS.contains(&t.as_str())) {
@@ -421,7 +422,7 @@ fn report(
             }
             let covers = |l: &crate::selection::Launch| {
                 (frameworks.is_empty() || frameworks.contains(&l.framework))
-                    && under(&l.dir, path)
+                    && crate::workflows::launch_matches(&l.framework, &l.dir, path)
                     && (l.framework != "gotest"
                         || crate::workflows::go_test_runs(&l.dir, path, &has_go_mod))
             };
@@ -511,11 +512,6 @@ fn containing_package(packages: &Packages, path: &str) -> (String, String) {
         dir = parent;
     }
     (".".to_owned(), "//".to_owned())
-}
-
-/// `path` (root-relative) is `dir` or below it (`.`: the root).
-fn under(dir: &str, path: &str) -> bool {
-    dir == "." || dir.is_empty() || path.strip_prefix(dir).is_some_and(|r| r.starts_with('/'))
 }
 
 /// The selection document's class of a chain as a [`Reason`].

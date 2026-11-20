@@ -1,10 +1,10 @@
 //! Test-framework inputs in the graph.
 //!
 //! During a build, every file of a dirty first-party package is offered to the
-//! graph frameworks ([`GRAPH_FRAMEWORKS`]: jest, vitest, pytest, go test, cargo
-//! test). Whatever an adapter contributes is stored in the file's shard like
-//! any other observation, so it is cached, keyed and invalidated with the
-//! shard:
+//! graph frameworks ([`GRAPH_FRAMEWORKS`]: jest, vitest, the Node.js test
+//! runner, pytest, go test, cargo test). Whatever an adapter contributes is
+//! stored in the file's shard like any other observation, so it is cached,
+//! keyed and invalidated with the shard:
 //!
 //! | Contribution | Stored as |
 //! |---|---|
@@ -66,13 +66,14 @@ use crate::shard::{FRAMEWORK_LEVEL, LocatedRec};
 pub const GRAPH_FRAMEWORKS: &[(&str, &str)] = &[
     ("jest", "js"),
     ("vitest", "js"),
+    ("node-test", "js"),
     ("pytest", "python"),
     ("gotest", "go"),
     ("cargo-test", "rust"),
 ];
 
 /// Version of the framework integration, part of the options digest.
-pub const INTEGRATION_VERSION: &str = "frameworks-17";
+pub const INTEGRATION_VERSION: &str = "frameworks-19";
 
 /// The adapters of [`GRAPH_FRAMEWORKS`] that are compiled in.
 fn adapters() -> Vec<(&'static dyn Framework, &'static str)> {
@@ -111,6 +112,10 @@ pub struct ConfigPaths {
     digests: Mutex<HashMap<String, u128>>,
     /// Whether the checkout lies below a directory called `node_modules`.
     below_node_modules: bool,
+    /// Repo-relative `package.json` paths, sorted, each with the runs of the
+    /// Node.js test runner its scripts start
+    /// ([`ConfigPaths::node_test_runs`]), read when first asked for.
+    manifests: Vec<(String, OnceLock<String>)>,
 }
 
 impl ConfigPaths {
@@ -134,7 +139,13 @@ impl ConfigPaths {
         let multi = (0..paths.len())
             .map(|_| std::sync::OnceLock::new())
             .collect();
+        let manifests = files
+            .iter()
+            .filter(|f| f.rsplit('/').next().unwrap_or(f) == "package.json")
+            .map(|f| (f.clone(), OnceLock::new()))
+            .collect();
         ConfigPaths {
+            manifests,
             repo: repo.to_path_buf(),
             paths,
             by_dir,
@@ -185,6 +196,60 @@ impl ConfigPaths {
     /// Where the checkout lies is no part of it: a shard whose records depend
     /// on that says so itself ([`place_state`]).
     pub fn digest_for(&self, root: &str) -> u128 {
+        let configs = self.config_digest_for(root);
+        let runs = self.node_test_runs(root);
+        if runs.is_empty() {
+            return configs;
+        }
+        let mut h = xxhash_rust::xxh3::Xxh3::new();
+        h.update(&configs.to_le_bytes());
+        for r in runs {
+            h.update(&(r.len() as u64).to_le_bytes());
+            h.update(r.as_bytes());
+        }
+        h.digest128()
+    }
+
+    /// The runs of the Node.js test runner that can take a file of the package
+    /// rooted at `root` as a test: those the scripts of the manifests in its
+    /// directory tree and in the directories above it start
+    /// ([`turborepo_trace_frameworks::nodetest`]), as text without the place
+    /// of the checkout. The adapter reads the manifests without a record (a
+    /// manifest changes with every dependency entry), so the runs are part
+    /// of the package's first-party key: a script that comes to start the
+    /// runner, or names other files or preloads, traces the package again.
+    fn node_test_runs(&self, root: &str) -> Vec<&str> {
+        let prefix = if root.is_empty() {
+            String::new()
+        } else {
+            format!("{root}/")
+        };
+        self.manifests
+            .iter()
+            .filter(|(path, _)| {
+                let dir = path.rsplit_once('/').map_or("", |(d, _)| d);
+                // Below the root, or in a directory above it.
+                path.starts_with(prefix.as_str())
+                    || dir.is_empty()
+                    || root.strip_prefix(dir).is_some_and(|r| r.starts_with('/'))
+            })
+            .map(|(path, runs)| {
+                runs.get_or_init(|| {
+                    let runs =
+                        turborepo_trace_frameworks::nodetest::manifest_runs(&self.repo.join(path));
+                    if runs.is_empty() {
+                        return String::new();
+                    }
+                    format!("{path}: {runs:?}").replace(&*self.repo.to_string_lossy(), "")
+                })
+                .as_str()
+            })
+            .filter(|r| !r.is_empty())
+            .collect()
+    }
+
+    /// The part of [`ConfigPaths::digest_for`] that the config files decide.
+    fn config_digest_for(&self, root: &str) -> u128 {
         // With a multi config above, the set is every config below the highest
         // directory that has one plus the configs directly in the directories
         // above that one: a function of that directory alone (memoized; with a

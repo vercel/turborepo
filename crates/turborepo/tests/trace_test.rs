@@ -2382,3 +2382,271 @@ fn a_changed_jest_script_selects_the_tests_it_starts() {
         ])
     );
 }
+
+// ---------------------------------------------------------------------------
+// The Node.js test runner (`node --test`).
+
+const NODE_ADD: &str = "packages/math/test/add.test.js";
+const NODE_MUL: &str = "packages/math/test/mul.test.js";
+const NODE_INDEX: &str = "packages/math/src/index_test.js";
+const NODE_SLUG: &str = "packages/text/src/slug.test.ts";
+const NODE_TITLE: &str = "packages/text/src/nested/title.test.ts";
+const NODE_SLUG_E2E: &str = "packages/text/e2e/slug.spec.ts";
+const NODE_BUILT: &str = "packages/built/src/id.test.ts";
+const NODE_COMPUTED: &str = "packages/computed/test/one.test.js";
+
+/// The selection of the Node.js test runner fixture without the files it
+/// always lists: the tests of the two packages whose runs are not mapped.
+#[cfg(unix)]
+fn node_selection(dir: &Path, args: &[&str]) -> JsonSelection {
+    let mut selection = affected_json(dir, args);
+    for always in [NODE_BUILT, NODE_COMPUTED] {
+        assert!(
+            selection.tests.remove(always).is_some(),
+            "{always} is not listed: {:?}",
+            selection.tests
+        );
+    }
+    selection
+}
+
+#[cfg(unix)]
+fn expect_tests(selection: &JsonSelection, expected: &[(&str, &str)]) {
+    let got: Vec<(&str, &str)> = selection
+        .tests
+        .iter()
+        .map(|(path, task)| (path.as_str(), task.as_str()))
+        .collect();
+    assert_eq!(got, expected);
+}
+
+/// A run without file arguments takes the runner's default patterns below the
+/// package, a run with a quoted glob the files the glob names: each file is a
+/// test with a verdict of its own, of the task whose script names it.
+#[cfg(unix)]
+#[test]
+fn node_test_files_are_the_tests_of_the_script_that_names_them() {
+    let dir = fixture("trace_node_test");
+    let selection = node_selection(dir.path(), &["--changed", "packages/math/src/mul.js"]);
+    expect_tests(
+        &selection,
+        &[(NODE_INDEX, "math#test"), (NODE_MUL, "math#test")],
+    );
+    let selection = node_selection(dir.path(), &["--changed", "packages/text/src/slug.ts"]);
+    expect_tests(
+        &selection,
+        &[(NODE_SLUG_E2E, "text#test:e2e"), (NODE_SLUG, "text#test")],
+    );
+    let selection = node_selection(dir.path(), &["--changed", "packages/text/src/title.ts"]);
+    expect_tests(&selection, &[(NODE_TITLE, "text#test")]);
+    // The tasks of the mapped runs are covered.
+    assert_eq!(selection.uncovered, ["built#test", "computed#test"]);
+    // The framework has a name for `--tests`.
+    let selected = affected(
+        dir.path(),
+        &[
+            "--changed",
+            "packages/math/src/add.js",
+            "--tests",
+            "node-test",
+        ],
+    );
+    assert_selects(&selected, &[NODE_ADD, NODE_MUL, NODE_INDEX], &[NODE_SLUG]);
+}
+
+/// What a run loads before every test (`--import`), the env file it reads and
+/// a test's snapshot file are inputs of the tests of that run, and of no test
+/// of another run of the package.
+#[cfg(unix)]
+#[test]
+fn node_test_preloads_env_files_and_snapshots_are_inputs() {
+    let dir = fixture("trace_node_test");
+    // A module the preload imports.
+    let selection = node_selection(dir.path(), &["--changed", "packages/text/test/locale.mjs"]);
+    expect_tests(
+        &selection,
+        &[(NODE_TITLE, "text#test"), (NODE_SLUG, "text#test")],
+    );
+    let selection = node_selection(dir.path(), &["--changed", "packages/text/test/setup.mjs"]);
+    expect_tests(
+        &selection,
+        &[(NODE_TITLE, "text#test"), (NODE_SLUG, "text#test")],
+    );
+    let selected = affected(dir.path(), &["--changed", "packages/text/.env.test"]);
+    assert_selects(&selected, &[NODE_TITLE, NODE_SLUG], &[NODE_ADD]);
+    let selection = node_selection(
+        dir.path(),
+        &["--changed", "packages/text/src/slug.test.ts.snapshot"],
+    );
+    expect_tests(&selection, &[(NODE_SLUG, "text#test")]);
+}
+
+/// The command of a script that starts tests is part of how they run: an edit
+/// of the script selects the tests the script runs, and no test of another
+/// package.
+#[cfg(unix)]
+#[test]
+fn an_edited_test_script_selects_the_tests_it_runs() {
+    let dir = fixture("trace_jest");
+    let math = dir.path().join("packages/math/package.json");
+    let manifest = fs::read_to_string(&math).unwrap();
+    assert!(manifest.contains("\"test\": \"jest\""), "{manifest}");
+    fs::write(
+        &math,
+        manifest.replace("\"test\": \"jest\"", "\"test\": \"jest --runInBand\""),
+    )
+    .unwrap();
+    let selected = affected(dir.path(), &["--base", "HEAD"]);
+    assert_selects(&selected, &[JEST_ADD, JEST_MUL], &[JEST_GREET]);
+}
+
+/// The text of the script is how its tests run: an edit selects the tests of
+/// that run.
+#[cfg(unix)]
+#[test]
+fn node_test_script_edit_selects_the_tests_of_the_run() {
+    let dir = fixture("trace_node_test");
+    let text = dir.path().join("packages/text/package.json");
+    let manifest = fs::read_to_string(&text).unwrap();
+    assert!(manifest.contains("--test-reporter spec"), "{manifest}");
+    fs::write(
+        &text,
+        manifest.replace("--test-reporter spec", "--test-reporter dot"),
+    )
+    .unwrap();
+    let selection = node_selection(dir.path(), &["--base", "HEAD"]);
+    expect_tests(
+        &selection,
+        &[(NODE_TITLE, "text#test"), (NODE_SLUG, "text#test")],
+    );
+}
+
+/// A run whose files are build outputs (`tsc && node --test dist/...`) or are
+/// named by the environment is not mapped to files: its task runs whole, and
+/// the files that look like its tests are always listed.
+#[cfg(unix)]
+#[test]
+fn node_test_runs_that_are_not_mapped_run_whole() {
+    let dir = fixture("trace_node_test");
+    let output = trace(
+        dir.path(),
+        &[
+            "affected",
+            "--changed",
+            "packages/math/src/add.js",
+            "--json",
+        ],
+    );
+    assert!(output.status.success(), "{}", stderr(&output));
+    let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    let uncovered: Vec<(&str, &str)> = json["uncoveredTasks"]["items"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|t| {
+            (
+                t["task"].as_str().unwrap(),
+                t["description"].as_str().unwrap(),
+            )
+        })
+        .collect();
+    let why = "starts the Node.js test runner in a way the trace cannot map to test files";
+    assert_eq!(uncovered, [("built#test", why), ("computed#test", why)]);
+    for path in [NODE_BUILT, NODE_COMPUTED] {
+        let item = json["affectedTests"]["items"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|i| i["path"] == path)
+            .unwrap_or_else(|| panic!("{path} is not listed: {json}"));
+        assert_eq!(item["reason"]["__typename"], "UnknownTest", "{item}");
+    }
+
+    // The same files named from another task's output directory, with no build in
+    // the script itself: none of them is a test the trace knows.
+    let built = dir.path().join("packages/built/package.json");
+    let manifest = fs::read_to_string(&built).unwrap();
+    fs::write(
+        &built,
+        manifest.replace("tsc -p tsconfig.json && node --test", "node --test"),
+    )
+    .unwrap();
+    git(
+        dir.path(),
+        &["commit", "--quiet", "-am", "test after build"],
+    );
+    let output = trace(
+        dir.path(),
+        &[
+            "affected",
+            "--changed",
+            "packages/math/src/add.js",
+            "--json",
+        ],
+    );
+    assert!(output.status.success(), "{}", stderr(&output));
+    let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    let built = json["uncoveredTasks"]["items"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|t| t["task"] == "built#test")
+        .unwrap_or_else(|| panic!("built#test is covered: {json}"));
+    assert!(
+        built["description"]
+            .as_str()
+            .unwrap()
+            .contains("names no source file the trace knows as a test"),
+        "{built}"
+    );
+}
+
+/// A root jest config whose default patterns also match the files of a
+/// `node --test` run: the files are tests of both runners. The run's task is
+/// the one named for them, and it is covered by the Node.js test runner's
+/// tests alone: a selection of jest tests only cannot speak for it.
+#[cfg(unix)]
+#[test]
+fn node_test_files_that_jest_also_claims_keep_the_task_of_their_run() {
+    let dir = fixture("trace_node_test");
+    fs::write(dir.path().join("jest.config.js"), "module.exports = {};\n").unwrap();
+    let root = dir.path().join("package.json");
+    let manifest = fs::read_to_string(&root).unwrap();
+    fs::write(
+        &root,
+        manifest.replace(
+            "\"private\": true,",
+            "\"private\": true,\n  \"scripts\": { \"test:jest\": \"jest\" },",
+        ),
+    )
+    .unwrap();
+    git(dir.path(), &["add", "-A"]);
+    git(
+        dir.path(),
+        &["commit", "--quiet", "-m", "a root jest config"],
+    );
+    let selection = affected_json(dir.path(), &["--changed", "packages/math/src/mul.js"]);
+    assert_eq!(
+        selection.tests[NODE_MUL], "math#test",
+        "{:?}",
+        selection.tests
+    );
+    assert_eq!(selection.tests[NODE_INDEX], "math#test");
+    assert!(!selection.tests.contains_key(NODE_ADD));
+    assert_eq!(selection.uncovered, ["built#test", "computed#test"]);
+    // Asked for jest alone, the run's task is not covered.
+    let selection = affected_json(
+        dir.path(),
+        &["--changed", "packages/math/src/mul.js", "--tests", "jest"],
+    );
+    assert!(
+        selection.tests.contains_key(NODE_MUL),
+        "{:?}",
+        selection.tests
+    );
+    assert!(
+        selection.uncovered.contains(&"math#test".to_owned()),
+        "{:?}",
+        selection.uncovered
+    );
+}

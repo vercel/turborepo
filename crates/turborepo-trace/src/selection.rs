@@ -534,6 +534,7 @@ fn below<'s, 'p>(sorted: &'s [(&'p str, NodeId)], dir: &str) -> Vec<&'s (&'p str
 }
 
 /// Whether `path` is `dir` or below it (`.` and the empty string: everything).
+#[cfg(test)]
 fn under(dir: &str, path: &str) -> bool {
     let dir = dir.trim_end_matches('/');
     dir.is_empty()
@@ -678,7 +679,13 @@ pub(crate) fn build(i: &Input<'_>) -> Document {
                 Some((id, _)) if asked(id) => id,
                 _ => {
                     foreign.get_or_insert_with(|| {
-                        format!("starts {fw} tests, which this selection does not cover")
+                        if fw == turborepo_trace_frameworks::nodetest::UNMAPPED {
+                            "starts the Node.js test runner in a way the trace cannot map to test \
+                             files"
+                                .to_owned()
+                        } else {
+                            format!("starts {fw} tests, which this selection does not cover")
+                        }
                     });
                     continue;
                 }
@@ -693,7 +700,30 @@ pub(crate) fn build(i: &Input<'_>) -> Document {
                 v.sort_unstable();
                 v
             });
-            for &(path, t) in below(all, d) {
+            // The tests of the launch: those at or below its directory; for the
+            // Node.js test runner those its glob names.
+            let node_test = fw_static == turborepo_trace_frameworks::nodetest::ID;
+            let of_launch: Vec<&(&str, NodeId)> = if node_test {
+                let glob = crate::workflows::LaunchGlob::new(d);
+                all.iter().filter(|(path, _)| glob.matches(path)).collect()
+            } else {
+                below(all, d)
+            };
+            // A run of the Node.js test runner that names files of which none is a
+            // test of the graph (the output directory of a build): what it runs
+            // is not known.
+            if node_test
+                && of_launch.is_empty()
+                && !turborepo_trace_frameworks::nodetest::is_default_glob(d)
+            {
+                foreign.get_or_insert_with(|| {
+                    format!(
+                        "runs the Node.js test runner on {d}, which names no source file the \
+                         trace knows as a test"
+                    )
+                });
+            }
+            for &(path, t) in of_launch {
                 if !seen.contains(t) {
                     seen.insert(t);
                     tests += 1;
@@ -810,10 +840,11 @@ pub(crate) fn build(i: &Input<'_>) -> Document {
         };
         let pkg_run = if run == Run::All { Run::All } else { would_run };
         for t in &mut a.tasks {
-            let unknown_below = a
-                .unknown
-                .iter()
-                .any(|u| t.runs.iter().any(|l| under(&l.dir, u)));
+            let unknown_below = a.unknown.iter().any(|u| {
+                t.runs
+                    .iter()
+                    .any(|l| crate::workflows::launch_matches(&l.framework, &l.dir, u))
+            });
             let would = if t.unmapped.is_some() || (t.tests > 0 && t.selected == t.tests) {
                 Run::All
             } else if t.selected == 0 && !unknown_below {

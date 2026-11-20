@@ -10,7 +10,8 @@
 //!
 //! | Command | Recorded |
 //! |---|---|
-//! | a test runner (`jest`, `vitest`, `pytest`, `go test`, `cargo test`, `playwright test`, `mocha`, `node --test`) | [`TestRun::Tests`]: the framework and the directory the run is rooted at (config roots, package arguments), by the runner's recognizer; its config file is a definition file |
+//! | a test runner (`jest`, `vitest`, `pytest`, `go test`, `cargo test`, `playwright test`, `mocha`) | [`TestRun::Tests`]: the framework and the directory the run is rooted at (config roots, package arguments), by the runner's recognizer; its config file is a definition file |
+//! | `node --test` | [`TestRun::Tests`] with the glob of each file argument in place of a directory, when the run is mapped exactly ([`crate::recognizers::nodetest`]); else a run of a runner no framework has, so the task runs whole |
 //! | a task reference (`pnpm run x`, `pnpm -F web test`, `turbo run x`, `make x`, `npm-run-all`) | [`TestRun::Task`]: every task dependency the command adds. A computed package (`pnpm -F "$PKG" test`) means every package. A computed task name is [`TestRun::Computed`] ([`TestRun::Unknown`] when the command names `test`) |
 //! | `turbo run x` | also the tasks `x` depends on in the root `turbo.json` (`dependsOn`, transitively): turbo runs them even when a package has no `x` script |
 //! | a script run by an interpreter (`node x.mjs`, `tsx x.ts`, `python x.py`, a file with a `node` shebang, a repository `bin`) | the script is a definition file; its text is scanned for [launch words](launch_word), for a JS/TS script without its comments |
@@ -450,8 +451,10 @@ pub fn observe(
         }
     }
     // 2. `node --test`: the built-in runner (its files are tests, not tooling).
-    if recognizer == "node" && cmd.argv.iter().any(|w| w.text == "--test") {
-        out.test_run("node-test", cmd.cwd.clone());
+    if recognizer == "node"
+        && cmd.argv.iter().any(|w| w.text == "--test")
+        && crate::recognizers::nodetest::record(cmd, cx, out)
+    {
         return;
     }
     // 3. Scripts run by an interpreter: the script defines the task; its text may
