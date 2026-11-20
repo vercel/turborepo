@@ -677,6 +677,7 @@ pub(crate) fn build(i: &Input<'_>) -> Document {
         // --test`, Playwright, or a framework that was not asked for): the task
         // always starts.
         let mut foreign: Option<String> = None;
+        let mut outputs_before: Option<Vec<(String, String)>> = None;
         for (fw, d) in launched.launches() {
             list.push(Launch {
                 framework: fw.to_owned(),
@@ -719,6 +720,33 @@ pub(crate) fn build(i: &Input<'_>) -> Document {
             } else {
                 below(all, d)
             };
+            // A run of the Node.js test runner that searches where a task before it
+            // writes its outputs (a build the task depends on, a `pre` script):
+            // the compiled test files it finds there are no files of the graph.
+            if node_test {
+                let (searched, _) = turborepo_trace_tasks::glob::split_static_prefix(d);
+                let searched = searched.trim_end_matches('/');
+                let within = |inner: &str, outer: &str| {
+                    outer.is_empty()
+                        || outer == "."
+                        || inner == outer
+                        || inner
+                            .strip_prefix(outer)
+                            .is_some_and(|rest| rest.starts_with('/'))
+                };
+                let built = outputs_before
+                    .get_or_insert_with(|| runs.outputs_before(n))
+                    .iter()
+                    .find(|(_, out)| within(out, searched) || within(searched, out));
+                if let Some((task, out)) = built {
+                    foreign.get_or_insert_with(|| {
+                        format!(
+                            "runs the Node.js test runner where {task} writes its outputs \
+                             ({out}): the test files built there are not source files"
+                        )
+                    });
+                }
+            }
             // A run of the Node.js test runner that names files of which none is a
             // test of the graph (the output directory of a build): what it runs
             // is not known.

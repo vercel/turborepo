@@ -411,6 +411,9 @@ fn report(
         tasks.sort_by(|a, b| a.id.cmp(&b.id));
     }
     let has_go_mod = crate::workflows::go_mod_dirs(repo.root.as_std_path());
+    let asked = |framework: &str| {
+        req.tests.is_empty() || req.tests.iter().any(|t| t == framework || t == "all")
+    };
     let kept = |package: &str| {
         req.packages
             .as_ref()
@@ -469,6 +472,10 @@ fn report(
                 return;
             }
             for framework in frameworks {
+                // `--tests`: the items of the frameworks asked for.
+                if !asked(framework) {
+                    continue;
+                }
                 items.push(AffectedTest {
                     path: path.to_owned(),
                     package: package.clone(),

@@ -34,7 +34,9 @@
 //!   included). A shell expands an unquoted one first, with `**` as `*`: the
 //!   files it names are among those the glob names for Node, so quoted and
 //!   unquoted arguments are read alike.
-//! - `**` never enters `node_modules`.
+//! - `**` never enters `node_modules`. It skips directories whose name starts
+//!   with a dot too; the adapter lists the files below them (a file Node does
+//!   not run is listed as a test: never one left out).
 //! - Every word after the first file argument is a file argument.
 //! - `--test-name-pattern`, `--test-skip-pattern`, `--test-shard`,
 //!   `--test-only` and `--watch` leave no file out for good: every file is a
@@ -57,6 +59,22 @@
 //! - a file argument is absolute, leaves the working directory (`..`), starts
 //!   with `!`, is a glob this crate does not translate exactly, or names a
 //!   directory (Node 22 and 24 resolve it as a module, Node 26 searches it).
+//!
+//! Neither is a run that loads what its command line does not say:
+//!
+//! - `NODE_PATH`, `TSX_TSCONFIG_PATH`, `TS_NODE_PROJECT` (and the like)
+//!   assigned in front of the command, also through `cross-env` or `env`;
+//! - a command before it in the script that changes the environment (`export`,
+//!   a sourced file, a bare assignment);
+//! - an env file (of `--env-file`, or of `dotenv`, `dotenvx`, `env-cmd` in
+//!   front of the runner, whose files are inputs of the tests like the file of
+//!   `--env-file`) that sets `NODE_OPTIONS` or one of those variables;
+//! - an `.npmrc` in the package's directory or above it that sets
+//!   `node-options`;
+//! - `--test-isolation` other than `process` (the files share one process);
+//! - a `--test-reporter` that is not built in (a module);
+//! - a preload file, or a file it imports by a relative path, that calls
+//!   `snapshot.setResolveSnapshotPath`.
 //!
 //! The task that starts such a run runs whole (`turborepo-trace-tasks`,
 //! `recognizers/nodetest.rs`).
@@ -148,7 +166,6 @@ const FLAGS: &[&str] = &[
 /// Options with a value (`--x=v` or `--x v`) that change neither the files nor
 /// what loads.
 const VALUE_OPTIONS: &[&str] = &[
-    "--test-reporter",
     "--test-reporter-destination",
     "--test-concurrency",
     "--test-shard",
@@ -162,8 +179,6 @@ const VALUE_OPTIONS: &[&str] = &[
     "--test-coverage-exclude",
     "--test-random-seed",
     "--test-rerun-failures",
-    "--test-isolation",
-    "--experimental-test-isolation",
     "--experimental-test-tag-filter",
     "--watch-path",
     "--watch-kill-signal",
@@ -230,6 +245,17 @@ pub struct Run {
 }
 
 impl Run {
+    /// Whether `other` is the same run as its command line says it: the
+    /// working directory, the files and what is loaded first. (The env files
+    /// of a wrapper in front of the runner are known to the reader of the
+    /// script only.)
+    pub fn same_command(&self, other: &Run) -> bool {
+        self.cwd == other.cwd
+            && self.patterns == other.patterns
+            && self.preloads == other.preloads
+            && self.global_setup == other.global_setup
+    }
+
     /// The globs of the run's files from the working directory on, absolute:
     /// what a run record of the task names.
     pub fn launch_globs(&self) -> Vec<PathBuf> {
@@ -357,6 +383,22 @@ pub fn parse(
                         problem
                             .get_or_insert_with(|| format!("the module of `{name}` is computed"));
                     }
+                }
+            } else if matches!(name, "--test-isolation" | "--experimental-test-isolation") {
+                // In one process the files share state: what one loads, another sees.
+                if !matches!(value(&mut i), Some(("process", false))) {
+                    problem.get_or_insert_with(|| {
+                        format!("`{name}`: the test files do not run in processes of their own")
+                    });
+                }
+            } else if name == "--test-reporter" {
+                // A reporter that is not built in is a module the run loads.
+                if !matches!(
+                    value(&mut i),
+                    Some(("spec" | "tap" | "dot" | "junit" | "lcov", false))
+                ) {
+                    problem
+                        .get_or_insert_with(|| "the reporter is a module, or computed".to_owned());
                 }
             } else if matches!(name, "--env-file" | "--env-file-if-exists") {
                 match value(&mut i) {
@@ -608,6 +650,17 @@ pub fn script_runs(dir: &Path, text: &str) -> Vec<Run> {
     let mut cwd = Some(dir.to_path_buf());
     let mut after_cd = false;
     for cmd in commands(text) {
+        // A command that changes the environment of what follows (`export`, a file
+        // that is sourced, a bare assignment): what the runner then loads is not
+        // read, so no run after it is mapped.
+        if cmd.words.first().is_some_and(|(w, _)| {
+            matches!(
+                w.as_str(),
+                "export" | "." | "source" | "eval" | "set" | "unset"
+            ) || cmd.words.iter().all(|(w, _)| assignment(w).is_some())
+        }) {
+            break;
+        }
         // After `cd x ||`, `cd x |` or `cd x &` the directory of what follows is not
         // known.
         if after_cd && cmd.joint != Joint::Then {
@@ -646,6 +699,18 @@ pub fn script_runs(dir: &Path, text: &str) -> Vec<Run> {
         if before.iter().any(|(w, dynamic)| *dynamic || moves(w)) {
             continue;
         }
+        // A variable that changes what the runner resolves or loads, and that is
+        // not read here.
+        if before
+            .iter()
+            .any(|(w, _)| assignment(w).is_some_and(|name| RESOLUTION_VARIABLES.contains(&name)))
+        {
+            continue;
+        }
+        // The env files of a wrapper in front of the runner.
+        let Some(wrapper_env) = wrapper_env_files(before) else {
+            continue;
+        };
         let node_options = before
             .iter()
             .rev()
@@ -654,17 +719,170 @@ pub fn script_runs(dir: &Path, text: &str) -> Vec<Run> {
             .iter()
             .map(|(w, d)| (w.as_str(), *d))
             .collect();
-        if let Parsed::Run(run) = parse(base_name(&cmd.words[i].0), &args, node_options, at) {
-            out.push(run);
+        if let Parsed::Run(mut run) = parse(base_name(&cmd.words[i].0), &args, node_options, at) {
+            run.env_files.extend(wrapper_env);
+            if reads_only_what_is_modelled(&run) {
+                out.push(run);
+            }
         }
     }
     out
 }
 
-/// The runs of the scripts of the `package.json` at `manifest`, each with the
-/// name of its script. Runs that are equal (a `test` and a `test:watch` script)
-/// are listed once.
-pub fn manifest_runs(manifest: &Path) -> Vec<(String, Run)> {
+/// The name of the variable a word `NAME=value` assigns.
+fn assignment(word: &str) -> Option<&str> {
+    let (name, _) = word.split_once('=')?;
+    let ok = !name.is_empty()
+        && !name.as_bytes()[0].is_ascii_digit()
+        && name.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'_');
+    ok.then_some(name)
+}
+
+/// Variables that change which modules the runner resolves or loads, without
+/// an option on the command line. A run with one of them assigned (in front of
+/// the command, through `cross-env` or `env`, or in an env file) is not
+/// mapped. (`NODE_OPTIONS` in front of the command is read; in an env file it
+/// is not.)
+const RESOLUTION_VARIABLES: &[&str] = &[
+    "NODE_PATH",
+    "TSX_TSCONFIG_PATH",
+    "ESBK_TSCONFIG_PATH",
+    "TS_NODE_PROJECT",
+    "TS_NODE_COMPILER_OPTIONS",
+    "NODE_PRESERVE_SYMLINKS",
+];
+
+/// The env files that a wrapper among the words in front of the runner loads
+/// (`dotenv -e .env.test --`, `dotenvx run -f x --`, `env-cmd -f x`): inputs of
+/// the run's tests, like the file of `--env-file`. `None` when the wrapper's
+/// files are not known (an option that is not read, `env-cmd` without a
+/// file).
+fn wrapper_env_files(before: &[(String, bool)]) -> Option<Vec<EnvFile>> {
+    let Some(at) = before.iter().position(|(w, _)| {
+        matches!(
+            base_name(w),
+            "dotenv" | "dotenv-cli" | "dotenvx" | "env-cmd"
+        )
+    }) else {
+        return Some(Vec::new());
+    };
+    let wrapper = base_name(&before[at].0);
+    let mut files = Vec::new();
+    let mut words = before[at + 1..].iter().map(|(w, _)| w.as_str());
+    while let Some(w) = words.next() {
+        match w {
+            "--" => break,
+            "run" if wrapper == "dotenvx" => {}
+            "-e" | "-f" | "--file" | "--env-file" => files.push(words.next()?.to_owned()),
+            w if !w.starts_with('-') => break,
+            w => match w.split_once('=') {
+                Some(("--file" | "--env-file" | "-e" | "-f", f)) => files.push(f.to_owned()),
+                _ => return None,
+            },
+        }
+    }
+    if files.is_empty() {
+        if wrapper == "env-cmd" {
+            return None;
+        }
+        files.push(".env".to_owned());
+    }
+    Some(
+        files
+            .into_iter()
+            .map(|path| EnvFile {
+                path,
+                optional: true,
+            })
+            .collect(),
+    )
+}
+
+/// Reads a file without a record: what is computed from it is keyed by the
+/// runs ([`manifest_scripts`]).
+fn read_unrecorded(path: &Path) -> Option<String> {
+    let bytes = turborepo_trace_core::record::pause(|| fsx::read(path)).ok()?;
+    Some(String::from_utf8_lossy(&bytes).into_owned())
+}
+
+/// Whether the run loads nothing that its command line does not say: no env
+/// file of it sets `NODE_OPTIONS` or a [`RESOLUTION_VARIABLES`] entry, and no
+/// preload file (or a file it imports by a relative path) moves the snapshot
+/// files (`snapshot.setResolveSnapshotPath`).
+fn reads_only_what_is_modelled(run: &Run) -> bool {
+    for e in &run.env_files {
+        let Some(text) = read_unrecorded(&run.cwd.join(&e.path)) else {
+            continue;
+        };
+        let sets = text.lines().any(|l| {
+            let l = l.trim_start();
+            let l = l.strip_prefix("export ").unwrap_or(l).trim_start();
+            l.split_once(['=', ':'])
+                .map(|(n, _)| n.trim())
+                .is_some_and(|n| n == "NODE_OPTIONS" || RESOLUTION_VARIABLES.contains(&n))
+        });
+        if sets {
+            return false;
+        }
+    }
+    let mut todo: Vec<PathBuf> = run
+        .preloads
+        .iter()
+        .chain(&run.global_setup)
+        .filter(|p| p.starts_with('.'))
+        .map(|p| fsx::normalize(&run.cwd.join(p)))
+        .collect();
+    let mut seen: Vec<PathBuf> = Vec::new();
+    while let Some(file) = todo.pop() {
+        if seen.contains(&file) || seen.len() >= 256 {
+            continue;
+        }
+        seen.push(file.clone());
+        let Some(text) = read_unrecorded(&file) else {
+            continue;
+        };
+        if text.contains("setResolveSnapshotPath") {
+            return false;
+        }
+        // The files it names by a relative path.
+        let dir = file.parent().unwrap_or(Path::new("/"));
+        for quote in ['\'', '"'] {
+            for part in text.split(quote).skip(1).step_by(2) {
+                if part.starts_with("./") || part.starts_with("../") {
+                    let to = fsx::normalize(&dir.join(part));
+                    for ext in ["", ".js", ".mjs", ".cjs", ".ts", ".mts", ".cts"] {
+                        let mut name = to.clone().into_os_string();
+                        name.push(ext);
+                        todo.push(PathBuf::from(name));
+                    }
+                }
+            }
+        }
+    }
+    true
+}
+
+/// Whether an `.npmrc` that governs the package at `dir` (in the directory or
+/// above it, up to the repository root) sets `node-options`: npm and pnpm pass
+/// it to every script as `NODE_OPTIONS`, which is not read.
+fn npmrc_sets_node_options(dir: &Path) -> bool {
+    for d in dir.ancestors() {
+        if read_unrecorded(&d.join(".npmrc")).is_some_and(|text| {
+            text.lines()
+                .any(|l| l.trim_start().starts_with("node-options"))
+        }) {
+            return true;
+        }
+        if turborepo_trace_core::record::pause(|| fsx::exists(&d.join(".git"))) {
+            break;
+        }
+    }
+    false
+}
+
+/// The mapped runs of each script of the `package.json` at `manifest`, by
+/// script name.
+pub fn manifest_scripts(manifest: &Path) -> Vec<(String, Vec<Run>)> {
     // Not recorded as a read: a manifest changes with every dependency entry, and
     // only its runs matter here. Whoever keeps what is computed from them keys it
     // by the runs themselves (the graph store: the first-party key of the packages
@@ -683,10 +901,25 @@ pub fn manifest_runs(manifest: &Path) -> Vec<(String, Run)> {
         return Vec::new();
     };
     let dir = manifest.parent().unwrap_or(Path::new("/"));
+    if npmrc_sets_node_options(dir) {
+        return Vec::new();
+    }
+    scripts
+        .iter()
+        .filter_map(|(name, text)| {
+            let runs = script_runs(dir, text.as_str()?);
+            (!runs.is_empty()).then(|| (name.clone(), runs))
+        })
+        .collect()
+}
+
+/// The runs of the scripts of the `package.json` at `manifest`, each with the
+/// name of its script. Runs that are equal (a `test` and a `test:watch` script)
+/// are listed once.
+pub fn manifest_runs(manifest: &Path) -> Vec<(String, Run)> {
     let mut out: Vec<(String, Run)> = Vec::new();
-    for (name, text) in scripts {
-        let Some(text) = text.as_str() else { continue };
-        for run in script_runs(dir, text) {
+    for (name, runs) in manifest_scripts(manifest) {
+        for run in runs {
             if !out.iter().any(|(_, r)| *r == run) {
                 out.push((name.clone(), run));
             }
@@ -1037,6 +1270,18 @@ mod tests {
             "node --test $FILES",
             "echo 'node --test'",
             "node scripts/test.js --test",
+            // What the runner loads is changed from outside its command line.
+            "NODE_PATH=lib node --test",
+            "cross-env TSX_TSCONFIG_PATH=tsconfig.alt.json tsx --test",
+            "env TS_NODE_PROJECT=x node --loader ts-node/esm --test",
+            "export NODE_OPTIONS='--import ./pre.mjs' && node --test",
+            ". ./test-env.sh && node --test",
+            "FLAG=1; node --test",
+            "env-cmd node --test",
+            "dotenv -c -- node --test",
+            "node --test --test-isolation=none",
+            "node --experimental-test-isolation none --test",
+            "node --test --test-reporter ./reporter.mjs",
             // Another runner started as a file: a script of node, no run of its runner.
             "node ./node_modules/.bin/jest --ci",
             "node ./node_modules/.bin/jest --test",
@@ -1046,6 +1291,17 @@ mod tests {
         ] {
             assert!(runs(text).is_empty(), "{text}");
         }
+        // The env files of a wrapper are the run's.
+        assert_eq!(
+            one("dotenv -e .env.test -- node --test --test-isolation=process").env_files,
+            [EnvFile {
+                path: ".env.test".into(),
+                optional: true
+            }]
+        );
+        assert_eq!(one("env-cmd -f .env.ci node --test").env_files.len(), 1);
+        assert_eq!(one("dotenv -- node --test").env_files[0].path, ".env");
+        assert!(one("FLAG=1 node --test").env_files.is_empty());
         // Two runs in one script.
         assert_eq!(
             runs("node --test test/unit/*.test.js && node --test test/e2e/*.test.js").len(),

@@ -9,10 +9,15 @@
 //!    ([`turborepo_trace_frameworks::nodetest::parse`]) from the words this
 //!    crate's shell parser produced (after wrappers and forwarding bins are
 //!    removed), and says its files and preloads exactly;
-//! 2. the manifests that govern the working directory hold an equal run
-//!    ([`turborepo_trace_frameworks::nodetest::governing_runs`]): the files are
-//!    tests in the graph, with this run's preloads and env files as inputs;
-//! 3. no command of the task before it writes build output where the run looks
+//! 2. the task is a script of its package's manifest, and the adapter reads the
+//!    same run in that script
+//!    ([`turborepo_trace_frameworks::nodetest::manifest_scripts`]): the files
+//!    are tests in the graph, with this run's preloads and env files as inputs,
+//!    and nothing around the command (the environment, a wrapper's env file, an
+//!    `.npmrc`) loads what is not read;
+//! 3. no file the run names is a symbolic link (Node runs it by the link's
+//!    path; the graph has the file it leads to);
+//! 4. no command of the task before it writes build output where the run looks
 //!    for files (`tsc && node --test dist/*.test.js`, or the default patterns
 //!    after a build into the working directory): compiled test files are no
 //!    source files, and nothing maps them back.
@@ -27,8 +32,8 @@
 use std::path::Path;
 
 use turborepo_trace_frameworks::{
-    Framework,
-    nodetest::{self, NodeTest, Parsed, Run},
+    fsx,
+    nodetest::{self, Parsed, Run},
 };
 
 use crate::{
@@ -95,7 +100,11 @@ pub fn record(cmd: &Command, cx: &RecognizeCx<'_>, out: &mut TaskSpec) -> bool {
         Parsed::Run(run) => Some(run),
     };
     let mapped = run.filter(|run| {
-        !real.cwd_computed && !computed_options && built_before(run, out).is_none() && claimed(run)
+        !real.cwd_computed
+            && !computed_options
+            && built_before(run, out).is_none()
+            && claimed(run, cx)
+            && !names_a_link(run)
     });
     match mapped {
         Some(run) => {
@@ -108,13 +117,44 @@ pub fn record(cmd: &Command, cx: &RecognizeCx<'_>, out: &mut TaskSpec) -> bool {
     true
 }
 
-/// Whether the adapter lists the files of `run` as tests, with its preloads:
-/// the manifests that govern the working directory hold an equal run.
-fn claimed(run: &Run) -> bool {
-    let probe = run.cwd.join("__turbotrace_probe__");
-    NodeTest.config_for(&probe).is_some_and(|config| {
-        nodetest::governing_runs(config.parent().unwrap_or(Path::new("/")))
-            .iter()
-            .any(|(_, _, r)| r == run)
-    })
+/// Whether the adapter lists the files of `run` as tests, with what the run
+/// loads as their inputs: the script of this task, in the manifest of its
+/// package, holds the same run as the adapter reads it. (The adapter reads
+/// the script's text for what the words of one command do not show: the
+/// environment the commands before it leave, the env files of a wrapper, an
+/// `.npmrc`. Another script's equal command line says nothing about this
+/// one.)
+fn claimed(run: &Run, cx: &RecognizeCx<'_>) -> bool {
+    let Some(script) = cx.task_name else {
+        return false;
+    };
+    nodetest::manifest_scripts(&cx.package_root.join("package.json"))
+        .iter()
+        .any(|(name, runs)| name == script && runs.iter().any(|r| r.same_command(run)))
+}
+
+/// Whether a file the run names is a symbolic link: Node runs it by the
+/// link's path, and the graph has the file it leads to, which the run may not
+/// name.
+fn names_a_link(run: &Run) -> bool {
+    use turborepo_trace_frameworks::{TestPattern, pattern::CompiledPattern};
+    let is_link = |p: &Path| std::fs::symlink_metadata(p).is_ok_and(|m| m.is_symlink());
+    let mut link = false;
+    for pattern in &run.patterns {
+        let (prefix, rest) = crate::glob::split_static_prefix(pattern);
+        let base = run.cwd.join(prefix);
+        if rest.is_empty() {
+            link |= is_link(&base);
+            continue;
+        }
+        let glob = CompiledPattern::new(&TestPattern::Glob(rest.to_owned()));
+        fsx::walk_files_matching(&base, "**", &mut |p| {
+            if let Ok(rel) = p.strip_prefix(&base)
+                && glob.matches(&rel.to_string_lossy())
+            {
+                link |= is_link(p);
+            }
+        });
+    }
+    link
 }

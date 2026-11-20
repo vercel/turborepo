@@ -2922,3 +2922,448 @@ fn the_source_of_a_bin_a_test_script_runs_selects_the_tests_of_the_script() {
         );
     }
 }
+
+/// What can change a `node --test` run from outside its command line: the
+/// environment, env files, an `.npmrc`, a build before the run, files that
+/// share a process, a bin in front of the runner. Each case asks that the
+/// change runs the test: the test is selected, or its task is among those
+/// that run whole.
+#[cfg(unix)]
+mod node_test_inputs_outside_the_command_line {
+    use super::*;
+
+    const ADD: &str = "packages/math/test/add.test.js";
+    const HEADING: &str = "packages/web/src/heading.test.ts";
+
+    fn put(dir: &Path, rel: &str, text: &str) {
+        let path = dir.join(rel);
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        fs::write(path, text).unwrap();
+    }
+
+    fn commit(dir: &Path) {
+        git(dir, &["add", "-A"]);
+        git(dir, &["commit", "--quiet", "-m", "probe"]);
+    }
+
+    /// The manifest of `packages/math` with these scripts (JSON members).
+    fn math_scripts(dir: &Path, scripts: &str) {
+        put(
+            dir,
+            "packages/math/package.json",
+            &format!(
+                r#"{{ "name": "math", "version": "1.0.0", "private": true, "type": "module", "exports": "./src/index.js", "scripts": {{ {scripts} }} }}"#
+            ),
+        );
+    }
+
+    /// Whether a change of `changed` runs `test`: it is selected, or `task`
+    /// runs whole.
+    fn runs(dir: &Path, changed: &str, test: &str, task: &str) -> bool {
+        let selection = affected_json(dir, &["--changed", changed]);
+        selection.tests.contains_key(test) || selection.uncovered.iter().any(|t| t == task)
+    }
+
+    #[test]
+    fn npmrc_node_options_preload() {
+        let dir = fixture("trace_node_test");
+        put(dir.path(), ".gitignore", "node_modules/\n.turbo\ndist/\n");
+        put(dir.path(), ".npmrc", "node-options=--require ./pre.cjs\n");
+        put(dir.path(), "packages/math/pre.cjs", "globalThis.pre = 1;\n");
+        commit(dir.path());
+        assert!(runs(dir.path(), "packages/math/pre.cjs", ADD, "math#test"));
+    }
+
+    #[test]
+    fn tsx_tsconfig_path_variable() {
+        let dir = fixture("trace_node_test");
+        math_scripts(
+            dir.path(),
+            r#""test": "TSX_TSCONFIG_PATH=tsconfig.alt.json tsx --test""#,
+        );
+        put(
+            dir.path(),
+            "packages/math/tsconfig.json",
+            r#"{ "compilerOptions": { "paths": { "@impl/*": ["./src/*"] } } }"#,
+        );
+        put(
+            dir.path(),
+            "packages/math/tsconfig.alt.json",
+            r#"{ "compilerOptions": { "paths": { "@impl/*": ["./alt/*"] } } }"#,
+        );
+        put(
+            dir.path(),
+            "packages/math/src/value.ts",
+            "export const value = 1;\n",
+        );
+        put(
+            dir.path(),
+            "packages/math/alt/value.ts",
+            "export const value = 2;\n",
+        );
+        put(
+            dir.path(),
+            "packages/math/test/alias.test.ts",
+            "import test from 'node:test';\nimport { value } from '@impl/value';\ntest('alias', \
+             () => { if (value !== 2) throw new Error('value'); });\n",
+        );
+        commit(dir.path());
+        assert!(runs(
+            dir.path(),
+            "packages/math/alt/value.ts",
+            "packages/math/test/alias.test.ts",
+            "math#test"
+        ));
+    }
+
+    #[test]
+    fn node_path_variable() {
+        let dir = fixture("trace_node_test");
+        math_scripts(dir.path(), r#""test": "NODE_PATH=lib node --test""#);
+        put(
+            dir.path(),
+            "packages/math/lib/shared.cjs",
+            "module.exports = 1;\n",
+        );
+        put(
+            dir.path(),
+            "packages/math/test/path.test.cjs",
+            "const test = require('node:test');\nrequire('shared.cjs');\ntest('path', () => {});\n",
+        );
+        commit(dir.path());
+        assert!(runs(
+            dir.path(),
+            "packages/math/lib/shared.cjs",
+            "packages/math/test/path.test.cjs",
+            "math#test"
+        ));
+    }
+
+    #[test]
+    fn exported_node_options_preload() {
+        let dir = fixture("trace_node_test");
+        math_scripts(
+            dir.path(),
+            r#""test": "export NODE_OPTIONS=\"--import ./pre.mjs\" && node --test""#,
+        );
+        put(dir.path(), "packages/math/pre.mjs", "globalThis.pre = 1;\n");
+        commit(dir.path());
+        assert!(runs(dir.path(), "packages/math/pre.mjs", ADD, "math#test"));
+    }
+
+    #[test]
+    fn env_file_node_options_preload() {
+        let dir = fixture("trace_node_test");
+        math_scripts(dir.path(), r#""test": "node --env-file=.env.test --test""#);
+        put(
+            dir.path(),
+            "packages/math/.env.test",
+            "NODE_OPTIONS=--import ./pre.mjs\n",
+        );
+        put(dir.path(), "packages/math/pre.mjs", "globalThis.pre = 1;\n");
+        commit(dir.path());
+        assert!(runs(dir.path(), "packages/math/pre.mjs", ADD, "math#test"));
+    }
+
+    #[test]
+    fn dotenv_wrapper_env_file() {
+        let dir = fixture("trace_node_test");
+        math_scripts(
+            dir.path(),
+            r#""test": "dotenv -e .env.test -- node --test""#,
+        );
+        put(dir.path(), "packages/math/.env.test", "MODE=test\n");
+        commit(dir.path());
+        assert!(runs(
+            dir.path(),
+            "packages/math/.env.test",
+            ADD,
+            "math#test"
+        ));
+    }
+
+    #[test]
+    fn isolation_none_shares_one_process() {
+        let dir = fixture("trace_node_test");
+        math_scripts(dir.path(), r#""test": "node --test --test-isolation=none""#);
+        put(
+            dir.path(),
+            "packages/math/src/state.js",
+            "globalThis.shared = 1;\n",
+        );
+        put(
+            dir.path(),
+            "packages/math/test/a-sets.test.js",
+            "import test from 'node:test';\nimport '../src/state.js';\ntest('sets', () => {});\n",
+        );
+        put(
+            dir.path(),
+            "packages/math/test/b-reads.test.js",
+            "import test from 'node:test';\ntest('reads', () => { if (globalThis.shared !== 1) \
+             throw new Error('shared'); });\n",
+        );
+        commit(dir.path());
+        assert!(runs(
+            dir.path(),
+            "packages/math/src/state.js",
+            "packages/math/test/b-reads.test.js",
+            "math#test"
+        ));
+    }
+
+    #[test]
+    fn custom_reporter_file() {
+        let dir = fixture("trace_node_test");
+        math_scripts(
+            dir.path(),
+            r#""test": "node --test --test-reporter ./reporter.mjs""#,
+        );
+        put(
+            dir.path(),
+            "packages/math/reporter.mjs",
+            "export default async function* reporter(source) { for await (const event of source) \
+             { void event; } }\n",
+        );
+        commit(dir.path());
+        assert!(runs(
+            dir.path(),
+            "packages/math/reporter.mjs",
+            ADD,
+            "math#test"
+        ));
+    }
+
+    /// `packages/math` with a TypeScript source whose compiled copy
+    /// (`dist/cases/test/shape.js`) the default patterns take, and no source
+    /// file of that test the patterns name.
+    fn compiled_test(dir: &Path, scripts: &str) {
+        math_scripts(dir, scripts);
+        put(
+            dir,
+            "packages/math/tsconfig.json",
+            r#"{ "compilerOptions": { "outDir": "dist", "rootDir": "src", "jsx": "react-jsx" }, "include": ["src"] }"#,
+        );
+        put(
+            dir,
+            "packages/math/src/value.ts",
+            "export const value = 1;\n",
+        );
+        put(
+            dir,
+            "packages/math/src/cases/test/shape.tsx",
+            "import test from 'node:test';\nimport { value } from '../../value';\ntest('shape', \
+             () => { if (value !== 1) throw new Error('value'); });\n",
+        );
+    }
+
+    #[test]
+    fn compiled_tests_of_a_build_the_task_depends_on() {
+        let dir = fixture("trace_node_test");
+        compiled_test(
+            dir.path(),
+            r#""build": "tsc -p tsconfig.json", "test": "node --test""#,
+        );
+        put(
+            dir.path(),
+            "turbo.json",
+            r#"{ "tasks": { "build": { "outputs": ["dist/**"] }, "test": { "dependsOn": ["build"] } } }"#,
+        );
+        commit(dir.path());
+        let selection = affected_json(dir.path(), &["--changed", "packages/math/src/value.ts"]);
+        assert!(
+            selection.uncovered.iter().any(|t| t == "math#test"),
+            "math#test is covered and nothing is selected: {:?}",
+            selection.tests
+        );
+    }
+
+    #[test]
+    fn compiled_tests_of_a_pretest_script() {
+        let dir = fixture("trace_node_test");
+        compiled_test(
+            dir.path(),
+            r#""pretest": "tsc -p tsconfig.json", "test": "node --test""#,
+        );
+        commit(dir.path());
+        let selection = affected_json(dir.path(), &["--changed", "packages/math/src/value.ts"]);
+        assert!(
+            selection.uncovered.iter().any(|t| t == "math#test"),
+            "math#test is covered and nothing is selected: {:?}",
+            selection.tests
+        );
+    }
+
+    #[test]
+    fn linked_test_file() {
+        let dir = fixture("trace_node_test");
+        put(
+            dir.path(),
+            "packages/math/shared/cases.js",
+            "import test from 'node:test';\nimport './dep.js';\ntest('cases', () => {});\n",
+        );
+        put(
+            dir.path(),
+            "packages/math/shared/dep.js",
+            "export default 1;\n",
+        );
+        std::os::unix::fs::symlink(
+            "../shared/cases.js",
+            dir.path().join("packages/math/test/cases.js"),
+        )
+        .unwrap();
+        commit(dir.path());
+        let selection = affected_json(dir.path(), &["--changed", "packages/math/shared/dep.js"]);
+        assert!(
+            selection.tests.contains_key("packages/math/test/cases.js")
+                || selection
+                    .tests
+                    .contains_key("packages/math/shared/cases.js")
+                || selection.uncovered.iter().any(|t| t == "math#test"),
+            "{:?}",
+            selection.tests
+        );
+    }
+
+    #[test]
+    fn forwarding_bin_sets_a_preload() {
+        let dir = fixture("trace_node_test");
+        put(
+            dir.path(),
+            "packages/tool-run/bin/run.mjs",
+            "#!/usr/bin/env node\nimport { spawnSync } from 'node:child_process';\nimport path \
+             from 'node:path';\nprocess.env.NODE_OPTIONS = '--import ' + \
+             path.join(import.meta.dirname, '../hooks/pre.mjs');\nconst result = \
+             spawnSync(process.argv[2], process.argv.slice(3), { stdio: 'inherit' \
+             });\nprocess.exit(result.status ?? 1);\n",
+        );
+        put(
+            dir.path(),
+            "packages/tool-run/hooks/pre.mjs",
+            "globalThis.pre = 1;\n",
+        );
+        commit(dir.path());
+        assert!(runs(
+            dir.path(),
+            "packages/tool-run/hooks/pre.mjs",
+            HEADING,
+            "web#test"
+        ));
+    }
+
+    #[test]
+    fn forwarding_bin_reads_an_env_file() {
+        let dir = fixture("trace_node_test");
+        put(
+            dir.path(),
+            "packages/tool-run/bin/run.mjs",
+            "#!/usr/bin/env node\nimport { spawnSync } from 'node:child_process';\nimport fs from \
+             'node:fs';\nconst env = { ...process.env };\nfor (const line of \
+             fs.readFileSync('.env.test', 'utf8').split('\\n')) {\n  const [key, value] = \
+             line.split('=');\n  if (key) env[key] = value;\n}\nconst [program, ...rest] = \
+             process.argv.slice(2);\nconst result = spawnSync(program, rest, { stdio: 'inherit', \
+             env });\nprocess.exit(result.status ?? 1);\n",
+        );
+        put(dir.path(), "packages/web/.env.test", "MODE=test\n");
+        commit(dir.path());
+        assert!(runs(
+            dir.path(),
+            "packages/web/.env.test",
+            HEADING,
+            "web#test"
+        ));
+    }
+
+    #[test]
+    fn forwarding_bin_thirteenth_file() {
+        let dir = fixture("trace_node_test");
+        put(
+            dir.path(),
+            "packages/tool-run/bin/run.mjs",
+            "#!/usr/bin/env node\nimport { spawnSync } from 'node:child_process';\nimport { \
+             environment } from '../src/m1.mjs';\nconst [program, ...rest] = \
+             process.argv.slice(2);\nconst result = spawnSync(program, rest, { stdio: 'inherit', \
+             env: environment() });\nprocess.exit(result.status ?? 1);\n",
+        );
+        for i in 1..13 {
+            put(
+                dir.path(),
+                &format!("packages/tool-run/src/m{i}.mjs"),
+                &format!("export {{ environment }} from './m{}.mjs';\n", i + 1),
+            );
+        }
+        put(
+            dir.path(),
+            "packages/tool-run/src/m13.mjs",
+            "export const environment = () => ({ ...process.env, TOOL_RUN: '1' });\n",
+        );
+        commit(dir.path());
+        assert!(runs(
+            dir.path(),
+            "packages/tool-run/src/m2.mjs",
+            HEADING,
+            "web#test"
+        ));
+        assert!(runs(
+            dir.path(),
+            "packages/tool-run/src/m13.mjs",
+            HEADING,
+            "web#test"
+        ));
+    }
+
+    #[test]
+    fn tests_filter_keeps_items_of_other_frameworks() {
+        let dir = fixture("trace_node_test");
+        put(dir.path(), "jest.config.js", "module.exports = {};\n");
+        commit(dir.path());
+        for (asked, other) in [("jest", "node-test"), ("node-test", "jest")] {
+            let output = trace(
+                dir.path(),
+                &[
+                    "affected",
+                    "--json",
+                    "--tests",
+                    asked,
+                    "--changed",
+                    "packages/math/src/add.js",
+                ],
+            );
+            assert!(output.status.success(), "{}", stderr(&output));
+            let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+            let items = json["affectedTests"]["items"].as_array().unwrap();
+            assert!(
+                items.iter().any(|i| i["framework"] == asked),
+                "no {asked} item: {json}"
+            );
+            assert!(
+                !items.iter().any(|i| i["framework"] == other),
+                "--tests {asked} lists an item of {other}: {json}"
+            );
+        }
+    }
+
+    #[test]
+    fn custom_snapshot_path() {
+        let dir = fixture("trace_node_test");
+        math_scripts(dir.path(), r#""test": "node --import ./snap.mjs --test""#);
+        put(
+            dir.path(),
+            "packages/math/snap.mjs",
+            "import { snapshot } from 'node:test';\nimport path from \
+             'node:path';\nsnapshot.setResolveSnapshotPath((file) => \
+             path.join(path.dirname(file), '__snapshots__', path.basename(file) + '.snap'));\n",
+        );
+        put(
+            dir.path(),
+            "packages/math/test/__snapshots__/add.test.js.snap",
+            "exports[`add 1`] = `3`;\n",
+        );
+        commit(dir.path());
+        assert!(runs(
+            dir.path(),
+            "packages/math/test/__snapshots__/add.test.js.snap",
+            ADD,
+            "math#test"
+        ));
+    }
+}

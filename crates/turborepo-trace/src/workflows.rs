@@ -409,6 +409,88 @@ impl<'g> Runs<'g> {
         out
     }
 
+    /// The directories (from the repository root) that the tasks before the
+    /// package script at `n` write their outputs to, each with its task: the
+    /// tasks it depends on (turbo's `dependsOn`, transitively) and its `pre`
+    /// script. A runner that searches a directory for test files after them
+    /// finds what they built there. Directories that the Node.js test runner
+    /// never enters (a name that starts with a dot, `node_modules`) are left
+    /// out.
+    pub(crate) fn outputs_before(&self, n: NodeId) -> Vec<(String, String)> {
+        let Some(rec) = self.recs.get(&n) else {
+            return Vec::new();
+        };
+        let mut todo: Vec<NodeId> = rec
+            .deps
+            .iter()
+            .filter_map(|d| self.g.node_by_path(d.as_str()))
+            .collect();
+        if let Some((dir, name)) = rec
+            .id
+            .as_str()
+            .strip_prefix("task:")
+            .and_then(|r| r.rsplit_once('#'))
+        {
+            todo.extend(self.g.node_by_path(&format!("task:{dir}#pre{name}")));
+        }
+        let mut seen: BTreeSet<NodeId> = BTreeSet::from([n]);
+        let mut out = Vec::new();
+        while let Some(t) = todo.pop() {
+            if !seen.insert(t) || seen.len() > 512 {
+                continue;
+            }
+            let Some(rec) = self.recs.get(&t) else {
+                continue;
+            };
+            todo.extend(
+                rec.deps
+                    .iter()
+                    .filter_map(|d| self.g.node_by_path(d.as_str())),
+            );
+            let Some((dir, _)) = rec
+                .id
+                .as_str()
+                .strip_prefix("task:")
+                .and_then(|r| r.rsplit_once('#'))
+            else {
+                continue;
+            };
+            for o in rec.outputs.iter() {
+                let path = o.path.as_str();
+                if o.package.is_some() || path.starts_with('/') {
+                    continue;
+                }
+                let (prefix, _) = turborepo_trace_tasks::glob::split_static_prefix(
+                    o.pattern.as_ref().map_or("", |p| p.as_str()),
+                );
+                let mut parts: Vec<&str> = Vec::new();
+                for part in dir
+                    .split('/')
+                    .chain(path.split('/'))
+                    .chain(prefix.split('/'))
+                {
+                    match part {
+                        "" | "." => {}
+                        ".." => {
+                            parts.pop();
+                        }
+                        part => parts.push(part),
+                    }
+                }
+                if parts
+                    .iter()
+                    .any(|part| part.starts_with('.') || *part == "node_modules")
+                {
+                    continue;
+                }
+                out.push((rec.id.as_str().to_owned(), parts.join("/")));
+            }
+        }
+        out.sort();
+        out.dedup();
+        out
+    }
+
     /// Whether the task at `n` launches tests itself: one of its own commands
     /// is a test runner or a test launch that can't be mapped.
     fn launches(&self, n: NodeId) -> bool {
