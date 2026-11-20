@@ -270,3 +270,61 @@ fn go_test_reads_the_packages_it_names() {
     }
     std::fs::remove_dir_all(&root).unwrap();
 }
+
+/// A script file without a shell extension is not read command by command:
+/// its text says what it starts. `./scripts/test` is that file, not the `test`
+/// builtin, and a runner named by the path of its installed binary
+/// (`./node_modules/.bin/jest`) is that runner.
+#[test]
+fn a_script_file_names_the_runner_by_its_installed_binary() {
+    let script =
+        |body: &str| format!("#!/usr/bin/env bash\nset -e\ncd \"$(dirname \"$0\")/..\"\n{body}\n");
+    let forms: &[(&str, &str, &[&str])] = &[
+        ("a", "./node_modules/.bin/jest \"$@\"", &["tests:jest:."]),
+        (
+            "b",
+            "exec node_modules/.bin/vitest run",
+            &["tests:vitest:."],
+        ),
+        (
+            "c",
+            "\"$ROOT/node_modules/.bin/jest\" --ci",
+            &["tests:jest:."],
+        ),
+        ("d", "jest --ci", &["tests:jest:."]),
+        ("g", "go test ./...", &["tests:gotest:."]),
+        // Not a runner, and a file of the runner's package that is not its binary.
+        ("e", "./node_modules/.bin/tsc -p .", &[]),
+        ("f", "cat ./node_modules/jest/package.json", &[]),
+    ];
+    let mut files: Vec<(String, String)> = vec![(
+        "package.json".into(),
+        r#"{"name":"root","private":true,"workspaces":["packages/*"]}"#.into(),
+    )];
+    for (dir, body, _) in forms {
+        files.push((
+            format!("packages/{dir}/package.json"),
+            manifest(dir, "./scripts/test"),
+        ));
+        files.push((format!("packages/{dir}/scripts/test"), script(body)));
+    }
+    let borrowed: Vec<(&str, &str)> = files
+        .iter()
+        .map(|(a, b)| (a.as_str(), b.as_str()))
+        .collect();
+    let root = repo("script-file", &borrowed);
+    let rels: Vec<String> = forms
+        .iter()
+        .map(|(dir, _, _)| format!("packages/{dir}"))
+        .collect();
+    let rels: Vec<&str> = rels.iter().map(String::as_str).collect();
+    let set = tasks(&root, &rels);
+    for (dir, body, want) in forms {
+        assert_eq!(
+            runs(&set, &root, &format!("packages/{dir}")),
+            *want,
+            "{body}"
+        );
+    }
+    std::fs::remove_dir_all(&root).unwrap();
+}
