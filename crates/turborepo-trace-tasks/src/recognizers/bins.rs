@@ -377,6 +377,7 @@ fn first_party(
                 };
             }
             if !scan.tools.is_empty() {
+                let runs_before = out.runs.len();
                 for t in &scan.tools {
                     let mut fwd = cmd.clone();
                     fwd.argv[0] = Word::lit(*t);
@@ -389,6 +390,15 @@ fn first_party(
                             rel(file, cx),
                             if scan.weak { "weak" } else { "strong" }
                         ),
+                    );
+                }
+                // The bin starts tests and not all files of its package were read: one
+                // of the others can change how (the environment it passes on), so the
+                // task is not known to run them as the tool alone would.
+                if scan.capped && out.runs.len() > runs_before {
+                    out.test_run(
+                        format!("{name} (a bin whose sources are not all read)"),
+                        cmd.cwd.clone(),
                     );
                 }
                 return Resolved {

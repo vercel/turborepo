@@ -53,6 +53,10 @@ pub struct Scan {
     pub cwd: bool,
     /// The files scanned (entry first).
     pub files: Vec<PathBuf>,
+    /// Whether the bin's package has more files than were read (the entry
+    /// imports more than [`MAX_FILES`]): what the bin runs is then not known
+    /// from its sources.
+    pub capped: bool,
     /// Whether the entry file forwards its arguments to the program named by
     /// the first one ([`super::forward`]).
     pub forwards: bool,
@@ -360,7 +364,11 @@ pub fn scan(entry: &Path, pkg_dir: &Path) -> Scan {
     let (mut rest_strong, mut rest_weak) = (Vec::new(), Vec::new());
     let mut launch = false;
     while let Some(f) = todo.pop() {
-        if s.files.len() >= MAX_FILES || !seen.insert(f.clone()) {
+        if !seen.insert(f.clone()) {
+            continue;
+        }
+        if s.files.len() >= MAX_FILES {
+            s.capped |= f.starts_with(pkg_dir) && fsx::is_file(&f);
             continue;
         }
         if !f.starts_with(pkg_dir) || !fsx::is_file(&f) {

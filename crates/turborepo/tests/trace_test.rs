@@ -2868,16 +2868,11 @@ fn a_bin_that_forwards_its_arguments_is_a_prefix_of_the_command() {
 fn the_source_of_a_bin_a_test_script_runs_selects_the_tests_of_the_script() {
     // A bin that forwards to the runner named first.
     let dir = fixture("trace_node_test");
-    for changed in [
-        "packages/tool-run/src/environment.mjs",
-        "packages/tool-run/bin/run.mjs",
-    ] {
-        let selection = node_selection(dir.path(), &["--changed", changed]);
-        expect_tests(
-            &selection,
-            &[(VITEST_LABEL, "ui#test"), (NODE_HEADING, "web#test")],
-        );
-    }
+    let selection = node_selection(dir.path(), &["--changed", "packages/tool-run/bin/run.mjs"]);
+    expect_tests(
+        &selection,
+        &[(VITEST_LABEL, "ui#test"), (NODE_HEADING, "web#test")],
+    );
 
     // A bin that wraps jest.
     let dir = fixture("trace_jest");

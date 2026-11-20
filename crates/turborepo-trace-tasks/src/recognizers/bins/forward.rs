@@ -23,12 +23,20 @@
 //!   read as before ([`super::wrapper`]);
 //! - the name of the rest is used nowhere else (nothing can add or drop an
 //!   argument), and neither is a name bound to `process.argv.slice(2)`;
-//! - the call's options do not name `cwd`, and the file does not call
-//!   `process.chdir`: the command runs where the bin was started.
+//! - the name of the program is used nowhere else either, and `process.argv` is
+//!   named by the shape alone;
+//! - the call has no options, or an object written in the call with keys among
+//!   `stdio`, `windowsHide`, `timeout`, `killSignal`, `encoding` and
+//!   `maxBuffer`: no `cwd`, no `env`, no spread, no name set elsewhere;
+//! - the file does not call `process.chdir`, does not name `process.env`, reads
+//!   no file, and imports nothing but the module that starts the process
+//!   (`child_process`, `cross-spawn`, `execa`, `process`): a module of its
+//!   package could set a preload in the environment.
 //!
-//! The environment the bin passes on is not read (as for `env X=1`). A bin
-//! that picks the program from a table, wraps it in a shell string, or builds
-//! the arguments in a loop is not a forwarder.
+//! So the command behind the bin runs with the bin's own arguments,
+//! environment and working directory. A bin that picks the program from a
+//! table, wraps it in a shell string, builds the arguments in a loop or
+//! passes an environment of its own is not a forwarder.
 
 use super::wrapper::Lexed;
 
@@ -55,6 +63,27 @@ const OTHER_STARTS: &[&str] = &[
     "$(",
     "Bun.spawn(",
     "Bun.spawnSync(",
+];
+
+/// The keys an options object of the call may have: none of them changes the
+/// program, its arguments, its environment or where it runs.
+const OPTION_KEYS: &[&str] = &[
+    "stdio",
+    "windowsHide",
+    "timeout",
+    "killSignal",
+    "encoding",
+    "maxBuffer",
+];
+
+/// The modules the file may load: the ones that start the process.
+const MODULES: &[&str] = &[
+    "child_process",
+    "node:child_process",
+    "cross-spawn",
+    "execa",
+    "process",
+    "node:process",
 ];
 
 fn is_ident(c: u8) -> bool {
@@ -154,31 +183,73 @@ pub fn forwards(lx: &Lexed) -> bool {
     let [program, rest, options @ ..] = args.as_slice() else {
         return false;
     };
-    if options.iter().any(|o| o.contains("cwd")) {
+    // The options: none, or an object written in the call whose keys are all
+    // known to leave the command alone (no `cwd`, no `env`, no spread, no name
+    // whose value is set elsewhere).
+    match options {
+        [] => {}
+        [object] => {
+            let Some(inner) = object.strip_prefix('{').and_then(|o| o.strip_suffix('}')) else {
+                return false;
+            };
+            let plain = inner.split(',').filter(|m| !m.is_empty()).all(|member| {
+                member
+                    .split_once(':')
+                    .is_some_and(|(key, _)| OPTION_KEYS.contains(&key))
+            });
+            if !plain {
+                return false;
+            }
+        }
+        _ => return false,
+    }
+    // The file reads nothing and loads nothing of its own: an env file it
+    // reads, or a module of its package that it imports, can change what the
+    // program loads.
+    if lx.lits.iter().any(|l| {
+        !MODULES.contains(&l.value.as_str())
+            && (l.ctx.ends_with("from")
+                || l.ctx.ends_with("import")
+                || l.ctx.ends_with("import(")
+                || l.ctx.ends_with("require("))
+    }) {
+        return false;
+    }
+    if ["process.env", "readFile", "loadEnvFile", "createReadStream"]
+        .iter()
+        .any(|w| code.contains(w))
+    {
         return false;
     }
     let count = |name: &str| occurrences(&code, name).len();
+    // `process.argv` is named by the shape alone: nothing else reads or changes
+    // it.
+    let argv = count("process.argv");
     if *program == "process.argv[2]" && *rest == "process.argv.slice(3)" {
-        return true;
+        return argv == 2;
     }
     if is_name(program) && is_name(rest) && program != rest {
-        let declared = [
+        let together = [
             format!("[{program},...{rest}]=process.argv.slice(2)"),
             format!("[,,{program},...{rest}]=process.argv"),
         ]
         .iter()
-        .any(|d| code.contains(d.as_str()))
-            || (code.contains(&format!("{program}=process.argv[2]"))
-                && code.contains(&format!("{rest}=process.argv.slice(3)")));
-        // The rest: its declaration and the call.
-        return declared && count(rest) == 2;
+        .any(|d| code.contains(d.as_str()));
+        let apart = code.contains(&format!("{program}=process.argv[2]"))
+            && code.contains(&format!("{rest}=process.argv.slice(3)"));
+        // The program and the rest: the declaration and the call.
+        return (together && argv == 1 || apart && argv == 2)
+            && count(program) == 2
+            && count(rest) == 2;
     }
     if let Some(list) = program.strip_suffix("[0]")
         && is_name(list)
         && *rest == format!("{list}.slice(1)")
     {
         // The list: its declaration and the two uses in the call.
-        return code.contains(&format!("{list}=process.argv.slice(2)")) && count(list) == 3;
+        return code.contains(&format!("{list}=process.argv.slice(2)"))
+            && count(list) == 3
+            && argv == 1;
     }
     false
 }
@@ -194,8 +265,8 @@ mod tests {
              spawnSync(process.argv[2], process.argv.slice(3), { stdio: 'inherit' \
              });\nprocess.exit(r.status ?? 1);",
             "const { spawn } = require('child_process');\nconst [program, ...rest] = \
-             process.argv.slice(2);\nconsole.log(program);\nspawn(program, rest, { stdio: \
-             'inherit', env: { ...process.env, CI: '1' } }).on('exit', (c) => process.exit(c));",
+             process.argv.slice(2);\nspawn(program, rest, { stdio: 'inherit', windowsHide: true \
+             }).on('exit', (c) => process.exit(c));",
             "const [, , cmd, ...args] = \
              process.argv;\nrequire('cross-spawn').sync;\ncrossSpawn.sync(cmd, args, { stdio: \
              'inherit' });",
@@ -211,6 +282,16 @@ mod tests {
     #[test]
     fn what_is_not_a_forwarder() {
         for src in [
+            // An environment of its own, a module of its package, the program used again.
+            "const [program, ...rest] = process.argv.slice(2);\nspawn(program, rest, { stdio: \
+             'inherit', env: { ...process.env, CI: '1' } });",
+            "import { environment } from '../src/environment.mjs';\nconst [program, ...rest] = \
+             process.argv.slice(2);\nspawnSync(program, rest, { stdio: 'inherit', env: \
+             environment() });",
+            "const [program, ...rest] = \
+             process.argv.slice(2);\nconsole.log(program);\nspawnSync(program, rest);",
+            "import fs from 'node:fs';\nspawnSync(process.argv[2], process.argv.slice(3), { \
+             stdio: 'inherit' });",
             // A tool of its own.
             "spawnSync('jest', process.argv.slice(2), { stdio: 'inherit' });",
             // A second process.
@@ -236,6 +317,27 @@ mod tests {
              ${rest.join(' ')}`);",
             // Nothing is started.
             "console.log(process.argv[2], process.argv.slice(3));",
+        ] {
+            assert!(!forwards(&lex(src)), "{src}");
+        }
+    }
+
+    #[test]
+    fn bins_that_change_what_they_forward() {
+        for src in [
+            // The options are a name: its `cwd` is not seen.
+            "const options = { stdio: 'inherit', cwd: path.resolve(__dirname, '../../..') \
+             };\nconst [program, ...rest] = process.argv.slice(2);\nspawnSync(program, rest, \
+             options);",
+            // The program is replaced after it is read.
+            "let program = process.argv[2];\nconst rest = process.argv.slice(3);\nif (program === \
+             'node') program = 'jest';\nspawnSync(program, rest, { stdio: 'inherit' });",
+            // An argument is added to `process.argv` itself.
+            "process.argv.push('extra/smoke.js');\nspawnSync(process.argv[2], \
+             process.argv.slice(3), { stdio: 'inherit' });",
+            // The environment gets a preload.
+            "process.env.NODE_OPTIONS = '--import ' + hook;\nspawnSync(process.argv[2], \
+             process.argv.slice(3), { stdio: 'inherit' });",
         ] {
             assert!(!forwards(&lex(src)), "{src}");
         }
