@@ -101,6 +101,10 @@ $ vitest run
 # vitest [vitest] Full
 {
   "inputs": [
+    ".env",
+    ".env.local",
+    ".env.test",
+    ".env.test.local",
     "vite.config.cjs",
     "vite.config.cts",
     "vite.config.js",
@@ -159,6 +163,10 @@ $ vitest --config vitest.config.ts --dir src
 # vitest [vitest] Full
 {
   "inputs": [
+    ".env",
+    ".env.local",
+    ".env.test",
+    ".env.test.local",
     "vite.config.cjs",
     "vite.config.cts",
     "vite.config.js",
@@ -453,6 +461,10 @@ $ c8 --reporter=lcov vitest run
   "inputs": [
     ".c8rc",
     ".c8rc.json",
+    ".env",
+    ".env.local",
+    ".env.test",
+    ".env.test.local",
     ".nycrc",
     ".nycrc.json",
     ".nycrc.yml",

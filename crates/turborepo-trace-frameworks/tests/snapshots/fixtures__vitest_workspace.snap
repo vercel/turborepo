@@ -30,7 +30,12 @@ expression: r.json()
             }
           ],
           "edges": [],
-          "probes": [],
+          "probes": [
+            "<fixture>/packages/core/.env",
+            "<fixture>/packages/core/.env.local",
+            "<fixture>/packages/core/.env.test",
+            "<fixture>/packages/core/.env.test.local"
+          ],
           "memberships": []
         },
         "resolution": {
@@ -143,6 +148,10 @@ expression: r.json()
           ],
           "edges": [],
           "probes": [
+            "<fixture>/packages/web/.env",
+            "<fixture>/packages/web/.env.local",
+            "<fixture>/packages/web/.env.test",
+            "<fixture>/packages/web/.env.test.local",
             "<fixture>/packages/web/vitest.config.ts",
             "<fixture>/packages/web/vitest.config.cts",
             "<fixture>/packages/web/vitest.config.js",
@@ -257,7 +266,12 @@ expression: r.json()
             }
           ],
           "edges": [],
-          "probes": [],
+          "probes": [
+            "<fixture>/.env",
+            "<fixture>/.env.local",
+            "<fixture>/.env.test",
+            "<fixture>/.env.test.local"
+          ],
           "memberships": []
         },
         "resolution": {

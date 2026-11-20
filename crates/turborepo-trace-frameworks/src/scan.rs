@@ -170,6 +170,54 @@ pub fn scan(src: &[u8], dialect: Dialect, objects: &[&str], pragma: &str) -> Sca
     out
 }
 
+/// The files `toMatchFileSnapshot(path)` calls in `src` name: `Some` for a
+/// literal path (relative to the test file), `None` for a computed one or a
+/// call without a path (the default name is not known here). With the 1-based
+/// line.
+pub fn file_snapshots(src: &[u8], dialect: Dialect) -> Vec<(Option<String>, u32)> {
+    const NAME: &[u8] = b"toMatchFileSnapshot";
+    let mut out = Vec::new();
+    if !memfind(src, NAME) {
+        return out;
+    }
+    let mut lx = Lexer::new(src, dialect);
+    let mut toks: Vec<Token> = Vec::new();
+    loop {
+        let t = lx.next_token();
+        if t.kind == TokKind::Eof || toks.len() > 2_000_000 {
+            break;
+        }
+        toks.push(t);
+    }
+    for i in 0..toks.len() {
+        let t = toks[i];
+        if t.kind != TokKind::Ident
+            || t.text(src) != NAME
+            || toks.get(i + 1).is_none_or(|l| l.kind != TokKind::LParen)
+        {
+            continue;
+        }
+        let line = 1 + src[..t.start as usize]
+            .iter()
+            .filter(|b| **b == b'\n')
+            .count() as u32;
+        // A literal first argument that is the whole argument.
+        let path = match (toks.get(i + 2), toks.get(i + 3)) {
+            (Some(a), Some(end))
+                if matches!(a.kind, TokKind::Str | TokKind::Template)
+                    && matches!(end.kind, TokKind::RParen | TokKind::Comma) =>
+            {
+                a.literal_content(src)
+                    .and_then(|raw| decode(raw, EscapeRules::JS).ok())
+                    .map(Cow::into_owned)
+            }
+            _ => None,
+        };
+        out.push((path, line));
+    }
+    out
+}
+
 fn memfind(h: &[u8], n: &[u8]) -> bool {
     h.windows(n.len()).any(|w| w == n)
 }

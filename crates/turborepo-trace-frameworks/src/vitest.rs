@@ -20,7 +20,11 @@
 //!   is modelled when it is `require.resolve` of its argument and reported
 //!   otherwise. Path values of these fields are reported as
 //!   [`crate::inputs::ConfigValues`].
-//! - Tests: `vi.mock` / `vi.doMock` (with `__mocks__` lookup when no factory),
+//! - Env files: `.env`, `.env.local`, `.env.test`, `.env.test.local` in
+//!   `envDir` (the root by default) are read for every test of the project
+//!   ([`GlobalInputs::reads`]).
+//! - Tests: `toMatchFileSnapshot(path)` (the file, relative to the test),
+//!   `vi.mock` / `vi.doMock` (with `__mocks__` lookup when no factory),
 //!   `vi.importActual`, `vi.importMock`, `@vitest-environment`, default
 //!   snapshot paths.
 
@@ -41,9 +45,9 @@ use crate::{
     fsx,
     fsx::PathFsx,
     inputs::{
-        Alias, AliasMatcher, FrameworkInputs, FrameworkUncertainty, GlobalInputs, InputRef,
-        InputRole, MockPolicy, Project, ResolutionOverrides, SnapshotPolicy, TestDiscovery,
-        TestInputs, TestPattern,
+        Alias, AliasMatcher, EdgeKind, FrameworkInputs, FrameworkUncertainty, GlobalInputs,
+        InputRef, InputRole, MockPolicy, Project, ResolutionOverrides, SnapshotPolicy,
+        TestDiscovery, TestInputs, TestPattern,
     },
     jsconfig::{self, LoadOptions, Loaded},
     pattern::{JsRegex, is_glob},
@@ -222,7 +226,36 @@ impl Framework for Vitest {
             resolver,
             &mut out,
         );
+        file_snapshot_inputs(test, src, dialect, &mut out);
         out
+    }
+}
+
+/// `expect(x).toMatchFileSnapshot(path)`: the file at `path`, relative to the
+/// test file, is compared with the value (and written when it is missing). A
+/// path that is not a literal names any file.
+fn file_snapshot_inputs(test: &Path, src: &[u8], dialect: Dialect, out: &mut TestInputs) {
+    let dir = test.parent().unwrap_or(Path::new("/"));
+    for (path, line) in scan::file_snapshots(src, dialect) {
+        match path {
+            Some(p) => {
+                let file = fsx::join(dir, &p);
+                if file.fx_is_file() {
+                    crate::common::push_edge(out, EdgeKind::Snapshot, file, "file snapshot");
+                } else {
+                    crate::common::push_probe(out, file);
+                }
+            }
+            None => out.uncertainties.push(FrameworkUncertainty {
+                kind: UncertaintyKind::ComputedSpecifier,
+                file: test.to_path_buf(),
+                line,
+                field: None,
+                detail: "toMatchFileSnapshot with a path that is not a literal: any file may be \
+                         the snapshot"
+                    .into(),
+            }),
+        }
     }
 }
 
@@ -581,6 +614,36 @@ fn vitest_target(it: &Item, root: &Path) -> Option<crate::inputs::Target> {
     module_target(it, root, root)
 }
 
+/// The env files vite loads when the config is resolved, for `import.meta.env`
+/// (and, with the prefix, `process.env`) of every test: `.env`, `.env.local`,
+/// `.env.test` and `.env.test.local` in `envDir` (the root by default;
+/// `false`: none). The mode of a test run is `test` whatever `mode` the config
+/// sets (vitest 3, 4 and 5); a `--mode` on the command line, which loads the
+/// files of that mode instead, is not seen here.
+fn env_file_inputs(r: &mut Reader<'_>, root: &Path, global: &mut GlobalInputs) {
+    let dir = match r.get("envDir") {
+        Some(ConfigVal::Bool(false)) => return,
+        Some(ConfigVal::Str(v)) if v.is_known() => fsx::join(root, v.as_str().unwrap_or("")),
+        Some(other) if !other.is_null() => {
+            r.report_unknown("envDir", &other);
+            root.to_path_buf()
+        }
+        _ => root.to_path_buf(),
+    };
+    // (A `mode` in the config does not change which files a test run loads.)
+    let names = [".env", ".env.local", ".env.test", ".env.test.local"];
+    for n in names {
+        let p = dir.join(n);
+        if p.fx_is_file() {
+            if !global.reads.contains(&p) {
+                global.reads.push(p);
+            }
+        } else {
+            global.probes.push(p);
+        }
+    }
+}
+
 fn build_project(
     r: &mut Reader<'_>,
     config_file: Option<&Path>,
@@ -600,6 +663,7 @@ fn build_project(
         js_entries: loaded.code_files.clone(),
         ..GlobalInputs::default()
     };
+    env_file_inputs(r, &root, &mut global);
     for (field, role) in [
         ("test.setupFiles", InputRole::SetupFile),
         ("test.globalSetup", InputRole::GlobalSetup),
