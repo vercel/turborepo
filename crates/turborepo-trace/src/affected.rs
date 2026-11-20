@@ -170,7 +170,8 @@ pub struct AffectedCmd {
     pub change_source: Option<std::sync::Arc<dyn turborepo_trace_graph::ChangeSource>>,
     /// The host's cache directories (`turbo trace`: turbo's local cache
     /// directory, which the graph's transport writes): the cache entries in
-    /// them ([`is_cache_entry`]) are not part of a source's changes.
+    /// them ([`is_cache_entry`]) that git does not track are not part of a
+    /// source's changes.
     pub cache_dirs: Vec<PathBuf>,
 }
 
@@ -187,6 +188,33 @@ fn is_cache_entry(name: &str) -> bool {
         && [".tar.zst", "-meta.json", "-manifest.json"]
             .iter()
             .any(|s| rest == *s || (rest.starts_with(s) && rest.ends_with(".tmp")))
+}
+
+/// Those of `paths` (relative to `root`) that git does not track: neither in
+/// the index nor in `HEAD`. None when git cannot say.
+fn untracked_among(root: &Path, paths: &[String]) -> std::collections::HashSet<String> {
+    let listed = |args: &[&str]| -> Option<std::collections::HashSet<String>> {
+        let mut args: Vec<&str> = args.to_vec();
+        args.push("--");
+        args.extend(paths.iter().map(String::as_str));
+        let out = lockdiff::git(root, &args).ok()?;
+        Some(
+            out.split('\0')
+                .filter(|s| !s.is_empty())
+                .map(str::to_owned)
+                .collect(),
+        )
+    };
+    let index = listed(&["ls-files", "-z", "--full-name"]);
+    let head = listed(&["ls-tree", "-r", "-z", "--name-only", "--full-name", "HEAD"]);
+    let (Some(index), Some(head)) = (index, head) else {
+        return Default::default();
+    };
+    paths
+        .iter()
+        .filter(|p| !index.contains(*p) && !head.contains(*p))
+        .cloned()
+        .collect()
 }
 
 /// The selection document of an `affected` run, handed over in process.
@@ -914,15 +942,29 @@ fn affected(cmd: AffectedCmd, out: &mut dyn Write, host: Option<&Host>) -> Resul
             let o = format!("{p}/");
             changes.retain(|c| !c.path.starts_with(&o));
         }
+        // Only a file git does not track is one the command wrote: a tracked file
+        // named like a cache entry is a file of the repository, and its change
+        // stays.
+        let mut entries: Vec<String> = Vec::new();
         for dir in &cmd.cache_dirs {
             if let Some(p) = below(dir) {
                 let o = if p.is_empty() { p } else { format!("{p}/") };
-                changes.retain(|c| {
-                    !c.path
-                        .strip_prefix(&o)
-                        .is_some_and(|name| !name.contains('/') && is_cache_entry(name))
-                });
+                entries.extend(
+                    changes
+                        .iter()
+                        .filter(|c| {
+                            c.kind == ChangeKind::Added
+                                && c.path
+                                    .strip_prefix(&o)
+                                    .is_some_and(|name| !name.contains('/') && is_cache_entry(name))
+                        })
+                        .map(|c| c.path.clone()),
+                );
             }
+        }
+        if !entries.is_empty() {
+            let written = untracked_among(&root, &entries);
+            changes.retain(|c| !written.contains(&c.path));
         }
     }
     changes.extend(turbo_section_changes(&root, &changes, git.as_ref()));

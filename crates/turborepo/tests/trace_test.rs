@@ -2192,6 +2192,35 @@ fn the_cache_entries_of_the_graph_are_not_a_change() {
     assert_eq!(tests, [JEST_ROOT]);
 }
 
+/// A file of the repository that is named like a cache entry, in turbo's cache
+/// directory, is a file like any other: only the entries git does not track
+/// are left out of the changes.
+#[cfg(unix)]
+#[test]
+fn a_tracked_file_named_like_a_cache_entry_is_a_change() {
+    let none = Vec::<String>::new();
+    let main = fixture_without_dot_turbo_ignored();
+    let entry = ".turbo/cache/0123456789abcdef-meta.json";
+    let args = ["affected", "--base", "main"];
+    git(main.path(), &["checkout", "--quiet", "-b", "feature"]);
+    let (tests, err) = selected(main.path(), &args, &[]);
+    assert_eq!(tests, none, "{err}");
+
+    // Untracked, it is an entry the cache wrote.
+    fs::create_dir_all(main.path().join(".turbo/cache")).unwrap();
+    fs::write(main.path().join(entry), "{}\n").unwrap();
+    let (tests, err) = selected(main.path(), &args, &[]);
+    assert_eq!(tests, none, "{err}");
+
+    // Added to the index, and committed, it is a file of the repository.
+    git(main.path(), &["add", "-f", entry]);
+    let (tests, err) = selected(main.path(), &args, &[]);
+    assert_eq!(tests, [JEST_ROOT], "{err}");
+    git(main.path(), &["commit", "--quiet", "-m", "a fixture"]);
+    let (tests, err) = selected(main.path(), &args, &[]);
+    assert_eq!(tests, [JEST_ROOT], "{err}");
+}
+
 /// A package whose runner the trace does not cover (mocha): its test task runs
 /// whole, and says so.
 #[cfg(unix)]
