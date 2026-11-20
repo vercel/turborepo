@@ -20,6 +20,12 @@ File globs are used throughout Turborepo for configuring which files to include 
 | `some-dir`  | Match a file named `some-dir` or a `some-dir` directory and its contents                             |
 | `some-dir*` | Match files and directories that start with `some-dir`, including contents when matching a directory |
 | `*.js`      | Match all `.js` files in the directory                                                               |
+| `?`         | Match exactly one character, not including `/`                                                       |
+| `[abc]`     | Match one character from the set (`a`, `b`, or `c`)                                                  |
+| `[a-c]`     | Match one character in the range from `a` to `c`                                                     |
+| `[!abc]`    | Match one character that is not in the set (`[^abc]` is equivalent)                                  |
+| `{a,b}`     | Match any of the comma-separated alternatives (`a` or `b`)                                           |
+| `\`         | Escape the next character so it matches literally (see [Special characters](#special-characters))    |
 | `!`         | Negate the whole glob (automatically applies `/**` to the end of the defined glob)                   |
 
 ## Examples
@@ -36,3 +42,38 @@ File globs are used throughout Turborepo for configuring which files to include 
 | `!dist/*.js`       | Ignore all `.js` files in the `dist` directory                                                    |
 | `dist/**/*.js`     | Recursively match all `.js` files in the `dist` directory and its sub-directories                 |
 | `../scripts/**`    | Up one directory, match all files and sub-directories in the `scripts` directory                  |
+| `src/page?.js`     | Match files like `src/page1.js` and `src/pageA.js`, but not `src/page12.js`                       |
+| `src/[ab]/*.js`    | Match all `.js` files in the `src/a` and `src/b` directories                                      |
+| `src/{lib,bin}/**` | Match all files in the `src/lib` and `src/bin` directories and their sub-directories              |
+| `src/\[id\]/**`    | Match all files in a directory literally named `src/[id]`                                         |
+
+## Special characters
+
+The following characters have special meaning in globs:
+
+```
+* ? [ ] { } ( ) < > ,
+```
+
+To match one of these characters literally, put a backslash (`\`) before it. Because `turbo.json` is a JSON file, the backslash itself must be escaped, so each escape is written as `\\` in your configuration:
+
+```json title="./turbo.json"
+{
+  "tasks": {
+    "build": {
+      "inputs": ["src/\\[id\\]/page.js", "src/\\(marketing\\)/**"]
+    }
+  }
+}
+```
+
+A glob with unescaped special characters may not fail with an error. Instead, it can silently match different files than you intended. For example, `src/[id]/page.js` is read as a character class, so it matches `src/i/page.js` and `src/d/page.js`, but **not** `src/[id]/page.js`. When this happens in `inputs`, changes to your file won't cause a cache miss. When this happens in `outputs`, your file won't be stored in or restored from the cache.
+
+<Callout type="warn" title="Framework route directories">
+  Many frameworks use special characters in directory names for file-based
+  routing, like Next.js dynamic segments (`[id]`, `[...slug]`, `[[...slug]]`)
+  and route groups (`(marketing)`). When one of these directories is part of a
+  glob, escape its special characters (for example, `app/\\[id\\]/**` in
+  `turbo.json`), or use a wildcard like `app/**` that matches it without naming
+  it.
+</Callout>
