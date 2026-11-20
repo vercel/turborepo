@@ -459,9 +459,8 @@ fn a_refreshed_graph_follows_the_starts() {
     write(
         r,
         ".github/workflows/ci.yml",
-        "name: ci\non: push\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - \
-         uses: actions/checkout@v4\n      - run: npx vitest run\n        working-directory: \
-         packages/math\n",
+        "name: ci\non: push\njobs:\n  test:\n    runs-on: ubuntu-latest\n    steps:\n      - run: \
+         npx vitest run\n        working-directory: packages/math\n",
     );
     assert_eq!(both("a CI step"), [SHAPE, ADD]);
     std::fs::remove_file(r.join(".github/workflows/ci.yml")).unwrap();
@@ -685,4 +684,70 @@ fn the_directory_of_a_config_stays_a_working_directory() {
         "test:\n  script:\n    - cd packages/math\n    - npx vitest run\n",
     );
     assert_eq!(affected(d.path(), MATH_DATA), [DATA_TEST], "gitlab");
+}
+
+/// A wrapper script that starts vitest by the path of its program adds its
+/// directory, as one that names the command does.
+#[test]
+fn a_wrapper_that_starts_vitest_by_its_program_path_adds_its_directory() {
+    let d = below(PLAIN, "", r#""test":"node ./run-tests.mjs""#, "^4.0.18");
+    let r = d.path();
+    write(
+        r,
+        "packages/math/run-tests.mjs",
+        "import { spawnSync } from 'node:child_process';\nimport { createRequire } from \
+         'node:module';\nconst bin = \
+         createRequire(import.meta.url).resolve('vitest/vitest.mjs');\nspawnSync(process.execPath, \
+         [bin, 'run'], { stdio: 'inherit' });\n",
+    );
+    assert_eq!(affected(r, MATH_DATA), [SHAPE, ADD]);
+}
+
+/// A run without a config that is started above a package with a config takes
+/// the package's tests with its own root: the mock of a package is looked up
+/// there too.
+#[test]
+fn a_run_above_a_config_takes_package_mocks_from_its_directory() {
+    let d = two_runs("", RUN);
+    let r = d.path();
+    let test = "packages/math/test/pad.test.ts";
+    write(
+        r,
+        test,
+        "import pad from 'left-pad';\nimport { expect, test, vi } from \
+         'vitest';\nvi.mock('left-pad');\ntest('pad', () => {\n  expect(pad('a', \
+         2)).toBe('mock');\n});\n",
+    );
+    write(
+        r,
+        "node_modules/left-pad/package.json",
+        r#"{"name":"left-pad","version":"1.0.0","main":"index.js"}"#,
+    );
+    write(
+        r,
+        "node_modules/left-pad/index.js",
+        "module.exports = () => 1;\n",
+    );
+    write(r, "__mocks__/left-pad.js", "export default () => 'mock';\n");
+    assert!(runs_it(r, "__mocks__/left-pad.js", test, &[]));
+}
+
+/// The setup files of a config above are resolved against the root of the run
+/// that loads it (vitest up to 4): the package's file is an input of the tests
+/// of a run started there.
+#[test]
+fn a_run_below_a_config_takes_setup_files_from_its_directory() {
+    let d = below(
+        "export default { test: { setupFiles: ['./setup.ts'] } };\n",
+        "",
+        RUN,
+        "^4.0.18",
+    );
+    let r = d.path();
+    write(r, "setup.ts", "globalThis.ready = 'root';\n");
+    write(r, "packages/math/setup.ts", "globalThis.ready = 'math';\n");
+    for file in [ADD, SHAPE] {
+        assert!(runs_it(r, "packages/math/setup.ts", file, &[]), "{file}");
+        assert!(runs_it(r, "setup.ts", file, &[]), "{file}");
+    }
 }

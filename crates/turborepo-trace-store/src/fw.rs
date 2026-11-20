@@ -1012,6 +1012,60 @@ impl<'a> Fw<'a> {
         }
     }
 
+    /// The setup files of `project` as a run resolves them that is started in
+    /// one of `dirs`, directories below the project's config without a
+    /// config of their own (vitest up to 4 loads the config above with the
+    /// run's directory as root, and resolves `setupFiles` and `globalSetup`
+    /// against the root): the file at the same place below each directory,
+    /// as an edge when it is there and a probe when it is not. A request
+    /// without an extension is resolved from the directory. The mocks such
+    /// a file registers are not read.
+    fn rebased_setup_edges(
+        &self,
+        lang: &'static str,
+        id: &str,
+        project: &Project,
+        dirs: &[PathBuf],
+        edges: &mut Vec<FwEdge>,
+        obs: &mut Observations,
+    ) {
+        let root = &project.root_dir;
+        for e in &project.global.entries {
+            if !matches!(e.role, InputRole::SetupFile | InputRole::GlobalSetup) {
+                continue;
+            }
+            let (kind, phase) = role_kind(lang, e.role);
+            let label = format!("{id}:{}", role_name(e.role));
+            for dir in dirs {
+                let target = match &e.target {
+                    FwTarget::Path(p) => match p.strip_prefix(root) {
+                        Ok(rel) => FwTarget::Path(dir.join(rel)),
+                        Err(_) => continue,
+                    },
+                    FwTarget::Module { request, from_dir }
+                        if from_dir == root
+                            && (request.starts_with("./") || request.starts_with("../")) =>
+                    {
+                        if Path::new(request).extension().is_some() {
+                            FwTarget::Path(dir.join(request))
+                        } else {
+                            FwTarget::Module {
+                                request: request.clone(),
+                                from_dir: dir.clone(),
+                            }
+                        }
+                    }
+                    _ => continue,
+                };
+                if let Some(x) = self.target_edge(lang, kind, phase, &label, &target, obs)
+                    && !x.succ.is_empty()
+                {
+                    edges.push(x);
+                }
+            }
+        }
+    }
+
     /// A module request for an edge's specifier. A config value that leaves the
     /// repository by a step or two (`<rootDir>/../../tests/setup.ts` of a
     /// project at the root) is shown relative to the root, so the specifier
@@ -1688,6 +1742,9 @@ impl<'a> Fw<'a> {
             // The directories between the config and the file: a run started in one of
             // them has it as its root.
             let mut between: Vec<PathBuf> = Vec::new();
+            // The directories above the config: a run without a config that is started
+            // in one of them has it as its root.
+            let mut above: Vec<PathBuf> = Vec::new();
             if vitest {
                 // A file that looks like a test and that the config leaves out is one
                 // that always runs. It stays one where only the newer default list of
@@ -1718,6 +1775,17 @@ impl<'a> Fw<'a> {
                 if matched.is_empty() {
                     // A run below the config that loads it has the project's inputs too.
                     matched.push(0);
+                }
+                // A run without a config that is started above the config's directory
+                // takes the file by the defaults, with its own directory as root.
+                if claims.iter().any(|c| c == claim::DEFAULTS) {
+                    let top = config.parent().unwrap_or(self.repo);
+                    above = top
+                        .ancestors()
+                        .skip(1)
+                        .take_while(|a| a.starts_with(self.repo))
+                        .map(Path::to_path_buf)
+                        .collect();
                 }
             }
             if matched.is_empty() {
@@ -1763,17 +1831,20 @@ impl<'a> Fw<'a> {
                 let project: &Project = &l.inputs.projects[pi];
                 // A run started below the config looks for the mocks of packages
                 // (`__mocks__/<package>`) in its own root: every directory between the
-                // config and the file may be one.
+                // config and the file may be one. So may every directory above the
+                // config, for a run there that has no config.
                 let widened;
-                let project =
-                    if !between.is_empty() && mocks.as_ref().is_some_and(|m| !m.is_empty()) {
-                        let mut p = project.clone();
-                        p.mocks.root_mock_dirs.extend(between.iter().cloned());
-                        widened = p;
-                        &widened
-                    } else {
-                        project
-                    };
+                let project = if !(between.is_empty() && above.is_empty())
+                    && mocks.as_ref().is_some_and(|m| !m.is_empty())
+                {
+                    let mut p = project.clone();
+                    p.mocks.root_mock_dirs.extend(between.iter().cloned());
+                    p.mocks.root_mock_dirs.extend(above.iter().cloned());
+                    widened = p;
+                    &widened
+                } else {
+                    project
+                };
                 let res = Resolver::new(self, fw_lang);
                 let (ti, tobs) = self.recorded(|| {
                     let src = fsx::read(path).unwrap_or_default();
@@ -1783,6 +1854,7 @@ impl<'a> Fw<'a> {
                 out.reached.extend(res.reached.take());
                 obs.extend(res.obs.into_inner());
                 self.test_input_edges(fw_lang, fw.id(), &ti, &mut own, &mut obs, &mut uncs);
+                self.rebased_setup_edges(fw_lang, fw.id(), project, &between, &mut own, &mut obs);
                 replaced.push(
                     own.iter()
                         .filter_map(|e| e.spec.strip_prefix("mock:replaces "))
