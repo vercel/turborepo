@@ -263,7 +263,6 @@ pub(crate) fn get_input_file_hashes_without_git<S: AsRef<str>>(
             (None, false) => external_inclusions.push(input.into_glob()),
         }
     }
-    let has_local_inputs = !local_inclusions.is_empty() || !local_exclusions.is_empty();
     let has_local_inclusions = !local_inclusions.is_empty();
 
     for inclusion in &local_inclusions {
@@ -345,9 +344,9 @@ pub(crate) fn get_input_file_hashes_without_git<S: AsRef<str>>(
         walker_builder
             .follow_links(true)
             .sort_by_file_name(|a, b| a.cmp(b))
-            // if inputs have been provided manually, we shouldn't skip ignored files to mimic the
-            // regular behavior
-            .git_ignore(!has_local_inputs && external_inclusions.is_empty())
+            // Explicit inclusion globs preserve manual-hasher behavior for ignored files.
+            // Exclusion-only inputs and default walks must still respect gitignore.
+            .git_ignore(!has_local_inclusions && external_inclusions.is_empty())
             .require_git(false)
             .hidden(false) // this results in yielding hidden files (e.g. .gitignore)
             .build()
@@ -1015,6 +1014,65 @@ mod tests {
         assert!(
             !hashes.contains_key(&RelativeUnixPathBuf::new("excluded.ts").unwrap()),
             "excluded.ts should NOT be present"
+        );
+    }
+
+    #[test]
+    fn test_exclusion_only_inputs_respect_gitignore() {
+        let (_tmp, turbo_root) = tmp_dir();
+        let pkg_path = AnchoredSystemPathBuf::from_raw("app").unwrap();
+        let pkg_dir = turbo_root.resolve(&pkg_path);
+        pkg_dir.create_dir_all().unwrap();
+
+        turbo_root
+            .join_component(".gitignore")
+            .create_with_contents("app/dist\napp/node_modules\n")
+            .unwrap();
+        pkg_dir
+            .join_component("package.json")
+            .create_with_contents("{}")
+            .unwrap();
+        pkg_dir.join_component("src").create_dir_all().unwrap();
+        pkg_dir
+            .join_component("src")
+            .join_component("main.ts")
+            .create_with_contents("export {}")
+            .unwrap();
+        pkg_dir
+            .join_component("src")
+            .join_component("main.test.ts")
+            .create_with_contents("test")
+            .unwrap();
+        pkg_dir.join_component("dist").create_dir_all().unwrap();
+        pkg_dir
+            .join_components(&["dist", "out.js"])
+            .create_with_contents("output")
+            .unwrap();
+        pkg_dir
+            .join_components(&["node_modules", "dep"])
+            .create_dir_all()
+            .unwrap();
+        pkg_dir
+            .join_components(&["node_modules", "dep", "index.js"])
+            .create_with_contents("dependency")
+            .unwrap();
+
+        let hashes = get_package_file_hashes_without_git(
+            &turbo_root,
+            &pkg_path,
+            &["$TURBO_DEFAULT$", "!**/*.test.ts"],
+            true,
+            None,
+            None,
+        )
+        .unwrap();
+
+        assert!(hashes.contains_key(&RelativeUnixPathBuf::new("package.json").unwrap()));
+        assert!(hashes.contains_key(&RelativeUnixPathBuf::new("src/main.ts").unwrap()));
+        assert!(!hashes.contains_key(&RelativeUnixPathBuf::new("src/main.test.ts").unwrap()));
+        assert!(!hashes.contains_key(&RelativeUnixPathBuf::new("dist/out.js").unwrap()));
+        assert!(
+            !hashes.contains_key(&RelativeUnixPathBuf::new("node_modules/dep/index.js").unwrap())
         );
     }
 
