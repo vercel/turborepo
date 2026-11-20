@@ -63,7 +63,7 @@ pub const MEMBERS_LANG: &str = "task-members";
 /// builds).
 pub const PART_LANG: &str = "task-part";
 /// Version of the task integration, part of the options digest.
-pub const TASKS_VERSION: &str = "tasks-11";
+pub const TASKS_VERSION: &str = "tasks-12";
 
 /// The task workspace of one build, with name and root indexes for dependency
 /// closures.
