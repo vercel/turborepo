@@ -1,0 +1,21 @@
+{
+  "$schema": "../../docs/public/schema.json",
+  "extends": ["//"],
+  "tasks": {
+    "build": {
+      "dependsOn": ["^build"],
+      "outputs": ["dist/**"],
+      "command": ["pnpm", "run", "build"],
+      "tags": ["ci"]
+    },
+    "test": {
+      // The tests run the real runners on the built package.
+      "dependsOn": ["build"],
+      "command": ["pnpm", "exec", "jest"],
+      "tags": ["ci"]
+    },
+    "check-types": {
+      "tags": ["ci"]
+    }
+  }
+}
