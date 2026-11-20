@@ -46,6 +46,10 @@
 //!    the command starts. The tasks the script merely depends on (a `dependsOn`
 //!    entry that provisions a database) are not: they run before it, as
 //!    processes of their own, and their definition did not change.
+//!
+//!    The script's own text is its definition as well ([`script_effects`]):
+//!    `"test": "go test ./..."` that becomes `"test": "go test -race ./..."`
+//!    selects the tests the command runs.
 //! 3. **The files themselves.** A modified workflow or action file is not a
 //!    file change for the graph (it would reach every task of the root package
 //!    and every whole-directory listing). Code that reads it through an
@@ -393,6 +397,12 @@ impl<'g> Runs<'g> {
         if runs.every_test().is_some() {
             return self.g.tests(None);
         }
+        self.mapped_tests_of(runs)
+    }
+
+    /// The test nodes of the launches of `runs` that are mapped to a framework
+    /// and a directory.
+    pub(crate) fn mapped_tests_of(&mut self, runs: &JobRuns) -> Vec<NodeId> {
         let mut out = Vec::new();
         for (fw, dir) in &runs.tests {
             let g = self.g;
@@ -422,7 +432,9 @@ pub fn effects(
         .into_iter()
         .filter_map(|(n, t)| job_of(t.id.as_str()).map(|(wf, job)| (n, wf, job)))
         .collect();
-    if jobs.is_empty() || changes.is_empty() {
+    // Without workflow jobs there are still the package scripts whose definition
+    // files changed (step 2).
+    if changes.is_empty() {
         return fx;
     }
     let changed: BTreeMap<&str, ChangeKind> =
@@ -431,9 +443,10 @@ pub fn effects(
     let mut seeds: BTreeMap<NodeId, String> = BTreeMap::new();
 
     // 1. Definitions.
-    if changes
-        .iter()
-        .any(|c| def::is_workflow_file(&c.path) || def::is_action_file(&c.path))
+    if !jobs.is_empty()
+        && changes
+            .iter()
+            .any(|c| def::is_workflow_file(&c.path) || def::is_action_file(&c.path))
     {
         let read_new = |p: &str| std::fs::read_to_string(root.join(p)).ok();
         let read_old = |p: &str| match changed.get(p) {
@@ -760,6 +773,100 @@ pub(crate) fn go_mod_dirs(root: &Path) -> impl Fn(&str) -> bool + '_ {
         let has = root.join(dir).join("go.mod").is_file();
         known.borrow_mut().insert(dir.to_owned(), has);
         has
+    }
+}
+
+/// The package scripts whose command changed, added to `fx`: each selects the
+/// tests its command runs ([`Runs::of_command`]), as a changed definition
+/// file of the script does.
+///
+/// A script is changed when its text in the `scripts` of a changed
+/// `package.json` differs from the base revision's (a new script too). Without
+/// a base revision to read, and for a manifest that is new or that does not
+/// parse on one side, every script of the manifest counts. A command with
+/// other flags, another working directory or another runner can change the
+/// outcome of every test it starts, whether or not a file the tests load
+/// changed. A launch that can't be mapped to files adds nothing here: its task
+/// runs whole on every change (`uncoveredTasks`). `skip` names the changes
+/// that are handled elsewhere.
+pub fn script_effects(
+    g: &Graph,
+    root: &Path,
+    changes: &[Change],
+    git: Option<&Git>,
+    skip: &dyn Fn(&str) -> bool,
+    fx: &mut Effects,
+) {
+    let scripts_of = |text: &str| -> Option<serde_json::Map<String, serde_json::Value>> {
+        let v: serde_json::Value = serde_json::from_str(text).ok()?;
+        let obj = v.as_object()?;
+        Some(match obj.get("scripts") {
+            Some(s) => s.as_object()?.clone(),
+            None => serde_json::Map::new(),
+        })
+    };
+    let mut runs: Option<Runs<'_>> = None;
+    let has_go_mod = go_mod_dirs(root);
+    let (mut scripts, mut tests) = (0usize, 0usize);
+    for c in changes {
+        let (dir, name) = c.path.rsplit_once('/').unwrap_or(("", c.path.as_str()));
+        if name != "package.json" || c.kind == ChangeKind::Deleted || skip(&c.path) {
+            continue;
+        }
+        let Some(new) = std::fs::read_to_string(root.join(&c.path))
+            .ok()
+            .and_then(|t| scripts_of(&t))
+        else {
+            continue;
+        };
+        let old = match (c.kind, git) {
+            (ChangeKind::Modified, Some(git)) => git.show(&c.path).and_then(|t| scripts_of(&t)),
+            _ => None,
+        };
+        let dir = if dir.is_empty() { "." } else { dir };
+        for (script, text) in &new {
+            if old.as_ref().is_some_and(|o| o.get(script) == Some(text)) {
+                continue;
+            }
+            let Some(task) = g.node_by_path(&format!("task:{dir}#{script}")) else {
+                continue;
+            };
+            let runs = runs.get_or_insert_with(|| Runs::new(g));
+            let started = runs.of_command(task);
+            if !started.any() {
+                continue;
+            }
+            scripts += 1;
+            // `go test` stays in the module of the directory it starts in.
+            let launches: Vec<(String, String)> = started
+                .launches()
+                .map(|(fw, d)| (fw.to_owned(), d.to_owned()))
+                .collect();
+            let started_here = |t: NodeId| {
+                let path = g.path(t);
+                let frameworks = g.test_frameworks(t);
+                launches.iter().any(|(fw, d)| {
+                    frameworks.contains(&fw.as_str())
+                        && under(d, path)
+                        && (fw != "gotest" || go_test_runs(d, path, &has_go_mod))
+                })
+            };
+            for t in runs.mapped_tests_of(&started) {
+                if !started_here(t) {
+                    continue;
+                }
+                if let std::collections::btree_map::Entry::Vacant(e) = fx.tests.entry(t) {
+                    e.insert((task, c.path.clone()));
+                    tests += 1;
+                }
+            }
+        }
+    }
+    if scripts > 0 {
+        fx.notes.push(format!(
+            "scripts: {scripts} changed package script(s) that start tests run {tests} test(s) \
+             more"
+        ));
     }
 }
 

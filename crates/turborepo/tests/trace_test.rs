@@ -2174,6 +2174,15 @@ fn rows(expected: &[(&str, Row)]) -> BTreeMap<String, Row> {
         .collect()
 }
 
+/// Replaces `from` with `to` in the file at `rel`, which has it once.
+#[cfg(unix)]
+fn edit(root: &Path, rel: &str, from: &str, to: &str) {
+    let path = root.join(rel);
+    let text = fs::read_to_string(&path).unwrap();
+    assert_eq!(text.matches(from).count(), 1, "{rel}: {from}");
+    fs::write(&path, text.replace(from, to)).unwrap();
+}
+
 /// A Go test belongs to turbo's package around it, and its task is the script
 /// of that package that starts it: also where the script runs `go test` in a
 /// directory below the package, which is the Go module.
@@ -2241,5 +2250,135 @@ fn a_go_test_has_the_task_of_the_script_that_starts_it() {
     assert_eq!(
         affected_rows(dir.path(), &["--changed", "tools/lint/lint.go"]),
         rows(&[("tools/lint/lint_test.go", row("//", "", "FileChanged"))])
+    );
+}
+
+/// A script whose text changed can run its tests another way: every test it
+/// starts is selected, and no test of another script.
+#[cfg(unix)]
+#[test]
+fn a_changed_script_selects_the_tests_it_starts() {
+    let dir = fixture("trace_go_scripts");
+    let changed = |package: &str| row(package, &format!("{package}#test"), "TaskChanged");
+    for (package, from, to, tests) in [
+        (
+            "billing",
+            "go test ./...",
+            "go test -race ./...",
+            [
+                "services/billing/app/billing_test.go",
+                "services/billing/app/invoice/invoice_test.go",
+            ],
+        ),
+        (
+            "search",
+            "-race",
+            "-race -count=1",
+            [
+                "services/search/engine/index/index_test.go",
+                "services/search/engine/search_test.go",
+            ],
+        ),
+        (
+            "queue",
+            "-tags=integration",
+            "-tags=integration,slow",
+            [
+                "services/queue/queue_test.go",
+                "services/queue/worker/worker_test.go",
+            ],
+        ),
+        (
+            "batch",
+            "go test",
+            "go test -short",
+            [
+                "services/batch/one/one_test.go",
+                "services/batch/two/two_test.go",
+            ],
+        ),
+        (
+            "mail",
+            "./scripts/test.sh",
+            "./scripts/test.sh --verbose",
+            [
+                "services/mail/mail_test.go",
+                "services/mail/smtp/smtp_test.go",
+            ],
+        ),
+    ] {
+        let manifest = format!("services/{package}/package.json");
+        edit(dir.path(), &manifest, from, to);
+        let expected = rows(&[(tests[0], changed(package)), (tests[1], changed(package))]);
+        assert_eq!(
+            affected_rows(dir.path(), &["--base", "HEAD"]),
+            expected,
+            "{package}"
+        );
+        // Without a base revision to compare with, the scripts of a changed
+        // manifest count as changed (a test next to the manifest is selected
+        // as a reader of its directory already).
+        git(dir.path(), &["checkout", "--quiet", "--", &manifest]);
+        let selected = affected_rows(dir.path(), &["--changed", &manifest]);
+        assert_eq!(
+            selected.keys().collect::<Vec<_>>(),
+            expected.keys().collect::<Vec<_>>(),
+            "{package}"
+        );
+        assert!(
+            selected
+                .values()
+                .all(|r| r.task == format!("{package}#test")),
+            "{package}: {selected:?}"
+        );
+    }
+
+    // Another field of the manifest starts no test differently.
+    edit(
+        dir.path(),
+        "services/billing/package.json",
+        "\"version\": \"1.0.0\"",
+        "\"version\": \"1.0.1\"",
+    );
+    assert_eq!(
+        affected_rows(dir.path(), &["--base", "HEAD"]),
+        BTreeMap::new()
+    );
+    git(dir.path(), &["checkout", "--quiet", "--", "."]);
+
+    // The shell script file a script runs is the script's command too.
+    edit(
+        dir.path(),
+        "services/mail/scripts/test.sh",
+        "go test ./...",
+        "go test -race ./...",
+    );
+    assert_eq!(
+        affected_rows(dir.path(), &["--base", "HEAD"]),
+        rows(&[
+            ("services/mail/mail_test.go", changed("mail")),
+            ("services/mail/smtp/smtp_test.go", changed("mail")),
+        ])
+    );
+}
+
+/// The same for a JavaScript runner: `jest` that becomes `jest --ci`.
+#[cfg(unix)]
+#[test]
+fn a_changed_jest_script_selects_the_tests_it_starts() {
+    let dir = fixture("trace_jest");
+    edit(
+        dir.path(),
+        "packages/math/package.json",
+        "\"test\": \"jest\"",
+        "\"test\": \"jest --ci\"",
+    );
+    let changed = row("math", "math#test", "TaskChanged");
+    assert_eq!(
+        affected_rows(dir.path(), &["--base", "HEAD"]),
+        rows(&[
+            (JEST_ADD, row("math", "math#test", "TaskChanged")),
+            (JEST_MUL, changed),
+        ])
     );
 }
