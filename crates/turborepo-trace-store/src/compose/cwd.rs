@@ -57,6 +57,31 @@
 //! the runner is started in (see `fw::test_cwds`); the repository root is
 //! covered by the edges and probes the tracer recorded on `F` itself.
 //!
+//! # A file that only a task runs
+//!
+//! The working directory of a reference is the one of the process that runs the
+//! file, and that process is the entry's only when the entry reaches the file
+//! without a build task on the way. A script behind `task:math#build` runs when
+//! the task runs, in the directory the task's commands run in
+//! ([`Graph::task_dirs`]: the package of a package script), whoever imports
+//! what the build writes and from wherever. A file that no test reaches without
+//! a task is therefore resolved once, on the file itself, from the directories
+//! of the nearest tasks above it: the edges, probes, inputs and memberships go
+//! on it, and its record is marked entry-resolved as before, saying so in
+//! `--explain` ([`RESOLVED_TASK_NOTE`]). `TURBO_TRACE_DEBUG_CWD_TASK_RUNNER=0`
+//! resolves such a file with the test that reaches it instead (for A/B
+//! measurements).
+//!
+//! What it reads cannot be bounded when the file is behind a task whose
+//! directory is not known (a command line that changes directory, a task of
+//! another source) or behind a shell script, which can change directory before
+//! it starts the program that reads:
+//!
+//! - outside `--strict`, such a reference is resolved per test, as before: the
+//!   entry is assumed to run the file itself;
+//! - under `--strict` ([`Graph::set_cwd_strict`]) its record stays open, so
+//!   that every entry the file reaches is selected.
+//!
 //! # The repository root, and a path that climbs above it
 //!
 //! The root is a working directory of every test whose runner does not change
@@ -107,6 +132,10 @@ pub(super) const MODULE_EXTS: &[&str] = &[
 /// Appended to the detail of a record resolved per test.
 pub const RESOLVED_NOTE: &str = "resolved per test from the test runner's working directory";
 
+/// Appended to the detail of a record resolved from the directory of the task
+/// that runs the file.
+pub const RESOLVED_TASK_NOTE: &str = "resolved from the directory of the task that runs it";
+
 /// One `cwd_dependent` reference.
 pub(super) struct SiteRef {
     pub(super) kind: RefKind,
@@ -143,6 +172,21 @@ enum PatTok {
 /// Most parts of a pattern that is resolved per test.
 const MAX_PATTERN_PARTS: usize = 8;
 
+/// Who runs the process that holds a site's `cwd_dependent` references (see
+/// the module documentation).
+enum Runner {
+    /// The entries themselves: each test that reaches the file runs it in one
+    /// of its working directories.
+    Entry,
+    /// Build tasks: every way from a test to the file crosses tasks that run in
+    /// `dirs`, so the file runs there, whoever consumes what it writes.
+    Task(Vec<String>),
+    /// A task or a script whose directory is not known (a command line that
+    /// changes directory, a shell script): what the references name cannot be
+    /// bounded from here.
+    Unknown,
+}
+
 /// A file with `cwd_dependent` references.
 struct Site {
     node: u32,
@@ -155,6 +199,8 @@ struct Site {
     patterns: Vec<Option<Vec<PatTok>>>,
     /// Nodes that reach the file.
     reach: NodeSet,
+    /// Who runs the file.
+    runner: Runner,
 }
 
 /// What one reference resolves to in one working directory.
@@ -241,9 +287,10 @@ fn is_guess(detail: &str) -> bool {
     detail.contains("initial value is used") || detail.contains("assumed to be `path.")
 }
 
-/// The label of an edge of the per-test working-directory layer: the test's
-/// working directory, what the site names, and the site (the file and line
-/// whose reference is resolved there).
+/// The label of an edge of the working-directory layer: the directory the
+/// reference is resolved in (the test's, or the directory of the task that runs
+/// the file), what the site names, and the site (the file and line whose
+/// reference is resolved there).
 fn cwd_edge_label(cwd: &str, specs: &str, site: &str, line: u32) -> String {
     format!(
         "cwd {}: {specs} ({site}:{line})",
@@ -251,10 +298,10 @@ fn cwd_edge_label(cwd: &str, specs: &str, site: &str, line: u32) -> String {
     )
 }
 
-/// The site file of an edge of the per-test working-directory layer, from its
-/// label ([`cwd_edge_label`]): the edge runs from a test to what the site loads
-/// in that test's working directory, so the code that holds the loaded module
-/// is the site's. `None` for any other label.
+/// The site file of an edge of the working-directory layer, from its label
+/// ([`cwd_edge_label`]): the edge runs from a test, or from the site itself for
+/// a file a task runs, to what the site loads in that working directory, so the
+/// code that holds the loaded module is the site's. `None` for any other label.
 pub fn cwd_edge_site(label: &str) -> Option<&str> {
     let rest = label.strip_prefix("cwd ")?.strip_suffix(')')?;
     let (_, site) = rest.rsplit_once(" (")?;
@@ -401,7 +448,72 @@ fn assumed_sentence(site: &str, line: u32, spec: &str, dir: &str, at: &str) -> S
     )
 }
 
+/// `TURBO_TRACE_DEBUG_CWD_TASK_RUNNER=0`: a file that a task runs reads
+/// relative to the test that reaches it, as before (for A/B measurements; see
+/// the module documentation).
+fn task_runner_by_switch() -> bool {
+    turborepo_trace_core::debug::var_os("CWD_TASK_RUNNER").is_none_or(|v| v != "0")
+}
+
 impl Graph {
+    /// Who runs the process of the file at `node` (see the module
+    /// documentation): walking up from the file over the edges uncertainty
+    /// follows, a test that shows up before a task reaches the file without one
+    /// and runs it in its own process.
+    fn runner_of(
+        &self,
+        node: u32,
+        tests: &HashMap<u32, Vec<&str>>,
+        rev: &q::Adjacency,
+        runs: q::EdgeFilter,
+    ) -> Runner {
+        let mut seen = NodeSet::new(self.nodes.len() as u32);
+        seen.insert(NodeId(node));
+        let mut stack = vec![node];
+        let mut dirs: Vec<String> = Vec::new();
+        let mut unknown = false;
+        while let Some(x) = stack.pop() {
+            if tests.contains_key(&x) {
+                return Runner::Entry;
+            }
+            // A task, or a shell script, runs the file instead of the entry.
+            if x != node && self.runs_a_process(x) {
+                match self.is_task(NodeId(x)).then(|| self.task_dirs(NodeId(x))) {
+                    Some(Some(d)) => {
+                        for d in d {
+                            if !dirs.contains(&d) {
+                                dirs.push(d);
+                            }
+                        }
+                    }
+                    // A task whose directory is not known, or a script that can
+                    // change directory before it starts what reads.
+                    _ => unknown = true,
+                }
+                continue;
+            }
+            let (srcs, attrs) = rev.neighbors(NodeId(x));
+            for (&p, &a) in srcs.iter().zip(attrs) {
+                if runs.accepts(a) && seen.insert(NodeId(p)) {
+                    stack.push(p);
+                }
+            }
+        }
+        if unknown {
+            return Runner::Unknown;
+        }
+        if dirs.is_empty() {
+            return Runner::Entry;
+        }
+        Runner::Task(dirs)
+    }
+
+    /// Whether `x` is a node that runs the files below it in a process of its
+    /// own: a build task, or a shell script.
+    fn runs_a_process(&self, x: u32) -> bool {
+        self.is_task(NodeId(x)) || q::GraphView::lang(self, NodeId(x)) == Some("shell")
+    }
+
     /// The snapshot's walked-file list as stored (see
     /// [`crate::manifest::files_in`]).
     pub(super) fn walked_files(&self) -> Option<Vec<u8>> {
@@ -473,6 +585,13 @@ impl Graph {
     /// `--strict`, `TURBO_TRACE_DEBUG_CWD_EXPLAINED=0`.
     pub fn set_cwd_root_always(&mut self, always: bool) {
         self.cwd_root_always = always || root_always_by_switch();
+    }
+
+    /// Whether a read whose directory cannot be bounded is left open instead of
+    /// being resolved with the test that reaches it (see the module
+    /// documentation): `--strict`.
+    pub fn set_cwd_strict(&mut self, strict: bool) {
+        self.cwd_strict = strict;
     }
 
     /// Where the per-test resolution did not take the reading from the
@@ -589,6 +708,7 @@ impl Graph {
                     refs,
                     patterns,
                     reach: NodeSet::new(0),
+                    runner: Runner::Entry,
                 });
             }
         }
@@ -793,6 +913,7 @@ impl Graph {
                     refs: vec![r],
                     patterns: vec![None],
                     reach: NodeSet::new(0),
+                    runner: Runner::Entry,
                 }),
             }
         }
@@ -811,6 +932,7 @@ impl Graph {
         turborepo_trace_core::timing::mark("derive: transpose");
         let mut stack: Vec<u32> = Vec::new();
         let runs = q::EdgeFilter::ALL.for_uncertainty();
+        let task_runner = task_runner_by_switch();
         for s in &mut sites {
             let mut reach = NodeSet::new(n);
             reach.insert(NodeId(s.node));
@@ -828,8 +950,19 @@ impl Graph {
                 }
             }
             s.reach = reach;
+            if task_runner {
+                s.runner = self.runner_of(s.node, &tests, &rev, runs);
+            }
         }
         turborepo_trace_core::timing::mark("derive: reach");
+        let strict = self.cwd_strict;
+        // A file that only build tasks run reads where they do, whatever
+        // consumes what it writes (see the module documentation): its
+        // references are resolved once, on the file itself. A read behind a task
+        // or a script whose directory is not known can't be bounded: `--strict`
+        // keeps its record open, so that every entry it reaches is selected.
+        let on_site = |runner: &Runner| matches!(runner, Runner::Task(_));
+        let unbounded = |runner: &Runner| strict && matches!(runner, Runner::Unknown);
         // Tests of one project share their working directories: what a site adds to a
         // test is computed once per (set of working directories, site).
         let mut test_nodes: Vec<u32> = tests.keys().copied().collect();
@@ -884,6 +1017,9 @@ impl Graph {
         // sites.
         let mut work: Vec<(u32, u32)> = Vec::new();
         for (si, s) in sites.iter().enumerate() {
+            if on_site(&s.runner) || unbounded(&s.runner) {
+                continue;
+            }
             for &t in &test_nodes {
                 if s.reach.contains(NodeId(t)) {
                     work.push((t, si as u32));
@@ -1060,6 +1196,62 @@ impl Graph {
                 }
             }
         }
+        // The references of a file that only build tasks run, resolved in the
+        // directory of its task: the file reads there whenever its task runs it,
+        // whoever consumes what it writes, so the facts go on the file. A read
+        // whose directory can't be bounded keeps its record open under
+        // `--strict` (`unbounded`): what it names is not known.
+        for site in &sites {
+            let on = match &site.runner {
+                Runner::Task(dirs) => dirs.as_slice(),
+                runner => {
+                    if unbounded(runner) {
+                        failed.extend(site.refs.iter().map(|r| (site.node, r.unc_span)));
+                    }
+                    continue;
+                }
+            };
+            for (r, pat) in site.refs.iter().zip(&site.patterns) {
+                for dir in on {
+                    resolutions += 1;
+                    let res = match pat {
+                        Some(p) => self.resolve_pattern_in_cwd(&walked, dir, p),
+                        None => self.resolve_in_cwd(&walked, dir, r),
+                    };
+                    let Some(res) = res else {
+                        failed.insert((site.node, r.unc_span));
+                        continue;
+                    };
+                    if !res.edges.is_empty() {
+                        let shown = match pat {
+                            Some(p) => show_pattern(p),
+                            None => r.specs.as_deref().unwrap_or_default().join(" | "),
+                        };
+                        let label = patch.intern(&cwd_edge_label(
+                            dir,
+                            &shown,
+                            self.path_of(site.node as usize),
+                            r.line,
+                        ));
+                        for &x in &res.edges {
+                            patch.edge_id(NodeId(site.node), NodeId(x), EdgeAttr(r.attr), label);
+                        }
+                    }
+                    for p in &res.probes {
+                        let p = patch.intern(p);
+                        patch.probe_id(NodeId(site.node), p);
+                    }
+                    for f in &res.inputs {
+                        let f = patch.intern(f);
+                        patch.input_id(NodeId(site.node), f);
+                    }
+                    for (d, x) in &res.members {
+                        let (d, x) = (patch.intern(d), patch.intern(x));
+                        patch.membership_id(NodeId(site.node), d, x);
+                    }
+                }
+            }
+        }
         if turborepo_trace_core::timing::enabled() {
             turborepo_trace_core::timing::mark(&format!(
                 "derive: {pairs} pair(s), {} bundle(s), {resolutions} resolution(s), {} site \
@@ -1084,12 +1276,17 @@ impl Graph {
                     continue;
                 }
                 let detail = a.details[u.detail.to_native() as usize].as_str();
+                // Where the file reads, and so how its references were resolved.
+                let note = match site.runner {
+                    Runner::Task(_) => RESOLVED_TASK_NOTE,
+                    _ => RESOLVED_NOTE,
+                };
                 patch.resolve_for_entries(
                     NodeId(site.node),
                     cwd_kind,
                     u.line.to_native(),
                     span_of(&u.span),
-                    &format!("{detail}; {RESOLVED_NOTE}"),
+                    &format!("{detail}; {note}"),
                 );
             }
         }
