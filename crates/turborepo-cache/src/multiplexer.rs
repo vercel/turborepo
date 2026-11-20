@@ -93,7 +93,6 @@ impl CacheMultiplexer {
                 (Some(api_client), Some(api_auth)) => Some(Arc::new(HTTPCache::new(
                     api_client,
                     opts,
-                    repo_root.to_owned(),
                     api_auth,
                     analytics_recorder.clone(),
                     scm_state.clone(),
@@ -310,7 +309,7 @@ impl CacheMultiplexer {
                 && let Some(fs) = &self.fs
             {
                 if let Ok(Some((hit_metadata, files, artifact))) =
-                    http.fetch_with_archive(key).await
+                    http.fetch_with_archive(anchor, key).await
                 {
                     // We can ignore errors here because we know we have
                     // previously successfully fetched from the HTTP cache, and
@@ -329,7 +328,7 @@ impl CacheMultiplexer {
                     };
                     return Ok(Some((hit_metadata, files)));
                 }
-            } else if let Ok(Some((hit_metadata, files))) = http.fetch(key).await {
+            } else if let Ok(Some((hit_metadata, files))) = http.fetch(anchor, key).await {
                 return Ok(Some((hit_metadata, files)));
             }
         }
@@ -835,6 +834,60 @@ mod tests {
             local_bytes, uploaded,
             "locally installed archive must be the downloaded bytes, not a re-encode"
         );
+
+        handle.abort();
+        Ok(())
+    }
+
+    /// A remote hit is restored below the anchor the caller names, as a local
+    /// hit is, and not below the repository root when the two differ: with
+    /// and without the local cache taking the downloaded archive.
+    #[tokio::test]
+    async fn test_remote_fetch_restores_below_the_anchor() -> Result<()> {
+        let (port, handle) = start_mock().await;
+
+        let repo_root = tempdir()?;
+        let repo_root_path = AbsoluteSystemPathBuf::try_from(repo_root.path())?;
+        let anchor = repo_root_path.join_components(&["nested", "dir"]);
+        let file = AnchoredSystemPathBuf::from_raw("output.txt")?;
+        std::fs::create_dir_all(anchor.as_std_path())?;
+
+        let mut remote_only = both_write_opts();
+        remote_only.cache.local.read = false;
+        remote_only.cache.local.write = false;
+        for (hash, opts) in [
+            ("anchored-fetch-both", both_write_opts()),
+            ("anchored-fetch-remote", remote_only),
+        ] {
+            std::fs::write(anchor.resolve(&file), "anchored contents")?;
+            let cache = test_multiplexer(&opts, &repo_root_path, port);
+            cache
+                .put(&anchor, hash, std::slice::from_ref(&file), 42)
+                .await?;
+            // The fetch must be a remote hit that restores the file.
+            let _ = std::fs::remove_file(repo_root_path.join_components(&[
+                ".turbo",
+                "cache",
+                &format!("{hash}.tar.zst"),
+            ]));
+            std::fs::remove_file(anchor.resolve(&file))?;
+
+            let (metadata, files) = cache
+                .fetch(&anchor, hash)
+                .await?
+                .expect("remote hit expected");
+            assert_eq!(metadata.source, CacheSource::Remote);
+            assert_eq!(files, vec![file.clone()]);
+            assert!(
+                !repo_root_path.resolve(&file).exists(),
+                "{hash}: restored below the repository root"
+            );
+            assert_eq!(
+                std::fs::read(anchor.resolve(&file))?,
+                b"anchored contents",
+                "{hash}"
+            );
+        }
 
         handle.abort();
         Ok(())

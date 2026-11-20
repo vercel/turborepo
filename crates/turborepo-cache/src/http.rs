@@ -9,7 +9,7 @@ use std::{
 };
 
 use tracing::{debug, warn};
-use turbopath::{AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPathBuf};
+use turbopath::{AbsoluteSystemPath, AnchoredSystemPathBuf};
 use turborepo_analytics::AnalyticsSender;
 use turborepo_api_client::{
     APIAuth, APIClient, CacheClient, Response,
@@ -90,7 +90,6 @@ fn replace_api_auth_token(api_auth: &mut APIAuth, token: Credential) -> bool {
 pub struct HTTPCache {
     client: APIClient,
     signer_verifier: Option<ArtifactSignatureAuthenticator>,
-    repo_root: AbsoluteSystemPathBuf,
     api_auth: Arc<Mutex<APIAuth>>,
     recovery_lock: tokio::sync::Mutex<()>,
     disabled: AtomicBool,
@@ -107,7 +106,6 @@ impl HTTPCache {
     pub fn new(
         client: APIClient,
         opts: &CacheOpts,
-        repo_root: AbsoluteSystemPathBuf,
         api_auth: APIAuth,
         analytics_recorder: Option<AnalyticsSender>,
         scm_state: LazyScmState,
@@ -148,7 +146,6 @@ impl HTTPCache {
         Ok(HTTPCache {
             client,
             signer_verifier,
-            repo_root,
             uploads: Arc::new(Mutex::new(HashMap::new())),
             api_auth: Arc::new(Mutex::new(api_auth)),
             recovery_lock: tokio::sync::Mutex::new(()),
@@ -610,13 +607,15 @@ impl HTTPCache {
         }
     }
 
+    /// Fetches the artifact and restores its files below `anchor`.
     #[tracing::instrument(skip_all)]
     pub async fn fetch(
         &self,
+        anchor: &AbsoluteSystemPath,
         hash: &str,
     ) -> Result<Option<(CacheHitMetadata, Vec<AnchoredSystemPathBuf>)>, CacheError> {
         Ok(self
-            .fetch_with_archive(hash)
+            .fetch_with_archive(anchor, hash)
             .await?
             .map(|(metadata, files, _artifact)| (metadata, files)))
     }
@@ -629,6 +628,7 @@ impl HTTPCache {
     #[tracing::instrument(skip_all)]
     pub(crate) async fn fetch_with_archive(
         &self,
+        anchor: &AbsoluteSystemPath,
         hash: &str,
     ) -> Result<Option<(CacheHitMetadata, Vec<AnchoredSystemPathBuf>, Artifact)>, CacheError> {
         let Some(DownloadedArtifact {
@@ -646,9 +646,9 @@ impl HTTPCache {
         // work; run them on the blocking pool so a large restore does not
         // occupy a runtime worker.
         let body = Arc::new(body);
-        let repo_root = self.repo_root.clone();
+        let anchor = anchor.to_owned();
         let (files, artifact) =
-            tokio::task::spawn_blocking(move || body.restore(&repo_root)).await??;
+            tokio::task::spawn_blocking(move || body.restore(&anchor)).await??;
 
         self.log_fetch(analytics::CacheEvent::Hit, hash, duration);
         Ok(Some((
@@ -902,8 +902,6 @@ mod test {
     };
 
     fn cache_with_token(token: &str) -> HTTPCache {
-        let repo_root = tempfile::tempdir().unwrap();
-        let repo_root_path = AbsoluteSystemPathBuf::try_from(repo_root.path()).unwrap();
         let api_client = APIClient::new(
             "http://localhost:8000",
             Some(Duration::from_secs(200)),
@@ -929,7 +927,6 @@ mod test {
         HTTPCache::new(
             api_client,
             &opts,
-            repo_root_path,
             api_auth,
             None,
             LazyScmState::resolved(None),
@@ -1005,7 +1002,6 @@ mod test {
                 cache_max_age: None,
                 cache_max_size: None,
             },
-            repo_root_path.clone(),
             APIAuth {
                 team_id: Some("my-team".to_string()),
                 token: Credential::from("my-token".to_string()),
@@ -1099,16 +1095,19 @@ mod test {
         })
         .await?;
 
-        let (metadata, files) = cache.fetch("hit").await?.expect("remote hit");
+        let (metadata, files) = cache
+            .fetch(&repo_root_path, "hit")
+            .await?
+            .expect("remote hit");
         assert_eq!(metadata.time_saved, 42);
         assert_eq!(files, vec![AnchoredSystemPathBuf::from_raw("out.txt")?]);
         assert_eq!(
             std::fs::read_to_string(repo_root_path.join_component("out.txt").as_std_path())?,
             "prefetched"
         );
-        assert!(cache.fetch("miss").await?.is_none());
+        assert!(cache.fetch(&repo_root_path, "miss").await?.is_none());
         // The prefetcher skipped this one, so the fetch downloads it itself.
-        assert!(cache.fetch("skipped").await?.is_some());
+        assert!(cache.fetch(&repo_root_path, "skipped").await?.is_some());
 
         let denied = server
             .mock_async(|when, then| {
@@ -1136,7 +1135,7 @@ mod test {
             Err(crate::CacheError::ForbiddenRemoteCacheWrite)
         ));
         assert!(matches!(
-            cache.fetch("hit").await,
+            cache.fetch(&repo_root_path, "hit").await,
             Err(crate::CacheError::ForbiddenRemoteCacheWrite)
         ));
         assert!(matches!(
@@ -1222,7 +1221,6 @@ mod test {
         let cache = HTTPCache::new(
             api_client,
             &opts,
-            repo_root_path.to_owned(),
             api_auth,
             Some(analytics_recorder),
             LazyScmState::resolved(None),
@@ -1230,7 +1228,7 @@ mod test {
         .unwrap();
 
         // Should be a cache miss at first
-        let miss = cache.fetch(hash).await?;
+        let miss = cache.fetch(&repo_root_path, hash).await?;
         assert!(miss.is_none());
 
         let anchored_files: Vec<_> = files.iter().map(|f| f.path().to_owned()).collect();
@@ -1243,7 +1241,7 @@ mod test {
         assert_eq!(cache_response.time_saved, duration);
         assert_eq!(cache_response.source, CacheSource::Remote);
 
-        let (cache_response, received_files) = cache.fetch(hash).await?.unwrap();
+        let (cache_response, received_files) = cache.fetch(&repo_root_path, hash).await?.unwrap();
 
         assert_eq!(cache_response.time_saved, duration);
 
@@ -1306,7 +1304,7 @@ mod test {
             cache_max_size: None,
         };
 
-        let make_cache = |root: &AbsoluteSystemPathBuf| {
+        let make_cache = || {
             HTTPCache::new(
                 APIClient::new(
                     format!("http://localhost:{port}"),
@@ -1317,7 +1315,6 @@ mod test {
                 )
                 .unwrap(),
                 &opts,
-                root.to_owned(),
                 api_auth.clone(),
                 None,
                 LazyScmState::resolved(None),
@@ -1325,7 +1322,7 @@ mod test {
             .unwrap()
         };
 
-        let put_cache = make_cache(&put_root_path);
+        let put_cache = make_cache();
         put_cache
             .put(
                 &put_root_path,
@@ -1338,9 +1335,9 @@ mod test {
         // Restore into a different root so the bytes must actually travel.
         let fetch_root = tempdir()?;
         let fetch_root_path = AbsoluteSystemPathBuf::try_from(fetch_root.path())?;
-        let fetch_cache = make_cache(&fetch_root_path);
+        let fetch_cache = make_cache();
 
-        let (metadata, received_files) = fetch_cache.fetch(hash).await?.unwrap();
+        let (metadata, received_files) = fetch_cache.fetch(&fetch_root_path, hash).await?.unwrap();
         assert_eq!(metadata.time_saved, duration);
         assert_eq!(received_files.len(), 1);
         let restored = std::fs::read(fetch_root_path.resolve(&received_files[0]))?;
@@ -1393,15 +1390,7 @@ mod test {
             dirty_hash: Some("dirty789".to_string()),
         }));
 
-        let cache = HTTPCache::new(
-            api_client,
-            &opts,
-            repo_root_path.to_owned(),
-            api_auth,
-            None,
-            scm_state,
-        )
-        .unwrap();
+        let cache = HTTPCache::new(api_client, &opts, api_auth, None, scm_state).unwrap();
 
         let anchored_files: Vec<_> = test_case
             .files
@@ -1419,7 +1408,7 @@ mod test {
         assert_eq!(exists_response.dirty_hash.as_deref(), Some("dirty789"));
 
         // Verify fetch returns scm metadata
-        let (fetch_response, _files) = cache.fetch(&hash).await?.unwrap();
+        let (fetch_response, _files) = cache.fetch(&repo_root_path, &hash).await?.unwrap();
         assert_eq!(fetch_response.source, CacheSource::Remote);
         assert_eq!(fetch_response.sha.as_deref(), Some("abc123def456"));
         assert_eq!(fetch_response.dirty_hash.as_deref(), Some("dirty789"));
@@ -1470,7 +1459,6 @@ mod test {
         let cache = HTTPCache::new(
             api_client,
             &opts,
-            repo_root_path.to_owned(),
             api_auth,
             None,
             LazyScmState::resolved(None),
@@ -1491,7 +1479,7 @@ mod test {
         assert_eq!(exists_response.sha, None);
         assert_eq!(exists_response.dirty_hash, None);
 
-        let (fetch_response, _files) = cache.fetch(&hash).await?.unwrap();
+        let (fetch_response, _files) = cache.fetch(&repo_root_path, &hash).await?.unwrap();
         assert_eq!(fetch_response.sha, None);
         assert_eq!(fetch_response.dirty_hash, None);
 
@@ -2178,9 +2166,6 @@ mod test {
         // Test that the Arc<Mutex<APIAuth>> is properly thread-safe
         use std::{sync::Arc, thread};
 
-        let repo_root = tempfile::tempdir().unwrap();
-        let repo_root_path = AbsoluteSystemPathBuf::try_from(repo_root.path()).unwrap();
-
         let api_client = APIClient::new(
             "http://localhost:8000",
             Some(Duration::from_secs(200)),
@@ -2208,7 +2193,6 @@ mod test {
             HTTPCache::new(
                 api_client,
                 &opts,
-                repo_root_path,
                 api_auth,
                 None,
                 LazyScmState::resolved(None),
@@ -2261,9 +2245,6 @@ mod test {
 
     #[test]
     fn test_short_signature_key_rejected_when_enforced() {
-        let repo_root = tempfile::tempdir().unwrap();
-        let repo_root_path = AbsoluteSystemPathBuf::try_from(repo_root.path()).unwrap();
-
         let api_client = APIClient::new(
             "http://localhost:8000",
             Some(Duration::from_secs(200)),
@@ -2298,7 +2279,6 @@ mod test {
         let result = HTTPCache::new(
             api_client,
             &opts,
-            repo_root_path,
             api_auth,
             None,
             LazyScmState::resolved(None),
@@ -2320,9 +2300,6 @@ mod test {
 
     #[test]
     fn test_short_signature_key_accepted_without_enforcement() {
-        let repo_root = tempfile::tempdir().unwrap();
-        let repo_root_path = AbsoluteSystemPathBuf::try_from(repo_root.path()).unwrap();
-
         let api_client = APIClient::new(
             "http://localhost:8000",
             Some(Duration::from_secs(200)),
@@ -2357,7 +2334,6 @@ mod test {
         let result = HTTPCache::new(
             api_client,
             &opts,
-            repo_root_path,
             api_auth,
             None,
             LazyScmState::resolved(None),
@@ -2371,9 +2347,6 @@ mod test {
 
     #[test]
     fn test_valid_signature_key_accepted_when_enforced() {
-        let repo_root = tempfile::tempdir().unwrap();
-        let repo_root_path = AbsoluteSystemPathBuf::try_from(repo_root.path()).unwrap();
-
         let api_client = APIClient::new(
             "http://localhost:8000",
             Some(Duration::from_secs(200)),
@@ -2411,7 +2384,6 @@ mod test {
         let result = HTTPCache::new(
             api_client,
             &opts,
-            repo_root_path,
             api_auth,
             None,
             LazyScmState::resolved(None),
@@ -2425,9 +2397,6 @@ mod test {
 
     #[test]
     fn test_missing_signature_key_not_rejected_when_enforced() {
-        let repo_root = tempfile::tempdir().unwrap();
-        let repo_root_path = AbsoluteSystemPathBuf::try_from(repo_root.path()).unwrap();
-
         let api_client = APIClient::new(
             "http://localhost:8000",
             Some(Duration::from_secs(200)),
@@ -2462,7 +2431,6 @@ mod test {
         let result = HTTPCache::new(
             api_client,
             &opts,
-            repo_root_path,
             api_auth,
             None,
             LazyScmState::resolved(None),
