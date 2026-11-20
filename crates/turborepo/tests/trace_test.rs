@@ -2435,7 +2435,11 @@ fn node_test_files_are_the_tests_of_the_script_that_names_them() {
     let selection = node_selection(dir.path(), &["--changed", "packages/text/src/slug.ts"]);
     expect_tests(
         &selection,
-        &[(NODE_SLUG_E2E, "text#test:e2e"), (NODE_SLUG, "text#test")],
+        &[
+            (NODE_SLUG_E2E, "text#test:e2e"),
+            (NODE_SLUG, "text#test"),
+            (NODE_HEADING, "web#test"),
+        ],
     );
     let selection = node_selection(dir.path(), &["--changed", "packages/text/src/title.ts"]);
     expect_tests(&selection, &[(NODE_TITLE, "text#test")]);
@@ -2790,4 +2794,44 @@ fn a_file_two_frameworks_take_is_one_item_per_framework() {
     );
     let selected = trace(dir.path(), &["affected", "--changed", NODE_MUL]);
     assert_eq!(stdout(&selected), format!("{NODE_MUL}\n"));
+}
+
+// ---------------------------------------------------------------------------
+// Bins that forward their arguments.
+
+const NODE_HEADING: &str = "packages/web/src/heading.test.ts";
+const VITEST_LABEL: &str = "packages/ui/test/label.test.ts";
+
+/// A first-party bin that starts the program named by its first argument with
+/// the rest is a prefix of the command: `tool-run node --test ...` and
+/// `tool-run vitest run` are the runs behind it, and their tasks are covered.
+#[cfg(unix)]
+#[test]
+fn a_bin_that_forwards_its_arguments_is_a_prefix_of_the_command() {
+    let dir = fixture("trace_node_test");
+    let selection = node_selection(dir.path(), &["--changed", "packages/web/src/heading.ts"]);
+    expect_tests(&selection, &[(NODE_HEADING, "web#test")]);
+    assert_eq!(selection.uncovered, ["built#test", "computed#test"]);
+    let selection = node_selection(dir.path(), &["--changed", "packages/ui/src/label.ts"]);
+    expect_tests(&selection, &[(VITEST_LABEL, "ui#test")]);
+
+    // A bin that picks the program itself is no prefix: nothing says what it
+    // starts.
+    let bin = dir.path().join("packages/tool-run/bin/run.mjs");
+    let source = fs::read_to_string(&bin).unwrap();
+    assert!(source.contains("spawnSync(program, rest,"), "{source}");
+    fs::write(
+        &bin,
+        source.replace(
+            "spawnSync(program, rest,",
+            "spawnSync(program === 'test' ? 'node' : program, rest,",
+        ),
+    )
+    .unwrap();
+    git(
+        dir.path(),
+        &["commit", "--quiet", "-am", "the bin picks the program"],
+    );
+    let selection = node_selection(dir.path(), &["--changed", "packages/web/src/heading.ts"]);
+    expect_tests(&selection, &[(NODE_HEADING, "")]);
 }

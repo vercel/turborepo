@@ -53,6 +53,9 @@ pub struct Scan {
     pub cwd: bool,
     /// The files scanned (entry first).
     pub files: Vec<PathBuf>,
+    /// Whether the entry file forwards its arguments to the program named by
+    /// the first one ([`super::forward`]).
+    pub forwards: bool,
 }
 
 /// A string literal with the code right before it.
@@ -370,6 +373,7 @@ pub fn scan(entry: &Path, pkg_dir: &Path) -> Scan {
         if s.files.is_empty() {
             entry_strong = st;
             entry_weak = wk;
+            s.forwards = super::forward::forwards(&lx);
         } else {
             rest_strong.extend(st);
             rest_weak.extend(wk);
