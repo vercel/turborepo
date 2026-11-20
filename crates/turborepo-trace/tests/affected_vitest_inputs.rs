@@ -177,6 +177,87 @@ fn a_glob_import_that_is_not_a_literal_relative_pattern_is_open() {
     }
 }
 
+/// With the option `base`, the patterns are relative to that directory: one
+/// relative to the file is followed, any other (from the project root,
+/// computed, or in options that are not written in the call) is a load
+/// nothing bounds.
+#[test]
+fn a_glob_import_with_a_base_is_relative_to_the_base() {
+    let d = repo(Some(EMPTY));
+    let r = d.path();
+    write(r, "data/table.json", "{}\n");
+    write(r, "src/b.ts", "export const here = 1;\n");
+    for (call, changed) in [
+        (
+            "import.meta.glob('./*.ts', { base: './pages' })",
+            "src/pages/a.ts",
+        ),
+        (
+            "import.meta.glob(['./*.json'], { eager: true, base: '../data', })",
+            "data/table.json",
+        ),
+        (
+            "import.meta.glob('../*.ts', { 'base': './pages/' })",
+            "src/b.ts",
+        ),
+    ] {
+        write(
+            r,
+            "src/routes.ts",
+            &format!("export const pages = {call};\n"),
+        );
+        assert_eq!(affected(r, changed), [ROUTES], "{call}");
+    }
+    // The pattern does not start at the file any more.
+    write(
+        r,
+        "src/routes.ts",
+        "export const pages = import.meta.glob('./*.ts', { base: './pages' });\n",
+    );
+    assert_eq!(affected(r, "src/b.ts"), Vec::<String>::new());
+    for call in [
+        "import.meta.glob('./*.ts', { base: '/src/pages' })",
+        "import.meta.glob('./*.ts', { base: dir })",
+        "import.meta.glob('./*.ts', { base })",
+        "import.meta.glob('./*.ts', { ...options })",
+        "import.meta.glob('./*.ts', options)",
+    ] {
+        write(
+            r,
+            "src/routes.ts",
+            &format!(
+                "const dir = './pages';\nconst base = dir;\nconst options = {{ base }};\nexport \
+                 const pages = {call};\n"
+            ),
+        );
+        assert!(runs_it(r, "src/pages/a.ts", ROUTES), "{call}");
+    }
+}
+
+/// A glob import loads every file its pattern matches, also the kinds a
+/// traced `require` leaves out: a `README.md`, a C source, a declaration file.
+#[test]
+fn a_glob_import_loads_files_of_any_kind() {
+    let d = repo(Some(EMPTY));
+    let r = d.path();
+    write(
+        r,
+        "src/routes.ts",
+        "export const docs = import.meta.glob('./pages/*.md', { query: '?raw' });\nexport const \
+         all = import.meta.glob('./native/*', { query: '?raw' });\n",
+    );
+    for file in [
+        "src/pages/README.md",
+        "src/pages/CHANGELOG.md",
+        "src/native/add.c",
+        "src/native/add.h",
+        "src/native/types.d.ts",
+    ] {
+        write(r, file, "text\n");
+        assert_eq!(affected(r, file), [ROUTES], "{file}");
+    }
+}
+
 /// The file of a `toMatchFileSnapshot` is an input of the test, also before
 /// it is written.
 #[test]
