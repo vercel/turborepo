@@ -2500,6 +2500,37 @@ fn an_edited_test_script_selects_the_tests_it_runs() {
     assert_selects(&selected, &[JEST_ADD, JEST_MUL], &[JEST_GREET]);
 }
 
+/// A runner started as a file of `node` (`node ./node_modules/.bin/jest`) is
+/// no run of the Node.js test runner: no file becomes a `node-test` test, and
+/// the script's task is not reported as one that starts it.
+#[cfg(unix)]
+#[test]
+fn a_runner_started_as_a_node_script_is_no_node_test_run() {
+    let dir = fixture("trace_jest");
+    let math = dir.path().join("packages/math/package.json");
+    let manifest = fs::read_to_string(&math).unwrap();
+    fs::write(
+        &math,
+        manifest.replace(
+            "\"test\": \"jest\"",
+            "\"test\": \"node ./node_modules/.bin/jest\"",
+        ),
+    )
+    .unwrap();
+    git(
+        dir.path(),
+        &["commit", "--quiet", "-am", "jest as a node script"],
+    );
+    let output = trace(dir.path(), &["affected", "--changed", JEST_MUL, "--json"]);
+    assert!(output.status.success(), "{}", stderr(&output));
+    let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    let items = json["affectedTests"]["items"].as_array().unwrap();
+    assert_eq!(items.len(), 1, "{json}");
+    assert_eq!(items[0]["path"], JEST_MUL);
+    assert_eq!(items[0]["framework"], "jest", "{json}");
+    assert_eq!(json["uncoveredTasks"]["length"], 0, "{json}");
+}
+
 /// The text of the script is how its tests run: an edit selects the tests of
 /// that run.
 #[cfg(unix)]
@@ -2649,4 +2680,114 @@ fn node_test_files_that_jest_also_claims_keep_the_task_of_their_run() {
         "{:?}",
         selection.uncovered
     );
+}
+
+// ---------------------------------------------------------------------------
+// The framework of an item.
+
+/// The items of a `--json` document as (path, framework, task).
+#[cfg(unix)]
+fn framework_items(dir: &Path, args: &[&str]) -> Vec<(String, String, String)> {
+    let mut words = vec!["affected", "--json"];
+    words.extend_from_slice(args);
+    let output = trace(dir, &words);
+    assert!(output.status.success(), "{}", stderr(&output));
+    let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    let items = json["affectedTests"]["items"].as_array().unwrap();
+    assert_eq!(json["affectedTests"]["length"], items.len());
+    items
+        .iter()
+        .map(|item| {
+            assert!(item.get("framework").is_some(), "no framework key: {item}");
+            let text = |key: &str| item[key].as_str().unwrap_or("-").to_owned();
+            (text("path"), text("framework"), text("task"))
+        })
+        .collect()
+}
+
+/// Every item says which framework's run takes the file as a test; a file no
+/// framework lists has none.
+#[cfg(unix)]
+#[test]
+fn json_items_name_their_framework() {
+    let dir = fixture("trace_jest");
+    let items = framework_items(dir.path(), &["--changed", JEST_MUL]);
+    assert_eq!(
+        items,
+        [(
+            JEST_MUL.to_owned(),
+            "jest".to_owned(),
+            "math#test".to_owned()
+        )]
+    );
+    let dir = fixture("trace_vitest");
+    let items = framework_items(dir.path(), &["--changed", VITEST_CLAMP]);
+    assert_eq!(
+        items,
+        [(
+            VITEST_CLAMP.to_owned(),
+            "vitest".to_owned(),
+            "core#test".to_owned()
+        )]
+    );
+    let dir = fixture("trace_node_test");
+    let items = framework_items(dir.path(), &["--changed", "packages/text/src/title.ts"]);
+    let item = |path: &str, framework: &str, task: &str| {
+        (path.to_owned(), framework.to_owned(), task.to_owned())
+    };
+    assert_eq!(
+        items,
+        [
+            item(NODE_BUILT, "-", "built#test"),
+            item(NODE_COMPUTED, "-", "computed#test"),
+            item(NODE_TITLE, "node-test", "text#test"),
+        ]
+    );
+    // `--explain` says it too.
+    let output = trace(
+        dir.path(),
+        &[
+            "affected",
+            "--changed",
+            "packages/text/src/title.ts",
+            "--explain",
+            NODE_TITLE,
+            NODE_SLUG,
+        ],
+    );
+    assert!(output.status.success(), "{}", stderr(&output));
+    let text = stdout(&output);
+    assert_eq!(
+        text.matches("  a test of: node-test\n").count(),
+        2,
+        "{text}"
+    );
+}
+
+/// A file that two frameworks take is one item per framework, each with the
+/// task of that framework's run, and one line in text mode: a consumer that
+/// starts one runner filters the items by `framework`.
+#[cfg(unix)]
+#[test]
+fn a_file_two_frameworks_take_is_one_item_per_framework() {
+    let dir = fixture("trace_node_test");
+    fs::write(dir.path().join("jest.config.js"), "module.exports = {};\n").unwrap();
+    git(dir.path(), &["add", "-A"]);
+    git(
+        dir.path(),
+        &["commit", "--quiet", "-m", "a root jest config"],
+    );
+    let items = framework_items(dir.path(), &["--changed", NODE_MUL]);
+    let item = |path: &str, framework: &str, task: &str| {
+        (path.to_owned(), framework.to_owned(), task.to_owned())
+    };
+    assert_eq!(
+        items,
+        [
+            item(NODE_MUL, "jest", "-"),
+            item(NODE_MUL, "node-test", "math#test"),
+        ]
+    );
+    let selected = trace(dir.path(), &["affected", "--changed", NODE_MUL]);
+    assert_eq!(stdout(&selected), format!("{NODE_MUL}\n"));
 }

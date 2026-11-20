@@ -56,7 +56,9 @@ pub fn refuse_unless_enabled() -> Option<i32> {
 
 /// The `--json` document of `turbo trace affected`: each list has the same
 /// shape as the `affectedTasks` field of `turbo query` (`items`, `length`), so
-/// the command can graduate there.
+/// the command can graduate there. An item of `affectedTests` is one test
+/// file as one framework takes it (`framework`, with the `task` of that
+/// framework's run): a file that two frameworks take is two items.
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 struct AffectedJson<'a> {
@@ -95,12 +97,19 @@ fn uncovered_text(tests: &AffectedTests) -> String {
         .collect()
 }
 
+/// One test path per line: a file that several frameworks take (one item
+/// each, next to each other) is printed once.
 fn affected_text(tests: &AffectedTests) -> String {
-    tests
-        .items
-        .iter()
-        .map(|test| format!("{}\n", test.path))
-        .collect()
+    let mut text = String::new();
+    let mut last: Option<&str> = None;
+    for test in &tests.items {
+        if last != Some(test.path.as_str()) {
+            text.push_str(&test.path);
+            text.push('\n');
+        }
+        last = Some(&test.path);
+    }
+    text
 }
 
 /// `--base`/`--head` fall back to `TURBO_SCM_BASE`/`TURBO_SCM_HEAD` when
@@ -332,12 +341,14 @@ mod tests {
                     path: "packages/a/a.test.ts".into(),
                     package: "a".into(),
                     task: Some("a#test".into()),
+                    framework: Some("vitest".into()),
                     reason: Reason::TestChanged,
                 },
                 AffectedTest {
                     path: "packages/b/b.test.ts".into(),
                     package: "b".into(),
                     task: None,
+                    framework: None,
                     reason: Reason::FileChanged {
                         file_path: "packages/a/src/index.ts".into(),
                     },
@@ -358,6 +369,7 @@ mod tests {
         "path": "packages/a/a.test.ts",
         "package": "a",
         "task": "a#test",
+        "framework": "vitest",
         "reason": {
           "__typename": "TestChanged"
         }
@@ -366,6 +378,7 @@ mod tests {
         "path": "packages/b/b.test.ts",
         "package": "b",
         "task": null,
+        "framework": null,
         "reason": {
           "__typename": "FileChanged",
           "filePath": "packages/a/src/index.ts"

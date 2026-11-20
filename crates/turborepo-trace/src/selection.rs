@@ -212,6 +212,10 @@ pub(crate) struct Package {
     /// The scripts that start tests.
     #[serde(default)]
     pub(crate) tasks: Vec<Task>,
+    /// The frameworks of the `unselected` files, by path (not part of the
+    /// written document: `selected` items carry theirs).
+    #[serde(skip)]
+    pub(crate) frameworks: BTreeMap<String, Vec<String>>,
 }
 
 /// Totals.
@@ -552,6 +556,7 @@ struct Acc {
     unselected: Vec<String>,
     unknown: Vec<String>,
     tasks: Vec<Task>,
+    frameworks: BTreeMap<String, Vec<String>>,
 }
 
 /// Builds the document of an evaluation.
@@ -611,10 +616,15 @@ pub(crate) fn build(i: &Input<'_>) -> Document {
     }
     for n in i.entries.iter() {
         if !hit.contains(n) {
-            acc.entry(dir_of_node(n))
-                .or_default()
-                .unselected
-                .push(g.path(n).to_owned());
+            let a = acc.entry(dir_of_node(n)).or_default();
+            a.unselected.push(g.path(n).to_owned());
+            let frameworks = g.test_frameworks(n);
+            if !frameworks.is_empty() {
+                a.frameworks.insert(
+                    g.path(n).to_owned(),
+                    frameworks.into_iter().map(str::to_owned).collect(),
+                );
+            }
         }
     }
     // Entries that are no graph node: selected unless the policy ignores
@@ -878,6 +888,7 @@ pub(crate) fn build(i: &Input<'_>) -> Document {
             unselected: a.unselected,
             unknown: a.unknown,
             tasks: a.tasks,
+            frameworks: a.frameworks,
         });
     }
     Document {

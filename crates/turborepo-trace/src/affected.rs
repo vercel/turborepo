@@ -603,6 +603,20 @@ impl std::fmt::Display for DiffUnreadable {
     }
 }
 
+/// The line of `--explain` that says which test frameworks take the file as
+/// a test (the `framework` of its items in the `--json` document).
+fn write_test_frameworks(
+    g: &turborepo_trace_store::Graph,
+    n: turborepo_trace_graph::NodeId,
+    out: &mut dyn Write,
+) -> Result<()> {
+    let frameworks = g.test_frameworks(n);
+    if !frameworks.is_empty() {
+        writeln!(out, "  a test of: {}", frameworks.join(", "))?;
+    }
+    Ok(())
+}
+
 /// The lines of `--explain` for the readings from the repository root that the
 /// per-test working-directory layer did not take for `entry`
 /// (`turborepo_trace_store::Graph::cwd_assumed`): the assumption, where it
@@ -1592,6 +1606,7 @@ fn affected(cmd: AffectedCmd, out: &mut dyn Write, host: Option<&Host>) -> Resul
                     if let Some(note) = crate::lint::above_root_note(&root, &rel) {
                         writeln!(out, "  assumed: {note}")?;
                     }
+                    write_test_frameworks(&g, e.entry, out)?;
                 }
                 None if entries.missing.contains(&rel) => writeln!(
                     out,
@@ -1623,6 +1638,7 @@ fn affected(cmd: AffectedCmd, out: &mut dyn Write, host: Option<&Host>) -> Resul
                         if let Some(note) = crate::lint::above_root_note(&root, &rel) {
                             writeln!(out, "  assumed: {note}")?;
                         }
+                        write_test_frameworks(&g, n, out)?;
                     }
                 }
                 None => {
