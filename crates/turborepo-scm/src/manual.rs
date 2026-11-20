@@ -1060,7 +1060,7 @@ mod tests {
         let hashes = get_package_file_hashes_without_git(
             &turbo_root,
             &pkg_path,
-            &["$TURBO_DEFAULT$", "!**/*.test.ts"],
+            &["!**/*.test.ts"],
             true,
             None,
             None,
