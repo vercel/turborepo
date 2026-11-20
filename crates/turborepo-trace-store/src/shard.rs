@@ -28,7 +28,7 @@ use rkyv::{Archive, Deserialize, Serialize, util::AlignedVec};
 /// Version of the shard layout. Bump on any change to the types in this module.
 /// (45: the key of a file that imports a workspace package through a lockfile
 /// link has the config chain that governs the link's resolution.)
-pub const FORMAT_VERSION: u32 = 45;
+pub const FORMAT_VERSION: u32 = 46;
 
 const MAGIC: &[u8; 8] = b"DTSHARD\0";
 const HEADER: usize = 32;
@@ -296,6 +296,11 @@ pub struct TestRec {
     /// references in a test's closure against them
     /// ([`crate::Graph::cwd_patch`]).
     pub cwds: Vec<String>,
+    /// vitest: by which runs the file is a test ([`crate::fw::claim`]); the
+    /// working directories above are those of a run started where the
+    /// nearest config is. Empty for every other framework, whose record
+    /// holds as it is.
+    pub claim: Vec<String>,
 }
 
 /// Package identity.
@@ -1345,6 +1350,7 @@ mod tests {
                 file: 0,
                 framework: "jest".into(),
                 cwds: vec!["packages/a".into()],
+                claim: Vec::new(),
             }],
             tasks: vec![TaskRec {
                 file: 0,

@@ -63,7 +63,7 @@ pub const MEMBERS_LANG: &str = "task-members";
 /// builds).
 pub const PART_LANG: &str = "task-part";
 /// Version of the task integration, part of the options digest.
-pub const TASKS_VERSION: &str = "tasks-12";
+pub const TASKS_VERSION: &str = "tasks-14";
 
 /// The task workspace of one build, with name and root indexes for dependency
 /// closures.
@@ -1004,7 +1004,13 @@ impl<'a> Tasks<'a> {
                                 .into_owned()
                         })
                         .collect(),
-                    runs: encode_runs(&t.spec.runs, &t.spec.definition, &pkg.rel, self.repo),
+                    runs: encode_runs(
+                        &t.spec.runs,
+                        &t.spec.definition,
+                        &t.spec.starts,
+                        &pkg.rel,
+                        self.repo,
+                    ),
                 };
                 (
                     rec,
@@ -1236,17 +1242,79 @@ pub fn encode_run(
     }
 }
 
-/// [`TaskRec::runs`] of a task: its runs ([`encode_run`]) and its definition
+/// Where a task starts a test runner ([`turborepo_trace_tasks::spec::Start`])
+/// as stored in [`TaskRec::runs`] (directories from the repository root, `.`
+/// for the root; tab-separated):
+///
+/// | Start | Encoding |
+/// |---|---|
+/// | a recognized run | `start:<framework>:<config>\t<project dir>\t<start dir>\t<config dir above>`, with `<config>` one of `own` (a config in the project directory), `named` (a config named on the command line that the directory's own lookup does not find; its `include` globs follow, tab-separated), `above` (none there, the run loads the one above), `none` (none there, the run has the defaults), `either` (one of the two) |
+/// | a command that names a test runner and is not followed to where it runs it | `launch:<start dir>`, `launch:*` when the directory is not known |
+///
+/// A run outside the repository is left out. The composed graph reads them
+/// (`compose::claims`).
+pub fn encode_start(start: &turborepo_trace_tasks::spec::Start, repo: &Path) -> Option<String> {
+    use turborepo_trace_tasks::spec::{Start, StartConfig};
+    let rel = |d: &Path| repo_rel(repo, d).map(|d| if d.is_empty() { ".".to_string() } else { d });
+    match start {
+        Start::Launch { dir: None } => Some("launch:*".to_string()),
+        Start::Launch { dir: Some(d) } => Some(format!("launch:{}", rel(d)?)),
+        Start::Run {
+            framework,
+            dir,
+            from,
+            config,
+        } => {
+            let dir = rel(dir)?;
+            let from = rel(from).unwrap_or_else(|| dir.clone());
+            let mut tests: &[String] = &[];
+            let (kind, above) = match config {
+                StartConfig::Own => ("own", None),
+                StartConfig::Named { tests: t } => {
+                    tests = t;
+                    ("named", None)
+                }
+                StartConfig::None {
+                    above,
+                    loads_above,
+                    defaults,
+                } => (
+                    match (loads_above, defaults) {
+                        (true, true) => "either",
+                        (true, false) => "above",
+                        _ => "none",
+                    },
+                    above.as_deref().and_then(rel),
+                ),
+            };
+            let mut out = format!(
+                "start:{framework}:{kind}\t{dir}\t{from}\t{}",
+                above.unwrap_or_default()
+            );
+            // (A named config's patterns follow.)
+            for t in tests {
+                out.push('\t');
+                out.push_str(t);
+            }
+            Some(out)
+        }
+    }
+}
+
+/// [`TaskRec::runs`] of a task: its runs ([`encode_run`]), where it starts
+/// test runners ([`encode_start`]) and its definition
 /// files as `def:<repo-relative path>`. `package.json` and lockfiles are left
 /// out: their changes apply field by field and package by package, not as a
 /// file.
 pub fn encode_runs(
     runs: &[turborepo_trace_tasks::spec::TestRun],
     definition: &[PathBuf],
+    starts: &[turborepo_trace_tasks::spec::Start],
     pkg_rel: &str,
     repo: &Path,
 ) -> Vec<String> {
     let mut out: Vec<String> = runs.iter().map(|r| encode_run(r, pkg_rel, repo)).collect();
+    out.extend(starts.iter().filter_map(|s| encode_start(s, repo)));
     for d in definition {
         const BY_FIELD: &[&str] = &[
             "package.json",

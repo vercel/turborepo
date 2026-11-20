@@ -258,6 +258,33 @@ pub fn read(p: impl AsRef<Path>) -> io::Result<Vec<u8>> {
     }
 }
 
+/// Reads a file whose contents decide what a computation finds without being
+/// an input of what it finds: the read is logged ([`Log::read`]) for whoever
+/// keeps the computation's result, and the cache does not record it. (The
+/// version of a runner decides which default patterns a config has; a change
+/// of the manifest that declares it is no change of the tests, and a change of
+/// the runner's version reaches them through the runner itself.)
+pub fn read_key(p: impl AsRef<Path>) -> io::Result<Vec<u8>> {
+    let p = p.as_ref();
+    if let Some(b) = stand_in(p) {
+        return Ok(b);
+    }
+    match active_for(p) {
+        Ok(fs) => {
+            asked(p);
+            let read = turborepo_trace_core::record::pause(|| match fs {
+                Some(fs) => fs.read_cached(p).map(|b| b.to_vec()),
+                None => std::fs::read(p),
+            });
+            if read.is_ok() {
+                note(|l| l.read.push(normalize(p)));
+            }
+            read
+        }
+        Err(HostPath) => Err(io::ErrorKind::NotFound.into()),
+    }
+}
+
 /// Reads the `package.json` at `p` as module resolution gets it: its
 /// [`turborepo_trace_core::manifest::view`], the manifest without the fields
 /// that describe the package to people and to the package manager (dependency

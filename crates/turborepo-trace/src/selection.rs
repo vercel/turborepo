@@ -387,7 +387,14 @@ pub(crate) fn unknown_tests(
     for (fw, _) in turborepo_trace_store::fw::GRAPH_FRAMEWORKS {
         let tests = g.tests(Some(*fw));
         if matches!(*fw, "jest" | "vitest") {
-            configured.extend(tests.iter().map(|&t| g.package(t)));
+            // (A file that is a test only by a vitest run started below a config that
+            // leaves it out says nothing of the other files of its package.)
+            configured.extend(
+                tests
+                    .iter()
+                    .filter(|&&t| g.test_by_config(t))
+                    .map(|&t| g.package(t)),
+            );
         }
         if !asked(fw) {
             for t in tests {
@@ -396,6 +403,13 @@ pub(crate) fn unknown_tests(
         }
     }
     let defaults = JsDefaults::new(asked("jest"), asked("vitest"));
+    // The files a vitest run takes by a config named on its command line.
+    let mut named = NodeSet::new(g.node_count());
+    if asked("vitest") {
+        for n in g.named_run_tests() {
+            named.insert(n);
+        }
+    }
     (0..g.node_count())
         .map(NodeId)
         .filter(|&n| {
@@ -408,7 +422,7 @@ pub(crate) fn unknown_tests(
         .filter(|&n| {
             let path = g.path(n);
             let by_default = || !configured.contains(&g.package(n)) && defaults.matches(path);
-            (test_like(path, js, py, go) || by_default())
+            (test_like(path, js, py, go) || by_default() || named.contains(n))
                 && !not_tests.iter().any(|x| x.matches(path))
         })
         .collect()

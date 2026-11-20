@@ -497,9 +497,11 @@ impl StepsCx<'_> {
                     .or_else(|| defaults.wd.clone());
                 let mut t =
                     DiscoveredTask::new(self.id.clone(), self.name, self.root.to_path_buf());
+                let mut wd_computed = false;
                 if let Some(wd) = wd {
                     let wd = subst_exprs(&wd, &ecx);
                     if wd.contains(UNKNOWN_EXPR) {
+                        wd_computed = true;
                         t.spec.uncertain(
                             UncertaintyKind::CwdDependent,
                             format!("computed working-directory `{wd}`"),
@@ -521,6 +523,8 @@ impl StepsCx<'_> {
                         &run,
                         &format!("a `{shell}` step"),
                         self.root,
+                        // (A computed `working-directory` leaves the root here.)
+                        (!wd_computed).then_some(t.cwd.as_path()),
                         &mut t.spec,
                     );
                 }
@@ -539,6 +543,7 @@ impl StepsCx<'_> {
                                     &s,
                                     &format!("`with.{k}` of {uses}"),
                                     self.root,
+                                    None,
                                     &mut base.spec,
                                 );
                             }

@@ -3144,7 +3144,7 @@ fn assemble_first_party(
     // Per file, in parallel (a large package must not be a sequential long pole).
     // Build tasks (see `crate::tasks`) are discovered next to that: task analysis
     // of a big package (the root) is long and mostly sequential.
-    type TestMark = (String, &'static str, Vec<PathBuf>);
+    type TestMark = (String, &'static str, Vec<PathBuf>, Vec<String>);
     type FileFw = (
         Vec<TestMark>,
         Vec<PathBuf>,
@@ -3175,7 +3175,7 @@ fn assemble_first_party(
                     (
                         ff.tests
                             .into_iter()
-                            .map(|(t, cwds)| (rel.clone(), t, cwds))
+                            .map(|(t, cwds, claim)| (rel.clone(), t, cwds, claim))
                             .collect(),
                         ff.key_reads.into_iter().collect(),
                         ff.reached,
@@ -3310,7 +3310,7 @@ fn assemble_first_party(
         .collect();
     let mut recs: Vec<crate::shard::TestRec> = tests
         .iter()
-        .filter_map(|(rel, t, cwds)| {
+        .filter_map(|(rel, t, cwds, claim)| {
             // Working directories inside the repository, repo-relative.
             let mut cwds: Vec<String> = cwds
                 .iter()
@@ -3325,6 +3325,7 @@ fn assemble_first_party(
                 file: *ix.get(rel.as_str())?,
                 framework: (*t).to_owned(),
                 cwds,
+                claim: claim.clone(),
             })
         })
         .collect();

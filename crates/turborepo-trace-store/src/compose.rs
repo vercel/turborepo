@@ -71,6 +71,7 @@ use crate::{
 
 pub mod bind;
 mod cache;
+mod claims;
 pub(crate) mod cwd;
 pub use cwd::cwd_edge_site;
 mod derived;
@@ -197,6 +198,8 @@ pub struct Graph {
     entry_cwds: Vec<(u32, String)>,
     /// [`Graph::set_cwd_root_always`].
     cwd_root_always: bool,
+    /// Where the tasks start test runners ([`claims`]), read once.
+    starts: OnceLock<claims::Starts>,
     /// [`Graph::cwd_assumed`]: `(entry, sentence)`.
     cwd_notes: std::sync::Mutex<Vec<(u32, String)>>,
     /// [`Graph::cwd_dropped`].
@@ -348,6 +351,7 @@ impl Graph {
                     tables_cache: Some(crate::cache_dir(out).join(crate::cache_file::TABLES)),
                     entry_cwds: Vec::new(),
                     cwd_root_always: cwd::root_always_by_switch(),
+                    starts: OnceLock::new(),
                     cwd_notes: Default::default(),
                     cwd_dropped: Default::default(),
                     carried,
@@ -615,6 +619,7 @@ impl Graph {
             tables_cache: Some(crate::cache_dir(out).join(crate::cache_file::TABLES)),
             entry_cwds: Vec::new(),
             cwd_root_always: cwd::root_always_by_switch(),
+            starts: OnceLock::new(),
             cwd_notes: Default::default(),
             cwd_dropped: Default::default(),
             carried: None,
@@ -1516,7 +1521,10 @@ impl Graph {
             for t in a.tests.iter() {
                 if framework.is_none_or(|f| t.framework.as_str() == f) {
                     let fi = t.file.to_native();
-                    if let Some(n) = self.file_node(si, fi) {
+                    // A vitest record holds when a run takes it ([`claims`]).
+                    if let Some(n) = self.file_node(si, fi)
+                        && self.record_holds(n, t)
+                    {
                         out.push(n);
                     }
                 }
@@ -1529,16 +1537,10 @@ impl Graph {
 
     /// Frameworks that run `n` as a test.
     pub fn test_frameworks(&self, n: NodeId) -> Vec<&str> {
-        let node = self.nodes[n.index()];
-        if node.shard == NONE {
-            return Vec::new();
-        }
-        self.shards[node.shard as usize]
-            .get()
-            .tests
-            .iter()
-            .filter(|t| t.file.to_native() == node.file)
-            .map(|t| t.framework.as_str())
+        self.node_claims(n.0)
+            .into_iter()
+            .filter(|(_, c)| c.cwds.is_some())
+            .map(|(t, _)| t.framework.as_str())
             .collect()
     }
 

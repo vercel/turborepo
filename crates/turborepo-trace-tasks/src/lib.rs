@@ -310,7 +310,8 @@ pub fn analyze_package(ws: &Workspace, pkg: &Package, opts: &Options) -> Vec<Tas
                     if !parsed.uncertainties.is_empty() {
                         // Skipped constructs (`case`, `eval`, functions) may run anything.
                         spec.membership(pkg.dir.clone(), "**", "unsupported shell syntax");
-                        runs::scan_unsupported_shell(line, &ws.root, &mut spec);
+                        // (Where in the line the hidden command stands is not followed.)
+                        runs::scan_unsupported_shell(line, &ws.root, None, &mut spec);
                     }
                     let shell_issue = !parsed.uncertainties.is_empty();
                     opaque |= shell_issue;

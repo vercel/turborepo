@@ -757,6 +757,66 @@ pub enum TestRun {
     },
 }
 
+/// Where a task starts a test runner ([`TaskSpec::starts`]): what decides
+/// which directory a runner's project is rooted at and which directory its
+/// tests have as their working directory. Recorded for vitest, whose root is
+/// the directory it is started in.
+#[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub enum Start {
+    /// A recognized run of `framework`.
+    Run {
+        /// Framework id (`vitest`).
+        framework: String,
+        /// The directory (absolute) of the project the run executes: the
+        /// directory of its config, or the root of a run without one.
+        dir: PathBuf,
+        /// The directory (absolute) the command is started in.
+        from: PathBuf,
+        /// Which config the run has.
+        config: StartConfig,
+    },
+    /// A command started in `dir` that is not recognized and names a test
+    /// runner, a wrapper of one, or a task runner with a test task
+    /// ([`crate::runs::launch_word`]), or that names vitest and is not followed
+    /// to the directory it runs it in (a wrapper that changes directory, a
+    /// script's text, a container): it may start a runner in that directory.
+    /// Also a recognized run whose directory is computed.
+    Launch {
+        /// The directory (absolute) the command is started in. `None`: not
+        /// known (a `cd` to a computed directory came before, a package
+        /// manager runs the command in other packages): any directory.
+        dir: Option<PathBuf>,
+    },
+}
+
+/// The config of a recognized run ([`Start::Run`]).
+#[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
+pub enum StartConfig {
+    /// The config of the run's directory: the run executes its projects.
+    Own,
+    /// A config named on the command line that is not the one of the run's
+    /// directory: only the task knows it, the records of the test files do
+    /// not.
+    Named {
+        /// The config's `include` patterns, relative to the run's directory,
+        /// when they are plain globs: the files they match are the run's
+        /// tests, whatever else is known of them. Empty otherwise.
+        tests: Vec<String>,
+    },
+    /// No config in the run's directory. `above`: the directory of the nearest
+    /// config above it, which the run loads when `loads_above` (vitest up
+    /// to 4). `defaults`: the run may also have no config at all (vitest
+    /// 5 and later, or nothing above). Both when the version is not known.
+    None {
+        /// The directory (absolute) of the nearest config above.
+        above: Option<PathBuf>,
+        /// Whether the run may load that config.
+        loads_above: bool,
+        /// Whether the run may use the defaults.
+        defaults: bool,
+    },
+}
+
 /// A tool package a task runs: its version (from the lockfile) is an input
 /// (`next@15.x`, `typescript`, `ghcr.io/org/base` for docker base images).
 #[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
@@ -919,6 +979,10 @@ pub struct TaskSpec {
     /// does not: that is an input.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub definition: Vec<PathBuf>,
+    /// Where the task starts a test runner ([`Start`]). Like
+    /// [`TaskSpec::runs`], not an input.
+    #[serde(skip)]
+    pub starts: Vec<Start>,
     /// Absolute paths that a command of the task writes out
     /// ([`Command::writes`]), normalized, and that are not below the root
     /// of this checkout. An input, entry or config that is one of them is
@@ -1104,6 +1168,11 @@ impl TaskSpec {
         });
     }
 
+    /// Records where the task starts a test runner ([`TaskSpec::starts`]).
+    pub fn starts(&mut self, start: Start) {
+        self.starts.push(start);
+    }
+
     /// Records a file that defines how the task runs
     /// ([`TaskSpec::definition`]).
     pub fn defines(&mut self, p: impl Into<PathBuf>) {
@@ -1125,6 +1194,7 @@ impl TaskSpec {
         self.uncertainties.extend(other.uncertainties);
         self.runs.extend(other.runs);
         self.definition.extend(other.definition);
+        self.starts.extend(other.starts);
         self.persistent |= other.persistent;
         self.parts.extend(other.parts);
     }
@@ -1174,6 +1244,17 @@ impl TaskSpec {
         sd(&mut self.uncertainties);
         sd(&mut self.runs);
         sd(&mut self.definition);
+        // A runner started by a task whose working directory is computed somewhere
+        // (a CI step's `working-directory`, a recipe's, a `cd "$DIR"`) may be started
+        // anywhere.
+        if !self.starts.is_empty()
+            && self.uncertainties.iter().any(|u| {
+                u.detail.contains("computed working") || u.detail.contains("computed directory")
+            })
+        {
+            self.starts.push(Start::Launch { dir: None });
+        }
+        sd(&mut self.starts);
     }
 
     /// Whether nothing at all is recorded.

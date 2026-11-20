@@ -129,16 +129,7 @@ expression: r.json()
               "glob": "**/node_modules/**"
             },
             {
-              "glob": "**/dist/**"
-            },
-            {
-              "glob": "**/cypress/**"
-            },
-            {
-              "glob": "**/.{idea,git,cache,output,temp}/**"
-            },
-            {
-              "glob": "**/{karma,rollup,webpack,vite,vitest,jest,ava,babel,nyc,cypress,tsup,build,eslint,prettier}.config.*"
+              "glob": "**/.git/**"
             },
             {
               "glob": "e2e/**"
