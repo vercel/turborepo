@@ -77,6 +77,8 @@
 //!   `snapshot.setResolveSnapshotPath`;
 //! - an env file, a preload file or an `.npmrc` that is no regular file or
 //!   holds more than 4 MiB: it is not read;
+//! - preload files that name more files by relative paths than are followed
+//!   (2048 paths, 16 MiB);
 //! - the same command line started a second time in the script by a run that is
 //!   not mapped (after an `export`, behind such a variable or env file, in a
 //!   group, a branch, a subshell or a directory that is not followed): the task
@@ -862,6 +864,15 @@ fn wrapper_env_files(before: &[(String, bool)]) -> Option<Vec<EnvFile>> {
 /// env file, an `.npmrc`, a preload file.
 const READ_LIMIT: u64 = 4 << 20;
 
+/// The most paths the walk from a run's preload files takes (a file a preload
+/// names by a relative path, with each extension it may have), and the most
+/// bytes it reads.
+const MAX_PRELOAD_PATHS: usize = 2048;
+const MAX_PRELOAD_BYTES: u64 = 16 << 20;
+/// What a relative path of a preload may lack: the file is looked for with
+/// each.
+const PRELOAD_EXTENSIONS: &[&str] = &["", ".js", ".mjs", ".cjs", ".ts", ".mts", ".cts"];
+
 /// A file read without a record ([`read_unrecorded`]).
 enum Unrecorded {
     /// No file.
@@ -930,19 +941,32 @@ fn reads_only_what_is_modelled(run: &Run) -> bool {
         .iter()
         .chain(&run.global_setup)
         .filter(|p| p.starts_with('.'))
-        .map(|p| fsx::normalize(&run.cwd.join(p)))
+        .flat_map(|p| {
+            // (`--require ./setup` loads `setup.js`.)
+            let to = fsx::normalize(&run.cwd.join(p));
+            PRELOAD_EXTENSIONS.iter().map(move |ext| {
+                let mut name = to.clone().into_os_string();
+                name.push(ext);
+                PathBuf::from(name)
+            })
+        })
         .collect();
-    let mut seen: Vec<PathBuf> = Vec::new();
+    // Every path is taken once, and the walk has a budget: the files a preload
+    // names, and the bytes read for them. Beyond it the run is not mapped.
+    let mut queued: std::collections::HashSet<PathBuf> = todo.iter().cloned().collect();
+    let mut bytes_read = 0u64;
     while let Some(file) = todo.pop() {
-        if seen.contains(&file) || seen.len() >= 256 {
-            continue;
-        }
-        seen.push(file.clone());
         let read = read_unrecorded(&file);
         let text = match &read {
             Unrecorded::Absent => continue,
             Unrecorded::Refused => return false,
-            Unrecorded::Bytes(b) => String::from_utf8_lossy(b),
+            Unrecorded::Bytes(b) => {
+                bytes_read += b.len() as u64;
+                if bytes_read > MAX_PRELOAD_BYTES {
+                    return false;
+                }
+                String::from_utf8_lossy(b)
+            }
         };
         if text.contains("setResolveSnapshotPath") {
             return false;
@@ -951,12 +975,23 @@ fn reads_only_what_is_modelled(run: &Run) -> bool {
         let dir = file.parent().unwrap_or(Path::new("/"));
         for quote in ['\'', '"'] {
             for part in text.split(quote).skip(1).step_by(2) {
-                if part.starts_with("./") || part.starts_with("../") {
-                    let to = fsx::normalize(&dir.join(part));
-                    for ext in ["", ".js", ".mjs", ".cjs", ".ts", ".mts", ".cts"] {
-                        let mut name = to.clone().into_os_string();
-                        name.push(ext);
-                        todo.push(PathBuf::from(name));
+                // (A path of a file is short: a longer string is no path.)
+                if !(part.starts_with("./") || part.starts_with("../")) || part.len() > 4096 {
+                    continue;
+                }
+                let to = fsx::normalize(&dir.join(part));
+                if queued.contains(&to) {
+                    continue;
+                }
+                for ext in PRELOAD_EXTENSIONS {
+                    let mut name = to.clone().into_os_string();
+                    name.push(ext);
+                    let name = PathBuf::from(name);
+                    if queued.len() >= MAX_PRELOAD_PATHS {
+                        return false;
+                    }
+                    if queued.insert(name.clone()) {
+                        todo.push(name);
                     }
                 }
             }
@@ -1516,6 +1551,51 @@ mod tests {
         std::fs::remove_file(&manifest).expect("removed");
         std::os::unix::fs::symlink("/dev/zero", &manifest).expect("linked");
         assert!(manifest_scripts(&manifest).is_empty());
+        std::fs::remove_dir_all(&dir).expect("removed");
+    }
+
+    #[test]
+    #[allow(clippy::expect_used)]
+    fn a_preload_that_names_more_files_than_are_followed_is_not_mapped() {
+        let dir = scratch("preload-walk");
+        let script = "node --import ./pre.mjs --test a.test.js";
+        // One file named many times is one file.
+        std::fs::write(dir.join("pre.mjs"), "import './hook.mjs';\n".repeat(50_000))
+            .expect("written");
+        assert_eq!(script_runs(&dir, script).len(), 1);
+        // More files than the walk takes: one of them may move the snapshots.
+        let many: String = (0..MAX_PRELOAD_PATHS / 7 + 1)
+            .map(|i| format!("import './hooks/h{i}.mjs';\n"))
+            .collect();
+        std::fs::write(dir.join("pre.mjs"), many).expect("written");
+        assert!(script_runs(&dir, script).is_empty());
+        // A preload named without its extension is read too.
+        std::fs::write(
+            dir.join("setup.js"),
+            "require('node:test').snapshot.setResolveSnapshotPath((p) => p + '.snap');\n",
+        )
+        .expect("written");
+        assert!(script_runs(&dir, "node --require ./setup --test a.test.js").is_empty());
+        // More bytes than are read.
+        std::fs::write(
+            dir.join("pre.mjs"),
+            "import './a.mjs';\nimport './b.mjs';\n",
+        )
+        .expect("written");
+        for name in ["a.mjs", "b.mjs"] {
+            let file = std::fs::File::create(dir.join(name)).expect("created");
+            file.set_len(READ_LIMIT).expect("sized");
+        }
+        assert_eq!(script_runs(&dir, script).len(), 1);
+        let more: String = (0..MAX_PRELOAD_BYTES / READ_LIMIT + 1)
+            .map(|i| format!("import './big{i}.mjs';\n"))
+            .collect();
+        std::fs::write(dir.join("pre.mjs"), more).expect("written");
+        for i in 0..MAX_PRELOAD_BYTES / READ_LIMIT + 1 {
+            let file = std::fs::File::create(dir.join(format!("big{i}.mjs"))).expect("created");
+            file.set_len(READ_LIMIT).expect("sized");
+        }
+        assert!(script_runs(&dir, script).is_empty());
         std::fs::remove_dir_all(&dir).expect("removed");
     }
 
