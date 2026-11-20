@@ -27,6 +27,9 @@ Flags:
       --explain <TEST>…           Explain why each of these tests is or is not
                                   selected, instead of listing the selection
       --json                      Output the selection as JSON
+      --for-runners               Output the selection as the document the test
+                                  runner plugins of `@turbo/trace` read
+                                  (`TURBO_TRACE_SELECTION`)
       --exit-code                 Exit with code 1 when a test is selected, 0
                                   when none is, or 2 on errors. Useful for CI
                                   gating

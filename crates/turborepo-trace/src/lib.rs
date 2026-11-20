@@ -57,7 +57,7 @@ mod xfile;
 pub use adapter::Packages;
 pub use api::{
     AffectedRequest, AffectedTest, AffectedTests, Changes, LintRequest, Reason, Repo,
-    UncoveredTask, affected, explain, lint, prefetch_requests, supported, why,
+    RunnerSelection, UncoveredTask, affected, explain, lint, prefetch_requests, supported, why,
 };
 pub use error::Error;
 pub use graph::evict_graph;
