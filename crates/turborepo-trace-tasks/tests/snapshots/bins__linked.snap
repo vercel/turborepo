@@ -384,6 +384,10 @@ expression: "dump(&root, &set)"
   ],
   "spec": {
     "inputs": [
+      "packages/app/.env",
+      "packages/app/.env.local",
+      "packages/app/.env.test",
+      "packages/app/.env.test.local",
       "packages/app/vite.config.cjs",
       "packages/app/vite.config.cts",
       "packages/app/vite.config.js",

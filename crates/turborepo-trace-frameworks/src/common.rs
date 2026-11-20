@@ -541,7 +541,7 @@ pub fn resolve_with_aliases(
     resolver.resolve(request, from)
 }
 
-fn push_edge(out: &mut TestInputs, kind: EdgeKind, to: PathBuf, why: &str) {
+pub(crate) fn push_edge(out: &mut TestInputs, kind: EdgeKind, to: PathBuf, why: &str) {
     let e = ImplicitEdge {
         kind,
         to: fsx::normalize(&to),
@@ -552,7 +552,7 @@ fn push_edge(out: &mut TestInputs, kind: EdgeKind, to: PathBuf, why: &str) {
     }
 }
 
-fn push_probe(out: &mut TestInputs, p: PathBuf) {
+pub(crate) fn push_probe(out: &mut TestInputs, p: PathBuf) {
     let p = fsx::normalize(&p);
     if !out.probes.contains(&p) {
         out.probes.push(p);
