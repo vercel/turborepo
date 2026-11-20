@@ -20,8 +20,7 @@ fn setup_uv_monorepo(dir: &Path) {
 }
 
 fn setup_uv_pure_workspace(dir: &Path) {
-    setup::copy_fixture("uv_pure_workspace", dir).unwrap();
-    setup::setup_git(dir).unwrap();
+    setup_uv_fixture(dir, "uv_pure_workspace");
     assert!(
         !dir.join("package.json").exists(),
         "the pure uv fixture must have no package.json"
@@ -29,8 +28,20 @@ fn setup_uv_pure_workspace(dir: &Path) {
 }
 
 fn setup_uv_native_tools(dir: &Path) {
-    setup::copy_fixture("uv_native_tools", dir).unwrap();
+    setup_uv_fixture(dir, "uv_native_tools");
+}
+
+fn setup_uv_fixture(dir: &Path, fixture: &str) {
+    setup::copy_fixture(fixture, dir).unwrap();
     setup::setup_git(dir).unwrap();
+}
+
+fn run_uv(dir: &Path, args: &[&str]) -> std::process::Output {
+    std::process::Command::new("uv")
+        .args(args)
+        .current_dir(dir)
+        .output()
+        .expect("failed to execute uv")
 }
 
 fn run_turbo(dir: &Path, args: &[&str]) -> std::process::Output {
@@ -84,6 +95,251 @@ fn append_manifest(dir: &Path, relative: &str, contents: &str) {
     let path = dir.join(relative);
     let mut file = fs::OpenOptions::new().append(true).open(&path).unwrap();
     file.write_all(contents.as_bytes()).unwrap();
+}
+
+fn uv_dependency_graph_fixture() -> Option<tempfile::TempDir> {
+    if !uv_available() {
+        return None;
+    }
+    let fixture = tempfile::tempdir().unwrap();
+    setup_uv_fixture(fixture.path(), "uv_dependency_graph");
+    // Exercise real uv metadata, not the manifest-only fallback. This fixture's
+    // lockfile was generated with a Hatch hook for dynamic dependencies.
+    let metadata = run_uv(
+        fixture.path(),
+        &["workspace", "metadata", "--frozen", "--offline"],
+    );
+    assert_command_success(&metadata, "resolved uv workspace metadata");
+    Some(fixture)
+}
+
+fn assert_root_project_dependency_rejected(dir: &Path) {
+    let output = run_turbo(dir, &["build", "--filter=child-plugin", "--dry-run=json"]);
+    assert!(
+        !output.status.success(),
+        "unsupported root dependency must fail"
+    );
+    assert_ne!(output.status.code(), Some(101), "discovery must not panic");
+    // Error rendering can wrap the message with diagnostic gutters.
+    let diagnostic = common::combined_output(&output)
+        .split_whitespace()
+        .filter(|word| *word != "|")
+        .collect::<Vec<_>>()
+        .join(" ");
+    for expected in [
+        "child-plugin",
+        "core-lib",
+        "Dependencies on the root project are not supported by Turborepo",
+        "into a workspace member directory",
+    ] {
+        assert!(diagnostic.contains(expected), "{diagnostic}");
+    }
+}
+
+#[test]
+fn test_uv_resolved_root_project_dependency_is_rejected() {
+    if !uv_available() {
+        return;
+    }
+    let fixture = tempfile::tempdir().unwrap();
+    setup_uv_fixture(fixture.path(), "uv_root_dependency");
+    assert_command_success(
+        &run_uv(
+            fixture.path(),
+            &["workspace", "metadata", "--frozen", "--offline"],
+        ),
+        "uv accepts the root library and its Hatch-based plugin",
+    );
+    // The dependency exists only in resolved metadata. Falling back to the
+    // manifest would silently discard it and make this command succeed.
+    assert_root_project_dependency_rejected(fixture.path());
+}
+
+#[test]
+fn test_uv_fallback_root_project_dependency_is_rejected() {
+    for source in [
+        "",
+        "{ workspace = true }",
+        "{ path = '../..', editable = true }",
+        "[{ workspace = true, marker = \"sys_platform == 'linux'\" }, { index = 'pypi' }]",
+    ] {
+        let fixture = tempfile::tempdir().unwrap();
+        setup_uv_fixture(fixture.path(), "uv_root_dependency");
+        fs::write(fixture.path().join("uv.lock"), "invalid lockfile").unwrap();
+        fs::write(
+            fixture.path().join("packages/child-plugin/pyproject.toml"),
+            format!(
+                "[project]\nname = 'child-plugin'\nversion = '0.1.0'\ndependencies = \
+                 ['core-lib']\n{}",
+                if source.is_empty() {
+                    String::new()
+                } else {
+                    format!("[tool.uv.sources]\ncore-lib = {source}\n")
+                }
+            ),
+        )
+        .unwrap();
+        assert_root_project_dependency_rejected(fixture.path());
+    }
+}
+
+#[test]
+fn test_uv_fallback_allows_external_override_of_root_project_name() {
+    for source in [
+        "{ index = 'pypi' }",
+        "{ git = 'https://example.com/core-lib.git' }",
+    ] {
+        let fixture = tempfile::tempdir().unwrap();
+        setup_uv_fixture(fixture.path(), "uv_root_dependency");
+        fs::write(fixture.path().join("uv.lock"), "invalid lockfile").unwrap();
+        fs::write(
+            fixture.path().join("packages/child-plugin/pyproject.toml"),
+            format!(
+                "[project]\nname = 'child-plugin'\nversion = '0.1.0'\ndependencies = \
+                 ['core-lib']\n[tool.uv.sources]\ncore-lib = {source}\n"
+            ),
+        )
+        .unwrap();
+        let tasks = dry_run_tasks(fixture.path(), &["check", "--filter=child-plugin"]);
+        assert_eq!(task_ids(&tasks), ["child-plugin#check"]);
+    }
+}
+
+#[test]
+fn test_uv_resolved_direct_dependencies() {
+    let Some(fixture) = uv_dependency_graph_fixture() else {
+        return;
+    };
+    let output = run_turbo(
+        fixture.path(),
+        &[
+            "query",
+            "{ packages { items { name directDependencies { items { name } } } } }",
+        ],
+    );
+    assert_command_success(&output, "query resolved package graph");
+    assert!(
+        !String::from_utf8_lossy(&output.stderr).contains("using conservative Python task hashing"),
+        "graph tests require exact uv resolution: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let graph: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    let packages = graph["data"]["packages"]["items"].as_array().unwrap();
+    for (name, expected) in [
+        ("extras-app", vec!["feature-lib", "py-lib"]),
+        ("dynamic-app", vec!["feature-lib", "py-lib"]),
+        ("py-lib", vec!["feature-lib", "leaf-lib"]),
+        ("unrelated", vec![]),
+    ] {
+        let package = packages.iter().find(|p| p["name"] == name).unwrap();
+        let mut dependencies = package["directDependencies"]["items"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|dependency| dependency["name"].as_str().unwrap())
+            .collect::<Vec<_>>();
+        dependencies.sort();
+        assert_eq!(
+            dependencies, expected,
+            "{name}: preserve resolved extras and dynamic edges without flattening transitive \
+             packages"
+        );
+    }
+}
+
+#[test]
+fn test_uv_resolved_dynamic_dependency_build_order() {
+    let Some(fixture) = uv_dependency_graph_fixture() else {
+        return;
+    };
+    let json = dry_run_tasks(fixture.path(), &["build", "--filter=dynamic-app"]);
+    assert_eq!(
+        task_ids(&json),
+        [
+            "dynamic-app#build",
+            "feature-lib#build",
+            "leaf-lib#build",
+            "py-lib#build"
+        ],
+        "^build must include dependencies resolved by the Hatch metadata hook"
+    );
+    assert_eq!(
+        find_task(&json, "dynamic-app#build")["dependencies"],
+        serde_json::json!(["feature-lib#build", "py-lib#build"])
+    );
+    assert_eq!(
+        find_task(&json, "py-lib#build")["dependencies"],
+        serde_json::json!(["feature-lib#build", "leaf-lib#build"])
+    );
+}
+
+#[test]
+fn test_uv_resolved_dynamic_dependency_affectedness() {
+    let Some(fixture) = uv_dependency_graph_fixture() else {
+        return;
+    };
+    fs::write(
+        fixture
+            .path()
+            .join("packages/leaf-lib/src/leaf_lib/__init__.py"),
+        "VALUE = 'changed'\n",
+    )
+    .unwrap();
+    let json = dry_run_tasks(fixture.path(), &["check", "--filter=...[HEAD]"]);
+    let packages = json["packages"].as_array().unwrap();
+    for name in ["dynamic-app", "extras-app", "py-lib", "leaf-lib"] {
+        assert!(
+            packages.contains(&serde_json::json!(name)),
+            "a leaf source change must select its resolved dependent {name}: {packages:?}"
+        );
+    }
+    for name in ["feature-lib", "unrelated"] {
+        assert!(
+            !packages.contains(&serde_json::json!(name)),
+            "a leaf source change must not select {name}: {packages:?}"
+        );
+    }
+}
+
+#[test]
+fn test_uv_resolved_dynamic_dependency_hashes() {
+    let Some(fixture) = uv_dependency_graph_fixture() else {
+        return;
+    };
+    // check has no dependsOn: package inputs must invalidate it even without
+    // a task edge to a dependency's build.
+    let args = [
+        "check",
+        "--filter=dynamic-app",
+        "--filter=extras-app",
+        "--filter=unrelated",
+    ];
+    let before = dry_run_tasks(fixture.path(), &args);
+    fs::write(
+        fixture
+            .path()
+            .join("packages/py-lib/src/py_lib/__init__.py"),
+        "VALUE = 'changed'\n",
+    )
+    .unwrap();
+    let after = dry_run_tasks(fixture.path(), &args);
+    for task in ["dynamic-app#check", "extras-app#check"] {
+        let before_hash = find_task(&before, task)["hash"].as_str().unwrap();
+        let after_hash = find_task(&after, task)["hash"].as_str().unwrap();
+        assert_ne!(
+            before_hash, after_hash,
+            "a resolved dependency's source change must invalidate {task}"
+        );
+    }
+    assert_eq!(
+        find_task(&before, "unrelated#check")["hash"]
+            .as_str()
+            .unwrap(),
+        find_task(&after, "unrelated#check")["hash"]
+            .as_str()
+            .unwrap(),
+        "unrelated tasks must keep their hashes"
+    );
 }
 
 #[test]
@@ -643,11 +899,10 @@ fn test_uv_lock_change_only_affects_dependency_closure() {
         "packages/py-app/pyproject.toml",
         "\n[dependency-groups]\ndev = [\"ruff>=0.12.0,<=0.12.1\"]\n",
     );
-    let lock = std::process::Command::new("uv")
-        .args(["lock", "--upgrade-package", "ruff==0.12.0"])
-        .current_dir(tempdir.path())
-        .output()
-        .expect("uv lock runs");
+    let lock = run_uv(
+        tempdir.path(),
+        &["lock", "--upgrade-package", "ruff==0.12.0"],
+    );
     assert_command_success(&lock, "initial uv lock");
     let add = std::process::Command::new("git")
         .args(["add", "."])
@@ -665,11 +920,10 @@ fn test_uv_lock_change_only_affects_dependency_closure() {
     let before = dry_run_tasks(tempdir.path(), &["run", "build", "--filter=py-app"]);
 
     // Keep the manifest unchanged so only lockfile analysis can select py-app.
-    let lock = std::process::Command::new("uv")
-        .args(["lock", "--upgrade-package", "ruff==0.12.1"])
-        .current_dir(tempdir.path())
-        .output()
-        .expect("uv lock runs");
+    let lock = run_uv(
+        tempdir.path(),
+        &["lock", "--upgrade-package", "ruff==0.12.1"],
+    );
     assert_command_success(&lock, "updated uv lock");
     let diff = std::process::Command::new("git")
         .args(["diff", "--name-only", "HEAD"])
