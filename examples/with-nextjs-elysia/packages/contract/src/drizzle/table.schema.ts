@@ -25,7 +25,6 @@ export const userTable = p.pgTable("sys_user", {
   emailVerified: p.boolean("email_verified").default(false),
   image: p.text("image"),
 
-
   role: p.varchar("role", { length: 50 }),
   banned: p.boolean("banned").default(false),
   banReason: p.text("ban_reason"),

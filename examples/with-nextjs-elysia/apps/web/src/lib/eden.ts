@@ -1,9 +1,10 @@
-import { treaty } from '@elysiajs/eden'
-import { app } from '@/app/api/v1/[[...slugs]]/route'
+import { treaty } from "@elysiajs/eden";
+import type { App } from "~/app";
+import { app } from "~/app";
 
-
+// On the server (and during the build) call the Elysia app directly without
+// a network round trip. In the browser, send requests to the Next.js server.
 export const api =
-  // process is defined on server side and build time
-  typeof process !== 'undefined'
-    ? treaty<typeof app>(app).api
-    : treaty<typeof app>('localhost:3001').api
+  typeof process === "undefined"
+    ? treaty<App>("localhost:3001").api.v1
+    : treaty<App>(app).api.v1;

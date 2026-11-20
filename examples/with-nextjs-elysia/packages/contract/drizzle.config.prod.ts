@@ -6,6 +6,6 @@ export default defineConfig({
   dialect: "postgresql",
   casing: "snake_case",
   dbCredentials: {
-   url:"[your prod database url]"
+    url: "[your prod database url]",
   },
 });
