@@ -72,7 +72,7 @@ pub const GRAPH_FRAMEWORKS: &[(&str, &str)] = &[
 ];
 
 /// Version of the framework integration, part of the options digest.
-pub const INTEGRATION_VERSION: &str = "frameworks-18";
+pub const INTEGRATION_VERSION: &str = "frameworks-20";
 
 /// The adapters of [`GRAPH_FRAMEWORKS`] that are compiled in.
 fn adapters() -> Vec<(&'static dyn Framework, &'static str)> {
@@ -476,6 +476,10 @@ pub(crate) struct Fw<'a> {
     file_sets: Memo<(&'static str, PathBuf), FileSets>,
     /// The states of the location records ([`crate::located`]).
     places: &'a crate::located::Places,
+    /// `(load, directory)` → the discovery of the load's project as a vitest
+    /// run started in that directory below the config sees it
+    /// ([`turborepo_trace_frameworks::vitest::rebased`]), compiled.
+    rebased: Memo<(usize, PathBuf), DiscoveryMatcher<'static>>,
 }
 
 /// What [`Fw::augment`] found for one file besides the edges and group it
@@ -484,8 +488,9 @@ pub(crate) struct Fw<'a> {
 pub(crate) struct FileFw {
     /// Frameworks that run the file as a test, each with the working
     /// directories it may run the test in (absolute; see
-    /// [`crate::shard::TestRec::cwds`]).
-    pub tests: Vec<(&'static str, Vec<PathBuf>)>,
+    /// [`crate::shard::TestRec::cwds`]) and, for vitest, by which runs the
+    /// file is one ([`crate::shard::TestRec::claim`]).
+    pub tests: Vec<(&'static str, Vec<PathBuf>, Vec<String>)>,
     /// Config files whose contents decide the file's framework inputs without
     /// being query inputs (absolute).
     pub key_reads: Vec<PathBuf>,
@@ -529,6 +534,7 @@ impl<'a> Fw<'a> {
             alias_memo: Mutex::default(),
             own_sets: dashmap::DashMap::new(),
             file_sets: Mutex::default(),
+            rebased: Mutex::default(),
         }
     }
 
@@ -598,6 +604,7 @@ impl<'a> Fw<'a> {
             self.js_projects_for,
             self.alias_memo,
             self.own_sets,
+            self.rebased,
             self.file_sets,
         ))
     }
@@ -763,11 +770,23 @@ impl<'a> Fw<'a> {
     }
 
     fn load(&self, ai: usize, config: &Path) -> Arc<Loaded> {
-        let cell = memo(&self.loaded, &(ai, config.to_path_buf()));
+        let fw = self.adapters[ai].0;
+        self.load_keyed(ai, config.to_path_buf(), &|| fw.load(config))
+    }
+
+    /// [`Fw::load`]: `named` names the load in the memo, `load` makes the
+    /// adapter's inputs.
+    fn load_keyed(
+        &self,
+        ai: usize,
+        named: PathBuf,
+        load: &dyn Fn() -> FrameworkInputs,
+    ) -> Arc<Loaded> {
+        let cell = memo(&self.loaded, &(ai, named.clone()));
         Arc::clone(crate::once::init_once(&cell, || {
             LOADS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
             let (fw, lang) = self.adapters[ai];
-            let ((inputs, obs), mut log) = fsx::with_log(|| self.recorded(|| fw.load(config)));
+            let ((inputs, obs), mut log) = fsx::with_log(|| self.recorded(load));
             let mut config_files: Vec<PathBuf> = inputs.config_file.iter().cloned().collect();
             for p in &inputs.projects {
                 config_files.extend(p.config_file.iter().cloned());
@@ -830,7 +849,7 @@ impl<'a> Fw<'a> {
                 };
                 let spec = spec.to_text();
                 let rec = LocatedRec {
-                    config: self.display(p.config_file.as_deref().unwrap_or(config)),
+                    config: self.display(p.config_file.as_deref().unwrap_or(&named)),
                     root: self.places.state(&spec).to_string(),
                     spec,
                 };
@@ -989,6 +1008,60 @@ impl<'a> Fw<'a> {
                     links: r.links,
                     uncertainty: None,
                 })
+            }
+        }
+    }
+
+    /// The setup files of `project` as a run resolves them that is started in
+    /// one of `dirs`, directories below the project's config without a
+    /// config of their own (vitest up to 4 loads the config above with the
+    /// run's directory as root, and resolves `setupFiles` and `globalSetup`
+    /// against the root): the file at the same place below each directory,
+    /// as an edge when it is there and a probe when it is not. A request
+    /// without an extension is resolved from the directory. The mocks such
+    /// a file registers are not read.
+    fn rebased_setup_edges(
+        &self,
+        lang: &'static str,
+        id: &str,
+        project: &Project,
+        dirs: &[PathBuf],
+        edges: &mut Vec<FwEdge>,
+        obs: &mut Observations,
+    ) {
+        let root = &project.root_dir;
+        for e in &project.global.entries {
+            if !matches!(e.role, InputRole::SetupFile | InputRole::GlobalSetup) {
+                continue;
+            }
+            let (kind, phase) = role_kind(lang, e.role);
+            let label = format!("{id}:{}", role_name(e.role));
+            for dir in dirs {
+                let target = match &e.target {
+                    FwTarget::Path(p) => match p.strip_prefix(root) {
+                        Ok(rel) => FwTarget::Path(dir.join(rel)),
+                        Err(_) => continue,
+                    },
+                    FwTarget::Module { request, from_dir }
+                        if from_dir == root
+                            && (request.starts_with("./") || request.starts_with("../")) =>
+                    {
+                        if Path::new(request).extension().is_some() {
+                            FwTarget::Path(dir.join(request))
+                        } else {
+                            FwTarget::Module {
+                                request: request.clone(),
+                                from_dir: dir.clone(),
+                            }
+                        }
+                    }
+                    _ => continue,
+                };
+                if let Some(x) = self.target_edge(lang, kind, phase, &label, &target, obs)
+                    && !x.succ.is_empty()
+                {
+                    edges.push(x);
+                }
             }
         }
     }
@@ -1217,6 +1290,78 @@ impl<'a> Fw<'a> {
             st.obs = obs;
             st
         })
+    }
+
+    /// By which runs `path` is a vitest test ([`claim`]), for the load `l` of
+    /// its nearest config `config`. `at_home`: a project of the load matches
+    /// it.
+    fn vitest_claims(
+        &self,
+        l: &Arc<Loaded>,
+        config: &Path,
+        path: &Path,
+        at_home: bool,
+    ) -> Vec<String> {
+        use turborepo_trace_frameworks::vitest;
+        let mut out = Vec::new();
+        let rel = |d: &Path| {
+            let r = d
+                .strip_prefix(self.repo)
+                .map(|r| r.to_string_lossy().replace('\\', "/"))
+                .unwrap_or_default();
+            if r.is_empty() { ".".to_owned() } else { r }
+        };
+        let home = config.parent().unwrap_or(self.repo);
+        // A config that lists projects runs them wherever it is loaded from.
+        let projects = &l.inputs.projects;
+        let listed = projects.len() != 1 || projects[0].config_file.as_deref() != Some(config);
+        if at_home {
+            out.push(format!("{}{}", claim::HOME, rel(home)));
+            if listed {
+                out.push(claim::LISTED.to_owned());
+            }
+        }
+        // A run started in a directory between the config and the file, which has no
+        // config of its own: with the config (vitest up to 4), the root and the base
+        // of the patterns are that directory.
+        if !listed && projects[0].discovery.glob_base.as_deref() == Some(home) {
+            let d = &projects[0].discovery;
+            let between: Vec<&Path> = path
+                .parent()
+                .into_iter()
+                .flat_map(Path::ancestors)
+                .take_while(|a| *a != home && a.starts_with(home))
+                .collect();
+            if vitest::base_free(d) {
+                if at_home && !between.is_empty() {
+                    out.push(format!("{}*", claim::BELOW));
+                }
+            } else {
+                let id = Arc::as_ptr(l) as usize;
+                let hits: Vec<&Path> = between
+                    .iter()
+                    .copied()
+                    .filter(|dir| {
+                        let cell = memo(&self.rebased, &(id, dir.to_path_buf()));
+                        crate::once::init_once(&cell, || {
+                            let rebased: &'static _ = Box::leak(Box::new(vitest::rebased(d, dir)));
+                            rebased.matcher()
+                        })
+                        .is_test(path)
+                    })
+                    .collect();
+                if !hits.is_empty() && hits.len() == between.len() {
+                    out.push(format!("{}*", claim::BELOW));
+                } else {
+                    out.extend(hits.iter().map(|d| format!("{}{}", claim::BELOW, rel(d))));
+                }
+            }
+        }
+        // ...and without it (vitest 5 and later): the defaults.
+        if vitest_default_test(self.repo, path) {
+            out.push(claim::DEFAULTS.to_owned());
+        }
+        out
     }
 
     /// jest/vitest config files of the repository by directory.
@@ -1565,6 +1710,7 @@ impl<'a> Fw<'a> {
             let (config, cobs, levels) = &*walk;
             // Which config it is (or that there is none) is the walk's answer.
             walks.extend(levels.iter().cloned());
+            let vitest = fw.id() == "vitest";
             let Some(config) = config else { continue };
             let l = self.load(ai, config);
             // Whether the file is a test is the load's answer, also when it is no.
@@ -1591,9 +1737,61 @@ impl<'a> Fw<'a> {
             if first_project_only() {
                 matched.truncate(1);
             }
+            // vitest: by which runs the file is a test (see [`claim`]).
+            let mut claims: Vec<String> = Vec::new();
+            // The directories between the config and the file: a run started in one of
+            // them has it as its root.
+            let mut between: Vec<PathBuf> = Vec::new();
+            // The directories above the config: a run without a config that is started
+            // in one of them has it as its root.
+            let mut above: Vec<PathBuf> = Vec::new();
+            if vitest {
+                // A file that looks like a test and that the config leaves out is one
+                // that always runs. It stays one where only the newer default list of
+                // excluded places takes it in, or only the config loaded from a directory
+                // below does: what such a test reads is not known as well as that it runs.
+                let looks = looks_like_test(path);
+                if looks
+                    && matched
+                        .iter()
+                        .all(|&pi| only_by_newer_defaults(&l.inputs.projects[pi], path))
+                {
+                    matched.clear();
+                }
+                claims = self.vitest_claims(&l, config, path, !matched.is_empty());
+                let home = claims.iter().any(|c| c.starts_with(claim::HOME));
+                let below = claims.iter().any(|c| c.starts_with(claim::BELOW));
+                if !home && (!below || looks) {
+                    continue;
+                }
+                if below {
+                    let top = config.parent().unwrap_or(self.repo);
+                    between = dir
+                        .ancestors()
+                        .take_while(|a| *a != top && a.starts_with(top))
+                        .map(Path::to_path_buf)
+                        .collect();
+                }
+                if matched.is_empty() {
+                    // A run below the config that loads it has the project's inputs too.
+                    matched.push(0);
+                }
+                // A run without a config that is started above the config's directory
+                // takes the file by the defaults, with its own directory as root.
+                if claims.iter().any(|c| c == claim::DEFAULTS) {
+                    let top = config.parent().unwrap_or(self.repo);
+                    above = top
+                        .ancestors()
+                        .skip(1)
+                        .take_while(|a| a.starts_with(self.repo))
+                        .map(Path::to_path_buf)
+                        .collect();
+                }
+            }
             if matched.is_empty() {
                 continue;
             }
+            let at_home = !vitest || claims.iter().any(|c| c.starts_with(claim::HOME));
             if matched.len() > 1 && turborepo_trace_core::timing::enabled() {
                 SHARED_TESTS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
             }
@@ -1609,7 +1807,10 @@ impl<'a> Fw<'a> {
             }
             cwds.sort();
             cwds.dedup();
-            out.tests.push((fw.id(), cwds));
+            if !at_home {
+                cwds.clear();
+            }
+            out.tests.push((fw.id(), cwds, claims));
             obs.extend_from(cobs);
             // What the file does with the mock APIs is a fact of its extraction (none: it
             // uses none of them): the adapter does not scan the source for it again.
@@ -1628,6 +1829,22 @@ impl<'a> Fw<'a> {
                 uncs.extend(st.uncertainties.iter().cloned());
                 out.reached.extend(st.reached.iter().cloned());
                 let project: &Project = &l.inputs.projects[pi];
+                // A run started below the config looks for the mocks of packages
+                // (`__mocks__/<package>`) in its own root: every directory between the
+                // config and the file may be one. So may every directory above the
+                // config, for a run there that has no config.
+                let widened;
+                let project = if !(between.is_empty() && above.is_empty())
+                    && mocks.as_ref().is_some_and(|m| !m.is_empty())
+                {
+                    let mut p = project.clone();
+                    p.mocks.root_mock_dirs.extend(between.iter().cloned());
+                    p.mocks.root_mock_dirs.extend(above.iter().cloned());
+                    widened = p;
+                    &widened
+                } else {
+                    project
+                };
                 let res = Resolver::new(self, fw_lang);
                 let (ti, tobs) = self.recorded(|| {
                     let src = fsx::read(path).unwrap_or_default();
@@ -1637,6 +1854,7 @@ impl<'a> Fw<'a> {
                 out.reached.extend(res.reached.take());
                 obs.extend(res.obs.into_inner());
                 self.test_input_edges(fw_lang, fw.id(), &ti, &mut own, &mut obs, &mut uncs);
+                self.rebased_setup_edges(fw_lang, fw.id(), project, &between, &mut own, &mut obs);
                 replaced.push(
                     own.iter()
                         .filter_map(|e| e.spec.strip_prefix("mock:replaces "))
@@ -2101,6 +2319,117 @@ fn test_cwds(
     out.sort();
     out.dedup();
     out
+}
+
+/// How a vitest test record says by which runs its file is a test
+/// ([`crate::shard::TestRec::claim`]). vitest's root, and with it the base of
+/// its patterns and the working directory of its tests, is the directory a run
+/// is started in, and which config a run has depends on that directory and on
+/// the version: one in the directory, else (up to version 4) the one of the
+/// nearest directory above, else none. A shard cannot know where runs start
+/// (the tasks of every package say it), so the record lists the ways the file
+/// can be a test, and the composed graph adds what the runs that start give it
+/// (`compose::claims`).
+pub mod claim {
+    /// `home:<dir>`: a project of the nearest config, the one in `<dir>`
+    /// (from the repository root, `.` for the root), matches the file.
+    pub const HOME: &str = "home:";
+    /// The nearest config lists projects: a run that loads it runs them
+    /// wherever it is started.
+    pub const LISTED: &str = "listed";
+    /// `below:<dir>`: the nearest config's patterns match the file from
+    /// `<dir>`, a directory between the config and the file; `below:*`: from
+    /// every such directory.
+    pub const BELOW: &str = "below:";
+    /// vitest's default patterns match the file.
+    pub const DEFAULTS: &str = "defaults";
+}
+
+/// Whether `path` looks like a test file by its name: `*.test.*`, `*.spec.*`,
+/// or a file below a `__tests__` directory (the default patterns of jest and
+/// vitest). A file that does and that no framework's record makes a test
+/// always runs.
+fn looks_like_test(path: &Path) -> bool {
+    let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
+    let stem = name.rsplit_once('.').map_or(name, |(s, _)| s);
+    stem.ends_with(".test")
+        || stem.ends_with(".spec")
+        || matches!(stem, "test" | "spec")
+        || path
+            .parent()
+            .is_some_and(|d| d.components().any(|c| c.as_os_str() == "__tests__"))
+}
+
+/// Whether `project` takes `path` only because its `exclude` is vitest's
+/// default list since version 4, and the list up to version 3 leaves the file
+/// out (a place such as `dist/`, a name such as `vite.config.test.ts`).
+fn only_by_newer_defaults(project: &Project, path: &Path) -> bool {
+    use turborepo_trace_frameworks::{TestPattern, vitest};
+    let d = &project.discovery;
+    let newer = d.exclude.len() == vitest::DEFAULT_EXCLUDE_4.len()
+        && d.exclude
+            .iter()
+            .zip(vitest::DEFAULT_EXCLUDE_4)
+            .all(|(p, g)| matches!(p, TestPattern::Glob(x) if x == g));
+    if !newer {
+        return false;
+    }
+    let Some(rel) = d
+        .glob_base
+        .as_deref()
+        .and_then(|b| path.strip_prefix(b).ok())
+    else {
+        return false;
+    };
+    let mut parts: Vec<&str> = rel.iter().filter_map(|c| c.to_str()).collect();
+    let name = parts.pop().unwrap_or("");
+    parts.iter().any(|p| {
+        matches!(
+            *p,
+            "dist" | "cypress" | ".idea" | ".git" | ".cache" | ".output" | ".temp"
+        )
+    }) || name.split_once(".config.").is_some_and(|(tool, _)| {
+        matches!(
+            tool,
+            "karma"
+                | "rollup"
+                | "webpack"
+                | "vite"
+                | "vitest"
+                | "jest"
+                | "ava"
+                | "babel"
+                | "nyc"
+                | "cypress"
+                | "tsup"
+                | "build"
+                | "eslint"
+                | "prettier"
+        )
+    })
+}
+
+/// Whether vitest's default patterns make `path` a test of a run without a
+/// config that is started in a directory of the repository above it
+/// ([`turborepo_trace_frameworks::vitest::default_discovery`]; the patterns
+/// start with `**/`, so the directory does not matter).
+fn vitest_default_test(repo: &Path, path: &Path) -> bool {
+    let Some(name) = path.file_name().and_then(|n| n.to_str()) else {
+        return false;
+    };
+    let Some((stem, ext)) = name.rsplit_once('.') else {
+        return false;
+    };
+    // `**/*.{test,spec}.?(c|m)[jt]s?(x)`
+    let ext = ext.strip_suffix('x').unwrap_or(ext);
+    let ext = ext.strip_prefix(['c', 'm']).unwrap_or(ext);
+    if !matches!(ext, "js" | "ts") || !(stem.ends_with(".test") || stem.ends_with(".spec")) {
+        return false;
+    }
+    path.strip_prefix(repo).is_ok_and(|rel| {
+        !rel.components()
+            .any(|c| matches!(c.as_os_str().to_str(), Some("node_modules" | ".git")))
+    })
 }
 
 /// `TURBO_TRACE_DEBUG_FW_PROJECTS=first`: a test that several projects of its

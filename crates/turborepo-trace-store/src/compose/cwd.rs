@@ -55,7 +55,9 @@
 //!
 //! Soundness rests on [`crate::shard::TestRec::cwds`] naming every directory
 //! the runner is started in (see `fw::test_cwds`); the repository root is
-//! covered by the edges and probes the tracer recorded on `F` itself.
+//! covered by the edges and probes the tracer recorded on `F` itself. For
+//! vitest, whose root is the directory a run is started in, the directories are
+//! those of the runs that start ([`super::claims`]).
 //!
 //! # The repository root, and a path that climbs above it
 //!
@@ -414,21 +416,15 @@ impl Graph {
     /// root).
     pub fn tests_with_cwds(&self) -> HashMap<u32, Vec<&str>> {
         let mut out: HashMap<u32, Vec<&str>> = HashMap::new();
-        for (ni, node) in self.nodes.iter().enumerate() {
-            if node.shard == NONE {
-                continue;
-            }
-            // Test records are sorted by file.
-            let tests = &self.shards[node.shard as usize].get().tests;
-            let lo = tests.partition_point(|t| t.file.to_native() < node.file);
-            for t in tests[lo..]
-                .iter()
-                .take_while(|t| t.file.to_native() == node.file)
-            {
-                let v = out.entry(ni as u32).or_default();
-                for c in t.cwds.iter() {
-                    if !v.contains(&c.as_str()) {
-                        v.push(c.as_str());
+        for ni in 0..self.nodes.len() as u32 {
+            // The records that hold, each with the directories its runs start in
+            // ([`super::claims`]).
+            for (_, claim) in self.node_claims(ni) {
+                let Some(cwds) = claim.cwds else { continue };
+                let v = out.entry(ni).or_default();
+                for c in cwds {
+                    if !v.contains(&c) {
+                        v.push(c);
                     }
                 }
             }
@@ -449,18 +445,13 @@ impl Graph {
     /// [`Graph::set_entry_cwds`]).
     fn tests_run_from_root(&self) -> HashSet<u32> {
         let mut out = HashSet::new();
-        for (ni, node) in self.nodes.iter().enumerate() {
-            if node.shard == NONE {
-                continue;
-            }
-            let tests = &self.shards[node.shard as usize].get().tests;
-            let lo = tests.partition_point(|t| t.file.to_native() < node.file);
-            if tests[lo..]
+        for ni in 0..self.nodes.len() as u32 {
+            if self
+                .node_claims(ni)
                 .iter()
-                .take_while(|t| t.file.to_native() == node.file)
-                .any(|t| ROOT_RUNNERS.contains(&t.framework.as_str()))
+                .any(|(t, c)| c.cwds.is_some() && ROOT_RUNNERS.contains(&t.framework.as_str()))
             {
-                out.insert(ni as u32);
+                out.insert(ni);
             }
         }
         out.extend(self.entry_cwds.iter().map(|(n, _)| *n));

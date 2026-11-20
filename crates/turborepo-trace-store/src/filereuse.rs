@@ -867,7 +867,7 @@ pub(crate) fn kept_framework(
     root_abs: &Path,
     rel: String,
 ) -> (
-    Vec<(String, &'static str, Vec<PathBuf>)>,
+    Vec<(String, &'static str, Vec<PathBuf>, Vec<String>)>,
     Vec<PathBuf>,
     Vec<crate::fw::Reached>,
 ) {
@@ -891,7 +891,8 @@ pub(crate) fn kept_framework(
                     }
                 })
                 .collect();
-            Some((rel.clone(), *id, cwds))
+            let claim = t.claim.iter().map(|c| c.to_string()).collect();
+            Some((rel.clone(), *id, cwds, claim))
         })
         .collect();
     let keys = old.files[fi as usize]

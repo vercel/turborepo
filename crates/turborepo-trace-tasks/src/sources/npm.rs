@@ -65,6 +65,11 @@ impl TaskSource for NpmScripts {
         let mut out = Vec::new();
         for (name, cmd) in scripts {
             let Some(line) = cmd.as_str() else { continue };
+            // wireit runs the command its own section gives the script.
+            let line = (line.trim() == "wireit")
+                .then(|| manifest.get("wireit")?.get(name)?.get("command")?.as_str())
+                .flatten()
+                .unwrap_or(line);
             let mut t =
                 DiscoveredTask::new(cx.script_id(name), name.clone(), cx.package.dir.clone());
             t.lines.push(line.to_string());
@@ -212,6 +217,7 @@ impl Recognizer for PackageManager {
                         &rest[1..].join(" "),
                         &format!("`{}`", cmd.text.trim()),
                         cx.repo_root,
+                        None,
                         out,
                     );
                 }

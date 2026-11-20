@@ -582,6 +582,42 @@ fn vite_plus_test_script_runs_the_vitest_tests_of_its_package() {
     assert_eq!(selection.uncovered, Vec::<String>::new());
 }
 
+/// A vitest run started in a package directory whose config is the one of a
+/// directory above (vitest up to 4 looks for it there; `vitest run` and `vp
+/// test run` alike): the tests run with the package directory as their working
+/// directory, so a file they read below `process.cwd()` is the package's.
+/// (The file of the same name at the repository root selects the test too: a
+/// path below the working directory is also read from the root, where a runner
+/// can be started with a path filter.)
+#[cfg(unix)]
+#[test]
+fn vitest_run_below_its_config_reads_by_the_package_directory() {
+    let dir = fixture("trace_vitest");
+    let web = dir.path().join("packages/web");
+    fs::remove_file(web.join("vitest.config.ts")).unwrap();
+    fs::write(dir.path().join("vite.config.ts"), "export default {};\n").unwrap();
+    fs::create_dir_all(web.join("fixtures")).unwrap();
+    fs::write(web.join("fixtures/data.json"), "{}\n").unwrap();
+    fs::create_dir_all(dir.path().join("fixtures")).unwrap();
+    fs::write(dir.path().join("fixtures/data.json"), "{}\n").unwrap();
+    fs::write(
+        web.join("test/data.test.ts"),
+        "import fs from \"node:fs\";\nimport path from \"node:path\";\nimport { expect, test } \
+         from \"vitest\";\n\ntest(\"data\", () => {\n  const file = path.join(process.cwd(), \
+         \"fixtures/data.json\");\n  expect(fs.readFileSync(file, \"utf8\")).toBeTruthy();\n});\n",
+    )
+    .unwrap();
+    git(dir.path(), &["add", "-A"]);
+    git(dir.path(), &["commit", "--quiet", "-m", "a config above"]);
+
+    // The package's file is the one the test reads.
+    let selected = affected(
+        dir.path(),
+        &["--changed", "packages/web/fixtures/data.json"],
+    );
+    assert_selects(&selected, &["packages/web/test/data.test.ts"], &[]);
+}
+
 #[cfg(unix)]
 #[test]
 fn vitest_affected_by_a_working_tree_edit() {

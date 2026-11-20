@@ -179,7 +179,7 @@ impl Recognizer for VitePlus {
                 out.tool("npm", "vitest");
                 let mut run = cmd.shifted(vp.sub);
                 run.cwd = vp.cwd;
-                vitest_run(&run, cx, out)
+                vitest_run(&run, cx, out, true)
             }
             "run" => run_task(cmd, vp, cx, out),
             _ => {

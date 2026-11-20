@@ -48,7 +48,7 @@ use turborepo_trace_frameworks::fsx;
 
 use crate::{
     registry::{CommandReport, Recognition, RecognizeCx},
-    spec::{Command, EntryLang, TaskRef, TaskSpec, TestRun},
+    spec::{Command, EntryLang, Start, TaskRef, TaskSpec, TestRun},
 };
 
 /// The lengths of a spec's lists before a command is recognized.
@@ -57,6 +57,7 @@ pub struct Mark {
     entries: usize,
     deps: usize,
     runs: usize,
+    starts: usize,
 }
 
 /// Marks `out` before a command is recognized (see [`observe`]).
@@ -65,6 +66,7 @@ pub fn mark(out: &TaskSpec) -> Mark {
         entries: out.entries.len(),
         deps: out.task_deps.len(),
         runs: out.runs.len(),
+        starts: out.starts.len(),
     }
 }
 
@@ -217,16 +219,81 @@ fn turbo_test_task(text: &str, repo_root: &Path) -> Option<String> {
 }
 
 /// Scans `text` (shown as `what`) for a launch word and records what it found.
-pub fn scan_text(text: &str, what: &str, repo_root: &Path, out: &mut TaskSpec) {
+/// `cwd`: the directory the command that holds the text is started in (`None`:
+/// not known). A text
+/// with a launch word may start a test runner there ([`Start::Launch`]): a JS
+/// runner or a wrapper of one, or a task runner with a task that is a test
+/// task by its name. A text without one starts none, whatever else it says
+/// (`sg test`, a script called `check-test-matrix`, a variable), and neither
+/// does the runner of another language (`go test`).
+pub fn scan_text(text: &str, what: &str, repo_root: &Path, cwd: Option<&Path>, out: &mut TaskSpec) {
+    let launch = |out: &mut TaskSpec| {
+        out.starts(Start::Launch {
+            dir: cwd.map(Path::to_path_buf),
+        })
+    };
     match launch_word(text) {
-        Some((_, Launch::Framework(fw))) => out.test_run(fw, repo_root),
-        Some((w, Launch::Any)) => out.runs_unknown(format!("{what} names `{w}` with a test task")),
+        Some((_, Launch::Framework(fw))) => {
+            out.test_run(fw, repo_root);
+            // The runner of another language starts no JS runner (`go test`, `cargo
+            // test`, `pytest`).
+            if !matches!(fw, "gotest" | "cargo-test" | "pytest") {
+                launch(out);
+            }
+        }
+        Some((w, Launch::Any)) => {
+            out.runs_unknown(format!("{what} names `{w}` with a test task"));
+            // A runner may be started here only when a task is named that is a test
+            // task by its name, not by any word that contains `test`.
+            if names_test_task(text) {
+                launch(out);
+            }
+        }
         None => {
             if let Some(task) = turbo_test_task(text, repo_root) {
                 out.runs_unknown(format!("{what} names the turbo task `{task}`"));
+                launch(out);
             }
         }
     }
+}
+
+/// The task runners of [`launch_word`].
+const TASK_RUNNERS: &[&str] = &[
+    "turbo", "pnpm", "npm", "yarn", "bun", "make", "nx", "deno", "vpr",
+];
+
+/// Whether a line of `text` names a task runner together with a test task: a
+/// word that is `test` or `tests`, starts with `test` and a separator
+/// (`test:unit`, `test-e2e`), or ends with one and `test` (`e2e-test`), also
+/// as the part of a name after a `:` or `#` (`ci:test`, `web#test`). Not a word
+/// that has `test` inside it (`some-test-matrix`), an option (`--test`) or a
+/// variable (`$test_script`).
+fn names_test_task(text: &str) -> bool {
+    let part = |p: &str| {
+        matches!(p, "test" | "tests")
+            || p.strip_prefix("test")
+                .is_some_and(|r| r.starts_with(['-', '_', '.']))
+            || ["-test", "_test", "-tests", "_tests"]
+                .iter()
+                .any(|e| p.ends_with(e))
+    };
+    let word =
+        |w: &str| !w.starts_with(['-', '$']) && !w.contains('$') && w.split([':', '#']).any(part);
+    text.lines().any(|line| {
+        (TASK_RUNNERS.iter().any(|r| has_word(line, r)) || vp_subcommand(line, "run"))
+            && line
+                .split(|c: char| {
+                    !(c.is_ascii_alphanumeric()
+                        || matches!(c, '_' | '-' | '.' | ':' | '#' | '$' | '/'))
+                })
+                .any(word)
+    })
+}
+
+/// The directory `cmd` is started in, when it is known ([`Start`]).
+pub fn start_dir(cmd: &Command) -> Option<&Path> {
+    (!cmd.cwd_computed).then_some(cmd.cwd.as_path())
 }
 
 /// The text of the JS/TS script at `path` with everything that is not code
@@ -262,7 +329,12 @@ fn js_code(path: &Path, text: &str) -> Option<String> {
 
 /// Scans the parts of a command line the shell parser does not model: command
 /// substitutions (`$(…)`, backticks) and `eval`.
-pub fn scan_unsupported_shell(line: &str, repo_root: &Path, out: &mut TaskSpec) {
+pub fn scan_unsupported_shell(
+    line: &str,
+    repo_root: &Path,
+    cwd: Option<&Path>,
+    out: &mut TaskSpec,
+) {
     let b = line.as_bytes();
     let mut hidden = String::new();
     let mut i = 0;
@@ -305,7 +377,7 @@ pub fn scan_unsupported_shell(line: &str, repo_root: &Path, out: &mut TaskSpec) 
         }
     }
     if !hidden.is_empty() {
-        scan_text(&hidden, "a command substitution", repo_root, out);
+        scan_text(&hidden, "a command substitution", repo_root, cwd, out);
     }
 }
 
@@ -401,6 +473,7 @@ fn wrapped_runs(cmd: &Command, cx: &RecognizeCx<'_>, out: &mut TaskSpec) -> bool
         if !scratch.runs.is_empty() {
             out.runs.extend(scratch.runs);
             out.definition.extend(scratch.definition);
+            out.starts.extend(scratch.starts);
             return true;
         }
     }
@@ -410,6 +483,51 @@ fn wrapped_runs(cmd: &Command, cx: &RecognizeCx<'_>, out: &mut TaskSpec) -> bool
 /// Records what the command `cmd` (recognized as `rep`, with `out` marked by
 /// [`mark`] before) runs and which files define it: see the module docs.
 pub fn observe(
+    cmd: &Command,
+    rep: &CommandReport,
+    cx: &RecognizeCx<'_>,
+    m: Mark,
+    out: &mut TaskSpec,
+) {
+    observe_runs(cmd, rep, cx, m, out);
+    // Where the command may start vitest ([`Start`]). A recognized run says its
+    // directory itself. Any other command that names vitest (by word or by the
+    // path of its program) is not followed to the directory it runs it in: a
+    // wrapper that changes directory (`lerna exec`, `yarn workspace`), a
+    // container, the runner's file handed to node. It may start it where it is
+    // started itself.
+    let new = &out.starts[m.starts.min(out.starts.len())..];
+    let ran = new.iter().any(|s| matches!(s, Start::Run { .. }));
+    let launched = new.iter().any(|s| matches!(s, Start::Launch { .. }));
+    let exact = ran && rep.recognition != Recognition::Unknown;
+    if !exact && !launched && names_vitest(&rep.text) {
+        out.starts(Start::Launch {
+            dir: start_dir(cmd).map(Path::to_path_buf),
+        });
+    }
+}
+
+/// Whether `text` names vitest: the word, `vp test`, or a path to the runner
+/// (`node_modules/.bin/vitest`, `node_modules/vitest/vitest.mjs`). Not a
+/// config file (`vitest.config.ts`).
+fn names_vitest(text: &str) -> bool {
+    text.lines().any(|line| {
+        has_word(line, "vitest")
+            || vp_subcommand(line, "test")
+            || line
+                .split(|c: char| c.is_whitespace() || matches!(c, '"' | '\'' | '`' | '=' | ','))
+                .filter(|w| w.contains('/'))
+                .any(|w| {
+                    w.split('/').any(|part| {
+                        part == "vitest"
+                            || matches!(part, "vitest.mjs" | "vitest.js" | "vitest.cjs")
+                    })
+                })
+    })
+}
+
+/// The runs and definition files of [`observe`].
+fn observe_runs(
     cmd: &Command,
     rep: &CommandReport,
     cx: &RecognizeCx<'_>,
@@ -515,7 +633,13 @@ pub fn observe(
                     .unwrap_or(&p)
                     .to_string_lossy()
                     .replace('\\', "/");
-                scan_text(&text, &format!("script {shown}"), cx.repo_root, out);
+                scan_text(
+                    &text,
+                    &format!("script {shown}"),
+                    cx.repo_root,
+                    start_dir(cmd),
+                    out,
+                );
             }
         }
     }
@@ -534,6 +658,7 @@ pub fn observe(
             &rep.text,
             &format!("`{}`", rep.text.trim()),
             cx.repo_root,
+            start_dir(cmd),
             out,
         );
     }
@@ -629,17 +754,84 @@ mod tests {
     }
 
     #[test]
+    fn vitest_names() {
+        for yes in [
+            "lerna exec -- vitest run",
+            "node ../../node_modules/vitest/vitest.mjs run",
+            "node node_modules/.bin/vitest run",
+            "docker compose run --rm -w /app/packages/math app vitest run",
+            "yarn workspace math vp test run",
+        ] {
+            assert!(names_vitest(yes), "{yes}");
+        }
+        for no in [
+            "tsc -p vitest.config.ts",
+            "eslint --config ./vitest.config.ts .",
+            "rm -rf node_modules/.vitest",
+            "pnpm add -D @vitest/ui",
+        ] {
+            assert!(!names_vitest(no), "{no}");
+        }
+    }
+
+    #[test]
+    fn test_task_names() {
+        for yes in [
+            "pnpm test",
+            "pnpm run test:unit",
+            "turbo run test --filter=web",
+            "spawnSync('pnpm', ['run', 'ci:test'])",
+            "yarn workspace web e2e-test",
+            "make test-integration",
+            "turbo run web#test",
+        ] {
+            assert!(names_test_task(yes), "{yes}");
+        }
+        for no in [
+            "pnpm some-test-matrix",
+            "pnpm \"$test_script\"",
+            "npm run build -- --test",
+            "sg test",
+            "pnpm run attest",
+            "yarn latest",
+        ] {
+            assert!(!names_test_task(no), "{no}");
+        }
+    }
+
+    #[test]
     fn substitutions() {
         let mut out = TaskSpec::default();
         scan_unsupported_shell(
             "X=$(pnpm --silent test:list)\necho $X",
             Path::new("/r"),
+            Some(Path::new("/r/web")),
             &mut out,
         );
         assert_eq!(out.runs.len(), 1);
         assert!(is_unknown(&out.runs[0]));
+        // A launch word may start a runner where the command is started.
+        assert_eq!(
+            out.starts,
+            [Start::Launch {
+                dir: Some("/r/web".into())
+            }]
+        );
         let mut out = TaskSpec::default();
-        scan_unsupported_shell("X=$(date +%s)\necho $((1 + 2))", Path::new("/r"), &mut out);
+        scan_unsupported_shell(
+            "X=$(date +%s)\necho $((1 + 2))\nsg test",
+            Path::new("/r"),
+            None,
+            &mut out,
+        );
         assert!(out.runs.is_empty());
+        // No launch word: nothing starts, whatever else the text says.
+        assert!(out.starts.is_empty());
+        // The runner of another language is a run of its own tests and no start of a
+        // JS runner.
+        let mut out = TaskSpec::default();
+        scan_unsupported_shell("X=$(go test ./...)", Path::new("/r"), None, &mut out);
+        assert_eq!(out.runs.len(), 1);
+        assert!(out.starts.is_empty());
     }
 }

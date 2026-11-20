@@ -1,6 +1,7 @@
 //! The test harness the command tests run: `examples/harness.rs`, which `cargo
-//! test` builds with the tests (add `--example harness` when selecting tests
-//! with `--test`).
+//! test` builds with the tests. When selecting tests with `--test`, build it
+//! first (`cargo build -p turborepo-trace --example harness`): `cargo test
+//! --test x --example harness` leaves a harness of an earlier build in place.
 
 use std::path::PathBuf;
 
@@ -17,8 +18,8 @@ pub fn harness() -> PathBuf {
         .join(format!("harness{}", std::env::consts::EXE_SUFFIX));
     assert!(
         p.exists(),
-        "{} is missing: run the tests with `cargo test -p turborepo-trace` (or add `--example \
-         harness`)",
+        "{} is missing: run the tests with `cargo test -p turborepo-trace` (or build it first: \
+         `cargo build -p turborepo-trace --example harness`)",
         p.display()
     );
     p

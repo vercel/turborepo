@@ -30,7 +30,7 @@ use crate::{
         },
     },
     registry::{Recognition, RecognizeCx, Recognizer, registry},
-    spec::{Command, EntryLang, TaskSpec},
+    spec::{Command, EntryLang, Start, StartConfig, TaskSpec},
 };
 
 /// The recognizers of this module.
@@ -287,7 +287,7 @@ impl Recognizer for Vitest {
     }
     fn recognize(&self, cmd: &Command, cx: &RecognizeCx<'_>, out: &mut TaskSpec) -> Recognition {
         out.tool("npm", "vitest");
-        vitest_run(cmd, cx, out)
+        vitest_run(cmd, cx, out, false)
     }
 }
 
@@ -298,7 +298,15 @@ impl Recognizer for Vitest {
 /// `-c/--config`, else the one in the root, else (vitest up to 4) the one of
 /// the nearest directory above it: that one only says how the run goes, the
 /// tests stay those below the root.
-pub fn vitest_run(cmd: &Command, cx: &RecognizeCx<'_>, out: &mut TaskSpec) -> Recognition {
+///
+/// `vite_plus`: the run is `vp test`, which executes the vitest that vite-plus
+/// depends on.
+pub fn vitest_run(
+    cmd: &Command,
+    cx: &RecognizeCx<'_>,
+    out: &mut TaskSpec,
+    vite_plus: bool,
+) -> Recognition {
     let args = Args::new(
         cmd,
         0,
@@ -328,13 +336,33 @@ pub fn vitest_run(cmd: &Command, cx: &RecognizeCx<'_>, out: &mut TaskSpec) -> Re
     let root = opt(&args, &["-r", "--root"])
         .map(|r| cmd.path(r))
         .unwrap_or_else(|| cmd.cwd.clone());
-    let config = match opt(&args, &["-c", "--config"]) {
-        Some(c) => Some(cmd.path(c)),
-        None => find_config(&root, VITEST_CONFIGS),
+    // (vitest resolves the config it is given against its root.)
+    let named = opt(&args, &["-c", "--config"]).map(|c| fsx::join(&root, c));
+    let standard = find_config(&root, VITEST_CONFIGS);
+    // A named config that is not the one the root's own lookup finds.
+    let is_named = named.as_ref().is_some_and(|c| standard.as_ref() != Some(c));
+    let config = match &named {
+        Some(c) => Some(c.clone()),
+        None => standard,
     };
     for n in VITEST_CONFIGS {
         out.input(root.join(n));
     }
+    // Where the run starts ([`Start`]): a directory that is computed is any.
+    let computed = cmd.cwd_computed
+        || opt(&args, &["-r", "--root", "-c", "--config"]).is_some_and(|v| v.contains('$'));
+    let start = |out: &mut TaskSpec, dir: &Path, config: StartConfig| {
+        if computed {
+            out.starts(Start::Launch { dir: None });
+        } else {
+            out.starts(Start::Run {
+                framework: "vitest".into(),
+                dir: dir.to_path_buf(),
+                from: cmd.cwd.clone(),
+                config,
+            });
+        }
+    };
     match config {
         Some(c) => {
             let fi = turborepo_trace_frameworks::vitest::Vitest.load(&c);
@@ -342,6 +370,55 @@ pub fn vitest_run(cmd: &Command, cx: &RecognizeCx<'_>, out: &mut TaskSpec) -> Re
             if let Some(d) = opt(&args, &["--dir"]) {
                 out.test_run("vitest", cmd.path(d));
                 out.membership(cmd.path(d), "**", "vitest --dir");
+            }
+            // The run's own root, and the directory of every project its config lists.
+            start(
+                out,
+                &root,
+                if is_named {
+                    // What the named config takes, from the run's root.
+                    let tests = fi
+                        .projects
+                        .iter()
+                        .flat_map(|p| &p.discovery.include)
+                        .filter_map(|t| match t {
+                            turborepo_trace_frameworks::TestPattern::Glob(g)
+                                if !is_extglob(g) && !g.starts_with('!') =>
+                            {
+                                Some(g.clone())
+                            }
+                            _ => None,
+                        })
+                        .collect();
+                    StartConfig::Named { tests }
+                } else {
+                    StartConfig::Own
+                },
+            );
+            for p in &fi.projects {
+                let dir = p
+                    .config_file
+                    .as_deref()
+                    .and_then(Path::parent)
+                    .unwrap_or(&p.root_dir);
+                if dir != root {
+                    start(out, dir, StartConfig::Own);
+                }
+            }
+            // A config named on the command line that lies elsewhere is loaded with the
+            // run's root, like the config of a directory above.
+            if let Some(dir) = named.as_deref().and_then(Path::parent)
+                && dir != root
+            {
+                start(
+                    out,
+                    &root,
+                    StartConfig::None {
+                        above: Some(dir.to_path_buf()),
+                        loads_above: true,
+                        defaults: false,
+                    },
+                );
             }
             if complete {
                 Recognition::Full
@@ -358,6 +435,24 @@ pub fn vitest_run(cmd: &Command, cx: &RecognizeCx<'_>, out: &mut TaskSpec) -> Re
                 .skip(1)
                 .take_while(|d| d.starts_with(cx.repo_root))
                 .find_map(|d| find_config(d, turborepo_trace_frameworks::vitest::CONFIG_NAMES));
+            // Which of the two it is, by the version of the vitest the run executes;
+            // both when nothing says it.
+            let (may_load, may_default) =
+                turborepo_trace_frameworks::vitest::run_readings(&root, vite_plus);
+            let loads_above = above.is_some() && may_load;
+            let defaults = above.is_none() || may_default;
+            start(
+                out,
+                &root,
+                StartConfig::None {
+                    above: above
+                        .as_deref()
+                        .and_then(Path::parent)
+                        .map(Path::to_path_buf),
+                    loads_above,
+                    defaults,
+                },
+            );
             if let Some(c) = above {
                 add_code_config(&c, out);
                 out.defines(c);

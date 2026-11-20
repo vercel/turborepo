@@ -683,7 +683,7 @@ fn inline_script(
     let parsed = shell::parse(&rw.text, &cmd.cwd, &env);
     if !parsed.uncertainties.is_empty() {
         // Command substitutions and `eval` may start tests ([`crate::runs`]).
-        crate::runs::scan_unsupported_shell(&rw.text, cx.repo_root, out);
+        crate::runs::scan_unsupported_shell(&rw.text, cx.repo_root, None, out);
     }
     let mut r = Recognition::Full;
     for u in &parsed.uncertainties {

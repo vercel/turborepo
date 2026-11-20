@@ -22,6 +22,12 @@
 //!   is modelled when it is `require.resolve` of its argument and reported
 //!   otherwise. Path values of these fields are reported as
 //!   [`crate::inputs::ConfigValues`].
+//! - Versions: the default `exclude` is the long list up to vitest 3 and
+//!   `node_modules` and `.git` since vitest 4 ([`default_exclude`]), by the
+//!   version the project runs ([`project_major`]; not known: the short list,
+//!   the larger set of tests). A run started below a config loads it up to
+//!   vitest 4 with the run's directory as root ([`rebased`]) and has the
+//!   defaults since vitest 5 ([`default_discovery`]).
 //! - Tests: `vi.mock` / `vi.doMock` (with `__mocks__` lookup when no factory),
 //!   `vi.importActual`, `vi.importMock`, `@vitest-environment`, default
 //!   snapshot paths.
@@ -85,7 +91,9 @@ pub const RUNNER_PACKAGE: &str = "vitest";
 /// vitest default `include`.
 pub const DEFAULT_INCLUDE: &[&str] = &["**/*.{test,spec}.?(c|m)[jt]s?(x)"];
 
-/// vitest 3 default `exclude` (`configDefaults.exclude`).
+/// vitest's default `exclude` up to version 3 (`configDefaults.exclude`).
+/// Since version 4 it is [`DEFAULT_EXCLUDE_4`]; which one applies is decided
+/// by the version the project runs ([`project_major`]).
 pub const DEFAULT_EXCLUDE: &[&str] = &[
     "**/node_modules/**",
     "**/dist/**",
@@ -123,11 +131,268 @@ pub struct Vitest;
 /// vitest's default `exclude` since version 4, a part of [`DEFAULT_EXCLUDE`].
 pub const DEFAULT_EXCLUDE_4: &[&str] = &["**/node_modules/**", "**/.git/**"];
 
+/// The default `exclude` of vitest `major` (`None`: not known). Up to version
+/// 3 the long list; since version 4 `node_modules` and `.git` only, so a test
+/// below `dist/` or one called `vite.config.test.ts` runs. A version that is
+/// not known gets the short list: the larger set of tests.
+pub fn default_exclude(major: Option<u32>) -> &'static [&'static str] {
+    match major {
+        Some(m) if m <= 3 => DEFAULT_EXCLUDE,
+        _ => DEFAULT_EXCLUDE_4,
+    }
+}
+
+/// The major version a semver range resolves to, when it can resolve to one
+/// only: `^3.2.4`, `~3.2`, `3.2.4`, `3.x`, `3`. `None` for anything else
+/// (`>=3`, `*`, `latest`, `catalog:`, `workspace:*`, an alias, a URL).
+fn range_major(range: &str) -> Option<u32> {
+    let r = range.trim();
+    let r = r
+        .strip_prefix('^')
+        .or_else(|| r.strip_prefix('~'))
+        .or_else(|| r.strip_prefix('='))
+        .unwrap_or(r);
+    let r = r.strip_prefix('v').unwrap_or(r);
+    if r.is_empty()
+        || !r
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'.' | b'-' | b'+'))
+    {
+        return None;
+    }
+    let head = r.split('.').next()?;
+    (!head.is_empty() && head.bytes().all(|b| b.is_ascii_digit()))
+        .then(|| head.parse().ok())
+        .flatten()
+}
+
+/// The major versions a semver range can resolve to: one for a simple range
+/// ([`range_major`]), one for each alternative of `a || b` (`^3.2.0 || ^4.0.0`:
+/// 3 and 4). Empty when an alternative names no single major version: nothing
+/// says which it is.
+fn range_majors(range: &str) -> Vec<u32> {
+    let mut out: Vec<u32> = Vec::new();
+    for alt in range.split("||") {
+        match range_major(alt) {
+            Some(m) => out.push(m),
+            None => return Vec::new(),
+        }
+    }
+    out.sort_unstable();
+    out.dedup();
+    out
+}
+
+/// The range a pnpm catalog gives `name` in the `pnpm-workspace.yaml` text
+/// `yaml`, as major versions, when every catalog that lists it gives the same.
+fn catalog_majors(yaml: &str, name: &str) -> Vec<u32> {
+    let mut found: Option<Vec<u32>> = None;
+    let mut in_catalog = false;
+    for line in yaml.lines() {
+        let indented = line.starts_with([' ', '\t']);
+        let text = line.trim();
+        if text.is_empty() || text.starts_with('#') {
+            continue;
+        }
+        if !indented {
+            in_catalog = text.starts_with("catalog:") || text.starts_with("catalogs:");
+            continue;
+        }
+        if !in_catalog {
+            continue;
+        }
+        let Some((key, value)) = text.split_once(':') else {
+            continue;
+        };
+        if key.trim().trim_matches(['\'', '"']) != name {
+            continue;
+        }
+        let value = value.split(" #").next().unwrap_or(value);
+        let majors = range_majors(value.trim().trim_matches(['\'', '"']));
+        if majors.is_empty() || found.as_ref().is_some_and(|f| *f != majors) {
+            return Vec::new();
+        }
+        found = Some(majors);
+    }
+    found.unwrap_or_default()
+}
+
+/// How the files that say a version are read: recorded as inputs
+/// ([`fsx::read`], for a task), or as what decides a result without being an
+/// input of it ([`fsx::read_key`], for a config's load).
+type Read<'a> = &'a dyn Fn(&Path) -> Option<Vec<u8>>;
+
+fn recorded(p: &Path) -> Option<Vec<u8>> {
+    fsx::read(p).ok()
+}
+
+fn key_only(p: &Path) -> Option<Vec<u8>> {
+    fsx::read_key(p).ok()
+}
+
+fn read_json(read: Read<'_>, p: &Path) -> Option<serde_json::Value> {
+    read(p).and_then(|b| serde_json::from_slice(&b).ok())
+}
+
+/// The range the manifest `m` declares for the package `name`.
+fn declared(m: &serde_json::Value, name: &str) -> Option<String> {
+    [
+        "devDependencies",
+        "dependencies",
+        "peerDependencies",
+        "optionalDependencies",
+    ]
+    .iter()
+    .find_map(|k| m.get(k)?.get(name)?.as_str().map(str::to_owned))
+}
+
+/// The major version of the vitest that the command `vitest`, started in
+/// `dir`, executes, when the tree says it: the installed package
+/// (`node_modules/vitest`, or the vitest that an installed `vite-plus` depends
+/// on) in the nearest directory at or above `dir` that has one; else the range
+/// the nearest manifest at or above `dir` declares for `vitest` (through the
+/// pnpm catalog when it says `catalog:`), when that range resolves to one
+/// major version only. `None` when nothing says it (a manifest that declares
+/// only `vite-plus`, a range over several major versions): the caller then
+/// takes every possibility.
+///
+/// What is read is read through [`fsx`], so it is recorded like the config.
+pub fn vitest_major(dir: &Path) -> Option<u32> {
+    match plain_majors(&recorded, dir).as_slice() {
+        [m] => Some(*m),
+        _ => None,
+    }
+}
+
+/// [`vitest_major`] as the major versions it can be (a range `^3 || ^4`: 3 and
+/// 4); empty when nothing says it.
+fn plain_majors(read: Read<'_>, dir: &Path) -> Vec<u32> {
+    let version = |v: &serde_json::Value| -> Vec<u32> {
+        v.get("version")
+            .and_then(|v| v.as_str())
+            .map(range_majors)
+            .unwrap_or_default()
+    };
+    // A catalog entry is looked up in the workspace file of a directory at or above
+    // the manifest.
+    let catalog = |from: &Path| -> Vec<u32> {
+        from.ancestors()
+            .find_map(|d| {
+                read(&d.join("pnpm-workspace.yaml"))
+                    .and_then(|y| String::from_utf8(y).ok())
+                    .map(|y| catalog_majors(&y, "vitest"))
+            })
+            .unwrap_or_default()
+    };
+    for d in dir.ancestors() {
+        if let Some(v) = read_json(read, &d.join("node_modules/vitest/package.json")) {
+            return version(&v);
+        }
+        if let Some(v) = read_json(read, &d.join("node_modules/vite-plus/package.json")) {
+            return declared(&v, "vitest")
+                .as_deref()
+                .map(range_majors)
+                .unwrap_or_default();
+        }
+        let Some(m) = read_json(read, &d.join("package.json")) else {
+            continue;
+        };
+        if let Some(range) = declared(&m, "vitest") {
+            return if range.trim().starts_with("catalog:") {
+                catalog(d)
+            } else {
+                range_majors(&range)
+            };
+        }
+        if declared(&m, "vite-plus").is_some() {
+            return Vec::new();
+        }
+    }
+    Vec::new()
+}
+
+/// The major version of the vitest that `vp test`, started in `dir`, executes:
+/// the one the installed `vite-plus` of the nearest directory at or above
+/// `dir` depends on, whatever the manifests declare for `vitest` itself.
+/// `None` when vite-plus is not installed: its manifest alone says the range.
+pub fn vite_plus_major(dir: &Path) -> Option<u32> {
+    match vp_majors(&recorded, dir).as_slice() {
+        [m] => Some(*m),
+        _ => None,
+    }
+}
+
+fn vp_majors(read: Read<'_>, dir: &Path) -> Vec<u32> {
+    dir.ancestors()
+        .find_map(|d| read_json(read, &d.join("node_modules/vite-plus/package.json")))
+        .and_then(|installed| declared(&installed, "vitest"))
+        .as_deref()
+        .map(range_majors)
+        .unwrap_or_default()
+}
+
+/// What a run without a config of its own, started in `dir`, may do: load the
+/// config of a directory above (vitest up to 4), and run with the defaults
+/// (vitest 5 and later). By the versions the run can have (`vite_plus`: it is
+/// `vp test`, which executes the vitest vite-plus depends on); both when
+/// nothing says the version.
+pub fn run_readings(dir: &Path, vite_plus: bool) -> (bool, bool) {
+    let majors = if vite_plus {
+        vp_majors(&recorded, dir)
+    } else {
+        plain_majors(&recorded, dir)
+    };
+    (
+        majors.is_empty() || majors.iter().any(|m| *m <= 4),
+        majors.is_empty() || majors.iter().any(|m| *m >= 5),
+    )
+}
+
+/// The major version of the vitest that runs the project of a config in `dir`,
+/// as far as the default `exclude` goes ([`default_exclude`]): `Some` when
+/// every version that may run it has the same list. The versions are those of
+/// [`vitest_major`], and where a manifest at or above `dir` declares
+/// `vite-plus` (or it is installed there) also those of [`vite_plus_major`],
+/// since `vp test` runs the project with its own vitest.
+///
+/// The files that say it decide what the config's load finds and are no
+/// inputs of the project's tests ([`fsx::read_key`]): a manifest that changes
+/// elsewhere changes no test, and a runner whose version changes reaches the
+/// tests as the runner.
+pub fn project_major(dir: &Path) -> Option<u32> {
+    let read: Read<'_> = &key_only;
+    let mut majors = plain_majors(read, dir);
+    if majors.is_empty() {
+        return None;
+    }
+    let vite_plus = dir.ancestors().any(|d| {
+        read_json(read, &d.join("node_modules/vite-plus/package.json")).is_some()
+            || read_json(read, &d.join("package.json"))
+                .is_some_and(|m| declared(&m, "vite-plus").is_some())
+    });
+    if vite_plus {
+        let vp = vp_majors(read, dir);
+        if vp.is_empty() {
+            return None;
+        }
+        majors.extend(vp);
+    }
+    let long = |m: &u32| *m <= 3;
+    if majors.iter().all(long) {
+        majors.iter().max().copied()
+    } else if !majors.iter().any(long) {
+        majors.iter().min().copied()
+    } else {
+        None
+    }
+}
+
 /// Known values from `vitest/config` / `vitest/node`, and from vite-plus,
-/// which hands on vitest's (`vite-plus`, `vite-plus/test/config`). vite-plus 1
-/// depends on vitest 5, whose `configDefaults.exclude` is the short list:
-/// the tests it leaves out are left out by every version.
-fn externals(module: &str, path: &[String]) -> Option<ConfigVal> {
+/// which hands on vitest's (`vite-plus`, `vite-plus/test/config`). The default
+/// exclude list is the one of the version the project runs ([`project_major`],
+/// asked through `major` only when the config uses the list); vite-plus 1
+/// depends on vitest 5, whose list is the short one.
+fn externals(module: &str, path: &[String], major: &dyn Fn() -> Option<u32>) -> Option<ConfigVal> {
     let vite_plus = matches!(
         module,
         "vite-plus" | "vite-plus/test" | "vite-plus/test/config" | "vite-plus/test/node"
@@ -145,16 +410,66 @@ fn externals(module: &str, path: &[String]) -> Option<ConfigVal> {
         ["configDefaults", "exclude"] | ["defaultExclude"] if vite_plus => {
             Some(strs(DEFAULT_EXCLUDE_4))
         }
-        ["configDefaults", "exclude"] | ["defaultExclude"] => Some(strs(DEFAULT_EXCLUDE)),
+        ["configDefaults", "exclude"] | ["defaultExclude"] => Some(strs(default_exclude(major()))),
         ["configDefaults", "include"] | ["defaultInclude"] => Some(strs(DEFAULT_INCLUDE)),
         _ => None,
     }
 }
 
-fn opts() -> LoadOptions<'static> {
-    LoadOptions {
-        externals: &externals,
-        ..LoadOptions::default()
+/// Loads the config file `path` with the values vitest's own modules export.
+fn load_js(path: &Path) -> Loaded {
+    let dir = path.parent().unwrap_or(Path::new("/"));
+    let major = std::cell::OnceCell::new();
+    let ext = |module: &str, member: &[String]| {
+        externals(module, member, &|| {
+            *major.get_or_init(|| project_major(dir))
+        })
+    };
+    jsconfig::load(
+        path,
+        LoadOptions {
+            externals: &ext,
+            ..LoadOptions::default()
+        },
+    )
+}
+
+/// The discovery of a project as a run sees it that is started in `dir`, a
+/// directory below the project's config without a config of its own, and
+/// loads that config (vitest up to 4 takes the config of the nearest directory
+/// above): the root and the base of the patterns are `dir`.
+pub fn rebased(discovery: &TestDiscovery, dir: &Path) -> TestDiscovery {
+    TestDiscovery {
+        roots: vec![dir.to_path_buf()],
+        include: discovery.include.clone(),
+        exclude: discovery.exclude.clone(),
+        glob_base: Some(dir.to_path_buf()),
+        ..TestDiscovery::default()
+    }
+}
+
+/// Whether the patterns of `discovery` match a file the same way from every
+/// base above it: each one is a glob that starts with `**/`.
+pub fn base_free(discovery: &TestDiscovery) -> bool {
+    discovery
+        .include
+        .iter()
+        .chain(&discovery.exclude)
+        .all(|p| matches!(p, TestPattern::Glob(g) if g.starts_with("**/")))
+}
+
+/// The discovery of a run without a config, started in `dir`: vitest's
+/// defaults (the exclude list of version 4 and later: the larger set; a run
+/// that loads no config of a directory above is vitest 5 or later, or has
+/// none above).
+pub fn default_discovery(dir: &Path) -> TestDiscovery {
+    let globs = |xs: &[&str]| xs.iter().map(|g| TestPattern::Glob((*g).into())).collect();
+    TestDiscovery {
+        roots: vec![dir.to_path_buf()],
+        include: globs(DEFAULT_INCLUDE),
+        exclude: globs(DEFAULT_EXCLUDE_4),
+        glob_base: Some(dir.to_path_buf()),
+        ..TestDiscovery::default()
     }
 }
 
@@ -267,7 +582,7 @@ pub fn load_config(path: &Path) -> FrameworkInputs {
 
 /// [`load_config`]; `lists`: whether the config's list of projects is followed.
 fn load_with(path: &Path, lists: bool) -> FrameworkInputs {
-    let loaded = jsconfig::load(path, opts());
+    let loaded = load_js(path);
     let dir = path.parent().unwrap_or(Path::new("/")).to_path_buf();
     let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
     let mut out = FrameworkInputs {
@@ -421,7 +736,7 @@ fn workspace_projects(
                 match it.field("extends") {
                     Some(ConfigVal::Str(v)) if v.is_known() => {
                         let base = fsx::join(dir, v.as_str().unwrap_or(""));
-                        let bl = jsconfig::load(&base, opts());
+                        let bl = load_js(&base);
                         if let Some(bv) = &bl.value {
                             cfg = merge_deep(bv.clone(), cfg);
                         }
@@ -731,7 +1046,15 @@ fn build_project(
     let discovery = TestDiscovery {
         roots: vec![test_dir.clone()],
         include: globs(r, "test.include", DEFAULT_INCLUDE),
-        exclude: globs(r, "test.exclude", DEFAULT_EXCLUDE),
+        // The default list is the one of the version the project runs.
+        exclude: match r.get("test.exclude") {
+            Some(v) if !v.is_null() => globs(r, "test.exclude", &[]),
+            _ => globs(
+                r,
+                "test.exclude",
+                default_exclude(project_major(config_dir)),
+            ),
+        },
         glob_base: Some(test_dir.clone()),
         extensions: Vec::new(),
         absolute: false,
