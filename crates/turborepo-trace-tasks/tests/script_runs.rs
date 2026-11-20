@@ -215,6 +215,33 @@ fn gotestsum_runs_go_test() {
             "gotestsum --raw-command -- ./scripts/test.sh",
             &["unknown"],
         ),
+        // The packages come before `-args`: what follows it goes to the test binary.
+        (
+            "l",
+            "gotestsum --packages=./internal/... -- -count=1 -args -verbose",
+            &["tests:gotest:services/l/internal"],
+        ),
+        (
+            "m",
+            "gotestsum --packages './api/... ./web/...' -- --args ./fixtures",
+            &["tests:gotest:services/m/api", "tests:gotest:services/m/web"],
+        ),
+        (
+            "n",
+            "gotestsum -- -args ./fixtures",
+            &["tests:gotest:services/n"],
+        ),
+        // A gotestsum started by a gotestsum is a program of its own.
+        (
+            "o",
+            "gotestsum --raw-command -- gotestsum --raw-command -- go test -json ./internal/...",
+            &["unknown"],
+        ),
+        (
+            "p",
+            "gotestsum --raw-command -- go tool gotestsum -- ./internal/...",
+            &["unknown"],
+        ),
     ];
     let scripts: Vec<(&str, &str)> = forms.iter().map(|(d, s, _)| (*d, *s)).collect();
     let (root, set) = packages("gotestsum", &scripts, &[GO_MOD, TEST_SH]);
@@ -226,6 +253,26 @@ fn gotestsum_runs_go_test() {
         );
     }
     std::fs::remove_dir_all(&root).unwrap();
+}
+
+/// A script that nests `gotestsum --raw-command` thousands of times is read in
+/// one step: its task runs whole.
+#[test]
+fn nested_raw_gotestsum_commands_are_read_once() {
+    let script = format!(
+        "{}go test ./...",
+        "gotestsum --raw-command -- ".repeat(4000)
+    );
+    let handle = std::thread::Builder::new()
+        .stack_size(256 * 1024)
+        .spawn(move || {
+            let (root, set) = packages("gotestsum-nested", &[("a", &script)], &[GO_MOD]);
+            let got = runs(&set, &root, "services/a");
+            std::fs::remove_dir_all(&root).unwrap();
+            got
+        })
+        .unwrap();
+    assert_eq!(handle.join().unwrap(), ["unknown"]);
 }
 
 /// The Go files a task reads: `**/*.go` below a `./...` pattern.

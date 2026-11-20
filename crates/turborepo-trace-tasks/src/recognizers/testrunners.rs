@@ -556,6 +556,12 @@ enum GoLaunch {
     Raw,
 }
 
+/// `-args`, `--args`: the rest of a `go test` command line goes to the test
+/// binary, and names no packages.
+fn is_test_binary_args(word: &str) -> bool {
+    matches!(word, "-args" | "--args")
+}
+
 /// What `cmd` starts when it is a form of `go test`:
 ///
 /// | Command | As |
@@ -566,7 +572,18 @@ enum GoLaunch {
 /// | `go tool gotestsum …`, `go run gotest.tools/gotestsum[@version] …` | `gotestsum …` |
 /// | `gotestsum --raw-command -- go test <args>` | `go test <args>` |
 /// | `gotestsum --raw-command -- <another program>` | [`GoLaunch::Raw`] |
+///
+/// gotestsum puts the packages of `--packages` before `-args`: what follows
+/// `-args` belongs to the test binary.
 fn go_launch(cmd: &Command) -> Option<GoLaunch> {
+    go_launch_of(cmd, false)
+}
+
+/// [`go_launch`]; `raw` for the command of `--raw-command`, which is read as
+/// `go test` only when it is written as `go test`: a gotestsum that starts
+/// another gotestsum is a program of its own, so the reading ends after one
+/// step however long the command line is.
+fn go_launch_of(cmd: &Command, raw: bool) -> Option<GoLaunch> {
     use crate::spec::Word;
     let lit = |words: &[&str]| words.iter().map(|w| Word::lit(*w)).collect::<Vec<_>>();
     let rebuilt = |chdir: &[Word], rest: Vec<Word>| {
@@ -592,13 +609,13 @@ fn go_launch(cmd: &Command) -> Option<GoLaunch> {
             };
             match argv.get(at).map(|w| w.text.as_str())? {
                 "test" => return Some(GoLaunch::Test(rebuilt(chdir, argv[at + 1..].to_vec()))),
-                "tool" | "run" if argv.get(at + 1).is_some_and(is_gotestsum) => {
+                "tool" | "run" if !raw && argv.get(at + 1).is_some_and(is_gotestsum) => {
                     (chdir, &argv[at + 2..])
                 }
                 _ => return None,
             }
         }
-        "gotestsum" => (&[], &argv[1..]),
+        "gotestsum" if !raw => (&[], &argv[1..]),
         _ => return None,
     };
     // `gotestsum [options] [-- <go test arguments>]`.
@@ -608,9 +625,16 @@ fn go_launch(cmd: &Command) -> Option<GoLaunch> {
         None => (words, None),
     };
     if options.iter().any(|w| w.text == "--raw-command") {
+        // Only a command that starts with `go` can be `go test`: no copy of another.
+        let is_go = args
+            .and_then(<[Word]>::first)
+            .is_some_and(|w| !w.dynamic && w.text.rsplit('/').next() == Some("go"));
+        if !is_go || !chdir.is_empty() {
+            return Some(GoLaunch::Raw);
+        }
         let sub = cmd.shifted(argv.len() - args.map_or(0, <[Word]>::len));
-        return match (sub.program_name(), go_launch(&sub)) {
-            (Some("go"), Some(GoLaunch::Test(mut c))) if chdir.is_empty() => {
+        return match (sub.program_name(), go_launch_of(&sub, true)) {
+            (Some("go"), Some(GoLaunch::Test(mut c))) => {
                 c.text.clone_from(&cmd.text);
                 Some(GoLaunch::Test(c))
             }
@@ -638,7 +662,11 @@ fn go_launch(cmd: &Command) -> Option<GoLaunch> {
     if args.is_none() && packages.is_empty() {
         packages = lit(&["./..."]);
     }
-    rest.extend(packages);
+    let at = rest
+        .iter()
+        .position(|w| is_test_binary_args(&w.text))
+        .unwrap_or(rest.len());
+    rest.splice(at..at, packages);
     Some(GoLaunch::Test(rebuilt(chdir, rest)))
 }
 
@@ -668,7 +696,7 @@ impl Recognizer for GoTest {
         let words: Vec<&str> = cmd.args().skip(1).collect();
         let stop = words
             .iter()
-            .position(|w| *w == "-args")
+            .position(|w| is_test_binary_args(w))
             .unwrap_or(words.len());
         let sub = cmd.shifted(0);
         let args = Args::new(
