@@ -766,6 +766,33 @@ pub(crate) fn build(i: &Input<'_>) -> Document {
             },
         ));
     }
+    // A file that only the Node.js test runner takes as a test, and that the mapped
+    // run of no task names: the adapter read a run in a script (behind a program
+    // it does not interpret) that no task is known to start. Nothing says the file
+    // runs as that run says, so it is listed like a test the selection does not
+    // know: it always runs.
+    if asked(turborepo_trace_frameworks::nodetest::ID) {
+        let globs: Vec<crate::workflows::LaunchGlob> = tasks
+            .iter()
+            .flat_map(|(_, t)| &t.runs)
+            .filter(|l| l.framework == turborepo_trace_frameworks::nodetest::ID)
+            .map(|l| crate::workflows::LaunchGlob::new(&l.dir))
+            .collect();
+        for a in acc.values_mut() {
+            let frameworks = std::mem::take(&mut a.frameworks);
+            let orphan = |path: &str| {
+                frameworks.get(path).is_some_and(|f| {
+                    f.len() == 1 && f[0] == turborepo_trace_frameworks::nodetest::ID
+                }) && !globs.iter().any(|g| g.matches(path))
+            };
+            let (orphans, known): (Vec<String>, Vec<String>) = std::mem::take(&mut a.unselected)
+                .into_iter()
+                .partition(|path| orphan(path));
+            a.unselected = known;
+            a.unknown.extend(orphans);
+            a.frameworks = frameworks;
+        }
+    }
     for (dir, t) in tasks {
         // A task of a directory that is no package of the graph goes to the enclosing
         // one.

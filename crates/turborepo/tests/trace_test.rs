@@ -2834,6 +2834,26 @@ fn a_bin_that_forwards_its_arguments_is_a_prefix_of_the_command() {
     );
     let selection = node_selection(dir.path(), &["--changed", "packages/web/src/heading.ts"]);
     expect_tests(&selection, &[(NODE_HEADING, "")]);
+    // No task is known to start the run the script names: its file has no verdict
+    // to rely on, and is listed on every change.
+    let output = trace(
+        dir.path(),
+        &[
+            "affected",
+            "--changed",
+            "packages/math/src/add.js",
+            "--json",
+        ],
+    );
+    assert!(output.status.success(), "{}", stderr(&output));
+    let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    let heading = json["affectedTests"]["items"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|i| i["path"] == NODE_HEADING)
+        .unwrap_or_else(|| panic!("{NODE_HEADING} is not listed: {json}"));
+    assert_eq!(heading["reason"]["__typename"], "UnknownTest", "{heading}");
 }
 
 // ---------------------------------------------------------------------------
