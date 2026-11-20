@@ -68,6 +68,10 @@ expression: "dump(&root, &set)"
         "path": "tools/gen/bin/gen.js",
         "lang": "js"
       }
+    ],
+    "definition": [
+      "tools/gen/bin/gen.js",
+      "tools/gen/lib/render.js"
     ]
   }
 }
@@ -213,7 +217,9 @@ expression: "dump(&root, &set)"
       }
     ],
     "definition": [
-      "packages/web/jest.unit.config.js"
+      "packages/web/jest.unit.config.js",
+      "tools/ci-runners/bin/jest-ci.js",
+      "tools/ci-runners/bin/prepare.js"
     ]
   }
 }

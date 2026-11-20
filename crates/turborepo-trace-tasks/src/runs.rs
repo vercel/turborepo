@@ -15,6 +15,7 @@
 //! | a task reference (`pnpm run x`, `pnpm -F web test`, `turbo run x`, `make x`, `npm-run-all`) | [`TestRun::Task`]: every task dependency the command adds. A computed package (`pnpm -F "$PKG" test`) means every package. A computed task name is [`TestRun::Computed`] ([`TestRun::Unknown`] when the command names `test`) |
 //! | `turbo run x` | also the tasks `x` depends on in the root `turbo.json` (`dependsOn`, transitively): turbo runs them even when a package has no `x` script |
 //! | a script run by an interpreter (`node x.mjs`, `tsx x.ts`, `python x.py`, a file with a `node` shebang, a repository `bin`) | the script is a definition file; its text is scanned for [launch words](launch_word), for a JS/TS script without its comments |
+//! | a first-party package binary (`jest-ci`, a bin that forwards to the program named first) | its entry file and the files of its package that the entry imports are definition files ([`crate::recognizers::bins`]); what it starts is recorded by the command it wraps or forwards to |
 //! | an unknown program | the rest of its command line, if that is a recognized command (`timeout 600 pnpm test`); else its text is scanned |
 //! | a partly recognized command that mapped nothing, `docker run`/`compose` | its text is scanned |
 //! | shell scripts (`bash x.sh`, `./x.sh`) | definition files; their commands are recognized one by one |

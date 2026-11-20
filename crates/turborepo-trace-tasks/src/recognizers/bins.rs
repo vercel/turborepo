@@ -17,7 +17,7 @@
 //!
 //! | Found | Spec | Recognition |
 //! |---|---|---|
-//! | first-party JS bin | the target file as a JS `entry` (its closure and fs reads are traced), existing-file arguments as inputs, the bin package's `package.json` as config | `Full` (`Partial` plus a cwd membership if the bin reads relative to the cwd) |
+//! | first-party JS bin | the target file as a JS `entry` (its closure and fs reads are traced), existing-file arguments as inputs, the bin package's `package.json` as config; the entry and the files of its package it imports ([`wrapper::Scan::files`]) as definition files of the task | `Full` (`Partial` plus a cwd membership if the bin reads relative to the cwd) |
 //! | first-party bin that forwards its arguments to the program named first ([`forward`]: `tool-run node --test x`) | the bin's file as a JS `entry`, and the command behind it, recognized as if written without the bin | the forwarded command's |
 //! | first-party bin wrapping a known tool ([`wrapper`]) | the above, plus the remaining argv forwarded to the tool's recognizer (`jest-ci -c x` → jest with config `x`) and an `unknown_command` uncertainty naming the inference | `Partial` |
 //! | first-party Python bin (shebang) / shell bin | Python entry / `Auto` entry plus uncertainty | `Full` / `Partial` |
@@ -354,6 +354,12 @@ fn first_party(
         EntryLang::Js => {
             out.entry(file.to_path_buf(), EntryLang::Js);
             let scan = scan_memo(file, pkg_dir);
+            // The bin is part of how the task runs what it starts: its entry file and the
+            // files of its package that the entry imports define the task
+            // ([`crate::runs`]).
+            for f in &scan.files {
+                out.defines(f.clone());
+            }
             // A bin that forwards its arguments to the program named first is a prefix:
             // the command is the one behind it.
             if scan.forwards

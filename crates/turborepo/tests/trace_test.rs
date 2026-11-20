@@ -2835,3 +2835,75 @@ fn a_bin_that_forwards_its_arguments_is_a_prefix_of_the_command() {
     let selection = node_selection(dir.path(), &["--changed", "packages/web/src/heading.ts"]);
     expect_tests(&selection, &[(NODE_HEADING, "")]);
 }
+
+// ---------------------------------------------------------------------------
+// The source of a bin that a test script runs.
+
+/// A first-party bin that a test script runs is part of how the script runs
+/// its tests: a change of the bin's source (its entry file, or a file of its
+/// package that the entry imports) selects the tests of the scripts that run
+/// it, and no other test.
+#[cfg(unix)]
+#[test]
+fn the_source_of_a_bin_a_test_script_runs_selects_the_tests_of_the_script() {
+    // A bin that forwards to the runner named first.
+    let dir = fixture("trace_node_test");
+    for changed in [
+        "packages/tool-run/src/environment.mjs",
+        "packages/tool-run/bin/run.mjs",
+    ] {
+        let selection = node_selection(dir.path(), &["--changed", changed]);
+        expect_tests(
+            &selection,
+            &[(VITEST_LABEL, "ui#test"), (NODE_HEADING, "web#test")],
+        );
+    }
+
+    // A bin that wraps jest.
+    let dir = fixture("trace_jest");
+    let write = |rel: &str, text: &str| {
+        let path = dir.path().join(rel);
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        fs::write(path, text).unwrap();
+    };
+    write(
+        "packages/jest-ci/package.json",
+        "{\n  \"name\": \"jest-ci\",\n  \"version\": \"1.0.0\",\n  \"private\": true,\n  \"bin\": \
+         { \"jest-ci\": \"./bin/jest-ci.js\" }\n}\n",
+    );
+    write(
+        "packages/jest-ci/bin/jest-ci.js",
+        "#!/usr/bin/env node\nconst { spawnSync } = require('node:child_process');\n\nconst { \
+         flags } = require('../src/flags.js');\n\nconst result = spawnSync('jest', [...flags, \
+         ...process.argv.slice(2)], { stdio: 'inherit' });\nprocess.exit(result.status ?? 1);\n",
+    );
+    write(
+        "packages/jest-ci/src/flags.js",
+        "module.exports = { flags: ['--ci'] };\n",
+    );
+    let math = dir.path().join("packages/math/package.json");
+    let manifest = fs::read_to_string(&math).unwrap();
+    assert!(manifest.contains("\"test\": \"jest\""), "{manifest}");
+    fs::write(
+        &math,
+        manifest
+            .replace("\"test\": \"jest\"", "\"test\": \"jest-ci\"")
+            .replace(
+                "\"jest\": \"29.7.0\"",
+                "\"jest\": \"29.7.0\",\n    \"jest-ci\": \"*\"",
+            ),
+    )
+    .unwrap();
+    git(dir.path(), &["add", "-A"]);
+    git(dir.path(), &["commit", "--quiet", "-m", "a jest wrapper"]);
+    for changed in [
+        "packages/jest-ci/src/flags.js",
+        "packages/jest-ci/bin/jest-ci.js",
+    ] {
+        let selection = affected_json(dir.path(), &["--changed", changed]);
+        expect_tests(
+            &selection,
+            &[(JEST_ADD, "math#test"), (JEST_MUL, "math#test")],
+        );
+    }
+}
