@@ -2219,6 +2219,18 @@ fn a_tracked_file_named_like_a_cache_entry_is_a_change() {
     git(main.path(), &["commit", "--quiet", "-m", "a fixture"]);
     let (tests, err) = selected(main.path(), &args, &[]);
     assert_eq!(tests, [JEST_ROOT], "{err}");
+
+    // Tracked at the base only (the branch removed it), and written again: the
+    // file of the base changed.
+    git(main.path(), &["checkout", "--quiet", "main"]);
+    git(main.path(), &["merge", "--quiet", "--ff-only", "feature"]);
+    git(main.path(), &["checkout", "--quiet", "feature"]);
+    git(main.path(), &["rm", "--quiet", entry]);
+    git(main.path(), &["commit", "--quiet", "-m", "no fixture"]);
+    fs::create_dir_all(main.path().join(".turbo/cache")).unwrap();
+    fs::write(main.path().join(entry), "{\"changed\": true}\n").unwrap();
+    let (tests, err) = selected(main.path(), &args, &[]);
+    assert_eq!(tests, [JEST_ROOT], "{err}");
 }
 
 /// A package whose runner the trace does not cover (mocha): its test task runs

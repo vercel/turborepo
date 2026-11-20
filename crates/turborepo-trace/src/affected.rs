@@ -191,8 +191,13 @@ fn is_cache_entry(name: &str) -> bool {
 }
 
 /// Those of `paths` (relative to `root`) that git does not track: neither in
-/// the index nor in `HEAD`. None when git cannot say.
-fn untracked_among(root: &Path, paths: &[String]) -> std::collections::HashSet<String> {
+/// the index, nor in `HEAD`, nor in a base the working tree is compared with
+/// (`bases`). None when git cannot say.
+fn untracked_among(
+    root: &Path,
+    paths: &[String],
+    bases: &[String],
+) -> std::collections::HashSet<String> {
     let listed = |args: &[&str]| -> Option<std::collections::HashSet<String>> {
         let mut args: Vec<&str> = args.to_vec();
         args.push("--");
@@ -205,14 +210,18 @@ fn untracked_among(root: &Path, paths: &[String]) -> std::collections::HashSet<S
                 .collect(),
         )
     };
-    let index = listed(&["ls-files", "-z", "--full-name"]);
-    let head = listed(&["ls-tree", "-r", "-z", "--name-only", "--full-name", "HEAD"]);
-    let (Some(index), Some(head)) = (index, head) else {
+    let Some(mut tracked) = listed(&["ls-files", "-z"]) else {
         return Default::default();
     };
+    for rev in std::iter::once("HEAD").chain(bases.iter().map(String::as_str)) {
+        match listed(&["ls-tree", "-r", "-z", "--name-only", rev]) {
+            Some(at) => tracked.extend(at),
+            None => return Default::default(),
+        }
+    }
     paths
         .iter()
-        .filter(|p| !index.contains(*p) && !head.contains(*p))
+        .filter(|p| !tracked.contains(*p))
         .cloned()
         .collect()
 }
@@ -942,9 +951,9 @@ fn affected(cmd: AffectedCmd, out: &mut dyn Write, host: Option<&Host>) -> Resul
             let o = format!("{p}/");
             changes.retain(|c| !c.path.starts_with(&o));
         }
-        // Only a file git does not track is one the command wrote: a tracked file
-        // named like a cache entry is a file of the repository, and its change
-        // stays.
+        // Only a file git does not track is one the command wrote: a file named
+        // like a cache entry that is tracked (in the index, in `HEAD` or at the
+        // base) is a file of the repository, and its change stays.
         let mut entries: Vec<String> = Vec::new();
         for dir in &cmd.cache_dirs {
             if let Some(p) = below(dir) {
@@ -963,7 +972,8 @@ fn affected(cmd: AffectedCmd, out: &mut dyn Write, host: Option<&Host>) -> Resul
             }
         }
         if !entries.is_empty() {
-            let written = untracked_among(&root, &entries);
+            let bases = git.as_ref().map_or(&[][..], |g| g.bases.as_slice());
+            let written = untracked_among(&root, &entries, bases);
             changes.retain(|c| !written.contains(&c.path));
         }
     }
