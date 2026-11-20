@@ -25,7 +25,7 @@ use crate::{
     recognizers::{
         run::{go_module_configs, go_package_arg, package_name},
         util::{
-            Args, add_code_config, add_glob, find_config, find_up, opt, positionals,
+            Args, add_code_config, add_glob, find_config, find_up, flag, opt, opts, positionals,
             resolve_js_file,
         },
     },
@@ -817,7 +817,21 @@ impl Recognizer for Cargo {
                 sub,
                 "test" | "t" | "nextest" | "bench" | "insta" | "llvm-cov"
             ) {
-                out.test_run("cargo-test", root.clone());
+                // `-p <crate>` naming the crate of the manifest the command finds (a
+                // task of the crate: turbo's `cargo test --package=<crate>`) starts
+                // that crate's tests only.
+                let packages = opts(&args, &["-p", "--package"]);
+                let own = packages.len() == 1
+                    && !flag(&args, &["--workspace", "--all"])
+                    && fsx::read_to_string(&manifest)
+                        .ok()
+                        .and_then(|s| s.parse::<toml::Table>().ok())
+                        .and_then(|t| Some(t.get("package")?.get("name")?.as_str()? == packages[0]))
+                        .unwrap_or(false);
+                out.test_run(
+                    "cargo-test",
+                    if own { crate_dir.clone() } else { root.clone() },
+                );
                 out.membership(
                     root.clone(),
                     "**/{tests,benches,fixtures,testdata,snapshots}/**",

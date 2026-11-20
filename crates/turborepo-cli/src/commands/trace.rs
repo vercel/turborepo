@@ -91,8 +91,28 @@ fn uncovered_text(tests: &AffectedTests) -> String {
     tests
         .uncovered_tasks
         .iter()
-        .map(|t| format!("turbo trace: {} runs whole ({})\n", t.task, t.description))
+        .map(|t| {
+            format!(
+                "turbo trace: {} runs whole ({})\n",
+                one_line(&t.task),
+                one_line(&t.description)
+            )
+        })
         .collect()
+}
+
+/// `text` with its control characters escaped: a name from the repository
+/// stays on its line of the output.
+fn one_line(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    for c in text.chars() {
+        if c.is_control() {
+            out.extend(c.escape_default());
+        } else {
+            out.push(c);
+        }
+    }
+    out
 }
 
 fn affected_text(tests: &AffectedTests) -> String {
@@ -322,6 +342,22 @@ mod tests {
         for off in ["", "0", "false", "yes", "on", " 1", "2"] {
             assert!(!gate_value_enables(off), "{off:?}");
         }
+    }
+
+    #[test]
+    fn uncovered_text_keeps_each_task_on_one_line() {
+        let tests = AffectedTests {
+            uncovered_tasks: vec![UncoveredTask {
+                task: "a\n::error::b#test".into(),
+                package: "a".into(),
+                description: "runs\rpytest".into(),
+            }],
+            items: vec![],
+        };
+        assert_eq!(
+            uncovered_text(&tests),
+            "turbo trace: a\\n::error::b#test runs whole (runs\\rpytest)\n"
+        );
     }
 
     fn sample() -> AffectedTests {
