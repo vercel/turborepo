@@ -31,7 +31,16 @@
 //! - the file does not call `process.chdir`, does not name `process.env`, reads
 //!   no file, and imports nothing but the module that starts the process
 //!   (`child_process`, `cross-spawn`, `execa`, `process`): a module of its
-//!   package could set a preload in the environment.
+//!   package could set a preload in the environment;
+//! - `process` is named only for what the shape needs and for how the bin ends
+//!   (`process.argv`, `process.exit`, `process.exitCode`, `process.on`,
+//!   `process.kill`, `process.pid`, the standard streams), and the `process`
+//!   module is loaded only as that object (`import process from
+//!   'node:process'`, `const process = require('process')`): its parts under
+//!   other names (`import { env, chdir } from 'node:process'`, `const { env } =
+//!   process`) change the environment or the directory without naming
+//!   `process.env` or `process.chdir`. Neither is `globalThis` or `global`
+//!   named.
 //!
 //! So the command behind the bin runs with the bin's own arguments,
 //! environment and working directory. A bin that picks the program from a
@@ -85,6 +94,27 @@ const MODULES: &[&str] = &[
     "process",
     "node:process",
 ];
+
+/// The modules of [`MODULES`] that are the `process` object.
+const PROCESS_MODULES: &[&str] = &["process", "node:process"];
+
+/// What may follow the name `process`: its arguments, and how the bin ends.
+const PROCESS_USES: &[&str] = &[
+    ".argv",
+    ".exit(",
+    ".exitCode",
+    ".on(",
+    ".once(",
+    ".kill(",
+    ".pid",
+    ".stdout",
+    ".stderr",
+    ".stdin",
+];
+
+/// The ways the `process` module is loaded as the object of that name (in
+/// the code without whitespace, a string literal is `""`).
+const PROCESS_LOADS: &[&str] = &["import process from\"\"", "process=require(\"\")"];
 
 fn is_ident(c: u8) -> bool {
     c.is_ascii_alphanumeric() || c == b'_' || c == b'$'
@@ -164,6 +194,29 @@ pub fn forwards(lx: &Lexed) -> bool {
         code.push(c);
     }
     if code.contains("process.chdir(") {
+        return false;
+    }
+    // `process` is the global object, used for what the shape needs: no part
+    // of it has another name.
+    let loads: usize = PROCESS_LOADS.iter().map(|l| code.matches(l).count()).sum();
+    let process_modules = lx
+        .lits
+        .iter()
+        .filter(|l| PROCESS_MODULES.contains(&l.value.as_str()))
+        .count();
+    if process_modules != loads {
+        return false;
+    }
+    for at in occurrences(&code, "process") {
+        let (before, after) = (&code[..at], &code[at + "process".len()..]);
+        let used = PROCESS_USES.iter().any(|u| after.starts_with(u));
+        let loaded = (before.ends_with("import ") && after.starts_with(" from\"\""))
+            || after.starts_with("=require(\"\")");
+        if !(used || loaded) {
+            return false;
+        }
+    }
+    if !occurrences(&code, "globalThis").is_empty() || !occurrences(&code, "global").is_empty() {
         return false;
     }
     let mut calls: Vec<usize> = Vec::new();
@@ -338,6 +391,53 @@ mod tests {
             // The environment gets a preload.
             "process.env.NODE_OPTIONS = '--import ' + hook;\nspawnSync(process.argv[2], \
              process.argv.slice(3), { stdio: 'inherit' });",
+        ] {
+            assert!(!forwards(&lex(src)), "{src}");
+        }
+    }
+
+    #[test]
+    fn the_process_object_under_its_own_name_forwards() {
+        for src in [
+            "import process from 'node:process';\nimport { spawnSync } from \
+             'node:child_process';\nconst r = spawnSync(process.argv[2], process.argv.slice(3), { \
+             stdio: 'inherit' });\nprocess.exitCode = r.status ?? 1;",
+            "const process = require('process');\nconst { spawn } = \
+             require('child_process');\nconst child = spawn(process.argv[2], \
+             process.argv.slice(3), { stdio: 'inherit' });\nprocess.on('SIGINT', () => \
+             child.kill('SIGINT'));\nchild.on('exit', (c) => process.exit(c));",
+        ] {
+            assert!(forwards(&lex(src)), "{src}");
+        }
+    }
+
+    #[test]
+    fn parts_of_process_under_other_names_are_no_forwarder() {
+        for src in [
+            // Named imports change the environment and the directory.
+            "import { env, chdir } from 'node:process';\nimport { spawnSync } from \
+             'node:child_process';\nenv.NODE_OPTIONS = '--import \
+             ./hook.mjs';\nchdir('..');\nspawnSync(process.argv[2], process.argv.slice(3), { \
+             stdio: 'inherit' });",
+            "import { env } from 'process';\nenv.NODE_OPTIONS = '--require \
+             ./hook.cjs';\nspawnSync(process.argv[2], process.argv.slice(3), { stdio: 'inherit' \
+             });",
+            "import * as proc from 'node:process';\nproc.chdir('..');\nspawnSync(process.argv[2], \
+             process.argv.slice(3));",
+            "const { env, chdir } = \
+             require('node:process');\nchdir('..');\nspawnSync(process.argv[2], \
+             process.argv.slice(3));",
+            // The object is taken apart, or has another name.
+            "const { env } = process;\nenv.NODE_OPTIONS = '--import \
+             ./hook.mjs';\nspawnSync(process.argv[2], process.argv.slice(3));",
+            "const p = process;\np.chdir('..');\nspawnSync(process.argv[2], \
+             process.argv.slice(3));",
+            "process['env'].NODE_OPTIONS = '--import ./hook.mjs';\nspawnSync(process.argv[2], \
+             process.argv.slice(3));",
+            "globalThis['process'].chdir('..');\nspawnSync(process.argv[2], \
+             process.argv.slice(3));",
+            "Object.assign(process.env, { NODE_OPTIONS: '--import ./hook.mjs' \
+             });\nspawnSync(process.argv[2], process.argv.slice(3));",
         ] {
             assert!(!forwards(&lex(src)), "{src}");
         }
