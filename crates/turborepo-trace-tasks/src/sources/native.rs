@@ -158,11 +158,33 @@ fn go_work_uses(text: &str) -> Vec<String> {
     out
 }
 
+/// The directories a `go.work` with the text `text` uses ([`go_work_uses`]),
+/// as a set. Every package of a repository asks about the same file: the last
+/// text is parsed once.
+fn go_work_members(text: &str) -> std::sync::Arc<std::collections::HashSet<String>> {
+    type Parsed = (String, std::sync::Arc<std::collections::HashSet<String>>);
+    static LAST: std::sync::Mutex<Option<Parsed>> = std::sync::Mutex::new(None);
+    let mut last = LAST.lock().unwrap_or_else(|e| e.into_inner());
+    if let Some((of, members)) = last.as_ref()
+        && of == text
+    {
+        return members.clone();
+    }
+    let members = std::sync::Arc::new(go_work_uses(text).into_iter().collect());
+    *last = Some((text.to_owned(), std::sync::Arc::clone(&members)));
+    members
+}
+
 /// The module in `dir`, if it is a native package: its module path.
 fn module_at(root: &Path, dir: &Path) -> Option<String> {
+    // A directory without a `go.mod` is no module, whatever the workspace file
+    // says: it is not read for it.
+    if !fsx::is_file(&dir.join("go.mod")) {
+        return None;
+    }
     let work = fsx::read_to_string(root.join("go.work")).ok()?;
     let rel = repo_rel(root, dir);
-    if !go_work_uses(&work).contains(&rel) {
+    if !go_work_members(&work).contains(&rel) {
         return None;
     }
     let m = fsx::read_to_string(dir.join("go.mod")).ok()?;
@@ -354,7 +376,9 @@ fn has_binary(dir: &Path, m: &toml::Table) -> bool {
 
 /// The normalized names of the dependencies a pyproject declares itself: its
 /// project's dependencies, `tool.uv.dev-dependencies` and every dependency
-/// group (as turbo reads tool declarations).
+/// group (as turbo reads tool declarations). A dependency with an environment
+/// marker (`pytest; python_version >= '3.12'`) declares no tool: turbo derives
+/// no task from it.
 fn declared(m: &toml::Table) -> Vec<String> {
     let strings = |v: Option<&toml::Value>| -> Vec<String> {
         v.and_then(|v| v.as_array())
@@ -375,6 +399,7 @@ fn declared(m: &toml::Table) -> Vec<String> {
         }
     }
     all.iter()
+        .filter(|d| !d.contains(';'))
         .filter_map(|d| {
             let d = d.trim_start();
             let end = d
@@ -514,6 +539,31 @@ mod tests {
         )
         .unwrap();
         assert_eq!(declared(&m), ["pytest", "requests", "ruff"]);
+    }
+
+    #[test]
+    fn a_dependency_with_an_environment_marker_declares_no_tool() {
+        let m: toml::Table = toml::from_str(
+            "[project]\nname = \"a\"\ndependencies = [\"pytest; python_version >= '3.12'\", \
+             \"requests\"]\n[dependency-groups]\ntest = [\"pytest ; sys_platform == \
+             'linux'\"]\n[tool.uv]\ndev-dependencies = [\"pytest>=8; implementation_name == \
+             'cpython'\"]\n",
+        )
+        .unwrap();
+        assert_eq!(declared(&m), ["requests"]);
+    }
+
+    #[test]
+    fn the_members_of_a_go_workspace_follow_its_text() {
+        let first = "go 1.22\nuse (\n\t./services/billing\n\t./packages/math\n)\n";
+        for _ in 0..2 {
+            let members = go_work_members(first);
+            assert!(members.contains("services/billing") && members.contains("packages/math"));
+            assert!(!members.contains("apps/web"));
+        }
+        let members = go_work_members("go 1.22\nuse ./apps/web\n");
+        assert!(members.contains("apps/web") && !members.contains("packages/math"));
+        assert!(go_work_members(first).contains("packages/math"));
     }
 
     #[test]

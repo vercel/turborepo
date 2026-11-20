@@ -137,6 +137,56 @@ fn crates_have_the_tasks_turbo_derives() {
     );
 }
 
+/// A `[package]` in the root manifest is a package like any other: turbo
+/// names it by its crate, and `<crate>#<task>` in `turbo.json` is its
+/// definition.
+#[test]
+fn a_crate_at_the_repository_root_has_its_own_definitions() {
+    let root = repo(
+        "cargo-root",
+        &[
+            (
+                "turbo.json",
+                r#"{
+  "futureFlags": { "experimentalCargoWorkspaces": true },
+  "tasks": {
+    "build": { "outputs": ["dist/**"] },
+    "tool#build": { "outputs": ["out/**"] },
+    "lib-a#build": { "outputs": ["gen/**"] }
+  }
+}"#,
+            ),
+            (
+                "Cargo.toml",
+                "[package]\nname = \"tool\"\nversion = \"0.1.0\"\n\n[workspace]\nmembers = \
+                 [\"crates/*\"]\n",
+            ),
+            ("src/main.rs", "fn main() {}\n"),
+            (
+                "crates/lib-a/Cargo.toml",
+                "[package]\nname = \"lib-a\"\nversion = \"0.1.0\"\n",
+            ),
+            ("crates/lib-a/src/lib.rs", "pub fn f() {}\n"),
+        ],
+    );
+    let set = tasks(&root, &[".", "crates/lib-a"]);
+    let build = get(&set, ".", "build");
+    assert_eq!(build.lines, ["cargo build --package=tool --locked"]);
+    let outputs: Vec<&Path> = build
+        .spec
+        .outputs
+        .iter()
+        .map(|o| o.path.as_path())
+        .collect();
+    assert!(outputs.contains(&root.join("out").as_path()), "{outputs:?}");
+    // Another crate's definition is not the root crate's.
+    assert!(
+        !outputs.contains(&root.join("gen").as_path()),
+        "{outputs:?}"
+    );
+    std::fs::remove_dir_all(&root).unwrap();
+}
+
 #[test]
 fn crates_have_no_tasks_without_the_future_flag() {
     let root = repo(
@@ -192,6 +242,35 @@ fn uv_projects_that_declare_pytest_have_a_test_task() {
         "{:?}",
         test.spec.runs
     );
+}
+
+/// turbo derives no task from a dependency with an environment marker: a
+/// project that names pytest only that way has no test task.
+#[test]
+fn a_uv_project_with_pytest_behind_a_marker_has_no_test_task() {
+    let root = repo(
+        "uv-marker",
+        &[
+            (
+                "turbo.json",
+                r#"{ "futureFlags": { "experimentalPythonWorkspaces": true }, "tasks": { "test": {} } }"#,
+            ),
+            (
+                "pyproject.toml",
+                "[tool.turbo]\nname = \"acme\"\n\n[tool.uv.workspace]\nmembers = \
+                 [\"packages/*\"]\n",
+            ),
+            (
+                "packages/py-app/pyproject.toml",
+                "[project]\nname = \"py-app\"\nversion = \"0.1.0\"\ndependencies = [\"pytest; \
+                 python_version >= '3.12'\"]\n\n[dependency-groups]\ndev = [\"pytest>=8 ; \
+                 sys_platform == 'linux'\"]\n",
+            ),
+        ],
+    );
+    let set = tasks(&root, &[".", "packages/py-app"]);
+    assert!(names(&set, "packages/py-app").is_empty());
+    std::fs::remove_dir_all(&root).unwrap();
 }
 
 #[test]

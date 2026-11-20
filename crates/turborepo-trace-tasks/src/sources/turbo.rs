@@ -484,10 +484,11 @@ impl TaskSource for Turbo {
         // Definitions that apply: (task name, definition).
         let mut defs: Vec<(String, Value)> = Vec::new();
         // turbo's name of a native package (a crate, a uv project), which has no
-        // `package.json`.
-        let native = match (&pkg.name, is_root) {
-            (None, false) => super::native::package_name(&ws.root, &pkg.dir),
-            _ => None,
+        // `package.json`. Also at the repository root: a `[package]` in the root
+        // manifest is a package like any other, named by its crate.
+        let native = match &pkg.name {
+            None => super::native::package_name(&ws.root, &pkg.dir),
+            Some(_) => None,
         };
         if let Some(tasks) = tasks_of(&root_val) {
             for (k, v) in tasks {
@@ -495,10 +496,8 @@ impl TaskSource for Turbo {
                     None => defs.push((k.clone(), v.clone())),
                     Some(("//", n)) if is_root => defs.push((n.to_string(), v.clone())),
                     Some((p, n))
-                        if !is_root
-                            && (pkg.name.as_deref() == Some(p)
-                                || native.as_deref() == Some(p)
-                                || pkg.rel == p) =>
+                        if native.as_deref() == Some(p)
+                            || (!is_root && (pkg.name.as_deref() == Some(p) || pkg.rel == p)) =>
                     {
                         defs.push((n.to_string(), v.clone()))
                     }
