@@ -223,3 +223,157 @@ fn explicit_head_lockfile_comparison_is_independent_of_checkout() {
         );
     }
 }
+
+fn uv_lockfile(six: &str, sdist: &str, wheel: &str) -> String {
+    format!(
+        r#"version = 1
+revision = 5
+requires-python = ">=3.10"
+
+[manifest]
+members = [
+    "a",
+    "b",
+    "c",
+]
+
+[[package]]
+name = "a"
+version = "0.1.0"
+source = {{ editable = "packages/a" }}
+dependencies = [
+    {{ name = "six" }},
+]
+
+[package.metadata]
+requires-dist = [{{ name = "six", specifier = ">=1.16" }}]
+
+[[package]]
+name = "b"
+version = "0.1.0"
+source = {{ virtual = "packages/b" }}
+dependencies = [
+    {{ name = "a" }},
+]
+
+[package.metadata]
+requires-dist = [{{ name = "a", editable = "packages/a" }}]
+
+[[package]]
+name = "c"
+version = "0.1.0"
+source = {{ virtual = "packages/c" }}
+
+[[package]]
+name = "six"
+version = "{six}"
+source = {{ registry = "https://pypi.org/simple" }}
+sdist = {{ url = "https://files.pythonhosted.org/packages/{sdist}" }}
+wheels = [
+    {{ url = "https://files.pythonhosted.org/packages/{wheel}" }},
+]
+"#
+    )
+}
+
+/// Without a JavaScript package manager there is no ignored JavaScript
+/// resolution configuration to compare, so a clean checkout of the head ref
+/// must keep lockfile changes scoped instead of marking every package changed.
+/// A uv workspace stands in for any repository without a JavaScript package
+/// manager; it runs offline from an inline lockfile.
+#[test]
+fn explicit_head_scopes_lockfile_changes_without_javascript_package_manager() {
+    let available = which::which("uv").is_ok();
+    if !available {
+        eprintln!("skipping: uv is not on PATH");
+        return;
+    }
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    fs::write(
+        root.join("pyproject.toml"),
+        "[tool.turbo]\nname = \"acme\"\n\n[tool.uv.workspace]\nmembers = [\"packages/*\"]\n",
+    )
+    .unwrap();
+    fs::write(
+        root.join("turbo.json"),
+        json!({
+            "agentGuidance": false,
+            "futureFlags": {"experimentalPythonWorkspaces": true},
+            "tasks": {"check": {}}
+        })
+        .to_string(),
+    )
+    .unwrap();
+    fs::write(root.join(".gitignore"), ".venv\n").unwrap();
+    for (name, extra) in [
+        ("a", "dependencies = [\"six>=1.16\"]\n"),
+        (
+            "b",
+            "dependencies = [\"a\"]\n\n[tool.uv.sources]\na = { workspace = true }\n",
+        ),
+        ("c", ""),
+    ] {
+        let package = root.join("packages").join(name);
+        fs::create_dir_all(&package).unwrap();
+        fs::write(
+            package.join("pyproject.toml"),
+            format!(
+                "[project]\nname = \"{name}\"\nversion = \"0.1.0\"\nrequires-python = \
+                 \">=3.10\"\n{extra}"
+            ),
+        )
+        .unwrap();
+    }
+    fs::write(
+        root.join("uv.lock"),
+        uv_lockfile(
+            "1.16.0",
+            "six-1.16.0.tar.gz",
+            "six-1.16.0-py2.py3-none-any.whl",
+        ),
+    )
+    .unwrap();
+    git(root, &["init", "--quiet", "--initial-branch=main"]);
+    git(root, &["config", "user.email", "turbo-test@example.com"]);
+    git(root, &["config", "user.name", "Turbo Test"]);
+    git(root, &["add", "."]);
+    git(root, &["commit", "--quiet", "-m", "base"]);
+    let base = revision(root);
+    fs::write(
+        root.join("uv.lock"),
+        uv_lockfile(
+            "1.17.0",
+            "six-1.17.0.tar.gz",
+            "six-1.17.0-py2.py3-none-any.whl",
+        ),
+    )
+    .unwrap();
+    git(root, &["add", "."]);
+    git(root, &["commit", "--quiet", "-m", "update six"]);
+    let head = revision(root);
+
+    let expected = ["a", "acme", "b"];
+    assert_eq!(query_names(root, &base, None), expected);
+    assert_eq!(query_names(root, &base, Some(&head)), expected);
+    assert_eq!(query_names(root, &base, Some("HEAD")), expected);
+
+    let output = run_turbo_with_env(
+        root,
+        &["run", "check", "--affected", "--dry=json"],
+        &[("TURBO_SCM_BASE", &base), ("TURBO_SCM_HEAD", &head)],
+    );
+    assert!(
+        output.status.success(),
+        "{}",
+        common::combined_output(&output)
+    );
+    let data: Value = serde_json::from_slice(&output.stdout).unwrap();
+    let tasks: Vec<_> = data["tasks"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|task| task["taskId"].as_str().unwrap())
+        .collect();
+    assert_eq!(tasks, ["a#check", "b#check"]);
+}

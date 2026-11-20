@@ -44,12 +44,19 @@ impl PackageGraph {
     /// Whether the dependency-resolution configuration on disk matches the
     /// configuration returned by `read`. Ignored files are invisible to git
     /// status, so a clean checkout does not imply this.
+    ///
+    /// Only JavaScript lockfile interpretation reads this configuration from
+    /// disk (workspace linking, catalogs, Yarn settings). `uv.lock` and
+    /// `Cargo.lock` comparisons diff lockfile contents against the graph's
+    /// existing resolution, so a repository without a JavaScript package
+    /// manager has nothing here that git status could miss. A native
+    /// comparison that starts reading such configuration must compare it here.
     pub fn dependency_configuration_matches(
         &self,
         read: impl Fn(&AbsoluteSystemPath) -> Option<Vec<u8>>,
     ) -> bool {
         let Some(pm) = self.package_manager() else {
-            return false;
+            return true;
         };
         let pnpm = matches!(
             pm.lockfile_manager(),
@@ -266,6 +273,45 @@ mod tests {
         ));
         assert!(configuration_matches("pnpm-workspace.yaml", None, None));
         assert!(!configuration_matches("other.yaml", Some(lf), Some(crlf)));
+    }
+
+    #[tokio::test]
+    async fn configuration_matches_without_javascript_package_manager() {
+        let dir = tempfile::tempdir().unwrap();
+        // Cargo discovery reports plain (non-verbatim) paths on Windows.
+        let canonical = dunce::canonicalize(dir.path()).unwrap();
+        let root = AbsoluteSystemPath::new(canonical.to_str().unwrap()).unwrap();
+        fs::create_dir_all(canonical.join("crates/app/src")).unwrap();
+        for (path, contents) in [
+            (
+                "Cargo.toml",
+                "[workspace]\nmembers = [\"crates/*\"]\nresolver = \
+                 \"2\"\n\n[workspace.metadata]\nname = \"acme\"\n",
+            ),
+            (
+                "crates/app/Cargo.toml",
+                "[package]\nname = \"app\"\nversion = \"0.1.0\"\nedition = \"2021\"\n",
+            ),
+            ("crates/app/src/lib.rs", ""),
+            (
+                "Cargo.lock",
+                "version = 4\n\n[[package]]\nname = \"app\"\nversion = \"0.1.0\"\n",
+            ),
+        ] {
+            fs::write(canonical.join(path), contents).unwrap();
+        }
+        let graph = PackageGraph::builder_optional(root, None)
+            .with_contributor(
+                crate::cargo::CargoContributor::new_without_external_dependencies(root.to_owned()),
+            )
+            .build()
+            .await
+            .unwrap();
+        assert!(graph.package_manager().is_none());
+        // Even a head ref that lacks every file cannot differ in JavaScript
+        // configuration, so an explicit head on a clean checkout keeps native
+        // lockfile changes scoped.
+        assert!(graph.dependency_configuration_matches(|_| None));
     }
 
     fn lockfile(version: &str, later_dependency: bool) -> Vec<u8> {
