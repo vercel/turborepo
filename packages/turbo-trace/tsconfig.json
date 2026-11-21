@@ -1,0 +1,10 @@
+{
+  "extends": "@turbo/tsconfig/library.json",
+  "compilerOptions": {
+    "rootDir": ".",
+    "lib": ["ES2022"],
+    "types": ["node"],
+    "strictNullChecks": true
+  },
+  "exclude": ["dist"]
+}
