@@ -289,15 +289,87 @@ fn symlink_inputs_hash_external_and_git_metadata_targets_as_link_text() {
 }
 
 #[test]
-fn linked_directories_are_read_once_per_input_walk() {
+fn workspace_links_under_node_modules_are_not_followed() {
     let (_tmp, root) = test_utils::tmp_dir();
     test_utils::init_repo(&root);
     let at = |path: &str| root.join_unix_path(RelativeUnixPathBuf::new(path).unwrap());
     at(".gitignore")
         .create_with_contents("node_modules\n")
         .unwrap();
+    at("packages/a/src").create_dir_all().unwrap();
+    at("packages/b/src").create_dir_all().unwrap();
+    at("packages/a/package.json")
+        .create_with_contents("{}")
+        .unwrap();
+    at("packages/b/package.json")
+        .create_with_contents("{}")
+        .unwrap();
+    at("packages/a/src/a.test.ts")
+        .create_with_contents("a")
+        .unwrap();
+    at("packages/b/src/b.test.ts")
+        .create_with_contents("b")
+        .unwrap();
+    at("packages/a/node_modules/@s").create_dir_all().unwrap();
+    std::os::unix::fs::symlink("../../../b", at("packages/a/node_modules/@s/b")).unwrap();
+    std::os::unix::fs::symlink("../../b", at("packages/a/node_modules/b")).unwrap();
+    test_utils::commit_all(&root);
+    let package = AnchoredSystemPathBuf::from_raw("packages/a").unwrap();
+    for mode in 0..3 {
+        let wildcard = hashes(&root, &["**/*.{test,spec}.{ts,tsx}"], mode).unwrap();
+        let mut names: Vec<_> = wildcard.keys().map(|path| path.as_str()).collect();
+        names.sort();
+        assert_eq!(names, ["package.json", "src/a.test.ts"], "backend {mode}");
+        // `$TURBO_DEFAULT$` alongside the glob reads the Git index as well.
+        let scm = if mode == 2 {
+            SCM::Manual(crate::FileHashMode::ContentOnly)
+        } else {
+            SCM::new(&root)
+        };
+        let index = (mode == 1).then(|| scm.build_repo_index_eager().unwrap());
+        let with_defaults = scm
+            .get_package_file_hashes(
+                &root,
+                &package,
+                &["**/*.{test,spec}.{ts,tsx}"],
+                true,
+                None,
+                index.as_ref(),
+            )
+            .unwrap();
+        let mut names: Vec<_> = with_defaults.keys().map(|path| path.as_str()).collect();
+        names.sort();
+        assert_eq!(names, ["package.json", "src/a.test.ts"], "backend {mode}");
+        let named = hashes(
+            &root,
+            &[
+                "node_modules/@s/b/src/*.test.ts",
+                "node_modules/b/src/*.test.ts",
+            ],
+            mode,
+        )
+        .unwrap();
+        let mut names: Vec<_> = named.keys().map(|path| path.as_str()).collect();
+        names.sort();
+        assert_eq!(
+            names,
+            [
+                "node_modules/@s/b/src/b.test.ts",
+                "node_modules/b/src/b.test.ts",
+                "package.json"
+            ],
+            "backend {mode}"
+        );
+    }
+}
+
+#[test]
+fn linked_directories_are_read_once_per_input_walk() {
+    let (_tmp, root) = test_utils::tmp_dir();
+    test_utils::init_repo(&root);
+    let at = |path: &str| root.join_unix_path(RelativeUnixPathBuf::new(path).unwrap());
     for package in ["a", "b", "c", "d"] {
-        at(&format!("packages/{package}/node_modules"))
+        at(&format!("packages/{package}/linked"))
             .create_dir_all()
             .unwrap();
         at(&format!("packages/{package}/index.js"))
@@ -307,7 +379,7 @@ fn linked_directories_are_read_once_per_input_walk() {
     for (from, to) in [("a", "b"), ("a", "c"), ("b", "d"), ("c", "d"), ("d", "a")] {
         std::os::unix::fs::symlink(
             format!("../../{to}"),
-            at(&format!("packages/{from}/node_modules/{to}")),
+            at(&format!("packages/{from}/linked/{to}")),
         )
         .unwrap();
     }
@@ -315,14 +387,11 @@ fn linked_directories_are_read_once_per_input_walk() {
     let blob = |bytes: &str| crate::crlf::hash_bytes_as_blob(bytes.as_bytes()).unwrap();
     let expected: GitHashes = [
         ("index.js", blob("a")),
-        ("node_modules/b/index.js", blob("b")),
-        ("node_modules/b/node_modules/d/index.js", blob("d")),
-        (
-            "node_modules/b/node_modules/d/node_modules/a",
-            blob("../../a"),
-        ),
-        ("node_modules/c/index.js", blob("c")),
-        ("node_modules/c/node_modules/d", blob("../../d")),
+        ("linked/b/index.js", blob("b")),
+        ("linked/b/linked/d/index.js", blob("d")),
+        ("linked/b/linked/d/linked/a", blob("../../a")),
+        ("linked/c/index.js", blob("c")),
+        ("linked/c/linked/d", blob("../../d")),
     ]
     .into_iter()
     .map(|(path, hash)| (RelativeUnixPathBuf::new(path).unwrap(), hash))
