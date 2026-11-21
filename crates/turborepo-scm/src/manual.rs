@@ -228,12 +228,14 @@ pub(crate) fn get_input_file_hashes_without_git<S: AsRef<str>>(
     cached_attrs: Option<&crate::crlf::GitAttrs>,
 ) -> Result<GitHashes, Error> {
     let include_configs = matches!(selection, InputSelection::Package { .. });
-    let include_default_files = matches!(
-        selection,
+    // An empty input list selects the package's default files, the same way an
+    // explicit `$TURBO_DEFAULT$` does. The git hasher treats the two alike.
+    let include_default_files = match selection {
         InputSelection::Package {
-            include_default_files: true
-        }
-    );
+            include_default_files,
+        } => include_default_files || inputs.is_empty(),
+        InputSelection::Exact => false,
+    };
     let full_package_path = turbo_root.resolve(package_path);
     let package_unix_path = package_path.to_unix();
     let mut hashes = GitHashes::new();
@@ -247,8 +249,6 @@ pub(crate) fn get_input_file_hashes_without_git<S: AsRef<str>>(
     let git_metadata_path = effective_attrs_root.join_component(".git");
     let mut owned_attrs = None;
     let attrs = crate::crlf::resolve_or_load(cached_attrs, effective_attrs_root, &mut owned_attrs);
-    let mut default_file_hashes = GitHashes::new();
-    let mut excluded_file_paths = HashSet::new();
 
     let mut local_inclusions: Vec<String> = Vec::new();
     let mut local_exclusions: Vec<String> = Vec::new();
@@ -263,9 +263,6 @@ pub(crate) fn get_input_file_hashes_without_git<S: AsRef<str>>(
             (None, false) => external_inclusions.push(input.into_glob()),
         }
     }
-    let has_local_inputs = !local_inclusions.is_empty() || !local_exclusions.is_empty();
-    let has_local_inclusions = !local_inclusions.is_empty();
-
     for inclusion in &local_inclusions {
         external_inclusions
             .push(PackageInput::resolve(package_unix_path.as_str(), inclusion)?.into_glob());
@@ -276,15 +273,16 @@ pub(crate) fn get_input_file_hashes_without_git<S: AsRef<str>>(
                 .into_glob(),
         );
     }
-    let has_inclusions = !external_inclusions.is_empty();
-    if has_inclusions {
-        for name in globwalk::PACKAGE_CONFIG_INPUTS
-            .iter()
-            .filter(|_| include_configs)
-        {
+    // Config files join an explicit input walk. They are the whole input set
+    // when the list is exclusion-only and no default files are selected.
+    let has_explicit_inclusions = !external_inclusions.is_empty();
+    if include_configs && (has_explicit_inclusions || !include_default_files) {
+        for name in globwalk::PACKAGE_CONFIG_INPUTS {
             external_inclusions
                 .push(PackageInput::resolve(package_unix_path.as_str(), name)?.into_glob());
         }
+    }
+    if !external_inclusions.is_empty() {
         let files = globwalk::globwalk_with_settings(
             turbo_root,
             &external_inclusions,
@@ -318,11 +316,10 @@ pub(crate) fn get_input_file_hashes_without_git<S: AsRef<str>>(
         }
     }
 
-    if !include_configs && local_inclusions.is_empty() {
+    if !include_default_files {
         return Ok(hashes);
     }
 
-    let mut walker_builder = WalkBuilder::new(&full_package_path);
     let mut excludes = Vec::new();
     for exclusion in &local_exclusions {
         for pattern in globwalk::walk_exclusion_patterns(exclusion) {
@@ -336,24 +333,31 @@ pub(crate) fn get_input_file_hashes_without_git<S: AsRef<str>>(
         Some(any(excludes)?)
     };
 
-    walker_builder.filter_entry(bounded_entry_filter(
-        &full_package_path,
-        turbo_root,
-        (!has_local_inclusions).then(|| git_metadata_path.clone()),
-    ));
-    let walker = (!has_inclusions).then(|| {
-        walker_builder
-            .follow_links(true)
-            .sort_by_file_name(|a, b| a.cmp(b))
-            // if inputs have been provided manually, we shouldn't skip ignored files to mimic the
-            // regular behavior
-            .git_ignore(!has_local_inputs && external_inclusions.is_empty())
-            .require_git(false)
-            .hidden(false) // this results in yielding hidden files (e.g. .gitignore)
-            .build()
-    });
+    // Exclusions apply to the union of default files and explicit inputs, the
+    // way the git hasher filters that union in memory: the glob walk never
+    // drops a literal include that an exclusion matches.
+    if let Some(exclude_pattern) = exclude_pattern.as_ref() {
+        hashes.retain(|key, _| !exclude_pattern.is_match(key.as_str()));
+    }
 
-    for dirent in walker.into_iter().flatten() {
+    // Default files are the package's files that `.gitignore` doesn't hide, so
+    // this walk honors ignore files even when the task has inputs of its own:
+    // an exclusion is still an input. Files an explicit inclusion pulled out
+    // of an ignored path are already in `hashes` from the glob walk above.
+    let walker = WalkBuilder::new(&full_package_path)
+        .filter_entry(bounded_entry_filter(
+            &full_package_path,
+            turbo_root,
+            Some(git_metadata_path),
+        ))
+        .follow_links(true)
+        .sort_by_file_name(|a, b| a.cmp(b))
+        .git_ignore(true)
+        .require_git(false)
+        .hidden(false) // this results in yielding hidden files (e.g. .gitignore)
+        .build();
+
+    for dirent in walker {
         let dirent = match dirent {
             Err(error) if is_link_cycle(&error) => continue,
             dirent => dirent?,
@@ -398,82 +402,15 @@ pub(crate) fn get_input_file_hashes_without_git<S: AsRef<str>>(
             continue;
         }
 
+        // Files the glob walk already hashed need no second read.
+        if hashes.contains_key(&relative_path) {
+            continue;
+        }
+
         let attr_path = effective_attrs_root.anchor(path)?.to_unix();
         if let Some(hash) = hash_discovered_file(turbo_root, path, attr_path.as_str(), attrs)? {
             hashes.insert(relative_path, hash);
         }
-    }
-
-    // If we're including default files, we need to walk again, but this time with
-    // git_ignore enabled
-    if include_default_files {
-        walker_builder.filter_entry(bounded_entry_filter(
-            &full_package_path,
-            turbo_root,
-            Some(git_metadata_path),
-        ));
-        let walker = walker_builder
-            .follow_links(true)
-            .sort_by_file_name(|a, b| a.cmp(b))
-            .git_ignore(true)
-            .require_git(false)
-            .hidden(false) // this results in yielding hidden files (e.g. .gitignore)
-            .build();
-
-        for dirent in walker {
-            let dirent = match dirent {
-                Err(error) if is_link_cycle(&error) => continue,
-                dirent => dirent?,
-            };
-            let metadata = match dirent.metadata() {
-                Ok(metadata) => metadata,
-                Err(error)
-                    if error
-                        .io_error()
-                        .is_some_and(|error| error.kind() == ErrorKind::NotFound) =>
-                {
-                    info!(path = %dirent.path().display(), "discovered hash candidate disappeared");
-                    continue;
-                }
-                Err(error) => return Err(error.into()),
-            };
-            // Skip anything that isn't a regular file. Must be here rather
-            // than as a walker filter because the root directory is always
-            // yielded.
-            if !metadata.is_file() {
-                continue;
-            }
-
-            let path = AbsoluteSystemPath::from_std_path(dirent.path())?;
-            let relative_path = full_package_path.anchor(path)?;
-            let relative_path = relative_path.to_unix();
-
-            if let Some(exclude_pattern) = exclude_pattern.as_ref()
-                && exclude_pattern.is_match(relative_path.as_str())
-            {
-                // Track excluded paths — no need to hash since we only use the
-                // path for filtering.
-                excluded_file_paths.insert(relative_path);
-                continue;
-            }
-
-            // Skip files already hashed in the first walk to avoid redundant I/O.
-            if hashes.contains_key(&relative_path) {
-                continue;
-            }
-
-            let attr_path = effective_attrs_root.anchor(path)?.to_unix();
-            if let Some(hash) = hash_discovered_file(turbo_root, path, attr_path.as_str(), attrs)? {
-                default_file_hashes.insert(relative_path, hash);
-            }
-        }
-    }
-
-    // merge default with all hashes
-    hashes.extend(default_file_hashes);
-    // remove excluded files
-    if !excluded_file_paths.is_empty() {
-        hashes.retain(|key, _| !excluded_file_paths.contains(key));
     }
 
     Ok(hashes)
@@ -1018,6 +955,69 @@ mod tests {
         );
     }
 
+    /// Regression test for https://github.com/vercel/turborepo/issues/15059
+    ///
+    /// An exclusion is the only input in these task definitions, so the walk
+    /// has no inclusions to drive it. Without `.git` the manual walk is the
+    /// only hasher, and hashing the ignored files it used to visit makes a
+    /// task's own outputs inputs: the hash after a build differs from the one
+    /// before it.
+    #[test]
+    fn test_exclusion_only_inputs_respect_gitignore() {
+        let (_tmp, turbo_root) = tmp_dir();
+        let pkg_path = AnchoredSystemPathBuf::from_raw("apps/web").unwrap();
+        let pkg_dir = turbo_root.resolve(&pkg_path);
+        pkg_dir.create_dir_all().unwrap();
+
+        for (path, contents) in [
+            ("package.json", "{}"),
+            ("src/index.ts", "export {}"),
+            ("src/index.test.ts", "test"),
+            ("dist/out.js", "output"),
+            ("node_modules/dep/index.js", "dependency"),
+        ] {
+            let file = pkg_dir.join_unix_path(RelativeUnixPathBuf::new(path).unwrap());
+            file.ensure_dir().unwrap();
+            file.create_with_contents(contents).unwrap();
+        }
+        turbo_root
+            .join_component(".gitignore")
+            .create_with_contents("node_modules\ndist\n")
+            .unwrap();
+
+        fn keys(hashes: &GitHashes) -> Vec<&str> {
+            let mut keys: Vec<_> = hashes.keys().map(|key| key.as_str()).collect();
+            keys.sort_unstable();
+            keys
+        }
+
+        // `$TURBO_DEFAULT$` with an exclusion: the default files minus the
+        // exclusion, which leaves the ignored outputs out.
+        let hashes = get_package_file_hashes_without_git(
+            &turbo_root,
+            &pkg_path,
+            &["!**/*.test.ts"],
+            true,
+            None,
+            None,
+        )
+        .unwrap();
+        assert_eq!(keys(&hashes), ["package.json", "src/index.ts"]);
+
+        // The same exclusion without `$TURBO_DEFAULT$` selects no package files
+        // beyond the config inputs, matching the git hasher.
+        let hashes = get_package_file_hashes_without_git(
+            &turbo_root,
+            &pkg_path,
+            &["!**/*.test.ts"],
+            false,
+            None,
+            None,
+        )
+        .unwrap();
+        assert_eq!(keys(&hashes), ["package.json"]);
+    }
+
     /// Regression test for https://github.com/vercel/turborepo/issues/9574
     /// Directory names as inputs (e.g. "src") should match all files inside.
     #[test]
@@ -1321,7 +1321,7 @@ mod tests {
             &turbo_root,
             &AnchoredSystemPathBuf::from_raw("packages/a").unwrap(),
             &["!**/*.md"],
-            false,
+            true,
             None,
             None,
         )
@@ -1358,21 +1358,19 @@ mod tests {
         index.create_with_contents("export {};").unwrap();
         std::os::unix::fs::symlink("..", package.join_components(&["src", "parent"])).unwrap();
 
-        for include_default_files in [false, true] {
-            let hashes = get_package_file_hashes_without_git(
-                &turbo_root,
-                &AnchoredSystemPathBuf::from_raw("packages/a").unwrap(),
-                &["!**/*.md"],
-                include_default_files,
-                None,
-                None,
-            )
-            .unwrap();
-            assert_eq!(
-                hashes.keys().collect::<Vec<_>>(),
-                vec![&RelativeUnixPathBuf::new("src/index.js").unwrap()],
-            );
-        }
+        let hashes = get_package_file_hashes_without_git(
+            &turbo_root,
+            &AnchoredSystemPathBuf::from_raw("packages/a").unwrap(),
+            &["!**/*.md"],
+            true,
+            None,
+            None,
+        )
+        .unwrap();
+        assert_eq!(
+            hashes.keys().collect::<Vec<_>>(),
+            vec![&RelativeUnixPathBuf::new("src/index.js").unwrap()],
+        );
     }
 
     // Regression test for https://github.com/vercel/turborepo/issues/10485
