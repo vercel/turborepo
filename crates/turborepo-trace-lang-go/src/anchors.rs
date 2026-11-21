@@ -1731,18 +1731,21 @@ mod tests {
         let coarse = names_with(src.as_bytes(), false, false);
         assert_eq!((coarse.anchor, coarse.ups), (Some(7), 5));
         assert!(coarse.anchored.is_empty());
-        // The string climbs; as joined onto the working directory it is marked with
-        // its steps and the `Dir`; the location covers where it goes from there.
+        // The string climbs; the `Dir` is in a helper, which can run more than once,
+        // so it names its shape anywhere; the location covers where it goes from
+        // there.
         assert_eq!(
             (coarse.names[0].climbs, coarse.names[0].climbs_from_cwd),
-            (false, 5)
+            (true, 0)
         );
         // With: the directory, and no parent step is left to apply to it.
         let n = names(src.as_bytes(), false);
         assert_eq!((n.anchor, n.ups), (None, 0));
+        // The location followed above its directory can be the base of a climbing
+        // string of another file of the package: the file is marked.
         assert_eq!(
             n.encode(),
-            "names:0,0,0,0,0\n7\tfixtures\n@L\t7\t../../../../fixtures\t**"
+            "names:0,0,0,0,0,1\n7\tfixtures\n@L\t7\t../../../../fixtures\t**"
         );
         assert!(!n.names[0].climbs);
         // Parent steps elsewhere in the file still count, for every entry.

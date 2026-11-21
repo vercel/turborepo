@@ -115,8 +115,9 @@ pub enum GoRoot {
 /// change to it extracts every file again. (2: a string that climbs from the
 /// working directory is marked with how far it climbs; 3: also with the other
 /// parent steps of the file, and a file that can move the base of its package
-/// is marked.)
-const FACTS_VERSION: u32 = 3;
+/// is marked; 4: a call that changes the working directory is a record, and
+/// its file is marked.)
+const FACTS_VERSION: u32 = 4;
 
 /// Go-specific options (the `go` command's flags and environment). Including
 /// files for every target is the shared
@@ -188,7 +189,9 @@ impl Language for GoLanguage {
             .and_then(|n| n.to_str())
             .is_some_and(|n| n.ends_with("_test.go"));
         let names = names::names_with(src, test_file, anchors_enabled());
-        if !names.is_empty() {
+        // The parent steps of a file without names still raise how far the climbing
+        // strings of the other files of its package can climb.
+        if !names.is_empty() || names.ups > 0 {
             out.fact(names.encode());
         }
     }

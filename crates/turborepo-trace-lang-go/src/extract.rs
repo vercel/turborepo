@@ -7,6 +7,7 @@
 //! | `import "C"` | the same (resolves to the builtin `C`), plus one reference per `#include` in the preamble: `"x.h"` relative to the file ([`RefKind::Import`], build), `<x.h>` as base [`CGO_SYSTEM_BASE`] (a builtin) |
 //! | `//go:embed p1 "p 2" `p3`` | one [`RefKind::Embed`] per pattern, [`Phase::Build`], relative to the file's directory |
 //! | calls in [`APIS`] (`os.ReadFile`, `template.ParseFiles`, `http.Dir`, …) | per the table, relative to the working directory with [`UncertaintyKind::CwdDependent`] unless absolute; in `_test.go` files relative to the file's directory, because `go test` runs tests in the package directory |
+//! | a call of a function called `Chdir` (`os.Chdir(dir)`, `t.Chdir(dir)`), unless into a temporary directory | a read with an unknown path and a [`UncertaintyKind::CwdDependent`] record ([`CHDIR_DETAIL`]): after it the relative paths of the directory's files, the literal ones of its test files too, are taken from elsewhere, and every test of the directory reaches the record |
 //!
 //! A file with a `//go:build` / `// +build` constraint or a `_GOOS`/`_GOARCH`
 //! file-name suffix only builds for some targets: all its references are
@@ -213,7 +214,30 @@ pub fn extract<'s>(src: &'s [u8], path: Option<&Path>, out: &mut RefSink<'s>) {
     };
     r.run();
     r.finish();
+    // A call that changes the working directory: every relative path of the files
+    // of the directory can be taken from elsewhere after it, a literal one in a
+    // test file too (which is otherwise taken from the package directory). The
+    // record is reached from every test of the directory (a test file depends
+    // on its package mates), so a change query bounds those paths by names or
+    // opens them.
+    for span in crate::names::chdir_calls(src) {
+        out.push(
+            RawRef::new(RefKind::FsRead, Specifier::Unknown, span)
+                .with_flags(flags)
+                .with_uncertainty(Uncertainty::new(
+                    UncertaintyKind::CwdDependent,
+                    span,
+                    CHDIR_DETAIL,
+                )),
+        );
+    }
 }
+
+/// The detail of the record of a call that changes the working directory
+/// ([`crate::names::chdir_calls`]).
+pub const CHDIR_DETAIL: &str = "Chdir changes the working directory: the relative paths of the Go \
+                                files of this directory are taken from where it moves, and their \
+                                strings name paths anywhere in the repository";
 
 impl<'s> Recognizer<'s, '_> {
     fn text(&self, t: &Tok) -> &'s [u8] {
@@ -1291,6 +1315,28 @@ mod tests {
         assert_eq!(r.phase, Phase::Build);
         assert_eq!(r.base, IMPORT_BASE);
         assert!(r.flags.is_empty());
+    }
+
+    #[test]
+    fn a_call_that_changes_the_working_directory_is_a_record() {
+        let src = "package p\n\nimport \"os\"\n\nfunc TestMain(m *testing.M) \
+                   {\n\tos.Chdir(\"..\")\n\tos.Exit(m.Run())\n}\n";
+        let got: Vec<_> = refs_at(src, "/p/main_test.go")
+            .into_iter()
+            .filter(|r| r.kind == RefKind::FsRead)
+            .collect();
+        assert_eq!(got.len(), 1);
+        assert!(matches!(got[0].spec, Specifier::Unknown));
+        let u = got[0].uncertainty.as_ref().unwrap();
+        assert_eq!(u.kind, UncertaintyKind::CwdDependent);
+        assert_eq!(&*u.detail, CHDIR_DETAIL);
+        // Into a temporary directory: no record.
+        let src = "package p\n\nfunc TestX(t *testing.T) {\n\tt.Chdir(t.TempDir())\n}\n";
+        assert!(
+            refs_at(src, "/p/x_test.go")
+                .iter()
+                .all(|r| r.uncertainty.is_none())
+        );
     }
 
     #[test]
