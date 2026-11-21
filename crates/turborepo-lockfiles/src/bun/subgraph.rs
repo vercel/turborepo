@@ -914,60 +914,23 @@ impl BunLockfile {
                         continue;
                     };
 
+                    // A dependency found in an ancestor scope of the source key
+                    // can't be re-parented under the dependent's pruned key.
+                    // Keeping its verbatim key would leave the dependent
+                    // resolving dep_name by name from its own scope or the top
+                    // level, which is exactly the resolution that does not
+                    // satisfy its declared range. Nest the entry under the
+                    // dependent instead, so it resolves the version the full
+                    // lockfile locked it to. See
+                    // https://github.com/vercel/turborepo/issues/13233 and
+                    // https://github.com/vercel/turborepo/issues/13310
                     let source_prefix = format!("{source_parent_key}/");
-                    let pruned_dep_key = if let Some(suffix) =
-                        source_dep_key.strip_prefix(&source_prefix)
-                    {
-                        format!("{key}/{suffix}")
-                    } else {
-                        // The entry was found in an ancestor scope of the source
-                        // key, so its key can't be re-parented under the
-                        // dependent's pruned key. Bun resolves dependencies by
-                        // walking up the dependent's scope chain by name, so the
-                        // verbatim key is fine as long as SOME entry named
-                        // dep_name is reachable from the dependent. When none is
-                        // (the dependent was renamed by de-aliasing/promotion and
-                        // the ancestor chain was pruned), bun fails to parse the
-                        // lockfile; nest the entry directly under the dependent
-                        // instead. See
-                        // https://github.com/vercel/turborepo/issues/13233
-                        let name_resolvable = pruned_data.packages.contains_key(dep_name) || {
-                            let mut resolvable = false;
-                            let mut scope = Some(key.clone());
-                            while let Some(scope_key) = scope {
-                                if pruned_data
-                                    .packages
-                                    .contains_key(&format!("{scope_key}/{dep_name}"))
-                                {
-                                    resolvable = true;
-                                    break;
-                                }
-                                scope = PackageKey::parse(&scope_key).parent();
-                            }
-                            resolvable
-                        };
-                        // The verbatim key only makes sense if its root scope
-                        // survived pruning. When the entire chain was pruned
-                        // away (e.g. "@expo/cli/ora/chalk" when "@expo/cli"
-                        // is gone), nothing can ever resolve to the verbatim
-                        // key, so bun's lockfile clean pass strips the
-                        // package and `bun install --frozen-lockfile` fails.
-                        // Nest the entry under the dependent instead so the
-                        // dependent resolves the version it was locked to.
-                        // See https://github.com/vercel/turborepo/issues/13310
-                        let root_scope_exists = {
-                            let mut topmost = source_dep_key.clone();
-                            while let Some(parent) = PackageKey::parse(&topmost).parent() {
-                                topmost = parent;
-                            }
-                            topmost == source_dep_key || pruned_data.packages.contains_key(&topmost)
-                        };
-                        if name_resolvable && root_scope_exists {
-                            source_dep_key
+                    let pruned_dep_key =
+                        if let Some(suffix) = source_dep_key.strip_prefix(&source_prefix) {
+                            format!("{key}/{suffix}")
                         } else {
                             format!("{key}/{dep_name}")
-                        }
-                    };
+                        };
 
                     if pruned_data.packages.contains_key(&pruned_dep_key) {
                         continue;
