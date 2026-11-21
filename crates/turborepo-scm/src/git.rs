@@ -4,7 +4,6 @@ use std::{
     env::{self, VarError},
     fs,
     path::PathBuf,
-    process::Command,
 };
 
 use serde::Deserialize;
@@ -741,10 +740,9 @@ impl GitRepo {
 
         use sha2::Digest;
 
-        let mut child = match Command::new(self.bin.as_std_path())
+        let mut child = match crate::git_command(self.bin.as_std_path())
             .args(args)
             .current_dir(&self.root)
-            .env("GIT_OPTIONAL_LOCKS", "0")
             .stdout(Stdio::piped())
             .stderr(Stdio::null())
             .spawn()
@@ -958,11 +956,8 @@ impl GitRepo {
     }
 
     pub fn execute_git_command(&self, args: &[&str], pathspec: &str) -> Result<Vec<u8>, Error> {
-        let mut command = Command::new(self.bin.as_std_path());
-        command
-            .args(args)
-            .current_dir(&self.root)
-            .env("GIT_OPTIONAL_LOCKS", "0");
+        let mut command = crate::git_command(self.bin.as_std_path());
+        command.args(args).current_dir(&self.root);
 
         if !pathspec.is_empty() {
             command.arg("--").arg(pathspec);
