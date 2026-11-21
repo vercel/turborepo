@@ -69,7 +69,14 @@ fn package_queries_ignore_git_dir_exported_to_worktree_hooks() {
     let worktree = tmp.path().join("worktree");
     git(
         &repo,
-        &["worktree", "add", "-q", worktree.to_str().unwrap(), "-b", "side"],
+        &[
+            "worktree",
+            "add",
+            "-q",
+            worktree.to_str().unwrap(),
+            "-b",
+            "side",
+        ],
     );
     let package = absolute(&worktree.join("packages/app"));
     let dep = package.join_components(&["node_modules", "dep", "index.js"]);
