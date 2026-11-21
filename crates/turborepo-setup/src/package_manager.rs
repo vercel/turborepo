@@ -117,7 +117,7 @@ fn invalid(source: &str, message: impl Into<String>) -> Error {
 fn manager(family: Manager, source: &str) -> Result<Manager, Error> {
     match family {
         Manager::Npm | Manager::Pnpm | Manager::Yarn | Manager::Bun => Ok(family),
-        Manager::Aube | Manager::Nub => Err(invalid(source, UNSUPPORTED_MANAGER)),
+        Manager::Aube | Manager::Nub | Manager::Vlt => Err(invalid(source, UNSUPPORTED_MANAGER)),
     }
 }
 

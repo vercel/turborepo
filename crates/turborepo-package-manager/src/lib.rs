@@ -13,17 +13,19 @@ pub enum Family {
     Npm,
     Nub,
     Pnpm,
+    Vlt,
     Yarn,
 }
 
 impl Family {
     /// Canonical names, in the legacy declaration-pattern order.
-    pub const ALL: [Self; 6] = [
+    pub const ALL: [Self; 7] = [
         Self::Aube,
         Self::Bun,
         Self::Npm,
         Self::Nub,
         Self::Pnpm,
+        Self::Vlt,
         Self::Yarn,
     ];
 
@@ -34,6 +36,7 @@ impl Family {
             Self::Npm => "npm",
             Self::Nub => "nub",
             Self::Pnpm => "pnpm",
+            Self::Vlt => "vlt",
             Self::Yarn => "yarn",
         }
     }

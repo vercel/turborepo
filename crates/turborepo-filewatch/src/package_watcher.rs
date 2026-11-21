@@ -221,6 +221,8 @@ const INVALIDATION_PATHS: &[&str] = &[
     package_manager::yarn::LOCKFILE,
     package_manager::bun::LOCKFILE_BINARY,
     package_manager::bun::LOCKFILE,
+    package_manager::vlt::WORKSPACE_CONFIGURATION_PATH,
+    package_manager::vlt::LOCKFILE,
 ];
 
 fn matches_workspace_glob(

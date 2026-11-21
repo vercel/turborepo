@@ -67,6 +67,11 @@ fn turbo_gen_command(package_manager: &PackageManager, tag: &str) -> PackageMana
             executable: "bun",
             args: vec!["x".to_string(), package],
         },
+        // vlx reads flags as its own until a `--`
+        PackageManager::Vlt => PackageManagerCommand {
+            executable: "vlx",
+            args: vec!["--yes".to_string(), "--".to_string(), package],
+        },
         PackageManager::Nub { .. } => PackageManagerCommand {
             executable: "nubx",
             args: vec![package],

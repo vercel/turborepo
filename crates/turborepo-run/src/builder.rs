@@ -60,6 +60,7 @@ const CHANGE_PREFETCH_LOCKFILES: &[&str] = &[
     "yarn.lock",
     "bun.lock",
     "bun.lockb",
+    "vlt-lock.json",
     "uv.lock",
 ];
 
