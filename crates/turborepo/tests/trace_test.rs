@@ -2851,3 +2851,52 @@ fn for_runners_lists_the_tests_of_every_framework_together() {
         serde_json::json!(["apps/web/", "crates/rates/"])
     );
 }
+
+/// The runner plugins of `@turbo/trace` in a configuration change nothing
+/// about which files are tests: a configuration wrapped in `withTurboTrace`
+/// and one with the `turboTrace()` plugin are read as before, and the
+/// selection is the one without them.
+#[cfg(unix)]
+#[test]
+fn the_runner_plugins_in_a_configuration_do_not_change_the_selection() {
+    let dir = fixture("trace_jest");
+    let before = affected(dir.path(), &["--changed", "packages/math/src/mul.js"]);
+    assert_eq!(
+        before,
+        BTreeSet::from([JEST_MUL.to_owned(), JEST_TOTAL.to_owned()])
+    );
+    for package in ["math", "app"] {
+        fs::write(
+            dir.path()
+                .join("packages")
+                .join(package)
+                .join("jest.config.js"),
+            "const { withTurboTrace } = require(\"@turbo/trace/jest\");\n\nmodule.exports = \
+             withTurboTrace({\n  testEnvironment: \"node\",\n  testMatch: \
+             [\"<rootDir>/test/**/*.test.js\"],\n});\n",
+        )
+        .unwrap();
+    }
+    git(dir.path(), &["commit", "--quiet", "-am", "plugins"]);
+    let after = affected(dir.path(), &["--changed", "packages/math/src/mul.js"]);
+    assert_eq!(after, before);
+
+    let dir = fixture("trace_vitest");
+    let before = affected(dir.path(), &["--changed", "packages/web/src/format.ts"]);
+    assert_eq!(before, BTreeSet::from([VITEST_FORMAT.to_owned()]));
+    for package in ["core", "web"] {
+        fs::write(
+            dir.path()
+                .join("packages")
+                .join(package)
+                .join("vitest.config.ts"),
+            "import { turboTrace } from \"@turbo/trace/vitest\";\nimport { defineConfig } from \
+             \"vitest/config\";\n\nexport default defineConfig({\n  plugins: [turboTrace()],\n  \
+             test: {\n    include: [\"test/**/*.test.ts\"],\n  },\n});\n",
+        )
+        .unwrap();
+    }
+    git(dir.path(), &["commit", "--quiet", "-am", "plugins"]);
+    let after = affected(dir.path(), &["--changed", "packages/web/src/format.ts"]);
+    assert_eq!(after, before);
+}

@@ -3889,6 +3889,12 @@ impl<'s> Ev<'s, '_> {
                     {
                         args.into_iter().next().unwrap_or(ConfigVal::Null)
                     }
+                    // The wrapper of `@turbo/trace/jest` sets jest's `filter`,
+                    // which runs fewer of the same tests: the configuration
+                    // it is given is the one the trace reads.
+                    "withTurboTrace" if module == "@turbo/trace/jest" && !args.is_empty() => {
+                        args.into_iter().next().unwrap_or(ConfigVal::Null)
+                    }
                     "mergeConfig" if args.len() >= 2 => {
                         let mut it = args.into_iter();
                         let a = it.next().unwrap_or(ConfigVal::Null);

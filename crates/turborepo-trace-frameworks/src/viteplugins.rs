@@ -50,6 +50,8 @@ const KNOWN: &[(&str, &[&str])] = &[
     ("@vitejs/plugin-react-swc", &[]),
     ("@vitejs/plugin-react-oxc", &[]),
     ("vite-tsconfig-paths", &[]),
+    // Drops test files while a selection is active, and loads nothing.
+    ("@turbo/trace/vitest", &[]),
     ("@vgpu/wgsl/loader-vite", &[".wgsl"]),
 ];
 
@@ -163,6 +165,8 @@ mod tests {
         let react = call("react()", "@vitejs/plugin-react");
         assert!(unmodelled(&ConfigVal::Arr(vec![react.clone()])).is_empty());
         assert!(unmodelled(&ConfigVal::Arr(vec![])).is_empty());
+        let trace = call("turboTrace()", "@turbo/trace/vitest");
+        assert!(unmodelled(&ConfigVal::Arr(vec![trace])).is_empty());
         // Conditional plugins, nested arrays, harmless options.
         let v = ConfigVal::Arr(vec![
             ConfigVal::Bool(false),
