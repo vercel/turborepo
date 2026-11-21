@@ -192,6 +192,24 @@ impl<'a> Descriptor<'a> {
         }
     }
 
+    /// A copy of this descriptor with the `::`-separated params section of its
+    /// reference removed, or `None` when the reference carries none.
+    ///
+    /// Yarn appends params to the reference of several protocols: `link:`,
+    /// `portal:` and `file:` entries carry `::locator=<workspace locator>` and
+    /// patched entries add `::version=..&hash=..`. Manifests declare those
+    /// dependencies without any params.
+    pub fn without_params(&self) -> Option<Descriptor<'static>> {
+        let (reference, params) = self.range.split_once("::")?;
+        if reference.is_empty() || params.is_empty() {
+            return None;
+        }
+        Some(Descriptor {
+            ident: self.ident.to_owned(),
+            range: reference.to_string().into(),
+        })
+    }
+
     /// If the descriptor is a patch returns the version that the patch targets
     pub fn primary_version(&self) -> Option<String> {
         let Locator { reference, .. } = Locator::from_patch_reference(&self.range)?;
