@@ -2588,6 +2588,85 @@ fn test_subgraph_relocates_ancestor_scoped_dep_for_renamed_dependent() {
     }
 }
 
+// Regression test for https://github.com/vercel/turborepo/issues/15079
+// Promoting a nested entry to the top level must keep its dependencies that
+// were only resolvable from the entry's old parent scope. Otherwise bun
+// resolves them from the top level, where a different version may sit outside
+// the promoted package's declared range.
+#[test]
+fn test_promoted_nested_entry_keeps_its_dependency_version() {
+    let contents = serde_json::to_string(&json!({
+            "lockfileVersion": 1,
+            "configVersion": 1,
+            "workspaces": {
+                "": {
+                    "name": "test-monorepo"
+                },
+                "apps/cli": {
+                    "name": "cli",
+                    "dependencies": {
+                        "chalk": "5.6.2",
+                        "ora": "5.4.1"
+                    }
+                },
+                "apps/web": {
+                    "name": "web",
+                    "dependencies": {
+                        "log-symbols": "7.0.1"
+                    }
+                }
+            },
+            "packages": {
+                "chalk": ["chalk@5.6.2", "", {}, "sha512-chalk5"],
+                "cli": ["cli@workspace:apps/cli"],
+                "log-symbols": ["log-symbols@7.0.1", "", {}, "sha512-ls7"],
+                "ora": ["ora@5.4.1", "", { "dependencies": { "chalk": "^4.1.0", "log-symbols": "^4.1.0" } }, "sha512-ora5"],
+                "ora/chalk": ["chalk@4.1.2", "", {}, "sha512-chalk4"],
+                "ora/log-symbols": ["log-symbols@4.1.0", "", { "dependencies": { "chalk": "^4.1.0" } }, "sha512-ls4"],
+                "web": ["web@workspace:apps/web"]
+            }
+        }))
+        .unwrap();
+
+    let lockfile = BunLockfile::from_str(&contents).unwrap();
+    let pruned = prune_to_string(
+        &lockfile,
+        "apps/cli",
+        &[("chalk", "5.6.2"), ("ora", "5.4.1")],
+    );
+    let pruned = BunLockfile::from_str(&pruned).unwrap();
+
+    assert_eq!(
+        pruned.data.packages["log-symbols"].ident, "log-symbols@4.1.0",
+        "the nested log-symbols@4 should be promoted to the top level"
+    );
+
+    // Bun resolves each dependency by walking up from the dependent's key and
+    // taking the first entry with a matching name, so every declared range has
+    // to be satisfied by the entry that walk lands on.
+    for (key, entry) in &pruned.data.packages {
+        let Some(info) = &entry.info else { continue };
+        for (dep_name, dep_spec) in &info.dependencies {
+            let mut scope = Some(key.clone());
+            let mut resolved = None;
+            while resolved.is_none()
+                && let Some(scope_key) = scope
+            {
+                resolved = pruned.data.packages.get(&format!("{scope_key}/{dep_name}"));
+                scope = PackageKey::parse(&scope_key).parent();
+            }
+            let resolved = resolved
+                .or_else(|| pruned.data.packages.get(dep_name.as_str()))
+                .unwrap_or_else(|| panic!("{key} cannot resolve dependency {dep_name}"));
+            assert!(
+                pruned.version_satisfies_spec(resolved.version(), dep_spec),
+                "{key} resolves {dep_name} to {} for {dep_name}@{dep_spec}",
+                resolved.version()
+            );
+        }
+    }
+}
+
 /// Prunes `lockfile` down to `workspace` and the closure of `deps`, then
 /// encodes the result the way `turbo prune` writes bun.lock.
 fn prune_to_string(lockfile: &BunLockfile, workspace: &str, deps: &[(&str, &str)]) -> String {
