@@ -377,6 +377,10 @@ impl Settings {
     /// Follow a directory link only when it resolves inside the base path and
     /// outside Git metadata, and only the first time the walk reaches its
     /// target. Other directory links are yielded as entries.
+    ///
+    /// A directory link under `node_modules` is not part of a walk at all
+    /// unless the pattern names it: package managers own those links, and the
+    /// lockfile and the package graph already capture those dependencies.
     pub fn follow_links_within_base(mut self) -> Self {
         self.links = LinkMode::FollowWithinBase;
         self
@@ -1778,7 +1782,7 @@ fn walk_glob(
     let iter = glob
         .walk_with_behavior(base_path_new, behavior)
         .not_any(ex_filter);
-    let mut gate = link_bound.map(LinkGate::new);
+    let mut gate = link_bound.map(|root| LinkGate::new(base_path_new, root, &glob.to_string()));
     let record_link_cycles = gate.is_some();
     let mut unfollowed = Vec::new();
     // walkdir reports a link back to a directory the walk is inside as an
@@ -1817,12 +1821,17 @@ fn walk_glob(
                 && entry.depth() > 0
                 && entry.file_type().is_dir()
                 && path.is_symlink()
-                && !gate.enter(path)
             {
-                if glob.is_match(path) {
-                    unfollowed.push(path.to_path_buf());
+                match gate.classify(path) {
+                    LinkUse::Follow => {}
+                    LinkUse::Skip => return Some(EntryResidue::Tree),
+                    LinkUse::YieldOnly => {
+                        if glob.is_match(path) {
+                            unfollowed.push(path.to_path_buf());
+                        }
+                        return Some(EntryResidue::Tree);
+                    }
                 }
-                return Some(EntryResidue::Tree);
             }
 
             None
@@ -1840,16 +1849,49 @@ fn walk_glob(
     results
 }
 
+/// What a walk does with a directory link it found below its root.
+enum LinkUse {
+    /// Follow the link target.
+    Follow,
+    /// Yield the link as an entry and prune its subtree.
+    YieldOnly,
+    /// Prune the link without yielding it.
+    Skip,
+}
+
 struct LinkGate {
+    /// The walk base, as given: the logical root that `node_modules` is
+    /// measured from.
+    base: PathBuf,
     root: PathBuf,
+    /// The pattern this walk matches, used to tell a link a pattern names from
+    /// one it only reaches through a wildcard.
+    pattern: String,
     entered: HashSet<PathBuf>,
 }
 
 impl LinkGate {
-    fn new(root: &Path) -> Self {
+    fn new(base: &Path, root: &Path, pattern: &str) -> Self {
         Self {
+            base: base.to_owned(),
             root: root.to_owned(),
+            pattern: pattern.to_owned(),
             entered: HashSet::new(),
+        }
+    }
+
+    fn classify(&mut self, link: &Path) -> LinkUse {
+        // Package managers own the links they create under `node_modules`, and
+        // the lockfile and the package graph already capture those
+        // dependencies. Such a link is not part of an input unless the pattern
+        // names it.
+        if package_manager_link(&self.base, link) && !pattern_names_path(&self.pattern, link) {
+            return LinkUse::Skip;
+        }
+        if self.enter(link) {
+            LinkUse::Follow
+        } else {
+            LinkUse::YieldOnly
         }
     }
 
@@ -1866,6 +1908,43 @@ impl LinkGate {
             inside && self.entered.insert(target)
         })
     }
+}
+
+/// Whether `link` sits under a `node_modules` directory below the walk base.
+fn package_manager_link(base: &Path, link: &Path) -> bool {
+    link.strip_prefix(base).is_ok_and(|relative| {
+        relative
+            .components()
+            .any(|component| component.as_os_str() == "node_modules")
+    })
+}
+
+/// Whether `pattern` names `path` through literal components only, as in
+/// `node_modules/@scope/dep/src/**/*.txt`.
+fn pattern_names_path(pattern: &str, path: &Path) -> bool {
+    let path = path.to_slash_lossy();
+    let mut pattern_components = pattern.split('/');
+    path.split('/').all(|component| {
+        pattern_components
+            .next()
+            .and_then(literal_component)
+            .is_some_and(|candidate| candidate == component)
+    })
+}
+
+/// The text a pattern component matches literally, or `None` when it can match
+/// more than one path component. An escaped character is itself.
+fn literal_component(component: &str) -> Option<String> {
+    let mut literal = String::with_capacity(component.len());
+    let mut chars = component.chars();
+    while let Some(character) = chars.next() {
+        match character {
+            '\\' => literal.push(chars.next()?),
+            '*' | '?' | '[' | ']' | '{' | '}' | '<' | '>' | '$' | ',' | '(' | ')' => return None,
+            _ => literal.push(character),
+        }
+    }
+    Some(literal)
 }
 
 fn visit_file(
@@ -1889,6 +1968,62 @@ fn visit_file(
                 _ => Some(Err(io_err.into())),
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod pattern_names_path_test {
+    use std::path::Path;
+
+    use super::pattern_names_path;
+
+    #[test]
+    fn test_literal_prefix_names_the_path() {
+        let link = Path::new("/repo/packages/a/node_modules/@scope/dep");
+        assert!(pattern_names_path(
+            "/repo/packages/a/node_modules/@scope/dep",
+            link
+        ));
+        assert!(pattern_names_path(
+            "/repo/packages/a/node_modules/@scope/dep/src/**/*.txt",
+            link
+        ));
+    }
+
+    #[test]
+    fn test_wildcards_do_not_name_the_path() {
+        let link = Path::new("/repo/packages/a/node_modules/@scope/dep");
+        for pattern in [
+            "/repo/packages/*/node_modules/@scope/dep/**",
+            "/repo/packages/a/**/dep/**",
+            "/repo/packages/a/node_modules/{@scope,@other}/dep/**",
+            "/repo/packages/a/node_modules/@s?ope/dep/**",
+            "/repo/packages/a/node_modules/@scope/dep\\?/**",
+        ] {
+            assert!(!pattern_names_path(pattern, link), "{pattern}");
+        }
+    }
+
+    #[test]
+    fn test_escaped_components_are_literal() {
+        // The walk base escapes glob specials, including a Windows drive's
+        // colon.
+        assert!(pattern_names_path(
+            "/C\\:/repo/node_modules/dep",
+            Path::new("/C:/repo/node_modules/dep")
+        ));
+        assert!(pattern_names_path(
+            "/repo/node_modules/\\*dep",
+            Path::new("/repo/node_modules/*dep")
+        ));
+    }
+
+    #[test]
+    fn test_shorter_pattern_does_not_name_the_path() {
+        assert!(!pattern_names_path(
+            "/repo/packages/a/node_modules",
+            Path::new("/repo/packages/a/node_modules/@scope/dep")
+        ));
     }
 }
 
