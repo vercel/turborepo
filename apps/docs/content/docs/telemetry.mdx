@@ -27,6 +27,7 @@ We track general usage information, specifically, we track the following with an
 - Version of `turbo`
 - General machine information (e.g. number of CPUs, macOS/Windows/Linux, whether or not the command was run within CI)
 - Size of application (total number of workspaces)
+- For [`turbo setup`](/docs/reference/setup), how it was invoked (for example, check, tools-only, or frozen mode), whether it succeeded or the category of failure, how long it took, how many bytes it downloaded, and how many managed tools it installed or reused
 - We **DO NOT** collect any metrics which may contain sensitive data. This includes, but is not limited to: task names, package names, sensitive argument or flag values, environment variables, file paths, or contents of files.
 
 **Note**: This list is regularly audited to ensure its accuracy.
