@@ -9,7 +9,8 @@ import {
   findExecutableInDirectory,
   findInstalledTurboLsp,
   probeInternalLsp,
-  resolveTurboPath
+  resolveTurboPath,
+  resolveWindowsTurboShim
 } from "./turbo-discovery";
 
 // These tests spawn real child processes as fake turbo binaries, which
@@ -42,6 +43,29 @@ function tmpdir() {
 
 const noopLog = () => {};
 
+function writeFile(filePath: string, contents = "") {
+  fs.mkdirSync(path.dirname(filePath), { recursive: true });
+  fs.writeFileSync(filePath, contents);
+  return filePath;
+}
+
+/// Lays out `node_modules/turbo` plus native binary packages the way npm
+/// installs them on Windows, and returns the `.bin/turbo.cmd` shim.
+function makeWindowsTurboInstall(
+  nodeModules: string,
+  binaryPackages: Array<string>
+) {
+  writeFile(path.join(nodeModules, "turbo", "package.json"), "{}");
+  for (const binaryPackage of binaryPackages) {
+    writeFile(path.join(nodeModules, binaryPackage, "package.json"), "{}");
+    writeFile(path.join(nodeModules, binaryPackage, "bin", "turbo.exe"));
+  }
+  return writeFile(path.join(nodeModules, ".bin", "turbo.cmd"));
+}
+
+const win32arm64 = { platform: "win32", arch: "arm64" } as const;
+const win32x64 = { platform: "win32", arch: "x64" } as const;
+
 test("findExecutableInDirectory finds plain executables only", () => {
   const dir = tmpdir();
   assert.equal(findExecutableInDirectory(dir, "turbo"), undefined);
@@ -70,6 +94,151 @@ test("resolveTurboPath resolves files, directories, and missing paths", () => {
   );
   assert.equal(resolveTurboPath(undefined, undefined, noopLog), undefined);
 });
+
+test("resolveWindowsTurboShim maps node_modules/.bin shims to the native binary", () => {
+  const nodeModules = path.join(tmpdir(), "node_modules");
+  const shim = makeWindowsTurboInstall(nodeModules, [
+    "@turbo/windows-64",
+    "@turbo/windows-arm64"
+  ]);
+  const binary = (name: string) =>
+    fs.realpathSync(path.join(nodeModules, name, "bin", "turbo.exe"));
+
+  assert.equal(
+    resolveWindowsTurboShim(shim, win32arm64),
+    binary("@turbo/windows-arm64")
+  );
+  assert.equal(
+    resolveWindowsTurboShim(shim, win32x64),
+    binary("@turbo/windows-64")
+  );
+  // PowerShell and extensionless shims sit next to the .cmd one.
+  for (const sibling of ["turbo.ps1", "turbo"]) {
+    const other = writeFile(path.join(nodeModules, ".bin", sibling));
+    assert.equal(
+      resolveWindowsTurboShim(other, win32x64),
+      binary("@turbo/windows-64")
+    );
+  }
+});
+
+test("resolveWindowsTurboShim follows pnpm links, npm global installs, and legacy names", () => {
+  // pnpm: node_modules/turbo links into the virtual store, where the binary
+  // package is a sibling of the real turbo package.
+  const workspace = tmpdir();
+  const store = path.join(workspace, "node_modules", ".pnpm", "turbo@2.0.0");
+  makeWindowsTurboInstall(path.join(store, "node_modules"), [
+    "@turbo/windows-64"
+  ]);
+  fs.symlinkSync(
+    path.join(store, "node_modules", "turbo"),
+    path.join(workspace, "node_modules", "turbo"),
+    "junction"
+  );
+  const pnpmShim = writeFile(
+    path.join(workspace, "node_modules", ".bin", "turbo.cmd")
+  );
+  assert.equal(
+    resolveWindowsTurboShim(pnpmShim, win32x64),
+    fs.realpathSync(
+      path.join(
+        store,
+        "node_modules",
+        "@turbo",
+        "windows-64",
+        "bin",
+        "turbo.exe"
+      )
+    )
+  );
+
+  // npm --global: <prefix>/turbo.cmd, with the binary nested under turbo.
+  const prefix = tmpdir();
+  const globalTurbo = path.join(prefix, "node_modules", "turbo");
+  writeFile(path.join(globalTurbo, "package.json"), "{}");
+  const nestedBinary = writeFile(
+    path.join(
+      globalTurbo,
+      "node_modules",
+      "@turbo",
+      "windows-64",
+      "bin",
+      "turbo.exe"
+    )
+  );
+  const globalShim = writeFile(path.join(prefix, "turbo.cmd"));
+  assert.equal(
+    resolveWindowsTurboShim(globalShim, win32x64),
+    fs.realpathSync(nestedBinary)
+  );
+
+  // Legacy unscoped package name, reached under x64 emulation on arm64.
+  const legacy = path.join(tmpdir(), "node_modules");
+  const legacyShim = makeWindowsTurboInstall(legacy, ["turbo-windows-64"]);
+  assert.equal(
+    resolveWindowsTurboShim(legacyShim, win32arm64),
+    fs.realpathSync(path.join(legacy, "turbo-windows-64", "bin", "turbo.exe"))
+  );
+});
+
+test("resolveWindowsTurboShim leaves other paths unchanged", () => {
+  const nodeModules = path.join(tmpdir(), "node_modules");
+  const shim = makeWindowsTurboInstall(nodeModules, ["@turbo/windows-64"]);
+  // Not Windows.
+  assert.equal(
+    resolveWindowsTurboShim(shim, { platform: "linux", arch: "x64" }),
+    shim
+  );
+  // Already a native binary.
+  const exe = path.join(
+    nodeModules,
+    "@turbo",
+    "windows-64",
+    "bin",
+    "turbo.exe"
+  );
+  assert.equal(resolveWindowsTurboShim(exe, win32x64), exe);
+  // No binary for this architecture.
+  assert.equal(
+    resolveWindowsTurboShim(shim, { platform: "win32", arch: "ia32" }),
+    shim
+  );
+  // A shim that is not next to a turbo package.
+  const stray = writeFile(path.join(tmpdir(), "bin", "turbo.cmd"));
+  assert.equal(resolveWindowsTurboShim(stray, win32x64), stray);
+});
+
+test(
+  "findInstalledTurboLsp probes the native binary behind a Windows .cmd shim",
+  { skip: process.platform !== "win32" },
+  async () => {
+    // Node will not spawn the .cmd shim without a shell (spawn EINVAL), so
+    // the probe must run the binary behind it. Stand in for turbo.exe with a
+    // link to node.exe that runs `__internal_lsp` from the workspace root.
+    const workspace = tmpdir();
+    const nodeModules = path.join(workspace, "node_modules");
+    const binaryPackage =
+      process.arch === "arm64" ? "@turbo/windows-arm64" : "@turbo/windows-64";
+    makeWindowsTurboInstall(nodeModules, []);
+    const turboExe = path.join(nodeModules, binaryPackage, "bin", "turbo.exe");
+    fs.mkdirSync(path.dirname(turboExe), { recursive: true });
+    try {
+      fs.linkSync(process.execPath, turboExe);
+    } catch {
+      fs.copyFileSync(process.execPath, turboExe);
+    }
+    writeFile(
+      path.join(workspace, "__internal_lsp"),
+      'process.stdout.write("turbo-lsp");'
+    );
+
+    const found = await findInstalledTurboLsp({
+      workspaceRoot: workspace,
+      log: noopLog
+    });
+    assert.equal(found, fs.realpathSync(turboExe));
+  }
+);
 
 test(
   "probeInternalLsp accepts turbo-lsp output",
