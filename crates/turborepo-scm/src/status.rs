@@ -1,6 +1,6 @@
 use std::{
     io::{BufRead, BufReader, Read},
-    process::{Command, Stdio},
+    process::Stdio,
 };
 
 use nom::Finish;
@@ -22,7 +22,7 @@ impl GitRepo {
         pkg_prefix: &RelativeUnixPathBuf,
         hashes: &mut GitHashes,
     ) -> Result<Vec<RelativeUnixPathBuf>, Error> {
-        let mut git = Command::new(self.bin.as_std_path())
+        let mut git = crate::git_command(self.bin.as_std_path())
             .args([
                 "status",
                 "--untracked-files",
@@ -31,7 +31,6 @@ impl GitRepo {
                 "--",
                 ".",
             ])
-            .env("GIT_OPTIONAL_LOCKS", "0")
             .current_dir(root_path)
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())

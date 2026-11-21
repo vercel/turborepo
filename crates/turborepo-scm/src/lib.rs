@@ -343,8 +343,26 @@ impl GitRepo {
     }
 }
 
+/// A `git` command that answers for the directory it runs in.
+///
+/// Git exports `GIT_DIR`, with no `GIT_WORK_TREE`, to hooks run inside a linked
+/// worktree. A command that inherits it treats its own working directory as the
+/// top of the worktree: the repository's index and ignore rules stop applying,
+/// and a package's `node_modules` is reported as untracked. Dropping the
+/// inherited redirections lets Git find the worktree from the working
+/// directory.
+pub(crate) fn git_command(bin: impl AsRef<std::ffi::OsStr>) -> Command {
+    let mut command = Command::new(bin);
+    command
+        .env("GIT_OPTIONAL_LOCKS", "0")
+        .env_remove("GIT_DIR")
+        .env_remove("GIT_WORK_TREE")
+        .env_remove("GIT_INDEX_FILE");
+    command
+}
+
 fn find_git_root(turbo_root: &AbsoluteSystemPath) -> Result<AbsoluteSystemPathBuf, Error> {
-    let rev_parse = Command::new("git")
+    let rev_parse = git_command("git")
         .args(["rev-parse", "--show-cdup"])
         .current_dir(turbo_root)
         .output()?;
