@@ -1340,6 +1340,75 @@ fn watch_interruptible_persistent_task_restarts_on_file_change() {
 }
 
 // ---------------------------------------------------------------------------
+// Regression test for #15114: a failing task must not stop its siblings
+// ---------------------------------------------------------------------------
+
+fn setup_watch_persistent_failure_test() -> (tempfile::TempDir, PathBuf) {
+    let tempdir = tempfile::tempdir().expect("failed to create tempdir");
+    let test_dir = tempdir.path().to_path_buf();
+
+    setup::copy_fixture("watch_persistent_failure_test", &test_dir).unwrap();
+    setup::setup_git(&test_dir).unwrap();
+
+    let gitignore = test_dir.join(".gitignore");
+    let mut gi = fs::read_to_string(&gitignore).unwrap_or_default();
+    gi.push_str(".markers/\n");
+    fs::write(&gitignore, gi).unwrap();
+
+    common::git(&test_dir, &["add", "."]);
+    common::git(
+        &test_dir,
+        &["commit", "-m", "add markers ignore", "--quiet"],
+    );
+
+    (tempdir, test_dir)
+}
+
+/// Regression test for https://github.com/vercel/turborepo/issues/15114
+///
+/// A persistent task that fails must not take the other persistent tasks of
+/// its run down with it. `turbo watch` restarts selected tasks on change and
+/// leaves every other task serving, so one task's failure cannot be allowed to
+/// close the run's process manager: on Windows under the TUI that close is a
+/// Ctrl-C to each remaining task, which is how an unrelated dev server was
+/// being killed.
+#[test]
+#[cfg_attr(windows, ignore)]
+fn watch_failing_persistent_task_keeps_sibling_persistent_task_running() {
+    let (_tempdir, test_dir) = setup_watch_persistent_failure_test();
+    let guard = WatchGuard::new(spawn_turbo_watch_with_tasks(&test_dir, &["dev"]));
+
+    wait_for_prefixed_markers(&test_dir, "app-a", "dev-", 1, Duration::from_secs(60));
+    wait_for_prefixed_markers(&test_dir, "app-b", "dev-", 1, Duration::from_secs(60));
+
+    // app-a exits non-zero on its own shortly after both tasks are up.
+    let start = Instant::now();
+    while read_marker_timestamp(&test_dir, "app-a", "failed").is_none() {
+        assert!(
+            start.elapsed() < Duration::from_secs(30),
+            "app-a never reported its failure"
+        );
+        std::thread::sleep(Duration::from_millis(200));
+    }
+
+    // Failure handling runs as the task's executor unwinds; give it time to
+    // reach the sibling the way the old run-wide stop did.
+    std::thread::sleep(Duration::from_secs(2));
+
+    assert!(
+        read_marker_timestamp(&test_dir, "app-b", "interrupted").is_none(),
+        "app-b was interrupted because app-a failed"
+    );
+    assert_eq!(
+        prefixed_marker_count(&test_dir, "app-b", "dev-"),
+        1,
+        "app-b should still be serving its first instance"
+    );
+
+    drop(guard);
+}
+
+// ---------------------------------------------------------------------------
 // Regression test for #13347: watch task inputs must use watch graph semantics
 // ---------------------------------------------------------------------------
 

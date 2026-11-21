@@ -238,6 +238,11 @@ pub struct TaskExecutor<H, E, W, A> {
 
     // Configuration
     pub continue_on_error: ContinueMode,
+    /// Whether this task belongs to a `turbo watch` run. Watch reruns stop and
+    /// restart selected tasks, and persistent tasks outlive the run that
+    /// spawned them, so a single task's failure must not close the run's
+    /// process manager and take the other tasks down with it.
+    pub is_watch: bool,
     pub ui_mode: UIMode,
     pub color_config: ColorConfig,
     pub is_github_actions: bool,
@@ -355,8 +360,10 @@ where
             Ok(ExecOutcome::Task { exit_code, message }) => {
                 tracker.build_failed(exit_code, message).await;
                 match self.continue_on_error {
-                    ContinueMode::Always | ContinueMode::DependenciesSuccessful => (),
-                    ContinueMode::Never => self.manager.stop().await,
+                    ContinueMode::Never if !self.is_watch => self.manager.stop().await,
+                    ContinueMode::Always
+                    | ContinueMode::DependenciesSuccessful
+                    | ContinueMode::Never => (),
                 }
             }
             Ok(ExecOutcome::Shutdown) => {
@@ -368,7 +375,9 @@ where
             }
             Err(e) => {
                 tracker.cancel();
-                self.manager.stop().await;
+                if !self.is_watch {
+                    self.manager.stop().await;
+                }
                 return Err(e);
             }
         }

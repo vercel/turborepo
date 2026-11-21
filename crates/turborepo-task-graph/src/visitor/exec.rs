@@ -138,6 +138,7 @@ impl<'a, R: TaskGraphRunOpts> ExecContextFactory<'a, R> {
             managed_environment: self.visitor.managed_environment.clone(),
             takes_input,
             continue_on_error: self.visitor.run_opts.continue_on_error(),
+            is_watch: self.visitor.is_watch,
             ui_mode: self.visitor.run_opts.ui_mode(),
             color_config: self.visitor.repo.color_config,
             is_github_actions: self.visitor.run_opts.is_github_actions(),
