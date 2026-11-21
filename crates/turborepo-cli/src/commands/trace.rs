@@ -85,6 +85,14 @@ fn affected_json(tests: &AffectedTests) -> Result<String, serde_json::Error> {
     Ok(json)
 }
 
+/// The `--for-runners` document: what the runner plugins of `@turbo/trace`
+/// read through `TURBO_TRACE_SELECTION`.
+fn runners_json(tests: &AffectedTests) -> Result<String, serde_json::Error> {
+    let mut json = serde_json::to_string(&tests.for_runners())?;
+    json.push('\n');
+    Ok(json)
+}
+
 /// The tasks that must run whole, for stderr in text mode (stdout stays one
 /// test path per line).
 fn uncovered_text(tests: &AffectedTests) -> String {
@@ -269,6 +277,8 @@ async fn run_inner(
                 let tests = turborepo_trace::affected(&repo, &request)?;
                 let rendered = if args.json {
                     affected_json(&tests)?
+                } else if args.for_runners {
+                    runners_json(&tests)?
                 } else {
                     eprint!("{}", uncovered_text(&tests));
                     affected_text(&tests)
@@ -330,6 +340,9 @@ mod tests {
     fn sample() -> AffectedTests {
         AffectedTests {
             uncovered_tasks: vec![],
+            run_all: false,
+            run_whole: vec!["packages/c/".into()],
+            unselected: vec!["packages/a/other.test.ts".into()],
             items: vec![
                 AffectedTest {
                     path: "packages/a/a.test.ts".into(),
@@ -402,8 +415,24 @@ mod tests {
             affected_text(&AffectedTests {
                 items: vec![],
                 uncovered_tasks: vec![],
+                run_all: false,
+                run_whole: vec![],
+                unselected: vec![],
             }),
             ""
+        );
+    }
+
+    #[test]
+    fn the_runners_document_is_one_line_by_path() {
+        assert_eq!(
+            runners_json(&sample()).unwrap(),
+            concat!(
+                r#"{"version":1,"runAll":false,"runWhole":["packages/c/"],"#,
+                r#""files":["packages/a/a.test.ts","packages/b/b.test.ts"],"#,
+                r#""unselected":["packages/a/other.test.ts"],"total":3}"#,
+                "\n"
+            )
         );
     }
 }

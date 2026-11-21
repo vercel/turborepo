@@ -2612,3 +2612,291 @@ fn a_changed_jest_script_selects_the_tests_it_starts() {
         ])
     );
 }
+
+// ---------------------------------------------------------------------------
+// `--for-runners`: the selection as the runner plugins read it.
+
+/// `turbo trace affected <args>` with `--json` and with `--for-runners`: the
+/// second document, after checking that it says what the first says.
+/// `dirs` names the directory of each package of the fixture.
+#[cfg(unix)]
+#[track_caller]
+fn for_runners(dir: &Path, args: &[&str], dirs: &[(&str, &str)]) -> serde_json::Value {
+    let run = |flag: &'static str| {
+        let output = trace(dir, &[&["affected", flag][..], args].concat());
+        assert!(output.status.success(), "{flag}: {}", stderr(&output));
+        serde_json::from_slice::<serde_json::Value>(&output.stdout).unwrap()
+    };
+    let json = run("--json");
+    let doc = run("--for-runners");
+    assert_eq!(
+        doc.as_object().unwrap().keys().collect::<Vec<_>>(),
+        [
+            "version",
+            "runAll",
+            "runWhole",
+            "files",
+            "unselected",
+            "total"
+        ]
+    );
+    assert_eq!(doc["version"], 1);
+    let items = json["affectedTests"]["items"].as_array().unwrap();
+    let paths: Vec<&serde_json::Value> = items.iter().map(|item| &item["path"]).collect();
+    assert_eq!(
+        doc["files"].as_array().unwrap().iter().collect::<Vec<_>>(),
+        paths
+    );
+    let all = |item: &serde_json::Value| item["reason"]["__typename"] == "AllTestsChanged";
+    assert_eq!(doc["runAll"], items.iter().any(all), "{json}");
+    assert_eq!(doc["runAll"], !items.is_empty() && items.iter().all(all));
+    let whole: BTreeSet<String> = json["uncoveredTasks"]["items"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|task| {
+            let package = task["package"].as_str().unwrap();
+            let (_, dir) = dirs.iter().find(|(name, _)| *name == package).unwrap();
+            format!("{dir}/")
+        })
+        .collect();
+    assert_eq!(
+        doc["runWhole"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .collect::<Vec<_>>(),
+        whole.iter().collect::<Vec<_>>()
+    );
+    let unselected = doc["unselected"].as_array().unwrap();
+    assert!(
+        unselected.iter().all(|path| !paths.contains(&path)),
+        "{doc}"
+    );
+    assert_eq!(doc["total"], paths.len() + unselected.len());
+    doc
+}
+
+#[cfg(unix)]
+const JEST_DIRS: &[(&str, &str)] = &[("math", "packages/math"), ("app", "packages/app")];
+
+#[cfg(unix)]
+#[test]
+fn for_runners_lists_the_selected_and_the_unselected_tests() {
+    let dir = fixture("trace_jest");
+    let args = ["--changed", "packages/math/src/mul.js"];
+    let doc = for_runners(dir.path(), &args, JEST_DIRS);
+    assert_eq!(
+        doc,
+        serde_json::json!({
+            "version": 1,
+            "runAll": false,
+            "runWhole": [],
+            "files": [JEST_TOTAL, JEST_MUL],
+            "unselected": [JEST_GREET, JEST_ADD],
+            "total": 4,
+        })
+    );
+    // One line, and the same bytes on a second run.
+    let bytes = |_| {
+        trace(
+            dir.path(),
+            &[&["affected", "--for-runners"][..], &args].concat(),
+        )
+        .stdout
+    };
+    let first = bytes(());
+    assert_eq!(first.iter().filter(|b| **b == b'\n').count(), 1);
+    assert_eq!(first, bytes(()));
+
+    // `--filter` narrows both lists: the plugins keep the tests of the other
+    // packages, which are in neither.
+    let doc = for_runners(
+        dir.path(),
+        &[&args[..], &["--filter", "app"]].concat(),
+        JEST_DIRS,
+    );
+    assert_eq!(doc["files"], serde_json::json!([JEST_TOTAL]));
+    assert_eq!(doc["unselected"], serde_json::json!([JEST_GREET]));
+
+    // It is an output format of its own.
+    for other in ["--json", "--explain"] {
+        let output = trace(dir.path(), &["affected", "--for-runners", other, JEST_MUL]);
+        assert!(!output.status.success(), "{other}");
+    }
+}
+
+/// Every test must run: another root `turbo.json`, and a base that cannot be
+/// read. The files and the total are still there.
+#[cfg(unix)]
+#[test]
+fn for_runners_says_when_every_test_runs() {
+    let dir = fixture("trace_jest");
+    fs::copy(
+        dir.path().join("turbo.json"),
+        dir.path().join("custom-turbo.json"),
+    )
+    .unwrap();
+    for args in [
+        &[
+            "--changed",
+            JEST_MUL,
+            "--root-turbo-json",
+            "custom-turbo.json",
+        ][..],
+        &["--base", "no-such-ref"][..],
+    ] {
+        let doc = for_runners(dir.path(), args, JEST_DIRS);
+        assert_eq!(doc["runAll"], true, "{args:?}");
+        assert_eq!(
+            doc["files"],
+            serde_json::json!([JEST_GREET, JEST_TOTAL, JEST_ADD, JEST_MUL])
+        );
+        assert_eq!(doc["unselected"], serde_json::json!([]));
+        assert_eq!(doc["total"], 4);
+    }
+}
+
+/// A task of a runner the trace does not cover: its package's directory runs
+/// whole, whatever the lists say about the files below it.
+#[cfg(unix)]
+#[test]
+fn for_runners_names_the_directory_of_an_uncovered_task() {
+    let dir = fixture("trace_jest");
+    let math = dir.path().join("packages/math/package.json");
+    let manifest = fs::read_to_string(&math).unwrap();
+    fs::write(&math, manifest.replace("\"jest\"", "\"mocha\"")).unwrap();
+    fs::remove_file(dir.path().join("packages/math/jest.config.js")).unwrap();
+    let doc = for_runners(
+        dir.path(),
+        &["--changed", "packages/app/src/greet.js"],
+        JEST_DIRS,
+    );
+    assert_eq!(doc["runWhole"], serde_json::json!(["packages/math/"]));
+    assert_eq!(doc["runAll"], false);
+}
+
+/// A test the trace does not know (jest's defaults, no config) always runs:
+/// it is among the files, never among the unselected ones.
+#[cfg(unix)]
+#[test]
+fn for_runners_lists_an_unknown_test_as_a_file_to_run() {
+    let dir = fixture("trace_jest");
+    fs::remove_file(dir.path().join("packages/math/jest.config.js")).unwrap();
+    let output = trace(
+        dir.path(),
+        &[
+            "affected",
+            "--json",
+            "--changed",
+            "packages/app/src/greet.js",
+        ],
+    );
+    let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    let unknown: Vec<&str> = json["affectedTests"]["items"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|item| item["reason"]["__typename"] == "UnknownTest")
+        .map(|item| item["path"].as_str().unwrap())
+        .collect();
+    assert_eq!(unknown, [JEST_ADD, JEST_MUL], "{json}");
+    let doc = for_runners(
+        dir.path(),
+        &["--changed", "packages/app/src/greet.js"],
+        JEST_DIRS,
+    );
+    assert_eq!(
+        doc["files"],
+        serde_json::json!([JEST_GREET, JEST_ADD, JEST_MUL])
+    );
+    assert_eq!(doc["unselected"], serde_json::json!([JEST_TOTAL]));
+}
+
+/// The tests of several frameworks are in one list, and with `--tests` the
+/// packages of the other frameworks run whole.
+#[cfg(unix)]
+#[test]
+fn for_runners_lists_the_tests_of_every_framework_together() {
+    let dir = fixture("trace_polyglot");
+    let dirs = [
+        ("web", "apps/web"),
+        ("ledger", "services/ledger"),
+        ("rates", "crates/rates"),
+    ];
+    let args = ["--changed", "services/ledger/money/money.go"];
+    let doc = for_runners(dir.path(), &args, &dirs);
+    assert_eq!(doc["files"], serde_json::json!([POLY_BOOK, POLY_MONEY]));
+    let unselected: Vec<&str> = doc["unselected"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|path| path.as_str().unwrap())
+        .collect();
+    for other in [
+        POLY_PRICE,
+        POLY_GREETING,
+        POLY_RUST_UNIT,
+        POLY_RUST_INTEGRATION,
+    ] {
+        assert!(unselected.contains(&other), "{other}: {doc}");
+    }
+    let doc = for_runners(
+        dir.path(),
+        &[&args[..], &["--tests", "gotest"]].concat(),
+        &dirs,
+    );
+    assert_eq!(
+        doc["runWhole"],
+        serde_json::json!(["apps/web/", "crates/rates/"])
+    );
+}
+
+/// The runner plugins of `@turbo/trace` in a configuration change nothing
+/// about which files are tests: a configuration wrapped in `withTurboTrace`
+/// and one with the `turboTrace()` plugin are read as before, and the
+/// selection is the one without them.
+#[cfg(unix)]
+#[test]
+fn the_runner_plugins_in_a_configuration_do_not_change_the_selection() {
+    let dir = fixture("trace_jest");
+    let before = affected(dir.path(), &["--changed", "packages/math/src/mul.js"]);
+    assert_eq!(
+        before,
+        BTreeSet::from([JEST_MUL.to_owned(), JEST_TOTAL.to_owned()])
+    );
+    for package in ["math", "app"] {
+        fs::write(
+            dir.path()
+                .join("packages")
+                .join(package)
+                .join("jest.config.js"),
+            "const { withTurboTrace } = require(\"@turbo/trace/jest\");\n\nmodule.exports = \
+             withTurboTrace({\n  testEnvironment: \"node\",\n  testMatch: \
+             [\"<rootDir>/test/**/*.test.js\"],\n});\n",
+        )
+        .unwrap();
+    }
+    git(dir.path(), &["commit", "--quiet", "-am", "plugins"]);
+    let after = affected(dir.path(), &["--changed", "packages/math/src/mul.js"]);
+    assert_eq!(after, before);
+
+    let dir = fixture("trace_vitest");
+    let before = affected(dir.path(), &["--changed", "packages/web/src/format.ts"]);
+    assert_eq!(before, BTreeSet::from([VITEST_FORMAT.to_owned()]));
+    for package in ["core", "web"] {
+        fs::write(
+            dir.path()
+                .join("packages")
+                .join(package)
+                .join("vitest.config.ts"),
+            "import { turboTrace } from \"@turbo/trace/vitest\";\nimport { defineConfig } from \
+             \"vitest/config\";\n\nexport default defineConfig({\n  plugins: [turboTrace()],\n  \
+             test: {\n    include: [\"test/**/*.test.ts\"],\n  },\n});\n",
+        )
+        .unwrap();
+    }
+    git(dir.path(), &["commit", "--quiet", "-am", "plugins"]);
+    let after = affected(dir.path(), &["--changed", "packages/web/src/format.ts"]);
+    assert_eq!(after, before);
+}

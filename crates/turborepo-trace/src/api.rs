@@ -102,6 +102,17 @@ pub struct AffectedTests {
     /// does not cover, a command it cannot read): each must run whole, sorted
     /// by task.
     pub uncovered_tasks: Vec<UncoveredTask>,
+    /// Whether every test is selected (each item is
+    /// [`Reason::AllTestsChanged`]).
+    pub run_all: bool,
+    /// The directories of the packages of `uncovered_tasks`, as prefixes of
+    /// paths relative to the repository root (`packages/legacy/`; empty: the
+    /// root package, so every path), sorted.
+    pub run_whole: Vec<String>,
+    /// The test files the trace knows and did not select, sorted. Not part of
+    /// `--json`; a file that is neither here nor in `items` is one the trace
+    /// knows nothing about.
+    pub unselected: Vec<String>,
 }
 
 impl AffectedTests {
@@ -110,6 +121,42 @@ impl AffectedTests {
     pub fn exit_code(&self) -> i32 {
         i32::from(!self.items.is_empty() || !self.uncovered_tasks.is_empty())
     }
+
+    /// The selection as a test runner's plugin reads it (`--for-runners`):
+    /// the same answer as `items` and `uncovered_tasks`, by path only.
+    pub fn for_runners(&self) -> RunnerSelection {
+        RunnerSelection {
+            version: 1,
+            run_all: self.run_all,
+            run_whole: self.run_whole.clone(),
+            files: self.items.iter().map(|t| t.path.clone()).collect(),
+            unselected: self.unselected.clone(),
+            total: self.items.len() + self.unselected.len(),
+        }
+    }
+}
+
+/// What `turbo trace affected --for-runners` prints. A runner's plugin
+/// (`@turbo/trace`) drops a test file only when it is in `unselected` and
+/// below no `run_whole` prefix, and nothing when `run_all` is set: a file
+/// the trace does not know always runs.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RunnerSelection {
+    /// The version of this shape: a plugin runs everything on another one.
+    pub version: u32,
+    /// Every test must run.
+    pub run_all: bool,
+    /// Directory prefixes (relative to the repository root, ending in `/`;
+    /// empty: everything) whose tests all run: a task there starts tests the
+    /// trace cannot map to files.
+    pub run_whole: Vec<String>,
+    /// The selected test files, relative to the repository root.
+    pub files: Vec<String>,
+    /// The known test files that are not selected.
+    pub unselected: Vec<String>,
+    /// The number of test files the trace knows: `files` plus `unselected`.
+    pub total: usize,
 }
 
 /// A task whose tests the trace cannot map to files: it runs whole.
@@ -393,6 +440,8 @@ fn report(
 ) -> AffectedTests {
     let mut items = Vec::new();
     let mut uncovered = Vec::new();
+    let mut unselected = Vec::new();
+    let mut run_whole = Vec::new();
     // The scripts that start tests, by the directory of their package.
     let mut scripts: BTreeMap<&str, Vec<&crate::selection::Task>> = BTreeMap::new();
     for t in doc.packages.iter().flat_map(|pkg| &pkg.tasks) {
@@ -475,6 +524,12 @@ fn report(
                 for p in &pkg.unknown {
                     push(p, &[], Reason::UnknownTest);
                 }
+                unselected.extend(
+                    pkg.unselected
+                        .iter()
+                        .filter(|p| kept(&containing_package(repo.packages, p).1))
+                        .cloned(),
+                );
             }
         }
         let package = package_name(repo.packages, &pkg.dir).unwrap_or_else(|| pkg.name.clone());
@@ -488,6 +543,10 @@ fn report(
                     package: package.clone(),
                     description: why.clone(),
                 });
+                run_whole.push(match pkg.dir.as_str() {
+                    "." | "" => String::new(),
+                    dir => format!("{dir}/"),
+                });
             }
         }
     }
@@ -495,9 +554,18 @@ fn report(
     items.dedup_by(|a, b| a.path == b.path);
     uncovered.sort_by(|a, b| a.task.cmp(&b.task));
     uncovered.dedup();
+    run_whole.sort();
+    run_whole.dedup();
+    // A file selected for one package and not for another is selected.
+    unselected.retain(|p| items.binary_search_by(|i| i.path.as_str().cmp(p)).is_err());
+    unselected.sort();
+    unselected.dedup();
     AffectedTests {
         items,
         uncovered_tasks: uncovered,
+        run_all: all.is_some(),
+        run_whole,
+        unselected,
     }
 }
 
