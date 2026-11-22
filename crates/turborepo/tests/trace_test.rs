@@ -2657,7 +2657,12 @@ fn for_runners(dir: &Path, args: &[&str], dirs: &[(&str, &str)]) -> serde_json::
         .map(|task| {
             let package = task["package"].as_str().unwrap();
             let (_, dir) = dirs.iter().find(|(name, _)| *name == package).unwrap();
-            format!("{dir}/")
+            // The root package's directory is the prefix of every path.
+            if dir.is_empty() {
+                String::new()
+            } else {
+                format!("{dir}/")
+            }
         })
         .collect();
     assert_eq!(
@@ -2774,6 +2779,35 @@ fn for_runners_names_the_directory_of_an_uncovered_task() {
     );
     assert_eq!(doc["runWhole"], serde_json::json!(["packages/math/"]));
     assert_eq!(doc["runAll"], false);
+}
+
+/// A task of the root package that the trace does not cover: the directory
+/// that runs whole is the repository, written as the empty prefix. A plugin
+/// then drops nothing, though the lists still say what was selected.
+#[cfg(unix)]
+#[test]
+fn for_runners_runs_everything_for_an_uncovered_task_of_the_root_package() {
+    let dir = fixture("trace_jest");
+    let root = dir.path().join("package.json");
+    let manifest = fs::read_to_string(&root).unwrap();
+    let scripts = "\"private\": true,\n  \"scripts\": { \"test\": \"mocha\" },";
+    fs::write(&root, manifest.replace("\"private\": true,", scripts)).unwrap();
+    let doc = for_runners(
+        dir.path(),
+        &["--changed", "packages/app/src/greet.js"],
+        &[
+            ("//", ""),
+            ("math", "packages/math"),
+            ("app", "packages/app"),
+        ],
+    );
+    assert_eq!(doc["runWhole"], serde_json::json!([""]), "{doc}");
+    assert_eq!(doc["runAll"], false);
+    assert_eq!(doc["files"], serde_json::json!([JEST_GREET]));
+    assert_eq!(
+        doc["unselected"],
+        serde_json::json!([JEST_TOTAL, JEST_ADD, JEST_MUL])
+    );
 }
 
 /// A test the trace does not know (jest's defaults, no config) always runs:
