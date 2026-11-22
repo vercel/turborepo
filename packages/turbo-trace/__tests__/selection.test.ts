@@ -17,6 +17,7 @@ import {
 } from "@jest/globals";
 import { filter as filterPath, withTurboTrace } from "../src/jest";
 import filter from "../src/jest/filter";
+import { hasWork } from "../src/index";
 import { loadSelection } from "../src/selection";
 import { turboTrace } from "../src/vitest";
 
@@ -167,6 +168,78 @@ describe("the selection", () => {
     expect(stderr).toHaveBeenCalledWith(
       "turbo trace: running 3 of 4 test files\n"
     );
+  });
+});
+
+describe("hasWork", () => {
+  // `idle` has known tests and none is selected; `idle-two` and `idle-whole`
+  // share its name as a prefix, not as a directory.
+  const plan = {
+    ...base,
+    runWhole: ["packages/whole/", "packages/idle-whole/", "packages/deep/x/"],
+    files: ["packages/a/a.test.js", "packages/idle-two/e.test.js"],
+    unselected: [
+      "packages/a/b.test.js",
+      "packages/deep/f.test.js",
+      "packages/idle/d.test.js",
+      "packages/idle/sub/g.test.js",
+      "packages/whole/c.test.js"
+    ]
+  };
+
+  it("is true without a selection, and with one that cannot be used", () => {
+    expect(hasWork("packages/idle")).toBe(true);
+    select("{");
+    expect(hasWork("packages/idle")).toBe(true);
+    expect(warnings()).toHaveLength(1);
+  });
+
+  it("is false only where every known test file is dropped", () => {
+    select(plan);
+    expect(hasWork("packages/idle")).toBe(false);
+    expect(hasWork("packages/idle/sub")).toBe(false);
+    // A selected file below it.
+    expect(hasWork("packages/a")).toBe(true);
+    expect(hasWork("packages/idle-two")).toBe(true);
+    // No known test file: a test the selection does not know would run.
+    expect(hasWork("packages/none")).toBe(true);
+    expect(hasWork("../elsewhere")).toBe(true);
+    // A directory that runs whole: around it, below it and above it.
+    expect(hasWork("packages/whole")).toBe(true);
+    expect(hasWork("packages/whole/src")).toBe(true);
+    expect(hasWork("packages/deep")).toBe(true);
+  });
+
+  it.each([
+    "packages/idle/",
+    "./packages/idle",
+    "packages\\idle",
+    "packages/a/../idle"
+  ])("reads %p as packages/idle", (dir) => {
+    select(plan);
+    expect(hasWork(dir)).toBe(false);
+    expect(hasWork(join(repo, dir.replace(/\\/g, "/")))).toBe(false);
+  });
+
+  it.each(["", ".", "./"])("takes %p as the repository root", (dir) => {
+    select(plan);
+    expect(hasWork(dir)).toBe(true);
+    select({ ...plan, runWhole: [], files: [] });
+    expect(hasWork(dir)).toBe(false);
+    select({ ...plan, runWhole: [""], files: [] });
+    expect(hasWork(dir)).toBe(true);
+  });
+
+  it("is true everywhere when every test runs", () => {
+    select({ ...plan, runAll: true });
+    expect(hasWork("packages/idle")).toBe(true);
+  });
+
+  it("takes a selection that was loaded before", () => {
+    select(plan);
+    const selection = loadSelection();
+    delete process.env.TURBO_TRACE_SELECTION;
+    expect(hasWork("packages/idle", selection)).toBe(false);
   });
 });
 

@@ -13,9 +13,14 @@
     "url": "git+https://github.com/vercel/turborepo.git",
     "directory": "packages/turbo-trace"
   },
+  "bin": {
+    "turbo-trace-has-work": "dist/bin.js"
+  },
   "files": [
     "dist"
   ],
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
   "typesVersions": {
     "*": {
       "jest": [
@@ -27,6 +32,10 @@
     }
   },
   "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
     "./jest": {
       "types": "./dist/jest.d.ts",
       "default": "./dist/jest.js"

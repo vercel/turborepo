@@ -1,5 +1,5 @@
 import { appendFileSync, existsSync, readFileSync } from "node:fs";
-import { dirname, join, relative, sep } from "node:path";
+import { dirname, join, relative, resolve, sep } from "node:path";
 
 /** The selection of `turbo trace affected --for-runners`, as a plugin uses it. */
 export interface Selection {
@@ -9,6 +9,8 @@ export interface Selection {
   known: string[];
   /** Those of them that the change cannot affect: the only files dropped. */
   dropped: Set<string>;
+  /** The directory prefixes below which every test runs. */
+  whole: string[];
 }
 
 let loaded: { path: string; selection?: Selection } | undefined;
@@ -50,11 +52,12 @@ function read(path: string): Selection | undefined {
   if (root === undefined) {
     return warn(`the files of the selection ${path} are not around here`);
   }
-  // An empty `runWhole` entry is the root package: it holds every file.
-  const whole = (file: string) =>
-    doc.runAll !== false || runWhole.some((dir) => file.startsWith(dir));
-  const dropped = new Set(unselected.filter((file) => !whole(file)));
-  return { root, known, dropped };
+  // An empty prefix is the root package, or `runAll`: it holds every file.
+  const whole = doc.runAll === false ? runWhole : [""];
+  const dropped = new Set(
+    unselected.filter((file) => !whole.some((dir) => file.startsWith(dir)))
+  );
+  return { root, known, dropped, whole };
 }
 
 /**
@@ -72,6 +75,27 @@ export function loadSelection(): Selection | undefined {
 /** `file` relative to the repository root, as the selection writes paths. */
 export function inRepository(selection: Selection, file: string): string {
   return relative(selection.root, file).split(sep).join("/");
+}
+
+/**
+ * Whether a test file below `dir` (a directory relative to the repository
+ * root, or an absolute one) would run. It is `false` only when the selection
+ * knows test files below `dir` and drops each of them: without a usable
+ * selection, and where it knows no test file, the answer is `true`.
+ */
+export function hasWork(dir: string, selection = loadSelection()): boolean {
+  if (!selection) {
+    return true;
+  }
+  const path = resolve(selection.root, dir.replace(/\\/g, "/"));
+  const inside = inRepository(selection, path);
+  const prefix = inside === "" ? "" : `${inside}/`;
+  const below = selection.known.filter((file) => file.startsWith(prefix));
+  return (
+    below.length === 0 ||
+    below.some((file) => !selection.dropped.has(file)) ||
+    selection.whole.some((whole) => whole.startsWith(prefix))
+  );
 }
 
 /**

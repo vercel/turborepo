@@ -32,6 +32,7 @@ const selection = {
   files: ["jest/a.test.js", "vitest/a.test.mjs"],
   unselected: [
     "jest/b.test.js",
+    "jest/idle/i.test.js",
     "jest/projects/two/b.test.js",
     "jest/spread/t.test.js",
     "jest/whole/c.test.js",
@@ -41,7 +42,7 @@ const selection = {
     "vitest/src/b.test.mjs",
     "vitest/whole/c.test.mjs"
   ],
-  total: 11
+  total: 12
 };
 
 const jestTest =
@@ -55,6 +56,9 @@ const files: Record<string, string> = {
   "jest/jest.config.js": `const { withTurboTrace } = require('@turbo/trace/jest');\nmodule.exports = withTurboTrace({ ${jestConfig} });\n`,
   // A package's configuration that spreads the root's.
   "jest/spread/jest.config.js":
+    "module.exports = { ...require('../jest.config.js'), rootDir: __dirname };\n",
+  // A package in which nothing is selected.
+  "jest/idle/jest.config.js":
     "module.exports = { ...require('../jest.config.js'), rootDir: __dirname };\n",
   "jest/esm.config.mjs": `import { withTurboTrace } from '@turbo/trace/jest';\nexport default withTurboTrace(async () => ({ ${jestConfig} }));\n`,
   "jest/own.config.js": `const { withTurboTrace } = require('@turbo/trace/jest');\nmodule.exports = withTurboTrace({ ${jestConfig}, filter: '<rootDir>/own-filter.js' });\n`,
@@ -76,6 +80,7 @@ const files: Record<string, string> = {
     [
       "a",
       "b",
+      "idle/i",
       "whole/c",
       "unknown",
       "spread/s",
@@ -152,6 +157,46 @@ function run(
   };
 }
 
+/** The directories among `dirs` that `turbo-trace-has-work` prints. */
+function planned(dirs: string[], stdin = false, env = {}): string[] {
+  const linked = join(runners, "node_modules/@turbo/trace/dist/bin.js");
+  const bin = existsSync(linked)
+    ? linked
+    : resolve(__dirname, "../dist/bin.js");
+  const result = spawnSync(process.execPath, [bin, ...(stdin ? [] : dirs)], {
+    cwd: repo,
+    encoding: "utf8",
+    env: { TURBO_TRACE_SELECTION: join(repo, "selection.json"), ...env },
+    input: stdin ? dirs.join("\n") : ""
+  });
+  expect(result.status).toBe(0);
+  return result.stdout.split("\n").filter(Boolean);
+}
+
+describe("turbo-trace-has-work", () => {
+  const dirs = [
+    "jest",
+    "jest/idle",
+    "jest/projects/two",
+    "vitest/src",
+    "vitest/whole",
+    "docs"
+  ];
+  // A selected file, a directory that runs whole, and one without known tests.
+  const busy = ["jest", "vitest/whole", "docs"];
+
+  it("prints the directories in which a test file would run", () => {
+    expect(planned(dirs)).toEqual(busy);
+    expect(planned(dirs, true)).toEqual(busy);
+  });
+
+  it("prints every directory without a selection, and with one it cannot read", () => {
+    expect(planned(dirs, false, { TURBO_TRACE_SELECTION: "" })).toEqual(dirs);
+    const unreadable = { TURBO_TRACE_SELECTION: join(repo, "jest/a.test.js") };
+    expect(planned(dirs, true, unreadable)).toEqual(dirs);
+  });
+});
+
 (jestVersion ? describe : describe.skip)(
   `jest ${jestVersion?.join(".")}`,
   () => {
@@ -164,6 +209,7 @@ function run(
     const every = [
       "a.test.js",
       "b.test.js",
+      "idle/i.test.js",
       "spread/s.test.js",
       "spread/t.test.js",
       "unknown.test.js",
@@ -177,9 +223,9 @@ function run(
       });
       expect({ ran, status }).toEqual({ ran: selected, status: 0 });
       expect(report).toEqual([
-        { runner: "jest", root: "jest", ran: 4, total: 6 }
+        { runner: "jest", root: "jest", ran: 4, total: 7 }
       ]);
-      expect(output).toContain("turbo trace: running 4 of 6 test files");
+      expect(output).toContain("turbo trace: running 4 of 7 test files");
     });
 
     it("runs everything without a selection, and says nothing", () => {
@@ -200,6 +246,14 @@ function run(
     it("passes when the files that were asked for are all dropped", () => {
       expect(run("jest", ["b.test.js"])).toMatchObject({ ran: [], status: 0 });
       expect(run("jest", ["--listTests"]).output).not.toContain("b.test.js");
+    });
+
+    it("runs nothing in a package that is planned as having no work", () => {
+      expect(planned(["jest/idle"])).toEqual([]);
+      expect(run("jest", ["-c", "idle/jest.config.js"])).toMatchObject({
+        ran: [],
+        status: 0
+      });
     });
 
     it("filters a configuration that spreads the wrapped one", () => {
@@ -350,6 +404,7 @@ function run(
     it("drops below the directory the tests are looked for in", () => {
       const env = { TURBO_TRACE_SELECTION: "selection.json", DIR: "src" };
       expect(run("vitest", ["run"], env)).toMatchObject({ ran: [], status: 0 });
+      expect(planned(["vitest/src"])).toEqual([]);
       expect(run("vitest", ["run"], { DIR: "src" })).toMatchObject({
         ran: ["src/b.test.mjs"],
         status: 0

@@ -2,6 +2,8 @@ import { defineConfig } from "tsdown";
 
 export default defineConfig({
   entry: {
+    index: "src/index.ts",
+    bin: "src/bin.ts",
     jest: "src/jest.ts",
     "jest/filter": "src/jest/filter.ts",
     vitest: "src/vitest.ts"

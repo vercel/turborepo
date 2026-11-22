@@ -102,6 +102,40 @@ Each call with a selection prints one line, `turbo trace: running 12 of 160 test
 - It does nothing outside vitest: a `vite.config.ts` that `vite build` or a linter also loads is not changed.
 - Typechecking (`typecheck.include`) is not filtered. A coverage threshold can fail in a filtered run, as with jest.
 
+## Planning shards
+
+With a selection, most packages of a large repository have no test to run. The plugins make such a run cheap, but not free: an empty jest or vitest run took 0.5 to 0.9 seconds where we measured it (jest 27 to 30, vitest 1 to 5), and the job around it installs the package first. A CI that splits its test packages into jobs can leave those packages out before it plans the jobs.
+
+`turbo-trace-has-work` reads directories, relative to the repository root, from its arguments or from the lines of stdin, and prints the ones in which a test file would run:
+
+```bash
+export TURBO_TRACE_SELECTION="$PWD/selection-$(git hash-object selection.json).json"
+turbo ls --output=json | jq -r '.packages.items[].path' \
+  | pnpm exec turbo-trace-has-work > packages-with-tests-to-run.txt
+```
+
+The same answer is a function, `hasWork(directory)`:
+
+```js
+const { hasWork } = require("@turbo/trace");
+
+const planned = packages.filter((dir) => hasWork(dir));
+```
+
+It answers `false` only when the selection knows test files below the directory and drops every one of them. It answers `true`:
+
+- without `TURBO_TRACE_SELECTION`, and, with one warning, when the selection cannot be used: the command then prints every directory, and it always exits with code 0;
+- when the selection says `runAll`;
+- when a file of `files` is below the directory;
+- when a `runWhole` directory holds the directory or is below it;
+- when the selection knows no test file below the directory. The selection does not tell a package without tests from a package whose tests it does not list, and the plugins run tests it does not list.
+
+The answer is about test files, and only about those the selection lists. Before you drop a package from a shard, check that all of this holds:
+
+- The package's test task only starts jest or vitest with the plugin. A script that also lints or typechecks (`tsc && jest`), and a task that other tasks depend on, still have work when no test file runs.
+- The task's runner has the plugin. Tasks of other runners stay scheduled.
+- The plan is made on the commit the selection was written for. A test file that is added later is in neither list of the selection: the plugins run it, but `hasWork` does not see it next to known files that are all dropped.
+
 ## Where to declare it
 
 Declare `@turbo/trace` in the `package.json` of each package whose configuration imports it. Declared only at the repository root, it works with a hoisting package manager, but tools that check for unlisted dependencies will report it.
