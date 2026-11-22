@@ -87,3 +87,36 @@ Without `TURBO_TRACE_SELECTION`, the plugins do nothing. With it, a plugin drops
 | `TURBO_TRACE_REPORT`    | Optional. A file to which each plugin call appends one line of JSON: `{ "runner", "root", "ran", "total" }`. |
 
 A coverage threshold counts only the tests that ran, so it can fail in a filtered run.
+
+## Planning shards
+
+With a selection, most packages have no test to run. An empty run of a runner is cheap, but the job around it is not. A CI that splits its test packages into jobs can leave those packages out before it plans the jobs. `turbo-trace-has-work` reads package directories from its arguments or from stdin, and prints the ones in which a test file would run:
+
+```bash title="Terminal"
+turbo ls --output=json | jq -r '.packages.items[].path' \
+  | pnpm exec turbo-trace-has-work > packages-with-tests-to-run.txt
+```
+
+`hasWork(directory)` from `@turbo/trace` is the same answer as a function. It is `false` only when the selection knows test files below the directory and drops every one of them. Without a usable selection, with `runAll`, with a `runWhole` directory around or below the directory, and where the selection knows no test file, it is `true`.
+
+<Callout type="warn">
+  The answer is about test files only. Drop a package from a shard only when
+  its test task does nothing but start jest or vitest with the plugin, and no
+  other task depends on it. Plan on the commit the selection was written for.
+</Callout>
+
+A planning job that has `jq` and no Node.js can read the selection itself. The filter prints the same directories, for directories written like `packages/app`:
+
+```bash title="Terminal"
+set -euo pipefail
+turbo ls --output=json | jq -r '.packages.items[].path' \
+  | jq -rR --slurpfile s "$TURBO_TRACE_SELECTION" '
+      . as $d | "\($d)/" as $p | $s[0] | select(
+        .version != 1 or .runAll != false
+        or any(.runWhole[]; startswith($p) or (. as $w | $p | startswith($w)))
+        or any(.files[]; startswith($p))
+        or (any(.unselected[]; startswith($p)) | not)
+      ) | $d'
+```
+
+Unlike the command, `jq` prints nothing when it cannot read the selection, so the job must fail then: keep `set -euo pipefail`.
