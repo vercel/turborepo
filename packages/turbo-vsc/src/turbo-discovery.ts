@@ -1,6 +1,7 @@
 import * as cp from "node:child_process";
 import * as path from "node:path";
 import * as fs from "node:fs";
+import { createRequire } from "node:module";
 
 export type Logger = (message: string) => void;
 
@@ -94,6 +95,63 @@ export function findExecutableOnPath(name: string) {
       return executable;
     }
   }
+}
+
+/**
+ * On Windows, npm, pnpm, and yarn install `turbo` as `turbo.cmd`/`turbo.ps1`
+ * shims around the JavaScript launcher in the `turbo` package. Node refuses to
+ * spawn `.cmd` files without a shell (`spawn EINVAL`), so map such a shim to
+ * the native binary that the launcher would run, resolved from the `turbo`
+ * package the same way `turbo/bin/turbo` resolves it. Returns `turboPath`
+ * unchanged when it is not a shim or no native binary is found.
+ */
+export function resolveWindowsTurboShim(
+  turboPath: string,
+  { platform = process.platform, arch = process.arch } = {}
+): string {
+  if (
+    platform !== "win32" ||
+    path.extname(turboPath).toLowerCase() === ".exe"
+  ) {
+    return turboPath;
+  }
+
+  // Mirror the launcher: the native arch first, then x64 under emulation on
+  // arm64; the scoped package name first, then the legacy unscoped one.
+  const archs =
+    arch === "arm64" ? ["arm64", "64"] : arch === "x64" ? ["64"] : [];
+  const binaries = archs.flatMap((a) => [
+    `@turbo/windows-${a}/bin/turbo.exe`,
+    `turbo-windows-${a}/bin/turbo.exe`
+  ]);
+
+  const shimDir = path.dirname(turboPath);
+  const packageJsonCandidates = [
+    // node_modules/.bin/turbo.cmd -> node_modules/turbo
+    path.join(shimDir, "..", "turbo", "package.json"),
+    // <npm global prefix>/turbo.cmd -> <prefix>/node_modules/turbo
+    path.join(shimDir, "node_modules", "turbo", "package.json")
+  ];
+
+  for (const packageJson of packageJsonCandidates) {
+    let requireFromTurbo: NodeRequire;
+    try {
+      // Resolve symlinks first so pnpm's linked layout finds the binary
+      // package next to the real `turbo` package.
+      requireFromTurbo = createRequire(fs.realpathSync(packageJson));
+    } catch {
+      continue;
+    }
+    for (const binary of binaries) {
+      try {
+        return requireFromTurbo.resolve(binary);
+      } catch {
+        // Try the next package name.
+      }
+    }
+  }
+
+  return turboPath;
 }
 
 export function resolveTurboPath(
@@ -193,16 +251,23 @@ export async function findInstalledTurboLsp(options: {
       continue;
     }
 
+    // Windows shims cannot be spawned without a shell; probe (and later
+    // run) the native binary behind them instead.
+    const turboPath = resolveWindowsTurboShim(candidate.path);
+    if (turboPath !== candidate.path) {
+      log(`turbo LSP: resolved ${candidate.path} to ${turboPath}`);
+    }
+
     // node_modules/.bin entries are usually symlinks; compare real paths so
     // the same binary is never probed twice.
-    let dedupeKey = candidate.path;
+    let dedupeKey = turboPath;
     try {
-      dedupeKey = fs.realpathSync(candidate.path);
+      dedupeKey = fs.realpathSync(turboPath);
     } catch {
       // Keep the literal path if realpath fails.
     }
     if (seen.has(dedupeKey)) {
-      log(`turbo LSP: skipping duplicate candidate at ${candidate.path}`);
+      log(`turbo LSP: skipping duplicate candidate at ${turboPath}`);
       continue;
     }
     seen.add(dedupeKey);
@@ -211,19 +276,19 @@ export async function findInstalledTurboLsp(options: {
       return undefined;
     }
 
-    log(`turbo LSP: probing ${candidate.label} at ${candidate.path}`);
+    log(`turbo LSP: probing ${candidate.label} at ${turboPath}`);
 
-    const probe = await probeInternalLsp(candidate.path, {
+    const probe = await probeInternalLsp(turboPath, {
       cwd: workspaceRoot,
       signal
     });
     if (probe.supported) {
-      log(`turbo LSP: using ${candidate.label} at ${candidate.path}`);
-      return candidate.path;
+      log(`turbo LSP: using ${candidate.label} at ${turboPath}`);
+      return turboPath;
     }
 
     log(
-      `turbo LSP: rejected ${candidate.label} at ${candidate.path}: ${probe.reason}`
+      `turbo LSP: rejected ${candidate.label} at ${turboPath}: ${probe.reason}`
     );
   }
 
