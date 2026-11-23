@@ -1,6 +1,6 @@
 services:
   otel-collector:
-    image: otel/opentelemetry-collector-contrib:0.139.0
+    image: otel/opentelemetry-collector-contrib:0.165.0
     volumes:
       - ./otel-collector.yml:/etc/otelcol-contrib/config.yaml
     ports:
@@ -12,7 +12,7 @@ services:
       - 55679:55679 # zpages extension
 
   prometheus:
-    image: prom/prometheus:latest
+    image: prom/prometheus:v3.16.0
     volumes:
       - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
     ports:
@@ -20,7 +20,7 @@ services:
     depends_on: [otel-collector]
 
   grafana:
-    image: grafana/grafana:latest
+    image: grafana/grafana:13.3.1
     volumes:
       - ./grafana/provisioning:/etc/grafana/provisioning:ro
       - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
