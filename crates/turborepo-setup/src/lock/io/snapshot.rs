@@ -5,10 +5,12 @@ use std::{
     sync::Arc,
 };
 
+use turborepo_turbo_json::SetupRegistry;
+
 use super::{
     DeclarationMap, Ecosystems, Error, LOCK_NAME, Lock, MAX_LOCK_BYTES, MAX_TOOLCHAIN_BYTES,
     NATIVE, RUST_TOOLCHAIN_FILES, StorageError, WriteOutcome, WriterStorage, probe_native_with,
-    read_optional, records, rust_toolchain,
+    read_nested, read_optional, records, rust_toolchain,
 };
 use crate::{
     go_discovery::{GO_MOD, GO_WORK, GoRequirements, MAX_MANIFEST_BYTES as GO_LIMIT},
@@ -44,6 +46,7 @@ pub struct Snapshot {
     inputs: Inputs,
     native: DeclarationMap,
     ecosystems: Ecosystems,
+    registries: Vec<SetupRegistry>,
     additional: BTreeMap<String, Tool>,
     unresolved: BTreeMap<String, CatalogRequest>,
     incomplete: BTreeMap<String, CatalogRequest>,
@@ -124,6 +127,7 @@ impl Snapshot {
             }
         }
         let additional::Projection {
+            registries,
             tools: additional,
             unresolved,
             incomplete,
@@ -144,6 +148,7 @@ impl Snapshot {
             inputs: captured,
             native,
             ecosystems,
+            registries,
             additional,
             unresolved,
             incomplete,
@@ -187,9 +192,25 @@ impl Snapshot {
         &self.additional
     }
 
-    /// Catalog declarations that the captured lock does not record, in ID
-    /// order. Only `turbo setup` resolves them; to every other consumer they
-    /// are drift.
+    /// `setup.registries` from the captured root configuration, in the order
+    /// the registries are asked. A recorded catalog entry is reused only
+    /// while its registry is among them.
+    pub fn registries(&self) -> &[SetupRegistry] {
+        &self.registries
+    }
+
+    /// A repository file that is not part of the captured state, such as a
+    /// registry file, by its portable path relative to the root. No link on
+    /// the way can lead the read outside the repository. `None` when the file
+    /// does not exist, and a `FileTooLarge` error when it has more than
+    /// `limit` bytes.
+    pub fn read_repository_file(&self, path: &str, limit: usize) -> io::Result<Option<Vec<u8>>> {
+        read_nested(&self.root, path, limit)
+    }
+
+    /// Catalog declarations that the captured lock does not record or whose
+    /// recorded registry is no longer declared, in ID order. Only `turbo
+    /// setup` resolves them; to every other consumer they are drift.
     pub fn catalog_requests(&self) -> impl Iterator<Item = &CatalogRequest> {
         self.unresolved.values()
     }
@@ -205,15 +226,15 @@ impl Snapshot {
     /// This snapshot with `tools` as the lock entries of its unresolved or
     /// incomplete catalog declarations. Each entry must be the one its
     /// declaration asks for, under the rule that reuses an entry from the
-    /// lock, so a resolver cannot lock another tool, version, catalog entry,
-    /// or artifact shape. No two additional tools may then install one
-    /// command on a platform.
+    /// lock, so a resolver cannot lock another tool, version, registry entry,
+    /// or artifact shape, or an entry from a registry that is not declared.
+    /// No two additional tools may then install one command on a platform.
     pub fn with_catalog_tools(&self, tools: BTreeMap<String, Tool>) -> Result<Self, StorageError> {
         let mut resolved = self.clone();
         for (id, tool) in tools {
             let request = resolved.unresolved.remove(&id);
             let request = request.or_else(|| resolved.incomplete.remove(&id));
-            if !request.is_some_and(|request| request.records(&tool)) {
+            if !request.is_some_and(|request| request.records(&tool, &resolved.registries)) {
                 return Err(Error::Invalid(
                     "resolved catalog tool does not match its setup.additionalTools declaration",
                 )

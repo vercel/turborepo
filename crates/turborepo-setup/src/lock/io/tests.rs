@@ -410,6 +410,54 @@ fn own_inputs_are_bounded_and_no_partial_probe_or_write_succeeds() {
     assert!(probe_native(root.path()).is_err());
 }
 
+#[test]
+fn nested_repository_files_are_read_bounded_and_only_below_the_root() {
+    let root = tempfile::tempdir().unwrap();
+    let outside = tempfile::tempdir().unwrap();
+    fs::create_dir_all(root.path().join("tools/nested")).unwrap();
+    fs::write(root.path().join("tools/nested/registry.yaml"), "packages").unwrap();
+    fs::write(root.path().join("registry.yaml"), "root").unwrap();
+    fs::write(outside.path().join("registry.yaml"), "outside").unwrap();
+    let read = |path: &str| read_nested(root.path(), path, 8);
+
+    let nested = read("tools/nested/registry.yaml").unwrap();
+    assert_eq!(nested.unwrap(), b"packages");
+    assert_eq!(read("registry.yaml").unwrap().unwrap(), b"root");
+    assert_eq!(read("tools/missing.yaml").unwrap(), None);
+    assert_eq!(read("missing/registry.yaml").unwrap(), None);
+    fs::write(root.path().join("tools/large.yaml"), "123456789").unwrap();
+    let large = read("tools/large.yaml").unwrap_err();
+    assert_eq!(large.kind(), std::io::ErrorKind::FileTooLarge);
+    assert!(read("tools/nested").is_err());
+    assert!(read("registry.yaml/registry.yaml").is_err());
+    let absolute = format!("{}/registry.yaml", outside.path().display());
+    for path in [
+        "../registry.yaml",
+        "tools/../registry.yaml",
+        "./registry.yaml",
+        "",
+        &absolute,
+    ] {
+        assert!(read(path).is_err(), "{path}");
+    }
+
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::symlink;
+        symlink(outside.path(), root.path().join("linked")).unwrap();
+        symlink(outside.path(), root.path().join("tools/linked")).unwrap();
+        let target = outside.path().join("registry.yaml");
+        symlink(target, root.path().join("tools/link.yaml")).unwrap();
+        for path in [
+            "linked/registry.yaml",
+            "tools/linked/registry.yaml",
+            "tools/link.yaml",
+        ] {
+            assert!(read(path).is_err(), "{path}");
+        }
+    }
+}
+
 #[cfg(unix)]
 #[test]
 fn read_only_probe_and_symlink_directory_fifo_safety() {

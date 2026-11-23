@@ -5,9 +5,7 @@ use turborepo_setup::lock::{
     self, Platform,
     additional::{CatalogRequest, TARGETS, lock_platform},
 };
-use turborepo_turbo_json::{
-    ArtifactFormat, ArtifactPlatform, CATALOG_PREFIX, derived_artifact_violation,
-};
+use turborepo_turbo_json::{ArtifactFormat, ArtifactPlatform, derived_artifact_violation};
 
 use super::{Catalog, Error};
 
@@ -50,6 +48,8 @@ pub enum Unavailable {
     Message(String),
     #[error("the catalog installs it with {0}, which turbo setup does not do")]
     Kind(String),
+    #[error("its download needs a login, which turbo setup does not support yet")]
+    Login,
     #[error("its {0} download is a format that turbo setup cannot install yet")]
     Format(String),
     #[error("the catalog entry cannot be used: {0}")]
@@ -84,25 +84,19 @@ pub struct ReleasePlan {
 /// Every release name a version may be published under, most likely first.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Plan {
-    /// The catalog entry as `turbo.lock` records it: `aqua:<package ID>`.
+    /// The registry entry as `turbo.lock` records it, `<registry>:<package
+    /// ID>`: the declared `from`, or else the registry that answered and the
+    /// package ID of its recipe.
     pub source: String,
     pub releases: Vec<ReleasePlan>,
 }
 
-impl Catalog {
+impl Catalog<'_> {
     /// The downloads the catalog describes for `request`. No I/O beyond
-    /// reading the bundled recipes.
+    /// reading the registries that the lookup asks.
     pub fn plan(&self, request: &CatalogRequest) -> Result<Plan, Error> {
-        let package = self.package(request)?;
-        let recipe = self
-            .registry()?
-            .package(&package)
-            .map_err(|_| Error::UnknownPackage {
-                tool: request.id.clone(),
-                package: package.clone(),
-            })?;
-        let source = format!("{CATALOG_PREFIX}{package}");
-        Ok(Plan::of(&recipe, source, &request.version))
+        let (source, recipe) = self.entry(request)?;
+        Ok(Plan::of(recipe, source, &request.version))
     }
 }
 
@@ -175,6 +169,9 @@ fn artifact(
     }
     if !supported(&package.supported_envs, os, arch) {
         return Err(Unavailable::Platform);
+    }
+    if package.private {
+        return Err(Unavailable::Login);
     }
     let url = match package.package_type() {
         AquaPackageType::GithubRelease => {

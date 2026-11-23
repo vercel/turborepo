@@ -7,7 +7,14 @@ use turborepo_setup::{
 };
 
 use super::*;
-use crate::{Catalog, plan::tests::REGISTRY, tests::request};
+use crate::{Catalog, Registry, plan::tests::REGISTRY, tests::request};
+
+fn catalog() -> Catalog<'static> {
+    Catalog::new(vec![Registry::aqua_for_tests(
+        "raw\texample/raw\n",
+        REGISTRY,
+    )])
+}
 
 const HOST: Platform = Platform::LinuxX64Gnu;
 
@@ -46,7 +53,7 @@ async fn run(
     host: Platform,
 ) -> Result<Resolved, Error> {
     let request = request(id, version, from);
-    let plan = Catalog::for_tests("raw\texample/raw\n", REGISTRY).plan(&request)?;
+    let plan = catalog().plan(&request)?;
     let transport = CatalogTransport::loopback_http_for_tests(server.origin())?;
     resolve(&request, &plan, host, &transport).await
 }
@@ -388,9 +395,7 @@ async fn recipes_without_a_usable_download_fail_without_a_request() {
 #[tokio::test]
 async fn only_a_missing_download_is_skipped_and_an_outage_stops_resolution() {
     let request = request("raw", "26.1", None);
-    let plan = Catalog::for_tests("raw\texample/raw\n", REGISTRY)
-        .plan(&request)
-        .unwrap();
+    let plan = catalog().plan(&request).unwrap();
     let transport = CatalogTransport::loopback_http_for_tests("http://127.0.0.1:9").unwrap();
     let error = resolve(&request, &plan, HOST, &transport)
         .await

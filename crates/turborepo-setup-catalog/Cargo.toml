@@ -16,6 +16,9 @@ test-support = ["turborepo-download/test-support"]
 aqua-registry = "=2026.11.1"
 flate2 = "1.1.9"
 futures = { workspace = true }
+serde = { workspace = true }
+# The YAML decoder that aqua-registry reads a registry with.
+serde-saphyr = "2"
 serde_json = { workspace = true }
 thiserror = { workspace = true }
 turborepo-archive = { workspace = true }

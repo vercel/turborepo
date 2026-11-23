@@ -1,7 +1,11 @@
-use std::collections::{BTreeMap, BTreeSet};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    io,
+};
 
 use turborepo_setup::{lock::Snapshot, source_policy::ToolDownloadPolicy};
-use turborepo_setup_catalog::{Catalog, CatalogTransport};
+use turborepo_setup_catalog::{Catalog, CatalogTransport, Registry};
+use turborepo_turbo_json::SetupRegistry;
 
 use super::{
     Error, LockMode, Mode, SetupRequest,
@@ -11,7 +15,8 @@ use super::{
 
 #[cfg(any(test, feature = "test-support"))]
 pub(super) struct Fixture {
-    pub catalog: Catalog,
+    /// Stands in for the built-in registry.
+    pub aqua: Registry<'static>,
     pub transport: CatalogTransport,
 }
 
@@ -31,6 +36,20 @@ pub(super) fn refuse_offline(snapshot: &Snapshot, request: &SetupRequest) -> Res
         return Err(Error::CatalogOffline(ids));
     }
     Ok(())
+}
+
+/// The registries that the captured `setup.registries` declares, in order.
+/// Each registry file is read when a lookup first asks its registry, through
+/// the read that stays inside the repository.
+fn catalog<'a>(snapshot: &'a Snapshot, mut aqua: Option<Registry<'a>>) -> Catalog<'a> {
+    let registries = snapshot.registries().iter().map(|registry| match registry {
+        SetupRegistry::Aqua => aqua.take().unwrap_or_else(Registry::aqua),
+        SetupRegistry::File { name, path } => Registry::declared(name, path, move |limit| {
+            let bytes = snapshot.read_repository_file(path, limit)?;
+            bytes.ok_or_else(|| io::ErrorKind::NotFound.into())
+        }),
+    });
+    Catalog::new(registries.collect())
 }
 
 pub(super) fn resolve(
@@ -56,11 +75,12 @@ pub(super) fn resolve(
     }
     requests.sort_by(|a, b| a.id.cmp(&b.id));
     let host = provision::platform()?;
-    let (catalog, fixture) = match fixture {
+    let (aqua, fixture) = match fixture {
         #[cfg(any(test, feature = "test-support"))]
-        Some(fixture) => (fixture.catalog, Some(fixture.transport)),
-        None => (Catalog::bundled(), None),
+        Some(fixture) => (Some(fixture.aqua), Some(fixture.transport)),
+        None => (None, None),
     };
+    let catalog = catalog(&snapshot, aqua);
     let plans = requests
         .iter()
         .map(|request| catalog.plan(request))
