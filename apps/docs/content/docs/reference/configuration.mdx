@@ -1421,7 +1421,7 @@ The OTLP protocol to use. Supported values:
 
 The OTLP collector endpoint URL. For example:
 
-- Axiom: `"https://us-east-1.aws.edge.axiom.co/v1/metrics"` with `protocol: "http/protobuf"` and the headers `Authorization: Bearer <API token>` and `x-axiom-metrics-dataset: <metrics dataset>`. Use the [edge domain](https://axiom.co/docs/reference/edge-deployments) of your dataset's region and the full `/v1/metrics` path.
+- Axiom: Send metrics to `"https://<edge-domain>/v1/metrics"` with `protocol: "http/protobuf"` and the headers `Authorization: Bearer <API token>` and `x-axiom-metrics-dataset: <metrics dataset>`. Use your dataset's [edge domain](https://axiom.co/docs/reference/edge-deployments), such as `us-east-1.aws.edge.axiom.co`.
 - Datadog: `"https://api.datadoghq.com/api/v2/otlp"`
 - Custom collector: `"https://otel-collector.example.com:4317"` (gRPC) or `"https://otel-collector.example.com:4318"` (HTTP)
 
