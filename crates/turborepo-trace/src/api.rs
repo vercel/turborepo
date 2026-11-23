@@ -595,7 +595,8 @@ fn explained_changes(
 /// `turbo trace why`.
 #[derive(Clone, Debug)]
 pub struct WhyRequest {
-    /// The test to explain (relative to [`Repo::cwd`]).
+    /// The test to explain (relative to [`Repo::cwd`]). `None` with
+    /// [`summary`](WhyRequest::summary).
     pub test: Option<String>,
     /// `<file>`: the change is this file alone, whatever
     /// [`AffectedRequest::changes`] says. When it does not select the test and
@@ -604,14 +605,20 @@ pub struct WhyRequest {
     /// The changes (without a `file`), `--tests` and `--strict`, as for
     /// [`affected`].
     pub affected: AffectedRequest,
+    /// `--summary`: the constructs that select the tests of the change, ranked
+    /// by the tests each selects first.
+    pub summary: bool,
+    /// `--top`: the summary's text lists this many constructs (0: all).
+    pub top: usize,
     /// `--json`.
     pub json: bool,
 }
 
 /// `turbo trace why`: why the change selects a test, in the selection's own
 /// terms: what changed, the construct that makes it matter, the kind of link
-/// and each hop to the test, for every mechanism that selects it by itself.
-/// Returns the exit code: 1 when the change does not select the test.
+/// and each hop to the test, for every mechanism that selects it by itself; or
+/// the summary of a whole selection. Returns the exit code: 1 when the change
+/// does not select the test.
 #[tracing::instrument(skip_all)]
 pub fn why(repo: &Repo<'_>, req: &WhyRequest, out: &mut dyn Write) -> Result<i32, Error> {
     supported()?;
@@ -621,9 +628,10 @@ pub fn why(repo: &Repo<'_>, req: &WhyRequest, out: &mut dyn Write) -> Result<i32
     if let Some(why) = unsupported_config(repo) {
         return Err(Error::Failed(why));
     }
-    if req.test.is_none() {
+    if req.test.is_none() && !req.summary {
         return Err(Error::InvalidRequest(
-            "missing <test>: `turbo trace why <test> [<file>]`".to_owned(),
+            "missing <test>: `turbo trace why <test> [<file>]` or `turbo trace why --summary`"
+                .to_owned(),
         ));
     }
     let run = |changes: &Changes, out: &mut dyn Write| -> Result<i32, Error> {
@@ -633,7 +641,9 @@ pub fn why(repo: &Repo<'_>, req: &WhyRequest, out: &mut dyn Write) -> Result<i32
                 .test
                 .as_ref()
                 .map(|t| abs(repo, t).to_string_lossy().into_owned()),
+            summary: req.summary,
             json: req.json,
+            top: req.top,
         });
         explained_changes(repo, &mut cmd, changes)?;
         let host = crate::affected::Host::default();

@@ -281,7 +281,11 @@ pub mod affected {
         /// <test>`), instead of the list.
         #[usage(long, value_name = "ENTRY")]
         pub why: Option<String>,
-        /// With --why: JSON.
+        /// Print the constructs that select the entries, ranked (`turbo trace
+        /// why --summary`), instead of the list.
+        #[usage(long)]
+        pub why_summary: bool,
+        /// With --why or --why-summary: JSON.
         #[usage(long)]
         pub why_json: bool,
         /// Exit 0 if nothing is affected, 1 if an entry is affected, 2 if one
@@ -340,10 +344,14 @@ pub mod affected {
                 full_package: c.full_package,
                 no_fail_open: c.no_fail_open,
                 explain: c.explain,
-                why: c.why.map(|test| turborepo_trace::commands::WhyOpts {
-                    test: Some(test),
-                    json: c.why_json,
-                }),
+                why: (c.why.is_some() || c.why_summary).then_some(
+                    turborepo_trace::commands::WhyOpts {
+                        test: c.why,
+                        summary: c.why_summary,
+                        json: c.why_json,
+                        top: 0,
+                    },
+                ),
                 exit_code: c.exit_code,
                 loc: c.loc.into(),
                 steering: c.steering,

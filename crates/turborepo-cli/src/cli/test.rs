@@ -841,6 +841,7 @@ fn trace_parses_its_subcommands() {
             command: Some(TraceCommand::Why(TraceWhyArgs {
                 test: Some("a.test.ts".into()),
                 file: Some("src/a.ts".into()),
+                top: 20,
                 ..Default::default()
             })),
         })
@@ -863,6 +864,18 @@ fn trace_parses_its_subcommands() {
                 test: Some("a.test.ts".into()),
                 base: Some("main".into()),
                 json: true,
+                top: 20,
+                ..Default::default()
+            })),
+        })
+    );
+    assert_eq!(
+        trace(&["why", "--summary", "--changed", "a.ts", "--top", "5"]).unwrap(),
+        Some(Command::Trace {
+            command: Some(TraceCommand::Why(TraceWhyArgs {
+                changed: vec!["a.ts".into()],
+                summary: true,
+                top: 5,
                 ..Default::default()
             })),
         })

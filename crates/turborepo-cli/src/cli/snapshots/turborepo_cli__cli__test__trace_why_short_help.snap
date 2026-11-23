@@ -22,6 +22,11 @@ Flags:
       --tests <FRAMEWORK>…        Only tests of these frameworks: jest, vitest,
                                   gotest, cargo-test or all (default: all)
       --strict                    Make no assumptions: every uncertainty selects
+      --summary                   Instead of one test, rank the code constructs
+                                  that select the tests of the change by the
+                                  number of tests each selects
+      --top <N>                   With --summary: list this many constructs (0:
+                                  all) (default: 20)
       --json                      Output the explanation as JSON
   -h, --help                      Print help
 

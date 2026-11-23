@@ -1,6 +1,7 @@
-//! `turbo trace why` end to end (the harness's `affected --why`): every test a
-//! change selects is explained with the reason the selection gives, link by
-//! link, with the other witnesses that select it too.
+//! `turbo trace why` end to end (the harness's `affected --why`,
+//! `--why-summary`): every test a change selects is explained with the reason
+//! the selection gives, link by link, with the other witnesses that select it
+//! too.
 // Test code: helpers outside `#[test]` functions unwrap and expect as the tests do.
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
@@ -627,6 +628,99 @@ fn an_unknown_test_always_runs() {
     assert_eq!(v["selected"], true, "{v}");
     assert_eq!(v["reason"]["__typename"], "UnknownTest", "{v}");
     assert_eq!(v["noChange"], true, "{v}");
+}
+
+#[test]
+fn the_summary_ranks_the_constructs_by_the_tests_they_select() {
+    let d = workspace();
+    let r = d.path();
+    let change = ["--changed", "packages/util/other.js"];
+    let (_, out) = run(
+        r,
+        &args(&["affected"], &change, &["--why-summary", "--why-json"]),
+    );
+    let v: Value = serde_json::from_str(&out).unwrap();
+    let listed = selected(r, &change);
+    assert_eq!(v["selected"], listed.len(), "{v}");
+    let rows = v["constructs"].as_array().unwrap();
+    assert_eq!(
+        rows.iter()
+            .map(|r| r["tests"].as_u64().unwrap())
+            .sum::<u64>(),
+        listed.len() as u64,
+        "{v}"
+    );
+    // Sorted by the tests each selects first.
+    let counts: Vec<u64> = rows.iter().map(|r| r["tests"].as_u64().unwrap()).collect();
+    assert!(counts.windows(2).all(|w| w[0] >= w[1]), "{v}");
+    // The framework's load selects two tests. One of them is selected first by
+    // its own read, which names the repository root, as a third test is: the
+    // load has one test first, and the name's row says its test stays selected.
+    let sum = |link: &str, field: &str| -> u64 {
+        rows.iter()
+            .filter(|r| r["link"] == link)
+            .map(|r| r[field].as_u64().unwrap())
+            .sum()
+    };
+    assert_eq!(sum("bounded load", "tests"), 1, "{v}");
+    assert_eq!(sum("name reference", "tests"), 2, "{v}");
+    assert_eq!(sum("bounded load", "alsoSelected"), 0, "{v}");
+    assert_eq!(sum("name reference", "alsoSelected"), 1, "{v}");
+    assert_eq!(rows[0]["tests"], 1, "{v}");
+    let load = rows.iter().find(|r| r["link"] == "bounded load").unwrap();
+    assert_eq!(
+        load["construct"],
+        "a bounded load can reach packages/util/ (packages/util/other.js changed)",
+        "{v}"
+    );
+    assert_eq!(load["example"], A, "{v}");
+    // The lint finding at the load, with the cost `lint` reports for it: two
+    // tests reach it.
+    assert_eq!(
+        load["code"]["file"], "packages/framework/normalize.js",
+        "{v}"
+    );
+    assert_eq!(load["lint"]["bounded"], true, "{v}");
+    assert_eq!(load["lint"]["reached"], 2, "{v}");
+    let (_, text) = run(r, &args(&["affected"], &change, &["--why-summary"]));
+    assert!(
+        text.starts_with(&format!(
+            "{} of {} tests selected by the change to packages/util/other.js (modified); 0 of \
+             them with no change at all\n",
+            listed.len(),
+            v["tests"]
+        )),
+        "{text}"
+    );
+    assert!(text.contains("  tests   also  construct\n"), "{text}");
+}
+
+#[test]
+fn the_summary_without_a_change_is_the_floor() {
+    let d = tasks();
+    let r = d.path();
+    // The harness takes a change; a file that nothing reads stands for none.
+    let (_, out) = run(
+        r,
+        &args(
+            &["affected"],
+            &["--changed", "README.md"],
+            &["--why-summary", "--why-json"],
+        ),
+    );
+    let v: Value = serde_json::from_str(&out).unwrap();
+    assert_eq!(v["selected"], v["noChange"], "{v}");
+    let rows = v["constructs"].as_array().unwrap();
+    assert!(
+        rows.iter()
+            .any(|r| r["reason"] == "UnknownTest" && r["example"] == "app/odd.spec.js"),
+        "{v}"
+    );
+    assert!(
+        rows.iter()
+            .any(|r| r["reason"] == "Uncertain" && r["example"] == LIB && r["noChange"] == 1),
+        "{v}"
+    );
 }
 
 /// `--explain` with several entries: a note that an entry before it printed is

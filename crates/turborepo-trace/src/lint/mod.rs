@@ -298,6 +298,39 @@ impl Ctx<'_, '_> {
     }
 }
 
+/// The cost of every `unconstrained-load` finding for `entries`, by file and
+/// line, as `lint` reports it: the summary of `why` shows it next to the
+/// constructs that are such findings (`crate::witness`).
+pub(crate) fn load_costs<'g>(
+    root: &Path,
+    graph: &'g Graph,
+    derived: &'g Derived<'g>,
+    engine: &Engine<'g, Derived<'g>>,
+    options: &AffectedOptions,
+    entries: &NodeSet,
+) -> std::collections::HashMap<(String, u32), Cost> {
+    let runtime = runtime_entries(graph, root, entries);
+    let ctx = Ctx {
+        root,
+        graph,
+        derived,
+        engine,
+        options,
+        entries,
+        runtime_entries: &runtime,
+        floor: OnceCell::new(),
+        floor_time: Cell::new(Duration::ZERO),
+        floor_open: OnceCell::new(),
+        reach: OnceCell::new(),
+        bounded: OnceCell::new(),
+    };
+    unconstrained::loads(&ctx)
+        .unwrap_or_default()
+        .into_iter()
+        .filter_map(|f| Some(((f.file, f.line), f.cost?)))
+        .collect()
+}
+
 /// What became of a finding.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Status {

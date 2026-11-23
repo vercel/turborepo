@@ -13,6 +13,10 @@
 //! the selection without any change. What each of them selects is a witness of
 //! its own. One witness per mechanism is known, as in the selection itself:
 //! the list is a lower bound.
+//!
+//! The summary groups the selected tests by the construct of their first
+//! witness. For the constructs that `turbo trace lint` reports, the cost of
+//! the finding is shown as lint computes it.
 
 use std::{collections::HashMap, io::Write, path::Path};
 
@@ -26,13 +30,19 @@ use turborepo_trace_store::Graph;
 
 use crate::{ExitCode, api::Reason, lint::Derived};
 
+mod summary;
+
 /// What `why` prints.
 #[derive(Clone, Debug, Default)]
 pub struct WhyOpts {
-    /// The test to explain (as `explain` takes an entry).
+    /// The test to explain (as `explain` takes an entry). `None`: the summary.
     pub test: Option<String>,
+    /// The constructs that select the tests, ranked, instead of one test.
+    pub summary: bool,
     /// JSON instead of text.
     pub json: bool,
+    /// The summary's text lists this many constructs (0: all).
+    pub top: usize,
 }
 
 /// What each mechanism of the selection selects by itself: one report per
@@ -88,11 +98,14 @@ pub(crate) struct Input<'a> {
     /// The selection.
     pub report: &'a AffectedReport,
     pub alone: &'a Alone,
-    /// The entries of the selection that are no graph node.
+    /// The entries of the selection, and those that are no graph node.
+    pub entries: &'a NodeSet,
     pub missing: &'a [String],
     /// Files that look like tests and are no entry: they always run.
     pub unknown: &'a NodeSet,
     pub changes: &'a [Change],
+    /// The cost of the lint findings about loads, by file and line.
+    pub lint: &'a dyn Fn() -> HashMap<(String, u32), crate::lint::Cost>,
 }
 
 /// A line of source.
@@ -575,7 +588,7 @@ pub(crate) fn write(
     out: &mut dyn Write,
 ) -> Result<ExitCode> {
     match test {
-        Some(rel) => explain(i, rel, opts.json, out),
-        None => anyhow::bail!("no test to explain"),
+        Some(rel) if !opts.summary => explain(i, rel, opts.json, out),
+        _ => summary::summary(i, opts, out),
     }
 }
