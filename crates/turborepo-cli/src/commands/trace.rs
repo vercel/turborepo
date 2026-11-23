@@ -144,6 +144,8 @@ fn why_request(args: &TraceWhyArgs) -> WhyRequest {
         test: args.test.clone(),
         file: args.file.clone(),
         affected: affected_request(&changes, None),
+        summary: args.summary,
+        top: args.top,
         json: args.json,
     }
 }

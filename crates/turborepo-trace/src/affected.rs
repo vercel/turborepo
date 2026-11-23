@@ -1695,31 +1695,39 @@ fn affected(mut cmd: AffectedCmd, out: &mut dyn Write, host: Option<&Host>) -> R
     // `--explain` and `why` make the files they name entries. The selection, which
     // runs without them, lists a file that looks like a test and is no entry as
     // an unknown test: it always runs, whatever its trace would say.
-    let unknown_tests: NodeSet = if cmd.explain.is_empty() && cmd.why.is_none() {
-        NodeSet::new(0)
-    } else {
-        let mut plain = cmd.entries.clone();
-        plain.extend(cmd.entries_opt.iter().cloned());
-        let mut selection = collect_entries(&g, &root, &plain, &cmd.entries_from, &cmd.tests)?;
-        for n in task_entries.iter() {
-            selection.set.insert(n);
-        }
-        let not_tests = cmd
-            .not_tests
-            .iter()
-            .map(|p| Glob::new(p).map_err(|e| anyhow::anyhow!("{p}: {e}")))
-            .collect::<Result<Vec<_>>>()?;
-        let mut unknown = NodeSet::new(g.node_count());
-        for n in crate::selection::unknown_tests(&g, &selection.set, &cmd.tests, &not_tests) {
-            unknown.insert(n);
-        }
-        unknown
-    };
+    let (unknown_tests, selection_entries): (NodeSet, NodeSet) =
+        if cmd.explain.is_empty() && cmd.why.is_none() {
+            (NodeSet::new(0), NodeSet::new(0))
+        } else {
+            let mut plain = cmd.entries.clone();
+            plain.extend(cmd.entries_opt.iter().cloned());
+            let mut selection = collect_entries(&g, &root, &plain, &cmd.entries_from, &cmd.tests)?;
+            for n in task_entries.iter() {
+                selection.set.insert(n);
+            }
+            let not_tests = cmd
+                .not_tests
+                .iter()
+                .map(|p| Glob::new(p).map_err(|e| anyhow::anyhow!("{p}: {e}")))
+                .collect::<Result<Vec<_>>>()?;
+            let mut unknown = NodeSet::new(g.node_count());
+            for n in crate::selection::unknown_tests(&g, &selection.set, &cmd.tests, &not_tests) {
+                unknown.insert(n);
+            }
+            (unknown, selection.set)
+        };
     if let Some(w) = &cmd.why {
         let test = cmd
             .explain
             .first()
             .map(|x| rel_to_root(&root, &cwd, x).unwrap_or_else(|| x.clone()));
+        // The entries the selection lists; the explained test is one for `why`.
+        let mut listed = selection_entries;
+        if let Some(n) = test.as_deref().and_then(|t| g.node_by_path(t))
+            && !unknown_tests.contains(n)
+        {
+            listed.insert(n);
+        }
         let missing: &[String] = match missing_verdict {
             Some(_) => &entries.missing,
             None => &[],
@@ -1731,9 +1739,11 @@ fn affected(mut cmd: AffectedCmd, out: &mut dyn Write, host: Option<&Host>) -> R
                 dg: &dg,
                 report: &report,
                 alone: &alone,
+                entries: &listed,
                 missing,
                 unknown: &unknown_tests,
                 changes: &changes,
+                lint: &|| crate::lint::load_costs(&root, &g, &dg, &engine, &aopts, &listed),
             },
             w,
             test.as_deref(),

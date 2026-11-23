@@ -288,9 +288,42 @@ A test is often selected in more than one way. Removing the construct of the fir
 
 A test that reaches code which cannot be analyzed is selected by every change, and also when nothing changed. So is a file that looks like a test and that no runner configuration lists (`UnknownTest`). `why` says `it is selected with no change at all too`, and marks the witness with `(needs no change)`.
 
+### `--summary`
+
+Instead of one test, rank the constructs that select the tests of the change. Use it to find out why a small change selects many tests.
+
+```bash title="Terminal"
+turbo trace why --summary --changed docs/guide.md
+```
+
+```txt title="Output"
+3 of 5 tests selected by the change to docs/guide.md (modified); 0 of them with no change at all
+  tests: selected first through the construct; also: of those, selected through another kind of link too (removing the construct does not unselect them)
+  tests   also  construct
+      2      1  name reference (NameReferenced): apps/web/vite.config.ts:24 names its own location (the repository root)
+                apps/web/vite.config.ts:24: envDir: resolve(import.meta.dirname, '..'),
+                class: it names the repository root: every path of the repository is below it
+                for example: turbo trace why apps/web/test/cart.test.ts
+      1      0  bounded load (Uncertain): a bounded load can reach packages/util/ (packages/util/other.js changed)
+                packages/framework/normalize.js:4: return [{ handler: () => import(spec), modulePath: spec }];
+                class: a load with a computed target, bounded only by the packages its package declares
+                turbo trace lint: 2 test(s) reach it, 0 only it (a bounded load)
+                for example: turbo trace why services/orders/test/routes.test.js
+```
+
+- `tests`: the selected tests whose first witness is the construct. Each selected test is counted once. A directory listing is one construct per listed pattern, whichever file lists it.
+- `also`: of those, the tests that another kind of link selects too. Removing the construct alone does not unselect them.
+- `turbo trace lint`: when the construct is a finding of [`turbo trace lint`](#turbo-trace-lint), the cost that `lint` reports for it: the tests that reach it whatever changes, and the tests that only it holds.
+
+Without a change (`--base HEAD` on a clean tree), the summary lists what selects tests whatever changes.
+
+### `--top <n>`
+
+With `--summary`: list this many constructs. The default is `20`; `0` lists all of them.
+
 ### `--json`
 
-Print the explanation as JSON. For a test: `test`, `selected`, `reason` (as in `turbo trace affected --json`), `noChange` and `witnesses`. Each witness has `reason`, `link`, `noChange`, `changed`, `description`, `class`, `code` (`file`, `line`, `text`), `chain` (`file`, `via`) and `next`.
+Print the explanation as JSON. For a test: `test`, `selected`, `reason` (as in `turbo trace affected --json`), `noChange` and `witnesses`. Each witness has `reason`, `link`, `noChange`, `changed`, `description`, `class`, `code` (`file`, `line`, `text`), `chain` (`file`, `via`) and `next`. With `--summary`: `tests`, `selected`, `noChange`, `changes` and `constructs`, each with `tests`, `alsoSelected`, `noChange`, `reason`, `link`, `construct`, `class`, `code`, `example` and `lint` (`reached`, `exclusive`, `bounded`).
 
 ## `turbo trace lint`
 

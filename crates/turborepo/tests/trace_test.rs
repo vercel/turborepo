@@ -456,6 +456,29 @@ fn why_explains_every_selected_test_with_the_reason_of_affected() {
             );
             explained += 1;
         }
+        // The summary counts the same tests, each under one construct.
+        let output = trace(
+            dir.path(),
+            &[&["why", "--summary", "--json"][..], &change].concat(),
+        );
+        assert_eq!(output.status.code(), Some(0), "{name}: {}", stderr(&output));
+        let summary: serde_json::Value = serde_json::from_str(&stdout(&output)).unwrap();
+        assert_eq!(
+            summary["selected"],
+            items.len(),
+            "{name} {changed:?}: {summary}"
+        );
+        let by_construct: u64 = summary["constructs"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|row| row["tests"].as_u64().unwrap())
+            .sum();
+        assert_eq!(
+            by_construct,
+            items.len() as u64,
+            "{name} {changed:?}: {summary}"
+        );
     }
     assert!(
         explained >= 9,

@@ -1692,6 +1692,13 @@ pub struct TraceWhyArgs {
     /// Make no assumptions: every uncertainty selects
     #[usage(long)]
     pub strict: bool,
+    /// Instead of one test, rank the code constructs that select the tests
+    /// of the change by the number of tests each selects
+    #[usage(long)]
+    pub summary: bool,
+    /// With --summary: list this many constructs (0: all)
+    #[usage(long, value_name = "N", default_value_t = 20, default = "20")]
+    pub top: usize,
     /// Output the explanation as JSON
     #[usage(long)]
     pub json: bool,
