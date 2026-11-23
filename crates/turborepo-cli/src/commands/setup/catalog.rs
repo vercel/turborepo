@@ -2,6 +2,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use turborepo_setup::{lock::Snapshot, source_policy::ToolDownloadPolicy};
 use turborepo_setup_catalog::{Catalog, CatalogTransport, Registry};
+use turborepo_turbo_json::SetupRegistry;
 
 use super::{
     Error, LockMode, Mode, SetupRequest,
@@ -34,6 +35,14 @@ pub(super) fn refuse_offline(snapshot: &Snapshot, request: &SetupRequest) -> Res
     Ok(())
 }
 
+/// The registries that the captured `setup.registries` declares, in order.
+fn catalog<'a>(snapshot: &'a Snapshot, mut aqua: Option<Registry<'a>>) -> Catalog<'a> {
+    let registries = snapshot.registries().iter().map(|registry| match registry {
+        SetupRegistry::Aqua => aqua.take().unwrap_or_else(Registry::aqua),
+    });
+    Catalog::new(registries.collect())
+}
+
 pub(super) fn resolve(
     snapshot: Snapshot,
     request: &SetupRequest,
@@ -59,10 +68,10 @@ pub(super) fn resolve(
     let host = provision::platform()?;
     let (aqua, fixture) = match fixture {
         #[cfg(any(test, feature = "test-support"))]
-        Some(fixture) => (fixture.aqua, Some(fixture.transport)),
-        None => (Registry::aqua(), None),
+        Some(fixture) => (Some(fixture.aqua), Some(fixture.transport)),
+        None => (None, None),
     };
-    let catalog = Catalog::new(vec![aqua]);
+    let catalog = catalog(&snapshot, aqua);
     let plans = requests
         .iter()
         .map(|request| catalog.plan(request))

@@ -3,6 +3,9 @@ use turborepo_setup_catalog::{CatalogTransport, Registry};
 
 use super::*;
 
+#[path = "registry_tests.rs"]
+mod registries;
+
 const LOCAL: &[&str] = &["--tools-only", "--no-frozen"];
 const UPDATE: &[&str] = &["--tools-only", "--no-frozen", "--update-lock"];
 const NAMES: &str = "fixture\texample/fixture\n";

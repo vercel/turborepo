@@ -213,7 +213,6 @@ fn archives_without_a_top_level_directory_omit_the_root_prefix() {
 #[test_case(|t| t["fixture"]["from"] = json!("aqua:example/fixture"); "from with artifacts")]
 #[test_case(|t| t["fixture"] = json!({"version": "1.2.3", "from": "example/fixture"}); "from without a registry")]
 #[test_case(|t| t["fixture"] = json!({"version": "1.2.3", "from": "aqua:"}); "from without a package")]
-#[test_case(|t| t["fixture"] = json!({"version": "1.2.3", "from": "acme:example/fixture"}); "from with another registry")]
 #[test_case(|t| t["fixture"] = json!({"version": "1.2.3", "from": "aqua:example/fixture@1.2.3"}); "from with a version")]
 #[test_case(|t| t["node"] = json!("24.0.0"); "builtin id in the catalog form")]
 #[test_case(|t| t["fixture"]["artifacts"] = json!({}); "no platforms")]

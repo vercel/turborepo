@@ -452,12 +452,26 @@ pub enum Error {
         text: NamedSource<String>,
     },
 
+    #[error("Invalid setup registry: {reason}.")]
+    #[diagnostic(help(
+        "List each registry once under `setup.registries`: the string \"aqua\" for the built-in \
+         registry."
+    ))]
+    SetupInvalidRegistry {
+        reason: String,
+        #[label("invalid registry")]
+        span: Option<SourceSpan>,
+        #[source_code]
+        text: NamedSource<String>,
+    },
+
     #[error("Invalid additional tool {tool:?}: {reason}.")]
     #[diagnostic(help(
-        "Declare an exact version. For a tool in the bundled catalog, that is all, or add `from` \
-         to name its catalog entry. Otherwise declare `artifacts`: for each supported platform, \
-         an HTTPS `url`, a lowercase `sha256`, a `format`, and relative `executables` paths. Tool \
-         IDs and executable names belong to one tool."
+        "Declare an exact version. For a tool that a registry in `setup.registries` knows by \
+         name, that is all, or add `from` to name its entry as `<registry>:<package ID>`. \
+         Otherwise declare `artifacts`: for each supported platform, an HTTPS `url`, a lowercase \
+         `sha256`, a `format`, and relative `executables` paths. Tool IDs and executable names \
+         belong to one tool."
     ))]
     SetupInvalidAdditionalTool {
         tool: String,

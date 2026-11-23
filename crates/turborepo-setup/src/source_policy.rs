@@ -175,6 +175,7 @@ fn applied_policy(setup: &jsonc_parser::ast::Value) -> bool {
         value(name, &p.value)
             || toolchain(name, &p.value)
             || name == "additionalTools"
+            || name == "registries"
             || (name == "mirrors" && strings(&MIRRORS, &p.value))
             || (name == "dependencyInstallOrder" && string_list(&p.value))
     }))

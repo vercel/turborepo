@@ -1126,6 +1126,13 @@ fn generate_setup_policy_interfaces() -> String {
   /** Setup policy for the Go toolchain. Requires `futureFlags.experimentalGoWorkspaces`. */
   go?: ToolchainSetupPolicy;
 
+  /**
+   * The registries that `turbo setup` asks where an additional tool comes
+   * from, in order. Without it, only `"aqua"` is asked. Leave `"aqua"` out to
+   * block it.
+   */
+  registries?: SetupRegistry[];
+
   /** Tools that no built-in adapter manages, keyed by tool ID. */
   additionalTools?: Record<string, AdditionalTool>;
 
@@ -1171,8 +1178,14 @@ export interface SetupMirrors {
 }
 
 /**
+ * A registry that `turbo setup` asks where an additional tool comes from.
+ * `"aqua"` is the registry built into `turbo`.
+ */
+export type SetupRegistry = "aqua";
+
+/**
  * A tool that `turbo setup` installs. A string is the exact version of a tool
- * in the bundled catalog, looked up by its tool ID.
+ * that a registry knows by its tool ID.
  */
 export type AdditionalTool = string | AdditionalToolDeclaration;
 
@@ -1181,10 +1194,10 @@ export interface AdditionalToolDeclaration {
   version: string;
 
   /**
-   * The bundled catalog entry that provides the downloads, as `aqua:` followed
-   * by a package ID, such as `aqua:jj-vcs/jj`. Without `from` and `artifacts`,
-   * the tool ID is looked up in the catalog's name list. Not allowed with
-   * `artifacts`.
+   * The registry entry that provides the downloads, as a registry from
+   * `setup.registries`, `:`, and a package ID, such as `aqua:jj-vcs/jj`.
+   * Without `from` and `artifacts`, the registries are asked for the tool ID
+   * in order. Not allowed with `artifacts`.
    */
   from?: string;
 
@@ -1381,6 +1394,11 @@ mod cli_tests {
             super::generate_typescript()
                 .contains("additionalTools?: Record<string, AdditionalTool>;")
         );
+        assert_eq!(
+            schema["definitions"]["BuiltinRegistry"]["enum"],
+            serde_json::json!(["aqua"])
+        );
+        assert!(super::generate_typescript().contains("registries?: SetupRegistry[];"));
         assert!(super::generate_root_schema_interface().contains("setup?: SetupPolicy;"));
         assert!(!super::generate_workspace_schema_interface().contains("setup?"));
     }

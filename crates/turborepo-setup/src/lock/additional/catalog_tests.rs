@@ -8,6 +8,12 @@ fn catalog() -> Value {
     json!({"jq": "1.8.2", "jj": {"version": "0.47.1", "from": JJ}})
 }
 
+fn declare(root: &Path, registries: Value, tools: &Value) {
+    let config = json!({"futureFlags": {"experimentalSetup": true},
+        "setup": {"registries": registries, "additionalTools": tools}});
+    fs::write(root.join("turbo.json"), config.to_string()).unwrap();
+}
+
 fn capture(root: &Path) -> Snapshot {
     Snapshot::capture_with(root, Ecosystems::default()).unwrap()
 }
@@ -428,7 +434,6 @@ fn a_resolved_tool_that_does_not_match_its_request_is_refused() {
         ("jq", source),
         ("jq", resolved(jj, JJ)),
         ("jj", resolved(jj, "aqua:martinvonz/jj")),
-        ("jq", resolved(jq, "acme:jqlang/jq")),
         (
             "rg",
             resolved(
@@ -450,4 +455,19 @@ fn a_resolved_tool_that_does_not_match_its_request_is_refused() {
     let resolved_jq = BTreeMap::from([("jq".to_owned(), resolved(jq, JQ))]);
     let once = snapshot.with_catalog_tools(resolved_jq.clone()).unwrap();
     assert!(once.with_catalog_tools(resolved_jq).is_err());
+}
+
+#[test]
+fn a_resolved_tool_from_an_undeclared_registry_is_refused() {
+    let tools = json!({"jq": "1.8.2"});
+    let root = repo(&tools);
+    declare(root.path(), json!([]), &tools);
+    let snapshot = capture(root.path());
+    let jq = &requests(&snapshot)["jq"];
+    let supply = |source: &str| {
+        let tools = BTreeMap::from([("jq".to_owned(), resolved(jq, source))]);
+        snapshot.with_catalog_tools(tools).map(drop)
+    };
+    assert!(matches!(supply(JQ), Err(StorageError::Lock(_))));
+    assert!(matches!(supply("other:jq"), Err(StorageError::Lock(_))));
 }
