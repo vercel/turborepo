@@ -149,6 +149,12 @@ pub struct BerryLockfile {
     // Lockfile metadata only: packages are moved into `locator_package`.
     data: LockfileData,
     resolutions: Map<Descriptor<'static>, Locator<'static>>,
+    // Descriptors whose reference carries a `::` params section, keyed by the
+    // same descriptor with the params dropped. Yarn appends them to `link:`,
+    // `portal:`, `file:` and patched resolutions while a manifest declares
+    // those dependencies without, so an edge resolved from a manifest only
+    // matches an entry through this map. None marks ambiguous stripped ranges.
+    without_params: Map<Descriptor<'static>, Option<Descriptor<'static>>>,
     // A mapping from descriptors without protocols to a range with a protocol
     resolver: DescriptorResolver,
     locator_package: Map<Locator<'static>, BerryPackage>,
@@ -245,6 +251,7 @@ impl BerryLockfile {
         let mut patches = Map::new();
         let mut locator_package = Map::new();
         let mut descriptor_locator = Map::new();
+        let mut without_params = Map::new();
         let mut resolver = DescriptorResolver::default();
         let mut workspace_path_to_locator = HashMap::new();
         // Packages move into `locator_package`, the only place they are read
@@ -273,7 +280,16 @@ impl BerryLockfile {
                         other,
                     })?;
                 }
-                descriptor_locator.insert(descriptor.into_owned(), locator.clone());
+                let descriptor = descriptor.into_owned();
+                if let Some(stripped) = descriptor.without_params() {
+                    // Params can bind relative paths to different parents. Do not
+                    // select an arbitrary package when the stripped range is ambiguous.
+                    without_params
+                        .entry(stripped)
+                        .and_modify(|entry| *entry = None)
+                        .or_insert_with(|| Some(descriptor.clone()));
+                }
+                descriptor_locator.insert(descriptor, locator.clone());
             }
 
             locator_package.insert(locator, package);
@@ -291,6 +307,7 @@ impl BerryLockfile {
                 packages: Map::new(),
             },
             resolutions: descriptor_locator,
+            without_params,
             locator_package,
             resolver,
             patches,
@@ -366,14 +383,31 @@ impl BerryLockfile {
         Ok(())
     }
 
+    /// The lockfile entry a descriptor resolved from a manifest points at.
+    ///
+    /// Yarn appends a `::` params section to some resolutions (`link:`,
+    /// `portal:` and `file:` entries carry `::locator=<workspace locator>`,
+    /// patched ones add `::version=..&hash=..`), which a manifest never
+    /// declares, so a dependency edge matches the entry with the params
+    /// dropped when no entry carries its exact reference.
+    fn lockfile_entry(
+        &self,
+        descriptor: &Descriptor<'static>,
+    ) -> Option<(&Descriptor<'static>, &Locator<'static>)> {
+        if let Some(entry) = self.resolutions.get_key_value(descriptor) {
+            return Some(entry);
+        }
+        let resolved = self.without_params.get(descriptor)?.as_ref()?;
+        self.resolutions.get_key_value(resolved)
+    }
+
     fn add_extension_descriptor(
         &self,
         descriptor: &Descriptor<'static>,
         resolutions: &mut Map<Descriptor<'static>, Locator<'static>>,
     ) -> Result<(), Error> {
-        let locator = self
-            .resolutions
-            .get(descriptor)
+        let (descriptor, locator) = self
+            .lockfile_entry(descriptor)
             .ok_or_else(|| Error::MissingLocator(descriptor.to_owned()))?;
         resolutions.insert(descriptor.clone(), locator.clone());
 
@@ -382,10 +416,11 @@ impl BerryLockfile {
             if let Some(package) = self.locator_package.get(&locator) {
                 for (name, range) in package.dependencies.iter().flatten() {
                     if let Ok(dependency) = self.resolve_dependency(&locator, name, range)
-                        && let Some(dependency_locator) = self.resolutions.get(&dependency)
-                        && !resolutions.contains_key(&dependency)
+                        && let Some((dependency, dependency_locator)) =
+                            self.lockfile_entry(&dependency)
+                        && !resolutions.contains_key(dependency)
                     {
-                        resolutions.insert(dependency, dependency_locator.clone());
+                        resolutions.insert(dependency.clone(), dependency_locator.clone());
                         queue.push(dependency_locator.clone());
                     }
                 }
@@ -467,11 +502,10 @@ impl BerryLockfile {
                 //  We need to track all of the descriptors coming out the workspace
                 for (name, range) in package.dependencies.iter().flatten() {
                     let dependency = self.resolve_dependency(locator, name, range.as_ref())?;
-                    let dep_locator = self
-                        .resolutions
-                        .get(&dependency)
+                    let (descriptor, dep_locator) = self
+                        .lockfile_entry(&dependency)
                         .ok_or_else(|| Error::MissingLocator(dependency.clone().into_owned()))?;
-                    resolutions.insert(dependency, dep_locator.clone());
+                    resolutions.insert(descriptor.clone(), dep_locator.clone());
                 }
 
                 // Included workspaces will always have their locator listed as a descriptor.
@@ -492,11 +526,10 @@ impl BerryLockfile {
 
             for (name, range) in package.dependencies.iter().flatten() {
                 let dependency = self.resolve_dependency(&locator, name, range.as_ref())?;
-                let dep_locator = self
-                    .resolutions
-                    .get(&dependency)
+                let (descriptor, dep_locator) = self
+                    .lockfile_entry(&dependency)
                     .ok_or_else(|| Error::MissingLocator(dependency.clone().into_owned()))?;
-                resolutions.insert(dependency, dep_locator.clone());
+                resolutions.insert(descriptor.clone(), dep_locator.clone());
             }
 
             // If the package has an associated patch we include it in the subgraph
@@ -644,6 +677,7 @@ impl BerryLockfile {
         Ok(Self {
             data: self.data.clone(),
             resolutions,
+            without_params: self.without_params.clone(),
             patches,
             // We clone the following structures without any alterations and
             // rely on resolutions being correctly pruned.
@@ -721,7 +755,7 @@ impl BerryLockfile {
     ) -> Result<Option<crate::Package>, crate::Error> {
         let dependency = self.resolve_dependency(locator, name, version)?;
 
-        let Some(resolved) = self.resolutions.get(&dependency) else {
+        let Some((_, resolved)) = self.lockfile_entry(&dependency) else {
             return Ok(None);
         };
 
@@ -1321,6 +1355,90 @@ mod test {
             !String::from_utf8(without_parser.encode().unwrap())
                 .unwrap()
                 .contains("@babel/types@npm:^7.8.3")
+        );
+    }
+
+    #[test]
+    fn test_ambiguous_parameterless_dependency() {
+        let yaml = r#"__metadata:
+  version: 8
+
+"local-lib@link:./vendor/local-lib::locator=a%40workspace%3Apackages%2Fa":
+  version: 0.0.0-use.local
+  resolution: "local-lib@link:./vendor/local-lib::locator=a%40workspace%3Apackages%2Fa"
+  linkType: soft
+
+"local-lib@link:./vendor/local-lib::locator=b%40workspace%3Apackages%2Fb":
+  version: 0.0.0-use.local
+  resolution: "local-lib@link:./vendor/local-lib::locator=b%40workspace%3Apackages%2Fb"
+  linkType: soft
+"#;
+        let lockfile = BerryLockfile::load(yaml.as_bytes(), None).unwrap();
+        let unbound = Descriptor::new("local-lib", "link:./vendor/local-lib")
+            .unwrap()
+            .into_owned();
+        assert!(lockfile.lockfile_entry(&unbound).is_none());
+
+        let bound = Descriptor::new(
+            "local-lib",
+            "link:./vendor/local-lib::locator=b%40workspace%3Apackages%2Fb",
+        )
+        .unwrap()
+        .into_owned();
+        assert!(lockfile.lockfile_entry(&bound).is_some());
+    }
+
+    #[test]
+    fn test_prune_with_link_dependency() {
+        // Regression test for https://github.com/vercel/turborepo/issues/15094
+        // Yarn records a `link:` dependency as
+        // `repo-utils@link:./scripts/repo-utils::locator=repro%40workspace%3A.`
+        // while the workspace declares it without the params, so pruning used
+        // to fail with "Unable to find any locator".
+        let yaml = r#"__metadata:
+  version: 8
+  cacheKey: 10c0
+
+"a@workspace:packages/a":
+  version: 0.0.0-use.local
+  resolution: "a@workspace:packages/a"
+  languageName: unknown
+  linkType: soft
+
+"repo-utils@link:./scripts/repo-utils::locator=repro%40workspace%3A.":
+  version: 0.0.0-use.local
+  resolution: "repo-utils@link:./scripts/repo-utils::locator=repro%40workspace%3A."
+  languageName: node
+  linkType: soft
+
+"repro@workspace:.":
+  version: 0.0.0-use.local
+  resolution: "repro@workspace:."
+  dependencies:
+    repo-utils: "link:./scripts/repo-utils"
+  languageName: unknown
+  linkType: soft
+"#;
+
+        let data = LockfileData::from_bytes(yaml.as_bytes()).unwrap();
+        let lockfile = BerryLockfile::new(data, None).unwrap();
+
+        let pruned = lockfile
+            .subgraph(
+                &["packages/a".to_string()],
+                &[
+                    "repo-utils@link:./scripts/repo-utils::locator=repro%40workspace%3A."
+                        .to_string(),
+                ],
+            )
+            .expect("the workspace's link dependency should resolve");
+
+        let encoded = String::from_utf8(pruned.encode().unwrap()).unwrap();
+        assert!(
+            encoded.contains(
+                "\"repo-utils@link:./scripts/repo-utils::locator=repro%40workspace%3A.\""
+            ),
+            "the pruned lockfile should keep the link entry's params: {encoded}"
         );
     }
 

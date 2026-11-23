@@ -1,6 +1,6 @@
 use std::{
     io::{BufRead, BufReader, Read},
-    process::{Command, Stdio},
+    process::Stdio,
 };
 
 use nom::Finish;
@@ -64,9 +64,8 @@ impl GitRepo {
     #[tracing::instrument(skip(self))]
     pub fn git_ls_tree(&self, root_path: &AbsoluteSystemPathBuf) -> Result<GitHashes, Error> {
         let mut hashes = GitHashes::new();
-        let mut git = Command::new(self.bin.as_std_path())
+        let mut git = crate::git_command(self.bin.as_std_path())
             .args(["ls-tree", "-r", "-z", "HEAD"])
-            .env("GIT_OPTIONAL_LOCKS", "0")
             .current_dir(root_path)
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
@@ -100,9 +99,8 @@ impl GitRepo {
     pub(crate) fn git_ls_tree_repo_root_sorted_with_unsupported(
         &self,
     ) -> Result<GitTreeState, Error> {
-        let mut git = Command::new(self.bin.as_std_path())
+        let mut git = crate::git_command(self.bin.as_std_path())
             .args(["ls-tree", "-r", "-z", "HEAD"])
-            .env("GIT_OPTIONAL_LOCKS", "0")
             .current_dir(&self.root)
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
@@ -139,7 +137,7 @@ impl GitRepo {
     pub(crate) fn git_diff_index_repo_root_with_unsupported(
         &self,
     ) -> Result<GitStatusState, Error> {
-        let mut git = Command::new(self.bin.as_std_path())
+        let mut git = crate::git_command(self.bin.as_std_path())
             .args([
                 "diff-index",
                 "HEAD",
@@ -147,7 +145,6 @@ impl GitRepo {
                 "--diff-filter=ADM",
                 "--no-renames",
             ])
-            .env("GIT_OPTIONAL_LOCKS", "0")
             .current_dir(&self.root)
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
@@ -189,10 +186,9 @@ impl GitRepo {
     }
 
     fn git_ls_files(&self, args: &[&str]) -> Result<GitPathList, Error> {
-        let mut git = Command::new(self.bin.as_std_path())
+        let mut git = crate::git_command(self.bin.as_std_path())
             .args(["ls-files", "-z"])
             .args(args)
-            .env("GIT_OPTIONAL_LOCKS", "0")
             .current_dir(&self.root)
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
