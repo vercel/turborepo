@@ -40,7 +40,7 @@ pub use args::{
     EnvModeArg, ExecutionArgs, GenerateCommand, GenerateWorkspaceArgs, GeneratorCustomArgs,
     GraphOutput, HookShell, LogOrderArg, LogPrefixArg, LsArgs, NonEmptyPath, OutputFormat,
     OutputLogsModeArg, PrintEnv, QuerySubcommand, RunArgs, SetupArgs, TelemetryCommand,
-    TraceAffectedArgs, TraceCommand, Verbosity,
+    TraceAffectedArgs, TraceCommand, TraceWhyArgs, Verbosity,
 };
 pub(crate) use configuration::resolve_configuration_from_args;
 

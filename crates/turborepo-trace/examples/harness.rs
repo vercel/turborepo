@@ -277,6 +277,13 @@ pub mod affected {
         /// are checked as entries too). Repeatable.
         #[usage(long, value_name = "ENTRY")]
         pub explain: Vec<String>,
+        /// Print the witnesses of this entry, link by link (`turbo trace why
+        /// <test>`), instead of the list.
+        #[usage(long, value_name = "ENTRY")]
+        pub why: Option<String>,
+        /// With --why: JSON.
+        #[usage(long)]
+        pub why_json: bool,
         /// Exit 0 if nothing is affected, 1 if an entry is affected, 2 if one
         /// is unknown.
         #[usage(long)]
@@ -333,6 +340,10 @@ pub mod affected {
                 full_package: c.full_package,
                 no_fail_open: c.no_fail_open,
                 explain: c.explain,
+                why: c.why.map(|test| turborepo_trace::commands::WhyOpts {
+                    test: Some(test),
+                    json: c.why_json,
+                }),
                 exit_code: c.exit_code,
                 loc: c.loc.into(),
                 steering: c.steering,

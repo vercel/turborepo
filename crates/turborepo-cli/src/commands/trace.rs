@@ -19,11 +19,11 @@ use turborepo_signals::{SignalHandler, listeners::get_signal};
 use turborepo_telemetry::events::command::CommandEventBuilder;
 use turborepo_trace::{
     AffectedRequest, AffectedTest, AffectedTests, Changes, LintRequest, Packages, Repo,
-    UncoveredTask, transport,
+    UncoveredTask, WhyRequest, transport,
 };
 
 use crate::{
-    cli::{self, Args, TraceAffectedArgs, TraceCommand},
+    cli::{self, Args, TraceAffectedArgs, TraceCommand, TraceWhyArgs},
     commands::{CommandBase, exec},
 };
 
@@ -128,6 +128,26 @@ fn affected_request(args: &TraceAffectedArgs, packages: Option<Vec<String>>) -> 
     }
 }
 
+/// The request of `turbo trace why`: its changes are read as those of
+/// `affected` (`--base`, `--head`, `--changed`, the same environment
+/// variables).
+fn why_request(args: &TraceWhyArgs) -> WhyRequest {
+    let changes = TraceAffectedArgs {
+        base: args.base.clone(),
+        head: args.head.clone(),
+        changed: args.changed.clone(),
+        tests: args.tests.clone(),
+        strict: args.strict,
+        ..Default::default()
+    };
+    WhyRequest {
+        test: args.test.clone(),
+        file: args.file.clone(),
+        affected: affected_request(&changes, None),
+        json: args.json,
+    }
+}
+
 /// Runs `turbo trace <command>` after the gate. With `affected --exit-code`
 /// every error becomes exit code 2 (turbo's `--exit-code` contract).
 pub async fn run(
@@ -161,7 +181,7 @@ async fn run_inner(
     turborepo_trace::supported()?;
     let Some(command) = command else {
         return Err(turborepo_trace::Error::InvalidRequest(
-            "missing subcommand: `turbo trace affected`, `turbo trace why <test> <file>` or \
+            "missing subcommand: `turbo trace affected`, `turbo trace why <test> [<file>]` or \
              `turbo trace lint` (see `turbo trace --help`)"
                 .to_string(),
         )
@@ -182,6 +202,9 @@ async fn run_inner(
             &base.repo_root,
             &affected_request(args, None).changes,
         ),
+        TraceCommand::Why(args) if args.file.is_none() => {
+            turborepo_trace::prefetch_requests(&base.repo_root, &why_request(args).affected.changes)
+        }
         _ => Vec::new(),
     };
     // The trace needs turbo's package graph, SCM and cache, not its task graph
@@ -278,10 +301,10 @@ async fn run_inner(
                     .map_err(turborepo_trace::Error::Io)?;
                 Ok(if args.exit_code { tests.exit_code() } else { 0 })
             }
-            TraceCommand::Why { test, file } => {
-                turborepo_trace::why(&repo, &test, &file, &mut out)?;
+            TraceCommand::Why(args) => {
+                let code = turborepo_trace::why(&repo, &why_request(&args), &mut out)?;
                 out.flush().map_err(turborepo_trace::Error::Io)?;
-                Ok(0)
+                Ok(code)
             }
             TraceCommand::Lint { json } => {
                 let code = turborepo_trace::lint(&repo, &LintRequest { json }, &mut out)?;

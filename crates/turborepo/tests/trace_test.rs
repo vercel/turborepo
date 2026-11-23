@@ -341,26 +341,125 @@ fn jest_exit_code_follows_the_selection() {
 #[test]
 fn jest_why_shows_the_chain() {
     let dir = fixture("trace_jest");
-    // `why` traces as Node resolves: within the package (the fixture has no
-    // install, so a workspace import ends at the package name).
+    // `why <test> <file>`: the file is the change.
     let output = trace(
         dir.path(),
         &["why", JEST_TOTAL, "packages/app/src/total.js"],
     );
     assert!(output.status.success(), "{}", stderr(&output));
     let text = stdout(&output);
-    assert!(text.contains("total.test.js"), "{text}");
-    assert!(text.contains("src/total.js"), "{text}");
-    // A file outside the trace is an error.
+    assert!(
+        text.starts_with(&format!(
+            "{JEST_TOTAL}: selected by the change to packages/app/src/total.js (modified) \
+             (FileChanged packages/app/src/total.js)\n"
+        )),
+        "{text}"
+    );
+    // The link, and each step with its reference.
+    assert!(text.contains("  1. import: modified\n"), "{text}");
+    assert!(
+        text.contains(&format!(
+            "-> {JEST_TOTAL}  (require \"../src/total\" at {JEST_TOTAL}:"
+        )),
+        "{text}"
+    );
+    // A file that does not select the test: exit code 1, and no error.
     let output = trace(
         dir.path(),
         &["why", JEST_TOTAL, "packages/app/src/greet.js"],
     );
+    assert_eq!(output.status.code(), Some(1), "{}", stderr(&output));
+    assert_eq!(
+        stdout(&output),
+        format!(
+            "{JEST_TOTAL}: not selected by this change (the change to packages/app/src/greet.js \
+             (modified))\n"
+        )
+    );
+    // With the changes of `affected` given too, what else of them selects it.
+    let output = trace(
+        dir.path(),
+        &[
+            "why",
+            JEST_TOTAL,
+            "packages/app/src/greet.js",
+            "--changed",
+            "packages/app/src/greet.js",
+            "packages/math/src/mul.js",
+        ],
+    );
+    assert_eq!(output.status.code(), Some(1), "{}", stderr(&output));
+    let text = stdout(&output);
+    assert!(
+        text.contains(&format!(
+            "the whole change:\n{JEST_TOTAL}: selected by 2 changed paths (FileChanged \
+             packages/math/src/mul.js)\n"
+        )),
+        "{text}"
+    );
+    // Without a test there is nothing to explain.
+    let output = trace(dir.path(), &["why"]);
     assert!(!output.status.success(), "{}", stdout(&output));
     assert!(
-        stderr(&output).contains("is not in the trace"),
+        stderr(&output).contains("missing <test>"),
         "{}",
         stderr(&output)
+    );
+}
+
+/// `why` explains every test that `affected` lists, with the reason
+/// `affected` gives for it, and no test that it does not list.
+#[cfg(unix)]
+#[test]
+fn why_explains_every_selected_test_with_the_reason_of_affected() {
+    let cases: &[(&str, &[&str])] = &[
+        ("trace_jest", &["packages/math/src/mul.js"]),
+        ("trace_jest", &["packages/app/src/greet.js", JEST_ADD]),
+        ("trace_jest", &["package.json"]),
+        ("trace_vitest", &["packages/core/src/slug.ts"]),
+        ("trace_vitest", &["packages/core/src/clamp.ts"]),
+        ("trace_polyglot", &["services/ledger/money/money.go"]),
+        ("trace_polyglot", &["shared/rates.json"]),
+        ("trace_polyglot", &["crates/rates/src/convert.rs"]),
+        ("trace_go_climb", &["shared/defaults.json"]),
+    ];
+    let mut explained = 0;
+    for (name, changed) in cases {
+        let dir = fixture(name);
+        let change = [&["--changed"][..], changed].concat();
+        let output = trace(dir.path(), &[&["affected", "--json"][..], &change].concat());
+        assert!(output.status.success(), "{name}: {}", stderr(&output));
+        let listed: serde_json::Value = serde_json::from_str(&stdout(&output)).unwrap();
+        let items = listed["affectedTests"]["items"].as_array().unwrap();
+        for item in items {
+            let test = item["path"].as_str().unwrap();
+            let output = trace(
+                dir.path(),
+                &[&["why", test, "--json"][..], &change].concat(),
+            );
+            assert_eq!(
+                output.status.code(),
+                Some(0),
+                "{name} {changed:?} {test}: {}{}",
+                stdout(&output),
+                stderr(&output)
+            );
+            let why: serde_json::Value = serde_json::from_str(&stdout(&output)).unwrap();
+            assert_eq!(why["selected"], true, "{name} {changed:?}: {why}");
+            assert_eq!(why["reason"], item["reason"], "{name} {changed:?}: {why}");
+            let first = &why["witnesses"][0];
+            assert_eq!(first["reason"], item["reason"], "{name} {changed:?}: {why}");
+            assert_eq!(
+                first["chain"].as_array().unwrap().last().unwrap()["file"],
+                test,
+                "{name} {changed:?}: {why}"
+            );
+            explained += 1;
+        }
+    }
+    assert!(
+        explained >= 9,
+        "only {explained} selected tests in the fixtures"
     );
 }
 

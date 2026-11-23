@@ -142,6 +142,9 @@ pub struct AffectedCmd {
     /// Print a readable reason for these entries instead of the list (they are
     /// checked as entries too). Repeatable.
     pub explain: Vec<String>,
+    /// `why`: the witnesses of one entry, link by link, or the constructs that
+    /// select the entries, instead of the list (`crate::witness`).
+    pub why: Option<crate::witness::WhyOpts>,
     /// Exit 0 if nothing is affected, 1 if an entry is affected, 2 if one is
     /// unknown.
     pub exit_code: bool,
@@ -281,6 +284,7 @@ impl Default for AffectedCmd {
             full_package: Default::default(),
             no_fail_open: Default::default(),
             explain: Default::default(),
+            why: None,
             exit_code: Default::default(),
             loc: Default::default(),
             steering: Default::default(),
@@ -687,6 +691,34 @@ fn write_cwd_assumed(
     Ok(())
 }
 
+/// The uncertainty notes of one explained entry (at most 20). A note that an
+/// entry explained before it printed is not printed again: with several
+/// entries, the line that says why each is selected stays easy to find.
+fn write_notes_once(
+    g: &Graph,
+    notes: &[turborepo_trace_graph::UncertaintyNote],
+    seen: &mut std::collections::HashSet<String>,
+    out: &mut dyn Write,
+) -> Result<()> {
+    let mut buf = Vec::new();
+    turborepo_trace_graph::output::write_uncertainty_notes(g, notes, 20, &mut buf)?;
+    let mut repeated = 0;
+    for line in String::from_utf8_lossy(&buf).lines() {
+        if line.starts_with("  … and ") || seen.insert(line.to_owned()) {
+            writeln!(out, "{line}")?;
+        } else {
+            repeated += 1;
+        }
+    }
+    if repeated > 0 {
+        writeln!(
+            out,
+            "  … and {repeated} uncertaintie(s) listed above for another entry"
+        )?;
+    }
+    Ok(())
+}
+
 pub fn cmd_affected(cmd: AffectedCmd, out: &mut dyn Write) -> Result<ExitCode> {
     cmd_affected_for(cmd, out, None)
 }
@@ -753,8 +785,12 @@ pub(crate) fn cmd_affected_for(
     }
 }
 
-fn affected(cmd: AffectedCmd, out: &mut dyn Write, host: Option<&Host>) -> Result<ExitCode> {
+fn affected(mut cmd: AffectedCmd, out: &mut dyn Write, host: Option<&Host>) -> Result<ExitCode> {
     let t0 = Instant::now();
+    // The test `why` explains is an entry, as one of `--explain` is.
+    if let Some(test) = cmd.why.as_ref().and_then(|w| w.test.clone()) {
+        cmd.explain = vec![test];
+    }
     turborepo_trace_core::timing::mark("affected: start");
     let (root, _) = cmd.loc.resolve()?;
     let root = std::fs::canonicalize(&root).unwrap_or(root);
@@ -764,6 +800,7 @@ fn affected(cmd: AffectedCmd, out: &mut dyn Write, host: Option<&Host>) -> Resul
         && cmd.tests.is_empty()
         && cmd.tasks.is_empty()
         && cmd.explain.is_empty()
+        && cmd.why.is_none()
     {
         bail!(
             "no entries: pass files or globs, --entries-from <file>, --tests <framework> or \
@@ -1262,9 +1299,17 @@ fn affected(cmd: AffectedCmd, out: &mut dyn Write, host: Option<&Host>) -> Resul
         ..
     } = outcome;
     turborepo_trace_core::timing::mark("affected: evaluate (barrels, erase, modes, passes)");
+    // For `why`: what each mechanism below selects by itself (crate::witness).
+    let mut alone = crate::witness::Alone::new(cmd.why.is_some());
+    if let Some(r) = alone.layer(&report) {
+        r.entries.clone_from(&report.entries);
+    }
     // What the steering changes reach through explicit references.
     let steering_reach = crate::steering::reach(&engine, &steer, &steering_changes);
     crate::steering::merge(&g, &steering_reach, &entries.set, &mut report);
+    if let Some(r) = alone.layer(&report) {
+        crate::steering::merge(&g, &steering_reach, &entries.set, r);
+    }
     if steering_only {
         // The loads of steering files are open here, as before: nothing else changed,
         // so no package is affected that could bound them (crate::loads).
@@ -1282,10 +1327,16 @@ fn affected(cmd: AffectedCmd, out: &mut dyn Write, host: Option<&Host>) -> Resul
     }
     // Changed workflow jobs and the tests they run (crate::workflows).
     wf.apply(&g, &entries.set, &mut report);
+    if let Some(r) = alone.layer(&report) {
+        wf.apply(&g, &entries.set, r);
+    }
     // Tests of tasks that start a changed service before running them
     // (crate::services).
     let svc = crate::services::effects(&g, &engine, &cs, &eval_opts);
     svc.apply(&g, &entries.set, &mut report);
+    if let Some(r) = alone.layer(&report) {
+        svc.apply(&g, &entries.set, r);
+    }
     // Tests whose Next.js config loads something the change affects
     // (crate::nextconfigdiff). The config and what it loads are evaluated as
     // entries of their own here; the names and the loads layer below run for
@@ -1424,6 +1475,19 @@ fn affected(cmd: AffectedCmd, out: &mut dyn Write, host: Option<&Host>) -> Resul
             &mut report,
             also,
         );
+        if let Some(r) = alone.layer(&report) {
+            crate::names::apply(
+                &g,
+                &engine,
+                &layer,
+                &named_changes,
+                &entries.set,
+                &runtime,
+                &aopts,
+                r,
+                None,
+            );
+        }
         format!(
             "names: {} name(s) of {} source file(s) and {} data file(s) ({} rescanned) checked \
              against the changed paths in {:.1} ms, {} can name one; {} entr(ies) selected \
@@ -1473,6 +1537,19 @@ fn affected(cmd: AffectedCmd, out: &mut dyn Write, host: Option<&Host>) -> Resul
                 &mut p.bounded,
             );
         }
+        if let Some(r) = alone.layer(&report) {
+            crate::loads::apply(
+                &engine,
+                &root,
+                &cs,
+                &load_paths,
+                &base,
+                &entries.set,
+                &runtime,
+                &eval_opts,
+                r,
+            );
+        }
         crate::loads::apply(
             &engine,
             &root,
@@ -1490,10 +1567,28 @@ fn affected(cmd: AffectedCmd, out: &mut dyn Write, host: Option<&Host>) -> Resul
     if let Some(p) = next_loads {
         let loaded = p.finish(&engine, &cs, &aopts, &eval_opts);
         loaded.apply(&g, &entries.set, &mut report);
+        if let Some(r) = alone.layer(&report) {
+            loaded.apply(&g, &entries.set, r);
+        }
         fx.notes.extend(loaded.notes);
     }
     let t_eval = t_eval0.elapsed();
     turborepo_trace_core::timing::mark("affected: steering + workflow runs");
+    // For `why`: the selection without a change, which holds whatever changes.
+    alone.no_change(|| {
+        let none = ChangeSet::new();
+        crate::barrel::evaluate(
+            &engine,
+            &root,
+            &none,
+            &entries.set,
+            &eval_opts,
+            None,
+            None,
+            None,
+        )
+        .report
+    });
     // Entries that exist but are not in the graph cannot be cleared.
     let missing_verdict = match policy {
         Policy::Affected => Some(Verdict::Affected),
@@ -1596,33 +1691,61 @@ fn affected(cmd: AffectedCmd, out: &mut dyn Write, host: Option<&Host>) -> Resul
         _ => {}
     }
 
-    if !cmd.explain.is_empty() {
+    let mut why_code = ExitCode::SUCCESS;
+    // `--explain` and `why` make the files they name entries. The selection, which
+    // runs without them, lists a file that looks like a test and is no entry as
+    // an unknown test: it always runs, whatever its trace would say.
+    let unknown_tests: NodeSet = if cmd.explain.is_empty() && cmd.why.is_none() {
+        NodeSet::new(0)
+    } else {
+        let mut plain = cmd.entries.clone();
+        plain.extend(cmd.entries_opt.iter().cloned());
+        let mut selection = collect_entries(&g, &root, &plain, &cmd.entries_from, &cmd.tests)?;
+        for n in task_entries.iter() {
+            selection.set.insert(n);
+        }
+        let not_tests = cmd
+            .not_tests
+            .iter()
+            .map(|p| Glob::new(p).map_err(|e| anyhow::anyhow!("{p}: {e}")))
+            .collect::<Result<Vec<_>>>()?;
+        let mut unknown = NodeSet::new(g.node_count());
+        for n in crate::selection::unknown_tests(&g, &selection.set, &cmd.tests, &not_tests) {
+            unknown.insert(n);
+        }
+        unknown
+    };
+    if let Some(w) = &cmd.why {
+        let test = cmd
+            .explain
+            .first()
+            .map(|x| rel_to_root(&root, &cwd, x).unwrap_or_else(|| x.clone()));
+        let missing: &[String] = match missing_verdict {
+            Some(_) => &entries.missing,
+            None => &[],
+        };
+        why_code = crate::witness::write(
+            &crate::witness::Input {
+                root: &root,
+                g: &g,
+                dg: &dg,
+                report: &report,
+                alone: &alone,
+                missing,
+                unknown: &unknown_tests,
+                changes: &changes,
+            },
+            w,
+            test.as_deref(),
+            out,
+        )?;
+    } else if !cmd.explain.is_empty() {
         let by_path: BTreeMap<&str, &turborepo_trace_graph::EntryResult> = report
             .entries
             .iter()
             .map(|e| (g.path(e.entry), e))
             .collect();
-        // `--explain` makes the files it names entries. The selection, which runs
-        // without them, lists a file that looks like a test and is no entry as an
-        // unknown test: it always runs, whatever its trace would say.
-        let unknown_tests: NodeSet = {
-            let mut plain = cmd.entries.clone();
-            plain.extend(cmd.entries_opt.iter().cloned());
-            let mut selection = collect_entries(&g, &root, &plain, &cmd.entries_from, &cmd.tests)?;
-            for n in task_entries.iter() {
-                selection.set.insert(n);
-            }
-            let not_tests = cmd
-                .not_tests
-                .iter()
-                .map(|p| Glob::new(p).map_err(|e| anyhow::anyhow!("{p}: {e}")))
-                .collect::<Result<Vec<_>>>()?;
-            let mut unknown = NodeSet::new(g.node_count());
-            for n in crate::selection::unknown_tests(&g, &selection.set, &cmd.tests, &not_tests) {
-                unknown.insert(n);
-            }
-            unknown
-        };
+        let mut seen_notes = std::collections::HashSet::new();
         for x in &cmd.explain {
             let rel = rel_to_root(&root, &cwd, x).unwrap_or_else(|| x.clone());
             if g.node_by_path(&rel)
@@ -1663,7 +1786,7 @@ fn affected(cmd: AffectedCmd, out: &mut dyn Write, host: Option<&Host>) -> Resul
                         export_notes.write_assumption(&engine, &pruned, e.entry, out)?;
                     }
                     let notes = engine.uncertainty_notes(e.entry, &aopts);
-                    turborepo_trace_graph::output::write_uncertainty_notes(&g, &notes, 20, out)?;
+                    write_notes_once(&g, &notes, &mut seen_notes, out)?;
                     turborepo_trace_graph::output::write_names_assumption(
                         &g, e.entry, &notes, &aopts, out,
                     )?;
@@ -1693,9 +1816,7 @@ fn affected(cmd: AffectedCmd, out: &mut dyn Write, host: Option<&Host>) -> Resul
                         pruned.write_reasons(&engine, n, out)?;
                         export_notes.write_assumption(&engine, &pruned, n, out)?;
                         let notes = engine.uncertainty_notes(n, &aopts);
-                        turborepo_trace_graph::output::write_uncertainty_notes(
-                            &g, &notes, 20, out,
-                        )?;
+                        write_notes_once(&g, &notes, &mut seen_notes, out)?;
                         turborepo_trace_graph::output::write_names_assumption(
                             &g, n, &notes, &aopts, out,
                         )?;
@@ -1900,7 +2021,7 @@ fn affected(cmd: AffectedCmd, out: &mut dyn Write, host: Option<&Host>) -> Resul
             0
         }));
     }
-    Ok(ExitCode::SUCCESS)
+    Ok(why_code)
 }
 
 /// For every changed turbo config (`turbo.json`, `turbo.jsonc`), the sections
