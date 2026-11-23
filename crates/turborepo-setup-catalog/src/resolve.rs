@@ -185,6 +185,7 @@ pub async fn resolve(
 ) -> Result<Resolved, Error> {
     let mut missing = BTreeSet::new();
     let mut asked = false;
+    let mut rejected = None;
     for release in &plan.releases {
         let mut downloads: Vec<(&PlannedArtifact, bool, Vec<Platform>)> = Vec::new();
         for (platform, planned) in &release.platforms {
@@ -213,7 +214,7 @@ pub async fn resolve(
             .iter()
             .filter_map(|(platform, planned)| Some((*platform, planned.as_ref().err()?.clone())))
             .collect();
-        let mut found = false;
+        let mut answered = false;
         for ((planned, _, platforms), pinned) in downloads.iter().zip(pinned) {
             let pinned = pinned.map_err(|source| Error::Download {
                 tool: request.id.clone(),
@@ -227,7 +228,7 @@ pub async fn resolve(
                     missing.insert(planned.url.clone());
                 }
                 Some(Err(Unavailable::Recipe(_))) => {}
-                _ => (asked, found) = (true, true),
+                _ => (asked, answered) = (true, true),
             }
             for (platform, pinned) in platforms.iter().zip(pinned) {
                 let pinned = pinned.and_then(|sha256| {
@@ -256,11 +257,14 @@ pub async fn resolve(
                 }
             }
         }
-        if !found {
-            continue;
-        }
+        // A release name is the release only if something under it can be
+        // locked. A host that answers a missing asset with a page must not
+        // stop the names after it.
         if artifacts.is_empty() {
-            return Err(no_platform(request, skipped));
+            if answered {
+                rejected.get_or_insert(skipped);
+            }
+            continue;
         }
         if !artifacts.contains_key(&host) {
             return Err(Error::Host {
@@ -276,6 +280,9 @@ pub async fn resolve(
             release: release.name.clone(),
             skipped,
         });
+    }
+    if let Some(skipped) = rejected {
+        return Err(no_platform(request, skipped));
     }
     if asked {
         return Err(Error::NoRelease {

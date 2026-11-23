@@ -93,7 +93,7 @@ fn resolved_shape(tool: &Tool) -> bool {
     };
     artifacts.iter().all(|(platform, parts)| {
         let (Some(platform), Some(artifact)) = (
-            declared_platform(*platform),
+            declared_platform(*platform).filter(|platform| TARGETS.contains(platform)),
             parts.get(PART).filter(|_| parts.len() == 1),
         ) else {
             return false;

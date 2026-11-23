@@ -319,6 +319,30 @@ async fn a_binary_must_begin_as_a_program_for_its_platform() {
 }
 
 #[tokio::test]
+async fn a_release_name_that_serves_nothing_installable_does_not_stop_the_next_one() {
+    let page = b"<!DOCTYPE html><html><body>Not found</body></html>";
+    let (mach_o, elf, pe): (&[u8], &[u8], &[u8]) =
+        (b"\xcf\xfa\xed\xfe\x0c", b"\x7fELF\x02", b"MZ\x90");
+    let assets = [
+        ("raw-darwin-amd64", mach_o),
+        ("raw-darwin-arm64", mach_o),
+        ("raw-linux-amd64", elf),
+        ("raw-linux-arm64", elf),
+        ("raw-windows-amd64.exe", pe),
+    ];
+    let release =
+        |name: &str, asset: &str| format!("/example/raw/releases/download/{name}/{asset}");
+    let pages = assets.map(|(asset, _)| (release("v26.1", asset), page.to_vec()));
+    let programs = assets.map(|(asset, program)| (release("26.1", asset), program.to_vec()));
+    let server = LoopbackServer::new(pages.into_iter().chain(programs), |_| {}).unwrap();
+
+    let resolved = run(&server, "raw", "26.1", None, HOST).await.unwrap();
+    assert_eq!(resolved.release, "26.1");
+    assert_eq!(artifacts(&resolved.tool).len(), 5);
+    assert_eq!(resolved.skipped, BTreeMap::new());
+}
+
+#[tokio::test]
 async fn one_download_serves_every_platform_that_shares_it() {
     let bytes = tar_gz(&[("raw", "#!/bin/sh\necho raw\n", 0o755)]);
     let server = serve(&[(
