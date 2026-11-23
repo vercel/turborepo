@@ -65,7 +65,7 @@ workspace member.
 
 ### Managed tools
 
-This repository commits `turbo.lock`, so `turbo run` uses the Node.js, pnpm, and Rust versions that `turbo.lock` records. Install `turbo` globally, then run `turbo setup` at the root of the repository after you clone it. Run `turbo setup` again when `turbo.lock` changes.
+This repository commits `turbo.lock`, so `turbo run` uses the Node.js, pnpm, Rust, `protoc`, `cargo-deny`, and `cargo-nextest` versions that `turbo.lock` records. Install `turbo` globally, then run `turbo setup` at the root of the repository after you clone it. Run `turbo setup` again when `turbo.lock` changes.
 
 Until you run `turbo setup`, `turbo run` exits with `managed setup validation failed`. The pre-push hook runs `turbo run format check:toml`, so `git push` fails the same way.
 

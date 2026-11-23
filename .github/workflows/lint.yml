@@ -40,6 +40,7 @@ jobs:
         with:
           shared-cache-key: turborepo-debug-build
           save-cache: true
+          protoc: "false"
           github-token: "${{ secrets.GITHUB_TOKEN }}"
 
       - name: Install Zig
@@ -54,18 +55,13 @@ jobs:
       - name: Install capnproto
         run: sudo apt-get update && sudo apt-get install -y capnproto
 
-      - name: Install cargo-deny
-        shell: bash
-        run: |
-          mkdir -p "$RUNNER_TEMP/cargo-deny"
-          curl -fsSL https://github.com/EmbarkStudios/cargo-deny/releases/download/0.19.2/cargo-deny-0.19.2-x86_64-unknown-linux-musl.tar.gz \
-            | tar -xz --strip-components=1 -C "$RUNNER_TEMP/cargo-deny"
-          echo "$RUNNER_TEMP/cargo-deny" >> "$GITHUB_PATH"
-          "$RUNNER_TEMP/cargo-deny/cargo-deny" --version
+      - name: Install Global Turbo
+        uses: ./.github/actions/install-global-turbo
+
+      - name: Install managed tools
+        run: turbo setup --tools-only
 
       - name: Check Rust quality
         # Vercel CI runs the JavaScript, TOML, docs, and Rust format checks from `quality`.
         # Manually set TURBO_API to an empty string to override Hetzner env
-        run: |
-          pnpm dlx turbo setup --tools-only
-          TURBO_API= pnpm dlx turbo run turborepo-crates#lint turborepo-crates#check:licenses --env-mode=strict
+        run: TURBO_API= turbo run turborepo-crates#lint turborepo-crates#check:licenses --env-mode=strict
