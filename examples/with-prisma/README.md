@@ -17,7 +17,7 @@ The example also uses TypeScript, Prettier, PostgreSQL, and Docker Compose. Pris
 
 ### 1. Create the project
 
-Use Node.js 26.12.1 or newer and pnpm 12.14.0 (pinned in `package.json`), and install Docker with Compose support.
+Use Node.js 26.13.1 or newer and pnpm 12.23.0 (pinned in `package.json`), and install Docker with Compose support.
 
 ```sh
 pnpm dlx create-turbo@latest my-turborepo -e with-prisma
@@ -27,13 +27,13 @@ pnpm install
 
 ### 2. Start PostgreSQL
 
-The included [`docker-compose.yml`](./docker-compose.yml) starts PostgreSQL 18.6 with a database named `turborepo`:
+The included [`docker-compose.yml`](./docker-compose.yml) starts PostgreSQL 19.0 with a database named `turborepo`:
 
 ```sh
 docker compose up -d
 ```
 
-To change the database name, update `POSTGRES_DB` in [`docker-compose.yml`](./docker-compose.yml). The named `database` volume persists data at PostgreSQL 18's `/var/lib/postgresql` mount point. Existing databases from older PostgreSQL major versions require a dump/restore or `pg_upgrade`; do not mount an older data directory directly into this container.
+To change the database name, update `POSTGRES_DB` in [`docker-compose.yml`](./docker-compose.yml). The named `database` volume persists data at `/var/lib/postgresql`, the mount point used by PostgreSQL 18 and newer images. Existing databases from older PostgreSQL major versions require a dump/restore or `pg_upgrade`; do not mount an older data directory directly into this container.
 
 ### 3. Configure environment variables
 
