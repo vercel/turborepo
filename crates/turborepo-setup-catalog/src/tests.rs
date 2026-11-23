@@ -48,14 +48,8 @@ fn every_bundled_name_is_a_tool_id_for_a_bundled_recipe() {
 fn every_bundled_recipe_plans_without_panicking_into_artifacts_the_lock_accepts() {
     use turborepo_setup::lock::{Artifact, Document, Lock, SCHEMA_VERSION};
 
-    let yaml = String::from_utf8(registry::bundled(1 << 30).unwrap()).unwrap();
-    // aqua-registry's template lexer slices by character index, so a tag with
-    // a non-ASCII character can panic it. Planning one version renders only
-    // that version's templates. This covers the ones it does not reach.
-    for tag in yaml.split("{{").skip(1) {
-        let tag = tag.split("}}").next().unwrap();
-        assert!(tag.is_ascii(), "non-ASCII template tag {{{{{tag}}}}}");
-    }
+    // Planning one version renders only that version's templates. The limits
+    // that loading checks are what cover the rest.
     let registry = Registry::aqua();
     let recipes = registry.recipes().unwrap();
     assert!(recipes.all().count() > 2000, "{}", recipes.all().count());
@@ -530,6 +524,22 @@ fn problem(bytes: &[u8]) -> Problem {
     }
 }
 
+fn limit(yaml: &str) -> Limit {
+    limit_of(&declared(yaml.as_bytes()))
+}
+
+/// A registry of one package, `tool`, with these fields.
+fn tool(fields: &str) -> String {
+    format!("packages:\n  - name: tool\n    type: http\n    format: raw\n{fields}")
+}
+
+/// The plan of `tool` 1.0.0 from the registry `acme` with this text.
+fn planned(yaml: &str) -> Plan {
+    let catalog = Catalog::new(vec![declared(yaml.as_bytes())]);
+    let plan = catalog.plan(&request("tool", "1.0.0", None));
+    plan.unwrap_or_else(|error| panic!("{error}: {yaml}"))
+}
+
 #[test]
 fn registry_bytes_are_refused_by_name_before_the_recipe_reader_sees_them() {
     let large = vec![b'#'; MAX_REGISTRY_BYTES + 1];
@@ -562,6 +572,65 @@ fn registry_bytes_are_refused_by_name_before_the_recipe_reader_sees_them() {
 }
 
 #[test]
+fn text_with_a_template_tag_is_checked_as_the_recipe_reader_decodes_it() {
+    // Each of these reaches the reader's template lexer as `{{ aé b }}`, which
+    // it cannot slice.
+    let binary = "aHR0cHM6Ly9lLnRlc3Qve3sgYcOpIGIgfX0=";
+    for (case, fields) in [
+        ("as written", "    url: https://e.test/{{ a\u{e9} b }}\n"),
+        ("an escaped character", "    url: \"https://e.test/{{ a\\u00e9 b }}\"\n"),
+        ("escaped braces", "    url: \"https://e.test/\\x7b\\x7b a\u{e9} b }}\"\n"),
+        ("an escaped line break", "    url: \"https://e.test/{\\\n      { a\u{e9} b }}\"\n"),
+        ("a folded scalar", "    url: >-\n      https://e.test/{{\n      a\u{e9} b }}\n"),
+        ("base64", &format!("    url: !!binary {binary}\n")),
+        ("a file source", "    url: https://e.test/tool\n    files:\n      - name: tool\n        src: \"{{ a\\u00e9 b }}\"\n"),
+        ("a platform override", "    url: https://e.test/tool\n    overrides:\n      - goos: linux\n        url: \"https://e.test/{{ a\\u00e9 b }}\"\n"),
+        ("a checksum", "    url: https://e.test/tool\n    checksum:\n      asset: \"{{ a\\u00e9 b }}\"\n"),
+        ("a key", "    url: https://e.test/tool\n    replacements:\n      \"{{ a\\u00e9 b }}\": x\n"),
+    ] {
+        assert_eq!(limit(&tool(fields)), Limit::TemplateNotAscii, "{case}");
+    }
+    let anchored =
+        "shared: &url \"https://e.test/{{ a\\u00e9 b }}\"\npackages:\n  - name: tool\n    type: \
+         http\n    url: *url\n";
+    assert_eq!(limit(anchored), Limit::TemplateNotAscii);
+    let merged = "shared: &shared\n  url: \"https://e.test/{{ a\\u00e9 b }}\"\npackages:\n  - \
+                  name: tool\n    type: http\n    <<: *shared\n";
+    assert_eq!(limit(merged), Limit::TemplateNotAscii);
+
+    let found = problem(tool("    url: \"https://e.test/{{ a\\u00e9 b }}\"\n").as_bytes());
+    assert_eq!(
+        found.to_string(),
+        "text with a template tag has a character that is not ASCII (line 5, column 10)"
+    );
+
+    // The lexer recurses once for each parenthesis.
+    let nested = |depth: usize| {
+        let (open, close) = ("(".repeat(depth), ")".repeat(depth));
+        tool(&format!(
+            "    url: https://e.test/{{{{{open}.Version{close}}}}}\n"
+        ))
+    };
+    assert_eq!(limit(&nested(600)), Limit::TemplateTooLong);
+    let deepest = planned(&nested(498));
+    assert_eq!(linux_url(&deepest), "https://e.test/v1.0.0");
+}
+
+#[test]
+fn text_the_recipe_reader_never_renders_can_be_any_text() {
+    let fields = "    description: \"caf\u{e9} \\u00e9 }} \u{1f980}\"\n    url: \
+                  https://e.test/{{.OS}}/tool\n    link: https://e.test/caf\u{e9}/{\n";
+    let plan = planned(&tool(fields));
+    assert_eq!(linux_url(&plan), "https://e.test/linux/tool");
+
+    // A tag that is opened and never closed ends with its own text.
+    let unclosed = "    url: https://e.test/{{.OS\n    description: \"\u{e9} }}\"\n";
+    let plan = planned(&tool(unclosed));
+    let linux = &plan.releases[0].platforms[&turborepo_setup::lock::Platform::LinuxX64Gnu];
+    assert!(linux.is_ok(), "{linux:?}");
+}
+
+#[test]
 fn an_error_about_a_registry_says_where_its_fault_is_and_never_shows_its_text() {
     const MARKER: &str = "MARKER-s3cret";
     for (yaml, line) in [
@@ -576,6 +645,12 @@ fn an_error_about_a_registry_says_where_its_fault_is_and_never_shows_its_text() 
             format!("packages:\n  - name: tool\n    {MARKER}: !!int {MARKER}\n"),
             3,
         ),
+        (
+            tool(&format!(
+                "    url: \"https://e.test/{{{{ {MARKER}\\u00e9 }}}}\"\n"
+            )),
+            5,
+        ),
     ] {
         let catalog = Catalog::new(vec![declared(yaml.as_bytes())]);
         let error = catalog.plan(&request("tool", "1.0.0", None)).unwrap_err();
@@ -587,5 +662,54 @@ fn an_error_about_a_registry_says_where_its_fault_is_and_never_shows_its_text() 
         );
         assert!(!message.contains(MARKER), "{message}");
         assert!(!format!("{error:?}").contains(MARKER), "{error:?}");
+    }
+}
+
+#[test]
+fn a_package_has_at_most_32_version_prefixes() {
+    let prefixed = |prefixes: usize| {
+        let overrides: String = (0..prefixes)
+            .flat_map(|prefix| [prefix, prefix])
+            .map(|prefix| {
+                format!(
+                    "      - version_constraint: \"false\"\n        version_prefix: p{prefix}-\n"
+                )
+            })
+            .collect();
+        format!(
+            "{}{}",
+            tool(&format!(
+                "    url: https://e.test/tool\n    version_constraint: \"true\"\n    \
+                 version_overrides:\n{overrides}"
+            )),
+            "  - name: other\n    version_prefix: other-\n",
+        )
+    };
+    assert_eq!(limit(&prefixed(33)), Limit::VersionPrefixes);
+    let plan = planned(&prefixed(32));
+    assert_eq!(plan.releases.len(), 32 * 2 + 2);
+
+    // Prefixes count for the package that an alias puts them in.
+    let aliased = |prefixes: usize| {
+        let shared: String = (0..prefixes)
+            .map(|prefix| format!("  - &p{prefix}\n    version_prefix: p{prefix}-\n"))
+            .collect();
+        let overrides: String = (0..prefixes)
+            .map(|prefix| format!("      - *p{prefix}\n"))
+            .collect();
+        let fields = format!("    url: https://e.test/tool\n    version_overrides:\n{overrides}");
+        format!("shared:\n{shared}{}", tool(&fields))
+    };
+    assert_eq!(limit(&aliased(33)), Limit::VersionPrefixes);
+    assert_eq!(planned(&aliased(32)).releases.len(), 32 * 2 + 2);
+}
+
+fn limit_of(registry: &Registry<'_>) -> Limit {
+    match registry.recipes().map(|_| ()) {
+        Err(Error::Registry {
+            problem: Problem::Limit { limit, at: Some(_) },
+            ..
+        }) => limit,
+        other => panic!("{other:?}"),
     }
 }

@@ -11,7 +11,7 @@ mod resolve;
 pub use plan::{Plan, PlannedArtifact, ReleasePlan, Unavailable};
 #[cfg(test)]
 use registry::MAX_REGISTRY_BYTES;
-pub use registry::{Position, Problem, Registry};
+pub use registry::{Limit, Position, Problem, Registry};
 pub use resolve::{CatalogTransport, Resolved, resolve, spelling};
 
 #[derive(Debug, thiserror::Error)]
