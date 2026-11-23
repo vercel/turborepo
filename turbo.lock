@@ -1207,6 +1207,116 @@
           }
         }
       }
+    },
+    "uv": {
+      "adapter": "uv",
+      "version": "0.13.5",
+      "declarations": [
+        {
+          "file": "uv.toml",
+          "field": "required-version",
+          "request": "==0.13.5"
+        }
+      ],
+      "installation": {
+        "kind": "managed",
+        "artifacts": {
+          "macos-x64": {
+            "distribution": {
+              "url": "https://releases.astral.sh/github/uv/releases/download/0.13.5/uv-x86_64-apple-darwin.tar.gz",
+              "sha256": "b0f52b0e3945b4107d89024ea38e625683011fbfc05a0d98f9fa2d6dcee28c66",
+              "format": "tar-gz",
+              "rootPrefix": "uv-x86_64-apple-darwin",
+              "executables": {
+                "uv": "uv",
+                "uvx": "uvx"
+              }
+            }
+          },
+          "macos-arm64": {
+            "distribution": {
+              "url": "https://releases.astral.sh/github/uv/releases/download/0.13.5/uv-aarch64-apple-darwin.tar.gz",
+              "sha256": "743f85035a1996ecb350659e01cd9faea9709829be09b1b4b03c73eaf3c9cd73",
+              "format": "tar-gz",
+              "rootPrefix": "uv-aarch64-apple-darwin",
+              "executables": {
+                "uv": "uv",
+                "uvx": "uvx"
+              }
+            }
+          },
+          "linux-x64-gnu": {
+            "distribution": {
+              "url": "https://releases.astral.sh/github/uv/releases/download/0.13.5/uv-x86_64-unknown-linux-gnu.tar.gz",
+              "sha256": "f68d291c75783122dad58ab77def0e13f3233f358731db5d6d7e8715603b928f",
+              "format": "tar-gz",
+              "rootPrefix": "uv-x86_64-unknown-linux-gnu",
+              "executables": {
+                "uv": "uv",
+                "uvx": "uvx"
+              }
+            }
+          },
+          "linux-arm64-gnu": {
+            "distribution": {
+              "url": "https://releases.astral.sh/github/uv/releases/download/0.13.5/uv-aarch64-unknown-linux-gnu.tar.gz",
+              "sha256": "4bb69cf95ed13f23713bb7bc09f241896ea0c75b7c557e615a20604b82f9c403",
+              "format": "tar-gz",
+              "rootPrefix": "uv-aarch64-unknown-linux-gnu",
+              "executables": {
+                "uv": "uv",
+                "uvx": "uvx"
+              }
+            }
+          },
+          "linux-x64-musl": {
+            "distribution": {
+              "url": "https://releases.astral.sh/github/uv/releases/download/0.13.5/uv-x86_64-unknown-linux-musl.tar.gz",
+              "sha256": "57ef9d9ccb01fb1bd998df995b0dd221b52f7d7841fbea93f2d4463bf61fb7a9",
+              "format": "tar-gz",
+              "rootPrefix": "uv-x86_64-unknown-linux-musl",
+              "executables": {
+                "uv": "uv",
+                "uvx": "uvx"
+              }
+            }
+          },
+          "linux-arm64-musl": {
+            "distribution": {
+              "url": "https://releases.astral.sh/github/uv/releases/download/0.13.5/uv-aarch64-unknown-linux-musl.tar.gz",
+              "sha256": "7906c79adb21c81abd559841ba76bb1d9af9d791acac7a041b2972e03ae16538",
+              "format": "tar-gz",
+              "rootPrefix": "uv-aarch64-unknown-linux-musl",
+              "executables": {
+                "uv": "uv",
+                "uvx": "uvx"
+              }
+            }
+          },
+          "windows-x64": {
+            "distribution": {
+              "url": "https://releases.astral.sh/github/uv/releases/download/0.13.5/uv-x86_64-pc-windows-msvc.zip",
+              "sha256": "a38b8d1902b7cfbc76b423ba1bb456f623f42064cdc72628b6075b89afd1019a",
+              "format": "zip",
+              "executables": {
+                "uv": "uv.exe",
+                "uvx": "uvx.exe"
+              }
+            }
+          },
+          "windows-arm64": {
+            "distribution": {
+              "url": "https://releases.astral.sh/github/uv/releases/download/0.13.5/uv-aarch64-pc-windows-msvc.zip",
+              "sha256": "09f47edf90726084a70f9426f6e3ca4f46e9bf7cbf23b1716ec64d60b055fae3",
+              "format": "zip",
+              "executables": {
+                "uv": "uv.exe",
+                "uvx": "uvx.exe"
+              }
+            }
+          }
+        }
+      }
     }
   }
 }

@@ -4,10 +4,14 @@
   "noUpdateNotifier": true,
   "futureFlags": {
     "experimentalCargoWorkspaces": true,
+    "experimentalPythonWorkspaces": true,
     "experimentalSetup": true,
     "experimentalTaskCommand": true
   },
   "setup": {
+    "python": {
+      "dependencies": "skip"
+    },
     "additionalTools": {
       "cargo-deny": "0.19.2",
       "cargo-nextest": "0.9.152",
