@@ -35,14 +35,6 @@ jobs:
       - name: "Setup Node"
         uses: ./.github/actions/setup-node
 
-      - name: Setup Rust
-        uses: ./.github/actions/setup-rust
-        with:
-          shared-cache-key: turborepo-debug-build
-          save-cache: true
-          protoc: "false"
-          github-token: "${{ secrets.GITHUB_TOKEN }}"
-
       - name: Install Zig
         shell: bash
         run: |
@@ -59,7 +51,21 @@ jobs:
         uses: ./.github/actions/install-global-turbo
 
       - name: Install managed tools
-        run: turbo setup --tools-only
+        run: |
+          turbo setup --tools-only
+          turbo exec -- sh -c 'dirname "$(command -v rustc)"' >> "$GITHUB_PATH"
+
+      - name: Add cargo problem matchers
+        shell: bash
+        run: echo "::add-matcher::.github/actions/setup-rust/matchers.json"
+
+      - name: Setup Rust Cache
+        if: github.event.pull_request.head.repo.full_name == github.repository
+        uses: Swatinem/rust-cache@42dc69e1aa15d09112580998cf2ef0119e2e91ae # v2
+        with:
+          shared-key: ${{ format('{0}-turborepo-debug-build', github.head_ref || github.ref_name) }}
+          key: ${{ github.head_ref || github.ref_name }}
+          save-if: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Check Rust quality
         # Vercel CI runs the JavaScript, TOML, docs, and Rust format checks from `quality`.

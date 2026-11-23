@@ -21,10 +21,6 @@ inputs:
     description: "Whether to enable the Rust cache. Set to `false` for jobs that don't compile."
     required: false
     default: "true"
-  protoc:
-    description: "Whether to install protoc. Set to `false` when `turbo setup` provides it."
-    required: false
-    default: "true"
 
 runs:
   using: "composite"
@@ -39,7 +35,6 @@ runs:
         cache: false
 
     - name: Set Up Protoc
-      if: inputs.protoc == 'true'
       uses: ./.github/actions/setup-protoc
       with:
         version: "26.x"
