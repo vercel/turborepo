@@ -46,3 +46,7 @@ Follow [@turborepo](https://x.com/turborepo) on X for project updates.
 If you believe you have found a security vulnerability in Turborepo, we encourage you to responsibly disclose this and not open a public issue. We will investigate all legitimate reports. Email `security@vercel.com` to disclose any security vulnerabilities.
 
 https://security.vercel.com/
+
+## Telemetry and data collection
+
+Turborepo collects telemetry regarding usage of Turborepo. This information is used to shape the Turborepo roadmap and prioritize features. You can learn more about the data collected, how it’s used, and how to opt out at https://turborepo.dev/docs/telemetry.
