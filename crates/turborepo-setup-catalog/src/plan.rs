@@ -48,6 +48,8 @@ pub enum Unavailable {
     Message(String),
     #[error("the catalog installs it with {0}, which turbo setup does not do")]
     Kind(String),
+    #[error("its download needs a login, which turbo setup does not support yet")]
+    Login,
     #[error("its {0} download is a format that turbo setup cannot install yet")]
     Format(String),
     #[error("the catalog entry cannot be used: {0}")]
@@ -167,6 +169,9 @@ fn artifact(
     }
     if !supported(&package.supported_envs, os, arch) {
         return Err(Unavailable::Platform);
+    }
+    if package.private {
+        return Err(Unavailable::Login);
     }
     let url = match package.package_type() {
         AquaPackageType::GithubRelease => {
