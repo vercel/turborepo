@@ -441,3 +441,42 @@ fn only_native_pnpm_parts_pin_sha512_instead_of_sha256() {
         distribution["distribution"] = sha512(distribution["distribution"].clone());
     });
 }
+
+#[test]
+fn only_additional_tools_record_a_catalog_source() {
+    let source = |adapter: &str, options: Value| {
+        let mut value = fixture();
+        value["tools"]["fixture"]["adapter"] = json!(adapter);
+        value["tools"]["fixture"]["options"] = options;
+        parse(&value)
+    };
+    let longest = format!("aqua:{}/{}", "a".repeat(127), "b".repeat(128));
+    for accepted in [
+        "aqua:jqlang/jq",
+        "aqua:kubernetes/kubernetes/kubectl",
+        "aqua:a.b/c_d-e",
+        longest.as_str(),
+    ] {
+        let lock = source(additional::ADAPTER, json!({"source": [accepted]})).unwrap();
+        assert_eq!(lock.tools()["fixture"].options["source"], [accepted]);
+    }
+    for rejected in [
+        json!({"source": []}),
+        json!({"source": ["aqua:jqlang/jq", "aqua:jqlang/other"]}),
+        json!({"source": ["jqlang/jq"]}),
+        json!({"source": ["aqua:jq"]}),
+        json!({"source": ["aqua:jqlang//jq"]}),
+        json!({"source": ["aqua:jqlang/jq?token=x"]}),
+        json!({"source": ["github:jqlang/jq"]}),
+        json!({"source": [format!("{longest}c")]}),
+        json!({"source": ["jq"]}),
+    ] {
+        assert!(
+            source(additional::ADAPTER, rejected.clone()).is_err(),
+            "{rejected}"
+        );
+    }
+    assert!(source("generic-download", json!({"source": ["aqua:jqlang/jq"]})).is_err());
+    assert!(source(additional::ADAPTER, json!({"origin": ["aqua:jqlang/jq"]})).is_err());
+    assert!(source("generic-download", json!({"source": ["jq"]})).is_ok());
+}

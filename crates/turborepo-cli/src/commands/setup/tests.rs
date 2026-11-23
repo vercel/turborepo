@@ -166,6 +166,7 @@ impl Fixture {
                 origin,
             )
             .unwrap(),
+            catalog: None,
             artifact: Some(
                 turborepo_setup::artifact_provision::ArtifactTransport::loopback_http_for_tests(
                     origin,
@@ -365,6 +366,8 @@ mod additional_tools;
 mod authorization;
 #[path = "bun_tests.rs"]
 mod bun;
+#[path = "catalog_tests.rs"]
+mod catalog_tools;
 #[path = "first_lock.rs"]
 mod first_lock;
 #[path = "force_tests.rs"]

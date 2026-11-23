@@ -454,9 +454,10 @@ pub enum Error {
 
     #[error("Invalid additional tool {tool:?}: {reason}.")]
     #[diagnostic(help(
-        "Declare an exact version and, for each supported platform, an HTTPS `url`, a lowercase \
-         `sha256`, a `format`, and relative `executables` paths. Tool IDs and executable names \
-         belong to one tool."
+        "Declare an exact version. For a tool in the bundled catalog, that is all, or add `from` \
+         to name its catalog entry. Otherwise declare `artifacts`: for each supported platform, \
+         an HTTPS `url`, a lowercase `sha256`, a `format`, and relative `executables` paths. Tool \
+         IDs and executable names belong to one tool."
     ))]
     SetupInvalidAdditionalTool {
         tool: String,

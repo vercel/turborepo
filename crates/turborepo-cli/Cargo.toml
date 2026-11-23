@@ -41,6 +41,7 @@ turborepo-repository = { path = "../turborepo-repository", features = [
 ] }
 turborepo-run-context = { workspace = true }
 turborepo-setup = { path = "../turborepo-setup", features = ["test-support"] }
+turborepo-setup-catalog = { workspace = true, features = ["test-support"] }
 turborepo-vercel-api-mock = { workspace = true }
 
 [lints]
@@ -109,6 +110,7 @@ turborepo-repository = { path = "../turborepo-repository" }
 turborepo-run = { workspace = true, default-features = false }
 turborepo-run-opts = { workspace = true }
 turborepo-setup = { path = "../turborepo-setup" }
+turborepo-setup-catalog = { workspace = true }
 turborepo-shim = { workspace = true }
 turborepo-signals = { workspace = true }
 turborepo-task-id = { workspace = true }

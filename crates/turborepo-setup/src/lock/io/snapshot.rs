@@ -12,7 +12,10 @@ use super::{
 };
 use crate::{
     go_discovery::{GO_MOD, GO_WORK, GoRequirements, MAX_MANIFEST_BYTES as GO_LIMIT},
-    lock::{Tool, additional},
+    lock::{
+        Tool,
+        additional::{self, CatalogRequest},
+    },
     python_discovery::PythonRequirement,
     uv_discovery::{self, UvRequirement},
 };
@@ -42,6 +45,8 @@ pub struct Snapshot {
     native: DeclarationMap,
     ecosystems: Ecosystems,
     additional: BTreeMap<String, Tool>,
+    unresolved: BTreeMap<String, CatalogRequest>,
+    incomplete: BTreeMap<String, CatalogRequest>,
 }
 
 // Raw manifests may contain unrelated secrets. Never print snapshot contents.
@@ -118,7 +123,11 @@ impl Snapshot {
                 native.insert("python".into(), vec![python.declaration()]);
             }
         }
-        let additional = project_additional(&captured)?;
+        let additional::Projection {
+            tools: additional,
+            unresolved,
+            incomplete,
+        } = project_additional(&captured, previous.as_ref())?;
         // Fail closed on a change observed during unlocked read-only capture.
         // Publication validates again under the stable writer guard.
         if same_file::Handle::from_path(&root)? != *root_identity
@@ -136,6 +145,8 @@ impl Snapshot {
             native,
             ecosystems,
             additional,
+            unresolved,
+            incomplete,
         })
     }
 
@@ -169,10 +180,55 @@ impl Snapshot {
         read_python(&self.inputs)
     }
 
-    /// Exact `setup.additionalTools` lock entries projected from the captured
-    /// root configuration. They never need resolution.
+    /// Exact `setup.additionalTools` lock entries: projected from the captured
+    /// root configuration, reused from the captured lock for catalog
+    /// declarations it records, or supplied to `with_catalog_tools`.
     pub fn additional_tools(&self) -> &BTreeMap<String, Tool> {
         &self.additional
+    }
+
+    /// Catalog declarations that the captured lock does not record, in ID
+    /// order. Only `turbo setup` resolves them; to every other consumer they
+    /// are drift.
+    pub fn catalog_requests(&self) -> impl Iterator<Item = &CatalogRequest> {
+        self.unresolved.values()
+    }
+
+    /// Catalog declarations whose recorded entry lacks a platform that hosts
+    /// install on, in ID order: the catalog had no installable download for
+    /// it when the entry was resolved. The recorded entry stands for every
+    /// consumer. Only `turbo setup --update-lock` resolves these again.
+    pub fn incomplete_catalog_requests(&self) -> impl Iterator<Item = &CatalogRequest> {
+        self.incomplete.values()
+    }
+
+    /// This snapshot with `tools` as the lock entries of its unresolved or
+    /// incomplete catalog declarations. Each entry must be the one its
+    /// declaration asks for, under the rule that reuses an entry from the
+    /// lock, so a resolver cannot lock another tool, version, catalog entry,
+    /// or artifact shape. No two additional tools may then install one
+    /// command on a platform.
+    pub fn with_catalog_tools(&self, tools: BTreeMap<String, Tool>) -> Result<Self, StorageError> {
+        let mut resolved = self.clone();
+        for (id, tool) in tools {
+            let request = resolved.unresolved.remove(&id);
+            let request = request.or_else(|| resolved.incomplete.remove(&id));
+            if !request.is_some_and(|request| request.records(&tool)) {
+                return Err(Error::Invalid(
+                    "resolved catalog tool does not match its setup.additionalTools declaration",
+                )
+                .into());
+            }
+            resolved.additional.insert(id, tool);
+        }
+        if let Some(collision) = additional::collision(&resolved.additional) {
+            return Err(StorageError::Collision {
+                tool: collision.tool.into(),
+                other: collision.other.into(),
+                executable: collision.executable.into(),
+            });
+        }
+        Ok(resolved)
     }
 
     /// Whether `lock` records exactly the declared additional tools.
@@ -181,7 +237,8 @@ impl Snapshot {
     }
 
     /// Additional tool IDs whose locked entry differs from the declaration,
-    /// including added and removed declarations.
+    /// including added and removed declarations and every unresolved catalog
+    /// declaration.
     pub fn additional_drift(&self, lock: &Lock) -> BTreeSet<String> {
         let locked: BTreeMap<_, _> = lock
             .tools()
@@ -190,6 +247,7 @@ impl Snapshot {
             .collect();
         let ids = locked.keys().copied().chain(self.additional.keys());
         ids.filter(|id| locked.get(*id).copied() != self.additional.get(*id))
+            .chain(self.unresolved.keys())
             .cloned()
             .collect()
     }
@@ -404,16 +462,19 @@ impl Snapshot {
     }
 }
 
-/// Additional tools come from the same captured root configuration bytes as
-/// the CAS, never from a separate read of current disk state.
-fn project_additional(inputs: &Inputs) -> Result<BTreeMap<String, Tool>, StorageError> {
+/// Additional tools come from the same captured root configuration and lock
+/// bytes as the CAS, never from a separate read of current disk state.
+fn project_additional(
+    inputs: &Inputs,
+    previous: Option<&Lock>,
+) -> Result<additional::Projection, StorageError> {
     let mut configs = turborepo_types::CONFIG_FILES
         .iter()
         .filter_map(|file| Some((*file, inputs.get(file)?.as_deref()?)));
     match (configs.next(), configs.next()) {
-        (None, _) => Ok(BTreeMap::new()),
+        (None, _) => Ok(additional::Projection::default()),
         (Some((file, bytes)), None) => {
-            additional::project(file, bytes).ok_or(StorageError::Declarations)
+            additional::project(file, bytes, previous).ok_or(StorageError::Declarations)
         }
         // turbo rejects ambiguous root configuration.
         (Some(_), Some(_)) => Err(StorageError::Declarations),

@@ -277,6 +277,7 @@ fn dispatch(
         uv: turborepo_setup::uv_resolution::UvTransport::loopback_http_for_tests(u.origin()).unwrap(),
         rustup: turborepo_setup::rustup_provision::RustupTransport::loopback_http_for_tests(u.origin()).unwrap(),
         python: turborepo_setup::python_resolution::PythonTransport::loopback_http_for_tests(u.origin()).unwrap(),
+        catalog: None,
         artifact: None,
         go: turborepo_setup::go_resolution::GoTransport::loopback_http_for_tests(u.origin()).unwrap(),
         bun: turborepo_setup::bun_provision::BunTransport::loopback_http_for_tests(u.origin()).unwrap(),

@@ -205,6 +205,7 @@ impl NpmFixture {
                 rustup: turborepo_setup::rustup_provision::RustupTransport::loopback_http_for_tests(upstream.origin()).unwrap(),
                 bun: turborepo_setup::bun_provision::BunTransport::loopback_http_for_tests(upstream.origin()).unwrap(),
                 python: turborepo_setup::python_resolution::PythonTransport::loopback_http_for_tests(upstream.origin()).unwrap(),
+                catalog: None,
                 artifact: None,
                 go: turborepo_setup::go_resolution::GoTransport::loopback_http_for_tests(
                     upstream.origin(),
@@ -223,6 +224,7 @@ impl NpmFixture {
                         .owned
                         .policy_at(&self.f.owned.root().join("apps/web/src"))?)
                 },
+                &|_| {},
             )?);
             Ok(0)
         })
