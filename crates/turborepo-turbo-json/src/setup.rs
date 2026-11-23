@@ -18,16 +18,18 @@ use turborepo_repository::toolchain::ToolchainId;
 
 pub use self::{
     additional_tools::{
-        AdditionalTool, AdditionalToolSource, ArtifactFormat, ArtifactPlatform, CATALOG_PREFIX,
-        RawAdditionalTool, RawAdditionalToolArtifact, RawAdditionalToolDeclaration,
-        catalog_package, command_name, derived_artifact_violation,
+        AdditionalTool, AdditionalToolSource, ArtifactFormat, ArtifactPlatform, RawAdditionalTool,
+        RawAdditionalToolArtifact, RawAdditionalToolDeclaration, command_name,
+        derived_artifact_violation,
     },
     mirrors::{RawSetupMirrors, SetupMirrors, mirror_url},
+    registries::{BUILTIN_REGISTRY, registry_package},
 };
 use crate::{error::Error, future_flags::FutureFlags};
 
 mod additional_tools;
 mod mirrors;
+mod registries;
 
 /// How `turbo setup` prepares a toolchain's tools. `managed` provisions the
 /// locked version for this repository. `skip` neither

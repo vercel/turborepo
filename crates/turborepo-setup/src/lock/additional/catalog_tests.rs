@@ -428,6 +428,7 @@ fn a_resolved_tool_that_does_not_match_its_request_is_refused() {
         ("jq", source),
         ("jq", resolved(jj, JJ)),
         ("jj", resolved(jj, "aqua:martinvonz/jj")),
+        ("jq", resolved(jq, "acme:jqlang/jq")),
         (
             "rg",
             resolved(

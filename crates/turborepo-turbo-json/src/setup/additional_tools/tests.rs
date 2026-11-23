@@ -87,30 +87,6 @@ fn catalog_tools_declare_a_version_and_optionally_their_entry() {
 }
 
 #[test]
-fn catalog_packages_are_two_or_more_plain_segments() {
-    assert_eq!(catalog_package("aqua:jqlang/jq"), Some("jqlang/jq"));
-    assert_eq!(catalog_package("aqua:a.b/c_d/e-f"), Some("a.b/c_d/e-f"));
-    let longest = format!("aqua:{}/{}", "a".repeat(127), "b".repeat(128));
-    assert!(catalog_package(&longest).is_some());
-    assert_eq!(catalog_package(&format!("{longest}c")), None);
-    for from in [
-        "jqlang/jq",
-        "aqua:jq",
-        "aqua:",
-        "aqua:jqlang/",
-        "aqua:/jq",
-        "aqua:jqlang//jq",
-        "aqua:jqlang/jq@1.8.2",
-        "aqua:jqlang/jq ",
-        "aqua:jqlang\\jq",
-        "AQUA:jqlang/jq",
-        "github:jqlang/jq",
-    ] {
-        assert_eq!(catalog_package(from), None, "{from}");
-    }
-}
-
-#[test]
 fn derived_artifacts_obey_the_rules_of_declared_ones() {
     let check = |platform, url: &str, format, executables: &[(&str, &str)]| {
         let executables = executables
@@ -235,8 +211,9 @@ fn archives_without_a_top_level_directory_omit_the_root_prefix() {
 #[test_case(|t| t["fixture"] = json!("v1.x"); "shorthand wildcard")]
 #[test_case(|t| t["fixture"] = json!({"version": "stable", "from": "aqua:example/fixture"}); "catalog channel")]
 #[test_case(|t| t["fixture"]["from"] = json!("aqua:example/fixture"); "from with artifacts")]
-#[test_case(|t| t["fixture"] = json!({"version": "1.2.3", "from": "example/fixture"}); "from without a catalog")]
-#[test_case(|t| t["fixture"] = json!({"version": "1.2.3", "from": "aqua:fixture"}); "from with one segment")]
+#[test_case(|t| t["fixture"] = json!({"version": "1.2.3", "from": "example/fixture"}); "from without a registry")]
+#[test_case(|t| t["fixture"] = json!({"version": "1.2.3", "from": "aqua:"}); "from without a package")]
+#[test_case(|t| t["fixture"] = json!({"version": "1.2.3", "from": "acme:example/fixture"}); "from with another registry")]
 #[test_case(|t| t["fixture"] = json!({"version": "1.2.3", "from": "aqua:example/fixture@1.2.3"}); "from with a version")]
 #[test_case(|t| t["node"] = json!("24.0.0"); "builtin id in the catalog form")]
 #[test_case(|t| t["fixture"]["artifacts"] = json!({}); "no platforms")]

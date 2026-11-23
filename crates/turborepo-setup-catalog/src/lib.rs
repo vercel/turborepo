@@ -2,7 +2,7 @@ use std::{collections::BTreeMap, io::Read, sync::OnceLock};
 
 use aqua_registry::ParsedRegistry;
 use turborepo_setup::lock::additional::CatalogRequest;
-use turborepo_turbo_json::{CATALOG_PREFIX, catalog_package};
+use turborepo_turbo_json::{BUILTIN_REGISTRY, registry_package};
 
 mod plan;
 mod resolve;
@@ -87,7 +87,7 @@ fn suggestions(candidates: &[String]) -> String {
             " The catalog has {}.",
             candidates
                 .iter()
-                .map(|package| format!("\"{CATALOG_PREFIX}{package}\""))
+                .map(|package| format!("\"{BUILTIN_REGISTRY}:{package}\""))
                 .collect::<Vec<_>>()
                 .join(", ")
         ),
@@ -159,7 +159,7 @@ impl Catalog {
     }
 
     fn package(&self, request: &CatalogRequest) -> Result<String, Error> {
-        if let Some(package) = request.from.as_deref().and_then(catalog_package) {
+        if let Some((_, package)) = request.from.as_deref().and_then(registry_package) {
             return Ok(package.into());
         }
         if let Some(package) = self.names.get(&request.id) {
@@ -198,7 +198,7 @@ impl Catalog {
 }
 
 fn catalog_package_id(package: &str) -> bool {
-    catalog_package(&format!("{CATALOG_PREFIX}{package}")).is_some()
+    registry_package(&format!("{BUILTIN_REGISTRY}:{package}")).is_some()
 }
 
 fn names(tsv: &str) -> BTreeMap<String, String> {

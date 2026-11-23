@@ -20,6 +20,7 @@ use serde::Serialize;
 use ts_rs::TS;
 use turborepo_errors::{Spanned, WithMetadata};
 
+use super::registries::{BUILTIN_REGISTRY, registry_package};
 use crate::error::Error;
 
 /// Identities of built-in setup adapters and toolchains.
@@ -30,7 +31,6 @@ const BUILTIN_EXECUTABLES: &str = "bun bunx cargo cargo-clippy cargo-fmt clippy-
                                    rust-analyzer rust-gdb rust-gdbgui rust-lldb rustc rustdoc \
                                    rustfmt rustup turbo uv uvx yarn yarnpkg";
 const MAX_EXECUTABLES: usize = 64; // The lock's per-artifact bound.
-pub const CATALOG_PREFIX: &str = "aqua:";
 
 /// The OS, architecture, and Linux C library that an artifact runs on.
 #[derive(
@@ -178,21 +178,6 @@ pub enum AdditionalToolSource {
     Artifacts(BTreeMap<ArtifactPlatform, Spanned<RawAdditionalToolArtifact>>),
 }
 
-/// The package ID of a catalog entry written as `aqua:<package ID>`: two or
-/// more `/`-separated segments of ASCII letters, digits, `.`, `_`, and `-`,
-/// at most 256 bytes. `turbo.lock` records the same spelling.
-pub fn catalog_package(from: &str) -> Option<&str> {
-    let package = from.strip_prefix(CATALOG_PREFIX)?;
-    let segment = |segment: &str| {
-        !segment.is_empty()
-            && segment
-                .bytes()
-                .all(|b| b.is_ascii_alphanumeric() || b"._-".contains(&b))
-    };
-    (package.len() <= 256 && package.contains('/') && package.split('/').all(segment))
-        .then_some(package)
-}
-
 /// Why an artifact that setup derived, rather than read from `turbo.json`,
 /// breaks the rules a hand-declared artifact for `platform` obeys. `None`
 /// means it could have been declared by hand.
@@ -287,7 +272,7 @@ fn validate_tool<'a>(
         }
         (Some(from), None) => {
             ensure(
-                catalog_package(from).is_some(),
+                registry_package(from).is_some_and(|(registry, _)| registry == BUILTIN_REGISTRY),
                 from,
                 "`from` must be `aqua:` followed by a catalog package ID, such as `aqua:jj-vcs/jj`",
             )?;
@@ -472,7 +457,8 @@ pub fn command_name(name: &str, windows: bool) -> String {
     }
 }
 
-fn identifier(value: &str) -> bool {
+/// The rule for a tool ID and for a registry name.
+pub(super) fn identifier(value: &str) -> bool {
     value.len() <= 64
         && value.starts_with(|c: char| c.is_ascii_lowercase())
         && value

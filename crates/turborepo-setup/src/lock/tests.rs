@@ -443,7 +443,7 @@ fn only_native_pnpm_parts_pin_sha512_instead_of_sha256() {
 }
 
 #[test]
-fn only_additional_tools_record_a_catalog_source() {
+fn only_additional_tools_record_a_registry_source() {
     let source = |adapter: &str, options: Value| {
         let mut value = fixture();
         value["tools"]["fixture"]["adapter"] = json!(adapter);
@@ -455,6 +455,9 @@ fn only_additional_tools_record_a_catalog_source() {
         "aqua:jqlang/jq",
         "aqua:kubernetes/kubernetes/kubectl",
         "aqua:a.b/c_d-e",
+        "aqua:jq",
+        "acme:acme-cli",
+        "team_2:tools/deploy",
         longest.as_str(),
     ] {
         let lock = source(additional::ADAPTER, json!({"source": [accepted]})).unwrap();
@@ -464,10 +467,13 @@ fn only_additional_tools_record_a_catalog_source() {
         json!({"source": []}),
         json!({"source": ["aqua:jqlang/jq", "aqua:jqlang/other"]}),
         json!({"source": ["jqlang/jq"]}),
-        json!({"source": ["aqua:jq"]}),
+        json!({"source": ["aqua:"]}),
+        json!({"source": [":jqlang/jq"]}),
         json!({"source": ["aqua:jqlang//jq"]}),
         json!({"source": ["aqua:jqlang/jq?token=x"]}),
-        json!({"source": ["github:jqlang/jq"]}),
+        json!({"source": ["Acme:jqlang/jq"]}),
+        json!({"source": ["my.registry:jqlang/jq"]}),
+        json!({"source": ["acme:aqua:jqlang/jq"]}),
         json!({"source": [format!("{longest}c")]}),
         json!({"source": ["jq"]}),
     ] {
