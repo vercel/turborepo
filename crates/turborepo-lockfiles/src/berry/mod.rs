@@ -153,8 +153,8 @@ pub struct BerryLockfile {
     // same descriptor with the params dropped. Yarn appends them to `link:`,
     // `portal:`, `file:` and patched resolutions while a manifest declares
     // those dependencies without, so an edge resolved from a manifest only
-    // matches an entry through this map.
-    without_params: Map<Descriptor<'static>, Descriptor<'static>>,
+    // matches an entry through this map. None marks ambiguous stripped ranges.
+    without_params: Map<Descriptor<'static>, Option<Descriptor<'static>>>,
     // A mapping from descriptors without protocols to a range with a protocol
     resolver: DescriptorResolver,
     locator_package: Map<Locator<'static>, BerryPackage>,
@@ -282,9 +282,12 @@ impl BerryLockfile {
                 }
                 let descriptor = descriptor.into_owned();
                 if let Some(stripped) = descriptor.without_params() {
-                    // Only the params can differ between two entries that
-                    // share a reference, so the first one wins.
-                    without_params.entry(stripped).or_insert(descriptor.clone());
+                    // Params can bind relative paths to different parents. Do not
+                    // select an arbitrary package when the stripped range is ambiguous.
+                    without_params
+                        .entry(stripped)
+                        .and_modify(|entry| *entry = None)
+                        .or_insert_with(|| Some(descriptor.clone()));
                 }
                 descriptor_locator.insert(descriptor, locator.clone());
             }
@@ -394,7 +397,7 @@ impl BerryLockfile {
         if let Some(entry) = self.resolutions.get_key_value(descriptor) {
             return Some(entry);
         }
-        let resolved = self.without_params.get(descriptor)?;
+        let resolved = self.without_params.get(descriptor)?.as_ref()?;
         self.resolutions.get_key_value(resolved)
     }
 
@@ -1353,6 +1356,36 @@ mod test {
                 .unwrap()
                 .contains("@babel/types@npm:^7.8.3")
         );
+    }
+
+    #[test]
+    fn test_ambiguous_parameterless_dependency() {
+        let yaml = r#"__metadata:
+  version: 8
+
+"local-lib@link:./vendor/local-lib::locator=a%40workspace%3Apackages%2Fa":
+  version: 0.0.0-use.local
+  resolution: "local-lib@link:./vendor/local-lib::locator=a%40workspace%3Apackages%2Fa"
+  linkType: soft
+
+"local-lib@link:./vendor/local-lib::locator=b%40workspace%3Apackages%2Fb":
+  version: 0.0.0-use.local
+  resolution: "local-lib@link:./vendor/local-lib::locator=b%40workspace%3Apackages%2Fb"
+  linkType: soft
+"#;
+        let lockfile = BerryLockfile::load(yaml.as_bytes(), None).unwrap();
+        let unbound = Descriptor::new("local-lib", "link:./vendor/local-lib")
+            .unwrap()
+            .into_owned();
+        assert!(lockfile.lockfile_entry(&unbound).is_none());
+
+        let bound = Descriptor::new(
+            "local-lib",
+            "link:./vendor/local-lib::locator=b%40workspace%3Apackages%2Fb",
+        )
+        .unwrap()
+        .into_owned();
+        assert!(lockfile.lockfile_entry(&bound).is_some());
     }
 
     #[test]
