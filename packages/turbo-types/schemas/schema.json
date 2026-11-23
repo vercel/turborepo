@@ -1095,7 +1095,7 @@
           ]
         },
         "registries": {
-          "description": "The registries that `turbo setup` asks where an additional tool comes from, in order. `\"aqua\"` is the registry built into `turbo`. Without `registries`, only `\"aqua\"` is asked. Leave `\"aqua\"` out to block it.",
+          "description": "The registries that `turbo setup` asks where an additional tool comes from, in order. `\"aqua\"` is the registry built into `turbo`, and an object names a registry file in this repository. Without `registries`, only `\"aqua\"` is asked. Leave `\"aqua\"` out to block it.",
           "type": ["array", "null"],
           "items": {
             "$ref": "#/definitions/SetupRegistry"
@@ -1126,12 +1126,38 @@
       }
     },
     "SetupRegistry": {
-      "description": "A registry that `turbo setup` asks where an additional tool comes from. The string `\"aqua\"` is the registry built into `turbo`.",
+      "description": "A registry that `turbo setup` asks where an additional tool comes from. The string `\"aqua\"` is the registry built into `turbo`. An object is a registry file in the repository.",
       "anyOf": [
         {
           "$ref": "#/definitions/BuiltinRegistry"
+        },
+        {
+          "$ref": "#/definitions/SetupRegistryDeclaration"
         }
       ]
+    },
+    "SetupRegistryDeclaration": {
+      "description": "The object form of a registry.",
+      "type": "object",
+      "required": ["name", "path"],
+      "properties": {
+        "name": {
+          "description": "The name that `from` and `turbo.lock` use for this registry: a lowercase letter, then lowercase letters, digits, `-`, or `_`. It cannot be `aqua`.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/String"
+            }
+          ]
+        },
+        "path": {
+          "description": "The registry file, as a path relative to the repository root that ends in `.yaml` or `.yml`.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/String"
+            }
+          ]
+        }
+      }
     },
     "String": {
       "type": "string"

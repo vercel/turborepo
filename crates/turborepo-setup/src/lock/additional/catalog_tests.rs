@@ -8,10 +8,27 @@ fn catalog() -> Value {
     json!({"jq": "1.8.2", "jj": {"version": "0.47.1", "from": JJ}})
 }
 
+fn acme() -> Value {
+    json!({"name": "acme", "path": "tools/registry.yaml"})
+}
+
 fn declare(root: &Path, registries: Value, tools: &Value) {
     let config = json!({"futureFlags": {"experimentalSetup": true},
         "setup": {"registries": registries, "additionalTools": tools}});
     fs::write(root.join("turbo.json"), config.to_string()).unwrap();
+}
+
+fn lock_resolved(root: &Path, sources: &[(&str, &str)]) -> Vec<u8> {
+    let snapshot = capture(root);
+    let requests = requests(&snapshot);
+    let tools = sources
+        .iter()
+        .map(|(id, source)| ((*id).to_owned(), resolved(&requests[*id], source)))
+        .collect();
+    let snapshot = snapshot.with_catalog_tools(tools).unwrap();
+    let outcome = reconcile(&snapshot, Mode::Local, false, never).unwrap();
+    assert_eq!(outcome.publication, Some(WriteOutcome::Written));
+    lock_bytes(root)
 }
 
 fn capture(root: &Path) -> Snapshot {
@@ -458,10 +475,87 @@ fn a_resolved_tool_that_does_not_match_its_request_is_refused() {
 }
 
 #[test]
+fn an_entry_from_a_declared_repository_registry_is_reused() {
+    let tools = json!({"acme-cli": "1.4.2",
+        "deploy": {"version": "2.0.0", "from": "acme:deploy-tool"}});
+    let root = repo(&tools);
+    declare(root.path(), json!([acme(), "aqua"]), &tools);
+    assert_eq!(capture(root.path()).registries().len(), 2);
+    let sources = [
+        ("acme-cli", "acme:acme-cli"),
+        ("deploy", "acme:deploy-tool"),
+    ];
+    let bytes = lock_resolved(root.path(), &sources);
+    let lock: Value = serde_json::from_slice(&bytes).unwrap();
+    for (id, source) in sources {
+        assert_eq!(lock["tools"][id]["options"], json!({"source": [source]}));
+    }
+
+    // Neither the order of the registries nor a new one in front moves a
+    // tool that is already locked.
+    for registries in [
+        json!([acme(), "aqua"]),
+        json!(["aqua", acme()]),
+        json!([acme()]),
+        json!([{"name": "first", "path": "first.yaml"}, acme(), "aqua"]),
+    ] {
+        declare(root.path(), registries.clone(), &tools);
+        let snapshot = capture(root.path());
+        assert_eq!(snapshot.catalog_requests().count(), 0, "{registries}");
+        assert!(snapshot.matches_additional(snapshot.previous_lock().unwrap()));
+        for mode in [Mode::Local, Mode::Frozen, Mode::NoLock] {
+            reconcile(&snapshot, mode, false, never).unwrap();
+        }
+        assert_eq!(lock_bytes(root.path()), bytes, "{registries}");
+    }
+}
+
+#[test]
+fn an_entry_whose_registry_is_no_longer_declared_is_unresolved_and_drift_when_frozen() {
+    let tools = json!({"acme-cli": "1.4.2", "jq": "1.8.2"});
+    let root = repo(&tools);
+    declare(root.path(), json!([acme(), "aqua"]), &tools);
+    let bytes = lock_resolved(root.path(), &[("acme-cli", "acme:acme-cli"), ("jq", JQ)]);
+
+    let renamed = json!([{"name": "other", "path": "tools/registry.yaml"}, "aqua"]);
+    for (registries, dropped) in [
+        (json!([acme()]), vec!["jq"]),
+        (json!(["aqua"]), vec!["acme-cli"]),
+        (renamed, vec!["acme-cli"]),
+        (json!([]), vec!["acme-cli", "jq"]),
+    ] {
+        declare(root.path(), registries.clone(), &tools);
+        let snapshot = capture(root.path());
+        let unresolved: Vec<_> = snapshot.catalog_requests().map(|r| &*r.id).collect();
+        assert_eq!(unresolved, dropped, "{registries}");
+        let lock = snapshot.previous_lock().unwrap();
+        assert_eq!(snapshot.additional_drift(lock), ids(&dropped));
+        for mode in [Mode::Frozen, Mode::NoLock] {
+            let error = reconcile(&snapshot, mode, false, never).unwrap_err();
+            assert!(
+                matches!(&error, Error::Drift(drift) if drift == &ids(&dropped)),
+                "{registries} {mode:?}: {error:?}"
+            );
+            assert!(error.to_string().contains(dropped[0]), "{error}");
+        }
+        assert!(matches!(
+            reconcile(&snapshot, Mode::Local, false, never),
+            Err(Error::Unresolved(unresolved)) if unresolved == ids(&dropped)
+        ));
+        assert_eq!(lock_bytes(root.path()), bytes, "{registries}");
+    }
+
+    // Without `setup.registries`, only the built-in registry is declared.
+    config(root.path(), "turbo.json", &tools);
+    let unresolved = requests(&capture(root.path()));
+    assert_eq!(unresolved.keys().collect::<Vec<_>>(), ["acme-cli"]);
+}
+
+#[test]
 fn a_resolved_tool_from_an_undeclared_registry_is_refused() {
     let tools = json!({"jq": "1.8.2"});
     let root = repo(&tools);
-    declare(root.path(), json!([]), &tools);
+    declare(root.path(), json!([acme()]), &tools);
     let snapshot = capture(root.path());
     let jq = &requests(&snapshot)["jq"];
     let supply = |source: &str| {
@@ -470,4 +564,5 @@ fn a_resolved_tool_from_an_undeclared_registry_is_refused() {
     };
     assert!(matches!(supply(JQ), Err(StorageError::Lock(_))));
     assert!(matches!(supply("other:jq"), Err(StorageError::Lock(_))));
+    assert!(supply("acme:jq").is_ok());
 }

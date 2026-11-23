@@ -1,8 +1,8 @@
 use std::{
     collections::BTreeMap,
-    fs::{File, OpenOptions},
+    fs::{self, File, OpenOptions},
     io::{self, Read},
-    path::Path,
+    path::{Component, Path},
 };
 
 use super::{Declaration, Error, Lock, MAX_LOCK_BYTES, declarations};
@@ -179,9 +179,38 @@ fn read_optional(root: &Path, name: &str, limit: usize) -> io::Result<Option<Vec
     let mut bytes = Vec::new();
     file.take(limit as u64 + 1).read_to_end(&mut bytes)?;
     if bytes.len() > limit {
-        return Err(io::Error::other("setup input exceeds byte limit"));
+        return Err(io::Error::new(
+            io::ErrorKind::FileTooLarge,
+            "setup input exceeds byte limit",
+        ));
     }
     Ok(Some(bytes))
+}
+
+/// Reads a file below `root` by a relative path of plain names. Every
+/// directory on the way must be a directory itself, not a link to one, and the
+/// file is opened as `read_optional` opens it, so in a stable repository the
+/// read stays inside `root`.
+fn read_nested(root: &Path, path: &str, limit: usize) -> io::Result<Option<Vec<u8>>> {
+    let path = Path::new(path);
+    let plain = |part: Component<'_>| matches!(part, Component::Normal(_));
+    let (Some(name), true) = (
+        path.file_name().and_then(|name| name.to_str()),
+        path.components().all(plain),
+    ) else {
+        return Err(io::Error::other("setup input is not a path below the root"));
+    };
+    let mut directory = root.to_path_buf();
+    for part in path.parent().into_iter().flat_map(Path::components) {
+        directory.push(part);
+        match fs::symlink_metadata(&directory) {
+            Ok(metadata) if metadata.is_dir() => {}
+            Ok(_) => return Err(io::Error::other("setup input is not below a directory")),
+            Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(None),
+            Err(error) => return Err(error),
+        }
+    }
+    read_optional(&directory, name, limit)
 }
 
 /// Read only. No lock sidecar, resolver, release metadata, or installation.

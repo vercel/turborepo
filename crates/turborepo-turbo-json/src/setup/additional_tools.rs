@@ -509,7 +509,7 @@ fn artifact_url(value: &str) -> bool {
 
 /// The conservative root-relative ASCII path rule that `turbo.lock` applies,
 /// checked here so invalid declarations point at their source.
-fn portable_path(value: &str) -> bool {
+pub(super) fn portable_path(value: &str) -> bool {
     if value.is_empty() || value.len() > 1024 || value.split('/').count() > 32 {
         return false;
     }
