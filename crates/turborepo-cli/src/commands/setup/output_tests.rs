@@ -52,6 +52,7 @@ fn tools() -> ToolReport {
         notes: vec![Note::Offline],
         lock_written: Some(LockReminder::Updated),
         downloaded_bytes: 0,
+        resolved: Vec::new(),
     }
 }
 
@@ -128,6 +129,69 @@ fn offline_outcomes_read_as_reused_and_verified() {
     assert_eq!(
         render_tools(&report(ToolOutcome::Reverified), style(false), None),
         "✓ Verified  node 24.0.0\n\n"
+    );
+}
+
+#[test]
+fn resolved_catalog_tools_get_one_line_and_a_note_per_tool_left_out_somewhere() {
+    let resolved = |id: &str, version: &str, source: &str, left_out: &[(&str, &str)]| {
+        let left_out = left_out.iter();
+        ResolvedTool {
+            id: id.into(),
+            version: version.into(),
+            source: source.into(),
+            release: format!("v{version}"),
+            left_out: left_out
+                .map(|(platform, reason)| LeftOut {
+                    platform: (*platform).to_owned(),
+                    reason: (*reason).to_owned(),
+                })
+                .collect(),
+        }
+    };
+    let report = ToolReport {
+        rows: vec![
+            row("jq", "1.8.2", ToolOutcome::Installed),
+            row("node", "24.0.0", ToolOutcome::Reused),
+            row("rg", "15.2.0", ToolOutcome::Installed),
+        ],
+        resolved: vec![
+            resolved("jq", "1.8.2", "aqua:jqlang/jq", &[]),
+            resolved(
+                "rg",
+                "15.2.0",
+                "aqua:BurntSushi/ripgrep",
+                &[
+                    (
+                        "linux-arm64-gnu",
+                        "the release has no download for this platform",
+                    ),
+                    (
+                        "windows-x64",
+                        "its 7z download is a format that turbo setup cannot install yet",
+                    ),
+                ],
+            ),
+        ],
+        notes: vec![Note::Offline],
+        ..ToolReport::default()
+    };
+    assert_eq!(
+        render_tools(&report, style(false), None),
+        "✓ Resolved   jq 1.8.2 (jqlang/jq), rg 15.2.0 (BurntSushi/ripgrep)\n✓ Installed  jq \
+         1.8.2, rg 15.2.0\n✓ Reused     node 24.0.0\nrg 15.2.0 is not locked for linux-arm64-gnu \
+         (the release has no download for this platform), windows-x64 (its 7z download is a \
+         format that turbo setup cannot install yet)\nOffline: used only tools already in the \
+         tool store.\n\n"
+    );
+    let unresolved = ToolReport {
+        resolved: Vec::new(),
+        ..report
+    };
+    assert_eq!(
+        render_tools(&unresolved, style(false), None),
+        "✓ Installed  jq 1.8.2, rg 15.2.0\n✓ Reused     node 24.0.0\nOffline: used only tools \
+         already in the tool store.\n\n"
     );
 }
 

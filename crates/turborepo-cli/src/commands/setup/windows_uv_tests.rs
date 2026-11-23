@@ -106,6 +106,7 @@ impl Repo {
                     python: turborepo_setup::python_resolution::PythonTransport::loopback_http_for_tests(origin).unwrap(),
                     go: turborepo_setup::go_resolution::GoTransport::loopback_http_for_tests(origin).unwrap(),
                     bun: turborepo_setup::bun_provision::BunTransport::loopback_http_for_tests(origin).unwrap(),
+                    catalog: None,
                     artifact: None,
                 }),
                 turborepo_setup::git::FakeGit::shared(),

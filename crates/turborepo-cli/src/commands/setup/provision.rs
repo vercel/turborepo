@@ -44,6 +44,8 @@ pub(super) struct Transports {
     /// A fixture's tool store in place of the user's.
     #[cfg(any(test, feature = "test-support"))]
     pub tool_store: Option<std::path::PathBuf>,
+    #[cfg(any(test, feature = "test-support"))]
+    pub catalog: Option<super::catalog::Fixture>,
     /// A mirror or fixture; otherwise built from the locked artifact origins.
     pub artifact: Option<ArtifactTransport>,
     pub go: GoTransport,
@@ -95,6 +97,8 @@ impl Transports {
             python,
             #[cfg(any(test, feature = "test-support"))]
             tool_store: None,
+            #[cfg(any(test, feature = "test-support"))]
+            catalog: None,
             // Otherwise built from the locked artifact origins.
             artifact: mirrors
                 .artifact
@@ -104,6 +108,13 @@ impl Transports {
             go,
             bun,
         })
+    }
+
+    pub(super) fn catalog(&mut self) -> Option<super::catalog::Fixture> {
+        #[cfg(any(test, feature = "test-support"))]
+        return self.catalog.take();
+        #[cfg(not(any(test, feature = "test-support")))]
+        None
     }
 
     /// The fixture's tool store, if any.
@@ -663,6 +674,7 @@ pub(super) fn run(
     };
     let mut trust = None;
     let mut transports = transports;
+    let mut resolved = Vec::new();
     let snapshot = if write {
         use turborepo_setup::lock::{WriteOutcome, reconcile};
         let trust = trust.insert(open_trust()?);
@@ -676,6 +688,10 @@ pub(super) fn run(
         check()?;
         snapshot.ensure_current()?;
         let policy = preflight()?;
+        let fixture = transports.as_mut().and_then(Transports::catalog);
+        let (snapshot, tools) =
+            super::catalog::resolve(snapshot, request, fixture, &policy, lock_status)?;
+        resolved = tools;
         let sources = transports
             .take()
             .map(Ok)
@@ -1060,5 +1076,6 @@ pub(super) fn run(
     }
     report.previous = previous;
     report.lock_written = lock_written;
+    report.resolved = resolved;
     Ok(report)
 }

@@ -147,7 +147,14 @@ pub(super) fn failure(error: &Error) -> SetupFailure {
         | Error::Go(_)
         | Error::Bun(_)
         | Error::Artifact(_) => SetupFailure::Download,
-        Error::AdditionalToolDrift(_) => SetupFailure::LockStale,
+        Error::AdditionalToolDrift(_) | Error::CatalogOffline(_) => SetupFailure::LockStale,
+        Error::Catalog(error) => {
+            use turborepo_setup_catalog::Error as Catalog;
+            match error {
+                Catalog::Download { .. } | Catalog::Transport(_) => SetupFailure::Download,
+                _ => SetupFailure::Resolution,
+            }
+        }
         Error::Mirror(_) => SetupFailure::Request,
         Error::Native(error) => native_failure(error),
         Error::Ephemeral(error) => {

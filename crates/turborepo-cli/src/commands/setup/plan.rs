@@ -13,7 +13,11 @@ use turborepo_setup::{
 use turborepo_tool_install::{Export, UserStore};
 
 use super::{
-    Error, LockMode, SetupRequest, check, dependencies::Dependencies, provision, root::Discovery,
+    Error, LockMode, SetupRequest, check,
+    dependencies::Dependencies,
+    output::{LeftOut, ResolvedTool},
+    provision,
+    root::Discovery,
 };
 
 /// A missing lock, local declaration drift or `--update-lock` proposes the
@@ -25,12 +29,15 @@ pub(super) fn report(
     dependencies: &Dependencies,
     transports: Option<provision::Transports>,
     preflight: impl Fn() -> Result<ToolDownloadPolicy, Error>,
+    status: &dyn Fn(Option<&str>),
 ) -> Result<String, Error> {
     let proposed = request.update_lock
         || match sources.previous_lock() {
             None => true,
             Some(lock) => {
-                request.lock == LockMode::Write && !lock.matches_native(sources.declarations())?
+                request.lock == LockMode::Write
+                    && (!lock.matches_native(sources.declarations())?
+                        || !sources.matches_additional(lock))
             }
         };
     if request.force || !proposed {
@@ -53,7 +60,21 @@ pub(super) fn report(
         dependencies,
         transports,
         preflight,
+        status,
     )
+}
+
+fn resolved(tool: &ResolvedTool) -> Vec<String> {
+    let mut lines = vec![format!(
+        "{} {}: {} (release {})",
+        tool.id, tool.version, tool.source, tool.release
+    )];
+    lines.extend(
+        tool.left_out
+            .iter()
+            .map(|LeftOut { platform, reason }| format!("  Not locked for {platform}: {reason}")),
+    );
+    lines
 }
 
 /// A tools-only locked plan, for direct tests.
@@ -152,8 +173,9 @@ fn propose(
     sources: Snapshot,
     request: &SetupRequest,
     dependencies: &Dependencies,
-    transports: Option<provision::Transports>,
+    mut transports: Option<provision::Transports>,
     preflight: impl Fn() -> Result<ToolDownloadPolicy, Error>,
+    status: &dyn Fn(Option<&str>),
 ) -> Result<String, Error> {
     let platform = provision::platform()?;
     let root = discovery.snapshot_root()?.as_std_path();
@@ -169,6 +191,8 @@ fn propose(
     };
     check()?;
     let policy = preflight()?;
+    let fixture = transports.as_mut().and_then(provision::Transports::catalog);
+    let (sources, catalog) = super::catalog::resolve(sources, request, fixture, &policy, status)?;
     let upstream = transports.map(Ok).unwrap_or_else(|| {
         provision::Transports::official(&policy, discovery.policy().mirrors())
     })?;
@@ -240,6 +264,11 @@ fn propose(
         &mut lines,
         "Dependencies",
         [dependencies.plan(root, &outcome.lock)?],
+    );
+    heading(
+        &mut lines,
+        "Resolved from the tool catalog",
+        catalog.iter().map(resolved),
     );
     recheck(discovery, &sources, &preflight)?;
     Ok(lines.join("\n"))
