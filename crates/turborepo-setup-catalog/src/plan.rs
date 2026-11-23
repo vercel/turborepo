@@ -5,9 +5,7 @@ use turborepo_setup::lock::{
     self, Platform,
     additional::{CatalogRequest, TARGETS, lock_platform},
 };
-use turborepo_turbo_json::{
-    ArtifactFormat, ArtifactPlatform, BUILTIN_REGISTRY, derived_artifact_violation,
-};
+use turborepo_turbo_json::{ArtifactFormat, ArtifactPlatform, derived_artifact_violation};
 
 use super::{Catalog, Error};
 
@@ -93,16 +91,8 @@ impl Catalog {
     /// The downloads the catalog describes for `request`. No I/O beyond
     /// reading the bundled recipes.
     pub fn plan(&self, request: &CatalogRequest) -> Result<Plan, Error> {
-        let package = self.package(request)?;
-        let recipe = self
-            .registry()?
-            .package(&package)
-            .map_err(|_| Error::UnknownPackage {
-                tool: request.id.clone(),
-                package: package.clone(),
-            })?;
-        let source = format!("{BUILTIN_REGISTRY}:{package}");
-        Ok(Plan::of(&recipe, source, &request.version))
+        let (source, recipe) = self.entry(request)?;
+        Ok(Plan::of(recipe, source, &request.version))
     }
 }
 

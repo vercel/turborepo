@@ -13,20 +13,20 @@ pub(super) fn request(id: &str, version: &str, from: Option<&str>) -> CatalogReq
 fn every_bundled_name_is_a_tool_id_for_a_bundled_recipe() {
     use turborepo_turbo_json::{RawRootTurboJson, RawTurboJson};
 
-    let catalog = Catalog::bundled();
-    assert!(catalog.names.len() > 500, "{}", catalog.names.len());
-    let registry = catalog.registry().unwrap();
+    let registry = Registry::aqua();
+    let names = registry.names();
+    assert!(names.len() > 500, "{}", names.len());
+    let recipes = registry.recipes().unwrap();
     let mut missing = Vec::new();
-    for (name, package) in &catalog.names {
+    for (name, package) in names {
         let source = format!("aqua:{package}");
-        if registry_package(&source).is_none() || registry.package(package).is_err() {
+        if registry_package(&source).is_none() || recipes.recipe(package).is_none() {
             missing.push(format!("{name}\t{package}"));
         }
     }
     assert!(missing.is_empty(), "{}", missing.join("\n"));
 
-    let rejected: Vec<_> = catalog
-        .names
+    let rejected: Vec<_> = names
         .keys()
         .filter_map(|name| {
             let config = serde_json::json!({
@@ -44,7 +44,7 @@ fn every_bundled_name_is_a_tool_id_for_a_bundled_recipe() {
 fn every_bundled_recipe_plans_without_panicking_into_artifacts_the_lock_accepts() {
     use turborepo_setup::lock::{Artifact, Document, Lock, SCHEMA_VERSION};
 
-    let yaml = Catalog::bundled().yaml().unwrap();
+    let yaml = String::from_utf8(registry::bundled(1 << 30).unwrap()).unwrap();
     // aqua-registry's template lexer slices by character index, so a tag with
     // a non-ASCII character can panic it. Planning one version renders only
     // that version's templates. This covers the ones it does not reach.
@@ -52,20 +52,12 @@ fn every_bundled_recipe_plans_without_panicking_into_artifacts_the_lock_accepts(
         let tag = tag.split("}}").next().unwrap();
         assert!(tag.is_ascii(), "non-ASCII template tag {{{{{tag}}}}}");
     }
-    let registry = aqua_registry::RegistryYaml::from_yaml(&yaml).unwrap();
-    assert!(
-        registry.packages.len() > 2000,
-        "{}",
-        registry.packages.len()
-    );
+    let registry = Registry::aqua();
+    let recipes = registry.recipes().unwrap();
+    assert!(recipes.all().count() > 2000, "{}", recipes.all().count());
     let request = request("tool", "1.2.3", None);
     let mut installable = 0;
-    for row in &registry.packages {
-        let recipe = &row.package;
-        let id = match &recipe.name {
-            Some(name) => name.clone(),
-            None => format!("{}/{}", recipe.repo_owner, recipe.repo_name),
-        };
+    for (id, recipe) in recipes.all() {
         eprintln!("{id}");
         let plan = Plan::of(recipe, "aqua:example/tool".into(), &request.version);
         for release in plan.releases {
@@ -102,6 +94,33 @@ fn every_bundled_recipe_plans_without_panicking_into_artifacts_the_lock_accepts(
         }
     }
     assert!(installable > 2000, "{installable}");
+}
+
+#[test]
+fn bundled_lookups_answer_as_the_recipe_reader_answers() {
+    use aqua_registry::{AquaPackage, ParsedRegistry, RegistryYaml};
+
+    let yaml = String::from_utf8(registry::bundled(1 << 30).unwrap()).unwrap();
+    let reader = ParsedRegistry::parse_yaml(&yaml).unwrap();
+    let registry = Registry::aqua();
+    let recipes = registry.recipes().unwrap();
+    let identity = |recipe: &AquaPackage| {
+        let repository = (recipe.repo_owner.clone(), recipe.repo_name.clone());
+        (recipe.name.clone(), repository, recipe.path.clone())
+    };
+    let mut asked = 0;
+    for row in RegistryYaml::from_yaml(&yaml).unwrap().packages {
+        let recipe = &row.package;
+        let repository = format!("{}/{}", recipe.repo_owner, recipe.repo_name);
+        let ids = [recipe.name.clone(), Some(repository), recipe.path.clone()];
+        for id in ids.into_iter().flatten().chain(row.aliases) {
+            let expected = reader.package(&id).ok().as_ref().map(identity);
+            let found = recipes.recipe(&id).map(|(_, recipe)| identity(recipe));
+            assert_eq!(found, expected, "{id}");
+            asked += 1;
+        }
+    }
+    assert!(asked > 2500, "{asked}");
 }
 
 #[test]
@@ -163,4 +182,13 @@ fn unknown_names_and_packages_say_what_to_write() {
         message.contains("no entry \"example/no-such-entry\""),
         "{message}"
     );
+}
+
+#[test]
+fn a_lookup_by_name_records_the_package_that_answered() {
+    // A short name of the built-in registry can stand for an alias.
+    let names = "old\telsewhere/old-name\n";
+    let built_in = Catalog::for_tests(names, plan::tests::REGISTRY);
+    let moved = built_in.plan(&request("old", "1.0.0", None)).unwrap();
+    assert_eq!(moved.source, "aqua:example/moved");
 }
