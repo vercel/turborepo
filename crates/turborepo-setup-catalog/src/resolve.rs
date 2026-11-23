@@ -102,6 +102,7 @@ impl CatalogTransport {
             }
             ArtifactFormat::Tar => turborepo_archive::Format::Tar,
             ArtifactFormat::TarGz => turborepo_archive::Format::TarGz,
+            ArtifactFormat::TarXz => turborepo_archive::Format::TarXz,
             ArtifactFormat::Zip => turborepo_archive::Format::Zip,
         };
         let unpack = |error: turborepo_archive::Error| Unavailable::Archive(error.to_string());

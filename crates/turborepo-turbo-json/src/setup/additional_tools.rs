@@ -65,6 +65,8 @@ pub enum ArtifactFormat {
     Tar,
     #[serde(rename = "tar-gz")]
     TarGz,
+    #[serde(rename = "tar-xz")]
+    TarXz,
     #[serde(rename = "zip")]
     Zip,
 }

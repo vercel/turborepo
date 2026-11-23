@@ -123,6 +123,33 @@ fn bundled_recipes_plan_real_tools() {
         linux.executables,
         BTreeMap::from([("jq".to_owned(), "jq".to_owned())])
     );
+
+    let zig = catalog.plan(&request("zig", "0.17.0", None)).unwrap();
+    assert_eq!(zig.source, "aqua:ziglang/zig");
+    let zig_release = zig.releases.iter().find(|r| r.name == "0.17.0").unwrap();
+    let zig_linux = zig_release.platforms[&turborepo_setup::lock::Platform::LinuxX64Gnu]
+        .as_ref()
+        .unwrap();
+    assert_eq!(
+        zig_linux.url,
+        "https://ziglang.org/download/0.17.0/zig-x86_64-linux-0.17.0.tar.xz"
+    );
+    assert_eq!(
+        zig_linux.format,
+        turborepo_turbo_json::ArtifactFormat::TarXz
+    );
+    assert_eq!(
+        zig_linux.executables,
+        BTreeMap::from([("zig".to_owned(), "zig-x86_64-linux-0.17.0/zig".to_owned())])
+    );
+    let zig_win = zig_release.platforms[&turborepo_setup::lock::Platform::WindowsX64]
+        .as_ref()
+        .unwrap();
+    assert_eq!(
+        zig_win.url,
+        "https://ziglang.org/download/0.17.0/zig-x86_64-windows-0.17.0.zip"
+    );
+    assert_eq!(zig_win.format, turborepo_turbo_json::ArtifactFormat::Zip);
 }
 
 #[test]

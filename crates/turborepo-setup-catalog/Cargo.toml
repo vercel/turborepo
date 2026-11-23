@@ -25,6 +25,11 @@ turborepo-turbo-json = { workspace = true }
 url = { workspace = true }
 
 [dev-dependencies]
+lzma-rust2 = { version = "0.25.0", default-features = false, features = [
+  "std",
+  "xz",
+  "encoder",
+] }
 sha2 = { workspace = true }
 tar = { version = "0.4.45", default-features = false }
 tokio = { workspace = true, features = ["macros", "rt", "net", "io-util"] }

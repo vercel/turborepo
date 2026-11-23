@@ -137,10 +137,11 @@ pub(super) fn extract_zip(bytes: &[u8], tree: &mut Tree) -> Result<(), Error> {
         let attributes = entry.u32(38);
         let host = entry.u16(4) >> 8;
         // Unix-host entries take their type and mode from the high word. Some
-        // writers, including official Bun archives, also set DOS bit 0x4000,
+        // writers also set DOS bits 0x4000 (official Bun archives) or 0x8000
+        // (7-Zip's Unix-extension marker, as in official Zig Windows archives),
         // which extraction never applies. Official uv Windows zips set 0x2000
         // (not content indexed), a search-indexing hint that is never applied.
-        let dos = attributes & 0xffff & if host == 3 { !0x4000 } else { !0 };
+        let dos = attributes & 0xffff & if host == 3 { !0xc000 } else { !0 };
         if !matches!(host, 0 | 3) || dos & !0x2037 != 0 {
             // DOS reparse/volume/device attributes and unknown hosts are unsafe.
             return Err(Error::UnsupportedEntry);

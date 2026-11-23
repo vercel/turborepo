@@ -17,7 +17,7 @@ export type ArtifactPlatform =
   | "linux-arm64-musl"
   | "windows-x64"
   | "windows-arm64";
-export type ArtifactFormat = "binary" | "tar" | "tar-gz" | "zip";
+export type ArtifactFormat = "binary" | "tar" | "tar-gz" | "tar-xz" | "zip";
 /**
  * This is a relative Unix-style path (e.g. `./src/index.ts` or `src/index.ts`).  Absolute paths (e.g. `/tmp/foo`) are not valid.
  */
