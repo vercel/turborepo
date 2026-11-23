@@ -92,7 +92,8 @@
     // Preserve the all-features coverage of cargo-deny-action.
     "turborepo-crates#check:licenses": {
       "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/deny.toml"],
-      "command": ["cargo", "deny", "--all-features", "check", "licenses"]
+      "command": ["cargo", "deny", "--all-features", "check", "licenses"],
+      "tags": ["ci"]
     },
 
     // docs lint task runs fumadocs-mdx

@@ -68,6 +68,6 @@ jobs:
           save-if: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Check Rust quality
-        # Vercel CI runs the JavaScript, TOML, docs, and Rust format checks from `quality`.
+        # Vercel CI runs the JavaScript, TOML, docs, Rust format, and Rust license checks from `quality`.
         # Manually set TURBO_API to an empty string to override Hetzner env
-        run: TURBO_API= turbo run turborepo-crates#lint turborepo-crates#check:licenses --env-mode=strict
+        run: TURBO_API= turbo run turborepo-crates#lint --env-mode=strict
