@@ -1,5 +1,5 @@
 use turborepo_setup::{artifact_provision::ArtifactTransport, mirror::Mirror};
-use turborepo_setup_catalog::{Catalog, CatalogTransport};
+use turborepo_setup_catalog::{CatalogTransport, Registry};
 
 use super::*;
 
@@ -70,7 +70,7 @@ fn run_with(
     crate::cli::dispatch_setup(&args, |args, setup_args| {
         let mut transports = f.transports(u.origin());
         transports.catalog = Some(catalog::Fixture {
-            catalog: Catalog::for_tests(NAMES, REGISTRY),
+            aqua: Registry::aqua_for_tests(NAMES, REGISTRY),
             transport: CatalogTransport::loopback_http_for_tests(u.origin()).unwrap(),
         });
         configure(&mut transports);
