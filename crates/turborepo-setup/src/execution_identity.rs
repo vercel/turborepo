@@ -9,7 +9,7 @@ use serde::Serialize;
 use sha2::{Digest, Sha256};
 use turborepo_platform::{Architecture, OperatingSystem, Platform as HostPlatform};
 
-use crate::lock::{Artifact, Format, Installation, Lock, Platform};
+use crate::lock::{Artifact, Format, Installation, Lock, Platform, additional};
 
 pub const IDENTITY_DOMAIN: &str = "turborepo.setup.execution.v1";
 
@@ -257,7 +257,7 @@ impl ExecutionSnapshot {
                 SelectedTool {
                     adapter: tool.adapter.clone(),
                     version: tool.version.clone(),
-                    options: tool.options.clone(),
+                    options: semantic_options(tool),
                     installation,
                 },
             );
@@ -298,6 +298,14 @@ impl ExecutionSnapshot {
     pub fn fingerprint(&self) -> &str {
         &self.fingerprint
     }
+}
+
+fn semantic_options(tool: &crate::lock::Tool) -> BTreeMap<String, Vec<String>> {
+    let mut options = tool.options.clone();
+    if tool.adapter == additional::ADAPTER {
+        options.remove(additional::SOURCE);
+    }
+    options
 }
 
 #[derive(Serialize)]

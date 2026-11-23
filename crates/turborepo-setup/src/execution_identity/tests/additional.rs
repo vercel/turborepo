@@ -101,3 +101,23 @@ fn builtin_identity_is_unchanged_beside_additional_tools() {
         Err(Error::MissingArtifacts)
     ));
 }
+
+#[test]
+fn the_catalog_source_is_not_part_of_the_identity() {
+    let hand_declared = locked();
+    let catalog = |source: &str| {
+        let mut value = hand_declared.clone();
+        value["tools"]["protoc"]["options"] = json!({"source": [source]});
+        value
+    };
+    let (first, second) = (
+        select(&catalog("aqua:protocolbuffers/protobuf/protoc")),
+        select(&catalog("aqua:example/protoc")),
+    );
+    assert_eq!(first.fingerprint(), second.fingerprint());
+    assert_eq!(first.canonical_identity(), second.canonical_identity());
+    assert_eq!(first.fingerprint(), GOLDEN);
+    assert!(first.tools()["protoc"].options.is_empty());
+    let canonical = String::from_utf8_lossy(first.canonical_identity()).into_owned();
+    assert!(!canonical.contains("aqua"), "{canonical}");
+}

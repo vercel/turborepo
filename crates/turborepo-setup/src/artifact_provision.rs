@@ -17,7 +17,7 @@ use crate::{
     Preparation,
     lock::{
         self, Format, Installation, Lock, Platform,
-        additional::{ADAPTER, PART},
+        additional::{ADAPTER, PART, SOURCE},
     },
     mirror::Mirror,
     node_provision::move_tree,
@@ -26,6 +26,14 @@ use crate::{
 const MAX_DOWNLOAD_BYTES: usize = 256 * 1024 * 1024;
 const MAX_EXTRACTED_BYTES: usize = 512 * 1024 * 1024;
 const DOWNLOAD_TIMEOUT: Duration = Duration::from_secs(300);
+pub fn download_limits() -> Result<turborepo_download::Limits, turborepo_download::Error> {
+    turborepo_download::Limits::new(MAX_DOWNLOAD_BYTES, DOWNLOAD_TIMEOUT)
+}
+
+pub fn archive_limits() -> Result<turborepo_archive::Limits, turborepo_archive::Error> {
+    turborepo_archive::Limits::new(MAX_EXTRACTED_BYTES, 100_000, 4096, 64)
+}
+
 /// Bump when this adapter stages different bytes for the same [`Staged`].
 const STAGING_REVISION: u32 = 1;
 
@@ -40,6 +48,12 @@ pub enum Error {
          setup.additionalTools.{tool}.artifacts"
     )]
     MissingTarget { tool: String, platform: String },
+    #[error(
+        "additional tool {tool:?} has no download for {platform}: the tool catalog had no \
+         installable download for this platform when turbo.lock recorded the tool; run `turbo \
+         setup --update-lock` to resolve it again"
+    )]
+    MissingCatalogTarget { tool: String, platform: String },
     #[error(
         "additional tool installation is qualified for macOS, GNU Linux, and Windows x64 hosts \
          only"
@@ -183,19 +197,31 @@ impl ArtifactPlan {
         let Installation::Managed { artifacts } = &tool.installation else {
             return Err(invalid());
         };
-        let parts = artifacts
-            .get(&platform)
-            .ok_or_else(|| Error::MissingTarget {
-                tool: id.into(),
-                platform: spelling.clone(),
-            })?;
+        let parts = artifacts.get(&platform).ok_or_else(|| {
+            let (tool_id, platform) = (id.into(), spelling.clone());
+            if tool.options.contains_key(SOURCE) {
+                Error::MissingCatalogTarget {
+                    tool: tool_id,
+                    platform,
+                }
+            } else {
+                Error::MissingTarget {
+                    tool: tool_id,
+                    platform,
+                }
+            }
+        })?;
         let artifact = parts
             .get(PART)
             .filter(|_| parts.len() == 1)
             .ok_or_else(invalid)?;
         let binary = artifact.format == Format::Binary;
         let url = Url::parse(&artifact.url).map_err(|_| invalid())?;
-        if !tool.options.is_empty()
+        let options = match tool.options.get(SOURCE).map(Vec::as_slice) {
+            None => tool.options.is_empty(),
+            Some(sources) => tool.options.len() == 1 && sources.len() == 1,
+        };
+        if !options
             || artifacts.contains_key(&Platform::Any)
             || artifact.destination.is_some()
             || (binary && artifact.root_prefix.is_some())
@@ -329,8 +355,7 @@ impl ArtifactPlan {
             .values()
             .map(String::as_str)
             .collect();
-        let limits = turborepo_archive::Limits::new(MAX_EXTRACTED_BYTES, 100_000, 4096, 64)
-            .map_err(unpack)?;
+        let limits = archive_limits().map_err(unpack)?;
         let layout = Layout {
             root,
             required_files: &required,
@@ -351,8 +376,7 @@ impl ArtifactPlan {
         };
         let sha256 = (self.artifact).sha256_or(Error::InvalidLock(self.tool.id.clone()))?;
         let digest = ExpectedSha256::from_hex(sha256).map_err(download)?;
-        let limits = turborepo_download::Limits::new(MAX_DOWNLOAD_BYTES, DOWNLOAD_TIMEOUT)
-            .map_err(download)?;
+        let limits = download_limits().map_err(download)?;
         transport
             .client
             .download_verified(&url, digest, limits)

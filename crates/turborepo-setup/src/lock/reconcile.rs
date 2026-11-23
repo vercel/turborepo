@@ -33,6 +33,11 @@ pub enum Error {
     Missing,
     #[error("tool declarations changed for {0:?}; run `turbo setup` locally and commit turbo.lock")]
     Drift(BTreeSet<String>),
+    #[error(
+        "setup.additionalTools {0:?} are not in turbo.lock and were not resolved from the tool \
+         catalog; run `turbo setup` locally and commit turbo.lock"
+    )]
+    Unresolved(BTreeSet<String>),
     #[error("resolver changed unaffected locked selection {0}")]
     Unaffected(String),
     #[error("native resolution failed: {0}")]
@@ -191,7 +196,11 @@ fn coordinate(
     snapshot.ensure_current()?;
     let current = snapshot.declarations();
     let additional = snapshot.additional_tools();
-    let mut changed = BTreeSet::new();
+    let unresolved: BTreeSet<_> = snapshot
+        .catalog_requests()
+        .map(|request| request.id.clone())
+        .collect();
+    let mut changed = unresolved.clone();
     for id in current
         .keys()
         .chain(additional.keys())
@@ -221,6 +230,9 @@ fn coordinate(
         && (mode == Mode::Frozen || (mode == Mode::NoLock && snapshot.previous_lock().is_some()))
     {
         return Err(Error::Drift(changed));
+    }
+    if !unresolved.is_empty() {
+        return Err(Error::Unresolved(unresolved));
     }
     let version_ids: BTreeSet<_> = current
         .keys()

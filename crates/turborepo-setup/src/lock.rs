@@ -133,7 +133,7 @@ impl Platform {
         Self::WindowsX64,
         Self::WindowsArm64,
     ];
-    fn windows(self) -> bool {
+    pub fn windows(self) -> bool {
         matches!(self, Self::WindowsX64 | Self::WindowsArm64)
     }
 }
@@ -304,6 +304,16 @@ impl Lock {
                 return Err(Error::Invalid("too many semantic options"));
             }
             for (key, values) in &tool.options {
+                if tool.adapter == additional::ADAPTER && key == additional::SOURCE {
+                    if !matches!(values.as_slice(), [source]
+                        if turborepo_turbo_json::catalog_package(source).is_some())
+                    {
+                        return Err(Error::Invalid(
+                            "an additional tool's source must be one aqua catalog package",
+                        ));
+                    }
+                    continue;
+                }
                 if !identifier(key)
                     || values.is_empty()
                     || values.len() > MAX_PARTS
@@ -432,7 +442,7 @@ fn declarations(values: &[Declaration]) -> Result<(), Error> {
     }
     Ok(())
 }
-fn validate_source(source: &str) -> Result<(), Error> {
+pub fn validate_source(source: &str) -> Result<(), Error> {
     // Never echo source metadata in diagnostics. Query parameters can carry
     // secrets.
     let authority = source
@@ -471,7 +481,7 @@ fn lowercase_hex(digest: &str, length: usize) -> bool {
             .bytes()
             .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
 }
-fn validate_artifact(value: &Artifact) -> Result<(), Error> {
+pub fn validate_artifact(value: &Artifact) -> Result<(), Error> {
     validate_source(&value.url)?;
     match value.digest() {
         Some(ArtifactDigest::Sha256(digest)) => validate_sha256(digest)?,
