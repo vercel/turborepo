@@ -6,17 +6,18 @@
   "scripts": {
     "build": "tsup",
     "dev": "tsup --watch",
-    "clean": "rm -rf dist"
+    "clean": "rm -rf dist",
+    "check-types": "tsc --noEmit"
   },
   "devDependencies": {
     "@repo/typescript-config": "*",
-    "@types/minimatch": "^6.0.0",
-    "@types/react": "~19.3.0",
-    "tsup": "^8.0.1",
-    "typescript": "6.0.3"
+    "@types/react": "19.3.0",
+    "@typescript/native": "npm:typescript@7.0.2",
+    "tsup": "9.0.0",
+    "typescript": "npm:@typescript/typescript6@6.0.2"
   },
   "dependencies": {
-    "react": "19.3.0",
-    "react-native": "0.88.0"
+    "react": "19.3.1",
+    "react-native": "0.88.1"
   }
 }

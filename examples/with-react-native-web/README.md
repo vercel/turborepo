@@ -29,4 +29,17 @@ This Turborepo has some additional tools already setup for you:
 
 - [Expo](https://docs.expo.dev/) for native development
 - [TypeScript](https://www.typescriptlang.org/) for static type checking
+- [ESLint](https://eslint.org/) for code linting
 - [Prettier](https://prettier.io) for code formatting
+
+### TypeScript 7
+
+Type checking (`yarn check-types`) runs on the native TypeScript 7 compiler, installed as `@typescript/native`. TypeScript 7.0 does not ship a compiler API yet, so `typescript` is aliased to [`@typescript/typescript6`](https://devblogs.microsoft.com/typescript/announcing-typescript-7-0/#running-side-by-side-with-typescript-6.0) for tools that still need it, such as Next.js, typescript-eslint, and tsup.
+
+## Useful commands
+
+- `yarn dev` - start the Next.js and Expo development servers
+- `yarn build` - build all apps and packages
+- `yarn lint` - lint all apps and packages
+- `yarn check-types` - type check all apps and packages
+- `yarn format` - format all files with Prettier

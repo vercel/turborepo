@@ -12,8 +12,6 @@ export default defineConfig((options: Options) => ({
   external: ["react"],
   dts: {
     compilerOptions: {
-      // tsup injects the deprecated `baseUrl` option, which TypeScript 6 rejects
-      ignoreDeprecations: "6.0",
       skipLibCheck: true,
       types: [],
     },
