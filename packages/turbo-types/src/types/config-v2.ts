@@ -631,12 +631,29 @@ export interface SetupMirrors {
   rust?: string;
 }
 
-export interface AdditionalTool {
+/**
+ * A tool that `turbo setup` installs. A string is the exact version of a tool
+ * in the bundled catalog, looked up by its tool ID.
+ */
+export type AdditionalTool = string | AdditionalToolDeclaration;
+
+export interface AdditionalToolDeclaration {
   /** The exact version of the tool. Ranges and channels are not allowed. */
   version: string;
 
-  /** Artifacts keyed by platform. Platforms without an artifact are unsupported. */
-  artifacts: Partial<Record<ArtifactPlatform, AdditionalToolArtifact>>;
+  /**
+   * The bundled catalog entry that provides the downloads, as `aqua:` followed
+   * by a package ID, such as `aqua:jj-vcs/jj`. Without `from` and `artifacts`,
+   * the tool ID is looked up in the catalog's name list. Not allowed with
+   * `artifacts`.
+   */
+  from?: string;
+
+  /**
+   * Artifacts keyed by platform. Platforms without an artifact are
+   * unsupported. Not allowed with `from`.
+   */
+  artifacts?: Partial<Record<ArtifactPlatform, AdditionalToolArtifact>>;
 }
 
 export interface AdditionalToolArtifact {

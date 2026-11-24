@@ -65,6 +65,49 @@ pub(super) struct ToolReport {
     /// Set when this run wrote turbo.lock.
     pub lock_written: Option<LockReminder>,
     pub downloaded_bytes: u64,
+    pub resolved: Vec<ResolvedTool>,
+}
+
+#[derive(Debug)]
+pub(super) struct ResolvedTool {
+    pub id: String,
+    pub version: String,
+    pub source: String,
+    pub release: String,
+    pub left_out: Vec<LeftOut>,
+}
+
+#[derive(Debug)]
+pub(super) struct LeftOut {
+    pub platform: String,
+    pub reason: String,
+}
+
+impl ResolvedTool {
+    fn item(&self) -> String {
+        let package = self
+            .source
+            .split_once(':')
+            .map_or(&*self.source, |(_, p)| p);
+        format!("{} {} ({package})", self.id, self.version)
+    }
+
+    pub(super) fn left_out_note(&self) -> Option<String> {
+        if self.left_out.is_empty() {
+            return None;
+        }
+        let platforms: Vec<_> = self
+            .left_out
+            .iter()
+            .map(|LeftOut { platform, reason }| format!("{platform} ({reason})"))
+            .collect();
+        Some(format!(
+            "{} {} is not locked for {}",
+            self.id,
+            self.version,
+            platforms.join(", ")
+        ))
+    }
 }
 
 impl ToolReport {
@@ -306,21 +349,34 @@ fn wrap(items: &[String], indent: usize, width: Option<usize>) -> String {
     text
 }
 
-/// One `✓ Label  tools` line per outcome, then notes, then a blank line.
-/// `width` is the terminal's, when stdout is one.
+const RESOLVED: &str = "Resolved";
+
+/// One `✓ Label  tools` line for what the catalog resolved and one per
+/// outcome, then notes, then a blank line. `width` is the terminal's, when
+/// stdout is one.
 pub(super) fn render_tools(report: &ToolReport, style: Style, width: Option<usize>) -> String {
     let lines = tool_lines(report);
-    let label_width = lines.keys().map(|change| change.label().len()).max();
-    let label_width = label_width.unwrap_or(0);
+    let resolved: Vec<_> = report.resolved.iter().map(ResolvedTool::item).collect();
+    let labels = lines.keys().map(|change| change.label());
+    let labels = labels.chain((!resolved.is_empty()).then_some(RESOLVED));
+    let label_width = labels.map(str::len).max().unwrap_or(0);
     let check = style.paint(&BOLD_GREEN, "✓");
     let mut text = String::new();
-    for (change, items) in &lines {
+    let resolved = (!resolved.is_empty()).then_some((RESOLVED, &resolved));
+    let outcomes = lines.iter().map(|(change, items)| (change.label(), items));
+    for (label, items) in resolved.into_iter().chain(outcomes) {
         let _ = writeln!(
             text,
-            "{check} {:<label_width$}  {}",
-            change.label(),
+            "{check} {label:<label_width$}  {}",
             wrap(items, 2 + label_width + 2, width)
         );
+    }
+    for note in report
+        .resolved
+        .iter()
+        .filter_map(ResolvedTool::left_out_note)
+    {
+        let _ = writeln!(text, "{}", style.paint(&GREY, &note));
     }
     for note in &report.notes {
         for line in render_note(note).lines() {

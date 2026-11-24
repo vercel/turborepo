@@ -54,6 +54,10 @@ expression: r.json()
           ],
           "edges": [],
           "probes": [
+            "<fixture>/.env",
+            "<fixture>/.env.local",
+            "<fixture>/.env.test",
+            "<fixture>/.env.test.local",
             "<fixture>/vitest.config.mts",
             "<fixture>/vitest.config.cts",
             "<fixture>/vitest.config.js",

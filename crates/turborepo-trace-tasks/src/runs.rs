@@ -20,8 +20,9 @@
 //!
 //! **Launch words.** Text the recognizers can't see through counts as starting
 //! tests only on evidence: it names a test runner (`jest`, `vitest`, `pytest`,
-//! `gotestsum`, `go test`, `cargo test`, `playwright`, `mocha`, `cypress`): the
-//! tests of that framework; or it names a task runner (`turbo`, a package
+//! `gotestsum`, `go test`, `cargo test`, `playwright`, `mocha`, `cypress`; also
+//! by the path of its installed binary, `./node_modules/.bin/jest`): the tests
+//! of that framework; or it names a task runner (`turbo`, a package
 //! manager, `make`, `nx`) on a line that also contains `test`, or `turbo` with
 //! a pipeline task that depends on a test task: every test. Text that merely
 //! names `turbo` or a package manager (a build, deploy or scoring script)
@@ -89,11 +90,16 @@ fn computed(s: &str) -> bool {
 }
 
 /// Whether `text[i..i + len]` is a word: not part of a longer name, path or
-/// package name.
+/// package name. The path of an installed binary (`node_modules/.bin/<word>`)
+/// names the word.
 fn is_word(text: &str, i: usize, len: usize) -> bool {
     let b = text.as_bytes();
     let name = |c: u8| c.is_ascii_alphanumeric() || matches!(c, b'_' | b'-' | b'.');
-    let before = i == 0 || !(name(b[i - 1]) || matches!(b[i - 1], b'/' | b'@'));
+    // An installed binary named by its path is the program all the same
+    // (`./node_modules/.bin/jest`).
+    let before = i == 0
+        || !(name(b[i - 1]) || matches!(b[i - 1], b'/' | b'@'))
+        || text[..i].ends_with("node_modules/.bin/");
     let after = i + len >= b.len() || !name(b[i + len]);
     before && after
 }
@@ -519,6 +525,17 @@ mod tests {
             Some(("jest", Launch::Framework("jest")))
         );
         assert_eq!(launch_word("import cfg from './jest.config.js'"), None);
+        // An installed binary by its path, not another file of the package.
+        assert_eq!(
+            launch_word("./node_modules/.bin/jest \"$@\""),
+            Some(("jest", Launch::Framework("jest")))
+        );
+        assert_eq!(
+            launch_word("exec \"$ROOT/node_modules/.bin/vitest\" run"),
+            Some(("vitest", Launch::Framework("vitest")))
+        );
+        assert_eq!(launch_word("cat node_modules/jest/package.json"), None);
+        assert_eq!(launch_word("./node_modules/.bin/jest-junit"), None);
         assert_eq!(launch_word("require('ts-jest')"), None);
         assert_eq!(launch_word("import { expect } from '@jest/globals'"), None);
         assert_eq!(

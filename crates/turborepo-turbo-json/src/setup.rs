@@ -18,7 +18,9 @@ use turborepo_repository::toolchain::ToolchainId;
 
 pub use self::{
     additional_tools::{
-        ArtifactFormat, ArtifactPlatform, RawAdditionalTool, RawAdditionalToolArtifact,
+        AdditionalTool, AdditionalToolSource, ArtifactFormat, ArtifactPlatform, CATALOG_PREFIX,
+        RawAdditionalTool, RawAdditionalToolArtifact, RawAdditionalToolDeclaration,
+        catalog_package, command_name, derived_artifact_violation,
     },
     mirrors::{RawSetupMirrors, SetupMirrors, mirror_url},
 };
@@ -97,8 +99,9 @@ pub struct RawSetupPolicy {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub go: Option<Spanned<RawToolchainSetupPolicy>>,
     /// Tools that no built-in adapter manages, keyed by tool ID. Each declares
-    /// an exact version and explicit per-platform artifacts. `turbo setup`
-    /// locks, verifies, and installs them without running tool-provided
+    /// an exact version. `turbo setup` finds the downloads in its bundled
+    /// catalog, or uses the explicit per-platform artifacts a tool declares.
+    /// It locks, verifies, and installs them without running tool-provided
     /// scripts.
     #[serde(rename = "additionalTools", skip_serializing_if = "Option::is_none")]
     pub additional_tools: Option<BTreeMap<String, Spanned<RawAdditionalTool>>>,
@@ -131,7 +134,7 @@ pub struct ToolchainSetupPolicy {
 pub struct SetupPolicy {
     defaults: ToolchainSetupPolicy,
     overrides: BTreeMap<ToolchainId, ToolchainSetupPolicy>,
-    additional_tools: BTreeMap<String, RawAdditionalTool>,
+    additional_tools: BTreeMap<String, AdditionalTool>,
     mirrors: SetupMirrors,
     dependency_install_order: Option<Vec<ToolchainId>>,
 }
@@ -217,7 +220,7 @@ impl SetupPolicy {
     }
 
     /// Validated `additionalTools` declarations, keyed by tool ID.
-    pub fn additional_tools(&self) -> &BTreeMap<String, RawAdditionalTool> {
+    pub fn additional_tools(&self) -> &BTreeMap<String, AdditionalTool> {
         &self.additional_tools
     }
 

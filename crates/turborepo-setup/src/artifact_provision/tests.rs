@@ -323,8 +323,29 @@ async fn plans_require_the_exact_locked_platform_and_shape() {
     );
     assert!(error.to_string().contains("setup.additionalTools.fixture"));
 
-    let mutations: [fn(&mut Value); 4] = [
+    let mut catalog = entry("1.2.3", "fixture.tar.gz", &bytes, "tar-gz");
+    catalog["options"] = json!({"source": ["aqua:example/fixture"]});
+    assert_eq!(
+        plan(catalog.clone()).inventory_tool(),
+        plan(entry("1.2.3", "fixture.tar.gz", &bytes, "tar-gz")).inventory_tool()
+    );
+    let lock = json!({"schemaVersion": 0, "tools": {"fixture": catalog}});
+    let lock = Lock::parse(&serde_json::to_vec(&lock).unwrap()).unwrap();
+    let error = ArtifactPlan::from_lock(&lock, Platform::LinuxArm64Gnu)
+        .err()
+        .unwrap();
+    assert!(
+        matches!(&error, Error::MissingCatalogTarget { tool, platform }
+            if tool == "fixture" && platform == "linux-arm64-gnu"),
+        "{error:?}"
+    );
+    let message = error.to_string();
+    assert!(message.contains("turbo setup --update-lock"), "{message}");
+    assert!(!message.contains("artifacts"), "{message}");
+
+    let mutations: [fn(&mut Value); 5] = [
         |tool| tool["options"] = json!({"flavor": ["x"]}),
+        |tool| tool["options"] = json!({"flavor": ["x"], "source": ["aqua:example/fixture"]}),
         |tool| {
             tool["installation"]["artifacts"]["linux-x64-gnu"][PART]["destination"] = json!("opt")
         },

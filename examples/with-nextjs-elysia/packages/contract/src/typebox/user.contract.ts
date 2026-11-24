@@ -1,6 +1,7 @@
 import { t } from "elysia";
 import { userTable } from "../drizzle/table.schema";
-import { spread, InferDTO } from "../utils";
+import type { InferDTO } from "../utils";
+import { spread } from "../utils";
 
 /** [Auto-Generated] Do not edit this tag to keep updates. @generated */
 export const UserInsertFields = spread(userTable, "insert");
@@ -40,15 +41,11 @@ export const UserContract = {
     })
   ),
 
-  // Patch 请求 (部分更新)
+  // Partial update payload
   Patch: t.Partial(
     t.Object({
-      ...t.Omit(t.Object(UserInsertFields), [
-        "id",
-        "createdAt",
-        "updatedAt",
-        "siteId",
-      ]).properties,
+      ...t.Omit(t.Object(UserInsertFields), ["id", "createdAt", "updatedAt"])
+        .properties,
     })
   ),
 

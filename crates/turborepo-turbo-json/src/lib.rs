@@ -52,9 +52,10 @@ pub use raw::{
     RawTaskDefinition, RawTurboJson,
 };
 pub use setup::{
-    ArtifactFormat, ArtifactPlatform, DependencyPolicy, RawAdditionalTool,
-    RawAdditionalToolArtifact, RawSetupMirrors, RawSetupPolicy, RawToolchainSetupPolicy,
-    SetupMirrors, SetupPolicy, ToolPolicy, ToolchainSetupPolicy,
+    AdditionalTool, AdditionalToolSource, ArtifactFormat, ArtifactPlatform, CATALOG_PREFIX,
+    DependencyPolicy, RawAdditionalTool, RawAdditionalToolArtifact, RawAdditionalToolDeclaration,
+    RawSetupMirrors, RawSetupPolicy, RawToolchainSetupPolicy, SetupMirrors, SetupPolicy,
+    ToolPolicy, ToolchainSetupPolicy, catalog_package, command_name, derived_artifact_violation,
 };
 pub use validator::{TOPOLOGICAL_PIPELINE_DELIMITER, Validator};
 

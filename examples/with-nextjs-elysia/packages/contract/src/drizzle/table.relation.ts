@@ -1,17 +1,22 @@
-import { defineRelations } from "drizzle-orm";
-import * as schema from "./table.schema"
+import { relations } from "drizzle-orm";
+import { roleTable, userRoleTable, userTable } from "./table.schema";
 
-export const relations = defineRelations(schema, (r) => ({
+// Users and roles are linked many-to-many through `userRoleTable`.
+export const userRelations = relations(userTable, ({ many }) => ({
+  userRoles: many(userRoleTable),
+}));
 
+export const roleRelations = relations(roleTable, ({ many }) => ({
+  userRoles: many(userRoleTable),
+}));
 
-  // [用户]：统一身份
-  userTable: {
-    // 权限关联
-    // 多对多
-    roles: r.many.roleTable({
-      from: r.userTable.id.through(r.userRoleTable.userId),
-      to: r.roleTable.id.through(r.userRoleTable.roleId),
-    }),
-
-  },
-}))
+export const userRoleRelations = relations(userRoleTable, ({ one }) => ({
+  user: one(userTable, {
+    fields: [userRoleTable.userId],
+    references: [userTable.id],
+  }),
+  role: one(roleTable, {
+    fields: [userRoleTable.roleId],
+    references: [roleTable.id],
+  }),
+}));

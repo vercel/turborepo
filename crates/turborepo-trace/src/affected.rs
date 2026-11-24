@@ -168,6 +168,62 @@ pub struct AffectedCmd {
     /// layer), instead of `changed`, `changed_from` and `since`; the
     /// source's base is the base revision.
     pub change_source: Option<std::sync::Arc<dyn turborepo_trace_graph::ChangeSource>>,
+    /// The host's cache directories (`turbo trace`: turbo's local cache
+    /// directory, which the graph's transport writes): the cache entries in
+    /// them ([`is_cache_entry`]) that git does not track are not part of a
+    /// source's changes.
+    pub cache_dirs: Vec<PathBuf>,
+}
+
+/// Whether `name` is a file of an entry of turbo's local cache: the archive
+/// or one of its sidecars (`<hash>.tar.zst`, `<hash>-meta.json`,
+/// `<hash>-manifest.json`, the hash being 16 hexadecimal digits), or the
+/// temporary file one of them is written as (`.<its name>.<...>.tmp`).
+fn is_cache_entry(name: &str) -> bool {
+    let name = name.strip_prefix('.').unwrap_or(name);
+    let Some((hash, rest)) = name.split_at_checked(16) else {
+        return false;
+    };
+    hash.bytes().all(|b| b.is_ascii_hexdigit())
+        && [".tar.zst", "-meta.json", "-manifest.json"]
+            .iter()
+            .any(|s| rest == *s || (rest.starts_with(s) && rest.ends_with(".tmp")))
+}
+
+/// Those of `paths` (relative to `root`) that git does not track: neither in
+/// the index, nor in `HEAD`, nor in a base the working tree is compared with
+/// (`bases`). None when git cannot say.
+fn untracked_among(
+    root: &Path,
+    paths: &[String],
+    bases: &[String],
+) -> std::collections::HashSet<String> {
+    let listed = |args: &[&str]| -> Option<std::collections::HashSet<String>> {
+        let mut args: Vec<&str> = args.to_vec();
+        args.push("--");
+        args.extend(paths.iter().map(String::as_str));
+        let out = lockdiff::git(root, &args).ok()?;
+        Some(
+            out.split('\0')
+                .filter(|s| !s.is_empty())
+                .map(str::to_owned)
+                .collect(),
+        )
+    };
+    let Some(mut tracked) = listed(&["ls-files", "-z"]) else {
+        return Default::default();
+    };
+    for rev in std::iter::once("HEAD").chain(bases.iter().map(String::as_str)) {
+        match listed(&["ls-tree", "-r", "-z", "--name-only", rev]) {
+            Some(at) => tracked.extend(at),
+            None => return Default::default(),
+        }
+    }
+    paths
+        .iter()
+        .filter(|p| !tracked.contains(*p))
+        .cloned()
+        .collect()
 }
 
 /// The selection document of an `affected` run, handed over in process.
@@ -233,6 +289,7 @@ impl Default for AffectedCmd {
             no_refresh: Default::default(),
             stats: Default::default(),
             change_source: None,
+            cache_dirs: Vec::new(),
         }
     }
 }
@@ -878,18 +935,46 @@ fn affected(cmd: AffectedCmd, out: &mut dyn Write, host: Option<&Host>) -> Resul
         }
     }
     // The graph directory is not part of a source's changes either (an untracked
-    // `.turbotrace` is an added path to git).
+    // `.turbotrace` is an added path to git), and neither are the entries of the
+    // host's cache directories: the command itself writes both (the graph, and
+    // the cache entry of the graph's transport) before the changes are read.
     if cmd.change_source.is_some() {
+        let below = |dir: &Path| {
+            std::fs::canonicalize(dir)
+                .unwrap_or_else(|_| dir.to_path_buf())
+                .strip_prefix(&root)
+                .ok()
+                .map(|p| p.to_string_lossy().replace('\\', "/"))
+        };
         let (_, out_dir) = cmd.loc.resolve()?;
-        if let Some(p) = std::fs::canonicalize(&out_dir)
-            .unwrap_or(out_dir)
-            .strip_prefix(&root)
-            .ok()
-            .map(|p| p.to_string_lossy().replace('\\', "/"))
-            .filter(|p| !p.is_empty())
-        {
+        if let Some(p) = below(&out_dir).filter(|p| !p.is_empty()) {
             let o = format!("{p}/");
             changes.retain(|c| !c.path.starts_with(&o));
+        }
+        // Only a file git does not track is one the command wrote: a file named
+        // like a cache entry that is tracked (in the index, in `HEAD` or at the
+        // base) is a file of the repository, and its change stays.
+        let mut entries: Vec<String> = Vec::new();
+        for dir in &cmd.cache_dirs {
+            if let Some(p) = below(dir) {
+                let o = if p.is_empty() { p } else { format!("{p}/") };
+                entries.extend(
+                    changes
+                        .iter()
+                        .filter(|c| {
+                            c.kind == ChangeKind::Added
+                                && c.path
+                                    .strip_prefix(&o)
+                                    .is_some_and(|name| !name.contains('/') && is_cache_entry(name))
+                        })
+                        .map(|c| c.path.clone()),
+                );
+            }
+        }
+        if !entries.is_empty() {
+            let bases = git.as_ref().map_or(&[][..], |g| g.bases.as_slice());
+            let written = untracked_among(&root, &entries, bases);
+            changes.retain(|c| !written.contains(&c.path));
         }
     }
     changes.extend(turbo_section_changes(&root, &changes, git.as_ref()));
@@ -958,7 +1043,17 @@ fn affected(cmd: AffectedCmd, out: &mut dyn Write, host: Option<&Host>) -> Resul
     let wf = if cmd.no_workflows {
         crate::workflows::Effects::default()
     } else {
-        crate::workflows::effects(&g, &engine, &root, &kept, git.as_ref())
+        let mut wf = crate::workflows::effects(&g, &engine, &root, &kept, git.as_ref());
+        // Package scripts whose command changed select the tests they start.
+        crate::workflows::script_effects(
+            &g,
+            &root,
+            &kept,
+            git.as_ref(),
+            &|p| steer.is_steering(p),
+            &mut wf,
+        );
+        wf
     };
     turborepo_trace_core::timing::mark("affected: workflows");
     let mut fx = fx;
@@ -1834,4 +1929,35 @@ fn turbo_section_changes(
         }
     }
     out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::is_cache_entry;
+
+    #[test]
+    fn cache_entries_by_name() {
+        for name in [
+            "0123456789abcdef.tar.zst",
+            "0123456789abcdef-meta.json",
+            "0123456789abcdef-manifest.json",
+            ".0123456789abcdef-meta.json.4711.tmp",
+            ".0123456789abcdef.tar.zst.4711.3.tmp",
+        ] {
+            assert!(is_cache_entry(name), "{name}");
+        }
+        for name in [
+            "notes.txt",
+            "0123456789abcdef",
+            "0123456789abcdef.json",
+            "0123456789abcdef.tar.zst.bak",
+            "0123456789abcdeg.tar.zst",
+            "123456789abcdef.tar.zst",
+            "00123456789abcdef.tar.zst",
+            "é123456789abcdef.tar.zst",
+            "meta.json",
+        ] {
+            assert!(!is_cache_entry(name), "{name}");
+        }
+    }
 }

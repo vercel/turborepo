@@ -37,21 +37,148 @@ fn with(mutate: impl FnOnce(&mut Value)) -> Result<SetupPolicy, Error> {
     parse(tools)
 }
 
+fn artifacts(
+    tool: &AdditionalTool,
+) -> &BTreeMap<ArtifactPlatform, Spanned<RawAdditionalToolArtifact>> {
+    match &tool.source {
+        AdditionalToolSource::Artifacts(artifacts) => artifacts,
+        AdditionalToolSource::Catalog { .. } => panic!("expected explicit artifacts"),
+    }
+}
+
+#[test]
+fn catalog_tools_declare_a_version_and_optionally_their_entry() {
+    let tools = json!({
+        "jq": "1.8.2",
+        "fzf": {"version": "0.70.0"},
+        "jj": {"version": "0.47.1", "from": "aqua:jj-vcs/jj"},
+        "kubectl": {"version": "1.36.0", "from": "aqua:kubernetes/kubernetes/kubectl"},
+        "fixture": tool(),
+    });
+    let policy = parse(tools.clone()).unwrap();
+    assert!(policy.is_configured());
+    let catalog = |from: Option<&str>| AdditionalToolSource::Catalog {
+        from: from.map(str::to_owned),
+    };
+    let tool = |id: &str| &policy.additional_tools()[id];
+    assert_eq!(
+        (tool("jq").version.as_str(), &tool("jq").source),
+        ("1.8.2", &catalog(None))
+    );
+    assert_eq!(tool("fzf").source, catalog(None));
+    assert_eq!(tool("jj").source, catalog(Some("aqua:jj-vcs/jj")));
+    assert_eq!(
+        tool("kubectl").source,
+        catalog(Some("aqua:kubernetes/kubernetes/kubectl"))
+    );
+    assert_eq!(artifacts(tool("fixture")).len(), 3);
+
+    let json = json!({"futureFlags": {"experimentalSetup": true},
+        "setup": {"additionalTools": tools}})
+    .to_string();
+    let raw: RawTurboJson = RawRootTurboJson::parse(&json, "turbo.json")
+        .unwrap()
+        .try_into()
+        .unwrap();
+    assert_eq!(
+        serde_json::to_value(&raw).unwrap()["setup"]["additionalTools"],
+        tools
+    );
+}
+
+#[test]
+fn catalog_packages_are_two_or_more_plain_segments() {
+    assert_eq!(catalog_package("aqua:jqlang/jq"), Some("jqlang/jq"));
+    assert_eq!(catalog_package("aqua:a.b/c_d/e-f"), Some("a.b/c_d/e-f"));
+    let longest = format!("aqua:{}/{}", "a".repeat(127), "b".repeat(128));
+    assert!(catalog_package(&longest).is_some());
+    assert_eq!(catalog_package(&format!("{longest}c")), None);
+    for from in [
+        "jqlang/jq",
+        "aqua:jq",
+        "aqua:",
+        "aqua:jqlang/",
+        "aqua:/jq",
+        "aqua:jqlang//jq",
+        "aqua:jqlang/jq@1.8.2",
+        "aqua:jqlang/jq ",
+        "aqua:jqlang\\jq",
+        "AQUA:jqlang/jq",
+        "github:jqlang/jq",
+    ] {
+        assert_eq!(catalog_package(from), None, "{from}");
+    }
+}
+
+#[test]
+fn derived_artifacts_obey_the_rules_of_declared_ones() {
+    let check = |platform, url: &str, format, executables: &[(&str, &str)]| {
+        let executables = executables
+            .iter()
+            .map(|(name, path)| ((*name).to_owned(), (*path).to_owned()))
+            .collect();
+        derived_artifact_violation(platform, url, format, &executables)
+    };
+    let (linux, windows) = (ArtifactPlatform::LinuxX64Gnu, ArtifactPlatform::WindowsX64);
+    let url = "https://downloads.example.test/fixture.tar.gz";
+    let archive = ArtifactFormat::TarGz;
+    assert_eq!(
+        check(linux, url, archive, &[("fixture", "pkg/bin/fixture")]),
+        None
+    );
+    assert_eq!(
+        check(windows, url, archive, &[("fixture", "fixture.exe")]),
+        None
+    );
+    for (platform, url, format, executables) in [
+        (
+            linux,
+            "http://downloads.example.test/a",
+            archive,
+            &[("fixture", "fixture")][..],
+        ),
+        (
+            linux,
+            "https://downloads.example.test/a?x=1",
+            archive,
+            &[("fixture", "fixture")],
+        ),
+        (linux, url, archive, &[("fixture", "../fixture")]),
+        (linux, url, archive, &[("bin/fixture", "fixture")]),
+        (linux, url, archive, &[("npm", "bin/npm")]),
+        (
+            linux,
+            url,
+            ArtifactFormat::Binary,
+            &[("a", "a"), ("b", "b")],
+        ),
+        (windows, url, archive, &[("fixture", "fixture")]),
+        (windows, url, archive, &[("fixture.exe", "fixture.exe")]),
+        (linux, url, archive, &[("Yn", "Yn"), ("yN", "yN")]),
+    ] {
+        assert!(
+            check(platform, url, format, executables).is_some(),
+            "{url} {executables:?}"
+        );
+    }
+}
+
 #[test]
 fn unknown_tools_are_declared_without_registration() {
     let policy = with(|_| {}).unwrap();
     assert!(policy.is_configured());
     let fixture = &policy.additional_tools()["fixture"];
     assert_eq!(fixture.version.as_str(), "1.2.3");
+    let fixture = artifacts(fixture);
     assert_eq!(
-        fixture.artifacts.keys().copied().collect::<Vec<_>>(),
+        fixture.keys().copied().collect::<Vec<_>>(),
         [
             ArtifactPlatform::MacosArm64,
             ArtifactPlatform::LinuxX64Gnu,
             ArtifactPlatform::WindowsX64
         ]
     );
-    let linux = &fixture.artifacts[&ArtifactPlatform::LinuxX64Gnu];
+    let linux = &fixture[&ArtifactPlatform::LinuxX64Gnu];
     assert_eq!(*linux.format, ArtifactFormat::TarGz);
     assert_eq!(
         linux.root_prefix.as_deref().unwrap().as_str(),
@@ -61,7 +188,7 @@ fn unknown_tools_are_declared_without_registration() {
         linux.executables["fixture-helper"].as_str(),
         "libexec/helper"
     );
-    let windows = &fixture.artifacts[&ArtifactPlatform::WindowsX64];
+    let windows = &fixture[&ArtifactPlatform::WindowsX64];
     assert_eq!(*windows.format, ArtifactFormat::Binary);
     assert_eq!(windows.root_prefix, None);
 
@@ -95,7 +222,7 @@ fn archives_without_a_top_level_directory_omit_the_root_prefix() {
         macos.remove("rootPrefix");
     })
     .unwrap();
-    let macos = &policy.additional_tools()["fixture"].artifacts[&ArtifactPlatform::MacosArm64];
+    let macos = &artifacts(&policy.additional_tools()["fixture"])[&ArtifactPlatform::MacosArm64];
     assert_eq!(macos.root_prefix, None);
 }
 
@@ -103,6 +230,15 @@ fn archives_without_a_top_level_directory_omit_the_root_prefix() {
 #[test_case(|t| t["fixture"]["version"] = json!("^1.2.3"); "range")]
 #[test_case(|t| t["fixture"]["version"] = json!("1.x"); "wildcard")]
 #[test_case(|t| t["fixture"]["version"] = json!("latest"); "channel")]
+#[test_case(|t| t["fixture"] = json!("^1.2.3"); "shorthand range")]
+#[test_case(|t| t["fixture"] = json!("latest"); "shorthand channel")]
+#[test_case(|t| t["fixture"] = json!("v1.x"); "shorthand wildcard")]
+#[test_case(|t| t["fixture"] = json!({"version": "stable", "from": "aqua:example/fixture"}); "catalog channel")]
+#[test_case(|t| t["fixture"]["from"] = json!("aqua:example/fixture"); "from with artifacts")]
+#[test_case(|t| t["fixture"] = json!({"version": "1.2.3", "from": "example/fixture"}); "from without a catalog")]
+#[test_case(|t| t["fixture"] = json!({"version": "1.2.3", "from": "aqua:fixture"}); "from with one segment")]
+#[test_case(|t| t["fixture"] = json!({"version": "1.2.3", "from": "aqua:example/fixture@1.2.3"}); "from with a version")]
+#[test_case(|t| t["node"] = json!("24.0.0"); "builtin id in the catalog form")]
 #[test_case(|t| t["fixture"]["artifacts"] = json!({}); "no platforms")]
 #[test_case(|t| t["fixture"]["artifacts"]["macos-arm64"]["url"] = json!("http://example.test/a"); "http")]
 #[test_case(|t| t["fixture"]["artifacts"]["macos-arm64"]["url"] = json!("https://user:token@example.test/a"); "userinfo")]
@@ -138,7 +274,10 @@ fn malformed_declarations_point_at_their_source(mutate: fn(&mut Value)) {
 #[test_case(|t| t["fixture"]["artifacts"]["macos-arm64"]["command"] = json!("make"); "artifact hook")]
 #[test_case(|t| { t["fixture"].as_object_mut().unwrap().remove("version"); }; "missing version")]
 #[test_case(|t| { t["fixture"]["artifacts"]["macos-arm64"].as_object_mut().unwrap().remove("sha256"); }; "missing digest")]
-#[test_case(|t| t["fixture"] = json!("1.2.3"); "shorthand")]
+#[test_case(|t| t["fixture"] = json!(1.2); "number shorthand")]
+#[test_case(|t| t["fixture"] = json!(["1.2.3"]); "array shorthand")]
+#[test_case(|t| t["fixture"] = json!({"version": "1.2.3", "from": 1}); "non string from")]
+#[test_case(|t| t["fixture"] = json!({"from": "aqua:example/fixture"}); "from without a version")]
 #[test_case(|t| t["fixture"]["artifacts"]["macos-arm64"]["executables"] = json!({}); "no executables")]
 fn unknown_or_missing_fields_are_parse_errors(mutate: fn(&mut Value)) {
     let Err(Error::Parse(error)) = with(mutate) else {

@@ -1847,3 +1847,36 @@ fn module_string_shapes() {
         assert!(!module_string_shape(bad.as_bytes()), "{bad}");
     }
 }
+
+#[test]
+fn glob_import_base() {
+    assert_eq!(join_relative("./pages", "./*.ts"), "./pages/*.ts");
+    assert_eq!(join_relative("./pages/", "../*.ts"), "./*.ts");
+    assert_eq!(join_relative("../data", "./**/*.json"), "../data/**/*.json");
+    assert_eq!(join_relative("./a", "../../b/*.ts"), "../b/*.ts");
+    assert_eq!(join_relative("../../a", "../*.ts"), "../../*.ts");
+    // Relative to the base, not to the file.
+    assert_eq!(
+        ts("import.meta.glob('./*.ts', { eager: true, base: './pages' })")[0],
+        "dynamic_import ./pages/*.ts lazy"
+    );
+    // A property of a nested object is not the option.
+    assert_eq!(
+        ts("import.meta.glob('./*.ts', { query: { base: '../x' } })")[0],
+        "dynamic_import ./*.ts lazy"
+    );
+    for open in [
+        "import.meta.glob('./*.ts', { base: '/src' })",
+        "import.meta.glob('./*.ts', { base: dir })",
+        "import.meta.glob('./*.ts', { base })",
+        "import.meta.glob('./*.ts', { ...rest })",
+        "import.meta.glob('./*.ts', { [key]: './x' })",
+        "import.meta.glob('./*.ts', options)",
+    ] {
+        let ex = scan(open.as_bytes(), Dialect::TS, ScanOptions::default());
+        assert!(
+            matches!(ex.refs.first(), Some(r) if matches!(r.spec, Specifier::Unknown)),
+            "{open}"
+        );
+    }
+}

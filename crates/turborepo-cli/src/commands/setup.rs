@@ -19,6 +19,7 @@ use crate::cli::{Args, SetupArgs};
 #[cfg(target_os = "macos")]
 mod acl;
 pub(crate) mod authorization;
+mod catalog;
 mod check;
 #[cfg(windows)]
 mod dacl;
@@ -148,6 +149,14 @@ pub enum Error {
          updated turbo.lock"
     )]
     AdditionalToolDrift(std::collections::BTreeSet<String>),
+    #[error(transparent)]
+    Catalog(#[from] turborepo_setup_catalog::Error),
+    #[error(
+        "--offline cannot find the downloads of setup.additionalTools {0:?}, which turbo.lock \
+         does not record yet; run `turbo setup --tools-only` without --offline and commit \
+         turbo.lock"
+    )]
+    CatalogOffline(std::collections::BTreeSet<String>),
     #[error(transparent)]
     Go(#[from] turborepo_setup::go_provision::Error),
     #[error(transparent)]
@@ -450,6 +459,7 @@ fn run_reporting(
     let tool_store = transports
         .as_ref()
         .and_then(provision::Transports::tool_store);
+    catalog::refuse_offline(&snapshot, &request)?;
     if request.mode == Mode::Check {
         return check::run(
             &discovery,
@@ -461,17 +471,20 @@ fn run_reporting(
         .map(output::Completed::Reported);
     }
     if request.mode == Mode::Plan {
-        println!(
-            "{}",
-            plan::report(
-                &discovery,
-                snapshot,
-                &request,
-                &dependencies,
-                transports,
-                preflight
-            )?
-        );
+        let spinner = std::cell::RefCell::new(None);
+        let status =
+            |message: Option<&str>| *spinner.borrow_mut() = message.map(|m| console.spinner(m));
+        let report = plan::report(
+            &discovery,
+            snapshot,
+            &request,
+            &dependencies,
+            transports,
+            preflight,
+            &status,
+        )?;
+        drop(spinner);
+        println!("{report}");
         return Ok(output::Completed::Reported(0));
     }
     // Offline setup reuses the trusted installation or trees already in the
@@ -688,6 +701,7 @@ pub fn setup_for_tests(
             origin,
         )
         .map_err(|e| e.to_string())?,
+        catalog: None,
         artifact: None,
         go: turborepo_setup::go_resolution::GoTransport::loopback_http_for_tests(origin)
             .map_err(|e| e.to_string())?,

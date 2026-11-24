@@ -262,7 +262,8 @@ impl VerifiedArtifact {
         Ok(Self(bytes))
     }
 
-    // Only verified bytes can produce this lock-ready artifact identity.
+    // Only verified or pinned bytes can produce this lock-ready artifact
+    // identity.
     pub fn sha256_hex(&self) -> String {
         hex::encode(Sha256::digest(&self.0))
     }
@@ -273,6 +274,28 @@ impl VerifiedArtifact {
 
     pub fn into_bytes(self) -> Vec<u8> {
         self.0
+    }
+}
+
+/// Bytes downloaded for the first time, before any digest exists to check
+/// them against. They are not verified and not metadata: the only thing to do
+/// with them is [`pin`](Self::pin) them. The pinned bytes may decide one
+/// thing, whether their own artifact is recorded: a caller may refuse to
+/// record an archive that does not unpack. They never decide a version, a
+/// URL, or another artifact's digest.
+pub struct UnpinnedArtifact(Vec<u8>);
+
+impl UnpinnedArtifact {
+    /// Binds exactly these bytes to their own SHA-256, and returns that
+    /// digest as lowercase hex with them. The caller must record the digest
+    /// where it is reviewed and enforced from then on, such as a committed
+    /// lock, or record nothing about the artifact. Pinning establishes what
+    /// the bytes are for every later download, not that their publisher is
+    /// trustworthy.
+    pub fn pin(self) -> (VerifiedArtifact, String) {
+        let artifact = VerifiedArtifact(self.0);
+        let sha256 = artifact.sha256_hex();
+        (artifact, sha256)
     }
 }
 
@@ -294,6 +317,12 @@ enum Redirects {
     Approved(Vec<ApprovedOrigin>),
     /// Verified downloads only, to any HTTPS origin.
     Https,
+}
+
+#[derive(Clone, Copy)]
+enum Payload {
+    Metadata,
+    Artifact,
 }
 
 /// Redirects, retries, and automatic decoding are always overridden.
@@ -398,7 +427,9 @@ impl DownloadClient {
     /// Because the caller's digest pins the bytes, the final host is never
     /// trusted for anything else. A redirect never downgrades to HTTP, and
     /// each hop is a fresh request without credentials, cookies, or a referer.
-    /// Unverified metadata reads still follow no redirects.
+    /// First-use downloads ([`Self::download_unpinned`]) follow the same
+    /// redirects, because their caller pins the bytes it receives. Unverified
+    /// metadata reads still follow no redirects.
     #[must_use]
     pub fn with_https_redirects(mut self) -> Self {
         self.redirects = Redirects::Https;
@@ -409,7 +440,39 @@ impl DownloadClient {
     /// this operation does not turn metadata-provided digests into trusted
     /// ones.
     pub async fn read_metadata(&self, url: &str, limits: Limits) -> Result<Vec<u8>, Error> {
-        self.fetch(url, limits, None).await
+        self.fetch(url, limits, None, Payload::Metadata).await
+    }
+
+    /// Buffer an artifact that has no digest yet, for a caller that pins the
+    /// bytes it receives: it hashes exactly these bytes and records the digest
+    /// where it is reviewed and enforced from then on, such as a committed
+    /// lock. Every later download of the artifact must use
+    /// [`Self::download_verified`] with that digest.
+    ///
+    /// The request goes only to an approved origin. With
+    /// [`Self::with_https_redirects`] it follows the redirects a
+    /// digest-verified download follows, under the same rules: HTTPS only, the
+    /// same hop limit, and no credentials, cookies, or referer between hops.
+    /// That is acceptable here and not for [`Self::read_metadata`] because of
+    /// how little the response may decide. The bytes may decide only whether
+    /// their own artifact is recorded, as when an archive that does not
+    /// unpack is left out. They never select a version, a URL, or another
+    /// artifact's digest, and whatever host served them, the recorded digest
+    /// is what gets reviewed. Never parse the result as resolver metadata.
+    ///
+    /// A missing artifact is [`Error::HttpStatus`] with status 404, also when
+    /// a redirect target answers it. A caller may take that status as "this
+    /// name does not exist" and ask for the artifact under another name it
+    /// already knew. That is the one decision the response makes beyond its
+    /// own artifact, and it can only choose among the caller's candidates.
+    pub async fn download_unpinned(
+        &self,
+        url: &str,
+        limits: Limits,
+    ) -> Result<UnpinnedArtifact, Error> {
+        self.fetch(url, limits, None, Payload::Artifact)
+            .await
+            .map(UnpinnedArtifact)
     }
 
     /// Buffer an artifact and release it only if its SHA-256 matches. A digest
@@ -424,6 +487,7 @@ impl DownloadClient {
             url,
             limits,
             Some(Verification::Sha256(digest, Sha256::new())),
+            Payload::Artifact,
         )
         .await
         .map(VerifiedArtifact)
@@ -440,6 +504,7 @@ impl DownloadClient {
             url,
             limits,
             Some(Verification::Sha512(digest, Sha512::new(), sha256)),
+            Payload::Artifact,
         )
         .await
         .map(VerifiedArtifact)
@@ -450,6 +515,7 @@ impl DownloadClient {
         input: &str,
         limits: Limits,
         mut verification: Option<Verification>,
+        payload: Payload,
     ) -> Result<Vec<u8>, Error> {
         let url = parse_url(input)?;
         if !self.origins.iter().any(|origin| origin.0 == url.origin()) {
@@ -476,7 +542,7 @@ impl DownloadClient {
                     break response;
                 }
                 hops += 1;
-                url = self.redirect(&url, &response, hops, verification.is_some())?;
+                url = self.redirect(&url, &response, hops, payload)?;
             };
             let status = response.status();
             if status == reqwest::StatusCode::PROXY_AUTHENTICATION_REQUIRED {
@@ -520,7 +586,7 @@ impl DownloadClient {
         from: &Url,
         response: &reqwest::Response,
         hops: usize,
-        verified: bool,
+        payload: Payload,
     ) -> Result<Url, Error> {
         let next = response
             .headers()
@@ -534,10 +600,12 @@ impl DownloadClient {
             Redirects::Approved(origins) => origins.iter().any(|o| o.0 == next.origin()),
             // Only a loopback fixture request starts on HTTP, and it may only
             // stay on loopback; everything else must be HTTPS.
-            Redirects::Https => {
-                verified
-                    && (next.scheme() == "https" || (from.scheme() == "http" && loopback(&next)))
-            }
+            Redirects::Https => match payload {
+                Payload::Metadata => false,
+                Payload::Artifact => {
+                    next.scheme() == "https" || (from.scheme() == "http" && loopback(&next))
+                }
+            },
         };
         if hops > MAX_REDIRECTS || !allowed {
             return Err(Error::RedirectRejected);

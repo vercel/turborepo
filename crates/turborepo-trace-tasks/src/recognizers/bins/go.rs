@@ -33,7 +33,10 @@ impl Recognizer for GoTool {
         let mut a = cmd.args();
         cmd.program_name() == Some("go")
             && a.next() == Some("tool")
-            && a.next().is_some_and(|n| !n.starts_with('-'))
+            // `go tool gotestsum` starts `go test` (the test runners' recognizer).
+            && a.next().is_some_and(|n| {
+                !n.starts_with('-') && n.rsplit('/').next() != Some("gotestsum")
+            })
     }
     fn recognize(&self, cmd: &Command, cx: &RecognizeCx<'_>, out: &mut TaskSpec) -> Recognition {
         out.tool("system", "go");

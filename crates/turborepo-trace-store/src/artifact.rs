@@ -261,9 +261,9 @@ pub enum ArtifactError {
     /// The graph directory already holds a graph.
     #[error("{0} already holds a graph")]
     Exists(PathBuf),
-    /// The graph directory, or the store below it, is a symbolic link: a commit
-    /// can add `.turbo/trace`, and installing a graph there would write outside
-    /// the repository.
+    /// The graph directory, the store below it or its cache directory is a
+    /// symbolic link: a commit can add `.turbo/trace`, and installing a graph
+    /// there would write, or delete, outside the repository.
     #[error("{0}: not a directory (a symbolic link)")]
     Linked(PathBuf),
 }
@@ -663,6 +663,9 @@ pub fn unpack(
         .ok();
     crate::real_dir(out, base.as_deref()).map_err(install)?;
     crate::real_dir(&out.join("store"), base.as_deref()).map_err(install)?;
+    // Neither at the directory of its caches, whose files are replaced or
+    // removed: below the graph directory unless the host keeps it elsewhere.
+    crate::real_dir(&crate::cache_dir(out), base.as_deref()).map_err(install)?;
     let file = std::fs::File::open(src).map_err(io(src))?;
     let len = file.metadata().map_err(io(src))?.len();
     if len == 0 {

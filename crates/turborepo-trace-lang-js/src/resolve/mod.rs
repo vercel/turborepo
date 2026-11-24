@@ -918,7 +918,13 @@ impl JsResolver {
         } else {
             JS_EXTENSIONS
         };
-        let keep: fn(&Path) -> bool = if self.include_types {
+        // A glob import loads every file its pattern matches.
+        let glob_import = parts.iter().any(
+            |p| matches!(p, PatPart::Wild { reason } if **reason == *crate::extract::GLOB_IMPORT),
+        );
+        let keep: fn(&Path) -> bool = if glob_import {
+            |_| true
+        } else if self.include_types {
             assets::keep_asset
         } else {
             |p| assets::keep_asset(p) && !is_dts(p)

@@ -52,6 +52,15 @@ pub enum StorageError {
     Manager(#[from] package_manager::Error),
     #[error("setup lock or native sources changed; capture a fresh snapshot before resolving")]
     Conflict,
+    #[error(
+        "setup.additionalTools {tool:?} and {other:?} both install the command {executable:?}; \
+         remove one of them, or declare one with `artifacts` under another executable name"
+    )]
+    Collision {
+        tool: String,
+        other: String,
+        executable: String,
+    },
 }
 
 #[derive(Debug, PartialEq, Eq)]

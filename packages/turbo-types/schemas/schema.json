@@ -235,27 +235,15 @@
   "allowTrailingCommas": true,
   "definitions": {
     "AdditionalTool": {
-      "description": "A tool that `turbo setup` downloads, verifies, and installs from explicit artifacts. The full installation tree is kept; no tool-provided scripts run.",
-      "type": "object",
-      "required": ["artifacts", "version"],
-      "properties": {
-        "artifacts": {
-          "description": "Artifacts keyed by platform, such as `linux-x64-gnu` or `macos-arm64`. Platforms without an artifact are unsupported for this tool.",
-          "allOf": [
-            {
-              "$ref": "#/definitions/Map_of_AdditionalToolArtifact"
-            }
-          ]
+      "description": "A tool that `turbo setup` downloads, verifies, and installs. The full installation tree is kept; no tool-provided scripts run.\n\nA string is the exact version of a tool in the bundled catalog, looked up by its tool ID. An object can name the catalog entry with `from`, or declare explicit `artifacts`.",
+      "anyOf": [
+        {
+          "$ref": "#/definitions/String"
         },
-        "version": {
-          "description": "The exact version of the tool. Ranges and channels are not allowed.",
-          "allOf": [
-            {
-              "$ref": "#/definitions/String"
-            }
-          ]
+        {
+          "$ref": "#/definitions/AdditionalToolDeclaration"
         }
-      }
+      ]
     },
     "AdditionalToolArtifact": {
       "description": "One platform's artifact for an additional tool.",
@@ -298,6 +286,43 @@
         },
         "url": {
           "description": "HTTPS download URL without credentials, a query, or a fragment.",
+          "allOf": [
+            {
+              "$ref": "#/definitions/String"
+            }
+          ]
+        }
+      }
+    },
+    "AdditionalToolDeclaration": {
+      "description": "The object form of an additional tool.",
+      "type": "object",
+      "required": ["version"],
+      "properties": {
+        "artifacts": {
+          "description": "Artifacts keyed by platform, such as `linux-x64-gnu` or `macos-arm64`. Platforms without an artifact are unsupported for this tool. Not allowed with `from`.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/Map_of_AdditionalToolArtifact"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "from": {
+          "description": "The bundled catalog entry that provides the downloads, as `aqua:` followed by a package ID, such as `aqua:jj-vcs/jj`. Without `from` and `artifacts`, the tool ID is looked up in the catalog's name list. Not allowed with `artifacts`.",
+          "anyOf": [
+            {
+              "$ref": "#/definitions/String"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "version": {
+          "description": "The exact version of the tool, as the tool itself reports it, such as `1.8.2`. Ranges and channels are not allowed.",
           "allOf": [
             {
               "$ref": "#/definitions/String"
@@ -996,7 +1021,7 @@
       "type": "object",
       "properties": {
         "additionalTools": {
-          "description": "Tools that no built-in adapter manages, keyed by tool ID. Each declares an exact version and explicit per-platform artifacts. `turbo setup` locks, verifies, and installs them without running tool-provided scripts.",
+          "description": "Tools that no built-in adapter manages, keyed by tool ID. Each declares an exact version. `turbo setup` finds the downloads in its bundled catalog, or uses the explicit per-platform artifacts a tool declares. It locks, verifies, and installs them without running tool-provided scripts.",
           "type": ["object", "null"],
           "additionalProperties": {
             "$ref": "#/definitions/AdditionalTool"

@@ -2003,6 +2003,236 @@ fn the_graph_travels_through_the_turbo_cache() {
     assert!(!stderr(&output).contains("restored"), "{}", stderr(&output));
 }
 
+/// A remote cache that holds the artifacts of the local cache directory
+/// `cache`, read-only: `HEAD` and `GET /v8/artifacts/<key>` answer for each of
+/// them, and everything else is a 404 (also the batched existence query, as on
+/// a server without that endpoint).
+#[cfg(unix)]
+fn remote_cache_of(cache: &Path) -> httpmock::MockServer {
+    let server = httpmock::MockServer::start();
+    server.mock(|when, then| {
+        when.path("/v8/artifacts/status");
+        then.status(200)
+            .json_body(serde_json::json!({"status": "enabled"}));
+    });
+    for name in cached_artifacts(cache) {
+        let key = name.strip_suffix(".tar.zst").unwrap().to_owned();
+        let body = fs::read(cache.join(&name)).unwrap();
+        server.mock(|when, then| {
+            when.path(format!("/v8/artifacts/{key}"));
+            then.status(200).body(body);
+        });
+    }
+    server
+}
+
+/// Every `transport.graph` below `root` (the packed graph's name while it is
+/// fetched or put), outside `.git`.
+#[cfg(unix)]
+fn transport_files(root: &Path) -> Vec<String> {
+    fn walk(root: &Path, dir: &Path, out: &mut Vec<String>) {
+        for entry in fs::read_dir(dir).unwrap() {
+            let entry = entry.unwrap();
+            let path = entry.path();
+            if entry.file_type().unwrap().is_dir() {
+                if entry.file_name() != ".git" {
+                    walk(root, &path, out);
+                }
+            } else if entry.file_name() == "transport.graph" {
+                out.push(path.strip_prefix(root).unwrap().display().to_string());
+            }
+        }
+    }
+    let mut out = Vec::new();
+    walk(root, root, &mut out);
+    out
+}
+
+/// A test that reads every entry of the repository root: any change selects
+/// it, also a file added at the root or below `.turbo`.
+#[cfg(unix)]
+const JEST_ROOT: &str = "packages/app/test/root.test.js";
+
+/// The `trace_jest` fixture as a repository that does not ignore `.turbo`,
+/// with [`JEST_ROOT`], committed on `main`.
+#[cfg(unix)]
+fn fixture_without_dot_turbo_ignored() -> tempfile::TempDir {
+    let dir = fixture("trace_jest");
+    fs::write(dir.path().join(".gitignore"), "node_modules/\n.npmrc\n").unwrap();
+    fs::write(
+        dir.path().join(JEST_ROOT),
+        "const { readdirSync, readFileSync } = require('fs');\nconst { join } = \
+         require('path');\nconst root = join(__dirname, '../../..');\ntest('root', () => {\n  for \
+         (const name of readdirSync(root)) {\n    readFileSync(join(root, name));\n  }\n});\n",
+    )
+    .unwrap();
+    git(dir.path(), &["add", "-A"]);
+    git(dir.path(), &["commit", "--quiet", "-m", "root listing"]);
+    dir
+}
+
+/// The selection of `turbo trace <args>` with `env`, which must succeed, and
+/// its stderr.
+#[cfg(unix)]
+#[track_caller]
+fn selected(dir: &Path, args: &[&str], env: &[(&str, &str)]) -> (Vec<String>, String) {
+    let output = trace_with_env(dir, args, env);
+    assert!(output.status.success(), "{}", stderr(&output));
+    (
+        stdout(&output).lines().map(str::to_owned).collect(),
+        stderr(&output),
+    )
+}
+
+/// The graph of the merge base comes from the remote cache into the graph
+/// directory, is installed, and is gone afterwards: the packed graph is in no
+/// place of the working tree, and is no change of the repository, which here
+/// does not ignore `.turbo`.
+#[cfg(unix)]
+#[test]
+fn the_graph_from_the_remote_cache_is_installed_and_is_not_a_change() {
+    let scratch = tempfile::tempdir().unwrap();
+    let cache = scratch.path().join("turbo-cache");
+    let none = Vec::<String>::new();
+
+    // CI on `main` builds the graph and puts it into the cache.
+    let main = fixture_without_dot_turbo_ignored();
+    let (tests, err) = selected(
+        main.path(),
+        &[
+            "affected",
+            "--base",
+            "HEAD",
+            "--cache-dir",
+            cache.to_str().unwrap(),
+        ],
+        &[("CI", "1")],
+    );
+    assert!(err.contains("put the graph of"), "{err}");
+    assert_eq!(tests, none);
+    assert_eq!(transport_files(main.path()), none);
+
+    // The same artifacts in a remote cache, and a fresh clone that reads only
+    // that cache, on a branch with a commit that changes no file.
+    let server = remote_cache_of(&cache);
+    let api = server.base_url();
+    let remote = [
+        ("TURBO_API", api.as_str()),
+        ("TURBO_TOKEN", "token"),
+        ("TURBO_TEAM", "team"),
+    ];
+    let fresh = scratch.path().join("fresh");
+    clone(main.path(), &fresh);
+    git(&fresh, &["checkout", "--quiet", "-b", "feature"]);
+    git(
+        &fresh,
+        &["commit", "--quiet", "--allow-empty", "-m", "nothing"],
+    );
+    let args = ["affected", "--base", "main", "--cache=remote:r"];
+    let (tests, err) = selected(&fresh, &args, &remote);
+    assert_eq!(tests, none, "{err}");
+    assert_eq!(transport_files(&fresh), none);
+    assert!(err.contains("restored the graph of"), "{err}");
+    // A second run in the same checkout finds the graph.
+    let (tests, err) = selected(&fresh, &args, &remote);
+    assert_eq!(tests, none, "{err}");
+    assert!(!err.contains("restored"), "{err}");
+
+    // A packed graph that an interrupted run left in the graph directory is
+    // no change either.
+    fs::write(fresh.join(".turbo/trace/transport.graph"), "left behind\n").unwrap();
+    let (tests, err) = selected(&fresh, &args, &remote);
+    assert_eq!(tests, none, "{err}");
+}
+
+/// What the graph's transport writes into turbo's local cache directory is no
+/// change of a repository that does not ignore `.turbo`: the entry CI puts
+/// there, and the entry a fetch from the remote cache leaves there.
+#[cfg(unix)]
+#[test]
+fn the_cache_entries_of_the_graph_are_not_a_change() {
+    let none = Vec::<String>::new();
+    let main = fixture_without_dot_turbo_ignored();
+    let args = ["affected", "--base", "HEAD"];
+    let (tests, err) = selected(main.path(), &args, &[("CI", "1")]);
+    assert!(err.contains("put the graph of"), "{err}");
+    assert_eq!(tests, none);
+    let cache = main.path().join(".turbo/cache");
+    assert_eq!(cached_artifacts(&cache).len(), 1);
+    // The cache entry is there now, untracked.
+    let (tests, err) = selected(main.path(), &args, &[("CI", "1")]);
+    assert_eq!(tests, none, "{err}");
+
+    // A fresh clone fetches from the remote cache, and the local cache takes
+    // the entry before the changes are read.
+    let server = remote_cache_of(&cache);
+    let api = server.base_url();
+    let remote = [
+        ("TURBO_API", api.as_str()),
+        ("TURBO_TOKEN", "token"),
+        ("TURBO_TEAM", "team"),
+    ];
+    let scratch = tempfile::tempdir().unwrap();
+    let fresh = scratch.path().join("fresh");
+    clone(main.path(), &fresh);
+    git(&fresh, &["checkout", "--quiet", "-b", "feature"]);
+    git(
+        &fresh,
+        &["commit", "--quiet", "--allow-empty", "-m", "nothing"],
+    );
+    let args = ["affected", "--base", "main", "--cache=local:rw,remote:r"];
+    let (tests, err) = selected(&fresh, &args, &remote);
+    assert!(err.contains("restored the graph of"), "{err}");
+    assert_eq!(cached_artifacts(&fresh.join(".turbo/cache")).len(), 1);
+    assert_eq!(tests, none, "{err}");
+
+    // Another file in the cache directory is a change.
+    fs::write(fresh.join(".turbo/cache/notes.txt"), "n\n").unwrap();
+    let (tests, _) = selected(&fresh, &args, &remote);
+    assert_eq!(tests, [JEST_ROOT]);
+}
+
+/// A file of the repository that is named like a cache entry, in turbo's cache
+/// directory, is a file like any other: only the entries git does not track
+/// are left out of the changes.
+#[cfg(unix)]
+#[test]
+fn a_tracked_file_named_like_a_cache_entry_is_a_change() {
+    let none = Vec::<String>::new();
+    let main = fixture_without_dot_turbo_ignored();
+    let entry = ".turbo/cache/0123456789abcdef-meta.json";
+    let args = ["affected", "--base", "main"];
+    git(main.path(), &["checkout", "--quiet", "-b", "feature"]);
+    let (tests, err) = selected(main.path(), &args, &[]);
+    assert_eq!(tests, none, "{err}");
+
+    // Untracked, it is an entry the cache wrote.
+    fs::create_dir_all(main.path().join(".turbo/cache")).unwrap();
+    fs::write(main.path().join(entry), "{}\n").unwrap();
+    let (tests, err) = selected(main.path(), &args, &[]);
+    assert_eq!(tests, none, "{err}");
+
+    // Added to the index, and committed, it is a file of the repository.
+    git(main.path(), &["add", "-f", entry]);
+    let (tests, err) = selected(main.path(), &args, &[]);
+    assert_eq!(tests, [JEST_ROOT], "{err}");
+    git(main.path(), &["commit", "--quiet", "-m", "a fixture"]);
+    let (tests, err) = selected(main.path(), &args, &[]);
+    assert_eq!(tests, [JEST_ROOT], "{err}");
+
+    // Tracked at the base only (the branch removed it), and written again: the
+    // file of the base changed.
+    git(main.path(), &["checkout", "--quiet", "main"]);
+    git(main.path(), &["merge", "--quiet", "--ff-only", "feature"]);
+    git(main.path(), &["checkout", "--quiet", "feature"]);
+    git(main.path(), &["rm", "--quiet", entry]);
+    git(main.path(), &["commit", "--quiet", "-m", "no fixture"]);
+    fs::create_dir_all(main.path().join(".turbo/cache")).unwrap();
+    fs::write(main.path().join(entry), "{\"changed\": true}\n").unwrap();
+    let (tests, err) = selected(main.path(), &args, &[]);
+    assert_eq!(tests, [JEST_ROOT], "{err}");
+}
+
 /// A package whose runner the trace does not cover (mocha): its test task runs
 /// whole, and says so.
 #[cfg(unix)]
@@ -2103,4 +2333,282 @@ fn tests_takes_only_the_frameworks_it_supports() {
     }
     let selected = affected(dir.path(), &["--changed", JEST_MUL, "--tests", "jest"]);
     assert_selects(&selected, &[JEST_MUL], &[JEST_ADD]);
+}
+
+// ---------------------------------------------------------------------------
+// Gate on: package scripts that start `go test` (`trace_go_scripts`).
+//
+// Each service's `test` script starts `go test` another way: `cd app && go
+// test ./...` (`billing`), `go -C engine test -race ./...` (`search`),
+// `gotestsum … -- -tags=integration ./...` (`queue`, with a module of its own
+// in `tools`), `go test ./one/... ./two/...` over a `go.work` (`batch`), a
+// shell script file (`mail`) and one without an extension (`ops`). The root's
+// `test` script is `turbo run test`, and `tools/lint` is a module in the root
+// package.
+
+/// One selected test of `--json`: its package, its task (empty: none) and the
+/// type of its reason.
+#[cfg(unix)]
+#[derive(Debug, PartialEq, Eq)]
+struct Row {
+    package: String,
+    task: String,
+    reason: String,
+}
+
+#[cfg(unix)]
+fn row(package: &str, task: &str, reason: &str) -> Row {
+    Row {
+        package: package.to_owned(),
+        task: task.to_owned(),
+        reason: reason.to_owned(),
+    }
+}
+
+/// `turbo trace affected --json <args>`: the selected tests by path.
+#[cfg(unix)]
+fn affected_rows(dir: &Path, args: &[&str]) -> BTreeMap<String, Row> {
+    let mut words = vec!["affected", "--json"];
+    words.extend_from_slice(args);
+    let output = trace(dir, &words);
+    assert!(
+        output.status.success(),
+        "turbo trace {words:?} failed\nstdout:\n{}\nstderr:\n{}",
+        stdout(&output),
+        stderr(&output)
+    );
+    let json: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+    assert_eq!(json["uncoveredTasks"]["length"], 0, "{json}");
+    json["affectedTests"]["items"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|item| {
+            (
+                item["path"].as_str().unwrap().to_owned(),
+                Row {
+                    package: item["package"].as_str().unwrap().to_owned(),
+                    task: item["task"].as_str().unwrap_or_default().to_owned(),
+                    reason: item["reason"]["__typename"].as_str().unwrap().to_owned(),
+                },
+            )
+        })
+        .collect()
+}
+
+#[cfg(unix)]
+fn rows(expected: &[(&str, Row)]) -> BTreeMap<String, Row> {
+    expected
+        .iter()
+        .map(|(path, r)| ((*path).to_owned(), row(&r.package, &r.task, &r.reason)))
+        .collect()
+}
+
+/// Replaces `from` with `to` in the file at `rel`, which has it once.
+#[cfg(unix)]
+fn edit(root: &Path, rel: &str, from: &str, to: &str) {
+    let path = root.join(rel);
+    let text = fs::read_to_string(&path).unwrap();
+    assert_eq!(text.matches(from).count(), 1, "{rel}: {from}");
+    fs::write(&path, text.replace(from, to)).unwrap();
+}
+
+/// A Go test belongs to turbo's package around it, and its task is the script
+/// of that package that starts it: also where the script runs `go test` in a
+/// directory below the package, which is the Go module.
+#[cfg(unix)]
+#[test]
+fn a_go_test_has_the_task_of_the_script_that_starts_it() {
+    let dir = fixture("trace_go_scripts");
+    for (changed, test, package) in [
+        (
+            "services/billing/app/invoice/invoice.go",
+            "services/billing/app/invoice/invoice_test.go",
+            "billing",
+        ),
+        (
+            "services/search/engine/index/index.go",
+            "services/search/engine/index/index_test.go",
+            "search",
+        ),
+        (
+            "services/queue/worker/worker.go",
+            "services/queue/worker/worker_test.go",
+            "queue",
+        ),
+        (
+            "services/batch/two/two.go",
+            "services/batch/two/two_test.go",
+            "batch",
+        ),
+        (
+            "services/mail/smtp/smtp.go",
+            "services/mail/smtp/smtp_test.go",
+            "mail",
+        ),
+        // A script file that is not read command by command: its text names
+        // `go test`.
+        ("services/ops/ops.go", "services/ops/ops_test.go", "ops"),
+    ] {
+        assert_eq!(
+            affected_rows(dir.path(), &["--changed", changed]),
+            rows(&[(
+                test,
+                row(package, &format!("{package}#test"), "FileChanged")
+            )]),
+            "{changed}"
+        );
+        // The filter keeps the tests of the package it names.
+        assert_eq!(
+            affected(dir.path(), &["--changed", changed, "--filter", package]),
+            BTreeSet::from([test.to_owned()]),
+            "{changed}"
+        );
+    }
+    // `./...` stays in its module: no script starts the tests of the module
+    // below the package's.
+    assert_eq!(
+        affected_rows(dir.path(), &["--changed", "services/queue/tools/tools.go"]),
+        rows(&[(
+            "services/queue/tools/tools_test.go",
+            row("queue", "", "FileChanged")
+        )])
+    );
+    // The root's `turbo run test` starts the scripts of the other packages:
+    // their tests are not the root script's, and no script tests the module in
+    // the root package.
+    assert_eq!(
+        affected_rows(dir.path(), &["--changed", "tools/lint/lint.go"]),
+        rows(&[("tools/lint/lint_test.go", row("//", "", "FileChanged"))])
+    );
+}
+
+/// A script whose text changed can run its tests another way: every test it
+/// starts is selected, and no test of another script.
+#[cfg(unix)]
+#[test]
+fn a_changed_script_selects_the_tests_it_starts() {
+    let dir = fixture("trace_go_scripts");
+    let changed = |package: &str| row(package, &format!("{package}#test"), "TaskChanged");
+    for (package, from, to, tests) in [
+        (
+            "billing",
+            "go test ./...",
+            "go test -race ./...",
+            [
+                "services/billing/app/billing_test.go",
+                "services/billing/app/invoice/invoice_test.go",
+            ],
+        ),
+        (
+            "search",
+            "-race",
+            "-race -count=1",
+            [
+                "services/search/engine/index/index_test.go",
+                "services/search/engine/search_test.go",
+            ],
+        ),
+        (
+            "queue",
+            "-tags=integration",
+            "-tags=integration,slow",
+            [
+                "services/queue/queue_test.go",
+                "services/queue/worker/worker_test.go",
+            ],
+        ),
+        (
+            "batch",
+            "go test",
+            "go test -short",
+            [
+                "services/batch/one/one_test.go",
+                "services/batch/two/two_test.go",
+            ],
+        ),
+        (
+            "mail",
+            "./scripts/test.sh",
+            "./scripts/test.sh --verbose",
+            [
+                "services/mail/mail_test.go",
+                "services/mail/smtp/smtp_test.go",
+            ],
+        ),
+    ] {
+        let manifest = format!("services/{package}/package.json");
+        edit(dir.path(), &manifest, from, to);
+        let expected = rows(&[(tests[0], changed(package)), (tests[1], changed(package))]);
+        assert_eq!(
+            affected_rows(dir.path(), &["--base", "HEAD"]),
+            expected,
+            "{package}"
+        );
+        // Without a base revision to compare with, the scripts of a changed
+        // manifest count as changed (a test next to the manifest is selected
+        // as a reader of its directory already).
+        git(dir.path(), &["checkout", "--quiet", "--", &manifest]);
+        let selected = affected_rows(dir.path(), &["--changed", &manifest]);
+        assert_eq!(
+            selected.keys().collect::<Vec<_>>(),
+            expected.keys().collect::<Vec<_>>(),
+            "{package}"
+        );
+        assert!(
+            selected
+                .values()
+                .all(|r| r.task == format!("{package}#test")),
+            "{package}: {selected:?}"
+        );
+    }
+
+    // Another field of the manifest starts no test differently.
+    edit(
+        dir.path(),
+        "services/billing/package.json",
+        "\"version\": \"1.0.0\"",
+        "\"version\": \"1.0.1\"",
+    );
+    assert_eq!(
+        affected_rows(dir.path(), &["--base", "HEAD"]),
+        BTreeMap::new()
+    );
+    git(dir.path(), &["checkout", "--quiet", "--", "."]);
+
+    // The shell script file a script runs is the script's command too.
+    edit(
+        dir.path(),
+        "services/mail/scripts/test.sh",
+        "go test ./...",
+        "go test -race ./...",
+    );
+    assert_eq!(
+        affected_rows(dir.path(), &["--base", "HEAD"]),
+        rows(&[
+            ("services/mail/mail_test.go", changed("mail")),
+            ("services/mail/smtp/smtp_test.go", changed("mail")),
+        ])
+    );
+}
+
+/// The same for a JavaScript runner: `jest` that becomes `jest --ci`.
+#[cfg(unix)]
+#[test]
+fn a_changed_jest_script_selects_the_tests_it_starts() {
+    let dir = fixture("trace_jest");
+    edit(
+        dir.path(),
+        "packages/math/package.json",
+        "\"test\": \"jest\"",
+        "\"test\": \"jest --ci\"",
+    );
+    let changed = row("math", "math#test", "TaskChanged");
+    assert_eq!(
+        affected_rows(dir.path(), &["--base", "HEAD"]),
+        rows(&[
+            (JEST_ADD, row("math", "math#test", "TaskChanged")),
+            (JEST_MUL, changed),
+        ])
+    );
 }

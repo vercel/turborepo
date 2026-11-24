@@ -170,6 +170,63 @@ pub fn scan(src: &[u8], dialect: Dialect, objects: &[&str], pragma: &str) -> Sca
     out
 }
 
+/// The files `toMatchFileSnapshot(path)` calls in `src` name: `Some` for a
+/// literal path (relative to the test file), `None` for a computed one or a
+/// call without a path (the default name is not known here). With the 1-based
+/// line.
+pub fn file_snapshots(src: &[u8], dialect: Dialect) -> Vec<(Option<String>, u32)> {
+    const NAME: &[u8] = b"toMatchFileSnapshot";
+    let mut out = Vec::new();
+    if !memfind(src, NAME) {
+        return out;
+    }
+    // One pass: the call and the three tokens after it, and the line counted
+    // on from the call before.
+    let mut lx = Lexer::new(src, dialect);
+    let mut window: std::collections::VecDeque<Token> =
+        std::collections::VecDeque::with_capacity(4);
+    let (mut line, mut counted) = (1u32, 0usize);
+    let mut eof = false;
+    loop {
+        while !eof && window.len() < 4 {
+            let t = lx.next_token();
+            if t.kind == TokKind::Eof {
+                eof = true;
+            } else {
+                window.push_back(t);
+            }
+        }
+        let Some(t) = window.pop_front() else {
+            break;
+        };
+        if t.kind != TokKind::Ident
+            || t.text(src) != NAME
+            || window.front().is_none_or(|l| l.kind != TokKind::LParen)
+        {
+            continue;
+        }
+        let at = (t.start as usize).min(src.len());
+        if at > counted {
+            line += src[counted..at].iter().filter(|b| **b == b'\n').count() as u32;
+            counted = at;
+        }
+        // A literal first argument that is the whole argument.
+        let path = match (window.get(1), window.get(2)) {
+            (Some(a), Some(end))
+                if matches!(a.kind, TokKind::Str | TokKind::Template)
+                    && matches!(end.kind, TokKind::RParen | TokKind::Comma) =>
+            {
+                a.literal_content(src)
+                    .and_then(|raw| decode(raw, EscapeRules::JS).ok())
+                    .map(Cow::into_owned)
+            }
+            _ => None,
+        };
+        out.push((path, line));
+    }
+    out
+}
+
 fn memfind(h: &[u8], n: &[u8]) -> bool {
     h.windows(n.len()).any(|w| w == n)
 }
@@ -224,6 +281,34 @@ pub fn environment_pragma(src: &[u8], pragma: &str) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn file_snapshot_calls() {
+        let src =
+            b"test('a', async () => {\n  await expect(a).toMatchFileSnapshot('./out/a.txt');\n  \
+                    await expect(b).toMatchFileSnapshot(\n    name,\n  );\n  await \
+                    expect(c).toMatchFileSnapshot(`./out/c.txt`, 'hint');\n  \
+                    expect(d).toMatchFileSnapshot();\n  toMatchFileSnapshot;\n});\n";
+        assert_eq!(
+            file_snapshots(src, Dialect::TS),
+            [
+                (Some("./out/a.txt".to_string()), 2),
+                (None, 3),
+                (Some("./out/c.txt".to_string()), 6),
+                (None, 7),
+            ]
+        );
+        // Many calls on many lines: each has its own line.
+        let many = "expect(x).toMatchFileSnapshot('./s.txt');\n".repeat(20_000);
+        let found = file_snapshots(many.as_bytes(), Dialect::TS);
+        assert_eq!(found.len(), 20_000);
+        assert!(
+            found
+                .iter()
+                .enumerate()
+                .all(|(i, (p, line))| p.as_deref() == Some("./s.txt") && *line as usize == i + 1)
+        );
+    }
 
     #[test]
     fn jest_calls() {

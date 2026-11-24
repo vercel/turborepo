@@ -315,6 +315,7 @@ fn loopback(f: &Fixture, u: &LoopbackServer) -> provision::Transports {
             u.origin(),
         )
         .unwrap(),
+        catalog: None,
         artifact: None,
         go: turborepo_setup::go_resolution::GoTransport::loopback_http_for_tests(u.origin())
             .unwrap(),
@@ -353,6 +354,7 @@ impl Fixture {
                         .owned
                         .policy_at(&self.owned.root().join("apps/web/src"))?)
                 },
+                &|_| {},
             )?);
             Ok(0)
         })

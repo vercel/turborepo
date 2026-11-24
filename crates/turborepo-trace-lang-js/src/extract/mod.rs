@@ -730,7 +730,15 @@ impl<'s> Recognizer<'s, '_> {
             // `import.meta.resolve(x)`: finds what `import(x)` would load (ESM resolution).
             TokKind::Dot => {
                 let (m, d, r) = (self.ts.peek(1), self.ts.peek(2), self.ts.peek(3));
+                // `import.meta.glob(patterns)` (vite): the modules the patterns match,
+                // loaded lazily or (with `eager`) at once.
                 if self.text(&m) == b"meta"
+                    && d.kind == TokKind::Dot
+                    && matches!(self.text(&r), b"glob" | b"globEager")
+                    && self.ts.peek(4).kind == TokKind::LParen
+                {
+                    self.meta_glob(t);
+                } else if self.text(&m) == b"meta"
                     && d.kind == TokKind::Dot
                     && self.text(&r) == b"resolve"
                     && self.ts.peek(4).kind == TokKind::LParen
@@ -745,6 +753,193 @@ impl<'s> Recognizer<'s, '_> {
             }
             _ => self.import_decl(t),
         }
+    }
+
+    /// `import.meta.glob(patterns, options)`: one reference per pattern that is
+    /// a literal relative to the file (`./pages/*.ts`,
+    /// `../data/**/*.json`), with every glob operator as an unknown part (a
+    /// pattern specifier: the files it matches now are loaded, and one that
+    /// is added or removed changes the set). A pattern that excludes
+    /// (`!...`) takes nothing away here. With the option `base`, a literal
+    /// relative to the file, the patterns are relative to that directory. A
+    /// pattern that is computed, or that is not relative to the file
+    /// (`/src/*.ts` from the project root, an alias), and every pattern under
+    /// a `base` that is not such a literal, is a reference nothing bounds.
+    /// Every file a pattern matches is loaded, whatever its kind
+    /// ([`GLOB_IMPORT`]).
+    fn meta_glob(&mut self, t: Token) {
+        let cap = self.capture_arg(4, 0);
+        if cap.end == cap.first {
+            return;
+        }
+        let base = self.glob_base();
+        let toks: Vec<Token> = self.ts.window(cap.first, cap.end).to_vec();
+        let end = toks.last().map_or(t.end, |l| l.end);
+        let span = Span::new(t.start, end);
+        let flags = RefFlags::LAZY | self.base_flags();
+        let open = |detail: &str| {
+            RawRef::new(RefKind::DynamicImport, Specifier::Unknown, span)
+                .with_flags(flags)
+                .with_uncertainty(Uncertainty::new(
+                    UncertaintyKind::ComputedSpecifier,
+                    span,
+                    detail,
+                ))
+        };
+        // One literal, or an array of literals.
+        let literals: Option<Vec<Token>> = match toks.as_slice() {
+            [one] if self.is_literal(one) => Some(vec![*one]),
+            [first, inner @ .., last]
+                if first.kind == TokKind::LBracket && last.kind == TokKind::RBracket =>
+            {
+                let mut out = Vec::new();
+                let mut ok = true;
+                for (i, x) in inner.iter().enumerate() {
+                    match (i % 2, x.kind) {
+                        (0, _) if self.is_literal(x) => out.push(*x),
+                        (1, TokKind::Comma) => {}
+                        _ => ok = false,
+                    }
+                }
+                ok.then_some(out)
+            }
+            _ => None,
+        };
+        let Some(literals) = literals else {
+            self.ex.refs.push(open(
+                "import.meta.glob with a pattern that is not a literal",
+            ));
+            return;
+        };
+        for lit in literals {
+            let Some(glob) = self.literal_str(&lit) else {
+                self.ex.refs.push(open(
+                    "import.meta.glob with a pattern that is not a literal",
+                ));
+                continue;
+            };
+            if glob.starts_with('!') {
+                continue;
+            }
+            if !(glob.starts_with("./") || glob.starts_with("../")) {
+                self.ex.refs.push(open(
+                    "import.meta.glob with a pattern that is not relative to the file",
+                ));
+                continue;
+            }
+            let glob = match &base {
+                GlobBase::Importer => glob.into_owned(),
+                GlobBase::Dir(dir) => join_relative(dir, &glob),
+                GlobBase::Open => {
+                    self.ex.refs.push(open(
+                        "import.meta.glob with a base that is not a literal relative to the file",
+                    ));
+                    continue;
+                }
+            };
+            // Literal text between the glob operators; braces, classes and extglobs
+            // are unknown text as a whole.
+            let mut parts: Vec<turborepo_trace_core::Part<'s>> = Vec::new();
+            let mut text = String::new();
+            let mut depth = 0u32;
+            let wild = |parts: &mut Vec<turborepo_trace_core::Part<'s>>, text: &mut String| {
+                if !text.is_empty() {
+                    parts.push(turborepo_trace_core::Part::Lit(Cow::Owned(std::mem::take(
+                        text,
+                    ))));
+                }
+                if !matches!(parts.last(), Some(turborepo_trace_core::Part::Wild { .. })) {
+                    parts.push(turborepo_trace_core::Part::Wild {
+                        reason: Cow::Borrowed(GLOB_IMPORT),
+                    });
+                }
+            };
+            // (`**/` also stands for no directory at all.)
+            for c in glob.replace("**/", "**").chars() {
+                match c {
+                    '{' | '[' | '(' => {
+                        depth += 1;
+                        wild(&mut parts, &mut text);
+                    }
+                    '}' | ']' | ')' => depth = depth.saturating_sub(1),
+                    _ if depth > 0 => {}
+                    '*' | '?' | '!' | '+' | '@' => wild(&mut parts, &mut text),
+                    c => text.push(c),
+                }
+            }
+            if !text.is_empty() {
+                parts.push(turborepo_trace_core::Part::Lit(Cow::Owned(text)));
+            }
+            let spec = if parts
+                .iter()
+                .any(|p| matches!(p, turborepo_trace_core::Part::Wild { .. }))
+            {
+                Specifier::Pattern(parts)
+            } else {
+                Specifier::Literal(Cow::Owned(glob))
+            };
+            self.ex
+                .refs
+                .push(RawRef::new(RefKind::DynamicImport, spec, span).with_flags(flags));
+        }
+    }
+
+    /// The `base` option of the `import.meta.glob` call whose `(` is at peek
+    /// index 4: the second argument is an object literal, and `base` a
+    /// property of it with a literal value.
+    fn glob_base(&mut self) -> GlobBase {
+        let cap = self.capture_arg(4, 1);
+        if cap.truncated {
+            return GlobBase::Open;
+        }
+        if cap.end == cap.first {
+            return GlobBase::Importer;
+        }
+        let toks: Vec<Token> = self.ts.window(cap.first, cap.end).to_vec();
+        let (Some(first), Some(last)) = (toks.first(), toks.last()) else {
+            return GlobBase::Importer;
+        };
+        if first.kind != TokKind::LBrace || last.kind != TokKind::RBrace || toks.len() < 2 {
+            // Options that are not written here.
+            return GlobBase::Open;
+        }
+        let inner = &toks[1..toks.len() - 1];
+        let top = first.depth + 1;
+        let mut base = GlobBase::Importer;
+        for (i, x) in inner.iter().enumerate() {
+            if x.depth != top {
+                continue;
+            }
+            // A spread or a computed key may set `base`.
+            if matches!(x.kind, TokKind::Ellipsis | TokKind::LBracket) {
+                let key = i == 0 || inner[i - 1].kind == TokKind::Comma;
+                if x.kind == TokKind::Ellipsis || key {
+                    return GlobBase::Open;
+                }
+            }
+            let named = (x.kind == TokKind::Ident && self.text(x) == b"base")
+                || self.literal_str(x).is_some_and(|v| v == "base");
+            let key = i == 0 || inner[i - 1].kind == TokKind::Comma;
+            if !(named && key) {
+                continue;
+            }
+            let value = match (inner.get(i + 1), inner.get(i + 2), inner.get(i + 3)) {
+                (Some(colon), Some(v), after)
+                    if colon.kind == TokKind::Colon
+                        && after.is_none_or(|a| a.kind == TokKind::Comma && a.depth == top) =>
+                {
+                    self.literal_str(v)
+                }
+                _ => None,
+            };
+            base = match value {
+                Some(v) if v.starts_with("./") || v.starts_with("../") => {
+                    GlobBase::Dir(v.into_owned())
+                }
+                _ => GlobBase::Open,
+            };
+        }
+        base
     }
 
     fn import_decl(&mut self, t: Token) {
@@ -3045,4 +3240,43 @@ fn destructure_back(src: &[u8], close: usize) -> Option<Vec<(&str, &str)>> {
         out.push((key, local));
     }
     Some(out)
+}
+
+/// The reason of the unknown parts of an `import.meta.glob` pattern. A pattern
+/// with it matches files of any kind: the resolver keeps what an asset glob
+/// would leave out (`README.md`, C sources, declaration files).
+pub const GLOB_IMPORT: &str = "import.meta.glob";
+
+/// What the patterns of an `import.meta.glob` are relative to.
+enum GlobBase {
+    /// The directory of the file (no `base` option).
+    Importer,
+    /// A directory relative to the file (`./pages`, `../data`).
+    Dir(String),
+    /// A directory that is not known here: computed, from the project root, or
+    /// set by options that are not written in the call.
+    Open,
+}
+
+/// The relative pattern `pattern` (`./x`, `../x`) below the relative directory
+/// `dir`, as a pattern relative to the file: `./` or `../` first, without `.`
+/// and inner `..` steps.
+fn join_relative(dir: &str, pattern: &str) -> String {
+    let mut out: Vec<&str> = Vec::new();
+    for seg in dir.split('/').chain(pattern.split('/')) {
+        match seg {
+            "" | "." => {}
+            ".." if out.last().is_some_and(|l| *l != "..") => {
+                out.pop();
+            }
+            s => out.push(s),
+        }
+    }
+    let joined = out.join("/");
+    let slash = if pattern.ends_with('/') { "/" } else { "" };
+    if joined.starts_with("..") {
+        format!("{joined}{slash}")
+    } else {
+        format!("./{joined}{slash}")
+    }
 }

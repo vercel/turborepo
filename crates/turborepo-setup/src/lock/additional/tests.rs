@@ -237,3 +237,6 @@ fn turbo_jsonc_is_the_recorded_declaration_file() {
     assert!(covered("fixture", fixture));
     assert!(!covered("other", fixture));
 }
+
+#[path = "catalog_tests.rs"]
+mod catalog;
