@@ -173,10 +173,7 @@ fn hash_objects_inner(
 pub(crate) fn has_symlink(root: &AbsoluteSystemPath, path: &AbsoluteSystemPath) -> bool {
     let mut current = Some(path);
     while let Some(path) = current.filter(|path| *path != root) {
-        if path
-            .symlink_metadata()
-            .is_ok_and(|meta| meta.file_type().is_symlink())
-        {
+        if is_symlink(path) {
             return true;
         }
         current = path.parent();
@@ -184,11 +181,71 @@ pub(crate) fn has_symlink(root: &AbsoluteSystemPath, path: &AbsoluteSystemPath) 
     false
 }
 
+fn is_symlink(path: &AbsoluteSystemPath) -> bool {
+    path.symlink_metadata()
+        .is_ok_and(|meta| meta.file_type().is_symlink())
+}
+
+/// Answers [`has_symlink`] for many paths under one root while checking each
+/// ancestor directory only once.
+///
+/// Package hashing probes every tracked file, and files in the same package
+/// share most of their ancestors. The leaf path is always checked, so only
+/// directory results are memoized.
+pub(crate) struct SymlinkProbe<'a> {
+    root: &'a AbsoluteSystemPath,
+    directories: std::collections::HashMap<std::path::PathBuf, bool>,
+}
+
+impl<'a> SymlinkProbe<'a> {
+    pub(crate) fn new(root: &'a AbsoluteSystemPath) -> Self {
+        Self {
+            root,
+            directories: std::collections::HashMap::new(),
+        }
+    }
+
+    /// Equivalent to `has_symlink(root, path)`.
+    pub(crate) fn has_symlink(&mut self, path: &AbsoluteSystemPath) -> bool {
+        if path == self.root {
+            return false;
+        }
+        if is_symlink(path) {
+            return true;
+        }
+
+        let root = self.root;
+        let mut unresolved = Vec::new();
+        let mut current = path.parent();
+        let result = loop {
+            let Some(directory) = current.filter(|directory| *directory != root) else {
+                break false;
+            };
+            if let Some(&cached) = self.directories.get(directory.as_std_path()) {
+                break cached;
+            }
+            unresolved.push(directory);
+            if is_symlink(directory) {
+                break true;
+            }
+            current = directory.parent();
+        };
+
+        // Every unresolved directory is the symlink itself or a descendant of
+        // the first symlink or cached ancestor, so all share the result.
+        for directory in unresolved {
+            self.directories
+                .insert(directory.as_std_path().to_owned(), result);
+        }
+        result
+    }
+}
+
 #[cfg(test)]
 mod test {
     use turbopath::{AbsoluteSystemPathBuf, RelativeUnixPathBuf, RelativeUnixPathBufTestExt};
 
-    use super::{hash_discovered_objects, hash_objects};
+    use super::{SymlinkProbe, has_symlink, hash_discovered_objects, hash_objects};
     use crate::{GitHashes, OidHash, find_git_root};
 
     #[test]
@@ -309,6 +366,63 @@ mod test {
         .unwrap();
 
         assert!(hashes.is_empty());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn test_symlink_probe_matches_has_symlink() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(tmp.path()).unwrap();
+        let outside = tempfile::tempdir().unwrap();
+        let outside = AbsoluteSystemPathBuf::try_from(outside.path()).unwrap();
+
+        for dir in ["pkg/src/nested", "pkg/real", "other/deep/er"] {
+            root.join_unix_path(RelativeUnixPathBuf::new(dir).unwrap())
+                .create_dir_all()
+                .unwrap();
+        }
+        outside.join_component("inner").create_dir_all().unwrap();
+        root.join_component("pkg")
+            .join_component("linked")
+            .symlink_to_dir(outside.to_string())
+            .unwrap();
+        root.join_component("other")
+            .join_component("deep")
+            .join_component("file-link")
+            .symlink_to_file(outside.join_component("missing").to_string())
+            .unwrap();
+
+        // Probe descendants of a symlink before and after the symlink itself,
+        // plus regular paths that share cached ancestors.
+        let paths = [
+            "pkg/src/nested/a.ts",
+            "pkg/src/b.ts",
+            "pkg/linked/inner/c.ts",
+            "pkg/linked/d.ts",
+            "pkg/linked",
+            "pkg/linked/inner/e.ts",
+            "pkg/real/f.ts",
+            "pkg/src/nested/g.ts",
+            "other/deep/file-link",
+            "other/deep/er/h.ts",
+            "pkg",
+        ];
+        let mut probe = SymlinkProbe::new(&root);
+        for path in paths {
+            let path = root.join_unix_path(RelativeUnixPathBuf::new(path).unwrap());
+            assert_eq!(
+                probe.has_symlink(&path),
+                has_symlink(&root, &path),
+                "{path}"
+            );
+        }
+        assert!(!probe.has_symlink(&root));
+        assert!(probe.has_symlink(
+            &root.join_unix_path(RelativeUnixPathBuf::new("pkg/linked/inner/c.ts").unwrap())
+        ));
+        assert!(!probe.has_symlink(
+            &root.join_unix_path(RelativeUnixPathBuf::new("pkg/src/nested/a.ts").unwrap())
+        ));
     }
 
     /// Verify that our blob hashing produces OIDs identical to `git
