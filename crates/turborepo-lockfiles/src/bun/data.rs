@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde_json::Value;
 
-use super::{BTreeSet, Map, PackageIndex};
+use super::{BTreeSet, Map, PackageIndex, types::split_ident};
 
 /// Represents a platform constraint that can be either inclusive or exclusive.
 /// This matches Bun's Negatable type for os/cpu/libc fields.
@@ -292,8 +292,7 @@ pub(crate) struct RootInfo {
 impl PackageEntry {
     // Extracts version from key
     pub(super) fn version(&self) -> &str {
-        self.ident
-            .rsplit_once('@')
+        split_ident(&self.ident)
             .map(|(_, version)| version)
             .unwrap_or(&self.ident)
     }

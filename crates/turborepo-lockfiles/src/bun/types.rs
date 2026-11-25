@@ -184,10 +184,23 @@ pub enum PackageIdent {
     Root { name: String },
 }
 
+/// Split a `name@specifier` ident at the `@` that ends the package name.
+///
+/// A package name is either `name` or `@scope/name`, so the separator is the
+/// first `@` after an optional leading scope marker. Any later `@` belongs to
+/// the specifier, as in the userinfo of `pkg@git+ssh://git@host/repo.git` or
+/// the scope in `@scope/pkg@https://host/@scope/pkg/-/pkg-1.0.0.tgz`; splitting
+/// from the right cuts the ident inside those URLs.
+pub(super) fn split_ident(s: &str) -> Option<(&str, &str)> {
+    let start = usize::from(s.starts_with('@'));
+    let at = start + s[start..].find('@')?;
+    Some((&s[..at], &s[at + 1..]))
+}
+
 impl PackageIdent {
     /// Parse a package ident string.
     pub fn parse(s: &str) -> Self {
-        if let Some((name, rest)) = s.rsplit_once('@') {
+        if let Some((name, rest)) = split_ident(s) {
             // Handle workspace protocol
             if let Some(path) = rest.strip_prefix("workspace:") {
                 return Self::Workspace {
@@ -599,6 +612,30 @@ mod tests {
             }
             _ => panic!("Expected Git ident"),
         }
+    }
+
+    #[test]
+    fn test_package_ident_with_at_in_specifier() {
+        let ident = PackageIdent::parse("my-pkg@git+ssh://git@github.com/org/repo.git#abc123");
+        assert_eq!(
+            ident,
+            PackageIdent::Git {
+                name: "my-pkg".to_string(),
+                url: "git+ssh://git@github.com/org/repo.git#abc123".to_string(),
+                rev: None
+            }
+        );
+
+        let ident = PackageIdent::parse(
+            "@scope/tar-pkg@https://registry.npmjs.org/@scope/tar-pkg/-/tar-pkg-1.0.0.tgz",
+        );
+        assert_eq!(
+            ident,
+            PackageIdent::Tarball {
+                name: "@scope/tar-pkg".to_string(),
+                url: "https://registry.npmjs.org/@scope/tar-pkg/-/tar-pkg-1.0.0.tgz".to_string()
+            }
+        );
     }
 
     #[test]

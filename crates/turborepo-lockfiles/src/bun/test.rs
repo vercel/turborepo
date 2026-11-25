@@ -3089,3 +3089,102 @@ fn test_prune_preserves_local_tarball_and_root_entry_shapes() {
     let reparsed = BunLockfile::from_str(&pruned).unwrap();
     assert_eq!(reparsed.data.packages, lockfile.data.packages);
 }
+
+// Bun copies a dependency's specifier verbatim into the package ident, so a git
+// URL's userinfo and a scoped tarball URL both carry `@` after the package
+// name. The name ends at the first `@` past an optional scope, not the last
+// one: split from the right, the ident names a package nothing looks up.
+#[test]
+fn test_resolves_nested_entry_whose_url_contains_at() {
+    let tar_url = "https://registry.npmjs.org/@scope/tar-pkg/-/tar-pkg-1.0.0.tgz";
+    let contents = serde_json::to_string(&json!({
+        "lockfileVersion": 1,
+        "workspaces": {
+            "": { "name": "monorepo" },
+            "apps/web": {
+                "name": "web",
+                "dependencies": {
+                    "my-pkg": "git+ssh://git@github.com/org/repo.git",
+                    "@scope/tar-pkg": tar_url,
+                },
+            },
+        },
+        "packages": {
+            "my-pkg": ["my-pkg@git+ssh://git@github.com/org/repo.git#abc123", {}, "abc123"],
+            "other/@scope/tar-pkg": [
+                format!("@scope/tar-pkg@{tar_url}"),
+                {},
+                "sha512-tar==",
+            ],
+        },
+    }))
+    .unwrap();
+
+    let lockfile = BunLockfile::from_str(&contents).unwrap();
+
+    let git_resolved = lockfile
+        .resolve_package(
+            "apps/web",
+            "my-pkg",
+            "git+ssh://git@github.com/org/repo.git",
+        )
+        .unwrap()
+        .expect("git dependency should resolve");
+    assert_eq!(
+        git_resolved.version,
+        "git+ssh://git@github.com/org/repo.git#abc123"
+    );
+
+    let tar_resolved = lockfile
+        .resolve_package("apps/web", "@scope/tar-pkg", tar_url)
+        .unwrap()
+        .expect("nested scoped tarball should resolve");
+    assert_eq!(tar_resolved.version, tar_url);
+}
+
+// A nested entry whose name has no hoisted counterpart is promoted to the
+// package name during prune. Naming it from the wrong `@` renames it to the URL
+// prefix, so bun can no longer resolve it from its parent.
+#[test]
+fn test_prune_promotes_nested_entry_whose_url_contains_at() {
+    let tar_url = "https://registry.npmjs.org/@scope/tar-pkg/-/tar-pkg-1.0.0.tgz";
+    let contents = serde_json::to_string(&json!({
+        "lockfileVersion": 1,
+        "workspaces": {
+            "": { "name": "monorepo" },
+            "apps/web": {
+                "name": "web",
+                "dependencies": { "parent-pkg": "^1.0.0" },
+            },
+        },
+        "packages": {
+            "parent-pkg": [
+                "parent-pkg@1.0.0",
+                { "dependencies": { "@scope/tar-pkg": tar_url } },
+                "sha512-parent",
+            ],
+            "parent-pkg/@scope/tar-pkg": [
+                format!("@scope/tar-pkg@{tar_url}"),
+                {},
+                "sha512-tar==",
+            ],
+        },
+    }))
+    .unwrap();
+
+    let lockfile = BunLockfile::from_str(&contents).unwrap();
+    let pruned = prune_to_string(&lockfile, "apps/web", &[("parent-pkg", "^1.0.0")]);
+
+    assert!(
+        pruned.contains(&format!(
+            "    \"@scope/tar-pkg\": [\"@scope/tar-pkg@{tar_url}\", {{}}, \"sha512-tar==\"],"
+        )),
+        "nested entry should be promoted to its package name:\n{pruned}"
+    );
+
+    let reparsed = BunLockfile::from_str(&pruned).unwrap();
+    assert_eq!(
+        reparsed.data.packages["@scope/tar-pkg"].ident,
+        format!("@scope/tar-pkg@{tar_url}")
+    );
+}
