@@ -213,8 +213,6 @@ impl<'a> Descriptor<'a> {
     /// If the descriptor is a patch returns the version that the patch targets
     pub fn primary_version(&self) -> Option<String> {
         let Locator { reference, .. } = Locator::from_patch_reference(&self.range)?;
-        // This is always owned due to needing to replace '%3A' with ':' so
-        // we extract the owned string.
         Some(reference.into_owned())
     }
 }
@@ -262,10 +260,12 @@ impl<'a> Locator<'a> {
         let caps = regex!(r"patch:(.+)#(?:\./)?([^:]+)(?:::)?.*$").captures(patch_reference)?;
         let capture_group = caps.get(1)?;
         let Locator { ident, reference } = Locator::try_from(capture_group.as_str()).ok()?;
-        // This might seem like a special case hack, but this is what yarn does
-        let mut decoded_reference = reference.replace("npm%3A", "npm:");
-        // Some older versions of yarn don't encode the npm protocol
-        if !decoded_reference.starts_with("npm:") {
+        // Yarn escapes the descriptor it splices in (`encodeUnsafeCharacters`),
+        // so decode it back to reach the reference of the patched package.
+        let mut decoded_reference = decode_unsafe_characters(&reference).into_owned();
+        // A reference without a protocol is an npm one, which some older
+        // versions of yarn leave out.
+        if !decoded_reference.contains(':') {
             decoded_reference.insert_str(0, "npm:");
         }
         Some(Locator {
@@ -324,6 +324,41 @@ impl<'a> From<Locator<'a>> for Descriptor<'a> {
             range: reference,
         }
     }
+}
+
+/// Reverses Yarn's `encodeUnsafeCharacters`, which escapes `%`, `:` and `#`
+/// before the source and selector of a range are joined. The escapes are undone
+/// in one pass so that a source's own `%3A`, written as `%253A`, survives.
+fn decode_unsafe_characters(reference: &str) -> Cow<'_, str> {
+    const ESCAPES: [(&str, char); 3] = [("%3A", ':'), ("%23", '#'), ("%25", '%')];
+
+    if !reference.contains('%') {
+        return Cow::Borrowed(reference);
+    }
+
+    let mut decoded = String::with_capacity(reference.len());
+    let mut rest = reference;
+    while let Some(percent) = rest.find('%') {
+        decoded.push_str(&rest[..percent]);
+        let candidate = &rest[percent..];
+        let escape = ESCAPES.into_iter().find(|(escape, _)| {
+            candidate
+                .get(..escape.len())
+                .is_some_and(|prefix| prefix.eq_ignore_ascii_case(escape))
+        });
+        match escape {
+            Some((escape, decoded_char)) => {
+                decoded.push(decoded_char);
+                rest = &candidate[escape.len()..];
+            }
+            None => {
+                decoded.push('%');
+                rest = &candidate[1..];
+            }
+        }
+    }
+    decoded.push_str(rest);
+    Cow::Owned(decoded)
 }
 
 #[cfg(test)]
@@ -563,6 +598,18 @@ mod test {
                 locator: "resolve@patch:resolve@npm%3A1.22.1#~builtin<compat/resolve>::version=1.\
                           22.1&hash=07638b",
                 original: Some("resolve@npm:1.22.1"),
+            },
+            TestCase {
+                // A source with its own protocol keeps it instead of gaining `npm:`.
+                locator: "is-odd@patch:is-odd@https%3A//registry.npmjs.org/is-odd/-/is-odd-3.0.1.\
+                          tgz#~/.yarn/patches/is-odd-https-9fc078a7d2.patch",
+                original: Some("is-odd@https://registry.npmjs.org/is-odd/-/is-odd-3.0.1.tgz"),
+            },
+            TestCase {
+                // Only the escapes Yarn writes are undone, and in one pass, so an
+                // escaped `%` stays literal.
+                locator: "a@patch:a@file%3A//tmp/a%253A1.tgz#./p.patch",
+                original: Some("a@file://tmp/a%3A1.tgz"),
             },
         ];
         for tc in test_cases {
