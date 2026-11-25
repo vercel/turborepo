@@ -55,14 +55,25 @@ impl BunLockfile {
 
         match spec {
             VersionSpec::Semver(spec_str) => {
-                // Parse both the requirement and the version
-                let Ok(req) = VersionReq::parse(&spec_str) else {
-                    // If we can't parse the requirement, be lenient and accept it
+                let Ok(ver) = Version::parse(version) else {
+                    // If we can't parse the version, be lenient and accept it
                     return true;
                 };
 
-                let Ok(ver) = Version::parse(version) else {
-                    // If we can't parse the version, be lenient and accept it
+                // A bare version ("2.0.0") is an exact pin in npm and Bun
+                // semver, but Cargo's `VersionReq` reads it as the caret range
+                // `^2.0.0`. Compare it by precedence instead, so a pin never
+                // widens into a range and picks a sibling version that is still
+                // within the same major.
+                if let Ok(exact) = Version::parse(&spec_str) {
+                    return ver.major == exact.major
+                        && ver.minor == exact.minor
+                        && ver.patch == exact.patch
+                        && ver.pre == exact.pre;
+                }
+
+                let Ok(req) = VersionReq::parse(&spec_str) else {
+                    // If we can't parse the requirement, be lenient and accept it
                     return true;
                 };
 
@@ -135,8 +146,10 @@ impl BunLockfile {
             return Ok(Some(pkg));
         }
 
-        // Try hoisted/top-level
-        if let Some((_key, entry)) = self.index.find_package(Some(workspace_name), name)
+        // Try hoisted/top-level. The workspace-scoped entry was already tried
+        // and rejected above, so skip straight to the hoisted entry instead of
+        // letting the scoped lookup answer for it a second time.
+        if let Some((_key, entry)) = self.index.find_package(None, name)
             && let Some(pkg) =
                 self.process_package_entry(entry, name, override_version, resolved_version)?
             && (has_override || self.version_satisfies_spec(&pkg.version, version_spec))
