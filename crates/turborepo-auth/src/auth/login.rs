@@ -19,7 +19,8 @@ use crate::{
         should_attempt_vercel_token_refresh, should_skip_existing_token_for_login,
     },
     device_flow::{self, TokenSet},
-    error, ui,
+    error,
+    ui::{self, RemoteCacheHint},
 };
 
 const DEFAULT_HOST_NAME: &str = "127.0.0.1";
@@ -47,12 +48,16 @@ pub(super) fn is_auth_rejection_error(error: &Error) -> bool {
     }
 }
 
-pub(super) fn valid_token_callback(message: &str, color_config: &ColorConfig) -> impl FnOnce(&str) {
+pub(super) fn valid_token_callback(
+    message: &str,
+    color_config: &ColorConfig,
+    hint: RemoteCacheHint,
+) -> impl FnOnce(&str) {
     let message = message.to_string();
     let color_config = *color_config;
     move |user_email: &str| {
         println!("{}", color_config.apply(BOLD.apply_to(message)));
-        ui::print_cli_authorized(user_email, &color_config);
+        ui::print_cli_authorized(user_email, &color_config, hint);
     }
 }
 
@@ -123,7 +128,11 @@ where
         api_client,
         linked_team_id,
         linked_team_slug,
-        Some(valid_token_callback(valid_message, color_config)),
+        Some(valid_token_callback(
+            valid_message,
+            color_config,
+            RemoteCacheHint::for_login(true, linked_team_id, linked_team_slug),
+        )),
     )
     .await
     {
@@ -144,7 +153,11 @@ where
         api_client,
         linked_team_id,
         linked_team_slug,
-        Some(valid_token_callback(valid_message, color_config)),
+        Some(valid_token_callback(
+            valid_message,
+            color_config,
+            RemoteCacheHint::for_login(true, linked_team_id, linked_team_slug),
+        )),
     )
     .await
     {
@@ -185,6 +198,8 @@ pub async fn login<T: Client + TokenClient + CacheClient>(
     } = *options;
 
     let is_vercel_login = is_vercel(login_url_configuration);
+    let remote_cache_hint =
+        RemoteCacheHint::for_login(is_vercel_login, linked_team_id, linked_team_slug);
     if is_vercel_login {
         ensure_trusted_vercel_api(api_client)?;
     }
@@ -248,7 +263,11 @@ pub async fn login<T: Client + TokenClient + CacheClient>(
                         api_client,
                         None,
                         None,
-                        Some(valid_token_callback("Using existing login.", color_config)),
+                        Some(valid_token_callback(
+                            "Using existing login.",
+                            color_config,
+                            remote_cache_hint,
+                        )),
                     )
                     .await?
                 };
@@ -284,7 +303,13 @@ pub async fn login<T: Client + TokenClient + CacheClient>(
     }
 
     if is_vercel_login {
-        login_vercel_device_flow(api_client, color_config, login_url_configuration).await
+        login_vercel_device_flow(
+            api_client,
+            color_config,
+            login_url_configuration,
+            remote_cache_hint,
+        )
+        .await
     } else {
         let port = sso_login_callback_port.unwrap_or(DEFAULT_PORT);
         login_redirect(
@@ -294,6 +319,7 @@ pub async fn login<T: Client + TokenClient + CacheClient>(
             login_url_source,
             api_url_source,
             port,
+            remote_cache_hint,
         )
         .await
     }
@@ -304,6 +330,7 @@ pub(super) async fn login_vercel_device_flow<T: Client>(
     api_client: &T,
     color_config: &ColorConfig,
     login_url: &str,
+    remote_cache_hint: RemoteCacheHint,
 ) -> Result<(Token, Option<TokenSet>), Error> {
     let http_client = crate::build_auth_http_client()?;
 
@@ -352,7 +379,7 @@ pub(super) async fn login_vercel_device_flow<T: Client>(
         .await
         .map_err(Error::FailedToFetchUser)?;
 
-    ui::print_cli_authorized(&user_response.user.email, color_config);
+    ui::print_cli_authorized(&user_response.user.email, color_config, remote_cache_hint);
 
     Ok((Token::New(secret_token), Some(token_set)))
 }
@@ -382,6 +409,7 @@ async fn login_redirect<T: Client>(
     login_url_source: Option<turborepo_types::ConfigurationSource>,
     api_url_source: Option<turborepo_types::ConfigurationSource>,
     port: u16,
+    remote_cache_hint: RemoteCacheHint,
 ) -> Result<(Token, Option<TokenSet>), Error> {
     let mut login_url =
         Url::parse(login_url_configuration).map_err(|_| error::Error::LoginUrlCannotBeABase {
@@ -443,7 +471,7 @@ async fn login_redirect<T: Client>(
         .await
         .map_err(Error::FailedToFetchUser)?;
 
-    ui::print_cli_authorized(&user_response.user.email, color_config);
+    ui::print_cli_authorized(&user_response.user.email, color_config, remote_cache_hint);
 
     Ok((Token::new(token_string), None))
 }

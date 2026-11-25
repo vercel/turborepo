@@ -1,3 +1,3 @@
 mod messages;
 
-pub use messages::print_cli_authorized;
+pub use messages::{RemoteCacheHint, print_cli_authorized};

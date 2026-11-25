@@ -17,8 +17,10 @@ use url::Url;
 
 const CSRF_STATE_LENGTH: usize = 32;
 
-pub(crate) fn is_vercel(login_url: &str) -> bool {
-    Url::parse(login_url)
+/// Whether `url` is served by Vercel, where the account API `turbo link` reads
+/// teams from lives.
+pub fn is_vercel(url: &str) -> bool {
+    Url::parse(url)
         .ok()
         .is_some_and(|url| is_trusted_vercel_origin(&url))
 }
