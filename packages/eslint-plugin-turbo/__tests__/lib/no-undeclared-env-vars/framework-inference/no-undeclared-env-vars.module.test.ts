@@ -31,6 +31,11 @@ ruleTester.run(RULES.noUndeclaredEnvVars, rule, {
       filename: nextJsFilename
     },
     {
+      code: `const { NEXT_DEPLOYMENT_ID } = import.meta.env;`,
+      ...options(),
+      filename: nextJsFilename
+    },
+    {
       code: `const { VITE_THINGS } = import.meta.env;`,
       ...options(),
       filename: viteFilename
@@ -60,6 +65,38 @@ ruleTester.run(RULES.noUndeclaredEnvVars, rule, {
       errors: [
         {
           message: "VITE_THINGS is not listed as a dependency in turbo.json"
+        }
+      ]
+    },
+    {
+      code: `const { INVITE_CODE } = import.meta.env;`,
+      ...options(),
+      filename: viteFilename,
+      errors: [
+        {
+          message: "INVITE_CODE is not listed as a dependency in turbo.json"
+        }
+      ]
+    },
+    {
+      code: `const { NEXT_DEPLOYMENT_ID_SECRET } = import.meta.env;`,
+      ...options(),
+      filename: nextJsFilename,
+      errors: [
+        {
+          message:
+            "NEXT_DEPLOYMENT_ID_SECRET is not listed as a dependency in turbo.json"
+        }
+      ]
+    },
+    {
+      code: `const { MY_NEXT_PUBLIC_KEY } = import.meta.env;`,
+      ...options(),
+      filename: nextJsFilename,
+      errors: [
+        {
+          message:
+            "MY_NEXT_PUBLIC_KEY is not listed as a dependency in turbo.json"
         }
       ]
     },
