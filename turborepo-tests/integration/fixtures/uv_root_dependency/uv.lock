@@ -1,0 +1,25 @@
+version = 1
+revision = 3
+requires-python = ">=3.9"
+
+[manifest]
+members = [
+    "child-plugin",
+    "core-lib",
+]
+
+[[package]]
+name = "child-plugin"
+version = "0.1.0"
+source = { editable = "packages/child-plugin" }
+dependencies = [
+    { name = "core-lib" },
+]
+
+[package.metadata]
+requires-dist = [{ name = "core-lib", editable = "." }]
+
+[[package]]
+name = "core-lib"
+version = "0.1.0"
+source = { editable = "." }

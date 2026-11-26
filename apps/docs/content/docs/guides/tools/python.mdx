@@ -66,6 +66,8 @@ uv packages come in two types:
 
 Both package types can be used as targets for [`--filter`](/docs/reference/run#--filter-string) and [`affected`](/docs/reference/run#--affected) calculations.
 
+A Python project defined at the repository root is separate from the root workspace package. Member dependencies on that root Python project are currently unsupported and cause an error. Move the root Python project into a workspace member directory to use it as a dependency.
+
 ## Built-in tasks
 
 Turborepo natively registers tasks that are common to all uv workspaces.

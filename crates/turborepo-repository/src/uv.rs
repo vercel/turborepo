@@ -7,10 +7,11 @@
 //!
 //! Discovery parses the root `pyproject.toml`'s `[tool.uv.workspace]` table
 //! in-process: member globs are expanded against the filesystem and each
-//! member's `pyproject.toml` is parsed for its identity, task configuration,
-//! and internal relationships. Exact external resolution comes from
+//! member's `pyproject.toml` is parsed for its identity and task configuration.
+//! Resolved internal relationships and exact external resolution come from
 //! `uv workspace metadata --frozen --offline`, avoiding direct interpretation
-//! of uv's unstable lockfile schema. Discovery also probes uv and its selected
+//! of uv's unstable lockfile schema. Manifest relationships are a fallback when
+//! metadata is unavailable. Discovery also probes uv and its selected
 //! Python interpreter so command tasks can be cached safely.
 //!
 //! Buildable packages register `build` (`uv build --package=<name>`), and all
@@ -149,6 +150,15 @@ pub enum Error {
         manifest: String,
         dependency: String,
         path: String,
+    },
+    #[error(
+        "{manifest} depends on the root Python project {root_project:?}. Dependencies on the root \
+         project are not supported by Turborepo. Move {root_project:?} into a workspace member \
+         directory."
+    )]
+    UnsupportedRootProjectDependency {
+        manifest: String,
+        root_project: String,
     },
     #[error(transparent)]
     Lockfile(#[from] turborepo_lockfiles::UvLockError),
@@ -922,9 +932,10 @@ fn discover_workspace_from_manifests(
         .map(|(package, _, manifest)| {
             let dependencies = manifest
                 .dependencies_with_kind()
-                .filter_map(|(dependency, _)| pep508_name(dependency))
-                .map(normalize_name)
-                .filter(|dependency| {
+                .filter_map(|(dependency, kind)| {
+                    pep508_name(dependency).map(|name| (normalize_name(name), kind))
+                })
+                .filter(|(dependency, _)| {
                     package_names.contains(dependency)
                         && manifest
                             .source_override(dependency)
@@ -981,8 +992,10 @@ fn discover_workspace_from_manifests(
 /// dependency of each member and of the root project is checked against its
 /// effective source: the declaring manifest's own `[tool.uv.sources]` entry,
 /// else the root's, with paths resolved relative to the manifest that declares
-/// the source. Paths resolving to a member directory (or to the root project)
-/// are allowed, as are `workspace`, `git`, `url`, and `index` sources.
+/// the source. Paths resolving to a member directory are allowed, as are
+/// `workspace`, `git`, `url`, and `index` sources. Member dependencies
+/// targeting the root Python project are rejected because it has no package
+/// graph node.
 fn reject_unsupported_local_sources(
     repo_root: &AbsoluteSystemPath,
     workspace: &DiscoveredWorkspace,
@@ -1034,6 +1047,21 @@ fn reject_unsupported_local_sources(
                 let base = declared_in
                     .parent()
                     .ok_or_else(|| Error::InvalidMemberManifestPath(declared_in.to_string()))?;
+                if let Some(root_project) = &workspace.root_project_name
+                    && manifest_path != root_manifest_path
+                    && source_targets_root_project(
+                        source,
+                        &dependency,
+                        root_project,
+                        base,
+                        repo_root,
+                    )
+                {
+                    return Err(Error::UnsupportedRootProjectDependency {
+                        manifest: manifest_path.to_string(),
+                        root_project: root_project.clone(),
+                    });
+                }
                 if let Some(path) = non_member_path_source(source, base, &member_dirs) {
                     return Err(Error::UnsupportedLocalPathSource {
                         manifest: declared_in.to_string(),
@@ -1062,6 +1090,29 @@ fn reject_unsupported_local_sources(
     Ok(())
 }
 
+fn source_targets_root_project(
+    source: &toml::Value,
+    dependency: &str,
+    root_project: &str,
+    base: &AbsoluteSystemPath,
+    repo_root: &AbsoluteSystemPath,
+) -> bool {
+    if let Some(sources) = source.as_array() {
+        return sources.iter().any(|source| {
+            source_targets_root_project(source, dependency, root_project, base, repo_root)
+        });
+    }
+    (source.get("workspace").and_then(toml::Value::as_bool) == Some(true)
+        && dependency == root_project)
+        || source
+            .get("path")
+            .and_then(toml::Value::as_str)
+            .is_some_and(|path| {
+                AbsoluteSystemPathBuf::from_unknown(base, path).as_std_path()
+                    == repo_root.as_std_path()
+            })
+}
+
 /// The first `path` in a `[tool.uv.sources]` entry (or list of
 /// marker-scoped entries) that does not resolve to a workspace member.
 fn non_member_path_source<'a>(
@@ -1083,7 +1134,7 @@ fn non_member_path_source<'a>(
 }
 
 /// Discover the uv workspace from uv's authoritative metadata, parsing member
-/// manifests only for Turborepo task synthesis and dependency-kind labels.
+/// manifests only for Turborepo task synthesis and tool declarations.
 fn discover_workspace_from_metadata(
     repo_root: &AbsoluteSystemPath,
     metadata: &UvWorkspaceMetadata,
@@ -1137,11 +1188,21 @@ fn discover_workspace_from_metadata(
 
     let root_tools = root_manifest.tool_declarations(DeclarationOwner::Root);
     let pytest = root_tools.execution(PythonTool::Pytest);
-    let packages = connect_packages(
-        parsed,
-        metadata_internal_dependencies(metadata),
-        &root_tools,
-    );
+    let internal_dependencies = metadata_internal_dependencies(metadata);
+    if let Some(root_project) = &root_project_name {
+        for (name, manifest_path, _) in &parsed {
+            if internal_dependencies
+                .get(name)
+                .is_some_and(|edges| edges.iter().any(|(target, _)| target == root_project))
+            {
+                return Err(Error::UnsupportedRootProjectDependency {
+                    manifest: manifest_path.to_string(),
+                    root_project: root_project.clone(),
+                });
+            }
+        }
+    }
+    let packages = connect_packages(parsed, internal_dependencies, &root_tools);
     let quality_plan = QualityPlan::homogeneous(
         &packages
             .iter()
@@ -1180,13 +1241,11 @@ fn discover_workspace_from_metadata(
     })
 }
 
-/// Resolve dependency edges to package names. Dependency-group
-/// (development) edges that would form a cycle remain compilation inputs
-/// but do not order tasks, since PEP 735 groups permit cycles while the
-/// task graph is a DAG.
-fn metadata_internal_dependencies(
-    metadata: &UvWorkspaceMetadata,
-) -> HashMap<String, HashSet<String>> {
+/// Resolved internal edges, retaining their role so development cycles can
+/// contribute inputs without imposing cyclic task ordering.
+type InternalDependencies = HashMap<String, Vec<(String, DependencyKind)>>;
+
+fn metadata_internal_dependencies(metadata: &UvWorkspaceMetadata) -> InternalDependencies {
     let members_by_id = metadata
         .members
         .iter()
@@ -1196,39 +1255,42 @@ fn metadata_internal_dependencies(
         .members
         .iter()
         .map(|member| {
-            let mut dependencies = HashSet::new();
-            let mut pending = metadata
-                .resolution
-                .get(&member.id)
-                .into_iter()
-                .flat_map(|node| {
-                    node.dependencies
+            let mut dependencies = Vec::new();
+            if let Some(node) = metadata.resolution.get(&member.id) {
+                for (edges, kind) in [
+                    (&node.dependencies, DependencyKind::Production),
+                    (&node.optional_dependencies, DependencyKind::Optional),
+                    (&node.dependency_groups, DependencyKind::Development),
+                ] {
+                    let mut pending = edges
                         .iter()
-                        .chain(&node.optional_dependencies)
-                        .chain(&node.dependency_groups)
-                })
-                .map(|dependency| dependency.id.as_str())
-                .collect::<Vec<_>>();
-            let mut visited = HashSet::new();
-            while let Some(id) = pending.pop() {
-                if !visited.insert(id) {
-                    continue;
-                }
-                if let Some(name) = members_by_id.get(id) {
-                    dependencies.insert(name.clone());
-                    continue;
-                }
-                let Some(node) = metadata.resolution.get(id) else {
-                    continue;
-                };
-                if node.kind.is_object() {
-                    pending.extend(
-                        node.dependencies
-                            .iter()
-                            .chain(&node.optional_dependencies)
-                            .chain(&node.dependency_groups)
-                            .map(|dependency| dependency.id.as_str()),
-                    );
+                        .map(|edge| edge.id.as_str())
+                        .collect::<Vec<_>>();
+                    let mut visited = HashSet::new();
+                    while let Some(id) = pending.pop() {
+                        if !visited.insert(id) {
+                            continue;
+                        }
+                        if let Some(name) = members_by_id.get(id) {
+                            dependencies.push((name.clone(), kind));
+                            continue;
+                        }
+                        let Some(node) = metadata.resolution.get(id) else {
+                            continue;
+                        };
+                        // Extras and dependency groups are synthetic nodes. Walk
+                        // through them, preserving the requesting edge's role,
+                        // but stop at real packages to retain direct edges.
+                        if node.kind.is_object() {
+                            pending.extend(
+                                node.dependencies
+                                    .iter()
+                                    .chain(&node.optional_dependencies)
+                                    .chain(&node.dependency_groups)
+                                    .map(|dependency| dependency.id.as_str()),
+                            );
+                        }
+                    }
                 }
             }
             (normalize_name(&member.name), dependencies)
@@ -1238,7 +1300,7 @@ fn metadata_internal_dependencies(
 
 fn connect_packages(
     parsed: Vec<(String, AbsoluteSystemPathBuf, PyProjectManifest)>,
-    internal_dependencies: HashMap<String, HashSet<String>>,
+    internal_dependencies: InternalDependencies,
     root_tools: &ToolDeclarations,
 ) -> Vec<UvPackage> {
     let mut graph = petgraph::Graph::<(), ()>::new();
@@ -1248,29 +1310,21 @@ fn connect_packages(
         .collect();
     let mut relationships: HashMap<String, Vec<Relationship>> = HashMap::new();
     let mut dev_edges: Vec<(String, String)> = Vec::new();
-    for (name, _, manifest) in &parsed {
+    for (name, _, _) in &parsed {
         let from = name.as_str();
         relationships.entry(from.to_string()).or_default();
-        for (dependency, kind) in manifest.dependencies_with_kind() {
-            let Some(dependency_name) = pep508_name(dependency) else {
-                continue;
-            };
-            let to = normalize_name(dependency_name);
-            if to == *from
-                || !internal_dependencies
-                    .get(from)
-                    .is_some_and(|dependencies| dependencies.contains(&to))
-            {
+        for (to, kind) in internal_dependencies.get(from).into_iter().flatten() {
+            if to == from {
                 continue;
             }
-            if kind == DependencyKind::Development {
-                dev_edges.push((from.to_string(), to));
+            if *kind == DependencyKind::Development {
+                dev_edges.push((from.to_string(), to.clone()));
             } else {
                 graph.add_edge(node_indices[from], node_indices[to.as_str()], ());
                 relationships
                     .entry(from.to_string())
                     .or_default()
-                    .push(Relationship::internal(to, kind));
+                    .push(Relationship::internal(to.clone(), *kind));
             }
         }
     }
@@ -3278,6 +3332,11 @@ impl RepositoryContributor for UvContributor {
                 Ok((metadata, workspace, lockfile)) => {
                     (Some(metadata), workspace, Ok(lockfile), None)
                 }
+                Err(error @ Error::UnsupportedRootProjectDependency { .. }) => {
+                    // Successful uv resolution exposed an unsupported layout;
+                    // manifest fallback would discard that dependency.
+                    return Err(toolchain::Error::Failed(Box::new(error)));
+                }
                 Err(error) => {
                     let can_prune_without_metadata = matches!(&error, Error::MetadataSpawn(source) if source.kind() == io::ErrorKind::NotFound);
                     let message = error.to_string();
@@ -3855,6 +3914,186 @@ mod test {
         ] {
             assert!(fallback_inputs.contains(path), "missing {path}");
         }
+    }
+
+    #[test_case::test_case(false; "static dependencies")]
+    #[test_case::test_case(true; "dynamic dependencies")]
+    fn resolved_workspace_relationships_preserve_dependency_roles(dynamic: bool) {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(tmp.path()).unwrap();
+        root.join_component(PYPROJECT_TOML)
+            .create_with_contents(
+                "[tool.turbo]\nname = 'acme'\n[tool.uv.workspace]\nmembers = ['packages/*']\n",
+            )
+            .unwrap();
+        let app_dependencies = if dynamic {
+            "dynamic = ['dependencies', 'optional-dependencies']\n"
+        } else {
+            "dependencies = ['lib[feature]']\n[project.optional-dependencies]\nfeature = \
+             ['optional']\n"
+        };
+        let declarations = [
+            (
+                "app",
+                format!("{app_dependencies}[dependency-groups]\ndev = ['dev[feature]']\n"),
+            ),
+            (
+                "lib",
+                "dependencies = ['transitive']\n[project.optional-dependencies]\nfeature = \
+                 ['extra']\n"
+                    .to_string(),
+            ),
+            ("extra", String::new()),
+            ("optional", String::new()),
+            (
+                "dev",
+                "dependencies = ['app']\n[project.optional-dependencies]\nfeature = \
+                 ['dev-extra']\n"
+                    .to_string(),
+            ),
+            ("dev-extra", String::new()),
+            ("transitive", String::new()),
+        ];
+        let mut members = Vec::new();
+        for (name, declarations) in declarations {
+            let dir = root.join_components(&["packages", name]);
+            dir.create_dir_all().unwrap();
+            dir.join_component(PYPROJECT_TOML)
+                .create_with_contents(format!(
+                    "[project]\nname = '{name}'\nversion = '0.1.0'\n{declarations}"
+                ))
+                .unwrap();
+            members.push(serde_json::json!({"name": name, "path": dir.as_str(), "id": name}));
+        }
+        let metadata: UvWorkspaceMetadata = serde_json::from_value(serde_json::json!({
+            "members": members,
+            "resolution": {
+                "app": {
+                    "kind": "package",
+                    "dependencies": [{"id": "lib[feature]"}],
+                    "optional_dependencies": [{"id": "app[feature]"}],
+                    "dependency_groups": [{"id": "app:dev"}]
+                },
+                "lib[feature]": {
+                    "kind": {"extra": "feature"},
+                    "dependencies": [{"id": "lib"}, {"id": "extra"}]
+                },
+                "lib": {
+                    "kind": "package",
+                    "dependencies": [{"id": "transitive"}],
+                    "optional_dependencies": [{"id": "lib[feature]"}]
+                },
+                "extra": {"kind": "package"},
+                "app[feature]": {
+                    "kind": {"extra": "feature"},
+                    "dependencies": [{"id": "app"}, {"id": "optional"}]
+                },
+                "optional": {"kind": "package"},
+                "app:dev": {
+                    "kind": {"group": "dev"},
+                    "dependencies": [{"id": "dev[feature]"}]
+                },
+                "dev[feature]": {
+                    "kind": {"extra": "feature"},
+                    "dependencies": [{"id": "dev"}, {"id": "dev-extra"}]
+                },
+                "dev": {
+                    "kind": "package",
+                    "dependencies": [{"id": "app"}],
+                    "optional_dependencies": [{"id": "dev[feature]"}]
+                },
+                "dev-extra": {"kind": "package"},
+                "transitive": {"kind": "package"}
+            }
+        }))
+        .unwrap();
+        let workspace = discover_workspace_from_metadata(&root, &metadata).unwrap();
+        let relationships = |name: &str| {
+            workspace
+                .packages
+                .iter()
+                .find(|package| package.name == name)
+                .unwrap()
+                .relationships
+                .clone()
+        };
+        assert_eq!(
+            relationships("app"),
+            vec![
+                Relationship::internal_input("dev", DependencyKind::Development),
+                Relationship::internal("dev-extra", DependencyKind::Development),
+                Relationship::internal("extra", DependencyKind::Production),
+                Relationship::internal("lib", DependencyKind::Production),
+                Relationship::internal("optional", DependencyKind::Optional),
+            ],
+            "resolved dependencies must survive without static declarations; development cycles \
+             affect inputs without ordering tasks, extras retain their originating role, and \
+             transitive package dependencies remain separate edges"
+        );
+        assert_eq!(
+            relationships("dev"),
+            vec![
+                Relationship::internal("app", DependencyKind::Production),
+                Relationship::internal("dev-extra", DependencyKind::Optional),
+            ]
+        );
+        assert_eq!(
+            relationships("lib"),
+            vec![
+                Relationship::internal("extra", DependencyKind::Optional),
+                Relationship::internal("transitive", DependencyKind::Production),
+            ]
+        );
+    }
+
+    #[test_case::test_case("dependencies", "core"; "production")]
+    #[test_case::test_case("dependencies", "core[feature]"; "requested extra")]
+    #[test_case::test_case("optional_dependencies", "app[feature]"; "optional")]
+    #[test_case::test_case("dependency_groups", "app:dev"; "development")]
+    fn resolved_root_project_dependencies_are_rejected(edges: &str, target: &str) {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = AbsoluteSystemPathBuf::try_from(tmp.path()).unwrap();
+        root.join_component(PYPROJECT_TOML)
+            .create_with_contents(
+                "[project]\nname = 'core-lib'\nversion = '0.1.0'\n[tool.turbo]\nname = \
+                 'acme'\n[tool.uv.workspace]\nmembers = ['packages/*']\n",
+            )
+            .unwrap();
+        let app = root.join_components(&["packages", "child-plugin"]);
+        app.create_dir_all().unwrap();
+        let manifest = app.join_component(PYPROJECT_TOML);
+        manifest
+            .create_with_contents(
+                "[project]\nname = 'child-plugin'\nversion = '0.1.0'\ndynamic = ['dependencies', \
+                 'optional-dependencies']\n",
+            )
+            .unwrap();
+        let mut metadata = serde_json::json!({
+            "members": [
+                {"id": "core", "name": "core-lib", "path": root.as_str()},
+                {"id": "app", "name": "child-plugin", "path": app.as_str()}
+            ],
+            "resolution": {
+                "core": {"kind": "package"},
+                "app": {"kind": "package"},
+                "core[feature]": {
+                    "kind": {"extra": "feature"}, "dependencies": [{"id": "core"}]
+                },
+                "app[feature]": {
+                    "kind": {"extra": "feature"},
+                    "dependencies": [{"id": "app"}, {"id": "core"}]
+                },
+                "app:dev": {
+                    "kind": {"group": "dev"}, "dependencies": [{"id": "core"}]
+                }
+            }
+        });
+        metadata["resolution"]["app"][edges] = serde_json::json!([{"id": target}]);
+        let metadata = serde_json::from_value(metadata).unwrap();
+        let error = discover_workspace_from_metadata(&root, &metadata).unwrap_err();
+        assert!(matches!(error, Error::UnsupportedRootProjectDependency {
+                manifest: path, root_project
+            } if path == manifest.as_str() && root_project == "core-lib"));
     }
 
     #[test]
