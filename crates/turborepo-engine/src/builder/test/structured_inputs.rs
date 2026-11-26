@@ -1,3 +1,5 @@
+use turborepo_types::TaskInputs;
+
 use super::*;
 
 fn engine_with_root_and_app_config(
@@ -85,4 +87,76 @@ fn package_extends_rejects_duplicate_startup_after_normalization() {
         message.contains("Use either legacy startup inputs"),
         "expected actionable guidance, got:\n{message}"
     );
+}
+
+fn app_build_inputs(root_build: serde_json::Value, app_inputs: serde_json::Value) -> TaskInputs {
+    let engine = engine_with_root_and_app_config(
+        json!({ "tasks": { "build": root_build } }),
+        json!({
+            "extends": ["//"],
+            "tasks": { "build": { "inputs": app_inputs } }
+        }),
+    )
+    .unwrap();
+    task_definition(&engine, "app#build").inputs.clone()
+}
+
+#[test]
+fn package_extends_keeps_default_files_when_root_has_no_inputs() {
+    let inputs = app_build_inputs(json!({}), json!(["$TURBO_EXTENDS$", "../shared/**"]));
+    assert!(
+        inputs.default,
+        "a root task without inputs hashes every package file; extending it must keep them"
+    );
+    assert_eq!(inputs.globs, ["../shared/**"]);
+    assert!(inputs.eager);
+}
+
+#[test]
+fn package_extends_keeps_default_files_when_root_inputs_are_empty() {
+    let inputs = app_build_inputs(
+        json!({ "inputs": [] }),
+        json!(["$TURBO_EXTENDS$", "../shared/**"]),
+    );
+    assert!(
+        inputs.default,
+        "`\"inputs\": []` hashes every package file; extending it must keep them"
+    );
+    assert_eq!(inputs.globs, ["../shared/**"]);
+    assert!(inputs.eager);
+}
+
+#[test]
+fn package_extends_with_jit_input_keeps_startup_hashing_of_default_files() {
+    let inputs = app_build_inputs(
+        json!({}),
+        json!([
+            "$TURBO_EXTENDS$",
+            { "mode": "jit", "globs": ["src/generated/**"] }
+        ]),
+    );
+    assert!(inputs.default);
+    assert!(inputs.globs.is_empty());
+    assert_eq!(inputs.jit_globs, ["src/generated/**"]);
+    assert!(
+        inputs.eager,
+        "package files must still be hashed at startup"
+    );
+}
+
+#[test]
+fn package_extends_explicit_root_globs_without_adding_defaults() {
+    let inputs = app_build_inputs(
+        json!({ "inputs": ["src/**"] }),
+        json!(["$TURBO_EXTENDS$", "lib/**"]),
+    );
+    assert!(!inputs.default);
+    assert_eq!(inputs.globs, ["src/**", "lib/**"]);
+}
+
+#[test]
+fn package_inputs_without_extends_marker_replace_root_default() {
+    let inputs = app_build_inputs(json!({}), json!(["lib/**"]));
+    assert!(!inputs.default);
+    assert_eq!(inputs.globs, ["lib/**"]);
 }
