@@ -4,7 +4,7 @@ This is a community-maintained example. If you experience a problem, please subm
 
 ## Using this example
 
-Use Node.js 26.12.1 or newer and pnpm 12.15.0, as pinned in `package.json`.
+Use Node.js 26.13.1 or newer and pnpm 12.23.0, as pinned in `package.json`.
 
 ```sh
 npx create-turbo@latest -e with-rsbuild-module-federation
