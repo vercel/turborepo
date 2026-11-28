@@ -116,3 +116,31 @@ fn analysis_is_deterministic_across_runs() {
         assert_eq!(x.1.missing, y.1.missing);
     }
 }
+
+/// What a crate's file records does not depend on the crate that was analyzed
+/// first: the workspace's crate graph (built with recording paused) reads every
+/// member, and the target discovery of `util` that it runs first must still be
+/// recorded for `util`'s own files.
+#[test]
+fn observations_do_not_depend_on_the_crate_analyzed_first() {
+    let sorted = |o: &Observations| {
+        let mut missing: Vec<PathBuf> = o.missing.clone();
+        missing.sort();
+        missing.dedup();
+        let mut listings = o.listings.clone();
+        listings.sort();
+        listings.dedup();
+        (missing, listings)
+    };
+    let alone = observations(&["util/src/lib.rs"]);
+    let after = observations(&["app/src/main.rs", "util/src/lib.rs"]);
+    assert_eq!(alone[0].0, "util/src/lib.rs");
+    assert_eq!(after[1].0, "util/src/lib.rs");
+    let (alone, after) = (sorted(&alone[0].1), sorted(&after[1].1));
+    // The target directories of `util` are among them.
+    assert!(
+        alone.1.iter().any(|(d, _)| d.ends_with("util/tests")),
+        "{alone:?}"
+    );
+    assert_eq!(alone, after);
+}

@@ -4437,9 +4437,6 @@ fn every_fixture_moved_across_node_modules() {
     repos.extend(one("next-e2e"));
     repos.extend(one("next-build/lab"));
     repos.extend(one("host-paths"));
-    // Cold builds of a multi-crate cargo workspace are not deterministic: remove
-    // this exclusion when F3 is fixed.
-    repos.retain(|(name, _)| name != "tasks/cargo");
     let lab = Lab::new("fixtures");
     let mut wrong = Vec::new();
     for (i, (name, source)) in repos.iter().enumerate() {

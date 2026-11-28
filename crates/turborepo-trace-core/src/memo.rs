@@ -4,9 +4,10 @@
 //! `Cargo.toml`, a package directory listing). In graph mode
 //! ([`crate::record`]) every reference must report what its resolution
 //! observed, including what a memoized step observed the first time it ran.
-//! [`Memo::get`] runs the computation inside its own recording frame, stores
-//! the frame's observations next to the value (deduplicated), and replays them
-//! into the caller's frame on this and every later call. Without recording
+//! [`Memo::get`] runs the computation inside its own recording frame with every
+//! pause lifted, stores the frame's observations next to the value
+//! (deduplicated), and replays them into the caller's frame, under the caller's
+//! pauses, on this and every later call. Without recording
 //! ([`DirCache::records`] is false) it is a plain concurrent memo table.
 //!
 //! Nested memos compose: an inner hit replays into the outer computation's
@@ -54,18 +55,25 @@ impl<K: Eq + Hash + Clone, V: Clone> Memo<K, V> {
     /// locked while `f` runs). Two threads may compute the same key
     /// concurrently; the first stored result wins and both report its
     /// observations.
+    ///
+    /// `f` runs with every pause lifted ([`record::capture`]), and what is
+    /// reported is subject to the caller's pauses ([`record::replay`]): the
+    /// stored observations are what the computation observes, whichever caller
+    /// happens to run it first. A first caller that pauses recording (one that
+    /// reports what it found itself, a workspace load) does not leave the entry
+    /// without observations for the later callers that record.
     pub fn get(&self, fs: &DirCache, key: &K, f: impl FnOnce() -> V) -> V {
         if let Some(e) = self.map.get(key) {
             replay(e.1.as_deref());
             return e.0.clone();
         }
-        let frame = fs.records().then(record::start);
-        let v = f();
-        let obs = frame.map(|fr| {
-            let mut o = fr.finish();
+        let (v, obs) = if fs.records() {
+            let (v, mut o) = record::capture(f);
             o.dedup();
-            Arc::new(o)
-        });
+            (v, Some(Arc::new(o)))
+        } else {
+            (f(), None)
+        };
         let e = self.map.entry(key.clone()).or_insert((v, obs));
         replay(e.1.as_deref());
         e.0.clone()
@@ -96,7 +104,7 @@ fn replay(obs: Option<&Observations>) {
     if let Some(o) = obs
         && !o.is_empty()
     {
-        record::extend_from(o);
+        record::replay(o);
     }
 }
 
@@ -161,6 +169,45 @@ mod tests {
             got.missing,
             [PathBuf::from("/outer"), PathBuf::from("/inner")]
         );
+    }
+
+    /// What a memoized step reports does not depend on whether the caller that
+    /// computed it first had recording paused: every caller gets what its own
+    /// pauses let through.
+    #[test]
+    fn a_paused_first_caller_keeps_the_observations_for_the_others() {
+        let fs = DirCache::with_recording();
+        let compute = || {
+            record::missing(Path::new("/m"));
+            record::listing(Path::new("/d"), "**");
+            1
+        };
+        let listing = [(PathBuf::from("/d"), "**".to_string())];
+        // First asked with all recording paused: nothing reaches that caller, and a
+        // caller that records gets the step's observations.
+        let memo: Memo<u32, u32> = Memo::new();
+        let f = record::start();
+        record::pause(|| memo.get(&fs, &1, compute));
+        assert!(f.finish().is_empty());
+        let f = record::start();
+        memo.get(&fs, &1, || unreachable!());
+        let got = f.finish();
+        assert_eq!(got.missing, [PathBuf::from("/m")]);
+        assert_eq!(got.listings, listing);
+        // First asked with listings paused: the same for the listing, and a later
+        // hit under a listings pause does not report it either.
+        let memo: Memo<u32, u32> = Memo::new();
+        let f = record::start();
+        record::pause_listings(|| memo.get(&fs, &1, compute));
+        let got = f.finish();
+        assert_eq!(got.missing, [PathBuf::from("/m")]);
+        assert!(got.listings.is_empty());
+        let f = record::start();
+        record::pause_listings(|| memo.get(&fs, &1, || unreachable!()));
+        assert!(f.finish().listings.is_empty());
+        let f = record::start();
+        memo.get(&fs, &1, || unreachable!());
+        assert_eq!(f.finish().listings, listing);
     }
 
     #[test]
