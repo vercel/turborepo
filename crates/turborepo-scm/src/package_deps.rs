@@ -1,7 +1,8 @@
 use globwalk::{PackageInput, ValidatedGlob};
 use tracing::{debug, warn};
 use turbopath::{
-    AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPath, AnchoredSystemPathBuf, PathError,
+    AbsoluteSystemPath, AbsoluteSystemPathBuf, AnchoredSystemPath, AnchoredSystemPathBuf,
+    PathError, RelativeUnixPath,
 };
 use turborepo_telemetry::events::task::{FileHashMethod, PackageTaskEventBuilder};
 
@@ -30,6 +31,18 @@ fn excluded_link(
                     .is_ok_and(|glob| wax::Program::is_match(&glob, relative.as_str()))
             })
     })
+}
+
+/// Whether a package-relative path is Turborepo's own bookkeeping, which lives
+/// in `.turbo` directories inside packages.
+///
+/// Tasks rewrite their logs on every run, so hashing them would change the
+/// inputs of every other task in the package and throw away its cache. These
+/// files are never task inputs, whatever `.gitignore` says about them.
+fn is_turbo_bookkeeping(path: &RelativeUnixPath) -> bool {
+    path.as_str()
+        .split('/')
+        .any(|component| component == turborepo_types::LOG_DIR)
 }
 
 #[derive(Clone, Copy)]
@@ -120,7 +133,7 @@ impl SCM {
         telemetry: Option<PackageTaskEventBuilder>,
         repo_index: Option<&RepoGitIndex>,
     ) -> Result<GitHashes, Error> {
-        let hashes = match self {
+        let mut hashes = match self {
             SCM::Manual(_) => {
                 if let Some(telemetry) = telemetry {
                     telemetry.track_file_hash_method(FileHashMethod::Manual);
@@ -195,6 +208,7 @@ impl SCM {
                 }
             }
         }?;
+        hashes.retain(|path, _| !is_turbo_bookkeeping(path));
         self.file_hash_mode()
             .apply(&turbo_root.resolve(package_path), hashes, true)
     }
@@ -1940,6 +1954,95 @@ mod tests {
                 .keys()
                 .any(|key| key.as_str().contains("turbo-build.log")),
             "excluded .turbo logs must not be hashed, got {hashes:?}"
+        );
+        Ok(())
+    }
+
+    /// Task logs land in a package's `.turbo` directory, so hashing them would
+    /// change the package's inputs after every run and throw away the cache of
+    /// every other task in it. They stay out of the hash even when nothing
+    /// gitignores them.
+    #[test]
+    fn test_task_logs_are_not_inputs_with_git() -> Result<(), Error> {
+        let (_repo_root_tmp, repo_root) = tmp_dir();
+        let package_path = AnchoredSystemPathBuf::from_raw("packages/app")?;
+        let app_dir = repo_root.join_components(&["packages", "app"]);
+        app_dir.create_dir_all()?;
+        app_dir
+            .join_component("package.json")
+            .create_with_contents("{}")?;
+        setup_repository(&repo_root);
+        commit_all(&repo_root);
+
+        let log = app_dir.join_components(&[turborepo_types::LOG_DIR, "turbo-build.log"]);
+        log.ensure_dir()?;
+        log.create_with_contents("cache miss, executing abc123")?;
+        let scm = SCM::new(&repo_root);
+        let before =
+            scm.get_package_file_hashes::<&str>(&repo_root, &package_path, &[], true, None, None)?;
+        log.create_with_contents("cache miss, executing abc123\r\nsecond line")?;
+        let after =
+            scm.get_package_file_hashes::<&str>(&repo_root, &package_path, &[], true, None, None)?;
+
+        assert!(
+            before.contains_key(&RelativeUnixPathBuf::new("package.json")?),
+            "default hashing should still cover the package's own files, got {before:?}"
+        );
+        assert!(
+            !before.keys().any(|key| key
+                .as_str()
+                .split('/')
+                .any(|c| c == turborepo_types::LOG_DIR)),
+            "task logs must not be inputs, got {before:?}"
+        );
+        assert_eq!(
+            before, after,
+            "rewriting a task log must not change the package's inputs"
+        );
+
+        let root_package = AnchoredSystemPathBuf::from_raw("")?;
+        let root_hashes =
+            scm.get_package_file_hashes::<&str>(&repo_root, &root_package, &[], true, None, None)?;
+        assert!(
+            !root_hashes.keys().any(|key| key
+                .as_str()
+                .split('/')
+                .any(|c| c == turborepo_types::LOG_DIR)),
+            "a package's task logs must not be inputs of the repository root, got {root_hashes:?}"
+        );
+        Ok(())
+    }
+
+    /// The manual hasher reads the same `.turbo` write without Git telling it
+    /// to skip it, so the exclusion has to hold there too.
+    #[test]
+    fn test_task_logs_are_not_inputs_without_git() -> Result<(), Error> {
+        let (_repo_root_tmp, repo_root) = tmp_dir();
+        let package_path = AnchoredSystemPathBuf::from_raw("packages/app")?;
+        let app_dir = repo_root.join_components(&["packages", "app"]);
+        app_dir.create_dir_all()?;
+        app_dir
+            .join_component("package.json")
+            .create_with_contents("{}")?;
+
+        let log = app_dir.join_components(&[turborepo_types::LOG_DIR, "turbo-lint.log"]);
+        log.ensure_dir()?;
+        log.create_with_contents("cache miss, executing abc123")?;
+        let scm = SCM::new(&repo_root);
+        assert!(matches!(scm, SCM::Manual(_)), "expected manual SCM");
+        let before =
+            scm.get_package_file_hashes::<&str>(&repo_root, &package_path, &[], true, None, None)?;
+        log.create_with_contents("cache miss, executing abc123\r\nsecond line")?;
+        let after =
+            scm.get_package_file_hashes::<&str>(&repo_root, &package_path, &[], true, None, None)?;
+
+        assert!(
+            before.contains_key(&RelativeUnixPathBuf::new("package.json")?),
+            "default hashing should still cover the package's own files, got {before:?}"
+        );
+        assert_eq!(
+            before, after,
+            "rewriting a task log must not change the package's inputs"
         );
         Ok(())
     }
