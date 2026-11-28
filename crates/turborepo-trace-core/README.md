@@ -42,6 +42,7 @@ All of them are read through `turborepo_trace_core::debug`. A rule switch is on 
 | `TURBO_TRACE_DEBUG_CONFIG_NAMES` | `turborepo-trace/confignames.rs` |
 | `TURBO_TRACE_DEBUG_CWD` | `turborepo-trace/graph.rs` |
 | `TURBO_TRACE_DEBUG_CWD_EXPLAINED` | `turborepo-trace-store/compose/cwd.rs` |
+| `TURBO_TRACE_DEBUG_CWD_TASK_RUNNER` | `turborepo-trace-store/compose/cwd.rs` |
 | `TURBO_TRACE_DEBUG_CYCLE_STATS` | `turborepo-trace/barrel.rs` |
 | `TURBO_TRACE_DEBUG_DEBUG_ASSEMBLE` | `turborepo-trace-store/build.rs` |
 | `TURBO_TRACE_DEBUG_DEBUG_REUSE` | `turborepo-trace-store/filereuse.rs` |
