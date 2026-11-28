@@ -22,7 +22,8 @@ use crate::{
         should_attempt_vercel_token_refresh, should_skip_existing_token_for_login,
     },
     device_flow::TokenSet,
-    error, ui,
+    error,
+    ui::{self, RemoteCacheHint},
 };
 
 const DEFAULT_SSO_PROVIDER: &str = "SAML/OIDC Single Sign-On";
@@ -82,7 +83,11 @@ async fn classify_existing_sso_token_with_recovery<T: Client + TokenClient>(
         token.clone(),
         api_client,
         sso_team,
-        Some(valid_token_callback(valid_message, color_config)),
+        Some(valid_token_callback(
+            valid_message,
+            color_config,
+            RemoteCacheHint::RunLink,
+        )),
     )
     .await
     {
@@ -98,7 +103,11 @@ async fn classify_existing_sso_token_with_recovery<T: Client + TokenClient>(
                 Token::existing_secret(recovered_token),
                 api_client,
                 sso_team,
-                Some(valid_token_callback(valid_message, color_config)),
+                Some(valid_token_callback(
+                    valid_message,
+                    color_config,
+                    RemoteCacheHint::RunLink,
+                )),
             )
             .await
             {
@@ -118,7 +127,11 @@ async fn classify_existing_sso_token_with_recovery<T: Client + TokenClient>(
                 Token::existing_secret(recovered_token),
                 api_client,
                 sso_team,
-                Some(valid_token_callback(valid_message, color_config)),
+                Some(valid_token_callback(
+                    valid_message,
+                    color_config,
+                    RemoteCacheHint::RunLink,
+                )),
             )
             .await
             {
@@ -162,9 +175,8 @@ pub async fn sso_login<T: Client + TokenClient>(
         existing_token,
         force,
         sso_login_callback_port,
-        // SSO login validates team access via `is_valid_sso` instead.
-        linked_team_id: _,
-        linked_team_slug: _,
+        linked_team_id,
+        linked_team_slug,
     } = *options;
 
     let sso_team = sso_team.ok_or(Error::EmptySSOTeam)?;
@@ -231,7 +243,11 @@ pub async fn sso_login<T: Client + TokenClient>(
                         Token::existing_secret(token.clone()),
                         api_client,
                         sso_team,
-                        Some(valid_token_callback("Using existing login.", color_config)),
+                        Some(valid_token_callback(
+                            "Using existing login.",
+                            color_config,
+                            RemoteCacheHint::for_login(false, linked_team_id, linked_team_slug),
+                        )),
                     )
                     .await?
                 };
@@ -270,8 +286,13 @@ pub async fn sso_login<T: Client + TokenClient>(
     }
 
     if is_vercel_login {
-        let (token, token_set) =
-            login_vercel_device_flow(api_client, color_config, login_url_configuration).await?;
+        let (token, token_set) = login_vercel_device_flow(
+            api_client,
+            color_config,
+            login_url_configuration,
+            RemoteCacheHint::RunLink,
+        )
+        .await?;
 
         return match token
             .is_valid_sso(api_client, sso_team, Option::<fn(&str)>::None)
@@ -310,7 +331,11 @@ pub async fn sso_login<T: Client + TokenClient>(
         .await
         .map_err(Error::FailedToFetchUser)?;
 
-    ui::print_cli_authorized(&user_response.user.email, color_config);
+    ui::print_cli_authorized(
+        &user_response.user.email,
+        color_config,
+        RemoteCacheHint::for_login(false, linked_team_id, linked_team_slug),
+    );
 
     Ok((Token::New(verified_token), None))
 }

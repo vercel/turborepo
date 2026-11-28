@@ -49,6 +49,13 @@ pub enum Error {
     TeamNotFound(String),
     #[error("Could not get teams information.")]
     TeamsRequest(#[source] turborepo_api_client::Error),
+    #[error(
+        "Could not get teams information. `turbo link` connects a repository to the Vercel Remote \
+         Cache through its `/v2/teams` route. To use a self-hosted Remote Cache, set \
+         `remoteCache.teamSlug` or `remoteCache.teamId` in `turbo.json`; a repository that \
+         already does is connected and needs no linking."
+    )]
+    SelfHostedTeamsRequest(#[source] turborepo_api_client::Error),
     #[error("Could not get caching status.")]
     CachingStatusNotFound(#[source] turborepo_api_client::Error),
     #[error("Failed to open browser. Please visit {0} to enable Remote Caching")]
@@ -177,6 +184,7 @@ pub async fn link(
     let homedir_path = home_dir().ok_or_else(|| Error::HomeDirectoryNotFound)?;
     let homedir = homedir_path.to_string_lossy();
     let repo_root_with_tilde = base.repo_root.to_string().replacen(&*homedir, "~", 1);
+    let api_url = base.opts().api_client_opts.api_url.clone();
     let api_client = base.api_client()?;
 
     let mut token =
@@ -217,7 +225,7 @@ pub async fn link(
         async move { api_client.get_teams(&token).await }
     })
     .await
-    .map_err(Error::TeamsRequest)?;
+    .map_err(|err| teams_request_error(err, &api_url))?;
 
     let selected_team = if let Some(team_slug) = scope {
         SelectedTeam::Team(
@@ -368,6 +376,16 @@ fn should_link_remote_cache(base: &CommandBase, location: &str) -> Result<bool, 
         .map_err(Error::UserCanceled)
 }
 
+/// Explains a failed team lookup when the API isn't Vercel's, since a
+/// self-hosted Remote Cache is connected through `turbo.json` instead.
+fn teams_request_error(error: turborepo_api_client::Error, api_url: &str) -> Error {
+    if turborepo_auth::is_vercel(api_url) {
+        Error::TeamsRequest(error)
+    } else {
+        Error::SelfHostedTeamsRequest(error)
+    }
+}
+
 fn enable_caching(url: &str) -> Result<(), Error> {
     webbrowser::open(url).map_err(|err| Error::OpenBrowser(url.to_string(), err))?;
 
@@ -383,6 +401,7 @@ mod test {
 
     use anyhow::Result;
     use tempfile::{NamedTempFile, TempDir};
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
     use turbopath::AbsoluteSystemPathBuf;
     use turborepo_run_opts::Opts;
     use turborepo_ui::ColorConfig;
@@ -392,6 +411,115 @@ mod test {
         commands::{CommandBase, link},
         config::TurborepoConfigBuilder,
     };
+
+    /// Runs `turbo link` in a repository whose `turbo.json` points at `api_url`
+    /// with the given `remoteCache` fields.
+    async fn link_configured_repo(api_url: &str, remote_cache: &str) -> Result<(), link::Error> {
+        let repo_root_tmp_dir = TempDir::new().unwrap();
+        let repo_root = AbsoluteSystemPathBuf::try_from(repo_root_tmp_dir.path()).unwrap();
+        repo_root
+            .join_component("turbo.json")
+            .create_with_contents(&format!(
+                r#"{{"remoteCache": {{"apiUrl": "{api_url}"{remote_cache}}}}}"#
+            ))
+            .unwrap();
+        repo_root
+            .join_component("package.json")
+            .create_with_contents("{}")
+            .unwrap();
+
+        let user_config_file = NamedTempFile::new().unwrap();
+        fs::write(user_config_file.path(), r#"{ "token": "hello" }"#).unwrap();
+        let override_global_config_path =
+            AbsoluteSystemPathBuf::try_from(user_config_file.path().to_path_buf()).unwrap();
+
+        let config = TurborepoConfigBuilder::new(&repo_root)
+            .with_global_config_path(override_global_config_path)
+            .with_token(Some("hello".to_string()))
+            .build()
+            .unwrap();
+
+        let mut base = CommandBase::from_opts(
+            Opts::new(&repo_root, &Default::default(), &Default::default(), config).unwrap(),
+            repo_root.clone(),
+            "1.0.0",
+            ColorConfig::new(false),
+        );
+
+        let result = link::link(&mut base, None, false, false).await;
+
+        // Linking is the only thing that writes the local team, so a cache that
+        // can't be linked must never leave one behind.
+        assert!(
+            !repo_root
+                .join_components(&[".turbo", "config.json"])
+                .exists()
+        );
+
+        result
+    }
+
+    /// A self-hosted Remote Cache: it serves `/v2/user`, and like most of them
+    /// it has no `/v2/teams` route.
+    async fn spawn_self_hosted_cache() -> String {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let url = format!("http://{}", listener.local_addr().unwrap());
+
+        tokio::spawn(async move {
+            while let Ok((mut stream, _)) = listener.accept().await {
+                let mut request = [0u8; 4096];
+                let read = stream.read(&mut request).await.unwrap_or(0);
+                let request = String::from_utf8_lossy(&request[..read]);
+                let (status, body) = if request.starts_with("GET /v2/user") {
+                    (
+                        "200 OK",
+                        r#"{"user":{"id":"usr_1","username":"user","email":"user@example.com","name":"User"}}"#,
+                    )
+                } else {
+                    ("401 Unauthorized", r#"{"message":"unknown route"}"#)
+                };
+                let response = format!(
+                    "HTTP/1.1 {status}\r\ncontent-type: application/json\r\ncontent-length: \
+                     {}\r\nconnection: close\r\n\r\n{body}",
+                    body.len()
+                );
+                let _ = stream.write_all(response.as_bytes()).await;
+            }
+        });
+
+        url
+    }
+
+    #[tokio::test]
+    async fn test_link_points_self_hosted_cache_at_turbo_json() -> Result<()> {
+        let api_url = spawn_self_hosted_cache().await;
+
+        let err = link_configured_repo(&api_url, r#", "teamSlug": "my-team""#)
+            .await
+            .unwrap_err();
+
+        assert!(
+            matches!(err, link::Error::SelfHostedTeamsRequest(_)),
+            "{err:?}"
+        );
+        assert!(err.to_string().contains("`remoteCache.teamSlug`"), "{err}");
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_vercel_team_lookup_failure_keeps_its_own_message() {
+        let error = turborepo_api_client::Error::UnknownStatus {
+            code: "forbidden".to_string(),
+            message: "Not authorized".to_string(),
+            backtrace: std::backtrace::Backtrace::capture(),
+        };
+
+        assert!(matches!(
+            super::teams_request_error(error, "https://vercel.com/api"),
+            link::Error::TeamsRequest(_)
+        ));
+    }
 
     #[tokio::test]
     async fn test_link_remote_cache() -> Result<()> {
