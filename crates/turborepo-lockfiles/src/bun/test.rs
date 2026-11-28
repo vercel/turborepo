@@ -3089,3 +3089,75 @@ fn test_prune_preserves_local_tarball_and_root_entry_shapes() {
     let reparsed = BunLockfile::from_str(&pruned).unwrap();
     assert_eq!(reparsed.data.packages, lockfile.data.packages);
 }
+
+// https://github.com/vercel/turborepo/issues/15145
+// npm and Bun read a bare version in a dependency entry (`"ms": "2.0.0"`) as an
+// exact pin, while Cargo's `VersionReq` reads the same string as `^2.0.0`. With
+// a workspace-scoped `ms@2.1.3` in the lockfile, the caret reading made
+// `debug@2.6.9`'s pinned `ms` resolve to `2.1.3`, dropping `ms@2.0.0` from the
+// pruned lockfile and breaking `bun install --frozen-lockfile` on the output.
+#[test]
+fn test_exact_dependency_version_is_not_a_caret_range() {
+    let contents = serde_json::to_string(&json!({
+        "lockfileVersion": 1,
+        "workspaces": {
+            "": { "name": "monorepo" },
+            "apps/app-a": {
+                "name": "app-a",
+                "version": "0.0.0",
+                "dependencies": { "ms": "2.0.0" }
+            },
+            "apps/web": {
+                "name": "web",
+                "version": "0.0.0",
+                "dependencies": { "debug": "2.6.9", "ms": "2.1.3" }
+            }
+        },
+        "packages": {
+            "debug": ["debug@2.6.9", "", { "dependencies": { "ms": "2.0.0" } }, "sha512-debug"],
+            "ms": ["ms@2.0.0", "", {}, "sha512-ms200"],
+            "web/ms": ["ms@2.1.3", "", {}, "sha512-ms213"]
+        }
+    }))
+    .unwrap();
+
+    let lockfile = BunLockfile::from_str(&contents).unwrap();
+
+    let pinned = lockfile
+        .resolve_package("apps/web", "ms", "2.0.0")
+        .unwrap()
+        .expect("ms@2.0.0 is in the lockfile");
+    assert_eq!(pinned.version, "2.0.0");
+
+    // The workspace's own `ms` range still resolves to the scoped entry.
+    let scoped = lockfile
+        .resolve_package("apps/web", "ms", "2.1.3")
+        .unwrap()
+        .expect("ms@2.1.3 is in the lockfile");
+    assert_eq!(scoped.version, "2.1.3");
+
+    let workspace_deps: std::collections::BTreeMap<String, String> = [
+        ("debug".to_string(), "2.6.9".to_string()),
+        ("ms".to_string(), "2.1.3".to_string()),
+    ]
+    .into_iter()
+    .collect();
+    let closure = crate::transitive_closure(&lockfile, "apps/web", workspace_deps, false).unwrap();
+    let idents: Vec<String> = closure.iter().map(|pkg| pkg.key.clone()).collect();
+
+    let subgraph = lockfile.subgraph(&["apps/web".into()], &idents).unwrap();
+    let pruned = subgraph.lockfile().unwrap();
+
+    assert!(
+        pruned
+            .packages
+            .values()
+            .any(|entry| entry.ident == "ms@2.0.0"),
+        "pruned lockfile must keep ms@2.0.0 for debug@2.6.9's exact pin, got: {:?}",
+        pruned
+            .packages
+            .iter()
+            .map(|(key, entry)| (key, entry.ident.as_str()))
+            .collect::<Vec<_>>()
+    );
+}
