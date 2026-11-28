@@ -376,7 +376,9 @@ impl Settings {
 
     /// Follow a directory link only when it resolves inside the base path and
     /// outside Git metadata, and only the first time the walk reaches its
-    /// target. Other directory links are yielded as entries.
+    /// target. Links under `node_modules` are followed only when an include
+    /// pattern explicitly names the link's path. Other directory links are
+    /// yielded as entries.
     pub fn follow_links_within_base(mut self) -> Self {
         self.links = LinkMode::FollowWithinBase;
         self
@@ -1817,7 +1819,7 @@ fn walk_glob(
                 && entry.depth() > 0
                 && entry.file_type().is_dir()
                 && path.is_symlink()
-                && !gate.enter(path)
+                && (is_wildcard_node_modules_link(glob, path) || !gate.enter(path))
             {
                 if glob.is_match(path) {
                     unfollowed.push(path.to_path_buf());
@@ -1838,6 +1840,55 @@ fn walk_glob(
             .map(|path| AbsoluteSystemPathBuf::try_from(path.as_path()).map_err(Into::into)),
     );
     results
+}
+
+/// Package manager links under `node_modules` are followed only when the glob
+/// explicitly names the link's full path. Broad wildcard walks should not
+/// descend into workspace links, since their contents are already represented
+/// by the package graph and may lead through arbitrarily large dependency
+/// trees.
+fn is_wildcard_node_modules_link(glob: &Glob<'_>, link: &Path) -> bool {
+    if !link
+        .components()
+        .any(|component| component.as_os_str() == "node_modules")
+    {
+        return false;
+    }
+
+    let pattern = glob.to_string();
+    let link = link.to_slash_lossy();
+    let pattern_components = pattern.split('/').filter(|component| !component.is_empty());
+    let link_components = link.split('/').filter(|component| !component.is_empty());
+
+    for (pattern_component, link_component) in pattern_components.zip(link_components) {
+        let Some(literal) = literal_glob_component(pattern_component) else {
+            return true;
+        };
+        let components_match = if cfg!(windows) {
+            literal.eq_ignore_ascii_case(link_component)
+        } else {
+            literal == link_component
+        };
+        if !components_match {
+            return true;
+        }
+    }
+    false
+}
+
+fn literal_glob_component(component: &str) -> Option<String> {
+    let mut literal = String::with_capacity(component.len());
+    let mut chars = component.chars();
+    while let Some(ch) = chars.next() {
+        if ch == '\\' {
+            literal.push(chars.next()?);
+        } else if matches!(ch, '*' | '?' | '[' | '{' | '(' | ')' | '}' | ',' | '$') {
+            return None;
+        } else {
+            literal.push(ch);
+        }
+    }
+    Some(literal)
 }
 
 struct LinkGate {
@@ -3623,6 +3674,52 @@ mod test {
                 ),
                 "packages/** with follow_links should find files behind symlinked dirs, got: \
                  {paths:?}"
+            );
+        }
+
+        #[test]
+        fn scoped_workspace_links_are_skipped_when_reached_through_a_wildcard() {
+            let tmp = tempfile::TempDir::with_prefix("scoped-node-modules").unwrap();
+            let root_path = tmp.path();
+            std::fs::create_dir_all(root_path.join("packages/a/src")).unwrap();
+            std::fs::create_dir_all(root_path.join("packages/b/src")).unwrap();
+            std::fs::create_dir_all(root_path.join("packages/a/node_modules/@scope")).unwrap();
+            std::fs::write(root_path.join("packages/a/src/a.test.ts"), "a").unwrap();
+            std::fs::write(root_path.join("packages/b/src/b.test.ts"), "b").unwrap();
+            std::os::unix::fs::symlink(
+                "../../../b",
+                root_path.join("packages/a/node_modules/@scope/b"),
+            )
+            .unwrap();
+
+            let root = AbsoluteSystemPathBuf::try_from(root_path).unwrap();
+            let walk = |pattern: &str| {
+                let include = [ValidatedGlob::from_str(pattern).unwrap()];
+                globwalk_with_settings(
+                    &root,
+                    &include,
+                    &[],
+                    WalkType::Files,
+                    Settings::default().follow_links_within_base(),
+                )
+                .unwrap()
+                .into_iter()
+                .map(|path| root.anchor(path).unwrap().to_string())
+                .collect::<HashSet<_>>()
+            };
+
+            let wildcard_results = walk("packages/a/**/*.{test,spec}.{ts,tsx}");
+            assert!(wildcard_results.contains("packages/a/src/a.test.ts"));
+            assert!(
+                !wildcard_results.contains("packages/a/node_modules/@scope/b/src/b.test.ts"),
+                "wildcard traversal should not follow a workspace link in node_modules: \
+                 {wildcard_results:?}"
+            );
+
+            let explicit_results = walk("packages/a/node_modules/@scope/b/**/*.ts");
+            assert!(
+                explicit_results.contains("packages/a/node_modules/@scope/b/src/b.test.ts"),
+                "an explicitly named workspace link should still be followed: {explicit_results:?}"
             );
         }
 
