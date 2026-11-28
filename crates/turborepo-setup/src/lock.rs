@@ -306,10 +306,10 @@ impl Lock {
             for (key, values) in &tool.options {
                 if tool.adapter == additional::ADAPTER && key == additional::SOURCE {
                     if !matches!(values.as_slice(), [source]
-                        if turborepo_turbo_json::catalog_package(source).is_some())
+                        if turborepo_turbo_json::registry_package(source).is_some())
                     {
                         return Err(Error::Invalid(
-                            "an additional tool's source must be one aqua catalog package",
+                            "an additional tool's source must be one `<registry>:<package ID>`",
                         ));
                     }
                     continue;

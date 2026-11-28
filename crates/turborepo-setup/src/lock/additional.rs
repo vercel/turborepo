@@ -18,8 +18,8 @@
 use std::collections::BTreeMap;
 
 use turborepo_turbo_json::{
-    AdditionalToolSource, ArtifactFormat, ArtifactPlatform, RawRootTurboJson, RawTurboJson,
-    SetupPolicy, catalog_package, command_name, derived_artifact_violation,
+    AdditionalToolSource, ArtifactFormat, ArtifactPlatform, BUILTIN_REGISTRY, RawRootTurboJson,
+    RawTurboJson, SetupPolicy, command_name, derived_artifact_violation, registry_package,
 };
 
 use super::{Artifact, Declaration, Format, Installation, Lock, Platform, Tool};
@@ -81,7 +81,7 @@ impl CatalogRequest {
             && covered(&self.id, tool)
             && tool.version == self.version
             && tool.declarations == [self.declaration()]
-            && catalog_package(source).is_some()
+            && registry_package(source).is_some_and(|(registry, _)| registry == BUILTIN_REGISTRY)
             && self.from.as_ref().is_none_or(|from| from == source)
             && resolved_shape(tool)
     }

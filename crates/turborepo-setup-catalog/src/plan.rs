@@ -6,7 +6,7 @@ use turborepo_setup::lock::{
     additional::{CatalogRequest, TARGETS, lock_platform},
 };
 use turborepo_turbo_json::{
-    ArtifactFormat, ArtifactPlatform, CATALOG_PREFIX, derived_artifact_violation,
+    ArtifactFormat, ArtifactPlatform, BUILTIN_REGISTRY, derived_artifact_violation,
 };
 
 use super::{Catalog, Error};
@@ -101,7 +101,7 @@ impl Catalog {
                 tool: request.id.clone(),
                 package: package.clone(),
             })?;
-        let source = format!("{CATALOG_PREFIX}{package}");
+        let source = format!("{BUILTIN_REGISTRY}:{package}");
         Ok(Plan::of(&recipe, source, &request.version))
     }
 }

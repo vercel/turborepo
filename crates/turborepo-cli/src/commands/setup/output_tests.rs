@@ -178,7 +178,7 @@ fn resolved_catalog_tools_get_one_line_and_a_note_per_tool_left_out_somewhere() 
     };
     assert_eq!(
         render_tools(&report, style(false), None),
-        "✓ Resolved   jq 1.8.2 (jqlang/jq), rg 15.2.0 (BurntSushi/ripgrep)\n✓ Installed  jq \
+        "✓ Resolved   jq 1.8.2 (aqua:jqlang/jq), rg 15.2.0 (aqua:BurntSushi/ripgrep)\n✓ Installed  jq \
          1.8.2, rg 15.2.0\n✓ Reused     node 24.0.0\nrg 15.2.0 is not locked for linux-arm64-gnu \
          (the release has no download for this platform), windows-x64 (its 7z download is a \
          format that turbo setup cannot install yet)\nOffline: used only tools already in the \

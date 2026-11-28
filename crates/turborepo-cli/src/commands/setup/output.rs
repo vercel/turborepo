@@ -85,11 +85,7 @@ pub(super) struct LeftOut {
 
 impl ResolvedTool {
     fn item(&self) -> String {
-        let package = self
-            .source
-            .split_once(':')
-            .map_or(&*self.source, |(_, p)| p);
-        format!("{} {} ({package})", self.id, self.version)
+        format!("{} {} ({})", self.id, self.version, self.source)
     }
 
     pub(super) fn left_out_note(&self) -> Option<String> {

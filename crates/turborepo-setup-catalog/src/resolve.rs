@@ -168,7 +168,8 @@ fn program(platform: Platform, bytes: &[u8]) -> bool {
 pub struct Resolved {
     /// The complete lock entry: one pinned artifact per installable platform.
     pub tool: Tool,
-    /// The catalog entry that gave the directions, as `aqua:<package ID>`.
+    /// The registry entry that gave the directions, as
+    /// `<registry>:<package ID>`.
     pub source: String,
     /// The name the release has upstream, such as `v1.8.2` for `1.8.2`.
     pub release: String,

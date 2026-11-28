@@ -18,8 +18,8 @@ fn every_bundled_name_is_a_tool_id_for_a_bundled_recipe() {
     let registry = catalog.registry().unwrap();
     let mut missing = Vec::new();
     for (name, package) in &catalog.names {
-        let from = format!("{CATALOG_PREFIX}{package}");
-        if catalog_package(&from).is_none() || registry.package(package).is_err() {
+        let source = format!("aqua:{package}");
+        if registry_package(&source).is_none() || registry.package(package).is_err() {
             missing.push(format!("{name}\t{package}"));
         }
     }
