@@ -17,6 +17,10 @@ use turborepo_turbo_json::BUILTIN_REGISTRY;
 
 use super::Error;
 
+mod limits;
+
+pub use limits::Limit;
+
 const NAMES: &str = include_str!("../catalog/names.tsv");
 const BUNDLED: &[u8] = include_bytes!("../catalog/aqua-registry.yaml.gz");
 const MAX_BUNDLED_BYTES: usize = 64 * 1024 * 1024;
@@ -63,6 +67,8 @@ pub enum Problem {
     Malformed { at: Option<Position> },
     #[error("it has no packages")]
     NoPackages,
+    #[error("{limit}{}", Position::shown(.at))]
+    Limit { limit: Limit, at: Option<Position> },
 }
 
 /// A place in a registry's text, counted from 1.
@@ -179,12 +185,14 @@ pub(super) fn bundled(limit: usize) -> io::Result<Vec<u8>> {
 
 impl Recipes {
     /// Checks registry bytes, whatever their source, and only then reads
-    /// them: their size and that they are UTF-8.
+    /// them: their size, that they are UTF-8, and the limits on the document
+    /// that keep the recipe reader from crashing or running without bound.
     fn load(bytes: &[u8], limit: usize) -> Result<Self, Problem> {
         if bytes.len() > limit {
             return Err(Problem::TooLarge(limit));
         }
         let yaml = std::str::from_utf8(bytes).map_err(|_| Problem::NotUtf8)?;
+        limits::check(yaml)?;
         let rows = RegistryYaml::from_yaml(yaml)
             .map_err(|error| Problem::Malformed {
                 at: Position::of(&error),
