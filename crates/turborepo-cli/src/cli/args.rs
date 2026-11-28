@@ -1657,13 +1657,9 @@ pub enum TraceCommand {
     /// List the tests that the changes between two git refs, or the given
     /// files, can affect
     Affected(TraceAffectedArgs),
-    /// Show the chain of references from a test to a file
-    Why {
-        /// The test file
-        test: String,
-        /// The file the test may depend on
-        file: String,
-    },
+    /// Explain why a change selects a test: what changed, the code that
+    /// makes it matter and each step to the test
+    Why(TraceWhyArgs),
     /// Report the code the trace cannot analyze statically, and the
     /// assumptions it makes
     Lint {
@@ -1671,6 +1667,34 @@ pub enum TraceCommand {
         #[usage(long)]
         json: bool,
     },
+}
+
+#[derive(UsageArgs, Clone, Debug, Default, PartialEq)]
+pub struct TraceWhyArgs {
+    /// The test file
+    pub test: Option<String>,
+    /// A file to take as the only change (default: the changes that
+    /// `turbo trace affected` reads)
+    pub file: Option<String>,
+    /// Base git ref for comparison, as for `turbo trace affected`
+    #[usage(long, conflicts = "changed")]
+    pub base: Option<String>,
+    /// Head git ref for comparison, as for `turbo trace affected`
+    #[usage(long, conflicts = "changed")]
+    pub head: Option<String>,
+    /// Use these files as the changes instead of reading them from git
+    #[usage(long, value_name = "FILE", num_args = 1..)]
+    pub changed: Vec<String>,
+    /// Only tests of these frameworks: jest, vitest, gotest, cargo-test or
+    /// all (default: all)
+    #[usage(long, value_name = "FRAMEWORK", num_args = 1..)]
+    pub tests: Vec<String>,
+    /// Make no assumptions: every uncertainty selects
+    #[usage(long)]
+    pub strict: bool,
+    /// Output the explanation as JSON
+    #[usage(long)]
+    pub json: bool,
 }
 
 #[derive(UsageArgs, Clone, Debug, Default, PartialEq)]

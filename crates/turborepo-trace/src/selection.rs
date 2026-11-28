@@ -468,7 +468,7 @@ fn test_like(path: &str, js: bool, py: bool, go: bool) -> bool {
 }
 
 /// The class of an entry's reason and what its chain starts at.
-fn reason_of(g: &Graph, e: &EntryResult) -> (&'static str, Option<String>) {
+pub(crate) fn reason_of(g: &Graph, e: &EntryResult) -> (&'static str, Option<String>) {
     let entry = g.path(e.entry);
     let site = || {
         e.uncertain

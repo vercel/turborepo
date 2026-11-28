@@ -2,15 +2,27 @@
 source: crates/turborepo-cli/src/cli/test.rs
 expression: "Args::render_help(get_trace_subcommand(\"why\"), false).unwrap()"
 ---
-Show the chain of references from a test to a file
+Explain why a change selects a test: what changed, the code that makes it matter
+and each step to the test
 
-Usage: turbo trace why <TEST> <FILE>
+Usage: turbo trace why [FLAGS] [TEST] [FILE]
 
 Arguments:
-  <TEST>  The test file
-  <FILE>  The file the test may depend on
+  [TEST]  The test file
+  [FILE]  A file to take as the only change (default: the changes that `turbo
+          trace affected` reads)
 
 Flags:
+      --base <BASE>               Base git ref for comparison, as for `turbo
+                                  trace affected`
+      --head <HEAD>               Head git ref for comparison, as for `turbo
+                                  trace affected`
+      --changed <FILE>…           Use these files as the changes instead of
+                                  reading them from git
+      --tests <FRAMEWORK>…        Only tests of these frameworks: jest, vitest,
+                                  gotest, cargo-test or all (default: all)
+      --strict                    Make no assumptions: every uncertainty selects
+      --json                      Output the explanation as JSON
   -h, --help                      Print help
 
 Global flags:

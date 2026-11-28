@@ -106,6 +106,8 @@ Make no assumptions: every uncertainty selects the tests it may affect.
 
 Explain why each of the given test files is or is not selected, instead of listing the selection. A file that the selection lists as an `UnknownTest` is explained as an unknown test, which always runs. Cannot be combined with `--json` or `--exit-code`.
 
+The first line of each test says why it is selected. The indented lines below it list the uncertainties the test reaches and the assumptions made for it. With several tests, an uncertainty that an earlier test listed is not repeated. For the chain from the change to one test, link by link, use [`turbo trace why`](#turbo-trace-why-test-file).
+
 ### `--json`
 
 Print the selection as JSON. Each list has the same shape as the `affectedTasks` field of [`turbo query affected`](/docs/reference/query#affected) (`items` and `length`), so the command can later move into `turbo query`:
@@ -174,13 +176,121 @@ The filesystem cache directory the graph is fetched from and, in CI, put into, a
 
 Read and write the graph in the local and remote caches as [`turbo run --cache`](/docs/reference/run#--cache-options) does for task outputs. For example, `--cache=local:r,remote:r` fetches graphs but never puts one.
 
-## `turbo trace why <test> <file>`
+## `turbo trace why <test> [file]`
 
-Print the chain of references from a test file to a file in its trace. Paths are relative to the current directory. Exits with an error when the file is not in the test's trace.
+Explain why a change selects a test, in the terms of the selection itself: what changed, the code that makes the change matter (with its line of source), the kind of link, and each step from there to the test. Paths are relative to the current directory.
 
 ```bash title="Terminal"
 turbo trace why packages/app/test/total.test.js packages/math/src/add.js
 ```
+
+With a `file`, that file is the change. Without one, the changes are those of `turbo trace affected`, with the same `--base`, `--head` and `--changed` flags (and `--tests` and `--strict`):
+
+```bash title="Terminal"
+turbo trace why packages/app/test/total.test.js --base main
+```
+
+The command exits with code `0` when the change selects the test, and with `1` when it does not. Then it prints `not selected by this change`; with a `file` and the flags of a change, it also explains what else of that change selects the test.
+
+The first line gives the reason as `turbo trace affected --json` reports it. Each numbered block below it is a witness: one way the change reaches the test.
+
+```txt title="Output"
+apps/web/test/cart.test.ts: selected by the change to packages/math/src/add.ts (modified) (FileChanged packages/math/src/add.ts)
+  1. import: modified
+        packages/math/src/add.ts
+     -> packages/math/src/index.ts  (re_export "./add" at packages/math/src/index.ts:1)
+     -> apps/web/test/cart.test.ts  (import "@acme/math" at apps/web/test/cart.test.ts:2)
+  no other kind of link selects it (one witness per kind is known: the same kind may hold more constructs)
+```
+
+### Kinds of link
+
+| Link                 | The change reaches the test because                                                                                      | Reason in `affected`  |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------ | --------------------- |
+| `import`, `asset`    | A file imports or reads the changed file.                                                                                | `FileChanged`         |
+| `the test itself`    | The test file changed.                                                                                                   | `TestChanged`         |
+| `name reference`     | Code that is loaded together with a read of a computed path names the changed path: by a string or by a file's location. | `NameReferenced`      |
+| `scope membership`   | The changed path matches the pattern that bounds a read.                                                                 | `FileChanged`         |
+| `directory listing`  | The changed path was added to or removed from a directory that the code lists.                                           | `FileChanged`         |
+| `task input`         | The changed file is an input of a task whose output the test loads.                                                      | `FileChanged`         |
+| `task definition`    | A script, CI job or service that runs the test changed.                                                                  | `TaskChanged`         |
+| `bounded load`       | A load with a computed target can reach a package that the change affects.                                               | `Uncertain`           |
+| `open load or read`  | The test reaches code that cannot be analyzed. It is selected whatever changes.                                          | `Uncertain`           |
+| `package dependency` | A third-party package resolves differently.                                                                              | `PackageDependencyChanged` |
+
+A name reference shows the name and the read it is loaded with:
+
+```txt title="Output"
+services/billing/test/token.test.js: selected by the change to services/billing/secrets/dev.token (added) (NameReferenced services/billing/secrets/dev.token)
+  1. name reference: changed services/billing/secrets/dev.token, named by the string 'secrets' in services/billing/test/paths.js:3 (loaded with the read at packages/reader/index.js:3, whose path is computed)
+     services/billing/test/paths.js:3: return base + '/secrets/' + name + '.token';
+     packages/reader/index.js:3: return fs.readFileSync(p, 'utf8');
+        services/billing/test/paths.js
+     -> services/billing/test/token.test.js  (require "./paths" at services/billing/test/token.test.js:2)
+```
+
+When the command knows what makes a construct broad, a `class` line says so. This name is the repository root, so every changed path matches it:
+
+```txt title="Output"
+apps/web/test/root.test.js: selected by the change to docs/guide.md (modified) (NameReferenced docs/guide.md)
+  1. name reference: changed docs/guide.md, named by its own location (the repository root) in apps/web/test/root.test.js:4 (loaded with the read at packages/reader/index.js:3, whose path is computed)
+     class: it names the repository root: every path of the repository is below it
+     apps/web/test/root.test.js:4: const top = (name) => readText(path.join(ROOT, name));
+     packages/reader/index.js:3: return fs.readFileSync(p, 'utf8');
+        apps/web/test/root.test.js
+```
+
+The other classes are a read relative to the working directory, a listing or read below the repository root, a path chosen by an environment variable, and a load that only the declared packages bound.
+
+A bounded load shows the load and the package it can reach:
+
+```txt title="Output"
+services/orders/test/routes.test.js: selected by the change to packages/util/other.js (modified) (Uncertain packages/framework/normalize.js)
+  1. bounded load: uncertain (computed_specifier; the load can reach packages/util/ (packages/util/other.js changed))
+     class: a load with a computed target, bounded only by the packages its package declares
+     packages/framework/normalize.js:4: return [{ handler: () => import(spec), modulePath: spec }];
+        packages/framework/normalize.js
+     -> packages/harness/setup.js  (require "@acme/framework/normalize.js" at packages/harness/setup.js:1)
+     -> services/orders/test/routes.test.js  (require "@acme/harness/setup.js" at services/orders/test/routes.test.js:1)
+```
+
+A load can also reach a package because a file of that package depends on the change, without being changed itself. The bound then names that file, and a `next:` line gives the command that explains it in turn:
+
+```txt title="Output"
+  1. bounded load: uncertain (computed_specifier; the load can reach packages/util/ (packages/util/list.js depends on the change))
+     class: a load with a computed target, bounded only by the packages its package declares
+     packages/framework/normalize.js:4: return [{ handler: () => import(spec), modulePath: spec }];
+     next: turbo trace why packages/util/list.js  (why that file depends on the change)
+```
+
+A changed input of a task shows the task between the file and the test. Here the task also holds code that cannot be analyzed, which is a second witness:
+
+```txt title="Output"
+apps/web/lib.test.js: selected by the change to packages/lib/src/other.ts (modified) (FileChanged packages/lib/src/other.ts); it is selected with no change at all too
+  selected through 2 independent witnesses: each selects the test by itself, so removing one does not unselect it. The first is the one `turbo trace affected` reports; also: task with an open uncertainty
+  1. task input: modified
+        packages/lib/src/other.ts
+     -> members:packages/lib/src/**/*  (fs_read)
+     -> task:packages/lib#build  (fs_read "members:packages/lib/src/**/* (tsconfig include)")
+     -> apps/web/lib.test.js  (import "generated by task")
+  2. task with an open uncertainty (needs no change): uncertain (computed_specifier)
+     members:packages/lib/src/**/*: callers not known; parameter load#0; a value passed to packages/lib/src/index.ts:1
+        members:packages/lib/src/**/*
+     -> task:packages/lib#build  (fs_read "members:packages/lib/src/**/* (tsconfig include)")
+     -> apps/web/lib.test.js  (import "generated by task")
+```
+
+### Several witnesses
+
+A test is often selected in more than one way. Removing the construct of the first witness then changes nothing, because the next one still selects the test. `why` lists every witness it knows, as in the last example: each selects the test by itself. It knows one witness per kind of link, so the list is a lower bound: a kind may hold more constructs of the same sort.
+
+### Selected with no change at all
+
+A test that reaches code which cannot be analyzed is selected by every change, and also when nothing changed. So is a file that looks like a test and that no runner configuration lists (`UnknownTest`). `why` says `it is selected with no change at all too`, and marks the witness with `(needs no change)`.
+
+### `--json`
+
+Print the explanation as JSON. For a test: `test`, `selected`, `reason` (as in `turbo trace affected --json`), `noChange` and `witnesses`. Each witness has `reason`, `link`, `noChange`, `changed`, `description`, `class`, `code` (`file`, `line`, `text`), `chain` (`file`, `via`) and `next`.
 
 ## `turbo trace lint`
 

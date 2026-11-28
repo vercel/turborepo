@@ -11,7 +11,8 @@
 //! changed files from turbo's [`SCM`](turborepo_scm::SCM) ([`Repo`]).
 //!
 //! The typed API ([`affected`], [`explain`], [`why`], [`lint`]) is what `turbo
-//! trace` calls. `commands` (hidden) has the full option set of each command
+//! trace` calls. `why` explains a selection with the selection's own results
+//! (`witness`). `commands` (hidden) has the full option set of each command
 //! and `graph build`, for the crate's tests (`examples/harness.rs`).
 //!
 //! Everything here is synchronous and CPU-bound (rayon inside): async callers
@@ -51,13 +52,14 @@ pub mod transport;
 mod tsconfigdiff;
 mod tsgovern;
 mod why;
+mod witness;
 mod workflows;
 mod xfile;
 
 pub use adapter::Packages;
 pub use api::{
     AffectedRequest, AffectedTest, AffectedTests, Changes, LintRequest, Reason, Repo,
-    UncoveredTask, affected, explain, lint, prefetch_requests, supported, why,
+    UncoveredTask, WhyRequest, affected, explain, lint, prefetch_requests, supported, why,
 };
 pub use error::Error;
 pub use graph::evict_graph;
@@ -95,6 +97,7 @@ pub mod commands {
         lint::{LintCmd, LintFormat},
         selection::Mode,
         why::{ExternalsArg, PhaseArg, TraceOpts, WhyCmd},
+        witness::WhyOpts,
     };
 
     /// `affected`.

@@ -526,7 +526,7 @@ fn under(dir: &str, path: &str) -> bool {
 }
 
 /// The selection document's class of a chain as a [`Reason`].
-fn reason(class: &str, via: Option<&str>) -> Reason {
+pub(crate) fn reason(class: &str, via: Option<&str>) -> Reason {
     let via = via.unwrap_or_default().to_owned();
     match class {
         "test-changed" => Reason::TestChanged,
@@ -561,48 +561,104 @@ pub fn explain(
         .iter()
         .map(|t| abs(repo, t).to_string_lossy().into_owned())
         .collect();
-    match &req.changes {
-        Changes::Files(files) => {
-            cmd.changed = files
-                .iter()
-                .map(|f| abs(repo, f).to_string_lossy().into_owned())
-                .collect();
-        }
-        Changes::Scm { base, head } => {
-            if let Err(e) = scm_changes(repo, &mut cmd, base.as_deref(), head.as_deref()) {
-                return Err(Error::Failed(format!(
-                    "the changes cannot be read: {e} (every test is selected)"
-                )));
-            }
-        }
-    }
+    explained_changes(repo, &mut cmd, &req.changes)?;
     let host = crate::affected::Host::default();
     crate::commands::finish(crate::affected::cmd_affected_for(cmd, out, Some(&host)))?;
     Ok(())
 }
 
-/// `turbo trace why <test> <file>`: the chain of references from the test to
-/// the file, as text (paths relative to [`Repo::cwd`]). An error when the file
-/// is not in the test's trace.
+/// Points `cmd` at `changes`, for a command that explains a selection: when
+/// they cannot be read, every test is selected and there is nothing to
+/// explain.
+fn explained_changes(
+    repo: &Repo<'_>,
+    cmd: &mut AffectedCmd,
+    changes: &Changes,
+) -> Result<(), Error> {
+    match changes {
+        Changes::Files(files) => {
+            cmd.changed = files
+                .iter()
+                .map(|f| abs(repo, f).to_string_lossy().into_owned())
+                .collect();
+            Ok(())
+        }
+        Changes::Scm { base, head } => scm_changes(repo, cmd, base.as_deref(), head.as_deref())
+            .map_err(|e| {
+                Error::Failed(format!(
+                    "the changes cannot be read: {e} (every test is selected)"
+                ))
+            }),
+    }
+}
+
+/// `turbo trace why`.
+#[derive(Clone, Debug)]
+pub struct WhyRequest {
+    /// The test to explain (relative to [`Repo::cwd`]).
+    pub test: Option<String>,
+    /// `<file>`: the change is this file alone, whatever
+    /// [`AffectedRequest::changes`] says. When it does not select the test and
+    /// changes were given, the whole change is explained after it.
+    pub file: Option<String>,
+    /// The changes (without a `file`), `--tests` and `--strict`, as for
+    /// [`affected`].
+    pub affected: AffectedRequest,
+    /// `--json`.
+    pub json: bool,
+}
+
+/// `turbo trace why`: why the change selects a test, in the selection's own
+/// terms: what changed, the construct that makes it matter, the kind of link
+/// and each hop to the test, for every mechanism that selects it by itself.
+/// Returns the exit code: 1 when the change does not select the test.
 #[tracing::instrument(skip_all)]
-pub fn why(repo: &Repo<'_>, test: &str, file: &str, out: &mut dyn Write) -> Result<(), Error> {
+pub fn why(repo: &Repo<'_>, req: &WhyRequest, out: &mut dyn Write) -> Result<i32, Error> {
     supported()?;
+    check_tests(&req.affected)?;
+    check_refs(&req.affected)?;
     host_defaults();
     if let Some(why) = unsupported_config(repo) {
         return Err(Error::Failed(why));
     }
-    let cwd = repo.cwd.as_std_path().to_path_buf();
-    let cmd = crate::why::WhyCmd {
-        entry: abs(repo, test),
-        file: abs(repo, file),
-        opts: crate::why::TraceOpts {
-            base: Some(cwd.clone()),
-            cwd: Some(cwd),
-            ..Default::default()
-        },
+    if req.test.is_none() {
+        return Err(Error::InvalidRequest(
+            "missing <test>: `turbo trace why <test> [<file>]`".to_owned(),
+        ));
+    }
+    let run = |changes: &Changes, out: &mut dyn Write| -> Result<i32, Error> {
+        let mut cmd = command(repo, &req.affected);
+        cmd.why = Some(crate::witness::WhyOpts {
+            test: req
+                .test
+                .as_ref()
+                .map(|t| abs(repo, t).to_string_lossy().into_owned()),
+            json: req.json,
+        });
+        explained_changes(repo, &mut cmd, changes)?;
+        let host = crate::affected::Host::default();
+        let code =
+            crate::commands::finish(crate::affected::cmd_affected_for(cmd, out, Some(&host)))?;
+        Ok(i32::from(code.0))
     };
-    crate::commands::finish(crate::why::cmd_why(cmd, out))?;
-    Ok(())
+    let given = &req.affected.changes;
+    let Some(file) = &req.file else {
+        return run(given, out);
+    };
+    let code = run(&Changes::Files(vec![file.clone()]), out)?;
+    // Not by this file: by what else of the change, if a change was given.
+    let whole = !matches!(
+        given,
+        Changes::Scm {
+            base: None,
+            head: None
+        }
+    );
+    if code != 0 && whole && !req.json {
+        writeln!(out, "the whole change:").map_err(Error::Io)?;
+        run(given, out)?;
+    }
+    Ok(code)
 }
 
 /// `turbo trace lint`.

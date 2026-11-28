@@ -788,7 +788,7 @@ fn trace_is_hidden_from_top_level_help() {
 
 #[test]
 fn trace_parses_its_subcommands() {
-    use crate::cli::{TraceAffectedArgs, TraceCommand};
+    use crate::cli::{TraceAffectedArgs, TraceCommand, TraceWhyArgs};
 
     let trace = |words: &[&str]| {
         parse_args(["turbo", "trace"].iter().chain(words))
@@ -838,10 +838,11 @@ fn trace_parses_its_subcommands() {
     assert_eq!(
         trace(&["why", "a.test.ts", "src/a.ts"]).unwrap(),
         Some(Command::Trace {
-            command: Some(TraceCommand::Why {
-                test: "a.test.ts".into(),
-                file: "src/a.ts".into(),
-            }),
+            command: Some(TraceCommand::Why(TraceWhyArgs {
+                test: Some("a.test.ts".into()),
+                file: Some("src/a.ts".into()),
+                ..Default::default()
+            })),
         })
     );
     assert_eq!(
@@ -854,7 +855,19 @@ fn trace_parses_its_subcommands() {
     assert!(trace(&["affected", "--changed", "a.ts", "--base", "main"]).is_err());
     assert!(trace(&["affected", "--explain", "a.test.ts", "--json"]).is_err());
     assert!(trace(&["affected", "--explain", "a.test.ts", "--exit-code"]).is_err());
-    assert!(trace(&["why", "a.test.ts"]).is_err());
+    // `why` takes the changes as `affected` does, or one file, or neither.
+    assert_eq!(
+        trace(&["why", "a.test.ts", "--base", "main", "--json"]).unwrap(),
+        Some(Command::Trace {
+            command: Some(TraceCommand::Why(TraceWhyArgs {
+                test: Some("a.test.ts".into()),
+                base: Some("main".into()),
+                json: true,
+                ..Default::default()
+            })),
+        })
+    );
+    assert!(trace(&["why", "a.test.ts", "--changed", "a.ts", "--base", "main"]).is_err());
 }
 
 #[test]
