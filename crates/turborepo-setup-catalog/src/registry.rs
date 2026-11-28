@@ -6,6 +6,9 @@
 //! most once. This crate reads no file: whoever declares a registry supplies
 //! the source. The bytes become recipes only through [`Recipes::load`], which
 //! checks them before the recipe reader sees them, whatever the source.
+//!
+//! A [`Problem`] says what kind of fault a registry has and where. It never
+//! quotes the registry, which can be any file of the repository.
 
 use std::{collections::BTreeMap, io, io::Read, sync::OnceLock};
 
@@ -17,8 +20,13 @@ use super::Error;
 const NAMES: &str = include_str!("../catalog/names.tsv");
 const BUNDLED: &[u8] = include_bytes!("../catalog/aqua-registry.yaml.gz");
 const MAX_BUNDLED_BYTES: usize = 64 * 1024 * 1024;
+/// The largest registry that a repository can declare.
+#[cfg(test)]
+pub const MAX_REGISTRY_BYTES: usize = 16 * 1024 * 1024;
 
-/// Reads a registry's bytes up to the given number.
+/// Reads a registry's bytes up to the given number. It fails with `NotFound`
+/// when there is no registry. When there are more bytes, it fails with
+/// `FileTooLarge` or returns more than that number.
 type Source<'a> = Box<dyn Fn(usize) -> io::Result<Vec<u8>> + 'a>;
 
 pub struct Registry<'a> {
@@ -26,7 +34,8 @@ pub struct Registry<'a> {
     /// Where the registry comes from, as an error shows it.
     origin: String,
     /// The tool IDs that the registry answers to, each with its package ID.
-    names: BTreeMap<String, String>,
+    /// Without them, a registry answers to the IDs and aliases of its recipes.
+    names: Option<BTreeMap<String, String>>,
     limit: usize,
     source: Source<'a>,
     recipes: OnceLock<Result<Recipes, Problem>>,
@@ -42,6 +51,8 @@ pub(super) struct Recipes {
 /// Why a registry cannot be used.
 #[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
 pub enum Problem {
+    #[error("it does not exist")]
+    Missing,
     #[error("it cannot be read: {0}")]
     Unreadable(String),
     #[error("it is larger than {} MiB", .0 >> 20)]
@@ -94,9 +105,27 @@ impl<'a> Registry<'a> {
         Self {
             name: BUILTIN_REGISTRY.to_owned(),
             origin: "built into turbo".to_owned(),
-            names: names(names_tsv),
+            names: Some(names(names_tsv)),
             limit: MAX_BUNDLED_BYTES,
             source,
+            recipes: OnceLock::new(),
+        }
+    }
+
+    /// The registry that a repository declares as `name`. `origin` is where it
+    /// comes from, such as the path of its file, and `source` reads it.
+    #[cfg(test)]
+    pub fn declared(
+        name: &str,
+        origin: &str,
+        source: impl Fn(usize) -> io::Result<Vec<u8>> + 'a,
+    ) -> Self {
+        Self {
+            name: name.to_owned(),
+            origin: origin.to_owned(),
+            names: None,
+            limit: MAX_REGISTRY_BYTES,
+            source: Box::new(source),
             recipes: OnceLock::new(),
         }
     }
@@ -106,10 +135,15 @@ impl<'a> Registry<'a> {
     }
 
     /// The recipe that answers to the tool `id`, with its package ID: the one
-    /// that the short names give for `id`. A registry whose short names do
-    /// not have `id` is not read.
+    /// that the short names give for `id`, or without short names, the one
+    /// with that ID or alias. A registry whose short names do not have `id`
+    /// is not read.
     pub(super) fn named(&self, id: &str) -> Result<Option<(&str, &AquaPackage)>, Error> {
-        match self.names.get(id) {
+        let package = match &self.names {
+            Some(names) => names.get(id).map(String::as_str),
+            None => Some(id),
+        };
+        match package {
             Some(package) => Ok(self.recipes()?.recipe(package)),
             None => Ok(None),
         }
@@ -119,8 +153,11 @@ impl<'a> Registry<'a> {
     /// asked for. A fault is kept, so a registry is read once either way.
     pub(super) fn recipes(&self) -> Result<&Recipes, Error> {
         let recipes = self.recipes.get_or_init(|| {
-            let bytes = (self.source)(self.limit)
-                .map_err(|error| Problem::Unreadable(error.to_string()))?;
+            let bytes = (self.source)(self.limit).map_err(|error| match error.kind() {
+                io::ErrorKind::NotFound => Problem::Missing,
+                io::ErrorKind::FileTooLarge => Problem::TooLarge(self.limit),
+                _ => Problem::Unreadable(error.to_string()),
+            })?;
             Recipes::load(&bytes, self.limit)
         });
         recipes.as_ref().map_err(|problem| Error::Registry {
@@ -210,6 +247,6 @@ fn names(tsv: &str) -> BTreeMap<String, String> {
 #[cfg(test)]
 impl Registry<'_> {
     pub(super) fn names(&self) -> &BTreeMap<String, String> {
-        &self.names
+        self.names.as_ref().expect("the built-in registry")
     }
 }

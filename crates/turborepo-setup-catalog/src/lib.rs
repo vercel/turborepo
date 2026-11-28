@@ -2,37 +2,51 @@ use std::collections::BTreeMap;
 
 use aqua_registry::AquaPackage;
 use turborepo_setup::lock::additional::CatalogRequest;
-use turborepo_turbo_json::{BUILTIN_REGISTRY, registry_package};
+use turborepo_turbo_json::registry_package;
 
 mod plan;
 mod registry;
 mod resolve;
 
 pub use plan::{Plan, PlannedArtifact, ReleasePlan, Unavailable};
-use registry::Registry;
-pub use registry::{Position, Problem};
+#[cfg(test)]
+use registry::MAX_REGISTRY_BYTES;
+pub use registry::{Position, Problem, Registry};
 pub use resolve::{CatalogTransport, Resolved, resolve, spelling};
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
-    #[error(
-        "{tool:?} is not a tool name that turbo setup knows.{}\nEither name its catalog entry \
-         with {{ \"version\": {version:?}, \"from\": \"aqua:<package ID>\" }}, or declare its \
-         downloads with {{ \"version\": {version:?}, \"artifacts\": {{ ... }} }} under \
-         setup.additionalTools.{tool}.",
-        suggestions(.candidates)
-    )]
+    #[error("{}", unknown_name(.tool, .version, .registries, .candidates))]
     UnknownName {
         tool: String,
         version: String,
-        /// Catalog package IDs whose last segment is the tool's name.
+        /// The registries that were asked, in order.
+        registries: Vec<String>,
+        /// Entries whose package ID ends in the tool's name, as
+        /// `<registry>:<package ID>`.
         candidates: Vec<String>,
     },
     #[error(
-        "the tool catalog has no entry {package:?} for setup.additionalTools.{tool}; check the \
-         package ID in `from`, or declare the tool's downloads with `artifacts` instead"
+        "the registry {registry:?} has no entry {package:?} for setup.additionalTools.{tool}; \
+         check the package ID in `from`, or declare the tool's downloads with `artifacts` instead"
     )]
-    UnknownPackage { tool: String, package: String },
+    UnknownPackage {
+        tool: String,
+        registry: String,
+        package: String,
+    },
+    #[error(
+        "the registry {registry:?} knows {tool:?} under a package name that turbo.lock cannot \
+         record. A package ID is `/`-separated segments of ASCII letters, digits, `.`, `_`, and \
+         `-`, at most 256 bytes. Rename the package in the registry, or declare the tool's \
+         downloads with `artifacts` under setup.additionalTools.{tool}."
+    )]
+    UnrecordablePackage { tool: String, registry: String },
+    #[error(
+        "setup.additionalTools.{tool} names {from:?} in `from`, which is not an entry of a \
+         registry that the tool catalog asks"
+    )]
+    UnknownRegistry { tool: String, from: String },
     #[error("cannot use the registry {registry:?} ({origin}): {problem}")]
     Registry {
         registry: String,
@@ -84,18 +98,36 @@ pub enum Error {
     Transport(#[source] turborepo_download::Error),
 }
 
-fn suggestions(candidates: &[String]) -> String {
-    match candidates {
+fn unknown_name(tool: &str, version: &str, registries: &[String], candidates: &[String]) -> String {
+    let artifacts = format!(
+        "{{ \"version\": {version:?}, \"artifacts\": {{ ... }} }} under \
+         setup.additionalTools.{tool}"
+    );
+    let (asked, registry) = match registries {
+        [registry] => (format!("the registry {registry:?} knows"), &**registry),
+        registries => {
+            let asked = format!(
+                "any registry knows. These were asked, in order: {}",
+                registries.join(", ")
+            );
+            (asked, "<registry>")
+        }
+    };
+    let entries = match candidates {
         [] => String::new(),
-        candidates => format!(
-            " The catalog has {}.",
-            candidates
+        candidates => {
+            let quoted: Vec<_> = candidates
                 .iter()
-                .map(|package| format!("\"{BUILTIN_REGISTRY}:{package}\""))
-                .collect::<Vec<_>>()
-                .join(", ")
-        ),
-    }
+                .map(|entry| format!("{entry:?}"))
+                .collect();
+            format!(" Entries with that name: {}.", quoted.join(", "))
+        }
+    };
+    format!(
+        "{tool:?} is not a tool name that {asked}.{entries}\nEither name its registry entry with \
+         {{ \"version\": {version:?}, \"from\": \"{registry}:<package ID>\" }}, or declare its \
+         downloads with {artifacts}."
+    )
 }
 
 fn reasons(platforms: &BTreeMap<String, Unavailable>) -> String {
@@ -106,60 +138,75 @@ fn reasons(platforms: &BTreeMap<String, Unavailable>) -> String {
         .join("\n")
 }
 
-pub struct Catalog {
-    registry: Registry<'static>,
+pub struct Catalog<'a> {
+    registries: Vec<Registry<'a>>,
 }
 
-impl Catalog {
-    pub fn bundled() -> Self {
-        Self {
-            registry: Registry::aqua(),
-        }
-    }
-
-    #[cfg(any(test, feature = "test-support"))]
-    pub fn for_tests(names_tsv: &str, registry_yaml: &str) -> Self {
-        Self {
-            registry: Registry::aqua_for_tests(names_tsv, registry_yaml),
-        }
+impl<'a> Catalog<'a> {
+    pub fn new(registries: Vec<Registry<'a>>) -> Self {
+        Self { registries }
     }
 
     /// The recipe that answers `request`, and the registry entry that
-    /// `turbo.lock` records for it. `from` is recorded as written, because a
-    /// recorded entry is reused while it equals `from`. Without `from`, the
-    /// entry is the recipe's own package ID, not an alias of it.
+    /// `turbo.lock` records for it. `from` reaches only the registry it names
+    /// and is recorded as written, because a recorded entry is reused while
+    /// it equals `from`. Without `from`, the first registry that knows the
+    /// tool ID answers, and the entry is its recipe's own package ID, not an
+    /// alias of it. A registry that cannot be read before that fails the
+    /// lookup.
     fn entry(&self, request: &CatalogRequest) -> Result<(String, &AquaPackage), Error> {
-        let registry = &self.registry;
         let Some(from) = &request.from else {
-            let Some((package, recipe)) = registry.named(&request.id)? else {
-                return Err(self.unknown_name(request)?);
-            };
-            return Ok((format!("{}:{package}", registry.name()), recipe));
+            for registry in &self.registries {
+                let Some((package, recipe)) = registry.named(&request.id)? else {
+                    continue;
+                };
+                let source = format!("{}:{package}", registry.name());
+                if registry_package(&source).is_none() {
+                    return Err(Error::UnrecordablePackage {
+                        tool: request.id.clone(),
+                        registry: registry.name().to_owned(),
+                    });
+                }
+                return Ok((source, recipe));
+            }
+            return Err(self.unknown_name(request)?);
         };
-        let package = registry_package(from).map_or(&**from, |(_, package)| package);
-        match registry.recipes()?.recipe(package) {
+        let unknown = || Error::UnknownRegistry {
+            tool: request.id.clone(),
+            from: from.clone(),
+        };
+        let (name, package) = registry_package(from).ok_or_else(unknown)?;
+        let registry = self.registries.iter().find(|r| r.name() == name);
+        match registry.ok_or_else(unknown)?.recipes()?.recipe(package) {
             Some((_, recipe)) => Ok((from.clone(), recipe)),
             None => Err(Error::UnknownPackage {
                 tool: request.id.clone(),
+                registry: name.to_owned(),
                 package: package.to_owned(),
             }),
         }
     }
 
-    /// The error for a tool ID that the registry does not know, with the
-    /// packages that `from` could name instead.
+    /// The error for a tool ID that no registry knows, with the entries that
+    /// `from` could name instead.
     fn unknown_name(&self, request: &CatalogRequest) -> Result<Error, Error> {
-        let packages = self.registry.recipes()?.packages_named(&request.id);
-        let recordable =
-            |package: &&str| registry_package(&format!("{BUILTIN_REGISTRY}:{package}")).is_some();
+        let mut candidates = Vec::new();
+        for registry in &self.registries {
+            let packages = registry.recipes()?.packages_named(&request.id);
+            let entries = packages
+                .iter()
+                .map(|package| format!("{}:{package}", registry.name()));
+            candidates.extend(entries.filter(|entry| registry_package(entry).is_some()));
+        }
         Ok(Error::UnknownName {
             tool: request.id.clone(),
             version: request.version.clone(),
-            candidates: packages
-                .into_iter()
-                .filter(recordable)
-                .map(str::to_owned)
+            registries: self
+                .registries
+                .iter()
+                .map(|r| r.name().to_owned())
                 .collect(),
+            candidates,
         })
     }
 }

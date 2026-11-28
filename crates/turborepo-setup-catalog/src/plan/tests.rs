@@ -1,7 +1,7 @@
 use turborepo_turbo_json::ArtifactFormat::{Binary, TarGz, Zip};
 
 use super::*;
-use crate::tests::request;
+use crate::{Registry, tests::request};
 
 const NAMES: &str = concat!(
     "# Fixture names.\n",
@@ -105,8 +105,8 @@ packages:
           - name: npm
 "#;
 
-fn catalog() -> Catalog {
-    Catalog::for_tests(NAMES, REGISTRY)
+fn catalog() -> Catalog<'static> {
+    Catalog::new(vec![Registry::aqua_for_tests(NAMES, REGISTRY)])
 }
 
 fn plan(id: &str, version: &str, from: Option<&str>) -> Plan {
@@ -363,12 +363,12 @@ fn version_overrides_select_the_recipe_for_the_requested_version() {
 }
 
 #[test]
-fn an_unknown_name_lists_the_catalog_entries_it_could_mean() {
+fn an_unknown_name_lists_the_registry_entries_it_could_mean() {
     let catalog = catalog();
     let error = catalog.plan(&request("xz", "5.8.1", None)).unwrap_err();
     assert!(
         matches!(&error, Error::UnknownName { tool, candidates, .. }
-            if tool == "xz" && candidates == &["example/xz".to_owned()]),
+            if tool == "xz" && candidates == &["aqua:example/xz".to_owned()]),
         "{error:?}"
     );
     let message = error.to_string();
@@ -384,11 +384,11 @@ fn an_unknown_name_lists_the_catalog_entries_it_could_mean() {
         catalog.plan(&request("raw", "1.0.0", None)).unwrap().source,
         "aqua:example/raw"
     );
-    let unnamed = Catalog::for_tests("", REGISTRY);
+    let unnamed = Catalog::new(vec![Registry::aqua_for_tests("", REGISTRY)]);
     let error = unnamed.plan(&request("raw", "1.0.0", None)).unwrap_err();
     assert!(
         matches!(&error, Error::UnknownName { candidates, .. }
-            if candidates == &["example/raw".to_owned(), "other/raw".to_owned()]),
+            if candidates == &["aqua:example/raw".to_owned(), "aqua:other/raw".to_owned()]),
         "{error:?}"
     );
     let error = catalog
@@ -398,13 +398,14 @@ fn an_unknown_name_lists_the_catalog_entries_it_could_mean() {
         matches!(&error, Error::UnknownName { candidates, .. } if candidates.is_empty()),
         "{error:?}"
     );
-    assert!(!error.to_string().contains("The catalog has"));
+    assert!(!error.to_string().contains("Entries with that name"));
 
     let error = catalog
         .plan(&request("xz", "5.8.1", Some("aqua:example/missing")))
         .unwrap_err();
     assert!(
-        matches!(&error, Error::UnknownPackage { package, .. } if package == "example/missing"),
+        matches!(&error, Error::UnknownPackage { registry, package, .. }
+            if registry == "aqua" && package == "example/missing"),
         "{error:?}"
     );
 }

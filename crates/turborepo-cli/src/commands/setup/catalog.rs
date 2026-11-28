@@ -1,7 +1,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use turborepo_setup::{lock::Snapshot, source_policy::ToolDownloadPolicy};
-use turborepo_setup_catalog::{Catalog, CatalogTransport};
+use turborepo_setup_catalog::{Catalog, CatalogTransport, Registry};
 
 use super::{
     Error, LockMode, Mode, SetupRequest,
@@ -11,7 +11,8 @@ use super::{
 
 #[cfg(any(test, feature = "test-support"))]
 pub(super) struct Fixture {
-    pub catalog: Catalog,
+    /// Stands in for the built-in registry.
+    pub aqua: Registry<'static>,
     pub transport: CatalogTransport,
 }
 
@@ -56,11 +57,12 @@ pub(super) fn resolve(
     }
     requests.sort_by(|a, b| a.id.cmp(&b.id));
     let host = provision::platform()?;
-    let (catalog, fixture) = match fixture {
+    let (aqua, fixture) = match fixture {
         #[cfg(any(test, feature = "test-support"))]
-        Some(fixture) => (fixture.catalog, Some(fixture.transport)),
-        None => (Catalog::bundled(), None),
+        Some(fixture) => (fixture.aqua, Some(fixture.transport)),
+        None => (Registry::aqua(), None),
     };
+    let catalog = Catalog::new(vec![aqua]);
     let plans = requests
         .iter()
         .map(|request| catalog.plan(request))
