@@ -651,6 +651,12 @@ fn an_error_about_a_registry_says_where_its_fault_is_and_never_shows_its_text() 
             )),
             5,
         ),
+        (
+            tool(&format!(
+                "    url: https://e.test/tool\n    version_constraint: {MARKER}(Version)\n"
+            )),
+            6,
+        ),
     ] {
         let catalog = Catalog::new(vec![declared(yaml.as_bytes())]);
         let error = catalog.plan(&request("tool", "1.0.0", None)).unwrap_err();
@@ -663,6 +669,124 @@ fn an_error_about_a_registry_says_where_its_fault_is_and_never_shows_its_text() 
         assert!(!message.contains(MARKER), "{message}");
         assert!(!format!("{error:?}").contains(MARKER), "{error:?}");
     }
+}
+
+/// `tool`, released as `matched` when `constraint` holds for the version.
+fn constrained(key: &str, constraint: &str) -> String {
+    let constraint = serde_json::to_string(constraint).unwrap();
+    tool(&format!(
+        "    url: https://e.test/default\n    version_constraint: \"false\"\n    \
+         version_overrides:\n      - {key}: {constraint}\n        url: https://e.test/matched\n"
+    ))
+}
+
+#[test]
+fn version_expressions_use_only_the_vocabulary_of_the_bundled_registry() {
+    for (constraint, expected) in [
+        ("0..99999999999", Limit::ExpressionVocabulary),
+        ("Version in 0..9", Limit::ExpressionVocabulary),
+        ("Version in [\"a\"]..[\"b\"]", Limit::ExpressionVocabulary),
+        ("len(Version) > 0", Limit::ExpressionVocabulary),
+        ("Version == 'v1.0.0'", Limit::ExpressionVocabulary),
+        ("Version == `v1.0.0`", Limit::ExpressionVocabulary),
+        ("Version == \"v1.0.0", Limit::ExpressionVocabulary),
+        ("Version == \"v1.0.0\\", Limit::ExpressionVocabulary),
+        (
+            "Version == \"caf\u{e9}\" or caf\u{e9}",
+            Limit::ExpressionVocabulary,
+        ),
+        ("true /* 0..9 */", Limit::ExpressionVocabulary),
+        (
+            &format!("true{}", " or true".repeat(64)),
+            Limit::ExpressionTooLong,
+        ),
+        (
+            &format!("Version in {}\"v1.0.0\"{}", "[".repeat(17), "]".repeat(17)),
+            Limit::ExpressionTooDeep,
+        ),
+    ] {
+        for key in ["version_constraint", "version_filter"] {
+            let found = limit(&constrained(key, constraint));
+            assert_eq!(found, expected, "{key}: {constraint}");
+        }
+    }
+    // Nested `any` takes time exponential in its depth, and only a constraint
+    // is evaluated.
+    let nested = "let words = [\"\", \"\"]; any(words, {any(words, {false})})";
+    let found = limit(&constrained("version_constraint", nested));
+    assert_eq!(found, Limit::ExpressionVocabulary);
+    let on_the_package = tool("    url: https://e.test/tool\n    version_constraint: 0..9\n");
+    assert_eq!(limit(&on_the_package), Limit::ExpressionVocabulary);
+    let on_a_platform = tool(
+        "    url: https://e.test/tool\n    overrides:\n      - goos: linux\n        \
+         version_constraint: 0..9\n",
+    );
+    assert_eq!(limit(&on_a_platform), Limit::ExpressionVocabulary);
+
+    let encoded = tool("    url: https://e.test/tool\n    version_constraint: !!binary MC4uOQ==\n");
+    assert_eq!(limit(&encoded), Limit::ExpressionVocabulary);
+    // An alias or a merge puts text under a key that it was not written under.
+    let aliased = format!(
+        "range: &range 0..9\n{}",
+        tool("    url: https://e.test/tool\n    version_constraint: *range\n")
+    );
+    assert_eq!(limit(&aliased), Limit::ExpressionVocabulary);
+    let merged = format!(
+        "shared:\n  - &ranged\n    version_filter: 0..9\n{}",
+        tool("    url: https://e.test/tool\n    <<: *ranged\n")
+    );
+    assert_eq!(limit(&merged), Limit::ExpressionVocabulary);
+
+    // The reader takes a node with a tag of its own as a mapping from the
+    // tag to the node, so the tag would be a key that the text never had.
+    let tagged = tool(
+        "    url: https://e.test/default\n    version_constraint: \"false\"\n    \
+         version_overrides:\n      - !version_constraint 0..9\n",
+    );
+    let found = problem(tagged.as_bytes());
+    assert!(
+        matches!(
+            found,
+            Problem::Malformed {
+                at: Some(Position { line: 8, .. })
+            }
+        ),
+        "{found:?}"
+    );
+
+    for (constraint, matches) in [
+        ("true", true),
+        ("semver(\">= 1.0.0, < 2.0.0\")", true),
+        (
+            "semver(\"< 1.0.0\") or Version in [\"v1.0.0\", \"v3\"]",
+            true,
+        ),
+        ("semver(\"< 1.0.0\") || Version == \"v0.1.0\"", false),
+        (
+            "not (Version startsWith \"v\") and Version != \"1.0.0\"",
+            false,
+        ),
+        (
+            "Version matches \"^v\\\\d+\\\\..*$\" && Version endsWith \"0\"",
+            true,
+        ),
+        ("Version contains \"..\"", false),
+        (
+            &format!("Version in {}\"v1.0.0\"{}", "[".repeat(16), "]".repeat(16)),
+            false,
+        ),
+    ] {
+        let plan = planned(&constrained("version_constraint", constraint));
+        let expected = match matches {
+            true => "https://e.test/matched",
+            false => "https://e.test/default",
+        };
+        assert_eq!(linux_url(&plan), expected, "{constraint}");
+    }
+
+    // The filter of the bundled `denoland/deno`, which a constraint cannot use.
+    let filter = "let words = [\"lsp\", \"nightly\"];\nnot any(words, {Version matches #})\n";
+    planned(&constrained("version_filter", filter));
 }
 
 #[test]
@@ -702,6 +826,33 @@ fn a_package_has_at_most_32_version_prefixes() {
     };
     assert_eq!(limit(&aliased(33)), Limit::VersionPrefixes);
     assert_eq!(planned(&aliased(32)).releases.len(), 32 * 2 + 2);
+}
+
+#[test]
+fn the_bundled_registry_is_within_the_limits_that_loading_checks() {
+    let yaml = String::from_utf8(registry::bundled(1 << 30).unwrap()).unwrap();
+    assert!(yaml.len() > 1 << 20, "{}", yaml.len());
+    // A refresh of the bundled registry that fails here uses a word or
+    // operator that is new. Add it to the vocabulary in `registry/limits.rs`
+    // once it is known that evaluating it is bounded.
+    if let Err(error) = Registry::aqua().recipes() {
+        panic!("{error}");
+    }
+    for (was, now) in [
+        (
+            "version_constraint: semver(",
+            "version_constraint: semverNew(",
+        ),
+        ("version_filter: not (", "version_filter: 1..2 or not ("),
+    ] {
+        assert!(yaml.contains(was), "{was}");
+        let changed = yaml.replacen(was, now, 1);
+        assert_eq!(
+            limit_of(&Registry::aqua_for_tests("", &changed)),
+            Limit::ExpressionVocabulary,
+            "{was}"
+        );
+    }
 }
 
 fn limit_of(registry: &Registry<'_>) -> Limit {

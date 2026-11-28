@@ -4,6 +4,8 @@
 //!
 //! - Its template lexer slices by character index, so a tag that is not ASCII
 //!   can panic it, and it recurses once for every nested parenthesis.
+//! - A `version_constraint` is an expression that it evaluates, and an
+//!   expression such as the range `0..99999999999` is built in memory.
 //! - Planning tries a release name for every version prefix of a recipe, and
 //!   resolution asks the network about each.
 //!
@@ -19,7 +21,38 @@ use serde::de::{self, DeserializeSeed, Deserializer, MapAccess, SeqAccess, Visit
 use super::{Position, Problem};
 
 const MAX_TEMPLATE_BYTES: usize = 1024;
+const MAX_EXPRESSION_BYTES: usize = 512;
+const MAX_EXPRESSION_DEPTH: usize = 16;
 const MAX_VERSION_PREFIXES: usize = 32;
+
+/// The words and operators of the expressions in the bundled registry. A
+/// catalog refresh that needs another one fails the test that loads the
+/// bundled registry, and the word is added here once it is known to be safe
+/// to evaluate. There is no number and no `.`, so there is no range.
+const WORDS: &[&str] = &[
+    "Version",
+    "SemVer",
+    "semver",
+    "semverWithVersion",
+    "trimPrefix",
+    "true",
+    "false",
+    "not",
+    "and",
+    "or",
+    "in",
+    "contains",
+    "startsWith",
+    "endsWith",
+    "matches",
+];
+const OPERATORS: &[&str] = &["==", "!=", "&&", "||", "(", ")", "[", "]", ","];
+/// What one bundled `version_filter` adds to bind a list and test its items:
+/// `let words = [...]; not any(words, {Version matches #})`. A filter is never
+/// evaluated here. A constraint is, and nested `any` over a list takes time
+/// exponential in the nesting, so a constraint cannot use these.
+const FILTER_WORDS: &[&str] = &["let", "words", "any"];
+const FILTER_OPERATORS: &[&str] = &["=", ";", "{", "}", "#"];
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, thiserror::Error)]
 pub enum Limit {
@@ -27,6 +60,14 @@ pub enum Limit {
     TemplateNotAscii,
     #[error("text with a template tag is longer than {MAX_TEMPLATE_BYTES} bytes")]
     TemplateTooLong,
+    #[error("a version constraint or filter is longer than {MAX_EXPRESSION_BYTES} bytes")]
+    ExpressionTooLong,
+    #[error("a version constraint or filter nests deeper than {MAX_EXPRESSION_DEPTH} levels")]
+    ExpressionTooDeep,
+    #[error(
+        "a version constraint or filter uses a word or operator that turbo setup does not evaluate"
+    )]
+    ExpressionVocabulary,
     #[error("a package has more than {MAX_VERSION_PREFIXES} version prefixes")]
     VersionPrefixes,
 }
@@ -37,6 +78,8 @@ enum Node {
     Document,
     Packages,
     Package,
+    Constraint,
+    Filter,
     VersionPrefix,
     Other,
 }
@@ -47,6 +90,8 @@ impl Node {
     fn under(key: &str) -> Self {
         match key {
             "packages" => Self::Packages,
+            "version_constraint" => Self::Constraint,
+            "version_filter" => Self::Filter,
             "version_prefix" => Self::VersionPrefix,
             _ => Self::Other,
         }
@@ -72,6 +117,12 @@ impl Walked {
             }
         }
         match (node, &mut self.prefixes) {
+            (Node::Constraint, _) => expression(text, WORDS, OPERATORS),
+            (Node::Filter, _) => expression(
+                text,
+                &[WORDS, FILTER_WORDS].concat(),
+                &[OPERATORS, FILTER_OPERATORS].concat(),
+            ),
             (Node::VersionPrefix, Some(prefixes)) => {
                 prefixes.insert(text.to_owned());
                 match prefixes.len() > MAX_VERSION_PREFIXES {
@@ -81,6 +132,61 @@ impl Walked {
             }
             _ => Ok(()),
         }
+    }
+}
+
+/// Whether `text` is at most the allowed length and depth and is made of only
+/// `words`, `operators`, double-quoted strings, spaces, and line breaks. A
+/// string ends where the reader's expression parser ends it: at the first
+/// quote that no backslash escapes.
+fn expression(text: &str, words: &[&str], operators: &[&str]) -> Result<(), Limit> {
+    if text.len() > MAX_EXPRESSION_BYTES {
+        return Err(Limit::ExpressionTooLong);
+    }
+    let mut depth = 0usize;
+    let mut rest = text.as_bytes();
+    loop {
+        rest = match rest {
+            [] => return Ok(()),
+            [b' ' | b'\n', rest @ ..] => rest,
+            [b'"', string @ ..] => {
+                let mut string = string;
+                loop {
+                    string = match string {
+                        [b'"', rest @ ..] => break rest,
+                        [b'\\', _, string @ ..] => string,
+                        [] | [b'\\' | b'\n' | b'\r', ..] => {
+                            return Err(Limit::ExpressionVocabulary);
+                        }
+                        [_, string @ ..] => string,
+                    };
+                }
+            }
+            [b'A'..=b'Z' | b'a'..=b'z' | b'_', ..] => {
+                let word = |byte: &u8| byte.is_ascii_alphanumeric() || *byte == b'_';
+                let end = rest.iter().position(|byte| !word(byte));
+                let (word, rest) = rest.split_at(end.unwrap_or(rest.len()));
+                if !words.iter().any(|known| known.as_bytes() == word) {
+                    return Err(Limit::ExpressionVocabulary);
+                }
+                rest
+            }
+            _ => {
+                let operator = operators.iter().find(|op| rest.starts_with(op.as_bytes()));
+                let Some(operator) = operator else {
+                    return Err(Limit::ExpressionVocabulary);
+                };
+                match *operator {
+                    "(" | "[" | "{" => depth += 1,
+                    ")" | "]" | "}" => depth = depth.saturating_sub(1),
+                    _ => {}
+                }
+                if depth > MAX_EXPRESSION_DEPTH {
+                    return Err(Limit::ExpressionTooDeep);
+                }
+                &rest[operator.len()..]
+            }
+        };
     }
 }
 
