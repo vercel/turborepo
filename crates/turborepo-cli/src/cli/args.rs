@@ -1700,11 +1700,15 @@ pub struct TraceAffectedArgs {
     pub strict: bool,
     /// Explain why each of these tests is or is not selected, instead of
     /// listing the selection
-    #[usage(long, value_name = "TEST", num_args = 1.., conflicts("json", "exit_code"))]
+    #[usage(long, value_name = "TEST", num_args = 1.., conflicts("json", "for_runners", "exit_code"))]
     pub explain: Vec<String>,
     /// Output the selection as JSON
     #[usage(long)]
     pub json: bool,
+    /// Output the selection as the document the test runner plugins of
+    /// `@turbo/trace` read (`TURBO_TRACE_SELECTION`)
+    #[usage(long, conflicts = "json")]
+    pub for_runners: bool,
     /// Exit with code 1 when a test is selected, 0 when none is, or 2 on
     /// errors. Useful for CI gating
     #[usage(long)]

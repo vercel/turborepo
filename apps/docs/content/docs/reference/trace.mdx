@@ -158,6 +158,32 @@ With `--tests`, the tasks that start a framework you did not ask for are listed 
 
 The items are sorted by path, and two runs on the same tree print the same bytes.
 
+### `--for-runners`
+
+Print the selection as one line of JSON for test runner plugins: the same selection as `--json`, by path only. A plugin reads the file named by the `TURBO_TRACE_SELECTION` environment variable and drops the test files the change cannot affect. Cannot be combined with `--json` or `--explain`.
+
+```bash title="Terminal"
+turbo trace affected --for-runners > selection.json
+```
+
+```json title="Output"
+{
+  "version": 1,
+  "runAll": false,
+  "runWhole": ["packages/legacy/"],
+  "files": ["packages/app/test/total.test.js"],
+  "unselected": ["packages/app/test/greet.test.js"],
+  "total": 2
+}
+```
+
+- `version`: the version of this shape. A plugin that reads another version runs every test.
+- `runAll`: `true` when every test must run (each item of `--json` is `AllTestsChanged`). `files` then lists every test.
+- `runWhole`: the directories of the packages of `uncoveredTasks`, each ending in `/`. Every test below one of them runs. An uncovered task of the root package (a root script that starts mocha, for example) gives an empty string: the root package's directory holds every file, so every test runs. `files` and `unselected` are still listed.
+- `files`: the paths of `affectedTests`, relative to the repository root, for all frameworks together.
+- `unselected`: the test files the command knows and did not select. A plugin drops a test file only when it is listed here and is below no `runWhole` directory. A file in neither list is one the command knows nothing about, so it runs. That includes the tests left out by `--filter` and `--tests`.
+- `total`: the number of test files the command knows, `files` plus `unselected`.
+
 ### `--exit-code`
 
 Exit with code `1` when a test is selected or a task must run whole, `0` when nothing must run, or `2` on errors. Useful for CI gating.
