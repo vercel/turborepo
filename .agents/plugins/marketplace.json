@@ -1,0 +1,20 @@
+{
+  "name": "turborepo",
+  "interface": {
+    "displayName": "Turborepo"
+  },
+  "plugins": [
+    {
+      "name": "turborepo",
+      "source": {
+        "source": "local",
+        "path": "./skills"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Developer Tools"
+    }
+  ]
+}
