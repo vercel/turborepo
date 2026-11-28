@@ -3,7 +3,6 @@ use std::fmt;
 use pest::{Parser, iterators::Pair};
 use pest_derive::Parser;
 use regex::regex;
-use semver::Version;
 use thiserror::Error;
 
 use super::identifiers::{Descriptor, Ident, Locator};
@@ -155,7 +154,7 @@ impl Resolution {
         // We have a match an we now override the dependency
         let mut dependency_override = dependency.clone();
         dependency_override.range = reference.to_string().into();
-        if Version::parse(reference).is_ok() || regex!(r"^[^v][a-z0-9._-]*$").is_match(reference) {
+        if Self::needs_default_protocol(reference) {
             dependency_override.range.to_mut().insert_str(0, "npm:")
         }
 
@@ -177,6 +176,16 @@ impl Resolution {
         Some(dependency_override)
     }
 
+    // Whether a reference that carries no protocol stands for an npm package,
+    // and so needs the npm protocol injected. Mirrors Yarn's
+    // `semverUtils.validRange(range) || TAG_REGEXP.test(range)` check, where a
+    // range is any npm SemVer range and not just an exact version: `>=3.0.3`
+    // and compound ranges are written to the lockfile as `npm:>=3.0.3`.
+    fn needs_default_protocol(reference: &str) -> bool {
+        node_semver::Range::parse(reference).is_ok()
+            || regex!(r"^[^v][a-z0-9._-]*$").is_match(reference)
+    }
+
     // Checks if two references are equal with a default protocol
     // Avoids any allocations
     fn eq_with_protocol(
@@ -184,9 +193,7 @@ impl Resolution {
         incomplete_reference: &str,
         default_protocol: &str,
     ) -> bool {
-        match Version::parse(incomplete_reference).is_ok()
-            || regex!(r"^[^v][a-z0-9._-]*$").is_match(incomplete_reference)
-        {
+        match Self::needs_default_protocol(incomplete_reference) {
             // We need to inject a protocol
             true => {
                 if let Some(stripped_reference) = reference.strip_prefix(default_protocol) {
@@ -382,7 +389,48 @@ mod test {
     #[test_case("other:1.0.0", "1.0.0", false ; "non-default protocols")]
     #[test_case("proto:1.0.0", "proto:1.2.3", false ; "mismatched ref")]
     #[test_case("proto:1.0.0", "1.2.3", false ; "mismatched ref with protocol")]
+    #[test_case("proto:>=3.0.3", ">=3.0.3", true ; "range uses default")]
+    #[test_case("proto:^3.0.0 || ^2.0.0", "^3.0.0 || ^2.0.0", true ; "or range uses default")]
+    #[test_case("proto:>=3.0.3", "proto:>=3.0.3", true ; "range with protocol")]
     fn test_reference_eq(a: &str, b: &str, expected: bool) {
         assert_eq!(Resolution::eq_with_protocol(a, b, "proto:"), expected);
+    }
+
+    #[test_case(">=3.0.3" ; "single comparator")]
+    #[test_case(">=3.0.0 <4.0.0" ; "compound comparators")]
+    #[test_case("^3.0.0 || ^2.0.0" ; "or range")]
+    #[test_case("latest" ; "tag")]
+    fn test_range_reference_uses_npm_protocol(reference: &str) {
+        // Yarn records a resolution whose reference is an npm SemVer range (or
+        // a tag) under the npm protocol, so the override must resolve to the
+        // qualified descriptor. See
+        // https://github.com/vercel/turborepo/issues/15144
+        let resolution = parse_resolution("braces").unwrap();
+        let dependency = resolution.reduce_dependency(
+            reference,
+            &Descriptor::try_from("braces@npm:^3.0.2").unwrap(),
+            &Locator::try_from("web@workspace:apps/web").unwrap(),
+        );
+        assert_eq!(
+            dependency,
+            Some(Descriptor::try_from(format!("braces@npm:{reference}").as_str()).unwrap())
+        );
+    }
+
+    #[test]
+    fn test_range_selector_matches_lockfile_reference() {
+        // A selector may spell out the same range the lockfile records under
+        // the npm protocol. See
+        // https://github.com/vercel/turborepo/issues/15144
+        let resolution = parse_resolution("braces@>=3.0.0 <4.0.0").unwrap();
+        let dependency = resolution.reduce_dependency(
+            "4.0.1",
+            &Descriptor::try_from("braces@npm:>=3.0.0 <4.0.0").unwrap(),
+            &Locator::try_from("web@workspace:apps/web").unwrap(),
+        );
+        assert_eq!(
+            dependency,
+            Some(Descriptor::try_from("braces@npm:4.0.1").unwrap())
+        );
     }
 }

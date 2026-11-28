@@ -1570,6 +1570,104 @@ mod test {
     }
 
     #[test]
+    fn test_prune_with_semver_range_resolution() {
+        // Regression test for https://github.com/vercel/turborepo/issues/15144
+        // A `resolutions` entry may be any npm SemVer range. Yarn records such
+        // an entry under the npm protocol (`braces@npm:>=3.0.3`), so resolving
+        // the override must produce the same descriptor instead of
+        // `braces@>=3.0.3`, which matches no lockfile entry.
+        let yaml = r#"__metadata:
+  version: 8
+  cacheKey: 10c0
+
+"braces@npm:>=3.0.3":
+  version: 3.0.3
+  resolution: "braces@npm:3.0.3"
+  dependencies:
+    fill-range: "npm:^7.1.1"
+  checksum: 10c0/7c6dfd30c338d2997ba77500539227b9d1f85e388a5f43220865201e407e076783d0881f2d297b9f80951b4c957fcf0b51c1d2d24227631643c3f7c284b0aa04
+  languageName: node
+  linkType: hard
+
+"fill-range@npm:^7.1.1":
+  version: 7.1.1
+  resolution: "fill-range@npm:7.1.1"
+  dependencies:
+    to-regex-range: "npm:^5.0.1"
+  checksum: 10c0/b75b691bbe065472f38824f694c2f7449d7f5004aa950426a2c28f0306c60db9b880c0b0e4ed819997ffb882d1da02cfcfc819bddc94d71627f5269682edf018
+  languageName: node
+  linkType: hard
+
+"to-regex-range@npm:^5.0.1":
+  version: 5.0.1
+  resolution: "to-regex-range@npm:5.0.1"
+  dependencies:
+    is-number: "npm:^7.0.0"
+  checksum: 10c0/487988b0a19c654ff3e1961b87f471702e708fa8a8dd02a298ef16da7206692e8552a0250e8b3e8759270f62e9d8314616f6da274734d3b558b1fc7b7724e892
+  languageName: node
+  linkType: hard
+
+"is-number@npm:^7.0.0":
+  version: 7.0.0
+  resolution: "is-number@npm:7.0.0"
+  checksum: 10c0/b4686d0d3053146095ccd45346461bc8e53b80aeb7671cc52a4de02dbbf7dc0d1d2a986e2fe4ae206984b4d34ef37e8b795ebc4f4295c978373e6575e295d811
+  languageName: node
+  linkType: hard
+
+"root@workspace:.":
+  version: 0.0.0-use.local
+  resolution: "root@workspace:."
+  languageName: unknown
+  linkType: soft
+
+"web@workspace:apps/web":
+  version: 0.0.0-use.local
+  resolution: "web@workspace:apps/web"
+  dependencies:
+    braces: "npm:^3.0.2"
+  languageName: unknown
+  linkType: soft
+"#;
+
+        let resolutions: HashMap<String, String> =
+            HashMap::from([("braces".to_string(), ">=3.0.3".to_string())]);
+        let manifest = BerryManifest::with_resolutions(resolutions);
+        let data = LockfileData::from_bytes(yaml.as_bytes()).unwrap();
+        let lockfile = BerryLockfile::new(data, Some(manifest)).unwrap();
+
+        let resolved = lockfile
+            .resolve_package("apps/web", "braces", "npm:^3.0.2")
+            .unwrap()
+            .expect("braces should resolve through the range resolution");
+        assert_eq!(resolved.key, "braces@npm:3.0.3");
+        assert_eq!(resolved.version, "3.0.3");
+
+        let subgraph = lockfile
+            .subgraph(
+                &["apps/web".to_string()],
+                &[
+                    "braces@npm:3.0.3".to_string(),
+                    "fill-range@npm:7.1.1".to_string(),
+                    "to-regex-range@npm:5.0.1".to_string(),
+                    "is-number@npm:7.0.0".to_string(),
+                ],
+            )
+            .expect("pruning a workspace with a range resolution should succeed");
+        let encoded = String::from_utf8(subgraph.encode().unwrap()).unwrap();
+        for expected in [
+            "braces@npm:>=3.0.3",
+            "fill-range@npm:^7.1.1",
+            "to-regex-range@npm:^5.0.1",
+            "is-number@npm:^7.0.0",
+        ] {
+            assert!(
+                encoded.contains(expected),
+                "pruned lockfile should contain {expected}: {encoded}"
+            );
+        }
+    }
+
+    #[test]
     fn test_prune_with_missing_patch_descriptor_returns_error() {
         let yaml = r#"__metadata:
   version: 6
