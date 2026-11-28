@@ -1,0 +1,122 @@
+---
+title: "@turbo/trace"
+description: Run only the tests that `turbo trace` selects, in jest and vitest.
+product: turborepo
+type: reference
+summary: Reference for the experimental `@turbo/trace` package, with plugins that make jest and vitest run only the test files `turbo trace` selects.
+related:
+  - /docs/reference/trace
+---
+
+import { ExperimentalBadge } from "@/components/geistdocs/experimental-badge";
+
+<ExperimentalBadge>Experimental</ExperimentalBadge>
+
+`@turbo/trace` has a plugin for jest and one for vitest. Each reads the selection that [`turbo trace affected --for-runners`](/docs/reference/trace) writes, and drops the test files a change cannot affect. You add one line to a runner configuration.
+
+```bash title="Terminal"
+pnpm add @turbo/trace --save-dev
+```
+
+## Jest
+
+Wrap the configuration with `withTurboTrace`. Jest 27 to 30 are supported.
+
+```js title="./jest.config.js"
+const { withTurboTrace } = require("@turbo/trace/jest"); // [!code highlight]
+
+module.exports = withTurboTrace({
+  // The configuration you have.
+});
+```
+
+`withTurboTrace` takes an object, a function or a promise and returns the same kind, so a package can spread a wrapped root configuration. It sets jest's [`filter`](https://jestjs.io/docs/configuration#filter-string) option, and `passWithNoTests` and `forceExit`, only while a selection is active.
+
+Jest reads `filter` from the configuration it is started with, and ignores one inside an entry of `projects`: wrap the configuration that has `projects`. A configuration that already has a `filter` keeps it, with one warning, and the selection is not applied.
+
+## Vitest
+
+Add the plugin. Vitest 0.34 to 5 and vite-plus are supported.
+
+```ts title="./vitest.config.ts"
+import { turboTrace } from "@turbo/trace/vitest"; // [!code highlight]
+import { defineConfig } from "vitest/config";
+
+export default defineConfig({
+  plugins: [turboTrace()] // [!code highlight]
+});
+```
+
+The plugin adds the dropped files to [`test.exclude`](https://vitest.dev/config/#exclude) and sets `passWithNoTests`. It applies to the configuration it is in: with `projects`, add it to each project. It does nothing outside vitest.
+
+Vitest reads `passWithNoTests` from the root configuration only. With the plugin only in the projects, vitest 3.1 and later still exit with code `0` when the selection drops every test file. Before 3.1, pass `--passWithNoTests`.
+
+## Running a selection
+
+Write the selection once, in a file named after its content, and name that file in the environment of the test runs:
+
+```bash title="Terminal"
+turbo trace affected --for-runners > selection.json
+export TURBO_TRACE_SELECTION="$PWD/selection-$(git hash-object selection.json).json"
+mv selection.json "$TURBO_TRACE_SELECTION"
+turbo run test
+```
+
+Add the variable to the [`env`](/docs/reference/configuration#env) of the test task, and `selection*.json` to `.gitignore`:
+
+```json title="./turbo.json"
+{
+  "tasks": {
+    "test": {
+      "env": ["TURBO_TRACE_SELECTION"]
+    }
+  }
+}
+```
+
+Both parts keep the cache of `turbo run` correct:
+
+- `env` makes the value of the variable part of the task's cache key, so a filtered run and a full run do not share a result. Without it, a full run reuses the result of a filtered one.
+- The value is a path, and the cache key does not see the content of the file. A selection that is rewritten at the same path would reuse the result of a run that skipped other tests. A name that holds the hash of the content changes whenever the selection does.
+
+Without `TURBO_TRACE_SELECTION`, the plugins do nothing. With it, a plugin drops a test file only when the selection lists it as `unselected` and it is below none of the `runWhole` directories. A file the selection does not know runs. An empty string in `runWhole` is the root package, whose directory holds every file: every test runs. When the selection cannot be read, every test runs and the plugin prints one warning.
+
+| Variable                | Meaning                                                                                                         |
+| ----------------------- | --------------------------------------------------------------------------------------------------------------- |
+| `TURBO_TRACE_SELECTION` | The path of the selection document.                                                                             |
+| `TURBO_TRACE_REPORT`    | Optional. A file to which each plugin call appends one line of JSON: `{ "runner", "root", "ran", "total" }`. |
+
+A coverage threshold counts only the tests that ran, so it can fail in a filtered run.
+
+## Planning shards
+
+With a selection, most packages have no test to run. An empty run of a runner is cheap, but the job around it is not. A CI that splits its test packages into jobs can leave those packages out before it plans the jobs. `turbo-trace-has-work` reads package directories from its arguments or from stdin, and prints the ones in which a test file would run:
+
+```bash title="Terminal"
+turbo ls --output=json | jq -r '.packages.items[].path' \
+  | pnpm exec turbo-trace-has-work > packages-with-tests-to-run.txt
+```
+
+`hasWork(directory)` from `@turbo/trace` is the same answer as a function. It is `false` only when the selection knows test files below the directory and drops every one of them. Without a usable selection, with `runAll`, with a `runWhole` directory around or below the directory, and where the selection knows no test file, it is `true`.
+
+<Callout type="warn">
+  The answer is about test files only. Drop a package from a shard only when
+  its test task does nothing but start jest or vitest with the plugin, and no
+  other task depends on it. Plan on the commit the selection was written for.
+</Callout>
+
+A planning job that has `jq` and no Node.js can read the selection itself. The filter prints the same directories, for directories written like `packages/app`:
+
+```bash title="Terminal"
+set -euo pipefail
+turbo ls --output=json | jq -r '.packages.items[].path' \
+  | jq -rR --slurpfile s "$TURBO_TRACE_SELECTION" '
+      . as $d | "\($d)/" as $p | $s[0] | select(
+        .version != 1 or .runAll != false
+        or any(.runWhole[]; startswith($p) or (. as $w | $p | startswith($w)))
+        or any(.files[]; startswith($p))
+        or (any(.unselected[]; startswith($p)) | not)
+      ) | $d'
+```
+
+Unlike the command, `jq` prints nothing when it cannot read the selection, so the job must fail then: keep `set -euo pipefail`.

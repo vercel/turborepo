@@ -1,0 +1,70 @@
+{
+  "name": "@turbo/trace",
+  "version": "2.11.14-canary.2",
+  "description": "Run only the tests that turbo trace selects, in jest and vitest",
+  "homepage": "https://turborepo.dev",
+  "bugs": {
+    "url": "https://github.com/vercel/turborepo/issues"
+  },
+  "license": "MIT",
+  "author": "Vercel",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/vercel/turborepo.git",
+    "directory": "packages/turbo-trace"
+  },
+  "bin": {
+    "turbo-trace-has-work": "dist/bin.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "typesVersions": {
+    "*": {
+      "jest": [
+        "dist/jest.d.ts"
+      ],
+      "vitest": [
+        "dist/vitest.d.ts"
+      ]
+    }
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./jest": {
+      "types": "./dist/jest.d.ts",
+      "default": "./dist/jest.js"
+    },
+    "./jest/filter": {
+      "types": "./dist/jest/filter.d.ts",
+      "default": "./dist/jest/filter.js"
+    },
+    "./vitest": {
+      "types": "./dist/vitest.d.ts",
+      "default": "./dist/vitest.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsdown && tsc -p tsconfig.build.json"
+  },
+  "devDependencies": {
+    "@jest/globals": "30.3.0",
+    "@turbo/test-utils": "workspace:*",
+    "@turbo/tsconfig": "workspace:*",
+    "@types/node": "18.17.4",
+    "jest": "30.3.0",
+    "tsdown": "0.12.0",
+    "typescript": "npm:@typescript/typescript6@^6.0.2",
+    "typescript-7": "npm:typescript@7.0.2",
+    "vitest": "4.1.12"
+  }
+}
