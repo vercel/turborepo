@@ -1511,6 +1511,86 @@ mod test {
     }
 
     #[test]
+    fn test_prune_with_patch_of_non_npm_source() {
+        // Regression test for https://github.com/vercel/turborepo/issues/15147
+        // Yarn escapes `%`, `:` and `#` when it splices a descriptor into a
+        // patch reference, so patching a remote tarball records its source as
+        // `https%3A//...`. Pruning used to take that for an npm reference and
+        // fail with "Unable to find entry for is-odd@npm:https%3A//...".
+        let yaml = r#"__metadata:
+  version: 8
+  cacheKey: 10c0
+
+"app@workspace:packages/app":
+  version: 0.0.0-use.local
+  resolution: "app@workspace:packages/app"
+  dependencies:
+    is-odd: "patch:is-odd@https%3A//registry.npmjs.org/is-odd/-/is-odd-3.0.1.tgz#~/.yarn/patches/is-odd-https-9fc078a7d2.patch"
+  languageName: unknown
+  linkType: soft
+
+"repro@workspace:.":
+  version: 0.0.0-use.local
+  resolution: "repro@workspace:."
+  languageName: unknown
+  linkType: soft
+
+"is-number@npm:6.0.0":
+  version: 6.0.0
+  resolution: "is-number@npm:6.0.0"
+  checksum: 10c0/5da4c68401529675c575878d2760d66f18eaef4b014858577f6003daf66488d7fe4eae684b1e8574e3fa1bb447c6c6c56b8491d2b4b3239da2d32e5f6f218008
+  languageName: node
+  linkType: hard
+
+"is-odd@https://registry.npmjs.org/is-odd/-/is-odd-3.0.1.tgz":
+  version: 3.0.1
+  resolution: "is-odd@https://registry.npmjs.org/is-odd/-/is-odd-3.0.1.tgz"
+  dependencies:
+    is-number: "npm:6.0.0"
+  checksum: 10c0/89ee2e353c5a3f3bd400c79db1c307a5b3506198ee8169d521e533a9b1d8a08fc95f21a919c084e98845b4286d7ffe309778da03744dfe66c3c1763ab1a030c6
+  languageName: node
+  linkType: hard
+
+"is-odd@patch:is-odd@https%3A//registry.npmjs.org/is-odd/-/is-odd-3.0.1.tgz#~/.yarn/patches/is-odd-https-9fc078a7d2.patch":
+  version: 3.0.1
+  resolution: "is-odd@patch:is-odd@https%3A//registry.npmjs.org/is-odd/-/is-odd-3.0.1.tgz#~/.yarn/patches/is-odd-https-9fc078a7d2.patch::version=3.0.1&hash=8dfc6b"
+  dependencies:
+    is-number: "npm:6.0.0"
+  checksum: 10c0/3202d60aa4e539044e945c44d7a9306b8cbfd9e6dacb7294f62b9eb6cbc93e74405b1280c8dd3e5ac046a84278ed1549716abab7d0d652877aff8d0d6749014e
+  languageName: node
+  linkType: hard
+"#;
+
+        let data = LockfileData::from_bytes(yaml.as_bytes()).unwrap();
+        let lockfile = BerryLockfile::new(data, None).unwrap();
+
+        let pruned = lockfile
+            .subgraph(
+                &["packages/app".to_string()],
+                &[
+                    "is-odd@patch:is-odd@https%3A//registry.npmjs.org/is-odd/-/is-odd-3.0.1.tgz#~/\
+                     .yarn/patches/is-odd-https-9fc078a7d2.patch::version=3.0.1&hash=8dfc6b"
+                        .to_string(),
+                    "is-number@npm:6.0.0".to_string(),
+                ],
+            )
+            .expect("patching a remote tarball should prune");
+
+        let encoded = String::from_utf8(pruned.encode().unwrap()).unwrap();
+        assert!(
+            encoded.contains(
+                "\"is-odd@patch:is-odd@https%3A//registry.npmjs.org/is-odd/-/is-odd-3.0.1.tgz#~/.\
+                 yarn/patches/is-odd-https-9fc078a7d2.patch\""
+            ),
+            "pruned lockfile should keep the patch entry: {encoded}"
+        );
+        assert!(
+            encoded.contains("\"is-odd@https://registry.npmjs.org/is-odd/-/is-odd-3.0.1.tgz\""),
+            "pruned lockfile should keep the patched package's source entry: {encoded}"
+        );
+    }
+
+    #[test]
     fn test_prune_with_scoped_patch_resolution() {
         // Regression test for https://github.com/vercel/turborepo/issues/3273
         // Scoped packages with patches (e.g. @google-cloud/datastore) should
