@@ -4,10 +4,10 @@ This is a community-maintained example. If you experience a problem, please subm
 
 ## Using this example
 
-Use Node.js 26.12.0 or newer and npm 12.2.0. Install the declared npm version, then create the workspace:
+Use Node.js 26.13.1 or newer and npm 12.2.3. Install the declared npm version, then create the workspace:
 
 ```sh
-npm install --global npm@12.2.0
+npm install --global npm@12.2.3
 npx create-turbo@latest my-turborepo -e with-npm --package-manager npm
 cd my-turborepo
 ```
