@@ -7,7 +7,7 @@ use semver::{Version, VersionReq};
 
 use super::{
     BunLockfile, BunLockfileData, Error, Map, PackageEntry, PackageIdent, PackageIndex,
-    PackageInfo, PackageKey, data::WorkspaceEntry,
+    PackageInfo, PackageKey, data::WorkspaceEntry, types::split_ident,
 };
 
 /// The entries of `packages` whose keys start with `prefix`, in key order.
@@ -219,9 +219,7 @@ impl BunLockfile {
                 || pruned_data.workspaces.values().any(|ws| &ws.name == pkg)
             {
                 keys_to_include.insert(pkg.clone());
-            } else if let Some(at_pos) = pkg.rfind('@') {
-                let name = &pkg[..at_pos];
-
+            } else if let Some((name, _)) = split_ident(pkg) {
                 if let Some(entry) = self.data.packages.get(name)
                     && let Some(workspace_path) = PackageIdent::parse(&entry.ident).workspace_path()
                     && pruned_data.workspaces.contains_key(workspace_path)
