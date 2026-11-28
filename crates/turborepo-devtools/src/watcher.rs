@@ -46,6 +46,8 @@ const RELEVANT_FILES: &[&str] = &[
     "lock.yaml",
     "bun.lock",
     "bun.lockb",
+    "vlt.json",
+    "vlt-lock.json",
     "Cargo.toml",
     "Cargo.lock",
 ];
@@ -223,6 +225,8 @@ mod tests {
         assert!(is_relevant_file(Path::new("lock.yaml")));
         assert!(is_relevant_file(Path::new("bun.lock")));
         assert!(is_relevant_file(Path::new("bun.lockb")));
+        assert!(is_relevant_file(Path::new("vlt.json")));
+        assert!(is_relevant_file(Path::new("vlt-lock.json")));
         assert!(is_relevant_file(Path::new("crates/app/Cargo.toml")));
         assert!(is_relevant_file(Path::new("Cargo.lock")));
         assert!(!is_relevant_file(Path::new("index.ts")));

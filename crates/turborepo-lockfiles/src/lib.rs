@@ -20,6 +20,7 @@ mod error;
 mod npm;
 mod pnpm;
 mod uv;
+mod vlt;
 mod yarn1;
 
 use std::{
@@ -47,6 +48,7 @@ pub use uv::{
     Error as UvLockError, PrunedUvLock, UvPackageKey, changed_package_names as uv_changed_packages,
     uv_package_keys, uv_prune_lock,
 };
+pub use vlt::VltLockfile;
 pub use yarn1::{Yarn1Lockfile, yarn_subgraph};
 
 // The closure walk visits every edge of every workspace's dependency closure,

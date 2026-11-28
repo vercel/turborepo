@@ -391,6 +391,7 @@ impl Workspace {
             package_manager::PackageManager::Yarn => "yarn",
             package_manager::PackageManager::Berry => "yarn",
             package_manager::PackageManager::Bun => "bun",
+            package_manager::PackageManager::Vlt => "vlt",
             package_manager::PackageManager::Nub { .. }
             | package_manager::PackageManager::Aube { .. } => {
                 unreachable!("lockfile_manager returns a concrete package manager")

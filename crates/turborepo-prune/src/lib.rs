@@ -325,7 +325,12 @@ pub async fn prune(input: PruneInput, telemetry: CommandEventBuilder) -> Result<
             .package_graph
             .package_manager()
             .is_some_and(|package_manager| {
-                package_manager.lockfile_manager() == &PackageManager::Bun
+                // Neither has an install mode that skips devDependencies, so
+                // the pruned manifests must not name workspaces left behind.
+                matches!(
+                    package_manager.lockfile_manager(),
+                    PackageManager::Bun | PackageManager::Vlt
+                )
             }) {
         prune
             .package_graph

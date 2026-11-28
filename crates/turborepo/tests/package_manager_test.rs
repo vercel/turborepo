@@ -64,6 +64,29 @@ fn test_detect_aube_from_dev_engines_package_manager() {
 }
 
 #[test]
+fn test_detect_vlt() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@8.19.4", false).unwrap();
+    set_package_manager(tempdir.path(), "vlt@1.8.0");
+    assert_eq!(get_package_manager(tempdir.path()), "vlt");
+}
+
+#[test]
+fn test_detect_vlt_from_dev_engines_package_manager() {
+    let tempdir = tempfile::tempdir().unwrap();
+    setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@8.19.4", false).unwrap();
+    // a devEngines declaration has to agree with the lockfile on disk
+    fs::remove_file(tempdir.path().join("package-lock.json")).unwrap();
+    fs::write(
+        tempdir.path().join("vlt-lock.json"),
+        r#"{"lockfileVersion": 1, "options": {}, "nodes": {}, "edges": {}}"#,
+    )
+    .unwrap();
+    set_dev_engines_package_manager(tempdir.path(), "vlt", "1.8.0");
+    assert_eq!(get_package_manager(tempdir.path()), "vlt");
+}
+
+#[test]
 fn test_errors_without_package_manager_declaration() {
     let tempdir = tempfile::tempdir().unwrap();
     setup::setup_integration_test(tempdir.path(), "basic_monorepo", "npm@8.19.4", false).unwrap();
