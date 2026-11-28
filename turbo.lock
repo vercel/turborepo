@@ -1,6 +1,148 @@
 {
   "schemaVersion": 0,
   "tools": {
+    "cargo-deny": {
+      "adapter": "artifact",
+      "version": "0.19.2",
+      "declarations": [
+        {
+          "file": "turbo.json",
+          "field": "/setup/additionalTools/cargo-deny",
+          "request": "0.19.2"
+        }
+      ],
+      "options": {
+        "source": [
+          "aqua:EmbarkStudios/cargo-deny"
+        ]
+      },
+      "installation": {
+        "kind": "managed",
+        "artifacts": {
+          "macos-x64": {
+            "artifact": {
+              "url": "https://github.com/EmbarkStudios/cargo-deny/releases/download/0.19.2/cargo-deny-0.19.2-x86_64-apple-darwin.tar.gz",
+              "sha256": "b73dc84685920324f0092e2ade445be5d8d2581f409454241c38135b1a34ff68",
+              "format": "tar-gz",
+              "executables": {
+                "cargo-deny": "cargo-deny-0.19.2-x86_64-apple-darwin/cargo-deny"
+              }
+            }
+          },
+          "macos-arm64": {
+            "artifact": {
+              "url": "https://github.com/EmbarkStudios/cargo-deny/releases/download/0.19.2/cargo-deny-0.19.2-aarch64-apple-darwin.tar.gz",
+              "sha256": "35e715486a78c0583c05a8cfe136c54b7e4e20e43bf01d91d345f80dfd345076",
+              "format": "tar-gz",
+              "executables": {
+                "cargo-deny": "cargo-deny-0.19.2-aarch64-apple-darwin/cargo-deny"
+              }
+            }
+          },
+          "linux-x64-gnu": {
+            "artifact": {
+              "url": "https://github.com/EmbarkStudios/cargo-deny/releases/download/0.19.2/cargo-deny-0.19.2-x86_64-unknown-linux-musl.tar.gz",
+              "sha256": "0c722daba6e38497a008c75f9232578481f0a1ad621d99865024a68204f18cc7",
+              "format": "tar-gz",
+              "executables": {
+                "cargo-deny": "cargo-deny-0.19.2-x86_64-unknown-linux-musl/cargo-deny"
+              }
+            }
+          },
+          "linux-arm64-gnu": {
+            "artifact": {
+              "url": "https://github.com/EmbarkStudios/cargo-deny/releases/download/0.19.2/cargo-deny-0.19.2-aarch64-unknown-linux-musl.tar.gz",
+              "sha256": "8de0b4774ed6236a21dd5a4407bd98acf814073b58fbe4fb60a792e5bacac07b",
+              "format": "tar-gz",
+              "executables": {
+                "cargo-deny": "cargo-deny-0.19.2-aarch64-unknown-linux-musl/cargo-deny"
+              }
+            }
+          },
+          "windows-x64": {
+            "artifact": {
+              "url": "https://github.com/EmbarkStudios/cargo-deny/releases/download/0.19.2/cargo-deny-0.19.2-x86_64-pc-windows-msvc.tar.gz",
+              "sha256": "27d2584ad4edee4d481852a5b62748059863c9fb623d238a76c87b0c1cf4dca6",
+              "format": "tar-gz",
+              "executables": {
+                "cargo-deny": "cargo-deny-0.19.2-x86_64-pc-windows-msvc/cargo-deny.exe"
+              }
+            }
+          }
+        }
+      }
+    },
+    "cargo-nextest": {
+      "adapter": "artifact",
+      "version": "0.9.152",
+      "declarations": [
+        {
+          "file": "turbo.json",
+          "field": "/setup/additionalTools/cargo-nextest",
+          "request": "0.9.152"
+        }
+      ],
+      "options": {
+        "source": [
+          "aqua:nextest-rs/nextest/cargo-nextest"
+        ]
+      },
+      "installation": {
+        "kind": "managed",
+        "artifacts": {
+          "macos-x64": {
+            "artifact": {
+              "url": "https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-0.9.152/cargo-nextest-0.9.152-universal-apple-darwin.tar.gz",
+              "sha256": "2fadf57df4243e691f088ee3bff4f4ab9af16da0c95a1db84b5cb1685e098a76",
+              "format": "tar-gz",
+              "executables": {
+                "cargo-nextest": "cargo-nextest"
+              }
+            }
+          },
+          "macos-arm64": {
+            "artifact": {
+              "url": "https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-0.9.152/cargo-nextest-0.9.152-universal-apple-darwin.tar.gz",
+              "sha256": "2fadf57df4243e691f088ee3bff4f4ab9af16da0c95a1db84b5cb1685e098a76",
+              "format": "tar-gz",
+              "executables": {
+                "cargo-nextest": "cargo-nextest"
+              }
+            }
+          },
+          "linux-x64-gnu": {
+            "artifact": {
+              "url": "https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-0.9.152/cargo-nextest-0.9.152-x86_64-unknown-linux-musl.tar.gz",
+              "sha256": "521c5f790ed07ee69d0a88403d9d86a8c8ab27977f12fc73f22aa4e7e14a0f71",
+              "format": "tar-gz",
+              "executables": {
+                "cargo-nextest": "cargo-nextest"
+              }
+            }
+          },
+          "linux-arm64-gnu": {
+            "artifact": {
+              "url": "https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-0.9.152/cargo-nextest-0.9.152-aarch64-unknown-linux-gnu.tar.gz",
+              "sha256": "ca1f81a5b86533eb45ab97e0064aa88e925e53aab9a698ca6331a7cad1f85f07",
+              "format": "tar-gz",
+              "executables": {
+                "cargo-nextest": "cargo-nextest"
+              }
+            }
+          },
+          "windows-x64": {
+            "artifact": {
+              "url": "https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-0.9.152/cargo-nextest-0.9.152-x86_64-pc-windows-msvc.tar.gz",
+              "sha256": "0384fc89a5a547d4fd5e183fcc101d31dba2837feafd8e64d5ea003a0ddb1941",
+              "format": "tar-gz",
+              "executables": {
+                "cargo-nextest": "cargo-nextest.exe"
+              }
+            }
+          }
+        }
+      }
+    },
     "node": {
       "adapter": "node",
       "version": "24.22.3",
@@ -237,6 +379,77 @@
               "format": "tar-gz",
               "rootPrefix": "package",
               "executables": {}
+            }
+          }
+        }
+      }
+    },
+    "protoc": {
+      "adapter": "artifact",
+      "version": "26.1",
+      "declarations": [
+        {
+          "file": "turbo.json",
+          "field": "/setup/additionalTools/protoc",
+          "request": "26.1"
+        }
+      ],
+      "options": {
+        "source": [
+          "aqua:protocolbuffers/protobuf/protoc"
+        ]
+      },
+      "installation": {
+        "kind": "managed",
+        "artifacts": {
+          "macos-x64": {
+            "artifact": {
+              "url": "https://github.com/protocolbuffers/protobuf/releases/download/v26.1/protoc-26.1-osx-x86_64.zip",
+              "sha256": "febd8821c3a2a23f72f4641471e0ab6486f4fb07b68111490a27a31681465b3c",
+              "format": "zip",
+              "executables": {
+                "protoc": "bin/protoc"
+              }
+            }
+          },
+          "macos-arm64": {
+            "artifact": {
+              "url": "https://github.com/protocolbuffers/protobuf/releases/download/v26.1/protoc-26.1-osx-aarch_64.zip",
+              "sha256": "26a29befa8891ecc48809958c909d284f2b9539a2eb47f22cadc631fe6abe8fd",
+              "format": "zip",
+              "executables": {
+                "protoc": "bin/protoc"
+              }
+            }
+          },
+          "linux-x64-gnu": {
+            "artifact": {
+              "url": "https://github.com/protocolbuffers/protobuf/releases/download/v26.1/protoc-26.1-linux-x86_64.zip",
+              "sha256": "a7be2928c0454f132c599e25b79b7ad1b57663f2337d7f7e468a1d59b98ec1b0",
+              "format": "zip",
+              "executables": {
+                "protoc": "bin/protoc"
+              }
+            }
+          },
+          "linux-arm64-gnu": {
+            "artifact": {
+              "url": "https://github.com/protocolbuffers/protobuf/releases/download/v26.1/protoc-26.1-linux-aarch_64.zip",
+              "sha256": "64a3b3b5f7dac0c8f9cf1cb85b2b1a237eb628644f6bcb0fb8f23db6e0d66181",
+              "format": "zip",
+              "executables": {
+                "protoc": "bin/protoc"
+              }
+            }
+          },
+          "windows-x64": {
+            "artifact": {
+              "url": "https://github.com/protocolbuffers/protobuf/releases/download/v26.1/protoc-26.1-win64.zip",
+              "sha256": "9090d135a1159042b13b4e51b210e40cb820d85a5032a6eca5f9b3ca3bdfb539",
+              "format": "zip",
+              "executables": {
+                "protoc": "bin/protoc.exe"
+              }
             }
           }
         }
@@ -989,6 +1202,116 @@
               "format": "binary",
               "executables": {
                 "rustup": "bin/rustup.exe"
+              }
+            }
+          }
+        }
+      }
+    },
+    "uv": {
+      "adapter": "uv",
+      "version": "0.13.5",
+      "declarations": [
+        {
+          "file": "uv.toml",
+          "field": "required-version",
+          "request": "==0.13.5"
+        }
+      ],
+      "installation": {
+        "kind": "managed",
+        "artifacts": {
+          "macos-x64": {
+            "distribution": {
+              "url": "https://releases.astral.sh/github/uv/releases/download/0.13.5/uv-x86_64-apple-darwin.tar.gz",
+              "sha256": "b0f52b0e3945b4107d89024ea38e625683011fbfc05a0d98f9fa2d6dcee28c66",
+              "format": "tar-gz",
+              "rootPrefix": "uv-x86_64-apple-darwin",
+              "executables": {
+                "uv": "uv",
+                "uvx": "uvx"
+              }
+            }
+          },
+          "macos-arm64": {
+            "distribution": {
+              "url": "https://releases.astral.sh/github/uv/releases/download/0.13.5/uv-aarch64-apple-darwin.tar.gz",
+              "sha256": "743f85035a1996ecb350659e01cd9faea9709829be09b1b4b03c73eaf3c9cd73",
+              "format": "tar-gz",
+              "rootPrefix": "uv-aarch64-apple-darwin",
+              "executables": {
+                "uv": "uv",
+                "uvx": "uvx"
+              }
+            }
+          },
+          "linux-x64-gnu": {
+            "distribution": {
+              "url": "https://releases.astral.sh/github/uv/releases/download/0.13.5/uv-x86_64-unknown-linux-gnu.tar.gz",
+              "sha256": "f68d291c75783122dad58ab77def0e13f3233f358731db5d6d7e8715603b928f",
+              "format": "tar-gz",
+              "rootPrefix": "uv-x86_64-unknown-linux-gnu",
+              "executables": {
+                "uv": "uv",
+                "uvx": "uvx"
+              }
+            }
+          },
+          "linux-arm64-gnu": {
+            "distribution": {
+              "url": "https://releases.astral.sh/github/uv/releases/download/0.13.5/uv-aarch64-unknown-linux-gnu.tar.gz",
+              "sha256": "4bb69cf95ed13f23713bb7bc09f241896ea0c75b7c557e615a20604b82f9c403",
+              "format": "tar-gz",
+              "rootPrefix": "uv-aarch64-unknown-linux-gnu",
+              "executables": {
+                "uv": "uv",
+                "uvx": "uvx"
+              }
+            }
+          },
+          "linux-x64-musl": {
+            "distribution": {
+              "url": "https://releases.astral.sh/github/uv/releases/download/0.13.5/uv-x86_64-unknown-linux-musl.tar.gz",
+              "sha256": "57ef9d9ccb01fb1bd998df995b0dd221b52f7d7841fbea93f2d4463bf61fb7a9",
+              "format": "tar-gz",
+              "rootPrefix": "uv-x86_64-unknown-linux-musl",
+              "executables": {
+                "uv": "uv",
+                "uvx": "uvx"
+              }
+            }
+          },
+          "linux-arm64-musl": {
+            "distribution": {
+              "url": "https://releases.astral.sh/github/uv/releases/download/0.13.5/uv-aarch64-unknown-linux-musl.tar.gz",
+              "sha256": "7906c79adb21c81abd559841ba76bb1d9af9d791acac7a041b2972e03ae16538",
+              "format": "tar-gz",
+              "rootPrefix": "uv-aarch64-unknown-linux-musl",
+              "executables": {
+                "uv": "uv",
+                "uvx": "uvx"
+              }
+            }
+          },
+          "windows-x64": {
+            "distribution": {
+              "url": "https://releases.astral.sh/github/uv/releases/download/0.13.5/uv-x86_64-pc-windows-msvc.zip",
+              "sha256": "a38b8d1902b7cfbc76b423ba1bb456f623f42064cdc72628b6075b89afd1019a",
+              "format": "zip",
+              "executables": {
+                "uv": "uv.exe",
+                "uvx": "uvx.exe"
+              }
+            }
+          },
+          "windows-arm64": {
+            "distribution": {
+              "url": "https://releases.astral.sh/github/uv/releases/download/0.13.5/uv-aarch64-pc-windows-msvc.zip",
+              "sha256": "09f47edf90726084a70f9426f6e3ca4f46e9bf7cbf23b1716ec64d60b055fae3",
+              "format": "zip",
+              "executables": {
+                "uv": "uv.exe",
+                "uvx": "uvx.exe"
               }
             }
           }

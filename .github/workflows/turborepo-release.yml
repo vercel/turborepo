@@ -347,7 +347,8 @@ jobs:
       - name: Install Global Turbo
         uses: ./.github/actions/install-global-turbo
         with:
-          turbo-version: ${{ inputs.ci-tag-override || '' }}
+          # Default to canary until a stable release includes #15124.
+          turbo-version: ${{ inputs.ci-tag-override || 'canary' }}
 
       - name: Install managed tools
         run: turbo setup --tools-only
@@ -602,7 +603,8 @@ jobs:
       - name: Install Global Turbo
         uses: ./.github/actions/install-global-turbo
         with:
-          turbo-version: ${{ inputs.ci-tag-override || '' }}
+          # Default to canary until a stable release includes #15124.
+          turbo-version: ${{ inputs.ci-tag-override || 'canary' }}
 
       - name: Move Rust artifacts into place
         run: |

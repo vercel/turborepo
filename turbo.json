@@ -4,8 +4,19 @@
   "noUpdateNotifier": true,
   "futureFlags": {
     "experimentalCargoWorkspaces": true,
+    "experimentalPythonWorkspaces": true,
     "experimentalSetup": true,
     "experimentalTaskCommand": true
+  },
+  "setup": {
+    "python": {
+      "dependencies": "skip"
+    },
+    "additionalTools": {
+      "cargo-deny": "0.19.2",
+      "cargo-nextest": "0.9.152",
+      "protoc": "26.1"
+    }
   },
   // The following are used by tools such as pnpm, gh actions to setup pnpm, etc.
   "globalPassThroughEnv": [
@@ -81,7 +92,8 @@
     // Preserve the all-features coverage of cargo-deny-action.
     "turborepo-crates#check:licenses": {
       "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/deny.toml"],
-      "command": ["cargo", "deny", "--all-features", "check", "licenses"]
+      "command": ["cargo", "deny", "--all-features", "check", "licenses"],
+      "tags": ["ci"]
     },
 
     // docs lint task runs fumadocs-mdx

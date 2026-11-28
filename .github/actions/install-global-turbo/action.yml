@@ -1,11 +1,14 @@
 name: "Install standalone turbo"
-description: "Installs the latest stable standalone turbo binary (or an overridden version)"
+description: "Installs the standalone turbo binary (defaults to canary until a stable release includes #15124)"
 
 inputs:
   turbo-version:
-    description: "Optional version or npm dist-tag for release CI (e.g., 2.11.5, beta, canary)"
+    description: "Optional version or npm dist-tag (e.g., 2.11.5, beta, canary)"
     required: false
-    default: ""
+    # Root turbo.json uses catalog entries in `setup.additionalTools` (#15124),
+    # and managed Rust needs #15077, #15080, and #15089. Clear this back to ""
+    # once a stable release includes them.
+    default: "canary"
 
 runs:
   using: "composite"
