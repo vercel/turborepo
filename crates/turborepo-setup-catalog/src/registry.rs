@@ -25,7 +25,6 @@ const NAMES: &str = include_str!("../catalog/names.tsv");
 const BUNDLED: &[u8] = include_bytes!("../catalog/aqua-registry.yaml.gz");
 const MAX_BUNDLED_BYTES: usize = 64 * 1024 * 1024;
 /// The largest registry that a repository can declare.
-#[cfg(test)]
 pub const MAX_REGISTRY_BYTES: usize = 16 * 1024 * 1024;
 
 /// Reads a registry's bytes up to the given number. It fails with `NotFound`
@@ -120,7 +119,6 @@ impl<'a> Registry<'a> {
 
     /// The registry that a repository declares as `name`. `origin` is where it
     /// comes from, such as the path of its file, and `source` reads it.
-    #[cfg(test)]
     pub fn declared(
         name: &str,
         origin: &str,

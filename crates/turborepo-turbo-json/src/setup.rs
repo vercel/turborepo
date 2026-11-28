@@ -25,7 +25,8 @@ pub use self::{
     },
     mirrors::{RawSetupMirrors, SetupMirrors, mirror_url},
     registries::{
-        BUILTIN_REGISTRY, BuiltinRegistry, RawSetupRegistry, SetupRegistry, registry_package,
+        BUILTIN_REGISTRY, BuiltinRegistry, RawSetupRegistry, RawSetupRegistryDeclaration,
+        SetupRegistry, registry_package,
     },
 };
 use crate::{error::Error, future_flags::FutureFlags};
@@ -104,8 +105,9 @@ pub struct RawSetupPolicy {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub go: Option<Spanned<RawToolchainSetupPolicy>>,
     /// The registries that `turbo setup` asks where an additional tool comes
-    /// from, in order. `"aqua"` is the registry built into `turbo`. Without
-    /// `registries`, only `"aqua"` is asked. Leave `"aqua"` out to block it.
+    /// from, in order. `"aqua"` is the registry built into `turbo`, and an
+    /// object names a registry file in this repository. Without `registries`,
+    /// only `"aqua"` is asked. Leave `"aqua"` out to block it.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub registries: Option<Vec<Spanned<RawSetupRegistry>>>,
     /// Tools that no built-in adapter manages, keyed by tool ID. Each declares
@@ -351,6 +353,7 @@ impl WithMetadata for RawSetupPolicy {
         }
         for registry in self.registries.iter_mut().flatten() {
             registry.add_text(text.clone());
+            registry.value.add_text(text.clone());
         }
         for tool in self
             .additional_tools
@@ -375,6 +378,7 @@ impl WithMetadata for RawSetupPolicy {
         }
         for registry in self.registries.iter_mut().flatten() {
             registry.add_path(path.clone());
+            registry.value.add_path(path.clone());
         }
         for tool in self
             .additional_tools

@@ -10,7 +10,7 @@ use turborepo_turbo_json::SetupRegistry;
 use super::{
     DeclarationMap, Ecosystems, Error, LOCK_NAME, Lock, MAX_LOCK_BYTES, MAX_TOOLCHAIN_BYTES,
     NATIVE, RUST_TOOLCHAIN_FILES, StorageError, WriteOutcome, WriterStorage, probe_native_with,
-    read_optional, records, rust_toolchain,
+    read_nested, read_optional, records, rust_toolchain,
 };
 use crate::{
     go_discovery::{GO_MOD, GO_WORK, GoRequirements, MAX_MANIFEST_BYTES as GO_LIMIT},
@@ -197,6 +197,15 @@ impl Snapshot {
     /// while its registry is among them.
     pub fn registries(&self) -> &[SetupRegistry] {
         &self.registries
+    }
+
+    /// A repository file that is not part of the captured state, such as a
+    /// registry file, by its portable path relative to the root. No link on
+    /// the way can lead the read outside the repository. `None` when the file
+    /// does not exist, and a `FileTooLarge` error when it has more than
+    /// `limit` bytes.
+    pub fn read_repository_file(&self, path: &str, limit: usize) -> io::Result<Option<Vec<u8>>> {
+        read_nested(&self.root, path, limit)
     }
 
     /// Catalog declarations that the captured lock does not record or whose

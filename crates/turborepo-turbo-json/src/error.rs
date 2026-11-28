@@ -455,7 +455,7 @@ pub enum Error {
     #[error("Invalid setup registry: {reason}.")]
     #[diagnostic(help(
         "List each registry once under `setup.registries`: the string \"aqua\" for the built-in \
-         registry."
+         registry, or {{ \"name\": ..., \"path\": ... }} for a registry file in this repository."
     ))]
     SetupInvalidRegistry {
         reason: String,
