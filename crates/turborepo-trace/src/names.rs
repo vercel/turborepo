@@ -688,10 +688,12 @@ pub(crate) fn build<V: GraphView>(
     }
 }
 
-/// The directories each entry runs in: the test runner's working directories
-/// when the graph knows them, else the entry's package root.
-fn entry_cwds(g: &Graph) -> impl Fn(NodeId) -> Vec<String> + '_ {
-    let known = g.tests_with_cwds();
+/// The directories each entry runs in: the working directories of the test
+/// runners asked for (`frameworks`: `--tests`) when the graph knows them, else
+/// the entry's package root. A file that is also a test of a framework that was
+/// not asked for does not run in that framework's directories here.
+fn entry_cwds<'g>(g: &'g Graph, frameworks: &[String]) -> impl Fn(NodeId) -> Vec<String> + 'g {
+    let known = g.tests_with_cwds_of(frameworks);
     move |n| match known.get(&n.0) {
         Some(dirs) => dirs.iter().map(|d| (*d).to_owned()).collect(),
         // `go test` runs a package's tests in the package directory.
@@ -795,11 +797,12 @@ pub(crate) fn apply<V: GraphView>(
     opts: &AffectedOptions,
     report: &mut AffectedReport,
     also: Option<(&NodeSet, &mut AffectedReport)>,
+    frameworks: &[String],
 ) -> usize {
     if !opts.named {
         return 0;
     }
-    let cwds = entry_cwds(g);
+    let cwds = entry_cwds(g, frameworks);
     let tasks = task_dirs(g);
     let pass = |entries: &NodeSet, runtime: &NodeSet| {
         engine.named_affected(

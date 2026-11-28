@@ -1423,6 +1423,7 @@ fn affected(cmd: AffectedCmd, out: &mut dyn Write, host: Option<&Host>) -> Resul
             &aopts,
             &mut report,
             also,
+            &cmd.tests,
         );
         format!(
             "names: {} name(s) of {} source file(s) and {} data file(s) ({} rescanned) checked \
