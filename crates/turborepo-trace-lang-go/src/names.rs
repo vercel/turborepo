@@ -18,7 +18,8 @@
 //! | [`Literal::path_arg`] | the literal is a direct argument of a function that takes pieces of a path (`filepath.Join`, `os.ReadFile`, `os.Stat`, ...; by name, on any receiver): there a bare word is a name (`filepath.Join(dir, "fixtures", name)`). Consecutive literal arguments are one literal, joined with `/`: `filepath.Join(dir, "src", "routes.ts")` is `src/routes.ts`, which names far less than `src` |
 //! | [`Strings::location`] | a use of the file `runtime.Caller` reports, other than in a literal path to a file: `filepath.Join(filepath.Dir(file), "..", "schemas", "job.json")` is a reference to exactly that file (the extractor emits it), and its `..` and `Dir` are no parent steps of anything else. A path that only goes up, names a directory, or has a part that is not a literal, uses the location: [`names`] then follows where it goes ([`crate::anchors`]), and only a file with a use that cannot be followed names everything below its location |
 //! | [`Strings::getwd`] | `os.Getwd` |
-//! | [`Strings::parents`] | `filepath.Dir` / `path.Dir` calls: steps toward the root (`..` segments are counted from the strings) |
+//! | [`Strings::parents`] | `filepath.Dir` / `path.Dir` and `filepath.Split` / `path.Split` calls, through an alias or a dot import too: steps toward the root (`..` segments are counted from the strings) |
+//! | [`Strings::dir_in_loop`] | such a call can run more than once: anywhere but at package level or directly in a test function outside loops (`steps_repeat`) |
 //!
 //! # Strings that climb
 //!
@@ -32,19 +33,24 @@
 //! ([`Name::climbs_from_cwd`](turborepo_trace_core::names::Name::climbs_from_cwd)):
 //! its own steps plus every other parent step of the file (its other `..`
 //! segments and its `filepath.Dir` calls), which can raise the base it is
-//! joined onto. The query names the rest at those directories, in whatever
-//! package they are, the rest completed with an extension there too
-//! (`"../../shared/golden" + ".json"`), and the shape anywhere below the
-//! working directory and inside the package like any other string
-//! (`turborepo_trace_graph::names`, "Strings that climb from the working
-//! directory"). This assumes:
+//! joined onto. The query adds the parent steps of the other Go files of the
+//! package (the files of the directory), whose strings and calls can be that
+//! base too (`const Fixtures = "../../../fixtures"` in one file,
+//! `filepath.Join(Fixtures, "../shared/a.json")` in another). It names the
+//! rest at those directories, in whatever package they are, the rest
+//! continued within its last segment there too (`"../../shared/golden" +
+//! ".json"`, `"../../shared/app." + env + ".yaml"`), and the shape, continued
+//! too, anywhere below the working directory, and inside the package like any
+//! other string (`turborepo_trace_graph::names`, "Strings that climb from the
+//! working directory"). This assumes:
 //!
 //! > A Go string that climbs with parent steps is taken from the working
 //! > directory the test starts in, or from a directory below it: it is not
-//! > joined onto another path that climbs above the working directory or leads
-//! > elsewhere (a directory that another package finds from its own location,
-//! > the value of an environment variable), and the process does not change its
-//! > working directory (`os.Chdir`, also in the `init` of an imported package).
+//! > joined onto a path that another package builds above the working directory
+//! > or elsewhere (a directory that another package finds from its own
+//! > location, the value of an environment variable), and no other package
+//! > changes the working directory (`os.Chdir` in the `init` of an imported
+//! > package).
 //!
 //! The file's own location names its own places ([`crate::anchors`]), and the
 //! consecutive literal arguments of one `filepath.Join` call are one string.
@@ -53,12 +59,34 @@
 //!
 //! - a string whose rest is not its shape: a named segment left before a later
 //!   parent step (`"../a/b/../c"`) or a hole before the name (`"../%s/data"`);
-//! - every climbing string of a file that calls `filepath.Dir` in a loop;
+//! - every climbing string of a file whose parent steps can run more than once
+//!   (`filepath.Dir` in a loop or in its clauses, in a function literal, in a
+//!   helper function, in a file with `goto`; [`Strings::dir_in_loop`]);
 //! - every climbing string of a package (the files of one directory) in which a
-//!   file calls `Chdir` (`os.Chdir`, `t.Chdir`, a `TestMain` that moves) or
-//!   holds a string that only climbs (`"../.."`, `const Root = "../.."`,
-//!   `filepath.Join("..", "..")`): such a string can be the base of the others
-//!   ([`Names::moves_base`](turborepo_trace_core::names::Names::moves_base)).
+//!   file calls `Chdir` (`os.Chdir`, `t.Chdir`, a `TestMain` that moves), holds
+//!   a string that only climbs (`"../.."`, `const Root = "../.."`,
+//!   `filepath.Join("..", "..")`), has parent steps that can run more than once
+//!   (an upward search for `go.mod`), or follows its own location above its
+//!   directory (`filepath.Join(filepath.Dir(file), "..", "..")` from
+//!   `runtime.Caller`): such a base can be joined to the strings of the other
+//!   files ([`Names::moves_base`](turborepo_trace_core::names::Names::moves_base)).
+//!   The parent steps of a file without names count for the others too: its
+//!   fact is kept for them;
+//! - every climbing string of a package with a symbolic link below its
+//!   directory, or on the way down to a place a string climbs to: the path it
+//!   spells is not where it leads (the query looks at the tree).
+//!
+//! A call that changes the working directory (not into a temporary directory,
+//! [`chdir_calls`]) moves every relative path of the directory's files, the
+//! literal reads of its test files too, which are otherwise taken from the
+//! package directory. The extractor records it as a read with an unknown path
+//! ([`crate::extract::CHDIR_DETAIL`]), which every test of the directory
+//! reaches: `--strict` opens it, and by default it is bounded by names. The
+//! file is marked
+//! ([`Names::chdir`](turborepo_trace_core::names::Names::chdir)),
+//! and every name of the directory's Go files then names its shape anywhere,
+//! not only inside the package. What a string of another package names after
+//! the change is still held to its package.
 //!
 //! What is left out, because the string never becomes a path:
 //!
@@ -118,9 +146,10 @@ pub struct Strings {
     /// The file calls a function called `Chdir` (`os.Chdir`, `t.Chdir`): its
     /// relative paths may be taken from another working directory.
     pub chdir: bool,
-    /// A counted `filepath.Dir` / `path.Dir` call is inside a `for` loop: it
-    /// can run any number of times, so [`Strings::parents`] does not bound
-    /// how far it climbs.
+    /// A counted parent step (`filepath.Dir`, `filepath.Split`) can run more
+    /// than once, so [`Strings::parents`] does not bound how far it climbs
+    /// (`steps_repeat`): it is in a loop, in a function literal, in a
+    /// function that other code calls, or the file has a `goto`.
     pub dir_in_loop: bool,
 }
 
@@ -304,9 +333,6 @@ struct Group {
     /// The last literal collected directly in this group: its token (an index
     /// into the significant tokens) and its place in [`Strings::literals`].
     last: Option<(usize, usize)>,
-    /// `{` opened after a `for` keyword: the loop's body (or a composite
-    /// literal of its header, which is taken as part of it).
-    looped: bool,
 }
 
 /// The variables that hold the caller file: the second target of every
@@ -393,6 +419,72 @@ fn location_literal(
     (punct(k, b')') && literal_file_path(&path)).then_some(k)
 }
 
+/// The calls of the Go file `src` that change the working directory: a call of
+/// a function called `Chdir` (`os.Chdir(dir)`, `t.Chdir(dir)`, on any
+/// receiver) whose first argument is not below a temporary directory
+/// ([`crate::temp`]: what a test reads there after it is no repository file).
+/// The span of each `Chdir`. A declaration of a function or method called
+/// `Chdir` is not a call.
+pub fn chdir_calls(src: &[u8]) -> Vec<turborepo_trace_core::Span> {
+    if memchr::memmem::find(src, b"Chdir").is_none() {
+        return Vec::new();
+    }
+    let (toks, _) = tokenize(src);
+    let sig: Vec<usize> = (0..toks.len()).filter(|&i| !toks[i].is_comment()).collect();
+    let roots = TempRoots::possible(src).then(|| TempRoots::of(src, &toks));
+    let tok = |k: usize| toks[sig[k]];
+    // The opening parenthesis of each closing one, found once for the file.
+    let mut opens: Option<Vec<Option<usize>>> = None;
+    // Per open brace: whether it is an interface type's.
+    let mut braces: Vec<bool> = Vec::new();
+    let mut out = Vec::new();
+    for k in 0..sig.len() {
+        if tok(k).is_punct(src, b'{') {
+            braces.push(k > 0 && tok(k - 1).is_ident(src, b"interface"));
+        } else if tok(k).is_punct(src, b'}') {
+            braces.pop();
+        }
+        if !(tok(k).is_ident(src, b"Chdir")
+            && sig.get(k + 1).is_some_and(|&i| toks[i].is_punct(src, b'(')))
+        {
+            continue;
+        }
+        // A method of an interface type declares it too.
+        if braces.last() == Some(&true) {
+            continue;
+        }
+        // `func Chdir(` and `func (r T) Chdir(` declare it.
+        let declared = k > 0
+            && (tok(k - 1).is_ident(src, b"func")
+                || (tok(k - 1).is_punct(src, b')') && {
+                    let opens = opens.get_or_insert_with(|| {
+                        let mut opens = vec![None; sig.len()];
+                        let mut stack = Vec::new();
+                        for (j, open) in opens.iter_mut().enumerate() {
+                            if tok(j).is_punct(src, b'(') {
+                                stack.push(j);
+                            } else if tok(j).is_punct(src, b')') {
+                                *open = stack.pop();
+                            }
+                        }
+                        opens
+                    });
+                    opens[k - 1].is_some_and(|j| j > 0 && tok(j - 1).is_ident(src, b"func"))
+                }));
+        if declared {
+            continue;
+        }
+        if roots
+            .as_ref()
+            .is_some_and(|r| r.call_below_temp(src, &toks, sig[k + 1]))
+        {
+            continue;
+        }
+        out.push(tok(k).span);
+    }
+    out
+}
+
 /// The path-relevant facts of the Go file `src`.
 pub fn strings(src: &[u8]) -> Strings {
     scan(src, None)
@@ -419,8 +511,11 @@ fn scan(src: &[u8], followed: Option<&Followed>) -> Strings {
     // The closing parenthesis of the literal location path the scan is inside of.
     let mut literal_until: Option<usize> = None;
     let mut groups: Vec<Group> = Vec::new();
-    // A `for` keyword whose body has not been opened yet.
-    let mut for_pending = false;
+    // The names `path/filepath` and `path` are imported as, and whether one of them
+    // is imported into the file's scope (`import . "path/filepath"`).
+    let (pkgs, dot_pkg) = path_packages(src, &toks, &sig);
+    // The counted parent steps: the significant token of each `Dir` / `Split`.
+    let mut steps: Vec<usize> = Vec::new();
     let mut line = 1u32;
     let mut line_at = 0usize;
     let mut k = 0;
@@ -477,27 +572,9 @@ fn scan(src: &[u8], followed: Option<&Followed>) -> Strings {
                         probe: callee.is_some() && probe_fn(name, receiver),
                         commas: 0,
                         last: None,
-                        looped: false,
                     });
                 }
-                b'{' => {
-                    let looped = for_pending;
-                    // The body of a loop ends its line (gofmt); a composite literal of the
-                    // header does not, and the body is still to come.
-                    if for_pending
-                        && next(1).is_none_or(|n| {
-                            n.is_punct(src, b'}')
-                                || memchr::memchr(b'\n', &src[at..n.span.start as usize]).is_some()
-                        })
-                    {
-                        for_pending = false;
-                    }
-                    groups.push(Group {
-                        looped,
-                        ..Group::default()
-                    });
-                }
-                b'[' => groups.push(Group::default()),
+                b'{' | b'[' => groups.push(Group::default()),
                 b')' | b']' | b'}' => {
                     let g = groups.pop();
                     // The literal location path is complete: it names what is below its
@@ -538,19 +615,20 @@ fn scan(src: &[u8], followed: Option<&Followed>) -> Strings {
                     b"Chdir" if next(1).is_some_and(|n| n.is_punct(src, b'(')) => {
                         out.chdir = true;
                     }
-                    b"for" if !prev(1).is_some_and(|p| p.is_punct(src, b'.')) => {
-                        for_pending = true;
-                    }
-                    b"Dir"
+                    // `filepath.Split` gives the directory too.
+                    b"Dir" | b"Split"
                         if !in_literal
+                            && next(1).is_some_and(|n| n.is_punct(src, b'('))
                             && !followed.is_some_and(|f| part(&f.dirs, at))
-                            && (after(b"filepath") || after(b"path"))
-                            && next(1).is_some_and(|n| n.is_punct(src, b'(')) =>
+                            && match prev(1) {
+                                Some(p) if p.is_punct(src, b'.') => prev(2).is_some_and(|r| {
+                                    r.kind == Kind::Ident && pkgs.contains(r.text(src))
+                                }),
+                                _ => dot_pkg,
+                            } =>
                     {
                         out.parents = (out.parents + 1).min(MAX_PARENTS);
-                        if groups.iter().any(|g| g.looped) {
-                            out.dir_in_loop = true;
-                        }
+                        steps.push(here);
                     }
                     // A use of the caller file outside a literal path from it (and not its
                     // declaration, a field or a method of that name).
@@ -623,7 +701,272 @@ fn scan(src: &[u8], followed: Option<&Followed>) -> Strings {
         l.value = segs[from..].join("/");
     }
     out.literals.retain(|l| !l.value.is_empty());
+    out.dir_in_loop = steps_repeat(src, &toks, &sig, &steps);
     out
+}
+
+/// The names the file imports `path/filepath` and `path` as (`filepath`,
+/// `path`, or an alias: `fp "path/filepath"`), and whether one of them is
+/// imported into the file's scope (`import . "path/filepath"`).
+fn path_packages<'s>(
+    src: &'s [u8],
+    toks: &[Tok],
+    sig: &[usize],
+) -> (std::collections::HashSet<&'s [u8]>, bool) {
+    let mut names: std::collections::HashSet<&'s [u8]> =
+        [&b"filepath"[..], b"path"].into_iter().collect();
+    let mut dot = false;
+    let tok = |k: usize| toks[sig[k]];
+    let mut k = 0;
+    while k < sig.len() {
+        if !(tok(k).is_ident(src, b"import") && (k == 0 || !tok(k - 1).is_punct(src, b'.'))) {
+            k += 1;
+            continue;
+        }
+        let grouped = sig.get(k + 1).is_some_and(|&i| toks[i].is_punct(src, b'('));
+        k += 1 + usize::from(grouped);
+        while k < sig.len() {
+            let t = tok(k);
+            if t.is_punct(src, b')') {
+                break;
+            }
+            if t.is_string() {
+                let value = string_value(src, &t);
+                if matches!(value.as_deref(), Some("path/filepath" | "path")) && k > 0 {
+                    let b = tok(k - 1);
+                    if b.kind == Kind::Ident && !b.is_ident(src, b"import") {
+                        names.insert(b.text(src));
+                    } else if b.is_punct(src, b'.') {
+                        dot = true;
+                    }
+                }
+                if !grouped {
+                    break;
+                }
+            }
+            k += 1;
+        }
+        k += 1;
+    }
+    (names, dot)
+}
+
+/// The tokens [`steps_repeat`] looks back through the type arguments of an
+/// instantiated type in a loop's clauses (`[]T[A, B]{`).
+const MAX_TYPE_ARGUMENTS: usize = 64;
+
+/// Whether one of the counted parent steps of a file (`steps`: the significant
+/// tokens of the `Dir` / `Split` calls) can run more than once, so that their
+/// number does not bound how far a path climbs. A step is taken to run once
+/// only where that is plain from the file: at package level, or directly in
+/// the body of a function that the test framework calls once and no code of
+/// the file calls (`TestX`, `BenchmarkX`, `FuzzX`, `ExampleX`, `TestMain`,
+/// `init`, `main`), outside every loop (its clauses too) and every function
+/// literal, in a file without `goto`. Any other step can repeat: in a loop, in
+/// a function literal (a closure called in a loop), in a helper (called from
+/// a loop, recursively, more than once, or from another file).
+fn steps_repeat(src: &[u8], toks: &[Tok], sig: &[usize], steps: &[usize]) -> bool {
+    if steps.is_empty() {
+        return false;
+    }
+    let tok = |k: usize| toks[sig[k]];
+    if (0..sig.len()).any(|k| tok(k).is_ident(src, b"goto")) {
+        return true;
+    }
+    #[derive(Copy, Clone, PartialEq, Eq)]
+    enum Frame {
+        Plain,
+        /// The braces of a `struct` or `interface` type.
+        Type,
+        Loop,
+        Literal,
+        Function,
+    }
+    let entry = |name: &[u8]| {
+        matches!(name, b"init" | b"main" | b"TestMain")
+            || [&b"Test"[..], b"Benchmark", b"Fuzz", b"Example"]
+                .iter()
+                .any(|p| name.starts_with(p))
+    };
+    let newline_before = |k: usize| {
+        k > 0 && {
+            let (a, b) = (tok(k - 1).span.end as usize, tok(k).span.start as usize);
+            a < b && memchr::memchr(b'\n', &src[a..b]).is_some()
+        }
+    };
+    let mut frames: Vec<Frame> = Vec::new();
+    // Depths of the `for` statements whose body is still to come, and of the
+    // function literals (or types) whose body is still to come.
+    let mut for_at: Vec<usize> = Vec::new();
+    let mut literal_at: Vec<usize> = Vec::new();
+    // A top-level function whose body is still to come, and the one whose body
+    // the scan is in.
+    let mut declared: Option<&[u8]> = None;
+    let mut current: Option<&[u8]> = None;
+    // The last brace closed was a type's.
+    let mut closed_type = false;
+    // How often each identifier is in the file, counted once.
+    let mut uses: Option<std::collections::HashMap<&[u8], u32>> = None;
+    let mut next_step = 0usize;
+    for k in 0..sig.len() {
+        let t = tok(k);
+        let depth = frames.len();
+        // A signature without a body ends its line.
+        if newline_before(k) {
+            if literal_at.last() == Some(&depth) {
+                literal_at.pop();
+            }
+            if depth == 0 {
+                declared = None;
+            }
+        }
+        if next_step < steps.len() && steps[next_step] == k {
+            next_step += 1;
+            let repeats = !for_at.is_empty()
+                || !literal_at.is_empty()
+                || frames
+                    .iter()
+                    .any(|f| matches!(f, Frame::Loop | Frame::Literal))
+                || current.is_some_and(|name| {
+                    !entry(name)
+                        || uses
+                            .get_or_insert_with(|| {
+                                let mut uses = std::collections::HashMap::new();
+                                for j in 0..sig.len() {
+                                    if tok(j).kind == Kind::Ident {
+                                        *uses.entry(tok(j).text(src)).or_insert(0u32) += 1;
+                                    }
+                                }
+                                uses
+                            })
+                            .get(name)
+                            .is_some_and(|&n| n > 1)
+                });
+            if repeats {
+                return true;
+            }
+        }
+        let prev = |n: usize| k.checked_sub(n).map(tok);
+        match t.kind {
+            Kind::Ident if !prev(1).is_some_and(|p| p.is_punct(src, b'.')) => match t.text(src) {
+                b"for" => for_at.push(depth),
+                b"func" if depth == 0 => {
+                    // `func Name(`, `func (r T) Name(`, `func Name[T any](`.
+                    let mut j = k + 1;
+                    if j < sig.len() && tok(j).is_punct(src, b'(') {
+                        let mut open = 0i32;
+                        while j < sig.len() {
+                            if tok(j).is_punct(src, b'(') {
+                                open += 1;
+                            } else if tok(j).is_punct(src, b')') {
+                                open -= 1;
+                                if open == 0 {
+                                    break;
+                                }
+                            }
+                            j += 1;
+                        }
+                        j += 1;
+                    }
+                    declared =
+                        (j < sig.len() && tok(j).kind == Kind::Ident).then(|| tok(j).text(src));
+                    if declared.is_none() {
+                        declared = Some(b"");
+                    }
+                }
+                b"func" => literal_at.push(depth),
+                _ => {}
+            },
+            Kind::Punct => match src[t.span.start as usize] {
+                b'{' => {
+                    let type_brace = prev(1).is_some_and(|p| {
+                        p.is_ident(src, b"struct") || p.is_ident(src, b"interface")
+                    });
+                    // A composite literal in a loop's clauses: `[]T{`, `[]*T{`, `[]pkg.T{`,
+                    // `map[K]V{`, `[]struct{ … }{`. A type name alone before the brace
+                    // would need parentheses there, so another brace is the body.
+                    // A type name `n` tokens back, after the brackets of a slice, an array
+                    // or a map: `]T`, `]*T`, `]pkg.T`.
+                    let element = |n: usize| {
+                        prev(n).is_some_and(|p| p.kind == Kind::Ident) && {
+                            let mut j = n + 1;
+                            if prev(j).is_some_and(|p| p.is_punct(src, b'.'))
+                                && prev(j + 1).is_some_and(|p| p.kind == Kind::Ident)
+                            {
+                                j += 2;
+                            }
+                            while prev(j).is_some_and(|p| p.is_punct(src, b'*')) {
+                                j += 1;
+                            }
+                            prev(j).is_some_and(|p| p.is_punct(src, b']'))
+                        }
+                    };
+                    // An instantiated type name, `]T[A, B]`: the name before the type
+                    // arguments. Arguments that go on for longer are taken for a type.
+                    let instantiated = || {
+                        let mut open = 0i32;
+                        for j in 1..=MAX_TYPE_ARGUMENTS {
+                            match prev(j) {
+                                Some(p) if p.is_punct(src, b']') => open += 1,
+                                Some(p) if p.is_punct(src, b'[') => {
+                                    open -= 1;
+                                    if open == 0 {
+                                        return element(j + 1);
+                                    }
+                                }
+                                Some(_) => {}
+                                None => return false,
+                            }
+                        }
+                        true
+                    };
+                    let composite = (prev(1).is_some_and(|p| p.is_punct(src, b'}')) && closed_type)
+                        || element(1)
+                        || (prev(1).is_some_and(|p| p.is_punct(src, b']'))
+                            && for_at.last() == Some(&depth)
+                            && instantiated());
+                    let frame = if type_brace {
+                        Frame::Type
+                    } else if declared.is_some() && depth == 0 {
+                        current = declared.take().filter(|n| !n.is_empty());
+                        if current.is_none() {
+                            current = Some(b"");
+                        }
+                        Frame::Function
+                    } else if literal_at.last() == Some(&depth) {
+                        literal_at.pop();
+                        Frame::Literal
+                    } else if for_at.last() == Some(&depth) && !composite {
+                        for_at.pop();
+                        Frame::Loop
+                    } else {
+                        Frame::Plain
+                    };
+                    frames.push(frame);
+                }
+                b'(' | b'[' => frames.push(Frame::Plain),
+                b')' | b']' | b'}' => {
+                    let f = frames.pop();
+                    closed_type = f == Some(Frame::Type);
+                    if f == Some(Frame::Function) {
+                        current = None;
+                    }
+                    let depth = frames.len();
+                    // (Both lists are in the order of their depths: the deeper ones are
+                    // at the end.)
+                    while for_at.last().is_some_and(|&d| d > depth) {
+                        for_at.pop();
+                    }
+                    while literal_at.last().is_some_and(|&d| d > depth) {
+                        literal_at.pop();
+                    }
+                }
+                _ => {}
+            },
+            _ => {}
+        }
+    }
+    false
 }
 
 /// Adds the names of the literal `l` to `c`, as
@@ -737,7 +1080,19 @@ pub fn names_with(src: &[u8], test_file: bool, follow: bool) -> turborepo_trace_
     for l in &s.literals {
         collect(&mut c, l, raise, s.chdir || s.dir_in_loop);
     }
-    c.names.moves_base |= s.chdir;
+    // What can be the base of a climbing string of another file of the package, and
+    // climb further than that file's parent steps say: a `Chdir`, a `filepath.Dir`
+    // loop, the file's own location followed above its directory
+    // (`filepath.Join(filepath.Dir(file), "..", "..")`; those parent steps are no
+    // string of the file).
+    c.names.moves_base |= s.chdir
+        || s.dir_in_loop
+        || followed
+            .as_ref()
+            .is_some_and(|f| f.entries.iter().any(|a| a.rel.starts_with("..")));
+    // A call that changes the working directory (not into a temporary directory):
+    // the relative paths of the directory's files can go anywhere.
+    c.names.chdir = s.chdir && !chdir_calls(src).is_empty();
     let mut names = c.finish();
     names.ups = (names.ups + s.parents).min(MAX_UPS);
     match followed {
@@ -863,11 +1218,16 @@ func load(dir string) {
         );
         // The file's `filepath.Dir` calls can raise the base: they count.
         assert_eq!(
+            climbing("package p\nvar a = filepath.Join(filepath.Dir(wd), \"../x/y.json\")\n"),
+            [own("x/y.json", 2)]
+        );
+        // In a helper they can run more than once: the plain mark.
+        assert_eq!(
             climbing(
                 "package p\nfunc f(wd string) string {\n\treturn filepath.Join(filepath.Dir(wd), \
                  \"../x/y.json\")\n}\n"
             ),
-            [own("x/y.json", 2)]
+            [free("x/y.json")]
         );
         // The same shape without parent steps is one name; the largest climb is kept
         // (each string's own steps plus the file's others).
@@ -922,14 +1282,77 @@ func load(dir string) {
               filepath.Dir(d)\n\t}\n}\nfunc g(d string) string {\n\treturn filepath.Dir(d)\n}\n",
         );
         assert!(s.dir_in_loop);
-        let s = strings(b"package p\nfunc g(d string) string {\n\treturn filepath.Dir(d)\n}\n");
-        assert!(!s.dir_in_loop);
+        let repeats = |body: &str| strings(format!("package p\n{body}").as_bytes()).dir_in_loop;
+        // Once: at package level, or directly in a test function, after a loop too.
+        for body in [
+            "var a = filepath.Dir(d)\n",
+            "func TestG(t *testing.T) {\n\t_ = filepath.Dir(d)\n}\n",
+            "func TestG(t *testing.T) {\n\tfor _, s := range []int{1} {\n\t\t_ = s\n\t}\n\td = \
+             filepath.Dir(d)\n}\n",
+            "func TestG(t *testing.T) {\n\tvar f func(string) string\n\t_ = f\n\tif ok \
+             {\n\t}\n\td = filepath.Dir(d)\n}\n",
+            "func init() {\n\td = filepath.Dir(d)\n}\n",
+            // An index before the body of a loop is no instantiated type.
+            "func TestG(t *testing.T) {\n\tfor i < n[0] {\n\t\ti++\n\t}\n\td = \
+             filepath.Dir(d)\n}\n",
+        ] {
+            assert!(!repeats(body), "{body}");
+        }
+        // More than once: in a loop's clauses or body (after a composite literal in
+        // its clauses, on one line or several), in a function literal, in a helper,
+        // recursively, in a test function that other code calls, with `goto`.
+        for body in [
+            "func TestG(t *testing.T) {\n\tfor d := wd; d != filepath.Dir(d); d = filepath.Dir(d) \
+             {\n\t}\n}\n",
+            "func TestG(t *testing.T) {\n\tfor _, s := range []int{1, 2} {\n\t\td = \
+             filepath.Dir(d)\n\t}\n}\n",
+            "func TestG(t *testing.T) {\n\tfor _, s := range []struct{ n int }{\n\t\t{1}, \
+             {2},\n\t} {\n\t\t_ = s\n\t\td = filepath.Dir(d)\n\t}\n}\n",
+            "func TestG(t *testing.T) {\n\tfor _, s := range map[string]int{\n\t\t\"a\": 1,\n\t} \
+             {\n\t\td = filepath.Dir(d)\n\t}\n}\n",
+            "func TestG(t *testing.T) {\n\tfor _, s := range []Box[int]{{1}, {2}} {\n\t\td = \
+             filepath.Dir(d)\n\t}\n}\n",
+            "func TestG(t *testing.T) {\n\tfor _, s := range []*pkg.Pair[string, \
+             []int]{\n\t\t{},\n\t} {\n\t\td = filepath.Dir(d)\n\t}\n}\n",
+            "func TestG(t *testing.T) {\n\tup := func(p string) string { return filepath.Dir(p) \
+             }\n\t_ = up\n}\n",
+            "func up(p string) string {\n\tif p != \"\" {\n\t\treturn \
+             up(filepath.Dir(p))\n\t}\n\treturn p\n}\n",
+            "func TestA(t *testing.T) {\n\td = filepath.Dir(d)\n}\nfunc TestB(t *testing.T) \
+             {\n\tTestA(t)\n}\n",
+            "func TestG(t *testing.T) {\nL:\n\td = filepath.Dir(d)\n\tgoto L\n}\n",
+        ] {
+            assert!(repeats(body), "{body}");
+        }
+        // Parent steps through an alias, a dot import, and `Split`.
+        for (src, n) in [
+            (
+                "package p\nimport fp \"path/filepath\"\nvar a = fp.Dir(x)\n",
+                1,
+            ),
+            (
+                "package p\nimport (\n\t. \"path/filepath\"\n)\nvar a = Dir(x)\n",
+                1,
+            ),
+            (
+                "package p\nvar a, _ = filepath.Split(x)\nvar b = strings.Split(x, \"/\")\n",
+                1,
+            ),
+            ("package p\nvar a = other.Dir(x)\n", 0),
+        ] {
+            assert_eq!(strings(src.as_bytes()).parents, n, "{src}");
+        }
         // A string that only climbs, or a `Chdir`, marks the file for its package.
         for src in [
             "package p\nconst Root = \"../..\"\n",
             "package p\nvar r = filepath.Join(\"..\", \"..\")\n",
             "package p\nvar r, _ = filepath.Abs(\"../..\")\n",
             "package p\nfunc TestMain(m *testing.M) {\n\tos.Chdir(dir)\n}\n",
+            // A loop of `filepath.Dir` calls, and the file's location followed above its
+            // directory: a base of the other files' strings that climbs further.
+            "package p\nfunc root(d string) string {\n\tfor {\n\t\td = filepath.Dir(d)\n\t}\n}\n",
+            "package p\nfunc root() string {\n\t_, file, _, _ := runtime.Caller(0)\n\treturn \
+             filepath.Join(filepath.Dir(file), \"..\", \"..\")\n}\n",
         ] {
             let n = names(src.as_bytes(), false);
             assert!(n.moves_base, "{src}");
@@ -949,6 +1372,52 @@ var x = "fixtures/a.json"
             ),
             [own("specs/order.json", 0), own("fixtures/a.json", 0)]
         );
+    }
+
+    #[test]
+    fn calls_that_change_the_working_directory() {
+        let calls = |src: &str| chdir_calls(src.as_bytes()).len();
+        assert_eq!(
+            calls("package p\nfunc TestMain(m *testing.M) {\n\tos.Chdir(\"../..\")\n}\n"),
+            1
+        );
+        assert_eq!(
+            calls("package p\nfunc TestX(t *testing.T) {\n\tt.Chdir(dir)\n}\n"),
+            1
+        );
+        // Into a temporary directory: what is read there is no repository file.
+        assert_eq!(
+            calls(
+                "package p\nfunc TestX(t *testing.T) {\n\tt.Chdir(t.TempDir())\n\tdir := \
+                 t.TempDir()\n\tos.Chdir(dir)\n}\n"
+            ),
+            0
+        );
+        // A declaration is no call.
+        assert_eq!(
+            calls(
+                "package p\nfunc Chdir(dir string) error { return nil }\nfunc (f *fs) Chdir(dir \
+                 string) error { return nil }\n"
+            ),
+            0
+        );
+        assert_eq!(
+            calls(
+                "package p\ntype FS interface {\n\tChdir(dir string) error\n}\nfunc f(fs FS) \
+                 {\n\tfs.Chdir(\"..\")\n}\n"
+            ),
+            1
+        );
+        let n = names(
+            b"package p\nfunc TestX(t *testing.T) {\n\tt.Chdir(dir)\n}\n",
+            true,
+        );
+        assert!(n.chdir && n.moves_base);
+        let n = names(
+            b"package p\nfunc TestX(t *testing.T) {\n\tt.Chdir(t.TempDir())\n}\n",
+            true,
+        );
+        assert!(!n.chdir && n.moves_base);
     }
 
     #[test]

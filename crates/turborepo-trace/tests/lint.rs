@@ -151,7 +151,7 @@ fn an_unconstrained_load_is_a_new_finding() {
     assert_eq!(code, 1);
     assert!(
         err.lines()
-            .any(|l| l.starts_with("lint: 1 finding(s) from 2 rule(s), 3 entr(ies);")),
+            .any(|l| l.starts_with("lint: 1 finding(s) from 3 rule(s), 3 entr(ies);")),
         "{err}"
     );
 }
@@ -524,6 +524,7 @@ fn rules_are_switched_by_flag_and_by_config() {
             ["unresolved-reference", "off"],
             ["undeclared-dependency", "off"],
             ["test-pattern-above-root", "warn"],
+            ["go-working-directory", "warn"],
             ["cwd-path-explained", "off"]
         ]
     );

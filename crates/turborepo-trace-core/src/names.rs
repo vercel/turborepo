@@ -62,8 +62,9 @@
 //!
 //! # The fact
 //!
-//! `names:<anchor>,<cwd>,<test_path>,<ups>,<overflow>[,1]` (the `,1` when
-//! [`Names::moves_base`] is set) followed by one
+//! `names:<anchor>,<cwd>,<test_path>,<ups>,<overflow>[,<moves>]` (`<moves>`
+//! when not `0`: `1` when [`Names::moves_base`] is set, `3` when
+//! [`Names::chdir`] is set too) followed by one
 //! `\n<line>\t<shape>` per name, or `\n<line>\t<shape>\t<rest>` for a name with
 //! a rest; lines are 1-based, `0` is "none". Shapes and rests contain no
 //! control characters. When the plugin knows where the strings are, `<line>` is
@@ -216,6 +217,12 @@ pub struct Names {
     /// consumer then does not take the climbing strings of that directory's
     /// files from the working directory ([`Name::climbs_from_cwd`]).
     pub moves_base: bool,
+    /// The file changes the working directory of the process (`os.Chdir`): the
+    /// relative paths of the files of its directory, literal ones too, can be
+    /// taken from anywhere. A consumer then lets the names of those files name
+    /// their paths anywhere, not only inside a package. Implies
+    /// [`Names::moves_base`].
+    pub chdir: bool,
     /// Where the file's location and the working directory go, when the plugin
     /// followed every use of them ([`Anchored`]).
     pub anchored: Vec<Anchored>,
@@ -231,6 +238,7 @@ impl Names {
             && self.test_path.is_none()
             && !self.overflow
             && !self.moves_base
+            && !self.chdir
     }
 
     /// The fact for [`RefSink::fact`](crate::RefSink::fact).
@@ -245,8 +253,10 @@ impl Names {
             self.ups,
             u8::from(self.overflow)
         ));
-        if self.moves_base {
-            out.push_str(",1");
+        // Bit 0: the base can move; bit 1: the working directory changes.
+        let moves = u8::from(self.moves_base || self.chdir) | (u8::from(self.chdir) << 1);
+        if moves != 0 {
+            out.push_str(&format!(",{moves}"));
         }
         for n in &self.names {
             out.push('\n');
@@ -301,6 +311,8 @@ pub struct Encoded<'a> {
     pub overflow: bool,
     /// See [`Names::moves_base`].
     pub moves_base: bool,
+    /// See [`Names::chdir`].
+    pub chdir: bool,
     body: &'a str,
 }
 
@@ -351,6 +363,7 @@ impl<'a> Encoded<'a> {
             && self.test_path.is_none()
             && !self.overflow
             && !self.moves_base
+            && !self.chdir
     }
 }
 
@@ -430,13 +443,17 @@ pub fn decode(fact: &str) -> Option<Encoded<'_>> {
     let (head, body) = rest.split_once('\n').unwrap_or((rest, ""));
     let mut it = head.split(',').map(|x| x.parse::<u32>().unwrap_or(0));
     let line = |x: u32| (x > 0).then_some(x);
+    let (anchor, cwd, test_path) = (line(it.next()?), line(it.next()?), line(it.next()?));
+    let (ups, overflow) = (it.next()?, it.next()? != 0);
+    let moves = it.next().unwrap_or(0);
     Some(Encoded {
-        anchor: line(it.next()?),
-        cwd: line(it.next()?),
-        test_path: line(it.next()?),
-        ups: it.next()?,
-        overflow: it.next()? != 0,
-        moves_base: it.next().is_some_and(|x| x != 0),
+        anchor,
+        cwd,
+        test_path,
+        ups,
+        overflow,
+        moves_base: moves != 0,
+        chdir: moves & 2 != 0,
         body,
     })
 }
@@ -916,6 +933,15 @@ mod tests {
         assert_eq!(moved.encode(), "names:0,0,0,0,0,1");
         assert!(decode("names:0,0,0,0,0,1").unwrap().moves_base);
         assert!(!decode("names:0,0,0,0,0").unwrap().moves_base);
+        let changed = Names {
+            chdir: true,
+            ..Names::default()
+        };
+        assert!(!changed.is_empty());
+        assert_eq!(changed.encode(), "names:0,0,0,0,0,3");
+        let d = decode("names:0,0,0,0,0,3").unwrap();
+        assert!(d.moves_base && d.chdir);
+        assert!(!decode("names:0,0,0,0,0,1").unwrap().chdir);
         assert_eq!(climbs_from_cwd("12"), 0);
         assert_eq!(climbs_from_cwd("12>3"), 3);
         assert_eq!(line_and_span("12>3"), (12, None));

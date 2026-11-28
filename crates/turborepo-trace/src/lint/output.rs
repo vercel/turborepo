@@ -55,15 +55,41 @@ fn stale_message(s: &Stale) -> String {
     format!("{}  {}  {}{n}", s.entry.file, s.entry.rule, s.entry.key)
 }
 
+/// `text` with its control characters escaped: a file name or a key from the
+/// repository stays on its line of the readable report.
+fn one_line(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    for c in text.chars() {
+        if c.is_control() {
+            out.extend(c.escape_default());
+        } else {
+            out.push(c);
+        }
+    }
+    out
+}
+
 /// One block per new finding.
 fn block(i: &Item, out: &mut dyn Write) -> io::Result<()> {
     let f = &i.finding;
-    writeln!(out, "{}:{}  {}  {}", f.file, f.line, f.rule, f.message)?;
+    writeln!(
+        out,
+        "{}:{}  {}  {}",
+        one_line(&f.file),
+        f.line,
+        f.rule,
+        one_line(&f.message)
+    )?;
     if let Some(c) = f.cost {
         writeln!(out, "  {}", cost_line(c))?;
     }
     for (k, line) in f.fix.lines().enumerate() {
-        writeln!(out, "  {}{line}", if k == 0 { "fix: " } else { "     " })?;
+        writeln!(
+            out,
+            "  {}{}",
+            if k == 0 { "fix: " } else { "     " },
+            one_line(line)
+        )?;
     }
     writeln!(out)
 }
@@ -96,7 +122,7 @@ pub fn text(r: &Report, out: &mut dyn Write) -> io::Result<()> {
             writeln!(
                 out,
                 "  {}{}",
-                stale_message(s),
+                one_line(&stale_message(s)),
                 if s.severity == Severity::Error {
                     ""
                 } else {
@@ -126,7 +152,10 @@ pub fn text(r: &Report, out: &mut dyn Write) -> io::Result<()> {
             writeln!(
                 out,
                 "{held:>8}  {}:{}  {}  {}",
-                f.file, f.line, f.rule, f.message
+                one_line(&f.file),
+                f.line,
+                f.rule,
+                one_line(&f.message)
             )?;
         }
         writeln!(out)?;
@@ -298,6 +327,15 @@ mod tests {
     fn escapes_workflow_commands() {
         assert_eq!(gh_data("50% of a\r\nb: c, d"), "50%25 of a%0D%0Ab: c, d");
         assert_eq!(gh_property("a:b,c%\n"), "a%3Ab%2Cc%25%0A");
+    }
+
+    #[test]
+    fn keeps_repository_text_on_one_line() {
+        assert_eq!(
+            one_line("a\n::warning::b\r.go \u{1b}[31m"),
+            "a\\n::warning::b\\r.go \\u{1b}[31m"
+        );
+        assert_eq!(one_line("pkg/a_test.go"), "pkg/a_test.go");
     }
 
     #[test]

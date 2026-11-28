@@ -1027,7 +1027,7 @@ fn assert_climb_assumed(files: &[(&str, &str)], changed: &str, test: &str) {
     let text = stdout(&output);
     assert!(
         text.contains("a directory another package finds from its own location")
-            && text.contains("also in the init of an imported package"),
+            && text.contains("os.Chdir in the init of an imported package"),
         "{text}"
     );
 }
@@ -1386,6 +1386,639 @@ func TestShared(t *testing.T) {
         "shared/defaults.json",
         "services/billing/inited/deep/deep_test.go",
     );
+}
+
+// Known gaps of Go tests that read a file through a relative path (each test
+// below passes under `go test`). They are ignored until the gap is closed.
+
+/// `os.ReadFile("../shared/defaults.json")` after `TestMain` in another file
+/// of the package moved to `services/`: the literal path is resolved from the
+/// package directory, where it names nothing, and no computed read is left
+/// that `--strict` could open.
+#[cfg(unix)]
+#[test]
+fn go_literal_read_after_chdir_in_the_test_main_of_a_sibling_file() {
+    assert_climb_selects(
+        &[
+            (
+                "services/billing/moved/main_test.go",
+                r#"package moved
+
+import (
+	"os"
+	"testing"
+)
+
+func TestMain(m *testing.M) {
+	if err := os.Chdir("../.."); err != nil {
+		panic(err)
+	}
+	os.Exit(m.Run())
+}
+"#,
+            ),
+            (
+                "services/billing/moved/moved_test.go",
+                r#"package moved
+
+import (
+	"os"
+	"testing"
+)
+
+func TestShared(t *testing.T) {
+	if _, err := os.ReadFile("../shared/defaults.json"); err != nil {
+		t.Fatal(err)
+	}
+}
+"#,
+            ),
+        ],
+        "shared/defaults.json",
+        "services/billing/moved/moved_test.go",
+    );
+}
+
+/// `t.Chdir` in the test itself, then a literal relative read: the read is
+/// taken from where the test moved, and `--explain` says why it is selected.
+#[cfg(unix)]
+#[test]
+fn go_literal_read_after_t_chdir_in_the_same_test() {
+    let files: &[(&str, &str)] = &[(
+        "services/billing/tchdir/tchdir_test.go",
+        r#"package tchdir
+
+import (
+	"os"
+	"testing"
+)
+
+func TestShared(t *testing.T) {
+	t.Chdir("../..")
+	if _, err := os.ReadFile("../shared/defaults.json"); err != nil {
+		t.Fatal(err)
+	}
+}
+"#,
+    )];
+    let test = "services/billing/tchdir/tchdir_test.go";
+    assert_climb_selects(files, "shared/defaults.json", test);
+    let dir = climb_fixture_with(files);
+    let output = trace(
+        dir.path(),
+        &[
+            "affected",
+            "--changed",
+            "shared/defaults.json",
+            "--explain",
+            test,
+        ],
+    );
+    assert!(output.status.success(), "{}", stderr(&output));
+    let text = stdout(&output);
+    assert!(
+        text.contains("shared/defaults.json") && text.contains("tchdir_test.go:9"),
+        "{text}"
+    );
+}
+
+/// A literal read that does not climb, after `os.Chdir` to the repository
+/// root in a sibling file: `shared/x.json` is no file of the package, and the
+/// package assumption does not hold it there.
+#[cfg(unix)]
+#[test]
+fn go_plain_literal_read_after_chdir_to_the_root_in_a_sibling_file() {
+    assert_climb_selects(
+        &[
+            ("shared/x.json", "{}\n"),
+            (
+                "services/billing/rooted/main_test.go",
+                r#"package rooted
+
+import (
+	"os"
+	"testing"
+)
+
+func TestMain(m *testing.M) {
+	if err := os.Chdir("../../.."); err != nil {
+		panic(err)
+	}
+	os.Exit(m.Run())
+}
+"#,
+            ),
+            (
+                "services/billing/rooted/rooted_test.go",
+                r#"package rooted
+
+import (
+	"os"
+	"testing"
+)
+
+func TestShared(t *testing.T) {
+	if _, err := os.ReadFile("shared/x.json"); err != nil {
+		t.Fatal(err)
+	}
+}
+"#,
+            ),
+        ],
+        "shared/x.json",
+        "services/billing/rooted/rooted_test.go",
+    );
+}
+
+/// `t.Chdir(t.TempDir())`: what the test reads after it is below a temporary
+/// directory, no repository file. The literal reads of the package stay taken
+/// from the package directory.
+#[cfg(unix)]
+#[test]
+fn go_chdir_into_a_temporary_directory_keeps_literal_reads_exact() {
+    let files: &[(&str, &str)] = &[
+        ("shared/x.json", "{}\n"),
+        (
+            "services/billing/tmpwd/tmpwd_test.go",
+            r#"package tmpwd
+
+import (
+	"os"
+	"testing"
+)
+
+func TestTemp(t *testing.T) {
+	if _, err := os.ReadFile("testdata/in.json"); err != nil {
+		t.Fatal(err)
+	}
+	t.Chdir(t.TempDir())
+	if err := os.WriteFile("out.json", nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+}
+"#,
+        ),
+        ("services/billing/tmpwd/testdata/in.json", "{}\n"),
+    ];
+    let dir = climb_fixture_with(files);
+    let test = "services/billing/tmpwd/tmpwd_test.go";
+    let selected = affected(dir.path(), &["--changed", "shared/x.json", "--strict"]);
+    assert_selects(&selected, &[], &[test]);
+    let selected = affected(
+        dir.path(),
+        &["--changed", "services/billing/tmpwd/testdata/in.json"],
+    );
+    assert_selects(&selected, &[test], &[]);
+}
+
+/// `turbo trace lint` lists a Go file that changes the working directory, with
+/// what it leaves to other packages; a `Chdir` into a temporary directory is
+/// none.
+#[cfg(unix)]
+#[test]
+fn lint_lists_a_go_file_that_changes_the_working_directory() {
+    let dir = climb_fixture_with(&[
+        (
+            "services/billing/moved/main_test.go",
+            "package moved\n\nimport (\n\t\"os\"\n\t\"testing\"\n)\n\nfunc TestMain(m *testing.M) \
+             {\n\tif err := os.Chdir(\"../..\"); err != nil \
+             {\n\t\tpanic(err)\n\t}\n\tos.Exit(m.Run())\n}\n",
+        ),
+        (
+            "services/billing/tmpwd/tmpwd_test.go",
+            "package tmpwd\n\nimport \"testing\"\n\nfunc TestTemp(t *testing.T) \
+             {\n\tt.Chdir(t.TempDir())\n}\n",
+        ),
+    ]);
+    let output = trace(dir.path(), &["lint"]);
+    assert_eq!(output.status.code(), Some(0), "{}", stderr(&output));
+    let text = stdout(&output);
+    assert!(
+        text.contains("services/billing/moved/main_test.go:9")
+            && text.contains("go-working-directory")
+            && text.contains("still held to that package"),
+        "{text}"
+    );
+    assert!(!text.contains("tmpwd_test.go"), "{text}");
+}
+
+/// `"../../../shared/app." + env + ".yaml"`: the climbing string ends inside
+/// the file name. Its place is compared as a directory or as a stem before an
+/// extension, so `shared/app.staging.yaml` is not at it.
+#[cfg(unix)]
+#[test]
+fn go_climbing_string_completed_within_its_last_segment() {
+    assert_climb_selects(
+        &[
+            ("shared/app.staging.yaml", "a: 1\n"),
+            (
+                "services/billing/prefix/prefix_test.go",
+                r#"package prefix
+
+import (
+	"testing"
+
+	"example.com/billing/config"
+)
+
+func TestShared(t *testing.T) {
+	env := "staging"
+	if _, err := config.Load("../../../shared/app." + env + ".yaml"); err != nil {
+		t.Fatal(err)
+	}
+}
+"#,
+            ),
+        ],
+        "shared/app.staging.yaml",
+        "services/billing/prefix/prefix_test.go",
+    );
+}
+
+/// `"../../../schema" + ".json"`: the rest of the climbing string is one
+/// segment. A shape of one segment names no file by its stem, so the string
+/// gets no places at all.
+#[cfg(unix)]
+#[test]
+fn go_climbing_string_of_one_segment_completed_with_an_extension() {
+    assert_climb_selects(
+        &[
+            ("schema.json", "{}\n"),
+            (
+                "services/billing/stem/stem_test.go",
+                r#"package stem
+
+import (
+	"testing"
+
+	"example.com/billing/config"
+)
+
+func TestSchema(t *testing.T) {
+	base := "../../../schema"
+	for _, ext := range []string{".json"} {
+		if _, err := config.Load(base + ext); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+"#,
+            ),
+        ],
+        "schema.json",
+        "services/billing/stem/stem_test.go",
+    );
+}
+
+/// `base + "_golden.json"`, the base a climbing string in a package that also
+/// holds a string that only climbs: the shape anywhere, continued too.
+#[cfg(unix)]
+#[test]
+fn go_climbing_string_completed_with_a_suffix_where_the_base_can_move() {
+    assert_climb_selects(
+        &[
+            ("shared/case_golden.json", "{}\n"),
+            (
+                "services/billing/golden/golden_test.go",
+                r#"package golden
+
+import (
+	"path/filepath"
+	"testing"
+
+	"example.com/billing/config"
+)
+
+const root = "../.."
+
+func TestGolden(t *testing.T) {
+	base := filepath.Join(root, "../shared/case")
+	if _, err := config.Load(base + "_golden.json"); err != nil {
+		t.Fatal(err)
+	}
+}
+"#,
+            ),
+        ],
+        "shared/case_golden.json",
+        "services/billing/golden/golden_test.go",
+    );
+}
+
+/// The base is the package's own location raised by two directories, found by
+/// a helper in another file of the same package. The location is followed, so
+/// its `".."` arguments are not kept as a string that only climbs, and the
+/// package is not marked.
+#[cfg(unix)]
+#[test]
+fn go_climbing_string_on_the_location_of_a_sibling_file() {
+    assert_climb_selects(
+        &[
+            (
+                "services/billing/located/help_test.go",
+                r#"package located
+
+import (
+	"path/filepath"
+	"runtime"
+)
+
+// servicesDir is the services directory, from this file.
+func servicesDir() string {
+	_, file, _, _ := runtime.Caller(0)
+	return filepath.Join(filepath.Dir(file), "..", "..")
+}
+"#,
+            ),
+            (
+                "services/billing/located/located_test.go",
+                r#"package located
+
+import (
+	"path/filepath"
+	"testing"
+
+	"example.com/billing/config"
+)
+
+func TestShared(t *testing.T) {
+	path := filepath.Join(servicesDir(), "../shared/defaults.json")
+	if _, err := config.Load(path); err != nil {
+		t.Fatal(err)
+	}
+}
+"#,
+            ),
+        ],
+        "shared/defaults.json",
+        "services/billing/located/located_test.go",
+    );
+}
+
+/// The upward search for `go.mod` written with `filepath.Dir` in the clauses
+/// of the `for` statement: only a call in the loop's body counts as a call in
+/// a loop.
+#[cfg(unix)]
+#[test]
+fn go_climbing_string_after_dir_calls_in_a_for_clause() {
+    assert_climb_selects(
+        &[(
+            "services/billing/walked/a/b/c/walked_test.go",
+            r#"package c
+
+import (
+	"os"
+	"path/filepath"
+	"testing"
+
+	"example.com/billing/config"
+)
+
+func moduleRoot(t *testing.T) string {
+	wd, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for d := wd; d != filepath.Dir(d); d = filepath.Dir(d) {
+		if _, err := os.Stat(filepath.Join(d, "go.mod")); err == nil {
+			return d
+		}
+	}
+	t.Fatal("no go.mod")
+	return ""
+}
+
+func TestShared(t *testing.T) {
+	path := filepath.Join(moduleRoot(t), "../../shared/defaults.json")
+	if _, err := config.Load(path); err != nil {
+		t.Fatal(err)
+	}
+}
+"#,
+        )],
+        "shared/defaults.json",
+        "services/billing/walked/a/b/c/walked_test.go",
+    );
+}
+
+/// A loop over a table written in its header on several lines: the table's
+/// brace ends its line, so it is taken for the loop's body and the body is not.
+#[cfg(unix)]
+#[test]
+fn go_climbing_string_after_a_dir_loop_over_a_table_literal() {
+    assert_climb_selects(
+        &[(
+            "services/billing/tabled/a/b/tabled_test.go",
+            r#"package b
+
+import (
+	"os"
+	"path/filepath"
+	"testing"
+
+	"example.com/billing/config"
+)
+
+func TestShared(t *testing.T) {
+	dir, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, step := range []struct{ n int }{
+		{1}, {2}, {3},
+	} {
+		_ = step
+		dir = filepath.Dir(dir)
+	}
+	if _, err := config.Load(filepath.Join(dir, "../../shared/defaults.json")); err != nil {
+		t.Fatal(err)
+	}
+}
+"#,
+        )],
+        "shared/defaults.json",
+        "services/billing/tabled/a/b/tabled_test.go",
+    );
+}
+
+/// The climbing base is a constant of another file of the package that also
+/// names a directory (`"../../../fixtures"`): only a string that climbs and
+/// names nothing marks the package.
+#[cfg(unix)]
+#[test]
+fn go_climbing_string_on_a_climbing_directory_constant_of_a_sibling_file() {
+    assert_climb_selects(
+        &[
+            (
+                "services/billing/sibling/paths.go",
+                "package sibling\n\n// Fixtures is the fixtures directory, from this \
+                 package.\nconst Fixtures = \"../../../fixtures\"\n",
+            ),
+            (
+                "services/billing/sibling/sibling_test.go",
+                r#"package sibling
+
+import (
+	"path/filepath"
+	"testing"
+
+	"example.com/billing/config"
+)
+
+func TestShared(t *testing.T) {
+	if _, err := config.Load(filepath.Join(Fixtures, "../shared/defaults.json")); err != nil {
+		t.Fatal(err)
+	}
+}
+"#,
+            ),
+        ],
+        "shared/defaults.json",
+        "services/billing/sibling/sibling_test.go",
+    );
+}
+
+/// The upward search for `go.mod` is a loop of `filepath.Dir` calls in another
+/// file of the package: the loop keeps the plain mark only for its own file.
+#[cfg(unix)]
+#[test]
+fn go_climbing_string_after_a_dir_loop_in_a_sibling_file() {
+    assert_climb_selects(
+        &[
+            (
+                "services/billing/rooted/a/b/root_test.go",
+                r#"package b
+
+import (
+	"os"
+	"path/filepath"
+	"testing"
+)
+
+func moduleRoot(t *testing.T) string {
+	dir, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for {
+		if _, err := os.Stat(filepath.Join(dir, "go.mod")); err == nil {
+			return dir
+		}
+		dir = filepath.Dir(dir)
+	}
+}
+"#,
+            ),
+            (
+                "services/billing/rooted/a/b/rooted_test.go",
+                r#"package b
+
+import (
+	"path/filepath"
+	"testing"
+
+	"example.com/billing/config"
+)
+
+func TestShared(t *testing.T) {
+	path := filepath.Join(moduleRoot(t), "../../shared/defaults.json")
+	if _, err := config.Load(path); err != nil {
+		t.Fatal(err)
+	}
+}
+"#,
+            ),
+        ],
+        "shared/defaults.json",
+        "services/billing/rooted/a/b/rooted_test.go",
+    );
+}
+
+/// The base is a directory below the working directory that is a link to a
+/// directory elsewhere in the repository: the path stays below the working
+/// directory by its spelling, and the file is elsewhere.
+#[cfg(unix)]
+#[test]
+fn go_climbing_string_on_a_linked_directory_below_the_working_directory() {
+    let dir = tempfile::tempdir().unwrap();
+    setup::copy_fixture("trace_go_climb", dir.path()).unwrap();
+    let package = dir.path().join("services/billing/linked");
+    fs::create_dir_all(&package).unwrap();
+    fs::write(
+        package.join("linked_test.go"),
+        r#"package linked
+
+import (
+	"path/filepath"
+	"testing"
+
+	"example.com/billing/config"
+)
+
+func TestShared(t *testing.T) {
+	dir := filepath.Join("data", "cases")
+	if _, err := config.Load(filepath.Join(dir, "../defaults.json")); err != nil {
+		t.Fatal(err)
+	}
+}
+"#,
+    )
+    .unwrap();
+    std::os::unix::fs::symlink("../../../shared", package.join("data")).unwrap();
+    setup::setup_git(dir.path()).unwrap();
+    let test = "services/billing/linked/linked_test.go";
+    let strict = affected(
+        dir.path(),
+        &["--changed", "shared/defaults.json", "--strict"],
+    );
+    assert_selects(&strict, &[test], &[]);
+    let selected = affected(dir.path(), &["--changed", "shared/defaults.json"]);
+    assert_selects(&selected, &[test], &[]);
+}
+
+/// A climbing string whose place is a link (`services/billing/shared` leads to
+/// `vendor/shared`): the place it spells is not where it reads.
+#[cfg(unix)]
+#[test]
+fn go_climbing_string_through_a_linked_place() {
+    let dir = tempfile::tempdir().unwrap();
+    setup::copy_fixture("trace_go_climb", dir.path()).unwrap();
+    let package = dir.path().join("services/billing/placed");
+    fs::create_dir_all(&package).unwrap();
+    fs::create_dir_all(dir.path().join("vendor/shared")).unwrap();
+    fs::write(dir.path().join("vendor/shared/x.json"), "{}\n").unwrap();
+    fs::write(
+        package.join("placed_test.go"),
+        r#"package placed
+
+import (
+	"testing"
+
+	"example.com/billing/config"
+)
+
+func TestShared(t *testing.T) {
+	if _, err := config.Load("../shared/x.json"); err != nil {
+		t.Fatal(err)
+	}
+}
+"#,
+    )
+    .unwrap();
+    std::os::unix::fs::symlink(
+        "../../vendor/shared",
+        dir.path().join("services/billing/shared"),
+    )
+    .unwrap();
+    setup::setup_git(dir.path()).unwrap();
+    let test = "services/billing/placed/placed_test.go";
+    let strict = affected(
+        dir.path(),
+        &["--changed", "vendor/shared/x.json", "--strict"],
+    );
+    assert_selects(&strict, &[test], &[]);
+    let selected = affected(dir.path(), &["--changed", "vendor/shared/x.json"]);
+    assert_selects(&selected, &[test], &[]);
 }
 
 /// `--strict` opens a read with a computed path: every test that has one is
