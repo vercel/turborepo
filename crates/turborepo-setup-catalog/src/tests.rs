@@ -200,6 +200,13 @@ packages:
     type: http
     url: https://downloads.example.test/acme/deploy-{{.OS}}-{{.Arch}}
     format: raw
+  - name: vault
+    type: github_release
+    repo_owner: acme
+    repo_name: vault
+    asset: vault-{{.OS}}-{{.Arch}}
+    format: raw
+    private: true
 "#;
 
 /// The registry `acme` of a repository, with this text.
@@ -863,4 +870,21 @@ fn limit_of(registry: &Registry<'_>) -> Limit {
         }) => limit,
         other => panic!("{other:?}"),
     }
+}
+
+#[test]
+fn a_private_recipe_is_left_out_because_its_download_needs_a_login() {
+    let catalog = Catalog::new(vec![acme()]);
+    let plan = catalog.plan(&request("vault", "1.0.0", None)).unwrap();
+    assert_eq!(plan.source, "acme:vault");
+    for release in &plan.releases {
+        for (platform, planned) in &release.platforms {
+            assert_eq!(planned, &Err(Unavailable::Login), "{platform:?}");
+        }
+    }
+    let reason = Unavailable::Login.to_string();
+    assert!(
+        reason.contains("login") && reason.contains("not support"),
+        "{reason}"
+    );
 }
