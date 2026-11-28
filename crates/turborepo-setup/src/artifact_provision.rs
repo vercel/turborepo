@@ -163,6 +163,7 @@ enum Staged {
 enum ArchiveFormat {
     Tar,
     TarGz,
+    TarXz,
     Zip,
 }
 
@@ -250,6 +251,10 @@ impl ArtifactPlan {
             },
             Format::TarGz => Staged::Archive {
                 format: ArchiveFormat::TarGz,
+                root: root(),
+            },
+            Format::TarXz => Staged::Archive {
+                format: ArchiveFormat::TarXz,
                 root: root(),
             },
             Format::Zip => Staged::Archive {
@@ -343,6 +348,7 @@ impl ArtifactPlan {
         let format = match format {
             ArchiveFormat::Tar => turborepo_archive::Format::Tar,
             ArchiveFormat::TarGz => turborepo_archive::Format::TarGz,
+            ArchiveFormat::TarXz => turborepo_archive::Format::TarXz,
             ArchiveFormat::Zip => turborepo_archive::Format::Zip,
         };
         let unpack = |source| Error::Archive {

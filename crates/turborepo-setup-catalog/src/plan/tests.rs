@@ -1,4 +1,4 @@
-use turborepo_turbo_json::ArtifactFormat::{Binary, TarGz, Zip};
+use turborepo_turbo_json::ArtifactFormat::{Binary, TarGz, TarXz, Zip};
 
 use super::*;
 use crate::tests::request;
@@ -49,6 +49,12 @@ packages:
     overrides:
       - goos: windows
         asset: xz-{{.Version}}-{{.OS}}-{{.Arch}}.zip
+  - repo_owner: example
+    repo_name: zst
+    asset: zst-{{.Version}}-{{.OS}}-{{.Arch}}.tar.zst
+    overrides:
+      - goos: windows
+        asset: zst-{{.Version}}-{{.OS}}-{{.Arch}}.zip
   - type: go_install
     repo_owner: example
     repo_name: from-source
@@ -303,16 +309,20 @@ fn raw_downloads_are_one_binary_installed_under_its_name() {
 #[test]
 fn platforms_a_recipe_cannot_install_are_left_out_with_a_reason() {
     let xz = plan("xz", "5.8.1", Some("aqua:example/xz"));
+    assert_eq!(first(&xz, Platform::LinuxX64Gnu).unwrap().format, TarXz);
+    assert_eq!(first(&xz, Platform::WindowsX64).unwrap().format, Zip);
+
+    let zst = plan("zst", "5.8.1", Some("aqua:example/zst"));
     assert_eq!(
-        first(&xz, Platform::LinuxX64Gnu),
-        Err(Unavailable::Format("tar.xz".into()))
+        first(&zst, Platform::LinuxX64Gnu),
+        Err(Unavailable::Format("tar.zst".into()))
     );
     assert!(
-        Unavailable::Format("tar.xz".into())
+        Unavailable::Format("tar.zst".into())
             .to_string()
-            .contains("tar.xz")
+            .contains("tar.zst")
     );
-    assert_eq!(first(&xz, Platform::WindowsX64).unwrap().format, Zip);
+    assert_eq!(first(&zst, Platform::WindowsX64).unwrap().format, Zip);
 
     let source = plan("from-source", "1.0.0", Some("aqua:example/from-source"));
     for planned in source.releases[0].platforms.values() {

@@ -144,6 +144,7 @@ pub enum Format {
     Binary,
     Tar,
     TarGz,
+    TarXz,
     Zip,
 }
 

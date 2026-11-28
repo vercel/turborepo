@@ -81,6 +81,12 @@ fn gzip(bytes: &[u8]) -> Vec<u8> {
     encoder.write_all(bytes).unwrap();
     encoder.finish().unwrap()
 }
+fn xz(bytes: &[u8]) -> Vec<u8> {
+    let options = lzma_rust2::XzOptions::with_preset(0);
+    let mut encoder = lzma_rust2::XzWriter::new(Vec::new(), options).unwrap();
+    encoder.write_all(bytes).unwrap();
+    encoder.finish().unwrap()
+}
 fn valid_tar() -> Vec<u8> {
     tar(&[("pkg/bin/tool", Regular, b"tool")])
 }
@@ -553,4 +559,64 @@ fn skipped_entries_keep_name_framing_strict_and_spend_the_entry_budget() {
         .err()
         .unwrap();
     assert!(matches!(error, LimitExceeded), "{error}");
+}
+
+#[test]
+fn tar_xz_extraction_enforces_integrity_and_limits() {
+    let raw = valid_tar();
+    let archive = xz(&raw);
+    let extracted = unpack(archive.clone(), TarXz, limits()).unwrap();
+    assert_eq!(
+        fs::read(extracted.root_path().join("bin/tool")).unwrap(),
+        b"tool"
+    );
+    #[cfg(unix)]
+    assert_eq!(
+        fs::metadata(extracted.root_path().join("bin/tool"))
+            .unwrap()
+            .permissions()
+            .mode()
+            & 0o7777,
+        0o755
+    );
+
+    // Concatenated multi-stream XZ archives decode cleanly.
+    let split = raw.len() / 2;
+    let mut multi = xz(&raw[..split]);
+    multi.extend_from_slice(&xz(&raw[split..]));
+    let extracted = unpack(multi, TarXz, limits()).unwrap();
+    assert_eq!(
+        fs::read(extracted.root_path().join("bin/tool")).unwrap(),
+        b"tool"
+    );
+
+    // Decoded size limits apply to the decompressed TAR stream.
+    let tight = Limits::new(raw.len() - 1, 32, 240, 8).unwrap();
+    rejected(archive.clone(), TarXz, tight, LimitExceeded);
+
+    // Empty, truncated, corrupted, and trailing-garbage XZ inputs are rejected.
+    rejected(Vec::new(), TarXz, limits(), InvalidArchive);
+    rejected(
+        b"not an xz stream".to_vec(),
+        TarXz,
+        limits(),
+        InvalidArchive,
+    );
+    rejected(
+        archive[..archive.len() - 1].to_vec(),
+        TarXz,
+        limits(),
+        InvalidArchive,
+    );
+    let mut corrupted = archive.clone();
+    let mid = corrupted.len() / 2;
+    corrupted[mid] ^= 0xff;
+    rejected(corrupted, TarXz, limits(), InvalidArchive);
+    let mut trailing = archive;
+    trailing.extend_from_slice(b"junk");
+    rejected(trailing, TarXz, limits(), InvalidArchive);
+
+    // TAR path validation still runs on decompressed entries.
+    let traversal = xz(&tar(&[("pkg/../escape", Regular, b"x")]));
+    rejected(traversal, TarXz, limits(), UnsafePath);
 }

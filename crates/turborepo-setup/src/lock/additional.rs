@@ -251,6 +251,7 @@ pub fn lock_format(format: ArtifactFormat) -> Format {
         ArtifactFormat::Binary => Format::Binary,
         ArtifactFormat::Tar => Format::Tar,
         ArtifactFormat::TarGz => Format::TarGz,
+        ArtifactFormat::TarXz => Format::TarXz,
         ArtifactFormat::Zip => Format::Zip,
     }
 }
@@ -260,6 +261,7 @@ fn declared_format(format: Format) -> ArtifactFormat {
         Format::Binary => ArtifactFormat::Binary,
         Format::Tar => ArtifactFormat::Tar,
         Format::TarGz => ArtifactFormat::TarGz,
+        Format::TarXz => ArtifactFormat::TarXz,
         Format::Zip => ArtifactFormat::Zip,
     }
 }

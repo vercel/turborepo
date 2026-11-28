@@ -197,6 +197,7 @@ fn artifact(
         "raw" => ArtifactFormat::Binary,
         "zip" => ArtifactFormat::Zip,
         "tar.gz" | "tgz" => ArtifactFormat::TarGz,
+        "tar.xz" | "txz" => ArtifactFormat::TarXz,
         "tar" => ArtifactFormat::Tar,
         other => return Err(Unavailable::Format(other.to_owned())),
     };

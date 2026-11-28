@@ -376,13 +376,41 @@ async fn recipes_without_a_usable_download_fail_without_a_request() {
     assert!(message.contains("linux-x64-gnu: the catalog installs it with go_install"));
     assert_eq!(server.hits(), 0);
 
-    let release = "/example/xz/releases/download/v5.8.1";
+    let release = "/example/zst/releases/download/v5.8.1";
     let server = serve(&[(
-        &format!("{release}/xz-v5.8.1-windows-amd64.zip"),
+        &format!("{release}/zst-v5.8.1-windows-amd64.zip"),
         b"zip".to_vec(),
     )]);
-    let error = run(&server, "xz", "5.8.1", Some("aqua:example/xz"), HOST).await;
+    let error = run(&server, "zst", "5.8.1", Some("aqua:example/zst"), HOST).await;
     assert!(matches!(error, Err(Error::NoPlatform { .. })), "{error:?}");
+}
+
+#[tokio::test]
+async fn tar_xz_releases_resolve_and_pin_in_the_lock() {
+    let mut archive = tar::Builder::new(Vec::new());
+    let contents = b"#!/bin/sh\necho xz\n";
+    let mut header = tar::Header::new_gnu();
+    header.set_size(contents.len() as u64);
+    header.set_mode(0o755);
+    header.set_cksum();
+    archive
+        .append_data(&mut header, "xz", contents.as_slice())
+        .unwrap();
+    let options = lzma_rust2::XzOptions::with_preset(0);
+    let mut encoder = lzma_rust2::XzWriter::new(Vec::new(), options).unwrap();
+    encoder.write_all(&archive.into_inner().unwrap()).unwrap();
+    let bytes = encoder.finish().unwrap();
+
+    let server = serve(&[(
+        "/example/xz/releases/download/v5.8.1/xz-v5.8.1-linux-amd64.tar.xz",
+        bytes.clone(),
+    )]);
+    let resolved = run(&server, "xz", "5.8.1", Some("aqua:example/xz"), HOST)
+        .await
+        .unwrap();
+    let linux = artifacts(&resolved.tool)[&Platform::LinuxX64Gnu];
+    assert_eq!(linux.format, Format::TarXz);
+    assert_eq!(linux.sha256, Some(sha256(&bytes)));
 }
 
 #[tokio::test]

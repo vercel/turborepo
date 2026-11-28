@@ -12,6 +12,11 @@ workspace = true
 [dependencies]
 crc32fast = "1.5.0"
 flate2 = "1.1.9"
+lzma-rust2 = { version = "0.25.0", default-features = false, features = [
+  "std",
+  "xz",
+  "optimization",
+] }
 tar = { version = "0.4.45", default-features = false }
 tempfile = { workspace = true }
 thiserror = { workspace = true }
@@ -22,4 +27,9 @@ nix = { workspace = true, features = ["fs"] }
 
 [dev-dependencies]
 hex = { workspace = true }
+lzma-rust2 = { version = "0.25.0", default-features = false, features = [
+  "std",
+  "xz",
+  "encoder",
+] }
 sha2 = { workspace = true }

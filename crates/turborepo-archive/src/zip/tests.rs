@@ -471,6 +471,18 @@ fn unix_host_entries_ignore_dos_bit_0x4000_as_official_bun_archives_set_it() {
 }
 
 #[test]
+fn unix_host_entries_ignore_dos_bit_0x8000_as_official_zig_archives_set_it() {
+    let mut bytes = valid(true, true);
+    let at = central(&bytes);
+    put(&mut bytes, at + 38, (0o100755 << 16) | 0x8020, 4);
+    assert!(unpack(bytes.clone(), Zip, limits()).is_ok());
+    // A DOS-host entry has no Unix mode, so the bit stays unsupported there.
+    put(&mut bytes, at + 4, 0x0014, 2);
+    put(&mut bytes, at + 38, 0x8020, 4);
+    rejected(bytes, Zip, limits(), UnsupportedEntry);
+}
+
+#[test]
 fn dos_host_entries_ignore_the_not_content_indexed_bit_as_official_uv_zips_set_it() {
     let mut bytes = valid(true, false);
     let at = central(&bytes);

@@ -33,6 +33,10 @@ unwrap_used = "deny"
 debug = 0
 opt-level = 0
 
+# Pure-Rust LZMA2 decompression is ~30x slower unoptimized, so keep it fast in dev builds.
+[profile.dev.package.lzma-rust2]
+opt-level = 3
+
 [profile.release]
 # Thin lto delivers some small runtime optimizations but massive binary size wins.
 # Coupling it with codegen-units=1 means we can distribute much of the work to the crate

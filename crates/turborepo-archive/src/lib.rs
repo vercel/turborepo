@@ -1,4 +1,5 @@
-//! Verified TAR/TAR.GZ and ZIP extraction; no transport, installation or CLI.
+//! Verified TAR/TAR.GZ/TAR.XZ and ZIP extraction; no transport, installation or
+//! CLI.
 //!
 //! The extractor creates and owns a fresh staging directory, never accepts an
 //! existing extraction tree, and deletes staging on failure/drop. The OS temp
@@ -77,6 +78,7 @@ pub enum Error {
 pub enum Format {
     Tar,
     TarGz,
+    TarXz,
     Zip,
 }
 
@@ -278,6 +280,23 @@ fn extract_inner(
                 .take(limits.bytes as u64 + 1)
                 .read_to_end(&mut decoded)
                 .map_err(|_| Error::InvalidArchive)?;
+            if decoded.len() > limits.bytes {
+                return Err(Error::LimitExceeded);
+            }
+            extract_tar(&decoded, &mut tree)?;
+        }
+        Format::TarXz => {
+            // Cap the per-block LZMA2 dictionary memory before allocation so a
+            // small crafted header cannot request a multi-gigabyte dictionary.
+            const MAX_XZ_DECODER_MEM_KIB: u32 = 256 * 1024;
+            let mut decoded = Vec::new();
+            lzma_rust2::XzReader::new_mem_limit(artifact, true, MAX_XZ_DECODER_MEM_KIB)
+                .take(limits.bytes as u64 + 1)
+                .read_to_end(&mut decoded)
+                .map_err(|error| match error.kind() {
+                    io::ErrorKind::OutOfMemory => Error::LimitExceeded,
+                    _ => Error::InvalidArchive,
+                })?;
             if decoded.len() > limits.bytes {
                 return Err(Error::LimitExceeded);
             }

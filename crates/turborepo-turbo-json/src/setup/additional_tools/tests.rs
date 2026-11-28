@@ -127,6 +127,15 @@ fn derived_artifacts_obey_the_rules_of_declared_ones() {
         None
     );
     assert_eq!(
+        check(
+            linux,
+            url,
+            ArtifactFormat::TarXz,
+            &[("fixture", "pkg/bin/fixture")]
+        ),
+        None
+    );
+    assert_eq!(
         check(windows, url, archive, &[("fixture", "fixture.exe")]),
         None
     );
