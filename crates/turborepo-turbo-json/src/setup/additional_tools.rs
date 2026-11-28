@@ -1,8 +1,9 @@
 //! Repository-declared tools under `setup.additionalTools`: an exact version,
 //! plus either explicit per-platform artifacts or nothing more, in which case
-//! `turbo setup` finds the downloads in its bundled catalog. Field and
-//! platform names match the managed artifacts in `turbo.lock`. Tools that a
-//! built-in setup adapter manages stay declared in their native files.
+//! `turbo setup` finds the downloads in a registry that `setup.registries`
+//! declares. Field and platform names match the managed artifacts in
+//! `turbo.lock`. Tools that a built-in setup adapter manages stay declared in
+//! their native files.
 
 use std::{
     borrow::Cow,
@@ -20,7 +21,7 @@ use serde::Serialize;
 use ts_rs::TS;
 use turborepo_errors::{Spanned, WithMetadata};
 
-use super::registries::{BUILTIN_REGISTRY, registry_package};
+use super::registries::{SetupRegistry, registry_package};
 use crate::error::Error;
 
 /// Identities of built-in setup adapters and toolchains.
@@ -106,9 +107,9 @@ pub struct RawAdditionalToolArtifact {
 /// A tool that `turbo setup` downloads, verifies, and installs. The full
 /// installation tree is kept; no tool-provided scripts run.
 ///
-/// A string is the exact version of a tool in the bundled catalog, looked up
-/// by its tool ID. An object can name the catalog entry with `from`, or
-/// declare explicit `artifacts`.
+/// A string is the exact version of a tool that a registry knows by its tool
+/// ID. An object can name the registry entry with `from`, or declare explicit
+/// `artifacts`.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, JsonSchema)]
 #[serde(untagged)]
 #[schemars(rename = "AdditionalTool")]
@@ -126,10 +127,10 @@ pub struct RawAdditionalToolDeclaration {
     /// `1.8.2`. Ranges and channels are not allowed.
     #[deserializable(required)]
     pub version: SpannedString,
-    /// The bundled catalog entry that provides the downloads, as `aqua:`
-    /// followed by a package ID, such as `aqua:jj-vcs/jj`. Without `from` and
-    /// `artifacts`, the tool ID is looked up in the catalog's name list. Not
-    /// allowed with `artifacts`.
+    /// The registry entry that provides the downloads, as a registry from
+    /// `setup.registries`, `:`, and a package ID, such as `aqua:jj-vcs/jj`.
+    /// Without `from` and `artifacts`, the registries are asked for the tool
+    /// ID in order. Not allowed with `artifacts`.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub from: Option<SpannedString>,
     /// Artifacts keyed by platform, such as `linux-x64-gnu` or `macos-arm64`.
@@ -169,10 +170,10 @@ pub struct AdditionalTool {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum AdditionalToolSource {
-    /// `turbo setup` finds the downloads in its bundled catalog and pins them
+    /// `turbo setup` finds the downloads in a declared registry and pins them
     /// in `turbo.lock`. `from` is the entry as written, such as
-    /// `aqua:jj-vcs/jj`; without it, the tool ID is looked up in the catalog's
-    /// name list.
+    /// `aqua:jj-vcs/jj`; without it, the registries are asked for the tool ID
+    /// in order.
     Catalog { from: Option<String> },
     /// The downloads the repository declared, by platform.
     Artifacts(BTreeMap<ArtifactPlatform, Spanned<RawAdditionalToolArtifact>>),
@@ -220,12 +221,14 @@ fn ensure<'a>(
 
 pub(super) fn validate(
     raw: Option<&BTreeMap<String, Spanned<RawAdditionalTool>>>,
+    registries: &[SetupRegistry],
 ) -> Result<BTreeMap<String, AdditionalTool>, Error> {
     let mut tools = BTreeMap::new();
     // Executables of every additional tool are active together on a platform.
     let mut owners: BTreeMap<(ArtifactPlatform, String), &str> = BTreeMap::new();
     for (id, raw_tool) in raw.into_iter().flatten() {
-        let tool = validate_tool(id, raw_tool, &mut owners).map_err(|(source, reason)| {
+        let checked = validate_tool(id, raw_tool, registries, &mut owners);
+        let tool = checked.map_err(|(source, reason)| {
             let (span, text) = source.span_and_text();
             Error::SetupInvalidAdditionalTool {
                 tool: id.clone(),
@@ -242,6 +245,7 @@ pub(super) fn validate(
 fn validate_tool<'a>(
     id: &'a str,
     raw: &'a Spanned<RawAdditionalTool>,
+    registries: &[SetupRegistry],
     owners: &mut BTreeMap<(ArtifactPlatform, String), &'a str>,
 ) -> Result<AdditionalTool, Invalid<'a>> {
     if builtin(BUILTIN_TOOLS, id) {
@@ -271,11 +275,21 @@ fn validate_tool<'a>(
             return Err((from, reason.into()));
         }
         (Some(from), None) => {
-            ensure(
-                registry_package(from).is_some_and(|(registry, _)| registry == BUILTIN_REGISTRY),
-                from,
-                "`from` must be `aqua:` followed by a catalog package ID, such as `aqua:jj-vcs/jj`",
-            )?;
+            let Some((registry, _)) = registry_package(from) else {
+                let reason = "`from` must be a registry name, `:`, and a package ID, such as \
+                              `aqua:jj-vcs/jj`";
+                return Err((from, reason.into()));
+            };
+            if !registries
+                .iter()
+                .any(|declared| declared.name() == registry)
+            {
+                let reason = format!(
+                    "`from` names the registry {registry:?}, which `setup.registries` does not \
+                     declare"
+                );
+                return Err((from, reason.into()));
+            }
             AdditionalToolSource::Catalog {
                 from: Some(from.as_inner().clone()),
             }

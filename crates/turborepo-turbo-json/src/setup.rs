@@ -5,7 +5,8 @@
 //! repository managed. Root `tools` and `dependencies`
 //! apply to every toolchain; a key named by a canonical toolchain ID overrides
 //! them for that toolchain. `additionalTools` declares tools that no built-in
-//! adapter manages, and `mirrors` names where setup downloads from.
+//! adapter manages, `registries` names where their downloads are looked up,
+//! and `mirrors` names where setup downloads from.
 
 use std::{collections::BTreeMap, sync::Arc};
 
@@ -23,7 +24,9 @@ pub use self::{
         derived_artifact_violation,
     },
     mirrors::{RawSetupMirrors, SetupMirrors, mirror_url},
-    registries::{BUILTIN_REGISTRY, registry_package},
+    registries::{
+        BUILTIN_REGISTRY, BuiltinRegistry, RawSetupRegistry, SetupRegistry, registry_package,
+    },
 };
 use crate::{error::Error, future_flags::FutureFlags};
 
@@ -100,11 +103,15 @@ pub struct RawSetupPolicy {
     /// `futureFlags.experimentalGoWorkspaces`.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub go: Option<Spanned<RawToolchainSetupPolicy>>,
+    /// The registries that `turbo setup` asks where an additional tool comes
+    /// from, in order. `"aqua"` is the registry built into `turbo`. Without
+    /// `registries`, only `"aqua"` is asked. Leave `"aqua"` out to block it.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub registries: Option<Vec<Spanned<RawSetupRegistry>>>,
     /// Tools that no built-in adapter manages, keyed by tool ID. Each declares
-    /// an exact version. `turbo setup` finds the downloads in its bundled
-    /// catalog, or uses the explicit per-platform artifacts a tool declares.
-    /// It locks, verifies, and installs them without running tool-provided
-    /// scripts.
+    /// an exact version. `turbo setup` finds the downloads in the registries,
+    /// or uses the explicit per-platform artifacts a tool declares. It locks,
+    /// verifies, and installs them without running tool-provided scripts.
     #[serde(rename = "additionalTools", skip_serializing_if = "Option::is_none")]
     pub additional_tools: Option<BTreeMap<String, Spanned<RawAdditionalTool>>>,
     /// Credential-free HTTPS mirrors for setup downloads. `turbo.lock` keeps
@@ -132,13 +139,32 @@ pub struct ToolchainSetupPolicy {
 }
 
 /// The validated root `setup` policy.
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SetupPolicy {
     defaults: ToolchainSetupPolicy,
     overrides: BTreeMap<ToolchainId, ToolchainSetupPolicy>,
+    registries: Vec<SetupRegistry>,
     additional_tools: BTreeMap<String, AdditionalTool>,
     mirrors: SetupMirrors,
     dependency_install_order: Option<Vec<ToolchainId>>,
+}
+
+impl Default for SetupPolicy {
+    fn default() -> Self {
+        Self {
+            defaults: ToolchainSetupPolicy::default(),
+            overrides: BTreeMap::new(),
+            registries: default_registries(),
+            additional_tools: BTreeMap::new(),
+            mirrors: SetupMirrors::default(),
+            dependency_install_order: None,
+        }
+    }
+}
+
+/// Without `setup.registries`, only the built-in registry is asked.
+fn default_registries() -> Vec<SetupRegistry> {
+    vec![SetupRegistry::Aqua]
 }
 
 impl SetupPolicy {
@@ -190,10 +216,17 @@ impl SetupPolicy {
             overrides.insert(id, policy);
         }
 
+        let registries = match raw.registries.as_deref() {
+            Some(raw) => registries::validate(raw)?,
+            None => default_registries(),
+        };
+        let additional_tools =
+            additional_tools::validate(raw.additional_tools.as_ref(), &registries)?;
         Ok(Self {
             defaults,
             overrides,
-            additional_tools: additional_tools::validate(raw.additional_tools.as_ref())?,
+            registries,
+            additional_tools,
             mirrors: mirrors::validate(raw.mirrors.as_ref())?,
             dependency_install_order: (raw.dependency_install_order.as_ref()).map(|order| {
                 order
@@ -221,6 +254,12 @@ impl SetupPolicy {
         }
     }
 
+    /// The registries that resolve an additional tool, in the order they are
+    /// asked. Without `setup.registries`, only the built-in one.
+    pub fn registries(&self) -> &[SetupRegistry] {
+        &self.registries
+    }
+
     /// Validated `additionalTools` declarations, keyed by tool ID.
     pub fn additional_tools(&self) -> &BTreeMap<String, AdditionalTool> {
         &self.additional_tools
@@ -240,6 +279,7 @@ impl SetupPolicy {
     /// Whether the repository configured any setup value.
     pub fn is_configured(&self) -> bool {
         !self.additional_tools.is_empty()
+            || self.registries != default_registries()
             || self.mirrors != SetupMirrors::default()
             || self.dependency_install_order.is_some()
             || self.defaults != ToolchainSetupPolicy::default()
@@ -309,6 +349,9 @@ impl WithMetadata for RawSetupPolicy {
             toolchain.add_text(text.clone());
             toolchain.value.add_text(text.clone());
         }
+        for registry in self.registries.iter_mut().flatten() {
+            registry.add_text(text.clone());
+        }
         for tool in self
             .additional_tools
             .iter_mut()
@@ -329,6 +372,9 @@ impl WithMetadata for RawSetupPolicy {
         for toolchain in self.toolchains_mut() {
             toolchain.add_path(path.clone());
             toolchain.value.add_path(path.clone());
+        }
+        for registry in self.registries.iter_mut().flatten() {
+            registry.add_path(path.clone());
         }
         for tool in self
             .additional_tools

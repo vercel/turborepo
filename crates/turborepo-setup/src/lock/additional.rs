@@ -5,10 +5,11 @@
 //!
 //! A catalog declaration names only a version. Its lock entry is the one a
 //! previous `turbo setup` resolved and recorded, reused unchanged while the
-//! declaration still asks for it. The lock, not the current catalog, decides
-//! what an existing repository installs. Without such an entry the
-//! declaration is unresolved: projection reports it and never resolves, reads
-//! the network, or discovers platforms.
+//! declaration still asks for it and `setup.registries` still declares the
+//! registry that the entry came from. The lock, not the current registries or
+//! their order, decides what an existing repository installs. Without such an
+//! entry the declaration is unresolved: projection reports it and never
+//! resolves, reads the network, or discovers platforms.
 //!
 //! A recorded entry may lack a platform in [`TARGETS`]: the catalog had no
 //! installable download for it when the entry was resolved. Such an entry is
@@ -18,8 +19,8 @@
 use std::collections::BTreeMap;
 
 use turborepo_turbo_json::{
-    AdditionalToolSource, ArtifactFormat, ArtifactPlatform, BUILTIN_REGISTRY, RawRootTurboJson,
-    RawTurboJson, SetupPolicy, command_name, derived_artifact_violation, registry_package,
+    AdditionalToolSource, ArtifactFormat, ArtifactPlatform, RawRootTurboJson, RawTurboJson,
+    SetupPolicy, SetupRegistry, command_name, derived_artifact_violation, registry_package,
 };
 
 use super::{Artifact, Declaration, Format, Installation, Lock, Platform, Tool};
@@ -28,8 +29,9 @@ use super::{Artifact, Declaration, Format, Installation, Lock, Platform, Tool};
 pub const ADAPTER: &str = "artifact";
 /// Each platform installs exactly one artifact part.
 pub const PART: &str = "artifact";
-/// The option that records which catalog entry gave a tool's downloads, as
-/// one `aqua:<package ID>` value. Provenance only: it selects no bytes.
+/// The option that records which registry entry gave a tool's downloads, as
+/// one `<registry>:<package ID>` value. It selects no bytes. An entry is
+/// reused only while its registry is still declared.
 pub const SOURCE: &str = "source";
 const FIELD: &str = "/setup/additionalTools/";
 /// The platforms that a host can install an additional tool on. Not musl
@@ -49,8 +51,8 @@ pub struct CatalogRequest {
     pub id: String,
     /// The tool's own exact version, without a release-name prefix.
     pub version: String,
-    /// The catalog entry as declared, `aqua:<package ID>`. Without it, the
-    /// tool ID is looked up in the catalog's name list.
+    /// The registry entry as declared, `<registry>:<package ID>`. Without it,
+    /// the declared registries are asked for the tool ID in order.
     pub from: Option<String>,
     /// The root configuration file that declares the tool.
     pub file: String,
@@ -61,8 +63,8 @@ impl CatalogRequest {
         declaration(&self.file, &self.id, &self.version)
     }
 
-    /// The lock entry for this declaration once the catalog entry `source`
-    /// (`aqua:<package ID>`) resolved it to one artifact per platform.
+    /// The lock entry for this declaration once the registry entry `source`
+    /// (`<registry>:<package ID>`) resolved it to one artifact per platform.
     /// Executable paths are relative to each archive's top level.
     pub fn resolved(&self, source: &str, artifacts: BTreeMap<Platform, Artifact>) -> Tool {
         let options = BTreeMap::from([(SOURCE.into(), vec![source.into()])]);
@@ -72,7 +74,9 @@ impl CatalogRequest {
         entry(self.declaration(), options, artifacts.collect())
     }
 
-    pub(super) fn records(&self, tool: &Tool) -> bool {
+    /// Whether `tool` is the entry this declaration asks for, from one of
+    /// the declared `registries`.
+    pub(super) fn records(&self, tool: &Tool, registries: &[SetupRegistry]) -> bool {
         let source = match tool.options.get(SOURCE).map(Vec::as_slice) {
             Some([source]) if tool.options.len() == 1 => source,
             _ => return false,
@@ -81,7 +85,11 @@ impl CatalogRequest {
             && covered(&self.id, tool)
             && tool.version == self.version
             && tool.declarations == [self.declaration()]
-            && registry_package(source).is_some_and(|(registry, _)| registry == BUILTIN_REGISTRY)
+            && registry_package(source).is_some_and(|(registry, _)| {
+                registries
+                    .iter()
+                    .any(|declared| declared.name() == registry)
+            })
             && self.from.as_ref().is_none_or(|from| from == source)
             && resolved_shape(tool)
     }
@@ -152,6 +160,9 @@ pub(super) fn collision(tools: &BTreeMap<String, Tool>) -> Option<Collision<'_>>
 
 #[derive(Default)]
 pub(super) struct Projection {
+    /// `setup.registries` in declared order. Empty without a root
+    /// configuration, which declares no tool to resolve either.
+    pub registries: Vec<SetupRegistry>,
     pub tools: BTreeMap<String, Tool>,
     pub unresolved: BTreeMap<String, CatalogRequest>,
     pub incomplete: BTreeMap<String, CatalogRequest>,
@@ -162,7 +173,10 @@ pub(super) fn project(file: &str, bytes: &[u8], previous: Option<&Lock>) -> Opti
     let raw: RawTurboJson = RawRootTurboJson::parse(text, file).ok()?.try_into().ok()?;
     let flags = raw.future_flags.as_ref().map(|flags| *flags.as_inner());
     let policy = SetupPolicy::from_raw(raw.setup.as_ref(), &flags.unwrap_or_default()).ok()?;
-    let mut projection = Projection::default();
+    let mut projection = Projection {
+        registries: policy.registries().to_vec(),
+        ..Projection::default()
+    };
     for (id, tool) in policy.additional_tools() {
         let artifacts = match &tool.source {
             AdditionalToolSource::Artifacts(artifacts) => artifacts,
@@ -174,7 +188,7 @@ pub(super) fn project(file: &str, bytes: &[u8], previous: Option<&Lock>) -> Opti
                     file: file.into(),
                 };
                 let locked = previous.and_then(|lock| lock.tools().get(id));
-                match locked.filter(|tool| request.records(tool)) {
+                match locked.filter(|tool| request.records(tool, &projection.registries)) {
                     Some(tool) => {
                         projection.tools.insert(id.clone(), tool.clone());
                         if !complete(tool) {

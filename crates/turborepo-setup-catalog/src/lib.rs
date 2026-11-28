@@ -1,3 +1,12 @@
+//! The tool catalog: where `turbo setup` finds the downloads of a
+//! `setup.additionalTools` declaration that names only a version. It is the
+//! registries that `setup.registries` declares, asked in that order, and it
+//! is consulted only for a declaration that `turbo.lock` does not record.
+//!
+//! A recipe is untrusted whichever registry it comes from. Planning turns it
+//! into downloads under the rules of a hand-declared artifact, and resolution
+//! pins what arrives.
+
 use std::collections::BTreeMap;
 
 use aqua_registry::AquaPackage;
@@ -44,7 +53,7 @@ pub enum Error {
     UnrecordablePackage { tool: String, registry: String },
     #[error(
         "setup.additionalTools.{tool} names {from:?} in `from`, which is not an entry of a \
-         registry that the tool catalog asks"
+         registry that setup.registries declares"
     )]
     UnknownRegistry { tool: String, from: String },
     #[error("cannot use the registry {registry:?} ({origin}): {problem}")]
@@ -104,6 +113,12 @@ fn unknown_name(tool: &str, version: &str, registries: &[String], candidates: &[
          setup.additionalTools.{tool}"
     );
     let (asked, registry) = match registries {
+        [] => {
+            return format!(
+                "{tool:?} cannot be found by name, because setup.registries is empty. Declare its \
+                 downloads with {artifacts}, or add a registry to setup.registries."
+            );
+        }
         [registry] => (format!("the registry {registry:?} knows"), &**registry),
         registries => {
             let asked = format!(
@@ -138,6 +153,10 @@ fn reasons(platforms: &BTreeMap<String, Unavailable>) -> String {
         .join("\n")
 }
 
+/// The registries that `setup.registries` declares, in the order they are
+/// asked. Every lookup goes through them, also when the built-in registry is
+/// the only one. A lookup reads only the registries it asks: the one that
+/// `from` names, or else each in order until one knows the tool ID.
 pub struct Catalog<'a> {
     registries: Vec<Registry<'a>>,
 }

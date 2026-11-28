@@ -53,9 +53,10 @@ pub use raw::{
 };
 pub use setup::{
     AdditionalTool, AdditionalToolSource, ArtifactFormat, ArtifactPlatform, BUILTIN_REGISTRY,
-    DependencyPolicy, RawAdditionalTool, RawAdditionalToolArtifact, RawAdditionalToolDeclaration,
-    RawSetupMirrors, RawSetupPolicy, RawToolchainSetupPolicy, SetupMirrors, SetupPolicy,
-    ToolPolicy, ToolchainSetupPolicy, command_name, derived_artifact_violation, registry_package,
+    BuiltinRegistry, DependencyPolicy, RawAdditionalTool, RawAdditionalToolArtifact,
+    RawAdditionalToolDeclaration, RawSetupMirrors, RawSetupPolicy, RawSetupRegistry,
+    RawToolchainSetupPolicy, SetupMirrors, SetupPolicy, SetupRegistry, ToolPolicy,
+    ToolchainSetupPolicy, command_name, derived_artifact_violation, registry_package,
 };
 pub use validator::{TOPOLOGICAL_PIPELINE_DELIMITER, Validator};
 

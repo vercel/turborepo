@@ -235,7 +235,7 @@
   "allowTrailingCommas": true,
   "definitions": {
     "AdditionalTool": {
-      "description": "A tool that `turbo setup` downloads, verifies, and installs. The full installation tree is kept; no tool-provided scripts run.\n\nA string is the exact version of a tool in the bundled catalog, looked up by its tool ID. An object can name the catalog entry with `from`, or declare explicit `artifacts`.",
+      "description": "A tool that `turbo setup` downloads, verifies, and installs. The full installation tree is kept; no tool-provided scripts run.\n\nA string is the exact version of a tool that a registry knows by its tool ID. An object can name the registry entry with `from`, or declare explicit `artifacts`.",
       "anyOf": [
         {
           "$ref": "#/definitions/String"
@@ -311,7 +311,7 @@
           ]
         },
         "from": {
-          "description": "The bundled catalog entry that provides the downloads, as `aqua:` followed by a package ID, such as `aqua:jj-vcs/jj`. Without `from` and `artifacts`, the tool ID is looked up in the catalog's name list. Not allowed with `artifacts`.",
+          "description": "The registry entry that provides the downloads, as a registry from `setup.registries`, `:`, and a package ID, such as `aqua:jj-vcs/jj`. Without `from` and `artifacts`, the registries are asked for the tool ID in order. Not allowed with `artifacts`.",
           "anyOf": [
             {
               "$ref": "#/definitions/String"
@@ -394,6 +394,11 @@
           ]
         }
       }
+    },
+    "BuiltinRegistry": {
+      "description": "The registry built into `turbo`.",
+      "type": "string",
+      "enum": ["aqua"]
     },
     "DependencyPolicy": {
       "description": "How `turbo setup` prepares a toolchain's dependencies. `locked` installs them from the committed ecosystem lockfile without changing it. `skip` does not install them.",
@@ -1021,7 +1026,7 @@
       "type": "object",
       "properties": {
         "additionalTools": {
-          "description": "Tools that no built-in adapter manages, keyed by tool ID. Each declares an exact version. `turbo setup` finds the downloads in its bundled catalog, or uses the explicit per-platform artifacts a tool declares. It locks, verifies, and installs them without running tool-provided scripts.",
+          "description": "Tools that no built-in adapter manages, keyed by tool ID. Each declares an exact version. `turbo setup` finds the downloads in the registries, or uses the explicit per-platform artifacts a tool declares. It locks, verifies, and installs them without running tool-provided scripts.",
           "type": ["object", "null"],
           "additionalProperties": {
             "$ref": "#/definitions/AdditionalTool"
@@ -1089,6 +1094,13 @@
             }
           ]
         },
+        "registries": {
+          "description": "The registries that `turbo setup` asks where an additional tool comes from, in order. `\"aqua\"` is the registry built into `turbo`. Without `registries`, only `\"aqua\"` is asked. Leave `\"aqua\"` out to block it.",
+          "type": ["array", "null"],
+          "items": {
+            "$ref": "#/definitions/SetupRegistry"
+          }
+        },
         "rust": {
           "description": "Setup policy for the Rust toolchain. Requires `futureFlags.experimentalCargoWorkspaces`.",
           "anyOf": [
@@ -1112,6 +1124,14 @@
           ]
         }
       }
+    },
+    "SetupRegistry": {
+      "description": "A registry that `turbo setup` asks where an additional tool comes from. The string `\"aqua\"` is the registry built into `turbo`.",
+      "anyOf": [
+        {
+          "$ref": "#/definitions/BuiltinRegistry"
+        }
+      ]
     },
     "String": {
       "type": "string"

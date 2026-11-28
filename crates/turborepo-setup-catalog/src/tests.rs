@@ -391,6 +391,15 @@ fn an_unknown_name_lists_the_registries_that_were_asked_in_order() {
         "{message}"
     );
     assert!(!message.contains("aqua"), "{message}");
+
+    let none = Catalog::new(Vec::new());
+    let message = none
+        .plan(&request("jq", "1.8.2", None))
+        .unwrap_err()
+        .to_string();
+    assert!(message.contains("setup.registries is empty"), "{message}");
+    assert!(message.contains("\"artifacts\""), "{message}");
+    assert!(!message.contains("\"from\""), "{message}");
 }
 
 /// The registry `acme` with this text, counting how often it is read.
