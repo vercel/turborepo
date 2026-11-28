@@ -2293,6 +2293,86 @@ fn test_subgraph_preserves_patch_when_patched_version_missing_from_lockfile_keys
     );
 }
 
+// A patched entry carries `+<patch path>` in the version reported for
+// cache identity. That suffix is not valid SemVer, so a range check run
+// against it parsed nothing and accepted every range, letting a patched
+// hoisted version shadow an incompatible nested one.
+#[test]
+fn test_patched_hoisted_does_not_match_incompatible_nested_range() {
+    let contents = serde_json::to_string(&json!({
+        "lockfileVersion": 1,
+        "workspaces": {
+            "": { "name": "repro" },
+            "apps/api": {
+                "name": "api",
+                "dependencies": { "is-odd": "3.0.1" }
+            },
+            "apps/web": {
+                "name": "web",
+                "dependencies": { "is-even": "1.0.0" }
+            }
+        },
+        "patchedDependencies": {
+            "is-odd@3.0.1": "patches/is-odd@3.0.1.patch"
+        },
+        "packages": {
+            "api": ["api@workspace:apps/api"],
+            "web": ["web@workspace:apps/web"],
+            "is-odd": ["is-odd@3.0.1", "", { "dependencies": { "is-number": "^6.0.0" } }, "sha512-v3=="],
+            "is-number": ["is-number@6.0.0", "", {}, "sha512-n6=="],
+            "is-even": ["is-even@1.0.0", "", { "dependencies": { "is-odd": "^0.1.2" } }, "sha512-even=="],
+            "is-even/is-odd": ["is-odd@0.1.2", "", { "dependencies": { "is-number": "^3.0.0" } }, "sha512-v0=="],
+            "is-even/is-odd/is-number": ["is-number@3.0.0", "", {}, "sha512-n3=="]
+        }
+    }))
+    .unwrap();
+
+    let lockfile = BunLockfile::from_str(&contents).unwrap();
+
+    let nested = lockfile
+        .resolve_package("apps/web", "is-odd", "^0.1.2")
+        .unwrap()
+        .expect("is-even's is-odd@^0.1.2 must resolve to the nested 0.1.2");
+    assert_eq!(nested.key, "is-odd@0.1.2");
+    assert_eq!(nested.version, "0.1.2");
+
+    // The patched hoisted entry still serves the range that selects it, and
+    // keeps reporting its patch for cache identity.
+    let patched = lockfile
+        .resolve_package("apps/api", "is-odd", "3.0.1")
+        .unwrap()
+        .expect("is-odd@3.0.1 resolves for the workspace that depends on it");
+    assert_eq!(patched.key, "is-odd@3.0.1");
+    assert_eq!(patched.version, "3.0.1+patches/is-odd@3.0.1.patch");
+
+    // Pruning the workspace that only reaches is-odd@0.1.2 must not drag in
+    // the patched 3.0.1, and must keep the 0.1.2 subtree it needs.
+    let pruned = prune_to_string(&lockfile, "apps/web", &[("is-even", "1.0.0")]);
+    let pruned_lockfile = BunLockfile::from_str(&pruned).unwrap();
+    assert_eq!(
+        pruned_lockfile
+            .data
+            .packages
+            .get("is-odd")
+            .map(|e| e.ident.as_str()),
+        Some("is-odd@0.1.2"),
+        "pruned is-odd should be the nested 0.1.2, got:\n{pruned}"
+    );
+    assert_eq!(
+        pruned_lockfile
+            .data
+            .packages
+            .get("is-number")
+            .map(|e| e.ident.as_str()),
+        Some("is-number@3.0.0"),
+        "is-odd@0.1.2's is-number@3.0.0 should be kept, got:\n{pruned}"
+    );
+    assert!(
+        pruned_lockfile.data.patched_dependencies.is_empty(),
+        "the patch for the pruned is-odd@3.0.1 should be dropped, got:\n{pruned}"
+    );
+}
+
 #[test]
 fn test_parses_v2_lockfile_and_resolves_workspace_and_external() {
     let contents = serde_json::to_string(&json!({

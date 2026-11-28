@@ -34,7 +34,10 @@ impl BunLockfile {
             }
         }
 
-        // Return the package with its version (and patch if applicable)
+        // Return the package with its version (and patch if applicable).
+        // The `+<patch path>` suffix is for cache identity only: it is not
+        // SemVer, so `find_matching_version` matches ranges against
+        // `entry.version()` rather than this string.
         let mut version = entry.version().to_string();
         if let Some(patch) = self.data.patched_dependencies.get(&entry.ident) {
             version.push('+');
@@ -130,7 +133,7 @@ impl BunLockfile {
         if let Some(entry) = self.index.get_workspace_scoped(workspace_name, name)
             && let Some(pkg) =
                 self.process_package_entry(entry, name, override_version, resolved_version)?
-            && (has_override || self.version_satisfies_spec(&pkg.version, version_spec))
+            && (has_override || self.version_satisfies_spec(entry.version(), version_spec))
         {
             return Ok(Some(pkg));
         }
@@ -139,7 +142,7 @@ impl BunLockfile {
         if let Some((_key, entry)) = self.index.find_package(Some(workspace_name), name)
             && let Some(pkg) =
                 self.process_package_entry(entry, name, override_version, resolved_version)?
-            && (has_override || self.version_satisfies_spec(&pkg.version, version_spec))
+            && (has_override || self.version_satisfies_spec(entry.version(), version_spec))
         {
             return Ok(Some(pkg));
         }
@@ -151,7 +154,7 @@ impl BunLockfile {
         for (lockfile_key, entry) in self.index.nested_candidates(name) {
             if let Some(pkg) =
                 self.process_package_entry(entry, name, override_version, resolved_version)?
-                && (has_override || self.version_satisfies_spec(&pkg.version, version_spec))
+                && (has_override || self.version_satisfies_spec(entry.version(), version_spec))
             {
                 tracing::debug!(
                     "Found matching version {} for {} (spec: {}) in nested entry {}",
