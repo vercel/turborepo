@@ -240,7 +240,11 @@ impl ResolvedConfigurationOptions for EnvVars {
                 _ => None,
             });
 
-        let cache_dir = self.output_map.get("cache_dir").map(|s| s.clone().into());
+        let cache_dir = self
+            .output_map
+            .get("cache_dir")
+            .filter(|s| !s.is_empty())
+            .map(|s| s.clone().into());
         let cache_max_age = self.output_map.get("cache_max_age").cloned();
         let cache_max_size = self.output_map.get("cache_max_size").cloned();
 
@@ -497,6 +501,7 @@ mod test {
         env.insert("turbo_allow_no_turbo_json".into(), "".into());
         env.insert("turbo_tui_scrollback_length".into(), "".into());
         env.insert("turbo_concurrency".into(), "".into());
+        env.insert("turbo_cache_dir".into(), "".into());
         let config = EnvVars::new(&env)
             .unwrap()
             .get_configuration_options(&ConfigurationOptions::default())
@@ -524,5 +529,6 @@ mod test {
             DEFAULT_TUI_SCROLLBACK_LENGTH
         );
         assert_eq!(config.concurrency, None);
+        assert_eq!(config.cache_dir, None);
     }
 }
